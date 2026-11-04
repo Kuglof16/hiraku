@@ -14,7 +14,18 @@ root), splits them by test class and runs each class with unittest in a process
 of its own, N at a time (default: the number of CPUs minus 4, at least 8). The
 slowest classes of the last run (runs/test_times.json, kept locally) start
 first; without that file, the scripted runs, the K2 vehicle and the shell
-solver start first. The environment is passed on as it is.
+solver start first. The environment is passed on as it is. A class that took SPLIT_S
+or more last time and shares nothing between its methods (no setUpClass, tearDownClass
+or setUpModule) runs one process per method (--no-split keeps it whole). --only PREFIX
+runs only the classes whose name starts with PREFIX (its times are added to the file,
+not put in place of it).
+
+Memory: each worker reports its peak (runs/test_memory.json, local). A class whose peak
+was HEAVY_GB or more (or one of KNOWN_HEAVY_GB before it was measured) is heavy: at most
+--max-heavy (default 2) heavy classes run at once, and a heavy class waits while another
+runs and free memory is under its peak plus RESERVE_GB ("waiting for memory: ..."); the
+lighter classes after it go first meanwhile. A scripted run's own process is not in its
+class's peak on Windows.
 
 A class that failed for lack of memory (MemoryError, numpy's _ArrayMemoryError,
 Windows' "paging file too small" WinError 1455: the machine was full, often
@@ -47,21 +58,29 @@ import sys
 import tempfile
 import time
 import unittest
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from qa import procs
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMES = ROOT / "runs" / "test_times.json"  # runs/ is local (not committed)
+MEMORY = ROOT / "runs" / "test_memory.json"  # each class's peak memory (GB) last time, local too
+HEAVY_GB = 4.0  # a class whose peak was this much or more is "heavy": at most --max-heavy of them at once
+RESERVE_GB = 4.0  # a heavy class starts only when free memory is its last peak plus this (unless none runs)
+# heavy before their peak is known: measured on 11/5 00:32 (four at once took about 34 GB)
+KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
+                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 8.6,
+                  "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
+                  "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
 # started first when there are no times yet
 HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verification.test_tools_protocol",
          "tests.solvers.test_frame_shell", "tests.solvers.test_k1_shell", "tests.tools.test_made_tools")
 CLASS_SKIP_RE = re.compile(r"^setUpClass \(([\w.]+)\)$")
 # out of memory: MemoryError and numpy's _ArrayMemoryError; WinError 1455 is "the paging file is too small";
 # OpenBLAS gives up with "Memory allocation still failed"; a worker that died with Windows' 0xC000012D
-# (commitment limit) or 0xC0000017 (no memory) leaves only its exit code
-MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]|Memory allocation still failed|\bexit (3221225773|3221225495)\b")
+# (commitment limit) or 0xC0000017 (no memory) leaves only its exit code; on Linux the OOM killer's SIGKILL is exit -9
+MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]|Memory allocation still failed"
+                       r"|\bexit (3221225773|3221225495|-9)\b")
 LOCK_DIR = Path(tempfile.gettempdir()) / "hiraku-run-tests"  # one file per qa.run_tests running on this PC
 
 
@@ -178,15 +197,51 @@ def _flatten(suite):
             yield x
 
 
-def discover() -> dict[str, list[str]]:
-    """Test ids by the name each worker loads: module.Class, or the module whose import failed."""
+SPLIT_S = 60.0  # a class that took this long last time runs one process per method, when nothing is shared
+
+
+def _shares_setup(cls: type) -> bool:
+    """The class (or a base other than TestCase) has setUpClass/tearDownClass, or its module setUpModule:
+    its methods share what that makes, so they stay in one process."""
+    for base in cls.__mro__:
+        if base in (unittest.TestCase, object):
+            continue
+        if "setUpClass" in vars(base) or "tearDownClass" in vars(base):
+            return True
+    mod = sys.modules.get(cls.__module__)
+    return bool(mod and (hasattr(mod, "setUpModule") or hasattr(mod, "tearDownModule")))
+
+
+def discover(only: list[str] | None = None, split: dict[str, float] | None = None) -> dict[str, list[str]]:
+    """Test ids by the name each worker loads: module.Class, or the module whose import failed.
+    only: keep the names starting with one of these prefixes. split: last times by name; a class
+    whose time (or its methods' sum) is SPLIT_S or more and that shares no setup is given as one
+    name per method (module.Class.method)."""
     groups: dict[str, list[str]] = {}
+    classes: dict[str, type] = {}
     for t in _flatten(unittest.defaultTestLoader.discover(str(ROOT), top_level_dir=str(ROOT))):
         if type(t).__module__ == "unittest.loader":  # _FailedTest: the module did not import
             groups.setdefault(t._testMethodName, []).append(t.id())
         else:
-            groups.setdefault(f"{type(t).__module__}.{type(t).__qualname__}", []).append(t.id())
+            name = f"{type(t).__module__}.{type(t).__qualname__}"
+            classes[name] = type(t)
+            groups.setdefault(name, []).append(t.id())
+    if only:
+        groups = {k: v for k, v in groups.items() if k.startswith(tuple(only))}
+    if split:
+        for name in [k for k, ids in groups.items() if k in classes and len(ids) > 1]:
+            if (_weight(name, split) or 0.0) >= SPLIT_S and not _shares_setup(classes[name]):  # None: never timed
+                for i in groups.pop(name):
+                    groups[i] = [i]
     return groups
+
+
+def _weight(name: str, last: dict[str, float]) -> float | None:
+    """The last time of a class, or the sum of its methods' when it ran split; None when unknown."""
+    if name in last:
+        return float(last[name])
+    parts = [float(v) for k, v in last.items() if k.startswith(name + ".")]
+    return sum(parts) if parts else None
 
 
 # --- one worker (a separate process) ----------------------------------------------------
@@ -198,6 +253,60 @@ class _Result(unittest.TextTestResult):
     def startTest(self, test):
         self.ids_run.append(test.id())
         super().startTest(test)
+
+
+def peak_gb() -> float | None:
+    """This process's peak memory in GB (Windows: peak working set; elsewhere: max RSS of it and its
+    waited-for children), or None when it cannot be read."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            class Counters(ctypes.Structure):
+                _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+                    (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                                                   "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                                                   "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+            c = Counters()
+            c.cb = ctypes.sizeof(c)
+            psapi = ctypes.WinDLL("psapi")
+            psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+            kernel = ctypes.WinDLL("kernel32")
+            kernel.GetCurrentProcess.restype = wintypes.HANDLE
+            if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(c), c.cb):
+                return None
+            return c.PeakWorkingSetSize / 2**30
+        import resource
+        kb = max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                 resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
+        return kb / 2**20  # Linux reports KB
+    except Exception:
+        return None
+
+
+def free_gb() -> float | None:
+    """Free physical memory in GB (Windows: available; Linux: MemAvailable), or None."""
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class Status(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong)] + [
+                    (n, ctypes.c_ulonglong) for n in ("ullTotalPhys", "ullAvailPhys", "ullTotalPageFile",
+                                                      "ullAvailPageFile", "ullTotalVirtual", "ullAvailVirtual",
+                                                      "ullAvailExtendedVirtual")]
+            st = Status()
+            st.dwLength = ctypes.sizeof(st)
+            if not ctypes.WinDLL("kernel32").GlobalMemoryStatusEx(ctypes.byref(st)):
+                return None
+            return st.ullAvailPhys / 2**30
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 2**20
+    except Exception:
+        return None
+    return None
 
 
 def worker(out: Path, names: list[str]) -> int:
@@ -218,23 +327,114 @@ def worker(out: Path, names: list[str]) -> int:
         "errors": [{"test": str(t), "kind": "ERROR", "last": last(tb), "traceback": tb} for t, tb in res.errors],
         "skipped": [{"test": str(t), "why": why} for t, why in res.skipped],
         "expected_failures": len(res.expectedFailures), "unexpected_successes": len(res.unexpectedSuccesses),
+        "peak_gb": peak_gb(),
     }, ensure_ascii=False), encoding="utf-8")
     return 0
 
 
 # --- the parent -------------------------------------------------------------------------
-def _order(groups: dict[str, list[str]]) -> list[str]:
+def _last_times() -> dict[str, float]:
     try:
-        last = json.loads(TIMES.read_text(encoding="utf-8"))
+        return json.loads(TIMES.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        last = {}
+        return {}
+
+
+def _order(groups: dict[str, list[str]], last: dict[str, float] | None = None) -> list[str]:
+    last = _last_times() if last is None else last
 
     def weight(name: str) -> float:
-        if name in last:
-            return float(last[name])
+        w = _weight(name, last)
+        if w is not None:
+            return w
+        cls = name.rsplit(".", 1)[0]  # a method run on its own for the first time: its share of the class
+        if len(groups[name]) == 1 and groups[name][0] == name and (w := _weight(cls, last)) is not None:
+            return w / max(1, sum(1 for k in groups if k.startswith(cls + ".")))
         return 1000.0 if name.startswith(HEAVY) else len(groups[name]) * 0.1
 
     return sorted(groups, key=weight, reverse=True)
+
+
+def _last_memory() -> dict[str, float]:
+    try:
+        return json.loads(MEMORY.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def memory_of(name: str, last: dict[str, float]) -> float | None:
+    """The last peak (GB) of a class or method (a method that never ran alone: its class's), else the known one."""
+    for k in (name, name.rsplit(".", 1)[0]):
+        if k in last:
+            return float(last[k])
+        if k in KNOWN_HEAVY_GB:
+            return KNOWN_HEAVY_GB[k]
+    return None
+
+
+def schedule(names: list[str], jobs: int, run, memory: dict, max_heavy: int = 2,
+             free=free_gb, poll_s: float = 5.0, say=None) -> list[dict]:
+    """Run names (in this order of preference) on `jobs` threads with run(name) -> result. A heavy
+    name (memory HEAVY_GB or more) starts only while fewer than max_heavy heavy ones run and, when
+    another heavy one runs, free memory is at least its peak plus RESERVE_GB; while it waits, the
+    lighter names after it go first. Returns the results in the order they ended."""
+    import threading
+    pending = list(names)
+    results: list[dict] = []
+    state = {"heavy": 0}
+    cond = threading.Condition()
+    told: set = set()
+
+    def heavy(n: str) -> bool:
+        m = memory.get(n)
+        return m is not None and m >= HEAVY_GB
+
+    def pick():
+        for n in pending:
+            if not heavy(n):
+                return n
+            if state["heavy"] >= max_heavy:
+                continue
+            if state["heavy"] > 0:
+                f = free()
+                if f is not None and f < memory[n] + RESERVE_GB:
+                    if say and n not in told:
+                        told.add(n)
+                        say(f"waiting for memory: {n} ({memory[n]:.1f} GB last time, {f:.1f} GB free)")
+                    continue
+            return n
+        return None
+
+    def loop():
+        while True:
+            with cond:
+                while True:
+                    if not pending:
+                        return
+                    n = pick()
+                    if n is not None:
+                        break
+                    cond.wait(timeout=poll_s)
+                pending.remove(n)
+                h = heavy(n)
+                state["heavy"] += h
+            try:
+                r = run(n)
+            except Exception as e:  # never lose a class: it is reported as not run
+                r = {"name": n, "s": 0.0, "crash": f"the runner failed: {e!r}"}
+            finally:
+                with cond:
+                    state["heavy"] -= h
+                    cond.notify_all()
+            with cond:
+                results.append(r)
+
+    threads = [threading.Thread(target=loop, daemon=True) for _ in range(max(1, jobs))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results
 
 
 def _run_one(name: str, tmp: Path, timeout: float, tag: str = "") -> dict:
@@ -293,6 +493,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=None,
                     help="processes at a time (default: CPUs - 4, at least 8; 8 with --no-wait)")
     ap.add_argument("--timeout", type=float, default=1800.0, help="seconds one class may take (default 1800)")
+    ap.add_argument("--only", action="append", default=[], metavar="PREFIX",
+                    help="run only the classes whose name starts with PREFIX (e.g. tests.web); may be repeated")
+    ap.add_argument("--no-split", action="store_true",
+                    help=f"keep every class in one process (by default a class that took {SPLIT_S:g} s or more "
+                         "last time and shares no setup runs one process per method)")
+    ap.add_argument("--max-heavy", type=int, default=2,
+                    help=f"classes whose last peak was {HEAVY_GB:g} GB or more that may run at once (default 2)")
     ap.add_argument("--no-wait", action="store_true",
                     help="run at once, without waiting for the machine-wide suite lock (emergencies only)")
     args = ap.parse_args(argv)
@@ -306,13 +513,15 @@ def main(argv: list[str] | None = None) -> int:
     for rec in before:
         print(f"warning: {_overlap(rec)}", file=sys.stderr, flush=True)
     _take_lock(args.jobs)
-    groups = discover()
+    last = _last_times()
+    groups = discover(args.only, None if args.no_split else last)
     expected = {i for ids in groups.values() for i in ids}
     results = []
-    with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(_run_one, name, Path(tmp), args.timeout) for name in _order(groups)]
-        for f in as_completed(futures):
-            results.append(f.result())
+    mem_last = _last_memory()
+    memory = {name: memory_of(name, mem_last) for name in groups}
+    with tempfile.TemporaryDirectory() as tmp:
+        results = schedule(_order(groups, last), args.jobs, lambda n: _run_one(n, Path(tmp), args.timeout), memory,
+                           max_heavy=args.max_heavy, say=lambda m: print(m, file=sys.stderr, flush=True))
         again = _rerun_alone(results, Path(tmp), args.timeout)
     wall = time.perf_counter() - start
 
@@ -356,7 +565,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"warning: {_overlap(rec)}")
     try:
         TIMES.parent.mkdir(exist_ok=True)
-        TIMES.write_text(json.dumps({r["name"]: round(r["s"], 2) for r in results}, indent=1), encoding="utf-8")
+        if not args.only:  # a whole suite: its names replace the last ones (a class split now drops its old entry)
+            last = {}
+        last.update({r["name"]: round(r["s"], 2) for r in results})
+        TIMES.write_text(json.dumps(last, indent=1), encoding="utf-8")
+        if not args.only:
+            mem_last = {}
+        mem_last.update({r["name"]: round(r["peak_gb"], 2) for r in results if r.get("peak_gb") is not None})
+        MEMORY.write_text(json.dumps(mem_last, indent=1), encoding="utf-8")
     except OSError:
         pass
     return 1 if failed else 0

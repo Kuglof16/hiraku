@@ -14,6 +14,9 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。全部の試験は PC で 1 つずつ回す: 始める前に PC 全体の鍵 (システムの一時フォルダの `hiraku-run-tests/suite.lock`。プロセスが終われば外れる) を取り、ほかが持っている間は「waiting for <pid> (<worktree>, since hh:mm)」と出して待つ。鍵を持っている間は CPU の数 − 4 (8 以上) のプロセスで回す。急ぐときだけ `--no-wait` (待たずに 8 プロセスで回し、重なりを「warning: another qa.run_tests is running on this PC」で知らせる) |
 | `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う。`run_tests` の試験のプロセスと台本の運転には、BLAS のスレッドを 1 本にして渡す (`OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`、もう決めてあればそのまま)。numpy と scipy の OpenBLAS は、使うかもしれないスレッドの数だけメモリを先に取るので、たくさん同時に回すと PC のメモリが尽きる |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
+| `shared_runs.py` | 遅い試験の台本の運転を、要件ファイルとコードの版ごとに 1 回だけ作り、それを読むクラスで使い回す (下の「走らせ方」) |
+| `numba_cache.py` | numba の `@njit(cache=True)` を、いくつものプロセスが同時に初めて呼んだとき、cache (`__pycache__` の `.nbi`・`.nbc`) の書き込みがぶつからないかと、機械語に直す最初の呼び出しの秒を見る (`python -m qa.numba_cache --procs 12`)。1 回目は直し、2 回目は cache を読む。どちらも、落ちたプロセス・違う結果・cache の注意を数える。numba が無ければ何もしない |
+| `remote_suite.py` | 速い一式・ブラウザ・遅い一式を順に回し、回った数・OK/FAILED・秒を 1 つの要約 (JSON) にする。試験だけをする機械 (Linux など) のため |
 
 ## 走らせ方
 
@@ -59,6 +62,35 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 - 台本の運転の通り道 (`hiraku/solvers/`・`hiraku/agent/`・`hiraku/store/`・`hiraku/tools/`・`hiraku/catalog/`・`data/catalog/`・`data/requirements/`) を変える取り込みのあと、取り込んだ main で 1 回。同じ回にいくつかの部署を取り込むなら、最後の 1 回だけでよい
 - 動画や `showcase/` に使う運転を記録する前に 1 回
 - コマンドはどちらか: `python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml`、または `HIRAKU_SLOW_TESTS=1 python -m unittest tests.verification.test_real_runs`
+
+同じ台本の運転を読む試験のクラスがいくつかあるので、運転は `qa.shared_runs.scripted_run(要件ファイル)` で 1 回だけ作り、`runs/.test-cache/<鍵>/` に置いて読み合う。
+
+- 鍵: `hiraku/`・`data/`・`plugins/` の中身 (作業中の変更も入る)、要件ファイル、Python・numpy・scipy の版、pypardiso があるか、`HIRAKU_SOLVER`
+- 同じ鍵の 2 つ目のクラスは、1 つ目が終わるのを待って、同じフォルダを読む
+- 次の一式でも、鍵が同じなら作り直さない
+- 残すのは終了コード 0 で終わった運転だけ。新しい鍵 3 つ分を残す
+- 試験は運転のフォルダを読むだけにする。書くときは `copy_run` で写してから書く
+- `HIRAKU_SHARED_RUNS=0` にすると、毎回作る
+- 2 回回して同じかを比べる運転 (動画用の 2 回目) には使わない
+
+`qa.run_tests` のほかの決まり:
+
+- 前の回に 60 秒以上かかったクラスは、メソッドごとに別のプロセスで回す。ただし、メソッドのあいだで何も共有しないクラスだけ (`setUpClass`・`tearDownClass`・`setUpModule` が無い)。`--no-split` にすると、クラスのまま回す
+- メモリの重いクラスは、同時に `--max-heavy` (既定 2) 個まで。前の回の山が 4 GB 以上のクラスを重いとみる
+  - まだ測っていないときは、11/5 に測った 4 つ (RearLinkRevision・SpaceFrameConvergence・SpaceFrameK2・MeshFlow、7.6〜8.7 GB) を重いとみる
+  - 山はプロセスごとに `runs/test_memory.json` に残る。Windows では、台本の運転の別のプロセスの分は入らない
+  - 重いクラスがほかに走っているときは、空きが「そのクラスの山 + 4 GB」になるまで待つ (`waiting for memory: ...`)。待つ間は、後ろの軽いクラスを先に回す
+- `--only tests.web` のように付けると、名前がその前置きで始まるクラスだけを回す (何度でも付けられる)
+
+### Linux (Ubuntu 24.04、Python 3.12) で回すとき
+
+- venv に `requirements.txt` と `playwright==1.62.0` を入れ、`python -m playwright install --with-deps chromium` を回す。字のために `fonts-noto-cjk` も入れる
+- `python -m qa.remote_suite` で、3 つを順に回す: 速い一式 (`--jobs 8 --no-wait`)、ブラウザ (`tests.web.browser`)、遅い一式 (`HIRAKU_SLOW_TESTS=1`、`--jobs 6 --no-wait`)
+  - 子のプロセスには `OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`・`PYTHONUTF8=1` を渡す (もう決めてあればそのまま)
+  - 1 つずつの出力は `runs/remote_suite/<名前>.log` に出る
+  - 要約は `runs/remote_suite/summary.json` に出る (回った数、OK/FAILED、失敗・skip の数、秒、終了コード)
+  - 1 行ずつの要約も表示する。どれか 1 つでも OK でなければ、終了コードは 1
+  - `--only fast,slow` で一部だけ回せる。`--jobs` と `--slow-jobs` でプロセスの数を変えられる
 
 ## 照合の考え方
 
