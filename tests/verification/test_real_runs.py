@@ -47,6 +47,10 @@ VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice
 # load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
 # so the run stops not_judged with every other tile of the last version green
 ENDED = {"offroad-4w.yaml": {"R7-hand-300N"}}
+# requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
+# the red's modules, so the run stops not_judged and says the lower stage's red is left
+BEHIND_RED = {"offroad-4w-n15.yaml"}
+LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
 # Subprocess timeout of one scripted run. The video run alone takes about 680 s (600 s
 # erred with TimeoutExpired); this stays below qa.run_tests' 1800 s per-class timeout.
 RUN_TIMEOUT_S = 1200
@@ -158,6 +162,12 @@ class _ScriptedRunTests:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
                 self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
+            elif name in BEHIND_RED:
+                self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
+                self.assertIn(LOWER_RED, project.get("stop_reason") or "", why)
+                last = max(int(d.name[1:]) for d in run.glob("v[0-9][0-9][0-9]") if d.is_dir())
+                tiles = json.loads((layout.version_dir(run, last) / layout.JUDGEMENTS_FILE).read_text(encoding="utf-8"))
+                self.assertIn("red", [j.get("state") for j in tiles if j.get("design_version") == last], why)
             elif name in ENDED:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 self._only_ended_left(run, project, ENDED[name])
