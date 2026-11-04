@@ -208,6 +208,7 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
             notes.append({"op": "emit", "kind": kind, **kw})
 
         hooks = Hooks(ctx, _NoteAttribution(notes), emit=emit)  # type: ignore[arg-type]
+        hooks.tell_routing = True  # no runner here to send the lead the routing of a version's reds
         hooks.load_state(state)
         ended: list[bool] = []
         hooks.on_end = lambda: (notes.append({"op": "end"}), ended.append(True))

@@ -1,8 +1,6 @@
 """hiraku.export: a scripted run's records written out (CSV, VTK, report, zip) and read back."""
 
 import os
-import subprocess
-import sys
 import tempfile
 import unittest
 import zipfile
@@ -181,13 +179,13 @@ class DemoRunExportTest(unittest.TestCase):
     """The demo's scripted run with the real solvers, exported and read back."""
 
     def test_the_demo_run_reads_back(self):
+        from qa import shared_runs  # the demo's run made once per code version, shared with QA's run checks
+
         root = Path(__file__).resolve().parents[2]
+        shared = shared_runs.scripted_run(root / "data/requirements/offroad-4w.yaml")
+        self.assertIsNotNone(shared.run_dir, shared.stderr[-2000:])
         with tempfile.TemporaryDirectory() as tmp:
-            env = dict(os.environ, PYTHONUTF8="1")
-            env.pop("ANTHROPIC_API_KEY", None)
-            subprocess.run([sys.executable, "-m", "hiraku", "run", str(root / "data/requirements/offroad-4w.yaml"),
-                            "--scripted", "--runs", tmp], cwd=root, env=env, capture_output=True, timeout=900)
-            (run,) = [p for p in Path(tmp).iterdir() if p.is_dir()]
+            run = shared_runs.copy_run(shared, Path(tmp))  # export writes into the run's folder
             got = export_run(run)
             store = RunStore.open(run)
             rows = read_csv(Path(got["out_dir"]) / "comparisons.csv")

@@ -458,6 +458,8 @@ def _twist_and_root(design: Record, props: dict, mid: str, t: float, near: str, 
                    "G": q(Ec / (2.0 * (1.0 + float(cm.get("nu", 0.3)))), "MPa"), "A": q(float(cs["A"]), "mm^2"),
                    "I_1": q(I, "mm^4"), "I_2": q(I, "mm^4"), "J": q(float(cs["J"]), "mm^4")}
             d_root = reg.evaluate("load_path.post_node", ins)["outputs"]["delta"]["value"]
+        else:
+            d_root = _node_turning(design, props, root, mid, p, F * f)
         L_tw = float(np.linalg.norm(land - xyz[root]))
         score = F * r_t ** 2 * L_tw / (G_m * float(sec["J"])) + d_root
         if score > best[0]:
@@ -466,7 +468,45 @@ def _twist_and_root(design: Record, props: dict, mid: str, t: float, near: str, 
     if col is not None:
         notes.append(f"根元の節 {root} は柱 ({col[0][0]}, {col[1][0]}) の途中: 柱の両端 {col[0][1]}・{col[1][1]} を固定とみて"
                      "、その節の動きを足した (load_path.post_node、柱の I は小さい方を両方向に)")
+    elif best[2] > 0.0:
+        notes.append(f"根元の節 {root} はほかの部材の集まる節: 節が回る分を足した (ほかの部材の 3EI/L と GJ/L を足した回りの硬さ。"
+                     "遠い端も節で回るので、遠い端を回れる端とみた柔らかい側。固定とみた 4EI/L との間に本当の値がある)")
     return best[1], best[2], notes
+
+
+def _node_turning(design: Record, props: dict, root: str, mid: str, p, Fv) -> float:
+    """The landing member's root node turning: the node held by the other members meeting there, each as a beam
+    whose far end is free to turn (bending 3EI/L across it, torsion GJ/L along it), against the load's moment about
+    the node; the point at p moves by the turn times its lever. 0 when fewer than two other members meet there.
+    The far nodes turn too (they are joints of the frame, not walls), so the node's stiffness lies between this
+    (far ends free to turn) and 4EI/L (far ends fixed): this is the softer bound, the unfavourable side for a
+    deflection held under a limit."""
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    r = np.asarray(p, float) - xyz[root]
+    M = np.cross(r, np.asarray(Fv, float))
+    Mn = float(np.linalg.norm(M))
+    if Mn <= 0.0:
+        return 0.0
+    m_hat = M / Mn
+    others = [m for m in design["members"] if m["id"] != mid and root in (m["node_a"], m["node_b"])]
+    if len(others) < 2:
+        return 0.0  # a node of the frame is two or more other members; one alone is a bent corner, not this model
+    k = 0.0
+    for m in others:
+        far = m["node_b"] if m["node_a"] == root else m["node_a"]
+        e = xyz[far] - xyz[root]
+        L = float(np.linalg.norm(e))
+        e = e / L
+        sec, mat = props[m["id"]]["section"], props[m["id"]]["material"]
+        E = float(mat["E_MPa"])
+        G = E / (2.0 * (1.0 + float(mat.get("nu", 0.3))))
+        c = float(m_hat @ e)
+        I = min(float(sec["Iy"]), float(sec["Iz"]))
+        k += 3.0 * E * I / L * (1.0 - c * c) + G * float(sec["J"]) / L * c * c
+    if k <= 0.0:
+        return 0.0
+    lever = float(np.linalg.norm(np.cross(m_hat, r)))  # the point's distance from the turning axis through the node
+    return Mn / k * lever
 
 
 def _force(load_case: Record, name: str, default: float) -> float:
@@ -724,7 +764,8 @@ R7_PLAN = {
     # Before, one chain of contacts turning in series gave 0.659 mm, and version 3's 0.768 against 0.704 was that
     # error cancelling the frame's. The frame with its plates has no hand calculation here; the members without the
     # plates (K1 beam frame) move the grip 7.3-7.9 mm, over the 5 mm limit on every version, so no bound either.
-    "expected_mismatch": {
+    # One entry by quantity (tools.plan.expected_entries): the grip's, and the pedal's on a rail strut.
+    "expected_mismatch": [{
         "quantity": "grip_deflection",
         "source": ("the analysis department's split of the tool's grip movement on the design department's runs "
                    "(demo versions 2-4, N15 version 5) and a K1 beam frame of the members alone, 2026-11-04"),
@@ -737,9 +778,20 @@ R7_PLAN = {
                   "0.768 mm) が版 3 で合った (0.704 mm) のは、多すぎる回りと足りない枠の打ち消しによる偶然だった"),
         "fix": "手計算で予測し直す式は無い。原因を記録して、この荷重条件は判定なしで次へ進む",
         "end": True,
-    },
+    }, {
+        "quantity": "pedal_deflection",
+        "source": ("the analysis department's split of the tool's pedal movement on the design department's run r8 "
+                   "(demo version 3: the pedal on a strut to rail_R_RAp2_RSO, no pedal stand), 2026-11-05"),
+        "cause": ("ペダルが棒の金具でレールに付く形 (ペダルの台なし)。ツールの 0.187 mm のうち 0.182 mm は、レールの付く点が枠と"
+                  "一緒に動く分 (レールが梯子の枠と長さ全体でねじれる)。金具と触れている所は 0.006 mm。手計算 "
+                  "(load_path.control_deflection) はレールのねじれを付く点から根元の節まで (9 mm) しか数えず、節が回る分 "
+                  "(0.037 mm) を足しても梯子全体のねじれを持たないので届かない。値はどちらも限界 5 mm よりずっと小さい"),
+        "fix": ("手計算で予測し直す式はまだ無い (梯子のねじれを足す直しは解析部の次の仕事)。原因を記録して、この荷重条件は"
+                "判定なしで次へ進む。ペダルの柱 (pedal_mount post) の形では、ペダルが柱の台に載り、手計算とツールが合う"),
+        "end": True,
+    }],
 }
-_PUSH = {k: f"from.{k}" for k in ("F", "a", "b", "E", "I", "h_A", "E_A", "I_A", "h_B", "E_B", "I_B")}
+_PUSH ={k: f"from.{k}" for k in ("F", "a", "b", "E", "I", "h_A", "E_A", "I_A", "h_B", "E_B", "I_B")}
 PUSH_PREDICTION = {
     "quantity": "occupant_push_deflection", "formula_id": "load_path.bar_on_posts", "output": "delta",
     "assumptions": ["点 R から外へ、いちばん先に当たる部材 (横の棒) を押す。点 R が 2 つ以上あれば、手計算でいちばん動くもの",

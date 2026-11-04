@@ -80,6 +80,30 @@ def smallest(m: dict[str, tuple[float, str]] | None) -> float:
     return min((v for v, _ in m.values()), default=float("inf"))
 
 
+def _pairs(design: Record) -> set[tuple[str, str]]:
+    """The pairs of bodies that overlap at rest by more than they may (k4_geometry.model's allowance and
+    shape_overlap: the tool's H1-interference at rest), found fast: the axis-aligned boxes round all bodies compared
+    at once, the exact test only for the pairs whose boxes meet."""
+    import numpy as np
+
+    from hiraku.solvers.k4_geometry import model as k4
+
+    bs = k4.bodies(design)
+    keys = sorted(bs)
+    corners = [bs[k].obb.corners() for k in keys]
+    lo = np.array([c.min(axis=0) for c in corners])
+    hi = np.array([c.max(axis=0) for c in corners])
+    meet = np.all((lo[:, None, :] <= hi[None, :, :] + k4.TOUCH_MM) & (lo[None, :, :] <= hi[:, None, :] + k4.TOUCH_MM),
+                  axis=2)
+    out = set()
+    for i, j in zip(*np.nonzero(np.triu(meet, 1))):
+        a, b = bs[keys[i]], bs[keys[j]]
+        allowed = k4.allowance(a, b, design)
+        if allowed != float("inf") and k4.shape_overlap(a, b) > allowed:
+            out.add((keys[i], keys[j]))
+    return out
+
+
 def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES, names: tuple[str, ...] = MARGINS,
                       time_limit_s: float = TIME_LIMIT_S, max_evals: int | None = None,
                       load_case: Record | None = None) -> Record:
@@ -117,6 +141,16 @@ def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES,
 
     cache: dict[tuple, dict | None] = {}
     count = {"evals": 0, "not_built": 0}
+    start_pairs = _pairs(design)
+
+    def with_battery(changes: dict) -> dict:
+        """The battery hangs between the seat's cross members (ladder_4w: seat_x moves them): it goes with the seat,
+        by the same shift (unless the search moves battery_x itself)."""
+        if "seat_x" in changes and "battery_x" in gen.VARIABLES and "battery_x" not in variables:
+            b0 = float((design.get("variables", {}).get("battery_x")
+                        or {"value": gen.VARIABLES["battery_x"].default})["value"])
+            changes["battery_x"] = {"value": b0 + changes["seat_x"]["value"] - start["seat_x"], "unit": "mm"}
+        return changes
 
     def measure(x: dict[str, float]) -> dict | None:
         key = tuple(x[k] for k in variables)
@@ -126,10 +160,16 @@ def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES,
         if over or (max_evals is not None and count["evals"] >= max_evals):
             raise _Stop("time" if over else "evaluations")
         count["evals"] += 1
-        changes = {k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]}
+        changes = with_battery({k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]})
         try:
             d = designgen.regenerate(design, changes) if changes else design
         except (DesignGenError, ValueError):
+            count["not_built"] += 1
+            cache[key] = None
+            return None
+        # a place that makes parts overlap that did not before (the seat's cross member into the battery, say) is
+        # refused as a design the generator refused: the driver's margins do not see the other parts
+        if changes and _pairs(d) - start_pairs:
             count["not_built"] += 1
             cache[key] = None
             return None
@@ -246,7 +286,7 @@ def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES,
         return out
 
     got = report(x)
-    got["changes"] = {k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]}
+    got["changes"] = with_battery({k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]})
     got["start"] = report(start)
     got.update(evaluations=count["evals"], not_built=count["not_built"], seconds=time.monotonic() - t0,
                stopped=stopped, time_limit_s=time_limit_s)

@@ -5,9 +5,10 @@
 tests/agent/test_plugin_path.py checks that the files equal what this writes now, so a change
 of a prompt is followed by running this.
 
-- agents/<name>.md: designer, packager and cae-<domain> for every domain but assembly. In the
-  person's Claude Code they are hiraku:designer, hiraku:packager, hiraku:cae-<domain>
-  (agent_id_from_sdk takes the "hiraku:" off). The lead is the main session.
+- agents/<name>.md: designer, designer-<module> for every module designer, packager and cae-<domain>
+  for every domain but assembly. In the person's Claude Code they are hiraku:designer,
+  hiraku:designer-<module>, hiraku:packager, hiraku:cae-<domain> (agent_id_from_sdk takes the
+  "hiraku:" off). The lead is the main session.
 - commands/run.md: /hiraku:run <requirements file>: start_run, then the lead's prompt.
 """
 
@@ -19,8 +20,9 @@ from pathlib import Path
 
 from hiraku import contract
 from hiraku.agent import prompts
-from hiraku.agent.roles import (CAE_EFFORT, CAE_TOOLS, DESIGNER_EFFORT, DESIGNER_TOOLS, PACKAGER_TOOLS, PLUGIN_DIR,
-                                PLUGIN_NAME, plugin_skills, sdk_name)
+from hiraku.agent.roles import (CAE_EFFORT, CAE_TOOLS, DESIGNER_EFFORT, DESIGNER_TOOLS, MODULE_DESIGNER_TOOLS,
+                                MODULE_PACKAGER_TOOLS, PLUGIN_DIR, PLUGIN_NAME, module_designer_skills, plugin_skills,
+                                sdk_name)
 
 GENERATED = "<!-- written by python -m hiraku.agent.plugin_files from hiraku/agent/prompts.py; do not edit -->"
 
@@ -42,19 +44,29 @@ def _frontmatter(fields: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _agent(name: str, description: str, prompt: str, tools: tuple[str, ...], effort: str, skills: bool) -> str:
+def _agent(name: str, description: str, prompt: str, tools: tuple[str, ...], effort: str, skills: bool,
+           skill_names: list[str] | None = None) -> str:
     fields: dict = {"name": name, "description": description,
                     "tools": ", ".join(plugin_tool(t) for t in tools), "model": "inherit", "effort": effort}
-    if skills:
-        fields["skills"] = plugin_skills()
+    if skills or skill_names:
+        fields["skills"] = skill_names if skill_names is not None else plugin_skills()
     return _frontmatter(fields) + "\n" + GENERATED + "\n\n" + prompt.rstrip("\n") + "\n"
 
 
 def agent_files() -> dict[str, str]:
+    """The plugin's agents are fixed files, so they cover designs with and without modules: the single designer,
+    a designer per module (designer-<module>; HK6 lets only designer.<module> propose on a design with modules), and
+    the packager with build_version and its rules for modules (they say they hold for a design with modules)."""
     out = {"agents/designer.md": _agent("designer", prompts.DESIGNER_DESCRIPTION, prompts.DESIGNER_PROMPT,
                                         DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False),
-           "agents/packager.md": _agent("packager", prompts.cae_description("assembly"), prompts.cae_prompt("assembly"),
-                                        PACKAGER_TOOLS, CAE_EFFORT, skills=True)}
+           "agents/packager.md": _agent("packager", prompts.cae_description("assembly", modules=True),
+                                        prompts.cae_prompt("assembly", modules=True), MODULE_PACKAGER_TOOLS,
+                                        CAE_EFFORT, skills=True)}
+    for agent_id in contract.MODULE_DESIGNERS:
+        module, name = agent_id.split(".", 1)[1], sdk_name(agent_id)
+        out[f"agents/{name}.md"] = _agent(name, prompts.module_designer_description(module),
+                                          prompts.module_designer_prompt(module), MODULE_DESIGNER_TOOLS,
+                                          DESIGNER_EFFORT, skills=False, skill_names=module_designer_skills())
     for domain in contract.DOMAINS:
         if domain == "assembly":
             continue
@@ -70,7 +82,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 1. MCP のツール {plugin_tool("start_run")} を requirements_file="$ARGUMENTS" で 1 回呼びます (ツールの棚を確かめるので、しばらくかかります)。断られたら、その文をそのまま人に伝えて終わります。
 2. 返った task が、まとめ役の最初の仕事です。下の「まとめ役の決まり」に従って進めます。
    - HIRAKU のツールは {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
-   - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。
+   - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。設計がモジュールに分かれているときは、{PLUGIN_NAME}:designer の代わりに、モジュールの設計役 {PLUGIN_NAME}:designer-<モジュール> ({"・".join(m.split(".", 1)[1] for m in contract.MODULE_DESIGNERS)}) を使います。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
    - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
 3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
@@ -86,7 +98,8 @@ def command_files() -> dict[str, str]:
     fields = {"description": "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める",
               "argument-hint": "<要件のファイル (例 data/requirements/offroad-4w.yaml)>",
               "allowed-tools": ", ".join(tools)}
-    body = RUN_COMMAND_INTRO + prompts.LEAD_PROMPT.rstrip("\n") + "\n"
+    # the module rules say they hold for a design with modules, so the one command serves both kinds of design
+    body = RUN_COMMAND_INTRO + prompts.lead_prompt(modules=True).rstrip("\n") + "\n"
     return {"commands/run.md": _frontmatter(fields) + "\n" + GENERATED + "\n\n" + body}
 
 
