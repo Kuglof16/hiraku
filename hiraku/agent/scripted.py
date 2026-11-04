@@ -200,13 +200,26 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         cmp = compare(ctx, cargs, agent)["comparison"]
         if cmp["status"] == "match":
             continue
-        if expected and hit is None and cmp["quantity"] == expected["quantity"]:
+        if hit is None and expected_for(expected, cmp) is not None:
             hit = cmp
             continue
         _say(ctx, agent, lc, f"{cmp['quantity']} が食い違いました (差 {cmp['diff_rel'] * 100:.1f} %)。"
                              f"台本にこの食い違いの原因は書かれていないので、ここで止めます")
         raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (the plan has none for it)")
     return hit
+
+
+def expected_for(expected: Any, cmp: Record) -> Record | None:
+    """The plan's expected_mismatch entry for a comparison: one entry, or a list of them, each for a quantity
+    and optionally a side (`when`: "high" when the prediction is above the analysis, "low" when below), so
+    one step can say why the hand calculation is off either way (e.g. R7-hand: low on a version whose
+    parts are not mounted, end; high on a stiffer frame, safe side)."""
+    entries = expected if isinstance(expected, list) else [expected] if expected else []
+    side = "high" if cmp["predicted"]["value"] > cmp["analyzed"]["value"] else "low"
+    for e in entries:
+        if e["quantity"] == cmp["quantity"] and e.get("when", side) == side:
+            return e
+    return None
 
 
 def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) -> None:
@@ -225,6 +238,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected)
     if hit is None:
         return  # matched; the plan's retry is not needed
+    expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)
     _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録します")
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}

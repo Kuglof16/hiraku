@@ -192,6 +192,20 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any("荷重の通り道が無いので不合格" in t for t in said))
 
+    def test_expected_mismatches_by_side(self):
+        """One step, two entries for one quantity: the prediction below the analysis ends the step, above it is
+        judged safe side (R7-hand: no mounts yet, then a stiffer frame)."""
+        from hiraku.agent.scripted import expected_for
+
+        low = {"quantity": "max_stress", "when": "low", "end": True}
+        high = {"quantity": "max_stress", "when": "high", "safe_side": True}
+        cmp = lambda p, a: {"quantity": "max_stress", "predicted": {"value": p}, "analyzed": {"value": a}}  # noqa: E731
+        self.assertIs(expected_for([low, high], cmp(0.77, 1.09)), low)
+        self.assertIs(expected_for([low, high], cmp(1.2, 0.7)), high)
+        self.assertIs(expected_for({"quantity": "max_stress"}, cmp(1.2, 0.7))["quantity"], "max_stress")  # no side: either
+        self.assertIsNone(expected_for([low], cmp(1.2, 0.7)))
+        self.assertIsNone(expected_for(None, cmp(1.2, 0.7)))
+
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan["notes"] = ["R4 は回していません"]
