@@ -67,7 +67,7 @@ their basis. What it looks at:
   in order and unchanged, plus at most one package change from the packager with package variables
   only; no variable is changed twice in a round, and every variable that moved is in that package
   change or a variable of a module proposed in the round (a proposal's code may set it, as fit: driver does;
-  a variable no module lists, worked out by the generator, is a warning);
+  a variable the generator marks derived may follow; one no module lists and not derived is a warning);
   warning (module.envelope) for a part box or member end outside its module's envelope boxes; no
   proposal in a design without modules
 - agents: each agent.started has its agent.stopped before run.finished (warning:
@@ -1668,14 +1668,23 @@ class RunChecker:
             if bad:
                 self.error(rule, w, f"v{v} moved {', '.join(bad)}: neither in the packager's package change nor a "
                                     f"variable of a module proposed in the round")
-            derived = [x for x in moved if x not in allowed and x not in owned]
-            if derived:
-                self.warn(rule, w, f"v{v} moved {', '.join(derived)}, which no module lists (worked out by the "
-                                   f"generator from the changes?)")
+            unowned = [x for x in moved if x not in allowed and x not in owned and x not in self._derived(prev)]
+            if unowned:
+                self.warn(rule, w, f"v{v} moved {', '.join(unowned)}, which no module lists and the generator does "
+                                   f"not mark derived")
             for p in rnd + pkg:
                 for var, q in (p.get("changes") or {}).items():
                     if b.get(var) != q:
                         self.warn(rule, w, f"v{v} has {var} = {b.get(var)}, not {q} as {p.get('change_id')} set it")
+
+    @staticmethod
+    def _derived(design: dict) -> set[str]:
+        """Variables the design's generator works out itself (spec derived: True, hiraku.designgen.variables)."""
+        try:
+            from hiraku import designgen
+            return {x["name"] for x in designgen.variables(design) if x.get("derived")}
+        except Exception:  # no generator for this design, or designgen not available: nothing is derived
+            return set()
 
     def _check_envelopes(self, v: int, d: dict, w: str, tol_mm: float = 0.5) -> None:
         """Parts (all 8 corners of the box) and members (both end nodes) inside one of their module's

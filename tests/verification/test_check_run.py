@@ -1362,6 +1362,10 @@ class Modules(unittest.TestCase):
         d2["variables"]["wheel_inertia"] = {"value": 2.0, "unit": "kg*m^2"}  # worked out from wheel_radius
         self.assertEqual(self.hk6(ev), set())
         self.assertTrue(any("wheel_inertia, which no module lists" in m for m in self.hk6(ev, "warn")))
+        # one the generator marks derived (spec derived: True) follows without a word
+        from unittest import mock
+        with mock.patch.object(cr.RunChecker, "_derived", staticmethod(lambda d: {"wheel_inertia"})):
+            self.assertEqual(self.hk6(ev, "warn"), set())
 
     def test_one_variable_is_changed_once_a_round(self):
         one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
