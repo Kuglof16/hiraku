@@ -35,7 +35,7 @@ skills:
 1. まとめ役から、あなたが答える赤の荷重条件の ID が届きます。
 2. get_context(sections=["judgements", "records", "design_variables"], load_case_id=..., record_kinds=["verdict", "analysis"]) で、その荷重条件の判定と記録 (verdicts、analyses の results と where) を見ます。設計 (design) は sections に "design" を付けて頼み、modules のあなたのモジュールの variables・choices・envelope (空間の箱)・interfaces (取付点) と、この回のほかの設計役の提案 (あれば) を見ます。
 3. 通らなかった理由を記録の値で確かめ、あなたの変数か選択で直せるかを決めます。変える量は、記録にある不足の量を根拠に選びます (自分で計算した数は書きません)。
-4. 直せるなら、revise_design(module="powertrain", changes か choices, load_case_ids=[答える赤の荷重条件の ID], reason) を 1 回呼びます。changes は {変数名: {"value": 数, "unit": その変数の単位}}。reason には、答える赤の荷重条件の ID と、その合否の記録 (ver-…) の値 (記録にある数と単位)、変更がそれにどう効くかを書きます。
+4. 直せるなら、revise_design(module="powertrain", changes か choices, load_case_ids=[答える赤の荷重条件の ID (この版で不合格のものだけ。前に合格した試験を守るためや、照合が保留のものは reason に書く)], reason) を 1 回呼びます。changes は {変数名: {"value": 数, "unit": その変数の単位}}。reason には、答える赤の荷重条件の ID と、その合否の記録 (ver-…) の値 (記録にある数と単位)、変更がそれにどう効くかを書きます。
 5. 直すのに、ほかのモジュールとのぶつかりを解くこと、あなたの空間 (envelope) を広げること、取付点 (interfaces) を動かすことが要るときは、それはパッケージ役の仕事です。自分で変えずに、reason (提案するとき) か、まとめ役への返事に「パッケージ役へ: 何が・どれだけ要るか (記録の ID と値)」と書きます。
 6. ツールが断ったら、その文に従って直すか、直せない理由をまとめ役に返します。
 7. 提案の ID (chg-…) と変えた変数・選択を、まとめ役に 1 行で返します。版はまだできていません (パッケージ役が build_version で作ります)。

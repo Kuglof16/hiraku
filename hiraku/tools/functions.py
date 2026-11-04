@@ -1365,6 +1365,17 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     design = ctx.store.design()
     choices = dict(args.get("choices") or {})
     _, _, changes = _checked_changes(ctx, design, args.get("changes") or {}, choices)
+    if args.get("load_case_ids"):
+        # the contract's module_change.load_case_ids: "The red load cases this change answers" (red on version v)
+        from hiraku.tools.judge import latest_verdicts
+
+        verdicts = latest_verdicts(ctx, v)
+        not_red = [i for i in args["load_case_ids"] if i not in verdicts or verdicts[i]["pass"]]
+        if not_red:
+            raise ToolError(
+                f"load_case_ids には、版 {v} で赤 (合否の記録が不合格) の荷重条件だけを書きます。赤でないもの: "
+                f"{', '.join(not_red)}。前に合格した試験を戻さないための変更や、照合が保留で合否の無いものは、"
+                "load_case_ids から外して reason に書いてください")
     change: Record = {"change_id": ctx.store.next_id("module_change"), "module_id": module, "agent_id": agent,
                       "reason": reason, "design_version": v}  # the version it was made on (contract 18c2679)
     if args.get("load_case_ids"):
@@ -1452,6 +1463,21 @@ def envelope_breaches(design: Record, modules: list[str]) -> list[tuple[str, str
                 if far > ENVELOPE_TOL_MM:
                     out.append((m, mem["id"], far))
     return out
+
+
+def _modules_moved(old: Record, new: Record) -> list[str]:
+    """The modules with a part box or a member end node that differs between two designs (added and removed
+    parts and members count)."""
+    def shapes(d: Record) -> dict[tuple[str, str], tuple[str | None, Any]]:
+        nodes = {n["id"]: n["xyz_mm"] for n in d.get("nodes") or []}
+        out = {("part", p["id"]): (p.get("module"), p.get("box")) for p in d.get("parts") or []}
+        out.update({("member", m["id"]): (m.get("module"), [nodes.get(m.get("node_a")), nodes.get(m.get("node_b"))])
+                    for m in d.get("members") or []})
+        return out
+
+    a, b = shapes(old), shapes(new)
+    return list(dict.fromkeys(m for k in sorted(set(a) | set(b)) if a.get(k) != b.get(k)
+                              for m, _ in (a.get(k) or (None, None), b.get(k) or (None, None)) if m))
 
 
 def _outside_envelopes(ctx: RunContext, design: Record, modules: list[str]) -> list[tuple[str, str, float]]:
@@ -1555,7 +1581,10 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     if stray:  # a module's choice moved a layout variable: only the packager changes those
         raise ToolError(f"提案の近道がレイアウトの変数 ({', '.join(stray)}) を動かします。レイアウトの変数を変えるのはパッケージ役だけなので、"
                         f"changes にその値を書いて変えるか、近道を出した設計役に別の値を頼んでください")
-    touched = list(dict.fromkeys([c["module_id"] for c in pending] + list(envelopes)))
+    # a module's change can move another module's parts (a steering proposal moves the frame's dash posts and
+    # column bracket): those modules are checked too
+    touched = list(dict.fromkeys([c["module_id"] for c in pending] + list(envelopes)
+                                 + _modules_moved(design, new)))
     if own or interfaces:  # the layout moved: every module's parts may have moved with it
         touched = [m for m in mods if m != "package"]
     breaches = _outside_envelopes(ctx, new, touched)

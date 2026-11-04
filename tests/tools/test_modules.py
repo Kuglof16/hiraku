@@ -2,14 +2,17 @@
 packager) builds the round's proposals into one version, HK6 keeps each role inside its module."""
 
 import unittest
+from unittest import mock
 
 from hiraku import contract
 from hiraku.store import RunStore
-from hiraku.tools import rules
+from hiraku.tools import judge, rules
 from hiraku.tools.context import ToolError
 from hiraku.tools.functions import build_version, get_context, revise_design
 from tests.tools.helpers import RunCase
-from tests.tools.modules import ModuleCase
+from tests.tools.modules import ModuleCase, ModuleDesigngen
+
+RED_R1 = {"R1-step100": {"verdict_id": "ver-0001", "load_case_id": "R1-step100", "pass": False}}
 
 
 class ProposalTest(ModuleCase, unittest.TestCase):
@@ -18,8 +21,9 @@ class ProposalTest(ModuleCase, unittest.TestCase):
         return revise_design(self.ctx, args, agent or f"designer.{module}")
 
     def test_a_proposal_is_recorded_and_evented_without_a_version(self):
-        out = self.propose("occupant", changes={"seat_x": self.mm(-1000)}, choices={"seat_kind": "slide"},
-                           load_case_ids=["R1-step100"])
+        with mock.patch.object(judge, "latest_verdicts", return_value=RED_R1):
+            out = self.propose("occupant", changes={"seat_x": self.mm(-1000)}, choices={"seat_kind": "slide"},
+                               load_case_ids=["R1-step100"])
         self.assertEqual(out["change_id"], "chg-0001")
         self.assertEqual(out["based_on_version"], 1)
         self.assertEqual(self.ctx.version, 1)  # no version made
@@ -38,6 +42,17 @@ class ProposalTest(ModuleCase, unittest.TestCase):
         self.assertEqual([c["change_id"] for c in self.ctx.store.pending_proposals()], ["chg-0001"])
         self.assertEqual(self.propose("powertrain", changes={"battery_x": self.mm(-950)})["change_id"], "chg-0002")
         self.assert_events_fit()
+
+    def test_load_case_ids_are_the_versions_reds_only(self):
+        verdicts = {**RED_R1, "P1-step100": {"verdict_id": "ver-0002", "load_case_id": "P1-step100", "pass": True}}
+        for ids, named in ((["R1-step100", "P1-step100"], "P1-step100"), (["H1-interference"], "H1-interference")):
+            with self.subTest(ids=ids), mock.patch.object(judge, "latest_verdicts", return_value=verdicts), \
+                    self.assertRaisesRegex(ToolError, f"版 1 で赤.*赤でないもの: {named}。.*reason に書いて"):
+                self.propose("occupant", changes={"seat_x": self.mm(-1000)}, load_case_ids=ids)
+        self.assertEqual(self.ctx.store.pending_proposals(), [])  # nothing recorded
+        with mock.patch.object(judge, "latest_verdicts", return_value=verdicts):
+            self.assertEqual(self.propose("occupant", changes={"seat_x": self.mm(-1000)},
+                                          load_case_ids=["R1-step100"])["change_id"], "chg-0001")
 
     def test_ids_go_on_after_reopening(self):
         self.propose("occupant", changes={"seat_x": self.mm(-1000)})
@@ -175,6 +190,22 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
         d = self.ctx.store.design(out["design_version"])
         self.assertEqual(d["modules"][3]["envelope"], [wider])
         self.assertIn("空間を配り直した: powertrain", d["change_reason"])
+
+    def test_a_proposal_that_moves_another_modules_part_out_of_its_space_is_refused(self):
+        # as a steering proposal moves the frame's dash posts: here the seat's move carries the cargo (body) along
+        plain = ModuleDesigngen.regenerate
+
+        def carried(gen, design, changes):
+            out = plain(gen, design, changes)
+            if "seat_x" in changes:
+                next(p for p in out["parts"] if p["id"] == "cargo")["box"]["center_mm"][0] += 300.0
+            return out
+
+        self.propose("occupant", changes={"seat_x": self.mm(-1000)})  # inside the occupant's space
+        with mock.patch.object(ModuleDesigngen, "regenerate", carried), self.assertRaises(ToolError) as e:
+            build_version(self.ctx, {"reason": "x"}, "packager")
+        self.assertIn("(body) の cargo が空間から", str(e.exception))
+        self.assertEqual(self.ctx.version, 1)
 
     def test_regrow_names_modules_of_the_design(self):
         self.propose("powertrain", changes={"battery_x": self.mm(-700)})
