@@ -5,7 +5,7 @@ allowable value; the legend is "応力 [MPa]" and "許容 <limit>" only, and no 
 trade is on the page. The weak spot is ringed (the element with the largest recorded
 value of the version before) from lead_s to the end and at full size through the zoom and
 the swap, red, then green once the fixed version is shown; no number or word with it.
-"✓ 直った" follows the verdict.
+"✓ OK" follows the verdict.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
 The records are shell_fixture's two versions judged on the hot-spot stress, with its result
@@ -186,13 +186,13 @@ class CutN07Test(unittest.TestCase):
         for t in (T["zoom_to_s"], (T["zoom_to_s"] + T["swap_s"]) / 2, T["swap_s"], T["swap_to_s"] + 0.5):
             self.assertAlmostEqual(seen[t]["n07"]["mark"]["w"], fill * inner, delta=1.0)
         self.assertLess(seen[T["zoom_s"]]["n07"]["mark"]["w"], seen[T["zoom_to_s"]]["n07"]["mark"]["w"])
-        # red on the version before; after the swap the fixed version: the ring green, "✓ 直った"
+        # red on the version before; after the swap the fixed version: the ring green, "✓ OK"
         self.assertEqual(seen[T["swap_s"]]["n07"]["mark"]["tone"], "red")
         late = seen[T["swap_to_s"] + 0.5]["n07"]
         self.assertEqual(late["mark"]["tone"], "green")
-        self.assertEqual(late["label"], "補強の後 ✓ 直った")
+        self.assertEqual(late["label"], "補強の後 ✓ OK")
         # after the swap the page says nothing more than the label and the legend
-        self.assertEqual(sorted(s for s in late["text"].split("\n") if s.strip()), sorted(["補強の後 ✓ 直った", "応力 [MPa]", self.allowable()]))
+        self.assertEqual(sorted(s for s in late["text"].split("\n") if s.strip()), sorted(["補強の後 ✓ OK", "応力 [MPa]", self.allowable()]))
 
     def test_paint_in_the_url_is_not_read(self):
         """The colours are the element stress whatever the URL says (paint=member is gone)."""

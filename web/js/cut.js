@@ -20,7 +20,7 @@ import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
 import { CutN04, CutN15 } from "./cut_grid.js";
-import { esc, fmt } from "./labels.js";
+import { NG_WORD, OK_WORD, esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
@@ -275,14 +275,14 @@ class Cut {
 // grip arrows and the centre of gravity. The higher step's motion runs on the same clock
 // as a red see-through overlay. Cases: ?ok= and ?over= (load case ids), else the P1 load
 // cases with the lowest and the highest step. The pane says only what the story asks: per
-// case its step's height (one number a card) and, large, "問題なし" or "直しが要る" (verdict),
+// case its step's height (one number a card) and, large, "✓ OK" or "✕ NG" (verdict),
 // and the colour bar of the stress.
 
-// The large word of a card or pane: "✓ 問題なし" when every check the records allow passes,
-// "✕ 直しが要る" when one fails, nothing when the records say nothing. ok: true / false / null.
+// The large word of a card or pane: "✓ OK" when every check the records allow passes,
+// "✕ NG" when one fails, nothing when the records say nothing. ok: true / false / null.
 function verdictHtml(ok) {
   if (ok === null) return "";
-  return ok ? `<span class="ok">✓ 問題なし</span>` : `<span class="miss">✕ 直しが要る</span>`;
+  return ok ? `<span class="ok">${OK_WORD}</span>` : `<span class="miss">${NG_WORD}</span>`;
 }
 
 // Whether a recorded result meets a criterion ({quantity, op, limit}); null when it cannot say.
@@ -304,8 +304,8 @@ function fitWidth(el, room, least) {
   }
 }
 
-// The size the large words start from: the box's width shared by the longest of them
-// ("✕ 直しが要る", six characters and a space).
+// The size the large words start from: the box's width shared by seven characters (the
+// size the cards were laid out for; "✕ NG" is shorter and stays at that size).
 const VERDICT_CHARS = 7;
 
 const N01_KEYS = ["duration_s", "view", "pane", "card", "times", "zoom", "overlay", "colors"];
@@ -490,7 +490,7 @@ class CutN01 {
 // test's load case with the centre of gravity; the load case of the same test whose id
 // ends in -beyond (the K2 team's "限界の外" conditions) runs on the same clock as a red
 // see-through overlay. Each pane has one tag: the test's name and, large under it, the
-// verdict of its load case ("問題なし" / "直しが要る": the run's verdicts when it judged the
+// verdict of its load case ("✓ OK" / "✕ NG": the run's verdicts when it judged the
 // case, else the record's result against the load case's criterion; nothing when neither
 // says). No figures (the story: which test it falls in, at a glance).
 //

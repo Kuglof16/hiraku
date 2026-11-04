@@ -13,14 +13,14 @@
 //   "<a> cm のつもりが <b> mm" and a setting of the load case came from the request as
 //   written, the line is "<the requirement's name>: <a> cm のつもりが <b> mm と書かれていた";
 //   otherwise the cause's first sentence with requirement ids taken out. From fixed_s the
-//   fix's first sentence and "✓ 直った" (when the record says resolved).
+//   fix's first sentence and "✓ OK" (when the record says resolved).
 // The ✕ / ✓ are labels (data-kind), the two values numbers. No record id is shown.
 // Positions, sizes, colours, the length and the times come from layout.json n12; a missing
 // key is named on the page.
 
 import { requireKeys, storyOf } from "./cut_n03.js";
 import { GREEN, MUTED, RED, panel, requestedSetting, textPx } from "./cut_panels.js";
-import { esc, fmtPct, fmtQ, fmtSigned, quantityName } from "./labels.js";
+import { OK_WORD, esc, fmtPct, fmtQ, fmtSigned, quantityName } from "./labels.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -97,7 +97,7 @@ export class CutN12 {
     this.causeBox.insertAdjacentHTML(
       "beforeend",
       `<p class="n12-why" style="font-size:${cx}px">${esc(causeLine(this.s, this.cause, this.lc))}</p>` +
-        (this.fixed && fix ? `<p class="n12-fix" style="font-size:${cx}px">直し方: ${esc(fix)}${this.cause.resolved ? ` <span class="mark" data-kind="label" style="color:${GREEN}">✓ 直った</span>` : ""}</p>` : ""),
+        (this.fixed && fix ? `<p class="n12-fix" style="font-size:${cx}px">直し方: ${esc(fix)}${this.cause.resolved ? ` <span class="mark" data-kind="label" style="color:${GREEN}">${OK_WORD}</span>` : ""}</p>` : ""),
     );
     this.causeEl = this.causeBox.querySelector(".n12-why");
     this.fixEl = this.causeBox.querySelector(".n12-fix");

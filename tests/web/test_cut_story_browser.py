@@ -510,18 +510,18 @@ class CutStoryTest(unittest.TestCase):
             self.assertEqual(got["sizes"]["fixed"], [])  # no verdict in this run: nothing added
 
     def test_n07_fixed_only_when_the_verdict_passes(self):
-        """補強の後 says "✓ 直った" in green only when the record judges version 2 a pass."""
+        """補強の後 says "✓ OK" in green only when the record judges version 2 a pass."""
         swap_to = self.layout["n07"]["times"]["swap_to_s"]
         for key, passed in (("n07_pass", True), ("n07_fail", False)):
             seen = self.check_cut("n07", self.base, self.runs[key], tag=key)
             for t, got in seen.items():
                 sz = got["sizes"]
                 if t >= swap_to and passed:
-                    self.assertEqual(sz["fixed"], [["✓ 直った", "rgb(47, 125, 79)"]], (key, t))
-                    self.assertEqual(sz["label"], "補強の後 ✓ 直った")
+                    self.assertEqual(sz["fixed"], [["✓ OK", "rgb(47, 125, 79)"]], (key, t))
+                    self.assertIn("補強の後 ✓ OK", sz["label"])
                 else:
                     self.assertEqual(sz["fixed"], [], (key, t))
-                    self.assertNotIn("直った", sz["label"], (key, t))
+                    self.assertNotIn("OK", sz["label"], (key, t))
 
     def test_n15(self):
         seen = self.check_cut("n15", self.base, self.runs["n15"])

@@ -5,7 +5,7 @@
 // page are only "補強の前" / "補強の後", and a legend of two things, "応力 [MPa]" and
 // "許容 <the load case's criterion limit>" (no names of analyses or of stress measures).
 // The tag is large (label.of_view_h), and with the version after it says in green
-// "✓ 直った" when the records judge that version a pass on the load case (its verdicts,
+// "✓ OK" when the records judge that version a pass on the load case (its verdicts,
 // else the domain's judgement of the version); otherwise nothing is added. Positions,
 // sizes, colours, the length and the times come from layout.json n07; a missing key is
 // named on the page.
@@ -38,7 +38,7 @@ import * as THREE from "three";
 import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
-import { esc, fmt, unitLabel } from "./labels.js";
+import { OK_WORD, esc, fmt, unitLabel } from "./labels.js";
 import { VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { PACE_LIMIT_DEG_S } from "./pace.js";
@@ -269,7 +269,7 @@ export class CutN07 {
     if (this.labelFor === c) return;
     this.labelFor = c;
     this.label.textContent = c.name;
-    if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">✓ 直った</span>`);
+    if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">${OK_WORD}</span>`);
     this.label.dataset.fixed = c.fixed ? "1" : "0";
   }
 
@@ -341,7 +341,7 @@ export class CutN07 {
     // the ring round the largest element (of the version before): from lead_s a small one
     // (ring.of_view_h of the view's height) shows where the weak spot is while the vehicle
     // turns, it grows with the zoom to zoom.fill of the view's height, and once the version
-    // after is shown and the record judges it a pass (✓ 直った) it turns green
+    // after is shown and the record judges it a pass (✓ OK) it turns green
     const at = isoToThree(this.focus.center.toArray()).project(b.view.camera);
     const small = this.spec.ring.of_view_h;
     const d = (small + (this.spec.zoom.fill - small) * p.zoom) * this.inner.h;

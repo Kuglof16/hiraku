@@ -373,12 +373,12 @@ class CutN11N13Test(unittest.TestCase):
         self.assertEqual(c[T["cause_s"] - 0.1]["cause"], [])
         self.assertEqual(c[T["cause_s"]]["cause"], [f"荷の重心の高さ (形の見本): {SETTING} cm のつもりが {SETTING} mm と書かれていた"])
         self.assertEqual(c[T["fixed_s"] - 0.1]["fix"], [])
-        # from fixed_s the comparison that resolved it: green, and the fix with "✓ 直った"
+        # from fixed_s the comparison that resolved it: green, and the fix with "✓ OK"
         late = c[T["fixed_s"]]
         self.assertEqual(late["diff"], [f"差 {pct(_rel(PRED2, ANA))} (許す幅 ±10 %) ✓ 一致"])
         self.assertEqual(late["again"], ["直してから予測し直した"])
-        self.assertEqual(late["fix"], ["直し方: 荷の高さを設計のとおりにして予測し直す ✓ 直った"])
-        self.assertEqual(late["marks"], [["✓ 一致", GREEN], ["✓ 直った", GREEN]])
+        self.assertEqual(late["fix"], ["直し方: 荷の高さを設計のとおりにして予測し直す ✓ OK"])
+        self.assertEqual(late["marks"], [["✓ 一致", GREEN], ["✓ OK", GREEN]])
 
     # ---- N13 --------------------------------------------------------------------------
 
