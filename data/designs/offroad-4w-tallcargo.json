@@ -2546,7 +2546,7 @@
     },
     {
       "id": "susp_FL",
-      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
+      "name": "前左の下の腕 (A 形。箱は腕のまわり)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -2560,7 +2560,7 @@
           60.0
         ]
       },
-      "mass_kg": 4.0,
+      "mass_kg": 1.89664278105713,
       "system": "suspension",
       "connects_to": [
         {
@@ -2570,21 +2570,6 @@
         },
         {
           "to": "LAl2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FL1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FL2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "LAd",
           "via": "bushing",
           "carries": "load"
         },
@@ -2638,7 +2623,7 @@
     },
     {
       "id": "susp_FR",
-      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
+      "name": "前右の下の腕 (A 形。箱は腕のまわり)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -2652,7 +2637,7 @@
           60.0
         ]
       },
-      "mass_kg": 4.0,
+      "mass_kg": 1.89664278105713,
       "system": "suspension",
       "connects_to": [
         {
@@ -2662,21 +2647,6 @@
         },
         {
           "to": "RAl2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FR1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FR2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "RAd",
           "via": "bushing",
           "carries": "load"
         },
@@ -2730,7 +2700,7 @@
     },
     {
       "id": "susp_RL",
-      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
+      "name": "後左の下の腕 (A 形。箱は腕のまわり)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -2744,7 +2714,7 @@
           60.0
         ]
       },
-      "mass_kg": 3.1074002113230854,
+      "mass_kg": 1.0040429923802154,
       "system": "suspension",
       "connects_to": [
         {
@@ -2754,21 +2724,6 @@
         },
         {
           "to": "bracket_lca_RL2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_RL1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_RL2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "LBd",
           "via": "bushing",
           "carries": "load"
         },
@@ -2822,7 +2777,7 @@
     },
     {
       "id": "susp_RR",
-      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
+      "name": "後右の下の腕 (A 形。箱は腕のまわり)",
       "kind": "suspension",
       "box": {
         "center_mm": [
@@ -2836,7 +2791,7 @@
           60.0
         ]
       },
-      "mass_kg": 3.1074002113230854,
+      "mass_kg": 1.0040429923802154,
       "system": "suspension",
       "connects_to": [
         {
@@ -2850,23 +2805,628 @@
           "carries": "load"
         },
         {
-          "to": "bracket_uca_RR1",
+          "to": "RR",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_FL_f",
+      "name": "前左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          50.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FL1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_FL_r",
+      "name": "前左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -50.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FL2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "damper_FL",
+      "name": "前左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          0.0,
+          415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          90.0
+        ]
+      },
+      "mass_kg": 1.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "LAd",
           "via": "bushing",
           "carries": "load"
         },
         {
-          "to": "bracket_uca_RR2",
+          "to": "susp_FL",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_lower_FL",
+      "name": "前左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_FL",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_upper_FL",
+      "name": "前左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_FL_f",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "uca_FL_r",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_FR_f",
+      "name": "前右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          50.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FR1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_FR_r",
+      "name": "前右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -50.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FR2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "damper_FR",
+      "name": "前右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          0.0,
+          -415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          -90.0
+        ]
+      },
+      "mass_kg": 1.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "RAd",
           "via": "bushing",
           "carries": "load"
         },
+        {
+          "to": "susp_FR",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_lower_FR",
+      "name": "前右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          -490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_FR",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_upper_FR",
+      "name": "前右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          -460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_FR_f",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "uca_FR_r",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_RL_f",
+      "name": "後左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -1970.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RL1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_RL_r",
+      "name": "後左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2070.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RL2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "damper_RL",
+      "name": "後左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          90.0
+        ]
+      },
+      "mass_kg": 1.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "LBd",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "susp_RL",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_lower_RL",
+      "name": "後左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_RL",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_upper_RL",
+      "name": "後左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_RL_f",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "uca_RL_r",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_RR_f",
+      "name": "後右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -1970.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RR1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "uca_RR_r",
+      "name": "後右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2070.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RR2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "damper_RR",
+      "name": "後右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          -90.0
+        ]
+      },
+      "mass_kg": 1.2,
+      "system": "suspension",
+      "connects_to": [
         {
           "to": "RBd",
           "via": "bushing",
           "carries": "load"
         },
         {
-          "to": "RR",
+          "to": "susp_RR",
           "via": "bushing",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_lower_RR",
+      "name": "後右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "susp_RR",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ]
+    },
+    {
+      "id": "bj_upper_RR",
+      "name": "後右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_RR_f",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "uca_RR_r",
+          "via": "bolt",
           "carries": "load"
         }
       ]
@@ -2891,7 +3451,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_FL",
+          "to": "bj_lower_FL",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_FL",
           "via": "ball_joint",
           "carries": "load"
         },
@@ -2922,7 +3487,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_FR",
+          "to": "bj_lower_FR",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_FR",
           "via": "ball_joint",
           "carries": "load"
         },
@@ -2953,7 +3523,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_RL",
+          "to": "bj_lower_RL",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_RL",
           "via": "ball_joint",
           "carries": "load"
         }
@@ -3015,7 +3590,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_RR",
+          "to": "bj_lower_RR",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_RR",
           "via": "ball_joint",
           "carries": "load"
         }

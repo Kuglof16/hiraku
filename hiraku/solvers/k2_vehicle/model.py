@@ -21,7 +21,7 @@ from .mass import combine, items_symmetric, member_items, part_items
 from .units import G0, si
 
 UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
-HALF_UNSPRUNG_KINDS = {"suspension"}
+HALF_UNSPRUNG_KINDS = {"suspension", "link", "damper", "ball_joint"}  # arms, dampers, ball joints (kit/arms.py)
 
 # Defaults used when the design does not say. They are modelling choices,
 # not values from a source; each one used is reported in Vehicle.assumptions

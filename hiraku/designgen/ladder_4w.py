@@ -63,7 +63,7 @@ from typing import Any
 
 import numpy as np
 
-from hiraku.designgen.kit import body, drivetrain, mounts, safety, steering, systems
+from hiraku.designgen.kit import arms, body, drivetrain, mounts, safety, steering, systems
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
@@ -976,6 +976,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アームとダンパー。箱は下の腕のまわり)", "suspension",
                      (hi_x - lo_x - 2 * SUSP_PIVOT_GAP_MM, ys[1] - ys[0], 2 * SUSP_HALF_HEIGHT_MM), 8.0),
                 x=(lo_x + hi_x) / 2.0, y=(ys[0] + ys[1]) / 2.0, z=hp["lca_outer"][2], carried_by=None)
+    _kit(arms.place, lay, rho)  # upper arms, dampers and ball joints, out of the suspension parts
     _kit(steering.place_corners, lay, rho)  # knuckles and the rear toe links, out of the suspension parts
     # the front bulkhead (a panel between the rails' outer faces, from the rails up to the dash cross member
     # under the steering column) and the brakes' master cylinder on its back face

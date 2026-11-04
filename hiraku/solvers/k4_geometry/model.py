@@ -151,6 +151,8 @@ def allowance(a: Body, b: Body, design: dict) -> float:
             return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM
+        if part.capsule is not None and joined(part, mem):  # a link or damper with its end at the mount
+            return float("inf")
         if part.support and part.kind == "suspension":  # arms are bolted to the frame at the mount
             fn = next((s.get("frame_node") for s in design["supports"] if s["id"] == part.support), None)
             return MOUNT_MM if fn in mem.nodes else TOUCH_MM

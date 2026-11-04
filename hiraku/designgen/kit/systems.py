@@ -42,6 +42,7 @@ SYSTEM_OF_KIND = {
     "steering": "steering", "steering_column": "steering", "steering_shaft": "steering", "steering_rack": "steering",
     "tie_rod": "steering", "brake_pedal": "brake", "brake_master_cylinder": "brake", "brake_caliper": "brake",
     "wheel": "suspension", "suspension": "suspension", "knuckle": "suspension",
+    "link": "suspension", "damper": "suspension", "ball_joint": "suspension",  # kit/arms.py
     "seat": "seat", "seat_belt": "restraint", "rollbar": "rops", "occupant": "occupant", "cargo": "cargo",
     "body": "body", "frame": "frame", "gusset": "frame", "bracket": "frame",
     "headlamp": "lighting", "taillamp": "lighting", "stoplamp": "lighting", "turn_signal": "lighting",
@@ -137,14 +138,26 @@ def links(design: Record) -> dict[str, Record]:
         sid = s["id"]
         susp, knuckle, wheel = f"susp_{sid}", f"knuckle_{sid}", f"wheel_{sid}"
         held = body_mounts(design, s)
+        arm = arm_parts(sid, ids)  # kit/arms.py: upper arm legs, damper, ball joints (when placed)
+        owner = {"lca_front": susp, "lca_rear": susp, "uca_front": arm.get("uca_f", susp),
+                 "uca_rear": arm.get("uca_r", susp), "damper_upper": arm.get("damper", susp)}
         if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
             for mount in BODY_MOUNTS:
                 if mount in held:
-                    add(susp, _c(held[mount], "bushing", "load"))
+                    add(owner[mount], _c(held[mount], "bushing", "load"))
         elif s.get("frame_node"):
             add(susp, _c(s["frame_node"], "bushing", "load"))
         add(susp, _c(sid, "bushing", "load"))
-        add(knuckle, _c(susp, "ball_joint", "load"))
+        if "damper" in arm:
+            add(arm["damper"], _c(susp, "bushing", "load"))  # damper_lower is on the lower arm
+        if "bj_lower" in arm and "bj_upper" in arm:
+            add(arm["bj_lower"], _c(susp, "bolt", "load"))
+            for leg in ("uca_f", "uca_r"):
+                if leg in arm:
+                    add(arm["bj_upper"], _c(arm[leg], "bolt", "load"))
+            add(knuckle, _c(arm["bj_lower"], "ball_joint", "load"), _c(arm["bj_upper"], "ball_joint", "load"))
+        else:
+            add(knuckle, _c(susp, "ball_joint", "load"))
         add(wheel, _c(knuckle if knuckle in ids else susp, "bolt", "load"), _c(sid, "rest", "load"))
         add(f"caliper_{sid}", _c(knuckle if knuckle in ids else susp, "bolt", "load"))
         toe = f"toe_link_{sid}"
@@ -234,6 +247,13 @@ def links(design: Record) -> dict[str, Record]:
         if cross:
             add(belt, _c(cross, "bolt", "load"))
     return out
+
+
+def arm_parts(sid: str, ids) -> dict[str, str]:
+    """{role: part id} of the arms, damper and ball joints kit/arms.py placed for support sid."""
+    from hiraku.designgen.kit.arms import part_ids
+
+    return {role: pid for role, pid in part_ids(sid).items() if pid in ids}
 
 
 def body_mounts(design: Record, support: Record) -> dict[str, str]:
