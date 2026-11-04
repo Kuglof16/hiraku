@@ -690,6 +690,53 @@ OPTIONAL.update({
     "rollbar_front_posts": ("rollbar_front_posts",),
     "fenders": ("fenders", "fender_front_deg", "fender_rear_deg", "fender_width", "fender_gap"),
 })
+# - getting in and out (test H7, proposed: k4_geometry.entry): the side frame (side_bars) as a fixed guard round point R
+#   only, and an opening ahead of it that opens (a net on quick-release clips, or a door on hinges with a latch); a
+#   grab bar on the side frame's front post. The guard keeps point R behind fixed bars (a net a person fastens does
+#   not count as the guard at point R: the program management's decision after CPSC's proposed 16 CFR 1422.5(c)(4),
+#   as the intake department read it); the opening is where the person passes.
+SIDE_OPENING_REACH_MM = 100.0  # the side frame's front post this far ahead of point R (HIRAKU's choice, no source)
+DOOR_T_MM = 2.3  # the door's sheet (HIRAKU's choice, no source for a door's thickness): the thinnest NFP-400
+#   thickness whose unit mass was read (PLATE_KG_M2)
+# The door's hinges and latch take a clip's size and mass (SIDE_NET_CLIP_MM, SIDE_NET_CLIP_KG 0.05 kg): HIRAKU's
+#   choice, no source for a hinge's or a latch's mass
+GRAB_BAR_D_MM, GRAB_BAR_T_MM = 27.2, 2.3  # a JIS G 3444 standard size (data/sections/standard_tubes.json)
+GRAB_BAR_GAP_MM = 75.0  # the hand's room between the grip and the post
+_OPTION_VARS_ENTRY = {
+    "side_opening": Var("1", 0.0, 0.0, 2.0,
+                        "0: the side frame (side_bars) runs from S2 to S1 (v1's options); 1 or 2: its front post stands "
+                        "side_bar_reach ahead of the most forward point R (load_path.point_r, the driver's spread by "
+                        "seat_slide) on an outrigger from the rail, and the stretch from there to "
+                        "SIDE_NET_FRONT_GAP_MM behind the front wheels is an opening: 1 a net in it on quick-release "
+                        "clips (kind net_clip) on the front post and on a short outrigger at the front (a triangle, as "
+                        "build_side_net), 2 a door in it (kind door, a DOOR_T_MM sheet of PLATE_STEEL) on two hinges "
+                        "(door_hinge) on the front post with a latch (door_latch) on that outrigger. Needs side_bars = 1 "
+                        "and not rollbar_front_posts (their post at S1 would stand in the opening)"),
+    "side_bar_reach": Var("mm", SIDE_OPENING_REACH_MM, 40.0, 300.0,
+                          "with side_opening: how far ahead of the most forward point R the side frame's front post "
+                          "stands (its centre line); the default 100 mm is HIRAKU's choice (no source)"),
+    "grab_bar": Var("1", 0.0, 0.0, 1.0,
+                    "1: a grab bar each side on the side frame's front post (side_bars = 1): two stand-offs out from the "
+                    "post at the lowest and the highest side bar, and the grip up between them, grab_bar_gap clear of "
+                    "the post (members grab_<side>_1..3, round tube grab_bar_d x grab_bar_t, STKM13A); 0: none"),
+    "grab_bar_d": Var("mm", GRAB_BAR_D_MM, 16.0, 38.0,
+                      "the grab bar's outside diameter: the default 27.2 mm is a JIS G 3444 standard size (the list in "
+                      "data/sections/standard_tubes.json), the nearest above the 25 mm ISO 2867:1980 7.3 recommends "
+                      "for a grab rail; the range is that clause's 16 mm min and 38 mm max (requirement items Q49 and "
+                      "Q89 as the intake department read them; an older edition of a standard for earth-moving "
+                      "machinery, borrowed)"),
+    "grab_bar_t": Var("mm", GRAB_BAR_T_MM, 1.6, 4.5, "the grab bar's tube wall (27.2 x 2.3: JIS G 3444 standard size)"),
+    "grab_bar_gap": Var("mm", GRAB_BAR_GAP_MM, 50.0, 150.0,
+                        "the clear room between the grip and the post's face: the default is the 75 mm hand clearance "
+                        "of ISO 2867:1994 Table 2 C as the intake department read it (not a requirement item here; "
+                        "borrowed, not checked by the analysis department)"),
+}
+_OPTION_VARS.update(_OPTION_VARS_ENTRY)
+VARIABLES.update(_OPTION_VARS_ENTRY)
+INTEGERS = INTEGERS + ("side_opening",)
+SWITCHES = SWITCHES + ("grab_bar",)
+OPTIONAL.update({"side_opening": ("side_opening", "side_bar_reach"),
+                 "grab_bar": ("grab_bar", "grab_bar_d", "grab_bar_t", "grab_bar_gap")})
 _PLATE_WORDS = {"floor_t": "the footwell floor and the floor under the seats (the seats, the people, the pedals and the "
                            "steering wheel stand on its top, so they move up or down with it)",
                 "deck_t": "the deck (the cargo on it)", "bulkhead_t": "the front bulkhead"}
@@ -780,6 +827,10 @@ OPTION_VALUES: dict[str, dict[str, dict[str, float]]] = {
              "four_post": {"rollbar_stays": 0.0, "rollbar_front_posts": 1.0},
              "four_post_stays": {"rollbar_stays": 1.0, "rollbar_front_posts": 1.0}},
     "fenders": {"none": {"fenders": 0.0}, "wheel": {"fenders": 1.0}},
+    # side_opening: the side frame round point R only and an opening ahead of it, closed by a net on clips or a door
+    # (with side_guard bars or bars_net); grab_bar: on the side frame's front post
+    "side_opening": {"none": {"side_opening": 0.0}, "clip_net": {"side_opening": 1.0}, "door": {"side_opening": 2.0}},
+    "grab_bar": {"none": {"grab_bar": 0.0}, "front_post": {"grab_bar": 1.0}},
 }
 CHOICES: dict[str, tuple[str, ...]] = {"joints": ("butt", "gusset", "through"),
                                        **{k: tuple(opts) for k, opts in OPTION_VALUES.items()}}
@@ -1068,10 +1119,15 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if foot == cross and not any(v[k] for k in ZERO_OR_AT_LEAST):
         side_foot = frame.section(*rect_tube(v["cross_b"], v["rail_h"], v["cross_t"]))
     columns = build_rops_extra(frame, lay, v, side_foot) if v["rollbar"] == 1 else {}
+    if (v["side_opening"] or v["grab_bar"]) and v["side_bars"] != 1:
+        raise DesignGenError("side_opening and grab_bar are on the side frame: they need side_bars = 1")
     guard = build_side_guard(frame, lay, v, side_foot, columns) if v["side_bars"] == 1 else None
     if v["side_net"] == 1 and guard is not None and len(guard["heights"]) < 2:
         raise DesignGenError("side_net with the side bars needs at least two of them (side_bar_count >= 2)")
     net = build_side_net(frame, lay, v, foot) if v["side_net"] == 1 and guard is None else None
+    closure = build_side_opening(frame, lay, v, guard, side_foot) if v["side_opening"] else None
+    if v["grab_bar"] == 1:
+        build_grab_bars(frame, v, guard)
     if guard is not None:
         materials.setdefault("stkm13a", json.loads(MATERIALS.read_text(encoding="utf-8"))["stkm13a"])
 
@@ -1099,7 +1155,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     for m in design["members"]:
         if m["id"].startswith("rops_"):
             m["part"] = safety.ROLLBAR_PART
-    add_options(design, v, guard, rho, net)
+    add_options(design, v, guard, rho, net, closure)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
     systems.write(design)  # system and connects_to of every part, when the contract has them
@@ -1531,22 +1587,108 @@ def build_side_guard(frame: Frame, lay: Layout, v: dict[str, float], foot_sectio
     sec = frame.section(*round_tube(d, t))
     before = {m["id"] for m in frame.members}
     nodes: dict[str, list[str]] = {}
+    x_front, front_st = s1, "S1"
+    if v["side_opening"]:  # the front post just ahead of point R, the rest of the side open (side_opening)
+        if any(front.values()):
+            raise DesignGenError("side_opening leaves the side open ahead of point R: the four posts' front post at S1 "
+                                 "would stand in the opening (use rops without front posts)")
+        x_front, front_st = max(x for x, _ in net_points(lay, v)) + v["side_bar_reach"], "SG"
+        if not s2 + MIN_STATION_GAP_MM <= x_front <= s1 - d:
+            raise DesignGenError(f"side_opening: the side frame's front post ({x_front:.0f} mm, side_bar_reach ahead of "
+                                 f"point R) must stand between S2 + {MIN_STATION_GAP_MM:g} mm ({s2 + MIN_STATION_GAP_MM:g} "
+                                 f"mm) and S1 less a post ({s1 - d:g} mm); change side_bar_reach")
     for side, sy in (("L", 1.0), ("R", -1.0)):
         cols = {}
-        for st, x in (("S2", s2), ("S1", s1)):
+        for st, x in (("S2", s2), (front_st, x_front)):
             if st == "S1" and front.get(side):
                 cols[st] = [n for n in front[side] if any(abs(frame.nodes[n][2] - z) < 1e-6 for z in zs)]
                 continue
-            tip = _outrigger(frame, f"side_foot_{side}{st}", f"{side}{st}", [x, sy * half, rail_z], foot_section)
+            root = f"{side}{st}"
+            if st == "SG":  # a rail node of its own for the front post's outrigger
+                root = mounts.split_rail(frame, [x, sy * rail_y, rail_z], root, {f"{side}S1", f"{side}S2"}, "")
+            tip = _outrigger(frame, f"side_foot_{side}{st}", root, [x, sy * half, rail_z], foot_section)
             cols[st] = _column(frame, f"side_post_{side}{st}", f"{side}{st}V", tip, x, sy * half, zs, sec, "stkm13a")
-        if len(cols["S1"]) != len(zs):
+        if len(cols[front_st]) != len(zs):
             raise DesignGenError("the front posts do not meet the side bars' heights")
-        for k, (a, b) in enumerate(zip(cols["S2"], cols["S1"]), 1):
+        for k, (a, b) in enumerate(zip(cols["S2"], cols[front_st]), 1):
             frame.member(f"side_bar_{side}{k}", a, b, sec, "stkm13a")
-        nodes[side] = cols["S2"] + cols["S1"]
+        nodes[side] = cols["S2"] + cols[front_st]
     members = {side: [m["id"] for m in frame.members if m["id"] not in before and m["id"].startswith("side_")
                       and m["id"][len("side_"):].split("_", 1)[-1][:1] == side] for side in "LR"}
-    return {"heights": heights, "x": (s2, s1), "y": half, "d": d, "nodes": nodes, "members": members, "z": zs}
+    return {"heights": heights, "x": (s2, x_front), "y": half, "d": d, "nodes": nodes, "members": members, "z": zs,
+            "front": {side: nodes[side][len(zs):] for side in "LR"}, "front_station": front_st}
+
+
+def build_side_opening(frame: Frame, lay: Layout, v: dict[str, float], guard: dict, foot_section: str) -> dict:
+    """What closes the opening ahead of the side frame (side_opening = 1: a net on clips, 2: a door), each side: an
+    outrigger side_open_foot_<side> from the rail at the opening's front end x_f (SIDE_NET_FRONT_GAP_MM behind the
+    front wheels' tyres) out to the side frame's line, and the closure in that line from a clip's length ahead of
+    the front post's face to x_f, from a clip's height over the outrigger's top to the highest side bar. The net
+    (1) is a triangle: clips (net_clip) up the front post every at most SIDE_NET_CLIP_PITCH_MM and one on the
+    outrigger's end (a taut net spans the hull of its fastenings, as build_side_net). The door (2) is a rectangle of
+    DOOR_T_MM sheet: two hinges (door_hinge) on the post's face at its bottom and top, one latch (door_latch) on the
+    outrigger's end under its front edge; the hinges and the latch are SIDE_NET_CLIP_MM cubes of SIDE_NET_CLIP_KG
+    (HIRAKU's choice, no source). Returns {side: {"kind", "box", "fittings": [(pid, kind, lo, hi, nodes)],
+    "carried_by", "area"}}."""
+    x_g, half, rail_y, rail_z = guard["x"][1], guard["y"], v["rail_spacing"] / 2.0, v["rail_height"]
+    c = SIDE_NET_CLIP_MM
+    x_r = x_g + guard["d"] / 2.0  # the front post's front face
+    fh = frame.sections[foot_section]["dims_mm"]["h"]
+    z_lo = rail_z + fh / 2.0 + c
+    z_hi = guard["z"][-1]
+    x_f = lay.station_x("A") - v["wheel_radius"] - SIDE_NET_FRONT_GAP_MM
+    if x_f - x_r < 4.0 * c:
+        raise DesignGenError(f"side_opening: no room for the opening between the side frame's front post ({x_r:.0f} mm) "
+                             f"and the front wheels ({x_f:.0f} mm)")
+    out = {}
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        y = sy * half
+        post = guard["front"][side]
+        root = mounts.split_rail(frame, [x_f - c / 2.0, sy * rail_y, rail_z], f"{side}SO", {f"{side}S1", f"{side}S2"}, "")
+        tip = _outrigger(frame, f"side_open_foot_{side}", root, [x_f - c / 2.0, y, rail_z], foot_section)
+        fits = []
+        if v["side_opening"] == 1:
+            n_clip = max(2, int(math.ceil((z_hi - z_lo - c) / SIDE_NET_CLIP_PITCH_MM)) + 1)
+            for k in range(n_clip):
+                z = z_lo + c / 2.0 + (z_hi - z_lo - c) * k / (n_clip - 1)
+                fits.append((f"side_open_clip_{side}{k + 1}", "net_clip", [x_r, y - c / 2.0, z - c / 2.0],
+                             [x_r + c, y + c / 2.0, z + c / 2.0], list(post)))
+            fits.append((f"side_open_clip_{side}{n_clip + 1}", "net_clip", [x_f - c, y - c / 2.0, rail_z + fh / 2.0],
+                         [x_f, y + c / 2.0, z_lo], [root, tip]))
+            thick, kind, area = v["side_net_wire_d"], "side_net", (x_f - x_r - c) * (z_hi - z_lo) / 2.0
+        else:
+            for k, z in enumerate((z_lo + c / 2.0, z_hi - c / 2.0), 1):
+                fits.append((f"side_door_hinge_{side}{k}", "door_hinge", [x_r, y - c / 2.0, z - c / 2.0],
+                             [x_r + c, y + c / 2.0, z + c / 2.0], list(post)))
+            fits.append((f"side_door_latch_{side}", "door_latch", [x_f - c, y - c / 2.0, rail_z + fh / 2.0],
+                         [x_f, y + c / 2.0, z_lo], [root, tip]))
+            thick, kind, area = DOOR_T_MM, "door", (x_f - x_r - c) * (z_hi - z_lo)
+        held = sorted({n for f in fits for n in f[4]}) if kind == "side_net" else list(post)
+        out[side] = {"kind": kind, "box": {"center_mm": [(x_r + c + x_f) / 2.0, y, (z_lo + z_hi) / 2.0],
+                                            "size_mm": [x_f - x_r - c, thick, z_hi - z_lo]},
+                     "fittings": fits, "carried_by": held, "area": area}
+    return out
+
+
+def build_grab_bars(frame: Frame, v: dict[str, float], guard: dict) -> None:
+    """A grab bar each side on the side frame's front post (grab_bar = 1): stand-offs grab_<side>_1 and _3 out from
+    the post's nodes at the lowest and the highest side bar, and the grip grab_<side>_2 up between their ends, its
+    centre line grab_bar_gap + grab_bar_d / 2 clear of the post's outer face (round tube grab_bar_d x grab_bar_t,
+    STKM13A)."""
+    d, t = v["grab_bar_d"], v["grab_bar_t"]
+    if 2.0 * t >= d:
+        raise DesignGenError("grab_bar_t must be less than half of grab_bar_d")
+    if len(guard["z"]) < 2:
+        raise DesignGenError("grab_bar runs between the lowest and the highest side bar: side_bar_count >= 2")
+    sec = frame.section(*round_tube(d, t))
+    out_y = guard["y"] + guard["d"] / 2.0 + v["grab_bar_gap"] + d / 2.0
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        lo, hi = guard["front"][side][0], guard["front"][side][-1]
+        a = frame.node(f"{side}GB1", [frame.nodes[lo][0], sy * out_y, frame.nodes[lo][2]])
+        b = frame.node(f"{side}GB2", [frame.nodes[hi][0], sy * out_y, frame.nodes[hi][2]])
+        frame.member(f"grab_{side}_1", lo, a, sec, "stkm13a")
+        frame.member(f"grab_{side}_2", a, b, sec, "stkm13a")
+        frame.member(f"grab_{side}_3", hi, b, sec, "stkm13a")
 
 
 def net_points(lay: Layout, v: dict[str, float]) -> list[tuple[float, float]]:
@@ -1648,9 +1790,11 @@ def build_side_net(frame: Frame, lay: Layout, v: dict[str, float], foot_section:
     return out
 
 
-def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: float, net: dict | None = None) -> None:
-    """The parts of the options, on the finished design (after the roll bar part): the side nets,
-    the fenders, the pedal stands, then the part mounts (kit/attach.py). The materials they name are added."""
+def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: float, net: dict | None = None,
+                closure: dict | None = None) -> None:
+    """The parts of the options, on the finished design (after the roll bar part): the side nets, the opening's net
+    or door (side_opening), the fenders, the pedal stands, then the part mounts (kit/attach.py). The materials they
+    name are added."""
     from hiraku.designgen.kit import attach
 
     mats = json.loads(MATERIALS.read_text(encoding="utf-8"))
@@ -1690,6 +1834,27 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
                 "box": {"center_mm": [(a + b) / 2.0 for a, b in zip(lo, hi)], "size_mm": [b - a for a, b in zip(lo, hi)]},
                 "mass_kg": SIDE_NET_CLIP_KG, "carried_by": list(nodes), "material": "ss400", "finish": "galvanized"})
         used.add("ss400")
+    fitting_words = {"net_clip": "網の留め具 (外せる)", "door_hinge": "扉の蝶番", "door_latch": "扉の掛け金"}
+    for side, n in (closure or {}).items():
+        name = "左" if side == "L" else "右"
+        if n["kind"] == "side_net":
+            w = v["side_net_wire_d"]
+            areal = 2.0 * math.pi * w * w / 4.0 / v["side_net_pitch"] * float(mats["ss400"]["density_kg_m3"]) * 1e-9
+            design["parts"].append({
+                "id": f"side_open_net_{side}", "name": f"{name}の乗り降りの開口の網 (外せる留め具で留める; 柱とレールのあいだの三角)",
+                "kind": "side_net", "box": n["box"], "mass_kg": float(areal * n["area"]), "carried_by": n["carried_by"],
+                "material": "ss400", "finish": "galvanized"})
+        else:
+            design["parts"].append({
+                "id": f"side_door_{side}", "name": f"{name}の乗り降りの扉 (蝶番と掛け金)", "kind": "door", "box": n["box"],
+                "mass_kg": plate_mass(n["box"]["size_mm"]), "carried_by": n["carried_by"],
+                "material": PLATE_STEEL, "finish": PLATE_FINISH})
+        for pid, kind, lo, hi, nodes in n["fittings"]:
+            design["parts"].append({
+                "id": pid, "name": f"{name}の{fitting_words[kind]}", "kind": kind,
+                "box": {"center_mm": [(a + b) / 2.0 for a, b in zip(lo, hi)], "size_mm": [b - a for a, b in zip(lo, hi)]},
+                "mass_kg": SIDE_NET_CLIP_KG, "carried_by": list(nodes), "material": "ss400", "finish": "galvanized"})
+        used.add("ss400")
     if v["fenders"] == 1:
         if v["fender_width"] < v["wheel_width"]:
             raise DesignGenError(f"fender_width ({v['fender_width']:g} mm) must be at least the tyre's ({v['wheel_width']:g} mm)")
@@ -1716,8 +1881,8 @@ def add_options(design: Record, v: dict[str, float], guard: dict | None, rho: fl
     _check_options_clear(design)
 
 
-OPTION_MEMBERS = ("rops_", "side_", "pedal_")  # the options' members
-OPTION_PARTS = ("side_net_", "fender_")  # the options' parts (the mounts and stands check themselves: kit/attach)
+OPTION_MEMBERS = ("rops_", "side_", "pedal_", "grab_")  # the options' members
+OPTION_PARTS = ("side_net_", "fender_", "side_open_", "side_door_")  # the options' parts (the mounts and stands check themselves: kit/attach)
 
 
 def _check_options_clear(design: Record) -> None:
