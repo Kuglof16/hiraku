@@ -719,6 +719,13 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .heldband .held-id { font-weight: 700; }
 .heldband .held-why { font-size: 12px; color: #7a5a20; }
 .heldband.bench { flex: none; font-size: 15px; }
+/* quantities without a criterion that are not held (held.js: 渡すだけ・比べるだけ・参考): not coloured */
+.refrows { border: 1.5px dashed var(--line); border-radius: 8px; padding: 2px 8px; font-size: 13px; line-height: 1.35; color: var(--muted); flex: none; }
+.refrows .ref-tag { font-weight: 700; color: var(--ink); font-size: 12.5px; }
+.refrows ul { list-style: none; margin: 0; padding: 0; }
+.refrows li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.refrows .ref-kind { border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin-right: 5px; font-size: 12px; color: var(--ink); }
+.refrows .held-id { color: var(--ink); }
 .chip.held { border-color: #d98a1c; background: #ffe7b8; }
 .chip.held::before { background: #d98a1c; }
 
