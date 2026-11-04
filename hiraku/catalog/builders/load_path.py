@@ -36,6 +36,12 @@ from hiraku.catalog.loading import LOADING_JA
 R7_TOL = 0.3
 # R8: free_parts is a count; the graph search and rigid_body_check find the same parts (the contacts are the same).
 R8_TOL = 0.05
+# R8-stress and R8-push: hand calculations of a stress and a movement (load_path.rail_utilisation,
+# load_path.bar_on_posts) against the whole frame, as wide as R7's (HIRAKU's choice): a beam model of the rails and
+# of one bar on its posts against the frame with every part. Measured (2026-11-04): version 2 rails 2.3 mm, stress
+# K0 0.969 against 0.614, push 11.2 against 7.0 mm (both larger, the plans' safe-side mismatches); version 2 with
+# 4.5 mm rails, stress K0 0.542 against 0.588 (+8 %).
+R8_K0_TOL = 0.3
 VERTICAL_G = 1.0  # no requirement gives a vertical acceleration for the parts: gravity only (1 g)
 
 NOT_BORROWED = "乗らない製品の加速度は別の値なので借りません"
@@ -183,12 +189,15 @@ def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
         cases.append({
             **base,
             "load_case_id": "R8-stress",
+            "tolerance_rel": tolerance(spec, R8_K0_TOL),
             "title": f"部品と乗員の重さと加速度 ({a}) で、各部材の応力をその材料の許しと比べる ({LOADING_JA[load]})",
             "params": {**inertia, "safety_factor": q(sf, "1")},
             "requirement_keys": [*pkeys, "Q61", *keys],
             "criterion": {"quantity": "max_utilisation", "op": "<=", "limit": q(1.0, "1"),
                           "basis": ("each member's von Mises stress over its own material's yield / Q61 "
-                                    f"{sf:g} (largest of these ratios): " + "; ".join(yields)),
+                                    f"{sf:g} (largest of these ratios): " + "; ".join(yields)
+                                    + f". Tolerance {R8_K0_TOL:g}: as R7, HIRAKU's choice for the gap between a hand "
+                                      "calculation and the frame's analysis (no source)"),
                           "requirement_keys": ["Q61"]},
         })
     push_miss = _missing(req, ("Q77", "Q78"))
@@ -197,13 +206,16 @@ def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
         cases.append({
             **base,
             "load_case_id": f"R8-push-{F:g}N",
+            "tolerance_rel": tolerance(spec, R8_K0_TOL),
             "title": f"乗員の肩・腰 (点 R) を {F:g} N で外へ押す ({LOADING_JA[load]})",
             "params": {"load_kind": "push", "push_force": q(F, "N"), "loading": load},
             "requirement_keys": ["Q77", "Q78", *keys],
             "criterion": {"quantity": "occupant_push_deflection", "op": "<=", "limit": q(lim, "mm"),
                           "basis": (f"Q78: what stands outboard of point R moves less than {lim:g} mm under Q77 "
                                     f"{F:g} N (the elastic movement taken as the bound of the permanent one); a point "
-                                    "with nothing outboard counts in occupant_push_open"),
+                                    "with nothing outboard counts in occupant_push_open. Tolerance "
+                                    f"{R8_K0_TOL:g}: as R7, HIRAKU's choice for the gap between a hand calculation and "
+                                    "the frame's analysis (no source)"),
                           "requirement_keys": ["Q78"]},
         })
     return cases

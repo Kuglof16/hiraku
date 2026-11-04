@@ -176,7 +176,11 @@ class EndCrossMemberTest(unittest.TestCase):
         for des in (d, stiff):
             chain = antisymmetric_twist(des, "cross_E", pair)["moment"]["rear"]
             k1 = self._anti_pair_k1(des)
-            self.assertAlmostEqual(abs(chain), abs(k1), delta=0.01 * abs(k1))
+            # 1.5 %: the chain's inertia relief is the roll about x alone; K1's uses the whole inertia tensor, whose
+            # products of inertia turn a little of the roll into yaw and pitch. With the occupants in segments
+            # (2026-11-04) the chain is 1.05 % above K1 (114663 against 113472 N*mm); against K1 with the tensor's
+            # diagonal only it is 0.26 % (114365)
+            self.assertAlmostEqual(abs(chain), abs(k1), delta=0.015 * abs(k1))
         base, twice = (abs(antisymmetric_twist(x, "cross_E", pair)["moment"]["rear"]) for x in (d, stiff))
         self.assertAlmostEqual(twice, base, delta=0.03 * base)
         with_bar = abs(antisymmetric_twist(bar, "cross_E", pair)["moment"]["rear"])
