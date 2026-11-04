@@ -289,6 +289,23 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
 
+    def test_a_revision_for_an_ended_case_is_used_only_when_no_red_is_left(self):
+        """answers_ended: with no red tile and R1 ended without a verdict, the plan's entry for R1 makes the next
+        version (the designer's change, the ended case in the reason, no load_case_ids); it is never used for a red."""
+        plan = plan_without_safe_side()
+        r1_second(plan)["expected_mismatch"]["end"] = True
+        plan["revise"] = [{"say": "R1 が判定なしで終わったので直します (試験)", "answers_ended": ["R1-step100"],
+                           "changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "R1: 判定なしで終わった (試験)"}]
+        run_scripted(self.ctx, plan)
+        designs = [e for e in self.ctx.store.events() if e["kind"] == "design.created"]
+        self.assertEqual([e["data"]["design_version"] for e in designs], [1, 2])
+        self.assertIn("R1: 判定なしで終わった (試験)", designs[1]["data"]["change_reason"])
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("版 1 に赤はありません。R1-step100 は判定なしで終わりました" in t for t in said))
+        self.assertIn("R1 が判定なしで終わったので直します (試験)", said)
+        self.assertEqual(len([t for t in said if "判定なしで終わりました (食い違いの原因の記録)" in t]), 1)  # used once
+        self.assert_events_fit()
+
     def test_end_and_retry_together_are_a_plan_error(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan["steps"][0]["expected_mismatch"]["end"] = True

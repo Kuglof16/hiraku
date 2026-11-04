@@ -1704,7 +1704,7 @@ class LoadPath(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R7", "R8"]
-    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.free_parts"]
+    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.grip_bound", "load_path.free_parts"]
     load_case_params = (LOAD_KIND, HAND_FORCE, FOOT_FORCE, ACCEL_V, ACCEL_LON, ACCEL_LAT, OCC_MASS, OCC_LAT, OCC_LON,
                         PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
     run_params = (TOUCH, NET_PRESTRESS)
