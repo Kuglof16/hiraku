@@ -41,7 +41,8 @@ def all_formulas() -> list[Formula]:
     s = {k: sp.Symbol(k, real=True) for k in ("L", "L_bk")}
     L, L_bk = s["L"], s["L_bk"]
     c = {k: sp.Symbol(k, real=True) for k in ("n", "n_out")}
-    k = {n: sp.Symbol(n, real=True) for n in ("n_rest", "n_slide", "n_wheel", "n_rod", "n_blocked")}
+    k = {n: sp.Symbol(n, real=True) for n in ("n_rest", "n_slide", "n_wheel", "n_rod", "n_blocked", "n_gap", "n_none",
+                                              "n_out")}
     return [
         Formula(
             formula_id="assembly.part_count",
@@ -106,6 +107,36 @@ def all_formulas() -> list[Formula]:
                          "H1-interference's and does not stop it",
                          "boxes as in assembly.overlap_count; turned parts are not counted"],
             source="counting (assembly_inputs.blocked_inputs)",
+            symbols=k,
+        ),
+        Formula(
+            formula_id="assembly.joint_count",
+            title="触れていないつながりと、どこにもつながらない部品の数 (箱で測る)",
+            domain="assembly",
+            expression="n = n_gap + n_none",
+            inputs={"n_gap": _in("1", "mechanical connects_to (not wire or hose) whose ends are more than 2 mm apart",
+                                 min=0),
+                    "n_none": _in("1", "parts with no mechanical connects_to", min=0)},
+            outputs={"n": ("1", "joints that do not touch, and parts joined to nothing", k["n_gap"] + k["n_none"])},
+            assumptions=["the gap between the axis-aligned boxes round the two (a node's or a support's point for "
+                         "those): never more than the gap between the shapes, so a joint can be missed, never added",
+                         "a joint touches when the gap is at most 2 mm; wires and hoses run between the two and are "
+                         "not counted"],
+            source="counting (assembly_inputs.joint_inputs)",
+            symbols=k,
+        ),
+        Formula(
+            formula_id="assembly.envelope_count",
+            title="モジュールの空間からはみ出した部品と部材の数 (軸に揃えた箱で)",
+            domain="assembly",
+            expression="n = n_out",
+            inputs={"n_out": _in("1", "parts and members whose box is not inside one box of their module's envelope",
+                                 min=0)},
+            outputs={"n": ("1", "bodies outside their module's space", k["n_out"])},
+            assumptions=["each body as the axis-aligned box round it (turned parts round their turned corners, "
+                         "slanted members round their ends widened by half the section's largest side)",
+                         "inside means inside one box of the envelope, more than 0.5 mm out counts"],
+            source="counting (assembly_inputs.envelope_inputs)",
             symbols=k,
         ),
         Formula(
