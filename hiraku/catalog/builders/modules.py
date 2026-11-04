@@ -12,8 +12,6 @@ BY_LOAD_CASE = {
     "H1-envelope": ["package"],
     "H1-joints": ["frame", "suspension", "steering", "occupant", "powertrain", "body"],  # the fittings of each module
     "H5-order": ["package"],
-    "H5-tools": ["package"],
-    "H5-reach": ["package"],
     "R8-push": ["occupant", "frame"],
 }
 BY_TEST = {

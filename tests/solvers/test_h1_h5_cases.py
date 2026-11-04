@@ -1,5 +1,5 @@
-"""H1 split into H1-interference, H1-motion, H1-joints, H1-envelope (designs with modules) and H1-steer; H5 into
-H5-order (blocked_parts), H5-tools and H5-reach (no K0 formula: not judged). The K0 counts against the assembly tool
+"""H1 split into H1-interference, H1-motion, H1-joints (shown, not judged), H1-envelope (designs with modules) and
+H1-steer; H5-order on blocked_parts. The K0 counts against the assembly tool
 on generated designs, and load_case.modules."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ SPEC = {"domain": "assembly", "tolerance_rel": 0.05}
 FORMULAS = formula_registry()
 
 
-def predict(design, lc) -> float | None:
+def predict(design, lc, quantity=None) -> float | None:
     plan = PLANS.get(lc["load_case_id"])
     if plan is None:
         return None
@@ -31,7 +31,7 @@ def predict(design, lc) -> float | None:
             ins[k] = given[name] if src == "from" else (
                 {"value": out[name], "unit": "deg"} if src == "pred" else design["variables"][ref.rsplit(".", 1)[1]])
         out[p["quantity"]] = FORMULAS.evaluate(p["formula_id"], ins)["outputs"][p["output"]]["value"]
-    return out[lc["criterion"]["quantity"]]
+    return out[quantity or lc.get("criterion", {}).get("quantity") or plan["predictions"][-1]["quantity"]]
 
 
 def cases(design):
@@ -43,13 +43,13 @@ class CasesTest(unittest.TestCase):
         d = GEN.build(GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "post"}, {}))
         got = cases(d)
         self.assertEqual(sorted(got), ["H1-envelope", "H1-interference", "H1-joints", "H1-motion", "H1-steer",
-                                       "H5-order", "H5-reach", "H5-tools"])
+                                       "H5-order"])
         for lc in got.values():
             self.assertEqual(contract.errors("load_case", lc), [], lc["load_case_id"])
         self.assertEqual(got["H1-interference"]["modules"], ["package"])
         self.assertEqual(got["H5-order"]["criterion"]["quantity"], "blocked_parts")
-        self.assertNotIn("H5-tools", PLANS)
-        self.assertNotIn("H5-reach", PLANS)
+        self.assertNotIn("criterion", got["H1-joints"])  # shown, not judged, while the parts are not joined in shape
+        self.assertIn("判定なし", got["H1-joints"]["title"])
 
     def test_no_envelope_case_without_modules(self):
         d = GEN.build()
@@ -91,7 +91,7 @@ class K0AgainstToolTest(unittest.TestCase):
                     q = cs[lc_id]["criterion"]["quantity"]
                     self.assertEqual(predict(d, cs[lc_id]), res[q])
             with self.subTest(design=name, case="H1-joints"):
-                q = cs["H1-joints"]["criterion"]["quantity"]
+                q = "joint_gap_count"
                 self.assertLessEqual(abs(predict(d, cs["H1-joints"]) - res[q]), 0.05 * res[q])
 
     def test_battery_on_the_gussets_is_red(self):

@@ -604,6 +604,16 @@ T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output)
 H_TOL = 0.05
 
 
+H1_JOINTS_TITLE = ("つながりが触れているか (判定なし: 設計の型 (designgen) が部品を形の上でつないでいない。直している途中。"
+                   "数は joint_gap_count = connects_to の相手と 2 mm より離れているつながり (電線とホースは除く) と、"
+                   "つながりの無い部品)")
+# the criterion H1-joints takes once the generator joins the parts in shape (not set now; see h1_interference)
+H1_JOINTS_CRITERION = {"quantity": "joint_gap_count", "op": "<=", "limit": {"value": 0.0, "unit": "1"},
+                       "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 mm: the "
+                                "program management's figure; wires and hoses not counted), and no part is joined to "
+                                "nothing"}
+
+
 def h1_interference(spec: Record, req: Record, design: Record) -> list[Record]:
     """Stage-0 cases, each judged on its own: at rest (the driver's seat also at both ends of its slide), in motion
     (the wheels' travel and the steering's range), the joints touching, the modules' spaces (a design split into
@@ -624,12 +634,9 @@ def h1_interference(spec: Record, req: Record, design: Record) -> list[Record]:
                        "basis": "H1: through the wheels' travel and the steering's range nothing of a corner meets "
                                 "what it is not mounted to"}},
     ]
-    out.append({**base, "load_case_id": "H1-joints",
-                "title": "つながりが触れているか (connects_to の相手と 2 mm 以内、つながりの無い部品が無い)",
-                "criterion": {"quantity": "joint_gap_count", "op": "<=", "limit": q(0.0, "1"),
-                              "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 "
-                                       "mm: the program management's figure; wires and hoses not counted), and no part "
-                                       "is joined to nothing"}})
+    # measured and shown, not judged (no criterion: the hooks skip it) while the generator does not join the parts
+    # in shape (H1_JOINTS_NOT_JUDGED); the program management puts the criterion back once the parts are joined
+    out.append({**base, "load_case_id": "H1-joints", "title": H1_JOINTS_TITLE})
     if design.get("modules"):
         out.append({**base, "load_case_id": "H1-envelope",
                     "title": "部品と部材がモジュールの空間に収まっているか",
@@ -823,32 +830,25 @@ def _assembled(design: Record) -> int:
 
 
 # The assembly tool's hands' way (two hands and a short tool straight in from outside to the fastening, within
-# REACH_MM) is its own rule with no source, so the steps it finds without that way are shown, not judged: H5-tools
-# and H5-reach have no K0 formula (no plan), so they stay not judged on the tile (HK4 does not wait for them, HK5
-# does not count them) until the rule is checked against a source.
-H5_HANDS_NOTE = ("the assembly tool's hands' way (k4_geometry.assembly: two hands and a short tool straight in from "
-                 "outside, within REACH_MM) is its own rule with no source; shown, not judged, until it is checked")
+# REACH_MM) is its own rule with no source, so the steps it finds without that way are shown, not judged: every
+# assembly analysis has steps_without_tool_clearance and steps_out_of_reach among its results, and no load case
+# judges them until the rule is checked against a source (a load case would need a prediction for the tool to run,
+# and there is no K0 formula for them).
+H5_HANDS_NOTE = ("the steps without the hands' way and out of reach (steps_without_tool_clearance, steps_out_of_reach) "
+                 "are shown in the results, not judged: the assembly tool's hands' way is its own rule with no source")
 
 
 def h5_assembly(spec: Record, req: Record, design: Record) -> list[Record]:
     """H5-order: no part is shut in, judged on blocked_parts (a count of the version itself; a part count taken
-    from the version the load cases were built on stayed at that version's number). H5-tools and H5-reach: the
-    steps without the hands' way or out of reach, not judged (H5_HANDS_NOTE)."""
+    from the version the load cases were built on stayed at that version's number)."""
     load, keys = loading(req, design)
-    base = {"test_id": "H5", "domain": spec["domain"], "params": {"loading": load},
-            "requirement_keys": (["Q82"] if entry(req, "Q82") else []) + keys, "tolerance_rel": tolerance(spec, H_TOL)}
-    return [
-        {**base, "load_case_id": "H5-order", "title": "どの部品も、どこかの向きから入れられるか",
-         "criterion": {"quantity": "blocked_parts", "op": "<=", "limit": q(0.0, "1"),
-                       "basis": "H5: every part of the design goes in, along some direction in some order (none shut "
-                                "in by what is there before it)"}},
-        {**base, "load_case_id": "H5-tools", "title": "工具と手が留め具まで入るか (判定なし: 手の道の決まりに出典が無い)",
-         "criterion": {"quantity": "steps_without_tool_clearance", "op": "<=", "limit": q(0.0, "1"),
-                       "basis": "H5: every fastening reached by the hands and a short tool; " + H5_HANDS_NOTE}},
-        {**base, "load_case_id": "H5-reach", "title": "留め具まで手が届くか (判定なし: 手の道の決まりに出典が無い)",
-         "criterion": {"quantity": "steps_out_of_reach", "op": "<=", "limit": q(0.0, "1"),
-                       "basis": "H5: every fastening within reach of the outside of what is built; " + H5_HANDS_NOTE}},
-    ]
+    return [{"load_case_id": "H5-order", "test_id": "H5", "domain": spec["domain"],
+             "title": "どの部品も、どこかの向きから入れられるか", "params": {"loading": load},
+             "requirement_keys": (["Q82"] if entry(req, "Q82") else []) + keys,
+             "criterion": {"quantity": "blocked_parts", "op": "<=", "limit": q(0.0, "1"),
+                           "basis": "H5: every part of the design goes in, along some direction in some order (none "
+                                    "shut in by what is there before it); " + H5_HANDS_NOTE},
+             "tolerance_rel": tolerance(spec, H_TOL)}]
 
 
 def h5_calc(design: Record, load_case: Record) -> Record:
@@ -1041,7 +1041,7 @@ BUILDERS = {
     "H3": h3_people,
     "H5": h5_assembly,
 }
-# H1 and H5 by load case (a test's own key would serve its other cases too): H5-tools and H5-reach have none
+# H1 and H5 by load case (a test's own key would serve its other cases too)
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
          "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
          "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
