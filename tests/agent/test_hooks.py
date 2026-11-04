@@ -5,9 +5,10 @@ from unittest import mock
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import agent_id_from_sdk, sdk_name
 from hiraku.tools import Attribution, rules
-from hiraku.tools.functions import analyze, compare
+from hiraku.tools.functions import analyze, build_version, compare, revise_design
 from tests.agent.test_builders_revise import BuildersCase
 from tests.tools.helpers import RunCase
+from tests.tools.modules import ModuleCase
 
 
 def run(coro):
@@ -341,6 +342,57 @@ class RoleStopReasonTest(BuildersCase, unittest.TestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("R1-step100", out["reason"])
         self.assertNotIn("H1-steer30", out["reason"])  # assembly's case is not the strength role's
+
+
+class ModuleScopeHookTest(ModuleCase, unittest.TestCase):
+    """HK6 in PreToolUse on a design with modules (the caller is the running role of agent_id a1)."""
+
+    def setUp(self):
+        super().setUp()
+        self.attribution = Attribution()
+        self.hooks = Hooks(self.ctx, self.attribution)
+
+    def pre(self, tool, args, agent):
+        self.hooks.running["a1"] = agent
+        data = {"hook_event_name": "PreToolUse", "tool_name": f"mcp__hiraku__{tool}", "tool_input": args,
+                "agent_type": agent.replace(".", "-"), "agent_id": "a1"}
+        return run(self.hooks.pre_tool_use(data, "tu1", None))
+
+    def assert_denied(self, out, word):
+        hso = out["hookSpecificOutput"]
+        self.assertEqual(hso["permissionDecision"], "deny")
+        self.assertIn(word, hso["permissionDecisionReason"])
+        ev = self.ctx.store.events()[-1]
+        self.assertEqual((ev["kind"], ev["data"]["rule"]), ("hook.denied", rules.HK6))
+
+    def test_denials(self):
+        seat = {"seat_x": {"value": -1000.0, "unit": "mm"}}
+        self.assert_denied(self.pre("revise_design", {"changes": seat, "reason": "x"}, "designer.occupant"), "module")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "changes": seat, "reason": "x"},
+                                    "designer.frame"), "designer.occupant")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "reason": "x",
+                                                      "changes": {"battery_x": {"value": -950.0, "unit": "mm"}}},
+                                    "designer.occupant"), "powertrain")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "choices": {"battery_pack": "big"},
+                                                      "reason": "x"}, "designer.occupant"), "battery_pack")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "changes": seat, "reason": "x"},
+                                    "packager"), "build_version")
+        self.assert_denied(self.pre("build_version", {"reason": "x"}, "designer.occupant"), "packager")
+        self.assert_denied(self.pre("build_version", {"reason": "x", "changes": seat}, "packager"), "occupant")
+        self.assertEqual(self.ctx.version, 1)
+        self.assert_events_fit()
+
+    def test_allowed_calls_and_the_hint_after_a_proposal(self):
+        args = {"module": "occupant", "changes": {"seat_x": {"value": -1000.0, "unit": "mm"}}, "reason": "x"}
+        self.assertEqual(self.pre("revise_design", args, "designer.occupant"), {})
+        self.assertEqual(self.attribution.take("mcp__hiraku__revise_design", args), "designer.occupant")
+        revise_design(self.ctx, args, "designer.occupant")
+        hint = self.hooks.next_step("revise_design", args)
+        self.assertIn("chg-0001", hint)
+        self.assertIn("build_version", hint)
+        self.assertEqual(self.pre("build_version", {"reason": "まとめ"}, "packager"), {})
+        build_version(self.ctx, {"reason": "まとめ"}, "packager")
+        self.assertIn("版 2", self.hooks.next_step("build_version", {"reason": "まとめ"}))
 
 
 if __name__ == "__main__":

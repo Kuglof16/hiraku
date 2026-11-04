@@ -5,7 +5,8 @@ each schema stands alone; get_context, list_formulas and list_tools have
 their own. Results are JSON text of what the function returns: the record
 for record_prediction; for analyze the record without what only the screen
 uses (for_agent); {comparison, verdict} for compare; {cause, verdict} for
-record_cause; a summary of the new version for revise_design; the asked-for
+record_cause; a summary of the new version for revise_design (a proposal's id and the pending
+proposals on a design with modules) and build_version; the asked-for
 parts for the reading tools. A ToolError comes back with is_error and its
 message (what is wrong, what to do next).
 """
@@ -34,7 +35,10 @@ def inline_refs(node: Any, defs: dict[str, Any]) -> Any:
         ref = node.get("$ref")
         if isinstance(ref, str) and ref.startswith("#/$defs/"):
             rest = {k: v for k, v in node.items() if k != "$ref"}
-            return {**inline_refs(defs[ref.removeprefix("#/$defs/")], defs), **inline_refs(rest, defs)}
+            target: Any = defs  # a pointer into a def as well (#/$defs/part/properties/box)
+            for key in ref.removeprefix("#/$defs/").split("/"):
+                target = target[key]
+            return {**inline_refs(target, defs), **inline_refs(rest, defs)}
         return {k: inline_refs(v, defs) for k, v in node.items()}
     if isinstance(node, list):
         return [inline_refs(v, defs) for v in node]
@@ -83,7 +87,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "sections": {"type": "array", "items": {"enum": list(CONTEXT_SECTIONS)}, "uniqueItems": True,
                      "description": "返してほしい部分。無ければ小さな一覧 (overview: 荷重条件の ID・担当・段、判定の札、記録の数、"
                                     "部分の名前と中身) だけ。手計算の入力は design_summary、設計の要約 (数・ID・変数の値・断面・材料) は design "
-                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables (いくつかをまとめて決める近道は design_choices)。"
+                                    "(中身は design_part で少しずつ)、設計役の変数は design_variables (いくつかをまとめて決める近道は design_choices)。モジュールに分けた設計では modules (自分のモジュールの変数・近道・空間・取付点と、その回の提案)。"
                                     "formula_inputs は荷重条件ごとの式の入力 (コードが出した値・単位・出どころ)。"
                                     "joint_wall_inputs は load_case_id の荷重条件での、つなぎ目の壁の曲げの式の入力"},
         "load_case_id": {"type": "string",
@@ -112,6 +116,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "compare": compare_input_schema(),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
+    "build_version": contract_input_schema("build_version"),
     "propose_design": contract_input_schema("propose_design"),
     "make_tool": contract_input_schema("make_tool"),
     "check_tool": check_tool_input_schema(),
@@ -125,7 +130,7 @@ DESCRIPTIONS = {
         "sections で要る部分を名前で頼み、大きな部分は絞る (load_cases と formula_inputs は domain か load_case_id、records は "
         "record_kinds と load_case_id、requirements は requirement_keys、archetypes は archetype)。設計を直した版では、最初に "
         "design_changes (前の版から変わった変数の前と後) が付く。手計算の入力の値は "
-        "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。要る部分だけを頼む。"
+        "design_summary から、設計の要約は design (部品・部材などの中身は design_part・offset・limit で少しずつ)、設計役の変数は design_variables。モジュールに分けた設計では modules (自分のモジュールの変数・近道・空間・取付点と、その回の提案)。要る部分だけを頼む。"
         "record_prediction の前に sections=[\"formula_inputs\"] (と load_case_id) を読む: 荷重条件ごとに、計画の式の"
         "入力を、台本の運転と同じコードがこの版の設計から出した値・単位・出どころ (from) で返す。"
         "シェルのホットスポット (max_hot_spot_stress) を式 frame_static.joint_wall_bending で予測するときは "
@@ -165,11 +170,23 @@ DESCRIPTIONS = {
     "record_cause": (
         "食い違った照合の原因と直し方を書く。これで分野の止まりが解ける。原因で差が説明でき、予測が本当の値を"
         "安全側から押さえていると判断できるときだけ safe_side: true と理由 (safe_side_reason) を付ける。"
-        "ツールが数字の向きを確かめ、合っていれば予測 (不利な方の値) で合否を作る。向きが逆なら断る"
+        "ツールが数字の向きを確かめ、合っていれば予測 (不利な方の値) で合否を作る。向きが逆なら断る。"
+        "原因は説明できても、この実行で確かめられる予測がその量に届かない (手計算で解けない、など) ときは "
+        "ends_case: true を付ける。その荷重条件は判定なしで終わり、待たれない (safe_side とは一緒に付けない)"
     ),
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
-        "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる"
+        "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる。"
+        "設計がモジュールに分かれているとき (get_context の modules) は、module に自分のモジュールを付けて、"
+        "モジュールの設計役 (designer.<module>) が呼ぶ。変えられるのは自分のモジュールの変数と近道 (choices) だけで、"
+        "版は作らず提案 (change_id) として記録される。その回の提案はパッケージ役が build_version で 1 つの版にまとめる"
+    ),
+    "build_version": (
+        "パッケージ役だけが使う (モジュールに分かれた設計)。その回の提案 (モジュールの設計役の revise_design) を全部まとめ、"
+        "パッケージ役のレイアウトの変数 (changes)・モジュールの空間 (envelopes)・取付点 (interfaces) と理由 (reason) から、"
+        "次の版を組み直して記録する。自分の変更が無くても毎回呼ぶ。回数は round_limit まで (1 回で 1 回分)。"
+        "2 つの提案が同じ変数を変えるとき、部品がモジュールの空間からはみ出すときは断られる。"
+        "新しい版では全部の荷重条件の判定がやり直しになる"
     ),
     "propose_design": (
         "設計役だけが使う。設計がまだ無い (版 0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
@@ -226,7 +243,7 @@ def for_agent(name: str, result: Any) -> Any:
 # Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
-ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "write_report")
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_report")
 NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
              "見つかりません)。同じ入力でもう一度呼んでください")
 

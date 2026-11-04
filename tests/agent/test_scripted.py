@@ -7,6 +7,13 @@ from hiraku.agent.scripted import ScriptError, _reader, has_plan, load_plan, res
 from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
+from tests.tools.helpers import stand_in_plan
+
+
+def setUpModule():
+    # this module's helpers call load_plan directly: the stand-in plan as RunCase's runs have it
+    globals()["load_plan"] = stand_in_plan
+
 
 def denied_rules(ctx):
     return [e["data"]["rule"] for e in ctx.store.events() if e["kind"] == "hook.denied"]
@@ -162,6 +169,43 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         scripted._run_step(self.ctx, lc, "cae.strength", "frame_static", {"predictions": [bad]})
         self.assertEqual(len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"]), before)
 
+    def test_a_load_case_the_analysis_judged_is_not_compared(self):
+        """A load with no path: the analysis's unsupported_load makes the verdict (judge); the scripted step says so and
+        compares nothing (run 20261104-091550: R8-stress on version 2 with parts not yet mounted)."""
+        from hiraku.agent import scripted
+
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def floating(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": 3.0, "unit": "1", "where": "seat_L"}]
+            return out
+
+        tool.run = floating
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        lc = self.ctx.load_case("R1-step100")
+        before = len(self.ctx.store.records("comparison"))
+        self.assertIsNone(scripted._analyze_and_compare(self.ctx, lc, "cae.strength", "frame_static", [r1["prediction_id"]]))
+        self.assertEqual(len(self.ctx.store.records("comparison")), before)
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("荷重の通り道が無いので不合格" in t for t in said))
+
+    def test_expected_mismatches_by_side(self):
+        """One step, two entries for one quantity: the prediction below the analysis ends the step, above it is
+        judged safe side (R7-hand: no mounts yet, then a stiffer frame)."""
+        from hiraku.agent.scripted import expected_for
+
+        low = {"quantity": "max_stress", "when": "low", "end": True}
+        high = {"quantity": "max_stress", "when": "high", "safe_side": True}
+        cmp = lambda p, a: {"quantity": "max_stress", "predicted": {"value": p}, "analyzed": {"value": a}}  # noqa: E731
+        self.assertIs(expected_for([low, high], cmp(0.77, 1.09)), low)
+        self.assertIs(expected_for([low, high], cmp(1.2, 0.7)), high)
+        self.assertIs(expected_for({"quantity": "max_stress"}, cmp(1.2, 0.7))["quantity"], "max_stress")  # no side: either
+        self.assertIsNone(expected_for([low], cmp(1.2, 0.7)))
+        self.assertIsNone(expected_for(None, cmp(1.2, 0.7)))
+
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan["notes"] = ["R4 は回していません"]
@@ -236,6 +280,14 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertNotIn("no next prediction", self.ctx.project["stop_reason"])
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any("判定の無いまま次へ進みます" in t for t in said))
+        # contract 110b991: a load case ended by its cause cannot be judged; no heavier stage waits for it (HK5)
+        from hiraku.tools import rules
+
+        self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})
+        self.assertEqual([c.get("ends_case") for c in self.ctx.store.records("cause")][-1:], [True])  # contract 08cf4d6
+        self.assertNotIn("R1-step100", [lc["load_case_id"] for _, lc, _ in rules.lower_stage_left(self.ctx, 9)])
+        self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        self.assert_events_fit()
 
     def test_end_and_retry_together_are_a_plan_error(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
@@ -443,6 +495,38 @@ class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
         if mine:
             self.assertFalse([r["rule_id"] for r in hits if r not in mine and r["rule_id"] in asks[0]])
         self.assert_events_fit()
+
+
+class SplitByModuleTest(unittest.TestCase):
+    """A plan's revision on a design with modules: each variable and choice goes to the module that lists it,
+    the package variables to the packager (contract d9631a5)."""
+
+    DESIGN = {"modules": [
+        {"module_id": "package", "variables": ["track"], "choices": []},
+        {"module_id": "steering", "variables": ["steering_column_angle"], "choices": ["pedal_mount"]},
+        {"module_id": "occupant", "variables": ["seat_height"], "choices": ["side_guard"]},
+        {"module_id": "body", "variables": [], "choices": ["fenders"]},
+    ]}
+
+    def test_each_part_goes_to_its_owner(self):
+        from hiraku.agent.scripted import split_by_module
+
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        by, package, stray = split_by_module(
+            self.DESIGN, {"track": mm(1220), "seat_height": mm(233.5), "steering_column_angle": {"value": 20, "unit": "deg"}},
+            {"fenders": "wheel", "pedal_mount": "post", "side_guard": "bars_net"})
+        self.assertEqual(list(by), ["steering", "occupant", "body"])  # the contract's module order
+        self.assertEqual(by["steering"], {"changes": {"steering_column_angle": {"value": 20, "unit": "deg"}},
+                                          "choices": {"pedal_mount": "post"}})
+        self.assertEqual(by["occupant"], {"changes": {"seat_height": mm(233.5)}, "choices": {"side_guard": "bars_net"}})
+        self.assertEqual(by["body"], {"choices": {"fenders": "wheel"}})
+        self.assertEqual((package, stray), ({"track": mm(1220)}, []))
+
+    def test_a_name_no_module_owns_is_named(self):
+        from hiraku.agent.scripted import split_by_module
+
+        self.assertEqual(split_by_module(self.DESIGN, {"wheelbase": {"value": 1, "unit": "mm"}}, {"roof": "x"})[2],
+                         ["wheelbase", "roof"])
 
 
 if __name__ == "__main__":

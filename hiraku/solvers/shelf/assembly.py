@@ -10,6 +10,7 @@ from scipy.optimize import brentq
 
 from ..k4_geometry import bodies, disassemble, fit, interferences, steps, sweep
 from ..k4_geometry.assembly import is_attach
+from ..k4_geometry.joints import joint_gaps, outside_envelopes
 from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_points
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
@@ -41,7 +42,8 @@ class Assembly(BuiltinTool):
     tests = ["H1", "H3", "H5"]
     formulas = ["geometry.free_steer_angle", "geometry.free_steer_angle_limited", "occupant.knee_room",
                 "occupant.knee_angle_room",
-                "assembly.part_count"]
+                "assembly.part_count", "assembly.overlap_count", "assembly.motion_count", "assembly.blocked_count",
+                "assembly.joint_count", "assembly.envelope_count"]
     load_case_params = (LOADING,)
     predicts = (
         Predicts("free_steer_angle", "geometry.free_steer_angle_limited", "theta",
@@ -55,6 +57,18 @@ class Assembly(BuiltinTool):
                  "both body sizes' leg links and their knee angles as K4 seats them (k0_handcalc.scene_inputs."
                  "knee_angle_inputs), against 99-138 deg"),
         Predicts("assembly_steps", "assembly.part_count", "steps", "n = parts in the design, n_out = occupants and cargo"),
+        Predicts("interference_count", "assembly.overlap_count", "n",
+                 "n_rest, n_slide from hiraku.solvers.k0_handcalc.assembly_inputs.overlap_inputs (axis-aligned boxes, "
+                 "turned parts and slanted members left out, this tool's allowance)"),
+        Predicts("motion_interference_count", "assembly.motion_count", "n",
+                 "n_wheel, n_rod from assembly_inputs.motion_inputs (the wheels' boxes and the tie rods swept)"),
+        Predicts("blocked_parts", "assembly.blocked_count", "n",
+                 "n_blocked from assembly_inputs.blocked_inputs (each part pushed along +-x, +-y, +-z against the frame)"),
+        Predicts("joint_gap_count", "assembly.joint_count", "n",
+                 "n_gap, n_none from assembly_inputs.joint_inputs (box to box gaps of the connects_to, parts joined to "
+                 "nothing)"),
+        Predicts("envelope_outside_count", "assembly.envelope_count", "n",
+                 "n_out from assembly_inputs.envelope_inputs (boxes against the modules' envelopes)"),
     )
 
     def known_answers(self) -> list[Record]:
@@ -152,6 +166,21 @@ class Assembly(BuiltinTool):
             result("steps_without_tool_clearance", float(sum(not s["tool_clearance"] for s in seq)), "1"),
             result("steps_out_of_reach", float(sum(not s["hand_reach"] for s in seq)), "1"),
         ]
+        joints = joint_gaps(design, bs)
+        results += [
+            result("joint_gap_count", float(len(joints["gaps"]) + len(joints["unjoined"])), "1",
+                   ", ".join(joints["unjoined"][:5]) or None),
+            result("joint_gaps", float(len(joints["gaps"])), "1"),
+            result("unjoined_parts", float(len(joints["unjoined"])), "1"),
+            result("worst_joint_gap", joints["gaps"][0][3] if joints["gaps"] else 0.0, "mm",
+                   f"{joints['gaps'][0][0]} -> {joints['gaps'][0][1]}" if joints["gaps"] else None),
+        ]
+        if design.get("modules"):
+            out_env = outside_envelopes(design, bs)
+            results += [result("envelope_outside_count", float(len(out_env)), "1",
+                               _name(out_env[0][0]) if out_env else None),
+                        result("worst_envelope_outside", out_env[0][2] if out_env else 0.0, "mm",
+                               _name(out_env[0][0]) if out_env else None)]
         if sw["free_steer"]:
             sid = min(sw["free_steer"], key=sw["free_steer"].get)
             results.append(result("free_steer_angle", sw["free_steer"][sid], "deg", sid))

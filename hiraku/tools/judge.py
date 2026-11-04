@@ -207,7 +207,12 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
     earlier safe-side verdict). Empty when nothing holds it back."""
     out = []
     for c, cause in unresolved_mismatches(ctx, load_case, version):
-        why = "原因がまだ書かれていない" if cause is None else f"原因 {cause['cause_id']} がまだ解けていない"
+        if cause is None:
+            why = "原因がまだ書かれていない"
+        elif cause.get("ends_case"):  # contract 08cf4d6: the load case ends not judged
+            why = f"原因 {cause['cause_id']} が、この実行の手計算では届かないとして、判定なしで終えた"
+        else:
+            why = f"原因 {cause['cause_id']} がまだ解けていない"
         out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
     crit = load_case.get("criterion")
     for a, r in beyond_results(ctx, load_case, version):

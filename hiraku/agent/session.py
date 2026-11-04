@@ -157,6 +157,10 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
     if design is not None:
         load_cases, skipped = build_tests(catalog, req, design)
         fields = project_fields(catalog, req, load_cases)
+        if design.get("modules"):  # docs/contract.md モジュールに分けた設計: a designer per module, and the packager
+            from hiraku.agent.roles import agents_with_modules
+
+            fields = dict(fields, agents=agents_with_modules(fields["agents"], design, catalog.prop))
     else:
         load_cases, skipped = [], None
         fields = dict(project_fields(catalog, req, []), agents=first_design_agents(catalog))
