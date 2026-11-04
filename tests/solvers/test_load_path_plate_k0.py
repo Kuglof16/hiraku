@@ -19,7 +19,8 @@ from tests.solvers.test_builders_load_path import PRED, REQ, SPECS, predict, res
 from tests.solvers.test_load_path import touch_nearest
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the floating pedal these tests move
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 REG = solvers.formula_registry()
 E, G, T = 205000.0, 205000.0 / 2.6, 2.3
 

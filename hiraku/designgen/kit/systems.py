@@ -42,10 +42,13 @@ SYSTEM_OF_KIND = {
     "steering": "steering", "steering_column": "steering", "steering_shaft": "steering", "steering_rack": "steering",
     "tie_rod": "steering", "brake_pedal": "brake", "brake_master_cylinder": "brake", "brake_caliper": "brake",
     "wheel": "suspension", "suspension": "suspension", "knuckle": "suspension",
+    "link": "suspension", "damper": "suspension", "ball_joint": "suspension",  # kit/arms.py
     "seat": "seat", "seat_belt": "restraint", "rollbar": "rops", "occupant": "occupant", "cargo": "cargo",
     "body": "body", "frame": "frame", "gusset": "frame", "bracket": "frame",
     "headlamp": "lighting", "taillamp": "lighting", "stoplamp": "lighting", "turn_signal": "lighting",
     "side_net": "restraint", "net_clip": "restraint", "fender": "body",
+    # kit/joints.py's parts: the brake pedal's pushrod, a strut through a sheet, the steering shaft's bearing
+    "pushrod": "brake", "anchor": "frame", "bearing": "steering",
 }
 WELDED_KINDS = ("frame", "gusset", "rollbar", "bracket")  # joined to their nodes by welds
 # the suspension's hard points on the body (K2's mounts): the arms and the damper are joined there
@@ -72,10 +75,18 @@ def system_of(part: Record) -> str:
     return SYSTEM_OF_KIND.get(part["kind"], "other")
 
 
-def _c(to: str, via: str, carries: str | None = None) -> Record:
+def _c(to: str, via: str, carries: str | None = None, at=None, axis=None) -> Record:
+    """A connects_to record; at: where the two are joined (mm), axis: a pin's, bushing's or ball joint's
+    axis (normalised here)."""
     out = {"to": to, "via": via}
     if carries:
         out["carries"] = carries
+    if at is not None:
+        out["at_mm"] = [float(v) for v in at]
+    if axis is not None:
+        a = [float(v) for v in axis]
+        n = sum(v * v for v in a) ** 0.5
+        out["axis"] = [v / n for v in a]
     return out
 
 
@@ -137,16 +148,46 @@ def links(design: Record) -> dict[str, Record]:
         sid = s["id"]
         susp, knuckle, wheel = f"susp_{sid}", f"knuckle_{sid}", f"wheel_{sid}"
         held = body_mounts(design, s)
-        if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
+        arm = arm_parts(sid, ids)  # kit/arms.py: the arms' legs, damper, ball joints (in place of the box)
+        if len(arm) == len(ARM_ROLES):
+            import numpy as np
+
+            hp = {k: np.asarray(v, float) for k, v in s["suspension"]["hardpoints_mm"].items()}
+            lower_axis, upper_axis = hp["lca_front"] - hp["lca_rear"], hp["uca_front"] - hp["uca_rear"]
+            kingpin = hp["uca_outer"] - hp["lca_outer"]
+            # each pivot and the damper's top: a bushing at the bracket (or node) that holds it, its pin along
+            # the arm's pivot axis (the damper's eyes parallel to the lower arm's)
+            owner = {"lca_front": (arm["lca_f"], lower_axis), "lca_rear": (arm["lca_r"], lower_axis),
+                     "uca_front": (arm["uca_f"], upper_axis), "uca_rear": (arm["uca_r"], upper_axis),
+                     "damper_upper": (arm["damper"], lower_axis)}
             for mount in BODY_MOUNTS:
                 if mount in held:
-                    add(susp, _c(held[mount], "bushing", "load"))
-        elif s.get("frame_node"):
-            add(susp, _c(s["frame_node"], "bushing", "load"))
-        add(susp, _c(sid, "bushing", "load"))
-        add(knuckle, _c(susp, "ball_joint", "load"))
-        add(wheel, _c(knuckle if knuckle in ids else susp, "bolt", "load"), _c(sid, "rest", "load"))
-        add(f"caliper_{sid}", _c(knuckle if knuckle in ids else susp, "bolt", "load"))
+                    pid, ax = owner[mount]
+                    add(pid, _c(held[mount], "bushing", "load", at=hp[mount], axis=ax))
+            from hiraku.designgen.kit.arms import cross_ends
+
+            ends = cross_ends(hp)
+            add(arm["lca_x"], _c(arm["lca_f"], "weld", "load", at=ends[0]), _c(arm["lca_r"], "weld", "load", at=ends[1]))
+            add(arm["damper"], _c(arm["lca_x"], "bushing", "load", at=hp["damper_lower"], axis=lower_axis))
+            add(arm["bj_lower"], _c(arm["lca_f"], "weld", "load", at=hp["lca_outer"]),
+                _c(arm["lca_r"], "weld", "load", at=hp["lca_outer"]))
+            add(arm["bj_upper"], _c(arm["uca_f"], "weld", "load", at=hp["uca_outer"]),
+                _c(arm["uca_r"], "weld", "load", at=hp["uca_outer"]))
+            add(knuckle, _c(arm["bj_lower"], "ball_joint", "load", at=hp["lca_outer"], axis=kingpin),
+                _c(arm["bj_upper"], "ball_joint", "load", at=hp["uca_outer"], axis=kingpin))
+            hub = knuckle
+        else:
+            if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
+                for mount in BODY_MOUNTS:
+                    if mount in held:
+                        add(susp, _c(held[mount], "bushing", "load"))
+            elif s.get("frame_node"):
+                add(susp, _c(s["frame_node"], "bushing", "load"))
+            add(susp, _c(sid, "bushing", "load"))
+            add(knuckle, _c(susp, "ball_joint", "load"))
+            hub = knuckle if knuckle in ids else susp
+        add(wheel, _c(hub, "bolt", "load"), _c(sid, "rest", "load"))
+        add(f"caliper_{sid}", _c(hub, "bolt", "load"))
         toe = f"toe_link_{sid}"
         if toe in ids:
             add(toe, _c(knuckle, "ball_joint", "load"))
@@ -236,6 +277,16 @@ def links(design: Record) -> dict[str, Record]:
     return out
 
 
+ARM_ROLES = ("lca_f", "lca_r", "lca_x", "uca_f", "uca_r", "damper", "bj_lower", "bj_upper")  # kit/arms.part_ids
+
+
+def arm_parts(sid: str, ids) -> dict[str, str]:
+    """{role: part id} of the arms, damper and ball joints kit/arms.py placed for support sid."""
+    from hiraku.designgen.kit.arms import part_ids
+
+    return {role: pid for role, pid in part_ids(sid).items() if pid in ids}
+
+
 def body_mounts(design: Record, support: Record) -> dict[str, str]:
     """{hard point: what holds it} for a support's body-side hard points (BODY_MOUNTS and tie_inner): the
     design node at the point (a tower's top, a leg's end), else the bracket part whose box holds it.
@@ -250,11 +301,12 @@ def body_mounts(design: Record, support: Record) -> dict[str, str]:
         if k not in hp:
             continue
         q = np.asarray(hp[k], float)
-        at = next((n for n, x in nodes.items() if float(np.linalg.norm(x - q)) <= MOUNT_TOL_MM), None)
+        # the bracket whose box holds the point (a clevis welded on, kit/mounts, kit/arms), else the node at it
+        at = next((p["id"] for p in brackets
+                   if np.all(np.abs(q - np.asarray(p["box"]["center_mm"], float))
+                             <= np.asarray(p["box"]["size_mm"], float) / 2.0 + MOUNT_TOL_MM)), None)
         if at is None:
-            at = next((p["id"] for p in brackets
-                       if np.all(np.abs(q - np.asarray(p["box"]["center_mm"], float))
-                                 <= np.asarray(p["box"]["size_mm"], float) / 2.0 + MOUNT_TOL_MM)), None)
+            at = next((n for n, x in nodes.items() if float(np.linalg.norm(x - q)) <= MOUNT_TOL_MM), None)
         if at is not None:
             out[k] = at
     return out

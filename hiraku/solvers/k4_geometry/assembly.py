@@ -43,8 +43,10 @@ NOT_ASSEMBLED = ("occupant", "cargo")
 
 
 def _frame(b: Body) -> bool:
-    """Members and the parts welded into the frame (gussets, through pieces): in place before assembly."""
-    return b.kind == "member" or b.kind in WELDED
+    """Members and the parts welded into the frame (gussets, through pieces): in place before assembly. A
+    welded kind that rides with a support (no carried_by, e.g. a stay welded on a knuckle) goes with its
+    corner instead."""
+    return b.kind == "member" or (b.kind in WELDED and b.support is None)
 NUDGE_MM = 20.0
 CORNER = "corner"  # unit id prefix of a corner group: "corner:<support id>"
 # Build stages by part kind, earliest first; a corner group is stage 0 and kinds not listed are
@@ -224,7 +226,7 @@ def _bottom(unit: list[Body]) -> float:
 def _held_by(design: dict, bs: dict[str, Body], k: str) -> list[np.ndarray]:
     """Centres of the parts that part k is bolted to (one point for a wheel on its hub)."""
     ups = [f"part:{f['to'].split(' ', 1)[1]}" for f in part_fastenings(design, k.split(":", 1)[1], bs)
-           if f["to"].startswith("part ")]
+           if f["to"].startswith("part ") and f["kind"] != "rest"]  # a rest orders the build, it does not hold
     return [bs[u].obb.center for u in ups if u in bs]
 
 

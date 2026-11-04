@@ -10,6 +10,7 @@ refs need that are not plain reads of the design.
 
 from __future__ import annotations
 
+import copy
 import math
 
 from hiraku.catalog.builders.common import BuildError, Record, design_var, entry, loading, number, q, text, tolerance
@@ -604,14 +605,11 @@ T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output)
 H_TOL = 0.05
 
 
-H1_JOINTS_TITLE = ("つながりが触れているか (判定なし: 設計の型 (designgen) が部品を形の上でつないでいない。直している途中。"
-                   "数は joint_gap_count = connects_to の相手と 2 mm より離れているつながり (電線とホースは除く) と、"
-                   "つながりの無い部品)")
-# the criterion H1-joints takes once the generator joins the parts in shape (not set now; see h1_interference)
+H1_JOINTS_TITLE = "つながりが形の上で触れているか (つながる点 at_mm が両方の形の上、つながりの無い部品が無い)"
 H1_JOINTS_CRITERION = {"quantity": "joint_gap_count", "op": "<=", "limit": {"value": 0.0, "unit": "1"},
                        "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 mm: the "
-                                "program management's figure; wires and hoses not counted), and no part is joined to "
-                                "nothing"}
+                                "program management's figure; wires and hoses not counted), says where (at_mm) on both "
+                                "shapes within 2 mm, and no part is joined to nothing"}
 
 
 def h1_interference(spec: Record, req: Record, design: Record) -> list[Record]:
@@ -634,9 +632,9 @@ def h1_interference(spec: Record, req: Record, design: Record) -> list[Record]:
                        "basis": "H1: through the wheels' travel and the steering's range nothing of a corner meets "
                                 "what it is not mounted to"}},
     ]
-    # measured and shown, not judged (no criterion: the hooks skip it) while the generator does not join the parts
-    # in shape (H1_JOINTS_NOT_JUDGED); the program management puts the criterion back once the parts are joined
-    out.append({**base, "load_case_id": "H1-joints", "title": H1_JOINTS_TITLE})
+    # judged again since the generator joins every part in shape (designgen kit/joints.py, kit/arms.py)
+    out.append({**base, "load_case_id": "H1-joints", "title": H1_JOINTS_TITLE,
+                "criterion": copy.deepcopy(H1_JOINTS_CRITERION)})
     if design.get("modules"):
         out.append({**base, "load_case_id": "H1-envelope",
                     "title": "部品と部材がモジュールの空間に収まっているか",

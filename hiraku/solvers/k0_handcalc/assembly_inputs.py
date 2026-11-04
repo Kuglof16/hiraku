@@ -297,19 +297,28 @@ def joint_inputs(design: dict) -> dict:
         return float(np.linalg.norm(np.maximum(np.maximum(a[0] - b[1], b[0] - a[1]), 0.0)))
 
     gaps, none = [], []
+    tubes: dict[str, list] = {}  # a part made of members (the roll bar) is its tubes' boxes
+    for m in design.get("members", []):
+        if m.get("part") and f"member:{m['id']}" in bx:
+            tubes.setdefault(m["part"], []).append(bx[f"member:{m['id']}"])
     for p in design.get("parts", []):
         links = [c for c in p.get("connects_to") or [] if c.get("via") not in NOT_TOUCHING_VIA]
         if not links:
             none.append(p["id"])
             continue
-        me = bx[f"part:{p['id']}"]
+        mine = tubes.get(p["id"]) or [bx[f"part:{p['id']}"]]
         for c in links:
             to = c["to"]
             pt = nodes.get(to, supports.get(to))
             other = (pt, pt) if pt is not None else bx.get(f"part:{to}") or bx.get(f"member:{to}")
             if other is None:
                 continue
-            g = gap(me, other)
+            g = min(gap(me, other) for me in mine)
+            if "at_mm" in c:  # where the joint says the two meet: in (or on) both boxes
+                at = np.asarray(c["at_mm"], float)
+                g = max(g, min(gap(me, (at, at)) for me in mine), gap(other, (at, at)))
+            else:
+                g = np.inf  # a joint that does not say where it is
             if g > JOINT_GAP_MM:
                 gaps.append((p["id"], to, g))
     return {"n_gap": float(len(gaps)), "n_none": float(len(none)), "gaps": sorted(gaps, key=lambda t: -t[2]),

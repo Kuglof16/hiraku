@@ -63,7 +63,7 @@ from typing import Any
 
 import numpy as np
 
-from hiraku.designgen.kit import body, drivetrain, mounts, safety, steering, systems
+from hiraku.designgen.kit import arms, body, drivetrain, mounts, safety, steering, systems
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
@@ -678,6 +678,8 @@ _OPTION_VARS.update({
 })
 INTEGERS = ("side_bar_count", "pedal_mount")
 ZERO_OR_AT_LEAST = {"rollbar_foot_b": 30.0, "rollbar_foot_h": 30.0, "rollbar_foot_t": 1.6}
+# part kinds of the frame itself, which a joint's gussets may meet (kit/frame.Frame.gussets avoids the others)
+GUSSET_NEIGHBOURS = ("frame", "gusset", "bracket", "rollbar")
 SWITCHES = SWITCHES + tuple(MOUNT_GROUPS) + ("side_bars", "side_net", "rollbar_stays", "rollbar_front_posts", "fenders")
 VARIABLES.update(_OPTION_VARS)
 OPTIONAL.update({
@@ -872,6 +874,50 @@ def plate_masses(lay: Layout) -> None:
     fb["material"], fb["finish"] = PLATE_STEEL, PLATE_FINISH
 
 
+FLOOR_TRIM = (("floor", 1), ("floor_front", 0))  # the floor plate and the axis it is trimmed along
+FLOOR_BRACKET_GAP_MM = 1.0  # a trimmed floor's edge this far from the bracket's face
+
+
+def _floors_clear_of_brackets(design: Record) -> None:
+    """Trim the floors so that none lies under a bracket (welded to the frame) above it, and each can be
+    lowered in from above (K4 assembly): floor narrowed in y to the brackets' inner faces (it stays one
+    plate the seats stand on), floor_front's end toward the bracket pulled back in x; the mass scales
+    with the area. Each trimmed floor's name says what it was trimmed for."""
+    brackets = [p for p in design["parts"] if p["kind"] == "bracket"]
+    for pid, axis in FLOOR_TRIM:
+        f = next((p for p in design["parts"] if p["id"] == pid), None)
+        if f is None:
+            continue
+        c, s = np.asarray(f["box"]["center_mm"], float), np.asarray(f["box"]["size_mm"], float)
+        lo, hi = c - s / 2.0, c + s / 2.0
+        by = []
+        for b in brackets:
+            bc, bs = np.asarray(b["box"]["center_mm"], float), np.asarray(b["box"]["size_mm"], float)
+            blo, bhi = bc - bs / 2.0, bc + bs / 2.0
+            if bhi[2] <= hi[2] or not all(blo[i] < hi[i] and bhi[i] > lo[i] for i in (0, 1)):
+                continue  # not above the floor's top, or not over it
+            if blo[2] <= hi[2] + FLOOR_BRACKET_GAP_MM:
+                continue  # standing on the floor (a pedal stand on it): put on after the floor, not in its way
+            if axis == 1:  # narrower, about the floor's centre line
+                inner = (blo[1] - c[1]) if bc[1] > c[1] else (c[1] - bhi[1])
+                half = min(hi[1] - c[1], inner - FLOOR_BRACKET_GAP_MM)
+                lo[1], hi[1] = c[1] - half, c[1] + half
+            elif bc[0] > c[0]:
+                hi[0] = min(hi[0], blo[0] - FLOOR_BRACKET_GAP_MM)
+            else:
+                lo[0] = max(lo[0], bhi[0] + FLOOR_BRACKET_GAP_MM)
+            by.append(b["id"])
+        if not by:
+            continue
+        new = hi - lo
+        if new[0] <= 0 or new[1] <= 0:
+            raise DesignGenError(f"{pid} would vanish to keep clear of the brackets above it ({', '.join(by)})")
+        f["mass_kg"] = float(f["mass_kg"]) * float(new[0] * new[1]) / float(s[0] * s[1])
+        f["box"]["center_mm"] = [float(v) for v in (lo + hi) / 2.0]
+        f["box"]["size_mm"] = [float(v) for v in new]
+        f["name"] += f" ({'、'.join(sorted(set(by)))} の下から外した寸法)"
+
+
 def _kit(fn, *args, **kw):
     """Call a kit's placing function; a part it cannot place is a DesignGenError (it says why)."""
     try:
@@ -1039,6 +1085,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
+    _kit(arms.place, lay, rho)  # the arms, dampers and ball joints in place of the suspension boxes
     plate_masses(lay)
     lay.reorder(PART_ORDER)
     materials = {"stkr400": material, PLATE_STEEL: steel}
@@ -1089,9 +1136,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     # joint reinforcement last, so that a design's other parts come first as in the design without it
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
+        others = [p for p in lay.parts if p["kind"] not in GUSSET_NEIGHBOURS]  # the gussets keep out of these
         for st in tee:
             for side in "LR":
-                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho))
+                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho,
+                                               avoid=others))
     if v["cross_members_through"] == 1:
         if v["cross_h"] - v["cross_t"] >= v["rail_h"] - v["rail_t"]:
             raise DesignGenError("cross_members_through = 1 needs cross members lower than the rails "
@@ -1158,13 +1207,22 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     add_options(design, v, guard, rho, net, closure)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
+    arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
+    _floors_clear_of_brackets(design)  # each floor can be lowered in from above
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     _check_tubes_through(design)
+    from .kit import joints
+
+    joints.join(design)  # every part's joints touch, with where (at_mm) and the axis of the turning ones
+    design["archetype"] = "ladder_4w"  # designgen.ARCHETYPES
     from .ladder_4w_modules import split
 
-    return split(design)  # module on every part and member, joint on the nodes, design.modules
+    from .ladder_4w_names import write as write_names
+
+    # module on every part and member, joint on the nodes, design.modules; then the members' and variables' names
+    return write_names(split(design))
 
 
 def _check_tubes_through(design: Record) -> None:

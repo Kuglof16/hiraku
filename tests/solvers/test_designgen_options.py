@@ -102,10 +102,12 @@ class MountsTest(unittest.TestCase):
             self.assertGreater(p["mass_kg"], 0.0)
 
     def test_every_part_but_the_pedals_is_held(self):
+        # every part is held since designgen joins them in shape (kit/joints.py: the pedals on struts or stands);
+        # before, the pedals floated here and 16 parts on version 1
         held, free = attach.free_parts(self.d)
-        self.assertEqual(free, {"pedal_accel", "pedal_brake"})
+        self.assertEqual(free, set())
         _, free_v1 = attach.free_parts(V1)
-        self.assertEqual(len(free_v1), 16)
+        self.assertEqual(len(free_v1), 0)
 
     def test_each_mount_touches_its_part_and_member(self):
         for p in self.mounts:

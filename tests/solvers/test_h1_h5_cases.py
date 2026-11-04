@@ -1,4 +1,4 @@
-"""H1 split into H1-interference, H1-motion, H1-joints (shown, not judged), H1-envelope (designs with modules) and
+"""H1 split into H1-interference, H1-motion, H1-joints, H1-envelope (designs with modules) and
 H1-steer; H5-order on blocked_parts. The K0 counts against the assembly tool
 on generated designs, and load_case.modules."""
 
@@ -48,8 +48,9 @@ class CasesTest(unittest.TestCase):
             self.assertEqual(contract.errors("load_case", lc), [], lc["load_case_id"])
         self.assertEqual(got["H1-interference"]["modules"], ["package"])
         self.assertEqual(got["H5-order"]["criterion"]["quantity"], "blocked_parts")
-        self.assertNotIn("criterion", got["H1-joints"])  # shown, not judged, while the parts are not joined in shape
-        self.assertIn("判定なし", got["H1-joints"]["title"])
+        # judged since the generator joins every part in shape (kit/joints.py, kit/arms.py)
+        self.assertEqual(got["H1-joints"]["criterion"]["quantity"], "joint_gap_count")
+        self.assertEqual(got["H1-joints"]["criterion"]["limit"], {"value": 0.0, "unit": "1"})
 
     def test_no_envelope_case_without_modules(self):
         d = GEN.build()
