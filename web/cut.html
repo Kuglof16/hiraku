@@ -86,7 +86,9 @@
   .grid-tile .ok { color: #2f7d4f; }
   .grid-tile .miss { color: #c8402a; }
   .grid-tile .mark.dim { color: #b9b3a5; }
-  .grid-tile .rate { background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 1px 4px; }
+  /* cases past the limit (beyond.js): own colours, apart from the domain's tick or cross */
+  .grid-tile .beyond { position: absolute; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; line-height: 1.2; font-weight: 700; white-space: nowrap; }
+  .grid-tile .beyond span { background: rgba(247, 244, 236, 0.9); border: 2px solid; border-radius: 4px; padding: 1px 6px; }  .grid-tile .rate { background: rgba(247, 244, 236, 0.85); border-radius: 4px; padding: 1px 4px; }
   .grid-tile .tag { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-weight: 700; color: #1b1a17; background: rgba(251, 249, 244, 0.88); border: 1px solid #c9c3b6; border-radius: 4px; padding: 1px 5px; }
   .grid-tile .tag small { font-size: 1em; font-weight: 400; margin-left: 4px; font-family: Consolas, monospace; }
   .grid-tile .tag.over { color: #c8402a; border-color: #c8402a; }

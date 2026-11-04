@@ -2,7 +2,10 @@
 // of a run (cut.html?cut=n04|n15&run=<id>[&version=<n>]). Each tile draws its test's
 // record of a design version and nothing else in words or figures (the story: a picture
 // and a tick or cross); its corner mark is the domain's judgement of that version
-// (judgement.updated: green ✓, red ✕, else none). The header is one line with one number:
+// (judgement.updated: green ✓, red ✕, else none). The load cases past the limit (beyond.js:
+// meant to fail) are counted apart under the mark in their own colours ("限界の外 N (狙いどおり
+// NG)", and "落ちるはずが通った" for one that passed), and a judgement red only through them
+// takes the colour of the domain's other verdicts (beyond.js tileOf). The header is one line with one number:
 // N04 the version (and the rounds to it, no count of red tiles), N15 how many rounds it
 // took. Positions, sizes, times and the order of the tiles come only from layout.json
 // (n04 / n15); a missing key is named on the page.
@@ -31,6 +34,7 @@ import { cutLookOf } from "./look.js";
 import { FEATURE_KEYS, listRects, storyOf } from "./cut_n03.js";
 import { TilePets, loadPets, missingPetKeys } from "./cut_pets.js";
 import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
+import { beyondWords, tileOf } from "./beyond.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -88,6 +92,9 @@ const TILES = {
 const BEYOND = /-beyond$/;
 const RED = "#c8402a";
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
+// The marks of the cases past the limit: not the red of a fail nor the green of a pass.
+const BEYOND_NG = "#6a4c93"; // failed as meant
+const BEYOND_PASSED = "#b26b00"; // passed though meant to fail
 
 // N04: the tiles the voice names, with the key of layout.json n04.times saying when.
 const NAMED = [["crash", "crash_s"], ["nvh", "nvh_s"], ["assembly", "assembly_s"]];
@@ -230,7 +237,7 @@ export class CutGrid {
   // take their judgement's colour when the voice names them (lit), the others none; N15:
   // the judgement of each version from when that version is shown.
   colourChanges(tile) {
-    const st = (v) => this.s.judgements[`${v}|${tile.key}`]?.state ?? null;
+    const st = (v) => tileOf(this.s, tile.key, v).state;
     if (this.name === "n04") {
       const v = this.versions.at(-1);
       const s = st(v);
@@ -278,7 +285,7 @@ export class CutGrid {
 
   featuredKey() {
     const keys = this.spec.tests;
-    const state = (x, k) => this.s.judgements[`${x}|${k}`]?.state ?? null;
+    const state = (x, k) => tileOf(this.s, k, x).state;
     const drawn = (k) => this.drawn(k);
     const first = (list) => list.find(drawn) ?? list[0];
     if (this.name === "n04") return first(keys);
@@ -434,9 +441,12 @@ export class CutGrid {
     el.className = "layer";
     el.dataset.version = String(v);
     tile.el.append(el);
-    const state = this.s.judgements[`${v}|${tile.key}`]?.state ?? null;
-    const layer = { v, el, state, area: null };
-    el.innerHTML = this.markHtml(box, state);
+    const own = tileOf(this.s, tile.key, v);
+    const state = own.state;
+    const layer = { v, el, state, recorded: own.recorded, beyond: { ng: own.ng.length, passed: own.passed.length }, area: null };
+    el.dataset.state = state ?? "";
+    el.dataset.recorded = own.recorded ?? "";
+    el.innerHTML = this.markHtml(box, state) + this.beyondHtml(box, own);
     // what is missing is said as a note for the makers (data-kind "note": not body text)
     if (!def) {
       el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">この札の中身はまだ決めていない (${esc(tile.key)})</span>`);
@@ -461,6 +471,20 @@ export class CutGrid {
     const M = this.spec.tile.mark;
     const px = Math.max(M.size_px, this.story.bodyPx);
     return `<span class="mark ${state === "green" ? "ok" : "miss"}" data-box="${box}.mark" data-state="${state}" data-kind="label" style="right:${M.right}px;top:${M.top}px;font-size:${px}px">${sign}</span>`;
+  }
+
+  // The cases past the limit of the domain in this version (beyond.js), at the tile's top left
+  // (the mark is at the top right, the pet at the bottom right), in their own colours: those that failed as meant ("限界の外 N (狙いどおり
+  // NG)") and those that passed though meant to fail ("限界の外 N: 落ちるはずが通った"). A note
+  // on the picture (data-kind "note"), not a verdict of the domain.
+  beyondHtml(box, own) {
+    const words = beyondWords(own);
+    if (!words.length) return "";
+    const st = this.spec.tile;
+    const kinds = [...(own.ng.length ? ["ng"] : []), ...(own.passed.length ? ["passed"] : [])];
+    return `<div class="beyond" data-box="${box}.beyond" data-kind="note" style="left:${st.label.x}px;top:${st.mark.top}px;font-size:${this.textPx}px">` +
+      words.map((w, i) => `<span class="beyond-${kinds[i]}" style="color:${kinds[i] === "ng" ? BEYOND_NG : BEYOND_PASSED};border-color:${kinds[i] === "ng" ? BEYOND_NG : BEYOND_PASSED}">${esc(w)}</span>`).join("") +
+      `</div>`;
   }
 
   // The top of the space under the tile's top line (its mark).
@@ -620,7 +644,7 @@ export class CutGrid {
       this.asmBox.style.visibility = gridShown ? "hidden" : "visible";
       // the voice names 組み立て as the grid gives way: the box that takes the assembly
       // tile's place is lit in the assembly's judgement colour of the version (none without one)
-      const st = this.s.judgements[`${this.versions.at(-1)}|assembly`]?.state ?? null;
+      const st = tileOf(this.s, "assembly", this.versions.at(-1)).state;
       const tone = st === "green" ? GREEN : st === "red" ? sp.overlay.color : null;
       this.asmBox.dataset.lit = tone ? st : "";
       this.asmBox.style.borderColor = tone ?? this.colors.rule;
@@ -662,8 +686,7 @@ export class CutGrid {
       // N04: a tick or cross is pale (gray) until its tile is named and lit, so lighting up
       // is what shows the record's colour; a tile the voice does not name stays pale
       const mark = layer.el.querySelector(".mark");
-      if (mark) mark.classList.toggle("dim", this.name === "n04" && !hot);
-      if (!gridShown || !layer.view) continue;
+      if (mark) mark.classList.toggle("dim", this.name === "n04" && !hot);      if (!gridShown || !layer.view) continue;
       // the record plays from lead_s to the grid's end, squeezed to fit and paced (pace.js) so
       // nothing turns faster than 90 deg/s on the screen
       if (layer.motion) {
