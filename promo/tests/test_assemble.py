@@ -92,15 +92,20 @@ class Table(unittest.TestCase):
             planned(three_segments(s1=5.0), THREE)
 
     def test_repo_table(self):
-        """The sample table covers the 21 cuts in order with the planned joins and looks."""
+        """The sample table covers the 23 cuts of flow v7 in order with the planned joins and looks."""
         data = json.loads(REPO_TABLE.read_text(encoding="utf-8"))
+        self.assertTrue(data["script"].startswith("${WORK}/"), data["script"])
         for seg in data["segments"]:   # inputs come through ${WORK}, never a fixed folder
             src = seg.get("video") or seg.get("still")
             for p in (src.values() if isinstance(src, dict) else [src] if src else []):
                 self.assertTrue(p.startswith("${WORK}/"), p)
         table = assemble.load_table(data, {"WORK": "/w"})
         cuts = [c for s in table.segments for c in s.cuts]
-        self.assertEqual(len(cuts), 21)
+        self.assertEqual(len(cuts), 23)
+        # flow v7: N14 right after N09; N13 split into N13a-c (the loop from version 1 to 3)
+        self.assertEqual(cuts[9:], ["N08b", "N09", "N14", "N10", "N11", "N12", "N13a", "N13b", "N13c",
+                                    "N15", "N16", "N17", "N17b", "N18"])
+        self.assertNotIn("N13", cuts)
         joins = {s.cuts[-1]: (s.join.kind, s.join.seconds) for s in table.segments}
         self.assertEqual(joins["N04"], ("grain", 0.5))
         self.assertEqual(joins["N05"], ("light", 0.5))

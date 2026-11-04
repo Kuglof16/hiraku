@@ -604,6 +604,13 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .grid-view { gap: 12px; }
 .intake-view { min-height: 0; overflow: auto; display: flex; flex-direction: column; border: 1.5px solid var(--line); border-radius: 12px; }
 .intake-view .intake-host { flex: 1 1 auto; min-height: 0; }
+/* the peek: the design with a rule hit lit, in the intake screen's corner while A2 points at one (app.js drawRulePeek) */
+.rule-peek { position: absolute; width: 440px; height: 300px; z-index: 30; pointer-events: none; display: flex; flex-direction: column;
+  background: var(--panel); border: 2px solid #ff6a00; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); overflow: hidden; }
+.rule-peek[hidden] { display: none; }
+.rule-peek-cap { padding: 5px 12px; font-size: 14px; color: var(--ink); border-bottom: 1.5px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-peek-gl { position: relative; flex: 1 1 auto; min-height: 0; }
+.rule-peek-gl canvas.gl { position: absolute; inset: 0; display: block; }
 .draftbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1.5px solid var(--line); background: var(--panel); font-size: 15px; }
 .draftbar button { font: inherit; font-size: 15px; color: var(--ink); background: var(--panel); border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 14px; cursor: pointer; }
 .draftbar button:disabled { color: var(--muted); border-color: var(--line); cursor: default; }
@@ -699,6 +706,37 @@ body.video .mode .stop-btn { display: none; }
 .runlist .drv { font-family: inherit; font-size: 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; margin-left: 6px; white-space: nowrap; }
 .runlist a { color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 12px; text-decoration: none; white-space: nowrap; margin-right: 6px; }
 .runlist .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
+
+/* the run list for people (no ?dev=1): over a veiled workbench, one line and one verb per row */
+.runlist.plain { top: 110px; max-height: 850px; width: 1200px; box-shadow: 0 0 0 3000px rgba(251, 249, 244, 0.88); }
+.runlist.plain h2 { margin-bottom: 2px; }
+.runlist.plain .lead { margin: 0 0 12px; font-size: 17px; }
+.runlist.plain h3 { margin: 14px 0 4px; }
+.runlist.plain .pick { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border: 2px solid #e9b872; background: var(--orange-pale); border-radius: 12px; font-size: 18px; }
+.runlist.plain .pick .tag { font-size: 14px; font-weight: 700; color: var(--panel); background: var(--ink); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.runlist.plain .pick .pline { flex: 1; }
+.runlist.plain .pick .sub { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.runlist.plain .pick .go, .runlist.plain .pick a.go { font-size: 17px; padding: 4px 22px; color: var(--panel); background: var(--ink); border: 1.5px solid var(--ink); margin: 0; }
+.runlist.plain .ways { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 4px; padding: 0; font-size: 15px; }
+.runlist.plain .ways .vb { display: inline-block; font-size: 13px; font-weight: 700; border: 1.5px solid var(--ink); border-radius: 999px; padding: 0 10px; margin-right: 6px; }
+.runlist.plain .vb.claude, .runlist.plain button.claude { border-color: #c77d1f; }
+.runlist.plain button.claude:not(:disabled) { color: #8a4f0a; }
+.runlist.plain button.go.claude { color: var(--panel); background: #c77d1f; }
+.runlist.plain .keyless { margin: 6px 0 4px; padding: 6px 12px; }
+.runlist.plain .keyless a.readme { margin-left: 8px; padding: 0 10px; font-size: 14px; }
+.runlist.plain .dline { font-size: 16px; }
+.runlist.plain .lreq { padding: 7px 6px; }
+.runlist.plain .more { display: inline; margin-left: 10px; }
+.runlist.plain .more summary { display: inline; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; list-style: none; }
+.runlist.plain .more[open] { display: block; margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); font-size: 14px; }
+.runlist.plain .more[open] summary { display: block; margin-bottom: 4px; }
+.runlist.plain .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.runlist.plain .more .cut { font-size: 12px; font-weight: 700; color: var(--blue); border: 1.5px solid var(--blue); border-radius: 999px; padding: 0 8px; }
+.runlist.plain .more .cost.over { color: var(--red); }
+.runlist.plain .lbtns a { margin-right: 0; }
+.runlist.plain .going { font-weight: 600; }
+.runlist.plain table td:nth-child(2) { width: 70px; color: var(--muted); }
+.runlist.plain table td:last-child { width: 70px; text-align: right; }
 
 .dropzone {
   position: absolute;
