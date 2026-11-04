@@ -549,7 +549,7 @@ class JointsBrowserTest(unittest.TestCase):
         self.assertEqual(got["fromData"], 2)
         self.assertEqual(got["guessed"], guessed)
         self.assertGreater(guessed, 0)
-        self.assertIn(f"推し量りで置いた {guessed} 所", legend["text"])
+        self.assertIn(f"場所はおおよそ {guessed} 所", legend["text"])
         # the counts do not change with the place
         self.assertEqual(got["counts"], expected_counts(design())[0])
 

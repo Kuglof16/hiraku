@@ -15,6 +15,10 @@
   font-size: 13px;
 }
 .joint-legend[hidden] { display: none; }
+/* js/joints.js hoverTag: the mark pointed at */
+.joint-tag { position: absolute; z-index: 7; pointer-events: none; background: rgba(251, 249, 244, 0.96); border: 1.5px solid var(--ink);
+  border-radius: 8px; padding: 3px 8px; font-size: 13px; white-space: nowrap; }
+.joint-tag[hidden] { display: none; }
 .joint-legend .jl-ttl { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
 .joint-legend .jl-ttl small { font-weight: 400; color: var(--muted); }
 .joint-legend .jl-rows { display: grid; grid-template-columns: 16px auto auto; column-gap: 8px; row-gap: 2px; align-items: center; }
@@ -22,6 +26,8 @@
 .joint-legend .jl-nm small { color: var(--muted); margin-left: 4px; }
 .joint-legend .jl-n { text-align: right; font-variant-numeric: tabular-nums; }
 .joint-legend .jl-note { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 4px; }
+.joint-legend .jl-more { margin-top: 4px; }
+.joint-legend .jl-more summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 /* the swatches: the shape of each mark (MARK_SHAPES), in its colour */
 .jl-sw { width: 14px; height: 14px; box-sizing: border-box; justify-self: center; }
 /* the weld: a fillet's section, the bead's triangle in the corner of two grey plates (the tube's side, the face) */

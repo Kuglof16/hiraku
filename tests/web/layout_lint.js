@@ -169,15 +169,17 @@
   const all = [root, ...root.querySelectorAll("*")].filter((e) => !e.closest("svg") && e.tagName !== "CANVAS");
 
   const shown = (el) => (el.checkVisibility ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : true);
-  // the box that clips an element (the nearest with overflow other than visible, itself too)
+  const cut = (r, c) => (c ? { left: Math.max(r.left, c.left), right: Math.min(r.right, c.right), top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) } : r);
+  // the box that clips an element: every box with overflow other than visible, itself too, cut
+  // to each other (a line of a scrolled list clipped by itself and by the list)
   const clipOf = (el) => {
+    let c = null;
     for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
       const cs = getComputedStyle(e);
-      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") return e.getBoundingClientRect();
+      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") c = cut(e.getBoundingClientRect(), c);
     }
-    return null;
+    return c;
   };
-  const cut = (r, c) => (c ? { left: Math.max(r.left, c.left), right: Math.min(r.right, c.right), top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) } : r);
   // an element is on top in the box r (a box of its text) at one of a few points of it
   const onTop = (el, r) => {
     if (!shown(el)) return false;
@@ -197,7 +199,11 @@
 
   // (a) overlap
   const press = all.filter((e) => e.matches(PRESSABLE) && !exempt(e, "overlap") && visible(e));
-  const boxesOf = (e) => [...e.getClientRects()].filter(inView);
+  // (cut to the boxes that clip them: a button scrolled out of its row is not where it would be)
+  const boxesOf = (e) => {
+    const c = clipOf(e.parentElement ?? e);
+    return [...e.getClientRects()].filter(inView).map((r) => cut(r, c)).filter((r) => r.right - r.left > 0.5 && r.bottom - r.top > 0.5);
+  };
   for (let i = 0; i < press.length; i++) {
     for (let j = i + 1; j < press.length; j++) {
       const a = press[i], b = press[j];
@@ -316,7 +322,7 @@
       if (k.right - k.left > 0.5 && k.bottom - k.top > 0.5 && inView(r)) texts.push({ el: p, r: k });
     }
   }
-  for (const e of all) if (e.matches(PRESSABLE) && !exempt(e, "cover") && shown(e)) for (const r of e.getClientRects()) if (inView(r)) texts.push({ el: e, r });
+  for (const e of all) if (e.matches(PRESSABLE) && !exempt(e, "cover") && shown(e)) for (const r of boxesOf(e)) texts.push({ el: e, r });
   for (const l of labels) {
     const lr = cut(l.getBoundingClientRect(), clipOf(l));
     if (!(lr.right > lr.left && lr.bottom > lr.top)) continue;

@@ -217,7 +217,15 @@ body.video .hint { display: none; }
 
 .logpanel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .logpanel .nw { white-space: nowrap; }
-.logpanel ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; scrollbar-width: thin; }
+/* labels.js keepAsides: an aside kept on one line when it fits; a longer one wraps within itself */
+.aside { display: inline-block; max-width: 100%; white-space: normal; }
+/* the top edge fades: a line cut there by the scroll reads as "more above", not as a broken line */
+.logpanel ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px); mask-image: linear-gradient(to bottom, transparent 0, #000 16px); }
+/* long ids (mass_props.front_wheel_load, a tool's call) break anywhere rather than run out sideways */
+.logpanel li { overflow-wrap: anywhere; }
+/* Japanese prose in narrow boxes: break between phrases, and no last line of one letter */
+.logpanel li, .card .fl-title, .asm-steps .tx, .asm-steps .fz, .asm-steps .blk { word-break: auto-phrase; text-wrap: pretty; }
 .logpanel li {
   position: relative;
   padding: 4px 0 4px 24px;
@@ -262,6 +270,12 @@ body.video .hint { display: none; }
 .tests .auto { flex: none; white-space: nowrap; font-size: 14px; color: var(--muted); border: 1.5px dashed var(--line); border-radius: 999px; padding: 4px 12px; }
 .tests .test { flex: 0 1 auto; min-width: 0; }
 .tests .auto.on { color: var(--blue); border-color: var(--blue); border-style: solid; }
+.tests .test .tid small { font-family: var(--sans, inherit); font-size: 13px; margin-left: 4px; }
+/* many load cases (app.js MANY_TESTS): the id and its short name only, the row scrolls sideways */
+.tests.many { overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.tests.many .test { flex: none; padding: 4px 11px; }
+.tests.many .test .tid { margin-right: 0; }
+.tests.many .test .ttl { display: none; }
 
 .viewport {
   position: relative;
@@ -279,7 +293,9 @@ body.video .hint { display: none; }
 .viewport canvas.gl { position: absolute; inset: 0; display: block; }
 /* the real look: a soft sky over the earth instead of the ruled paper */
 body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #eceee9 58%, #e3dccd 100%); }
-.gl-labels { position: absolute; left: 0; top: 0; pointer-events: none; }
+/* z-index: a stacking context of its own, so the labels' own z-indexes (CSS2DRenderer, by depth)
+   stay under the panels over the 3D (graph, legends, toggles) */
+.gl-labels { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; }
 .lbl {
   font-size: 15px;
   color: var(--ink);
@@ -587,6 +603,10 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .card h3 small { font-weight: 400; color: var(--muted); font-size: 16px; margin-left: 6px; }
 .card .sub { color: var(--muted); font-size: 16px; }
 .card .expr { font-family: var(--mono); font-size: 17px; margin: 4px 0; }
+.card .fl-title { font-size: 17px; margin: 2px 0 4px; }
+.card details.more { margin: 2px 0 4px; }
+.card details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.card details.more .basis { white-space: normal; overflow-wrap: anywhere; }
 .card .big { font-size: 22px; font-weight: 700; margin: 2px 0; }
 .card .kv { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; font-size: 16px; font-family: var(--mono); }
 .card .kv span:nth-child(odd) { color: var(--muted); }
@@ -668,8 +688,12 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .grid-head .vbox.red { border-color: var(--red); }
 .grid-head .vbox.green { border-color: var(--green); }
 .grid-head .vbox.cur { font-weight: 700; }
+.grid-head .vbox .vred { font-size: 13px; font-weight: 400; margin-left: 6px; }
 .grid-head .varrow { font-size: 20px; }
 .grid-head .change { color: var(--muted); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* the design's change in words: a line of its own under the version flow, up to two lines */
+.grid-head:has(.change.long) { flex-wrap: wrap; row-gap: 2px; }
+.grid-head .change.long { order: 10; flex-basis: 100%; white-space: normal; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tiles { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px; min-height: 0; }
 .tile { border: 2.5px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; min-height: 0; overflow: hidden; }
 .tile .th { display: flex; align-items: baseline; justify-content: space-between; }
@@ -843,11 +867,17 @@ body.video .mode .stop-btn { display: none; }
   background: rgba(251, 249, 244, 0.92);
   border: 1.5px solid var(--ink);
   border-radius: 10px;
-  white-space: nowrap;
+  /* up to two lines, then cut (the whole sentence is its title and in the log) */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
   pointer-events: none;
 }
+.now[hidden] { display: none; }
+/* app.js loadingNote: while a record is read */
+.loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
+  border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }
 
 /* the verdict in one sentence, then the value beside its criterion */
 .verdict .verdict-big { font-size: 24px; font-weight: 800; margin-bottom: 2px; }

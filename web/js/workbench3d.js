@@ -623,6 +623,14 @@ export class Workbench3D {
     // given as one box, or a torso box that still holds the head) keeps the torso drawn as a
     // capsule with a ball for the head, as before.
     const headed = new Set(occupants.filter((p) => segmentOf(p) === "head").map(personOf));
+    // the parts drawn here by their short name (one name tag for those that share it)
+    const sameShort = new Map();
+    for (const p of design.parts ?? []) {
+      if (p.kind === "wheel" && wheelAt(v3(p.box.center_mm))) continue;
+      const k = String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id;
+      if (!sameShort.has(k)) sameShort.set(k, []);
+      sameShort.get(k).push(p);
+    }
     for (const p of design.parts ?? []) {
       const c = v3(p.box.center_mm);
       const sz = p.box.size_mm;
@@ -682,14 +690,20 @@ export class Workbench3D {
           g.add(edges);
         }
       }
-      // Short name on the tag (the part before a bracket); the full name is the tooltip.
+      // Short name on the tag (the part before a bracket); the full name is the tooltip. Parts
+      // sharing a short name (a person's body segments) get one tag, on the first of them, with how
+      // many parts it names and no mass (how their masses add up is not in the data); a part whose
+      // mass is 0 or not given shows none (the roll bar's tubes weigh as members, not as its part).
       const short = String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id;
-      const tag = label(`${esc(short)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
-      tag.element.title = p.name ?? p.id;
+      const same = sameShort.get(short) ?? [];
+      const mass = p.mass_kg > 0 ? `<small>${fmt(p.mass_kg)} kg</small>` : "";
+      const tag = label(same.length > 1 ? `${esc(short)}<small>部品 ${same.length} 個</small>` : `${esc(short)}${mass}`, "lbl-part");
+      tag.element.title = same.length > 1 ? `${short}: ${same.map((x) => x.name ?? x.id).join("、")}` : p.name ?? p.id;
+      if (same.length > 1 && same[0] !== p) tag.element.dataset.named = "0"; // named by the first one's tag
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
-      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seatOf.get(personOf(p)) : null, onBoard: true, center: c, size: sz, short };
+      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seatOf.get(personOf(p)) : null, onBoard: true, center: c, size: sz, short, mass: p.mass_kg ?? 0 };
     }
 
     this.bboxIso = box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1000, -1000, 0), new THREE.Vector3(1000, 1000, 1000)) : box;
@@ -1802,7 +1816,7 @@ export class Workbench3D {
     this.arrows.visible = !!t.arrows && !this.frame;
     this.names.visible = !!t.names;
     this.markers.visible = !!t.names;
-    for (const o of Object.values(this.partObjs)) o.tag.visible = !!t.names;
+    for (const o of Object.values(this.partObjs)) o.tag.visible = !!t.names && o.tag.element.dataset.named !== "0";
     for (const o of Object.values(this.wheelObjs)) o.tag.visible = !!t.names || o.ring.visible;
     this.overGhosts.visible = !!t.contour;
     this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
@@ -1876,6 +1890,30 @@ export class Workbench3D {
     if (this.labelRenderer) {
       this.labelRenderer.render(this.scene, this.camera);
       this.placeOutLabels();
+      this.declutterNames();
+    }
+  }
+
+  // With 名前 on, a name tag that would lie over one already shown is hidden (thinned out): the
+  // parts first, heaviest first, then the members' and nodes' ids. Looked at every few frames
+  // (the tags move with the camera); a hidden tag keeps its place and comes back when clear.
+  declutterNames() {
+    if (!this.toggles?.names) return;
+    this.declutterTick = ((this.declutterTick ?? 0) + 1) % 6;
+    if (this.declutterTick !== 1) return;
+    const tags = [];
+    for (const o of Object.values(this.partObjs)) if (o.tag.visible && o.tag.element.dataset.named !== "0") tags.push({ el: o.tag.element, rank: 0, w: -(o.mass ?? 0) });
+    for (const t of this.names.children) if (t.element) tags.push({ el: t.element, rank: t.element.classList.contains("lbl-node") ? 2 : 1, w: 0 });
+    tags.sort((a, b) => a.rank - b.rank || a.w - b.w);
+    const kept = [];
+    for (const t of tags) {
+      t.el.style.visibility = "";
+      if (t.el.style.display === "none") continue;
+      const r = t.el.getBoundingClientRect();
+      if (!(r.width > 0)) continue;
+      const hit = kept.some((k) => r.left < k.right && r.right > k.left && r.top < k.bottom && r.bottom > k.top);
+      if (hit) t.el.style.visibility = "hidden";
+      else kept.push(r);
     }
   }
 

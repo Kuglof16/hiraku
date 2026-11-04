@@ -174,10 +174,11 @@ export function gridPlaceOf(id) {
 
 // A pet's row (the workbench's list, the grid's head): the pet, the agent's name and what it
 // does now (state.js status), and under them its bubble.
-export function petRowHtml(id, status, { tag = "li", cls = "" } = {}) {
+// name: the words for the agent (default its short name; the agents' pane gives the role's long name)
+export function petRowHtml(id, status, { tag = "li", cls = "", name = null } = {}) {
   return (
     `<${tag} class="petrow ${cls}" data-agent="${esc(id)}" data-say-host><span class="petslot" data-pet-slot="${esc(id)}"></span>` +
-    `<span class="nm">${esc(agentName(id))}</span><span class="st">${esc(status ?? "")}</span><span class="say" data-say="${esc(id)}"></span></${tag}>`
+    `<span class="nm">${esc(name ?? agentName(id))}</span><span class="st">${esc(status ?? "")}</span><span class="say" data-say="${esc(id)}"></span></${tag}>`
   );
 }
 
