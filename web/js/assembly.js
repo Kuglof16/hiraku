@@ -19,6 +19,7 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { esc, fmt } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { mountAssemblySwitch } from "./modules.js"; // modules:
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -425,6 +426,7 @@ export class AssemblyPanel {
     this.gl = this.q(".asm-gl");
     this.view = new Workbench3D(this.gl, "zu");
     this.stage = new AssemblyStage(this.view);
+    this.modules = mountAssemblySwitch(this); // modules: the module colours and spaces (modules.js)
     this.seek = new AssemblySeek(this.q(".asm-bar"), {
       interactive: true,
       onSeek: (u) => {
@@ -488,6 +490,7 @@ export class AssemblyPanel {
     this.seek.set(this.u, this.playing);
     const { current } = stepAt(this.u, n);
     if (current !== this.drawnCurrent) this.drawList(current);
+    this.modules.update(); // modules:
     this.view.render();
   }
 

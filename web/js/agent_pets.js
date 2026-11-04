@@ -17,6 +17,8 @@
 import { DOMAINS, agentName, esc } from "./labels.js";
 import { PetStage, loadPets, missingPetKeys, poseTime } from "./cut_pets.js";
 import { loadLayout } from "./compose.js";
+import { moduleColor } from "./proposals.js"; // modules:
+import { moduleStyle } from "./modules.js"; // modules:
 
 export const SAY_S = 5; // seconds a bubble stays (as the 3D's bubble: app.js SHOW_S)
 export const SAY_CHARS = 26; // a bubble shows at most this many characters of the line
@@ -204,7 +206,14 @@ export class AgentPets {
 
   // Can the agent be drawn as a pet (its role is one of pet3d.js ROLES)?
   has(id) {
-    return this.roles.has(id);
+    return this.roles.has(this.roleOf(id));
+  }
+
+  // modules: the pet3d.js role an agent is drawn as: its own id when ROLES has it (v10 has the six
+  // designer.<module>), else a module designer is the designer's pet with its module's mark.
+  roleOf(id) {
+    if (this.roles.has(id)) return id;
+    return id?.startsWith("designer.") ? "designer" : id;
   }
 
   setPixel(k) {
@@ -219,7 +228,8 @@ export class AgentPets {
     if (!p) {
       // i: the role's place in pet3d.js ROLES, not the order the pets were made in (a page
       // opened at ?t= makes them in another order than one played up to t)
-      p = { pet: this.stage.add(id), i: this.HP.ROLES.findIndex((r) => r.id === id), boxes: {} };
+      const role = this.roleOf(id);
+      p = { pet: this.stage.add(role), i: this.HP.ROLES.findIndex((r) => r.id === role), boxes: {} };
       this.pets.set(id, p);
     }
     let b = p.boxes[place];
@@ -234,6 +244,15 @@ export class AgentPets {
       const canvas = document.createElement("canvas");
       canvas.className = "pet3d";
       el.append(canvas);
+      // modules: a module designer drawn as the designer's pet carries its module's colour mark
+      if (p.pet.role.id !== id && id.startsWith("designer.")) {
+        moduleStyle();
+        const mark = document.createElement("span");
+        mark.className = "modmark";
+        mark.dataset.module = id.slice(9);
+        mark.style.setProperty("--mod", moduleColor(id.slice(9)));
+        el.append(mark);
+      }
       b = p.boxes[place] = { el, canvas, ctx: canvas.getContext("2d"), last: null, state: null };
     }
     return b.el;

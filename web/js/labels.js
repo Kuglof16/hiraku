@@ -93,6 +93,7 @@ export const RULES = [
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
+  { id: "HK6", key: "HK6_module_scope", ja: "持ち場" }, // modules: contract d9631a5
 ];
 
 export const BASE_JA = {
@@ -212,6 +213,13 @@ const QUANTITY_JA = {
   blocked_parts: "入らない部品の数",
   steps_without_tool_clearance: "工具が入らない手順の数",
   steps_out_of_reach: "手が届かない手順の数",
+  // held: the joints and the modules' spaces (hiraku/solvers/shelf/assembly.py at 7fc0ffc)
+  joint_gap_count: "つながりの不足の数",
+  joint_gaps: "離れたつながりの数",
+  unjoined_parts: "つながりの無い部品の数",
+  worst_joint_gap: "いちばん離れたつながり",
+  envelope_outside_count: "モジュールの空間からはみ出した部品の数",
+  worst_envelope_outside: "いちばん大きいはみ出し",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
   // the shell solver (frame_shell): the judged hot-spot stress
@@ -324,7 +332,19 @@ const VARIABLE_JA = {
   battery_x: "電池の前後の位置",
   wheelbase: "ホイールベース",
   track: "トレッド",
+  // modules: the variables a module designer changes in the sample records
+  front_spring_rate: "前のばねの固さ",
+  rear_spring_rate: "後ろのばねの固さ",
+  cargo_height: "荷の高さ",
+  rail_t: "レールの板厚",
+  seat_x: "座席の前後の位置",
+  max_steer_angle: "最大の舵角",
 };
+
+// modules: module id -> name (filled from the server's /api/modules, the contract's MODULE_NAMES_JA;
+// empty when the server has no such route: the id is shown as written)
+export const MODULE_JA = {};
+export const moduleName = (m) => MODULE_JA[m] ?? m ?? "";
 const DIM_JA = { t: "板厚", h: "高さ", b: "幅", d: "直径" };
 const PART_FIELD_JA = { mass_kg: "重さ" };
 const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
@@ -369,6 +389,7 @@ export function agentName(id) {
   if (!id) return "";
   if (ROLE_JA[id]) return ROLE_JA[id];
   if (id.startsWith("cae.")) return DOMAIN_JA[id.slice(4)] ?? id;
+  if (id.startsWith("designer.")) return `${moduleName(id.slice(9))}の設計役`; // modules: designer.<module>
   return id;
 }
 
