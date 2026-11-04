@@ -96,7 +96,10 @@ class FrameKitTest(unittest.TestCase):
         for n in part["nodes"]:
             self.assertEqual(v1_nodes[n["id"]], n["xyz_mm"])
         crosses = [m for m in part["members"] if m["id"].startswith("cross_")]
-        self.assertEqual(crosses, [m for m in V1["members"] if m["id"].startswith("cross_")])
+        # the generator writes module (and name) on the members after the kit has made them (ladder_4w_modules)
+        added = ("module", "name")
+        self.assertEqual(crosses, [{k: v for k, v in m.items() if k not in added}
+                                   for m in V1["members"] if m["id"].startswith("cross_")])
         rail_len = sum(abs(v1_nodes[m["node_a"]][0] - v1_nodes[m["node_b"]][0]) for m in V1["members"]
                        if m["id"].startswith("rail_L_"))
         self.assertAlmostEqual(rail_len, STATIONS["F"] - STATIONS["E"], places=9)
