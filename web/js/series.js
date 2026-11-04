@@ -15,7 +15,7 @@
 //   reaction_{x,y,z}.<ID>, grip_{x,y,z}.<ID> (N)  force vectors on the tyre
 // All positions are in the road frame (x along the road, y left, z up).
 
-import { channelName, channelPartName } from "./labels.js";
+import { channelName, channelPartName, quantityName } from "./labels.js";
 
 // Factors to mm, rad and N.
 export const LENGTH = { mm: 1, m: 1000, km: 1e6 };
@@ -241,7 +241,9 @@ export function chartGroups(channels) {
     const s = channels.get(n);
     const base = n.includes(".") ? n.slice(0, n.indexOf(".")) : n;
     const key = `${base}@${s.x.quantity}[${s.x.unit}]${s.unit}`;
-    if (!against.has(key)) against.set(key, { key, ja: base, unit: s.unit, x: { quantity: s.x.quantity, unit: s.x.unit }, channels: [] });
+    // named from the quantities' table (labels.js quantityName), else the channels' (channelName)
+    const ja = quantityName(base) !== base ? quantityName(base) : channelName(base);
+    if (!against.has(key)) against.set(key, { key, ja, unit: s.unit, x: { quantity: s.x.quantity, unit: s.x.unit }, channels: [] });
     against.get(key).channels.push(n);
   }
   return [...out, ...against.values()];

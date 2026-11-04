@@ -292,7 +292,9 @@ export class TileBoard {
       const why = j.state === "pending" && !j.judgement?.summary
         ? info.ana ? "この版の解析は記録にあるが、判定がまだ記録に無い" : "この版の解析がまだ記録に無い"
         : "";
-      const summary = verdicts.length ? `${failed.length ? `不合格 ${failed.length} 件: ` : "合格: "}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why;
+      // (a tile still まだ with some verdicts: those are the ones judged so far, not the tile's pass)
+      const lead = failed.length ? `不合格 ${failed.length} 件: ` : j.state === "green" ? "合格: " : "判定のある分: ";
+      const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why;
       const nv = j.judgement?.verdict_ids?.length ?? 0;
       const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
