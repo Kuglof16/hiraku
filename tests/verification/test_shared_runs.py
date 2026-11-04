@@ -33,7 +33,8 @@ class SharedRuns(unittest.TestCase):
         time.sleep(0.3)  # long enough for a second caller to arrive while it runs
         run = out / "20261104-000000-x"
         run.mkdir(parents=True)
-        (run / "events.jsonl").write_text("{}\n", encoding="utf-8")
+        end = "" if self.code == 3 else '{"kind": "run.finished"}\n'  # 3: a run that did not finish
+        (run / "events.jsonl").write_text('{"kind": "run.started"}\n' + end, encoding="utf-8")
         return run, self.code, "out", "err", 0.3
 
     def run_one(self, **kw):
@@ -59,9 +60,15 @@ class SharedRuns(unittest.TestCase):
         self.assertNotEqual(a.key, b.key)
         self.assertEqual(len(self.calls), 2)
 
-    def test_a_failed_run_is_not_passed_on(self):
-        self.code = 1
-        self.assertEqual(self.run_one().returncode, 1)
+    def test_a_run_ended_not_done_is_passed_on(self):
+        self.code = 1  # hiraku run's exit code for stopped / not_judged
+        self.run_one()
+        self.assertTrue(self.run_one().reused)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_a_run_that_did_not_finish_is_not_passed_on(self):
+        self.code = 3
+        self.assertEqual(self.run_one().returncode, 3)
         self.code = 0
         s = self.run_one()
         self.assertEqual((s.returncode, s.reused, len(self.calls)), (0, False, 2))

@@ -19,9 +19,11 @@ it under runs/.test-cache/<key>/<requirements stem>/ (runs/ is local, never comm
 - an OS lock on runs/.test-cache/<key>/<stem>.lock: a second caller waits for the first
   and reads the same folder. result.json is written last; a folder without it (a run that
   was stopped) is made again.
-- only a run that ended with exit code 0 and one run folder is kept for later callers;
-  another result is returned to its caller and the next caller makes the run again (a run
-  stopped for lack of memory is not passed on).
+- only a run that finished is kept for later callers: one run folder whose events.jsonl
+  has run.finished, and exit code 0 (status done) or 1 (`python -m hiraku run` gives 1 for
+  any other end, e.g. stopped/not_judged). Another result (stopped after the timeout, a
+  crash, 2 "cannot start the run") is returned to its caller and the next caller makes the
+  run again, so a run stopped for lack of memory is not passed on.
 - the run folder is for reading: a test that writes into a run copies it first (copy_run).
 - the folders of keys other than the newest KEEP_KEYS are removed when a run is kept.
 - HIRAKU_SHARED_RUNS=0 makes every call run on its own, in a fresh temporary folder
@@ -159,6 +161,23 @@ class _Lock:
             self.f.close()
 
 
+def finished(run: Path | None, code: int | None) -> bool:
+    """The run ended by itself: exit 0 or 1 and run.finished in its events.jsonl."""
+    if run is None or code not in (0, 1):
+        return False
+    try:
+        lines = (run / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in reversed(lines):
+        try:
+            if json.loads(line).get("kind") == "run.finished":
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def _read(folder: Path, k: str) -> Shared | None:
     try:
         r = json.loads((folder / RESULT).read_text(encoding="utf-8"))
@@ -203,7 +222,7 @@ def scripted_run(requirements: Path, timeout: float = TIMEOUT_S, cache: Path | N
         folder.mkdir(parents=True)
         run, code, so, se, s = _make(requirements, folder / "runs", timeout)
         shared = Shared(run, code, so, se, s, k, False)
-        if code == 0 and run is not None:
+        if finished(run, code):
             (folder / RESULT).write_text(json.dumps({
                 "key": k, "requirements": str(requirements), "run_dir": run.relative_to(folder).as_posix(),
                 "returncode": code, "stdout": so, "stderr": se, "seconds": round(s, 2),
