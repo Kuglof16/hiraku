@@ -92,7 +92,20 @@ RULE_CATEGORY_NAMES_JA = {
 # Agent-facing MCP tools (served by create_sdk_mcp_server under the name "hiraku").
 MCP_SERVER = "hiraku"
 MCP_TOOLS_MVP = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause")
-MCP_TOOLS_DESIGNER = ("revise_design",)
+MCP_TOOLS_DESIGNER = ("revise_design",)  # the designer, or each designer.<module> for designs with modules
+MCP_TOOLS_PACKAGER = ("build_version",)  # designs with modules: the packager builds a round's module changes into a version
+
+MODULES: tuple[str, ...] = _enum("module_id")
+MODULE_NAMES_JA = {
+    "package": "レイアウト",
+    "frame": "枠",
+    "suspension": "足まわり",
+    "steering": "操作系",
+    "occupant": "乗員まわり",
+    "powertrain": "動力",
+    "body": "車体",
+}
+MODULE_DESIGNERS = tuple(f"designer.{m}" for m in MODULES if m != "package")
 MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "make_tool", "check_tool", "import_knowledge", "rule_check",
                    "write_report")
 

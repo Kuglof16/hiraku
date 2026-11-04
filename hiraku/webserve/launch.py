@@ -148,6 +148,20 @@ def demo_run_estimate(value: Any) -> float | None:
     return value
 
 
+def demo_run_estimate_of(row: dict[str, Any]) -> float | None:
+    """The estimate a demo row shows: its `estimate_usd` when written, else the `usd` of the default
+    mix in its `estimates_usd` ({<mix>: {usd, upper_usd}} or null; none there: no estimate)."""
+    if "estimate_usd" in row:
+        return demo_run_estimate(row.get("estimate_usd"))
+    per_mix = row.get("estimates_usd")
+    if per_mix is None:
+        return None
+    default = per_mix.get("default") if isinstance(per_mix, dict) else None
+    if not isinstance(default, dict):
+        raise ValueError(f"estimates_usd must map each mix to {{usd, upper_usd}} (with default), not {per_mix!r}")
+    return demo_run_estimate(default.get("usd"))
+
+
 def run_command(requirements: Path, mode: str, runs_dir: Path, intake_events: Path | None = None) -> list[str]:
     cmd = [sys.executable, "-u", "-m", "hiraku", "run", str(requirements), "--runs", str(runs_dir)]
     if intake_events is not None:  # a request settled in A1/A2: the run emits these intake events as they are
@@ -258,7 +272,7 @@ class Launcher:
                                    "cuts": [str(c) for c in cuts] if isinstance(cuts, list) else [str(cuts)]}
             try:
                 row["modes"] = demo_run_modes(r.get("modes"))
-                row["estimate_usd"] = demo_run_estimate(r.get("estimate_usd"))
+                row["estimate_usd"] = demo_run_estimate_of(r)
             except ValueError as e:
                 rows.append({**row, "error": str(e)})
                 continue

@@ -12,7 +12,7 @@ export const DEMOS = {
    "data": {
     "run_id": "20261103-100000-offroad-4w",
     "created_at": "2026-11-03T10:00:00.000+09:00",
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "product": "offroad-4w",
     "flags": {
      "ride": true,
@@ -153,7 +153,7 @@ export const DEMOS = {
      },
      {
       "key": "Q51",
-      "name": "0 → 最高速度 (Q50) の時間",
+      "name": "0 → 最高速度の時間",
       "value": 6,
       "unit": "s",
       "source": "default",
@@ -355,7 +355,7 @@ export const DEMOS = {
    "agent": "lead",
    "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
      "ride": true,
      "lean": true,
@@ -1161,9 +1161,62 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 4 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 7 件、既定値 14 件",
    "data": {
     "answers": [
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -1182,22 +1235,74 @@ export const DEMOS = {
       "value": "ISO 13854 (指 25 mm)"
      },
      {
-      "key": "Q93",
-      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
       "value": 450,
       "unit": "mm"
      },
      {
       "key": "Q94",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
-      "value": 600,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
       "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
+      "unit": "mm"
+     },
+     {
+      "key": "Q03",
+      "name": "使う頻度・年数",
+      "value": "週末ごと、5 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer)"
+     },
+     {
+      "key": "Q20",
+      "name": "水・ほこり (IP)",
+      "value": "IP54",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer, dust and splashing water on a forest road)"
      },
      {
       "key": "Q34",
@@ -1231,6 +1336,14 @@ export const DEMOS = {
       "source": "hearing",
       "trust": 3,
       "basis": "assumption (steel tube frame)"
+     },
+     {
+      "key": "Q91",
+      "name": "運転時間",
+      "value": "1 日 2 時間、5 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer)"
      }
     ],
     "note": "林道だけで使い、公道は走らない"
@@ -1565,7 +1678,7 @@ export const DEMOS = {
       "unit": "deg"
      },
      "steering_wheel_height": {
-      "value": 495.411492555231,
+      "value": 495.4114925552308,
       "unit": "mm"
      },
      "pedal_x": {
@@ -2329,21 +2442,23 @@ export const DEMOS = {
        "center_mm": [
         -540.8888249672586,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         458.2223500654828,
         911.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 6.87645690910344,
+      "mass_kg": 11.183232626769652,
       "carried_by": [
        "LAp2",
        "RAp2",
        "LS1",
        "RS1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2376,7 +2491,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -330.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -2426,7 +2541,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -220.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -2474,9 +2589,9 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -350.0,
+        -332.29999999999995,
         -220.0,
-        714.5183687566542
+        697.7183687566543
        ],
        "size_mm": [
         120.0,
@@ -2536,21 +2651,23 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         550.0,
         1100.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 8.0,
+      "mass_kg": 16.20795,
       "carried_by": [
        "LS1",
        "RS1",
        "LS2",
        "RS2"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2583,15 +2700,15 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         950.0,
         483.6,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 9.891818181818183,
+      "mass_kg": 12.3078618,
       "carried_by": [
        "LS2",
        "RS2",
@@ -2600,6 +2717,8 @@ export const DEMOS = {
        "LE",
        "RE"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2657,6 +2776,8 @@ export const DEMOS = {
        "LAp1",
        "RAp1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -2687,17 +2808,19 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -280.0,
+        -271.15,
         0.0,
-        630.4431784698709
+        622.0431784698708
        ],
        "size_mm": [
-        20.0,
+        2.3,
         740.0,
-        400.88635693974163
+        384.08635693974145
        ]
       },
-      "mass_kg": 6.592353425231306,
+      "mass_kg": 5.607737628591613,
+      "material": "ss400",
+      "finish": "painted",
       "carried_by": [
        "LAt2",
        "LDT",
@@ -2748,7 +2871,7 @@ export const DEMOS = {
        "center_mm": [
         -720.0,
         -300.0,
-        1205.411492555231
+        1188.6114925552308
        ],
        "size_mm": [
         40.0,
@@ -2793,7 +2916,7 @@ export const DEMOS = {
        "center_mm": [
         -420.0,
         -300.0,
-        995.3492310923181
+        978.5492310923179
        ],
        "size_mm": [
         772.4647532568737,
@@ -2843,16 +2966,16 @@ export const DEMOS = {
        "center_mm": [
         -120.0,
         -235.0,
-        531.8082994683936
+        523.4082994683935
        ],
        "size_mm": [
-        547.360052837795,
+        531.1037549373495,
         24.0,
         24.0
        ],
        "rpy_deg": [
         0.0,
-        75.61744543525063,
+        75.14594426906802,
         90.0
        ]
       },
@@ -2995,7 +3118,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         -300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -3030,7 +3153,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         -540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -3069,7 +3192,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -3104,7 +3227,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -3143,7 +3266,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         -300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -3173,7 +3296,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -3203,7 +3326,7 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        600.0
+        583.2
        ],
        "size_mm": [
         900.0,
@@ -3237,7 +3360,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3272,7 +3395,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3307,16 +3430,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -111.175,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         -3.2899932439578037
        ]
       },
@@ -3342,7 +3465,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -3377,7 +3500,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3412,7 +3535,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3447,16 +3570,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -488.825,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         3.2899932439578
        ]
       },
@@ -3482,7 +3605,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -3517,7 +3640,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3552,7 +3675,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3587,7 +3710,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         447.325,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -3622,7 +3745,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -3657,7 +3780,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -3692,7 +3815,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -3727,7 +3850,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         152.675,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -3762,7 +3885,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -4939,7 +5062,7 @@ export const DEMOS = {
        "center_mm": [
         -285.0,
         -300.0,
-        851.8934450716384
+        835.0934450716383
        ],
        "size_mm": [
         50.0,
@@ -4974,7 +5097,7 @@ export const DEMOS = {
        "center_mm": [
         -1400.0,
         0.0,
-        1810.0
+        1793.2
        ],
        "size_mm": [
         42.69999999999982,
@@ -5300,7 +5423,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -5308,7 +5431,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        -350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -5332,7 +5455,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        600.0,
-       1810.0
+       1793.2
       ]
      },
      {
@@ -5356,7 +5479,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        -600.0,
-       1810.0
+       1793.2
       ]
      }
     ],
@@ -5835,6 +5958,15 @@ export const DEMOS = {
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     },
+     "ss400": {
+      "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "stkm13a": {
@@ -12525,7 +12657,7 @@ export const DEMOS = {
    "data": {
     "run_id": "20261103-100000-offroad-4w-file",
     "created_at": "2026-11-03T10:00:00.000+09:00",
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "product": "offroad-4w",
     "flags": {
      "ride": true,
@@ -12656,6 +12788,59 @@ export const DEMOS = {
       "basis": "the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm (data/designs/offroad-4w-v1.json, parts cargo and deck)"
      },
      {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
+     {
       "key": "Q50",
       "name": "最高速度",
       "value": 40,
@@ -12666,7 +12851,7 @@ export const DEMOS = {
      },
      {
       "key": "Q51",
-      "name": "0 → 最高速度 (Q50) の時間",
+      "name": "0 → 最高速度の時間",
       "value": 6,
       "unit": "s",
       "source": "default",
@@ -12860,6 +13045,15 @@ export const DEMOS = {
       "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
      },
      {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
       "key": "Q90",
       "name": "悪路の走行距離 (疲労)",
       "value": 5000,
@@ -12870,20 +13064,47 @@ export const DEMOS = {
      },
      {
       "key": "Q93",
-      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
       "value": 450,
       "unit": "mm"
      },
      {
       "key": "Q94",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
-      "value": 600,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
       "unit": "mm"
      }
     ],
@@ -12903,7 +13124,7 @@ export const DEMOS = {
    "agent": "lead",
    "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
      "ride": true,
      "lean": true,
@@ -13583,9 +13804,62 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 4 件: Q57・Q63・Q93・Q94)",
+   "text": "要件のファイルのまま進みます (既定値で足した 14 件: Q44・Q45・Q46・Q47・Q48・Q49・Q57・Q63・Q89・Q93・Q94・Q95・Q96・Q97)",
    "data": {
     "answers": [
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -13604,21 +13878,57 @@ export const DEMOS = {
       "value": "ISO 13854 (指 25 mm)"
      },
      {
-      "key": "Q93",
-      "name": "乗り降りの開口の幅 (横の守りの部品でふさいではいけない最小の幅)",
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. Not checked: ISO 3411, ISO 2867 and SAE J1050 were not attempted. Lower bound from a read value: AIST J2 (hip breadth, sitting, feet supported) young female 95 % = 391.0 mm, read 2026-11-03; the width must be above it. The 450 is a provisional margin, not from a source",
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
       "value": 450,
       "unit": "mm"
      },
      {
       "key": "Q94",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小の高さ)",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
       "source": "default",
       "trust": 3,
-      "basis": "assumption, not checked: no source for a height was read (ISO 3411, ISO 2867 and SAE J1050 were not attempted). Provisional: it must cover the hip and the shoulder heights of the seated body (Q31); replace when a source is read",
-      "value": 600,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
       "unit": "mm"
      }
     ]
@@ -13953,7 +14263,7 @@ export const DEMOS = {
       "unit": "deg"
      },
      "steering_wheel_height": {
-      "value": 495.411492555231,
+      "value": 495.4114925552308,
       "unit": "mm"
      },
      "pedal_x": {
@@ -14717,21 +15027,23 @@ export const DEMOS = {
        "center_mm": [
         -540.8888249672586,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         458.2223500654828,
         911.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 6.87645690910344,
+      "mass_kg": 11.183232626769652,
       "carried_by": [
        "LAp2",
        "RAp2",
        "LS1",
        "RS1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -14764,7 +15076,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -330.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -14814,7 +15126,7 @@ export const DEMOS = {
        "center_mm": [
         -389.76882046860203,
         -220.0,
-        508.8360923856119
+        492.0360923856119
        ],
        "size_mm": [
         100.0,
@@ -14862,9 +15174,9 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -350.0,
+        -332.29999999999995,
         -220.0,
-        714.5183687566542
+        697.7183687566543
        ],
        "size_mm": [
         120.0,
@@ -14924,21 +15236,23 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         550.0,
         1100.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 8.0,
+      "mass_kg": 16.20795,
       "carried_by": [
        "LS1",
        "RS1",
        "LS2",
        "RS2"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -14971,15 +15285,15 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         950.0,
         483.6,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 9.891818181818183,
+      "mass_kg": 12.3078618,
       "carried_by": [
        "LS2",
        "RS2",
@@ -14988,6 +15302,8 @@ export const DEMOS = {
        "LE",
        "RE"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -15045,6 +15361,8 @@ export const DEMOS = {
        "LAp1",
        "RAp1"
       ],
+      "material": "ss400",
+      "finish": "painted",
       "system": "body",
       "connects_to": [
        {
@@ -15075,17 +15393,19 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -280.0,
+        -271.15,
         0.0,
-        630.4431784698709
+        622.0431784698708
        ],
        "size_mm": [
-        20.0,
+        2.3,
         740.0,
-        400.88635693974163
+        384.08635693974145
        ]
       },
-      "mass_kg": 6.592353425231306,
+      "mass_kg": 5.607737628591613,
+      "material": "ss400",
+      "finish": "painted",
       "carried_by": [
        "LAt2",
        "LDT",
@@ -15136,7 +15456,7 @@ export const DEMOS = {
        "center_mm": [
         -720.0,
         -300.0,
-        1205.411492555231
+        1188.6114925552308
        ],
        "size_mm": [
         40.0,
@@ -15181,7 +15501,7 @@ export const DEMOS = {
        "center_mm": [
         -420.0,
         -300.0,
-        995.3492310923181
+        978.5492310923179
        ],
        "size_mm": [
         772.4647532568737,
@@ -15231,16 +15551,16 @@ export const DEMOS = {
        "center_mm": [
         -120.0,
         -235.0,
-        531.8082994683936
+        523.4082994683935
        ],
        "size_mm": [
-        547.360052837795,
+        531.1037549373495,
         24.0,
         24.0
        ],
        "rpy_deg": [
         0.0,
-        75.61744543525063,
+        75.14594426906802,
         90.0
        ]
       },
@@ -15383,7 +15703,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         -300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -15418,7 +15738,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         -540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -15457,7 +15777,7 @@ export const DEMOS = {
        "center_mm": [
         -1045.0,
         300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -15492,7 +15812,7 @@ export const DEMOS = {
        "center_mm": [
         -1320.0,
         540.0,
-        710.0
+        693.2
        ],
        "size_mm": [
         50.0,
@@ -15531,7 +15851,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         -300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -15561,7 +15881,7 @@ export const DEMOS = {
        "center_mm": [
         -1149.0,
         300.0,
-        1202.6
+        1185.8000000000002
        ],
        "size_mm": [
         292.0,
@@ -15591,7 +15911,7 @@ export const DEMOS = {
        "center_mm": [
         -1945.0,
         0.0,
-        600.0
+        583.2
        ],
        "size_mm": [
         900.0,
@@ -15625,7 +15945,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -15660,7 +15980,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -15695,16 +16015,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -111.175,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         -3.2899932439578037
        ]
       },
@@ -15730,7 +16050,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -15765,7 +16085,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         -392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -15800,7 +16120,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         -392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -15835,16 +16155,16 @@ export const DEMOS = {
        "center_mm": [
         -960.5,
         -488.825,
-        1276.4557462776156
+        1259.6557462776154
        ],
        "size_mm": [
-        592.3093334270051,
+        592.3093334270052,
         90.0,
         90.0
        ],
        "rpy_deg": [
         0.0,
-        16.431601884696633,
+        16.431601884696658,
         3.2899932439578
        ]
       },
@@ -15870,7 +16190,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         -392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -15905,7 +16225,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         392.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -15940,7 +16260,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         392.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -15975,7 +16295,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         447.325,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -16010,7 +16330,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         392.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -16045,7 +16365,7 @@ export const DEMOS = {
        "center_mm": [
         -946.743259751487,
         208.0,
-        856.0299424023287
+        839.2299424023288
        ],
        "size_mm": [
         608.3,
@@ -16080,7 +16400,7 @@ export const DEMOS = {
        "center_mm": [
         -647.3490755980956,
         208.0,
-        733.9891267806559
+        717.1891267806559
        ],
        "size_mm": [
         545.7999999999997,
@@ -16115,7 +16435,7 @@ export const DEMOS = {
        "center_mm": [
         -972.743259751487,
         152.675,
-        1179.7799424023287
+        1162.9799424023288
        ],
        "size_mm": [
         667.2071129653317,
@@ -16150,7 +16470,7 @@ export const DEMOS = {
        "center_mm": [
         -466.57900201425474,
         208.0,
-        534.9397034561874
+        518.1397034561875
        ],
        "size_mm": [
         272.5,
@@ -17327,7 +17647,7 @@ export const DEMOS = {
        "center_mm": [
         -285.0,
         -300.0,
-        851.8934450716384
+        835.0934450716383
        ],
        "size_mm": [
         50.0,
@@ -17362,7 +17682,7 @@ export const DEMOS = {
        "center_mm": [
         -1400.0,
         0.0,
-        1810.0
+        1793.2
        ],
        "size_mm": [
         42.69999999999982,
@@ -17688,7 +18008,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -17696,7 +18016,7 @@ export const DEMOS = {
       "xyz_mm": [
        -285.0,
        -350.0,
-       845.8863569397416
+       829.0863569397414
       ]
      },
      {
@@ -17720,7 +18040,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        600.0,
-       1810.0
+       1793.2
       ]
      },
      {
@@ -17744,7 +18064,7 @@ export const DEMOS = {
       "xyz_mm": [
        -1400.0,
        -600.0,
-       1810.0
+       1793.2
       ]
      }
     ],
@@ -18223,6 +18543,15 @@ export const DEMOS = {
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     },
+     "ss400": {
+      "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "stkm13a": {

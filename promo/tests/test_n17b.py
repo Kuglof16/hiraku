@@ -582,5 +582,226 @@ class OnScreen(unittest.TestCase):
         self.assertAlmostEqual(float(self.at[5.8]["op"]["lanes"]), ln["dim_alpha"], places=3)
 
 
+# --- n17b_3d.html: N17b shown in depth -----------------------------------------------
+
+FPS = 30
+
+
+def bezier(x1, y1, x2, y2):
+    """The page's cubic-bezier ease (the same bisection)."""
+    def at(a, b, u):
+        return 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3
+
+    def f(x):
+        lo, hi = 0.0, 1.0
+        for _ in range(40):
+            m = (lo + hi) / 2
+            if at(x1, x2, m) < x:
+                lo = m
+            else:
+                hi = m
+        return at(y1, y2, (lo + hi) / 2)
+    return f
+
+
+def camera_3d(v: dict, t: float) -> dict:
+    """The camera of n17b_3d.html at t, from layout.json check.n17b_3d."""
+    c = v["camera"]
+    q = bezier(*c["ease"])(min(1.0, max(0.0, (t - c["from_s"]) / (c["to_s"] - c["from_s"]))))
+
+    def mix(a, b):
+        return a + (b - a) * q
+    return {"yaw_deg": mix(c["yaw_from_deg"], c["yaw_to_deg"]), "pitch_deg": mix(c["pitch_from_deg"], c["pitch_to_deg"]),
+            "roll_deg": c["roll_deg"], "dolly_px": mix(c["dolly_from_px"], c["dolly_to_px"])}
+
+
+def project_3d(v: dict, cam: dict, x: float, y: float, z: float) -> tuple[float, float]:
+    """Where the point (x, y) of n17b's layout on the layer at depth z falls on
+    the screen: the layer's scale, then translateZ(dolly) rotateX(pitch)
+    rotateY(yaw) about the origin, then the perspective."""
+    from math import cos, radians, sin
+    p, ox, oy = v["view"]["perspective_px"], v["view"]["origin_x"], v["view"]["origin_y"]
+    k0 = (p - z) / p
+    px, py, pz = k0 * (x - ox), k0 * (y - oy), z
+    a, b = radians(cam["yaw_deg"]), radians(cam["pitch_deg"])
+    x1, z1 = px * cos(a) + pz * sin(a), -px * sin(a) + pz * cos(a)
+    y2, z2 = py * cos(b) - z1 * sin(b), py * sin(b) + z1 * cos(b) + cam["dolly_px"]
+    k = p / (p - z2)
+    return ox + x1 * k, oy + y2 * k
+
+
+def frame_steps(v: dict, duration: float) -> dict:
+    """The largest change of the camera from one frame (1/30 s) to the next."""
+    cams = [camera_3d(v, i / FPS) for i in range(round(duration * FPS) + 1)]
+    return {k: max(abs(b[k] - a[k]) for a, b in zip(cams, cams[1:])) for k in cams[0]}
+
+
+class Rules3D(unittest.TestCase):
+    """n17b_3d.html: the content and layout of n17b, only shown in depth."""
+
+    def setUp(self):
+        self.rules = layout_build.load()
+        self.n = self.rules["n17b"]
+        self.v = self.rules["check"]["n17b_3d"]
+        self.html = (lc.SCREENS / "n17b_3d.html").read_text(encoding="utf-8")
+        self.orig = (lc.SCREENS / "n17b.html").read_text(encoding="utf-8")
+
+    def test_reads_n17b_and_its_data(self):
+        self.assertIn('<script src="layout.js" data-cut="n17b"></script>', self.html)
+        self.assertIn('<script src="n17b.data.js"></script>', self.html)
+        self.assertIn('data-cut="n17b"', re.search(r"<body[^>]*>", self.html).group(0))   # n17b's story limits
+        m = re.search(r'data-duration="([0-9.]+)"', self.html)
+        self.assertEqual(float(m.group(1)), self.n["duration_s"])
+        self.assertEqual(self.v["duration_s"], self.n["duration_s"])
+        for name in re.findall(r'data-box="([^"$]+)"', self.html):
+            self.assertTrue(name.startswith("n17b_3d."), name)
+        self.assertNotIn("n17b_3d", self.orig)                  # the cut in the video is left as it is
+
+    def test_same_content_as_n17b(self):
+        # the words drawn on the screen are n17b's
+        words = lambda h: re.findall(r">([^<>{}$`]*[぀-ヿ一-鿿][^<>{}$`]*)<", h)  # noqa: E731
+        self.assertEqual(words(self.html), words(self.orig))
+        for kind in ("label", "number", "note"):
+            self.assertEqual(self.html.count(f'data-kind="{kind}"'), self.orig.count(f'data-kind="{kind}"'), kind)
+        for part in ('lab: "見る分野"', 'lab: "解析のツール"', 'lab: "手計算と解析の照合"', 'lab: "直して、合格"',
+                     "自動の試験", "数えた日時", "運転の記録"):
+            self.assertIn(part, self.html)
+
+    def test_no_figure_typed_in(self):
+        d = read_data_file()
+        figures = [d["amount"][k] for k in ("lines_total", "commits", "tests")] + \
+                  [d["depth"][k] for k in ("tools", "comparisons", "known_cases", "mismatches", "predictions")]
+        for v in figures:
+            if v >= 10:
+                self.assertIsNone(re.search(rf"(?<![\w,.])(?:{v:,}|{v})(?![\w,])", self.html), v)
+        for banned in ("requestAnimationFrame", "Date.now", "Math.random", "performance.now", "拓きました", "100,000"):
+            self.assertNotIn(banned, self.html)
+        self.assertIsNone(re.search(r"--t-[a-z-]+\s*:", self.html))
+
+    def test_small_tilt(self):
+        cam, lim = self.v["camera"], self.v["limits"]
+        self.assertLessEqual(lim["face_deg"], 8)
+        self.assertLessEqual(lim["swing_deg"], 6)
+        self.assertEqual(cam["roll_deg"], 0)
+        cams = [camera_3d(self.v, i / FPS) for i in range(round(self.n["duration_s"] * FPS) + 1)]
+        for c in cams:
+            self.assertLessEqual(abs(c["yaw_deg"]), lim["face_deg"])
+            self.assertLessEqual(abs(c["pitch_deg"]), lim["face_deg"])
+            self.assertEqual(c["roll_deg"], 0)
+        swing = sum(max(c[k] for c in cams) - min(c[k] for c in cams) for k in ("yaw_deg", "pitch_deg"))
+        self.assertLessEqual(swing, lim["swing_deg"])
+        self.assertGreater(swing, 1)                            # it does move round a little
+
+    def test_calm_motion(self):
+        cam = self.v["camera"]
+        step = frame_steps(self.v, self.n["duration_s"])
+        self.assertLess(step["yaw_deg"], 0.1)                   # degrees per frame
+        self.assertLess(step["pitch_deg"], 0.1)
+        self.assertLess(step["dolly_px"], 1.5)
+        # eased: starts and stops at rest, still from to_s (n17b holds still from 4.9 s)
+        x1, y1, x2, y2 = cam["ease"]
+        self.assertEqual((y1, y2), (0, 1))
+        self.assertGreater(x1, 0)
+        self.assertLess(x2, 1)
+        first = abs(camera_3d(self.v, cam["from_s"] + 1 / FPS)["yaw_deg"] - camera_3d(self.v, cam["from_s"])["yaw_deg"])
+        self.assertLess(first, step["yaw_deg"] / 10)
+        self.assertLessEqual(cam["to_s"], 5.0)
+        self.assertEqual(camera_3d(self.v, cam["to_s"]), camera_3d(self.v, self.n["duration_s"]))
+
+    def test_layers_at_rest_fall_where_n17b_puts_them(self):
+        rest = {"yaw_deg": 0, "pitch_deg": 0, "roll_deg": 0, "dolly_px": 0}
+        for z in self.v["planes"].values():
+            if isinstance(z, (int, float)):
+                for x, y in ((96, 110), (1824, 890), (960, 500), (300, 646)):
+                    gx, gy = project_3d(self.v, rest, x, y, z)
+                    self.assertAlmostEqual(gx, x, places=6)
+                    self.assertAlmostEqual(gy, y, places=6)
+        self.assertLess(self.v["planes"]["lanes_z_px"], self.v["planes"]["amount_z_px"])   # the graph behind
+
+    def test_boxes_stay_above_the_band_and_on_the_stage(self):
+        band, stage, pl = self.rules["subtitle_band"]["y"], self.rules["stage"], self.v["planes"]
+        boxes = [(self.n[k], pl[z]) for k, z in (("amount", "amount_z_px"), ("head", "cards_z_px"),
+                                                 ("depth", "cards_z_px"), ("stamp", "stamp_z_px"),
+                                                 ("lanes", "lanes_z_px"))]
+        for i in range(round(self.n["duration_s"] * FPS) + 1):
+            cam = camera_3d(self.v, i / FPS)
+            for b, z in boxes:
+                for x in (b["x"], b["x"] + b["w"]):
+                    for y in (b["y"], b["y"] + b["h"]):
+                        gx, gy = project_3d(self.v, cam, x, y, z)
+                        self.assertLess(gy, band)
+                        self.assertTrue(0 < gx < stage["w"] and 0 < gy, (i, b))
+
+    def test_check_names_the_page(self):
+        chk = self.rules["check"]
+        self.assertTrue(chk["times"]["n17b_3d"])
+        self.assertTrue(any(r["cut"] == "n17b_3d" and r["why"] for r in chk["allow_overlap"]))
+
+
+@unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
+class OnScreen3D(unittest.TestCase):
+    SCRIPT = """() => {
+      const shown = (el) => [...el.querySelectorAll('.rows span')]
+        .filter((s) => getComputedStyle(s).visibility !== 'hidden').map((s) => s.textContent);
+      const out = { amount: shown(document.querySelector('[data-box="n17b_3d.amount.num"]')), cards: {} };
+      for (const el of document.querySelectorAll('.card'))
+        out.cards[el.dataset.box.split('.')[2]] = shown(el.querySelector('.num'));
+      out.sub = document.querySelector('.amount .sub').textContent;
+      out.text = document.querySelector('.depth').textContent;
+      out.stamp = document.querySelector('.stamp').textContent;
+      out.cam = window.n17b3d.camera(window.promo.t);
+      out.world = document.querySelector('.world').style.transform;
+      out.shadow = document.querySelector('.amount .num').style.textShadow;
+      return out;
+    }"""
+
+    @classmethod
+    def setUpClass(cls):
+        from promo import export
+
+        cls.d = read_data_file()
+        cls.v = layout_build.load()["check"]["n17b_3d"]
+        cap = export.Capture(lc.SCREENS / "n17b_3d.html", scale=0.5)
+        try:
+            cls.at, cls.png = {}, {}
+            for t in (0.1, 1.0, 2.4, 3.0, 5.8):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                cls.at[t] = cap.page.evaluate(cls.SCRIPT)
+            # the same t twice, with other times between
+            for k, t in (("a", 2.8), ("x", 0.9), ("y", 4.4), ("b", 2.8)):
+                cap.page.evaluate("t => window.__export.seek(t)", t)
+                cls.png[k] = cap.page.screenshot(type="png")
+        finally:
+            cap.close()
+
+    def test_the_figures_shown_are_the_counts(self):
+        a, p, end = self.d["amount"], self.d["depth"], self.at[5.8]
+        fmt = lambda v: f"{v:,}"  # noqa: E731
+        self.assertEqual(end["amount"], [fmt(a["lines_total"])])
+        self.assertEqual(end["cards"], {"areas": [fmt(p["domains"])], "tools": [fmt(p["tools"])],
+                                        "comparisons": [fmt(p["comparisons"])], "passed": [fmt(p["passed"])]})
+        self.assertIn(fmt(a["commits"]), end["sub"])
+        self.assertIn(fmt(a["tests"]), end["sub"])
+        self.assertIn(f"{a['days']}日目", end["sub"])
+        self.assertIn(f"{fmt(p['known_cases'])} 件", end["text"])
+        self.assertIn(f"/ {p['areas']}", end["text"])
+        self.assertIn(a["head"], end["stamp"])
+        self.assertIn(p["run_id"], end["stamp"])
+        for t in (1.0, 3.0):                                     # one whole number in each window
+            self.assertEqual(len(self.at[t]["amount"]), 1)
+
+    def test_the_camera_is_the_one_in_the_rules(self):
+        for t, got in self.at.items():
+            want = camera_3d(self.v, t)
+            for k in want:
+                self.assertAlmostEqual(got["cam"][k], want[k], places=6)
+            self.assertIn("rotateX", got["world"])
+        self.assertIn("color-mix", self.at[5.8]["shadow"])     # the figure is extruded
+
+    def test_a_frame_depends_only_on_t(self):
+        self.assertEqual(self.png["a"], self.png["b"])
+        self.assertNotEqual(self.png["a"], self.png["x"])
+
+
 if __name__ == "__main__":
     unittest.main()

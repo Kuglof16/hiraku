@@ -253,11 +253,14 @@ class SampleAnswersTest(unittest.TestCase):
                     self.assertIn(r["source"], ("hearing", "default"))
                     self.assertEqual(contract.errors("requirement", r), [])
 
-    def test_the_demo_vehicle_keeps_some_questions_open_on_purpose(self):
+    def test_the_demo_vehicle_answers_every_question_of_the_hearing(self):
         req = load_product("offroad-4w")
         answers, note = load_answers(answers_file("offroad-4w"))
         p = prepare(req, answers, note)
-        self.assertEqual(p.unresolved, ["Q03", "Q20", "Q91"])
+        self.assertEqual(p.unresolved, [])
+        by = {a["key"]: a["source"] for a in p.answered["answers"]}
+        for key in ("Q03", "Q20", "Q91"):
+            self.assertEqual(by[key], "hearing", key)
         self.assertEqual(p.answered["note"], note)
 
     def test_answers_file_with_a_stray_key_is_refused(self):
@@ -269,6 +272,33 @@ class SampleAnswersTest(unittest.TestCase):
             path.write_text("answers: {}\nstuff: 1\n", encoding="utf-8")
             with self.assertRaises(IntakeError):
                 load_answers(path)
+
+
+class EntryExitItemsTest(unittest.TestCase):
+    """The items for getting in and out: a rider's vehicle only, borrowed numbers are assumptions that say where they were read."""
+
+    OPENING = ["Q93", "Q94", "Q95", "Q96"]
+    KEYS = OPENING + ["Q97", "Q44", "Q45", "Q46", "Q47", "Q48", "Q49", "Q89"]
+
+    def test_they_apply_to_a_vehicle_people_ride_that_is_rough(self):
+        keys = {i["key"] for i in applicable_items({"ride": True, "rough": True, "self_propelled": True})}
+        self.assertTrue(set(self.KEYS) <= keys)
+        for flags in ({"ride": True}, {"rough": True}, {"lean": True}):
+            self.assertFalse(set(self.KEYS) & {i["key"] for i in applicable_items(flags)}, flags)
+
+    def test_each_has_a_value_a_basis_that_says_what_was_read_and_trust_3(self):
+        for key in self.KEYS:
+            it = item(key)
+            with self.subTest(key=key):
+                self.assertEqual(it["ask"], "default")  # not asked: the default is used and shown
+                self.assertEqual(it["default"]["trust"], 3)
+                basis = it["default"]["basis"]
+                self.assertTrue("not checked" in basis or "read 2026-11-04" in basis, basis)
+                self.assertTrue(it["why"] and it["example"])
+
+    def test_the_opening_items_say_that_a_net_does_not_count_as_the_side_guard(self):
+        for key in self.OPENING + ["Q47"]:
+            self.assertIn("付けて働く網", item(key)["why"], key)
 
 
 if __name__ == "__main__":
