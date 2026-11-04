@@ -527,6 +527,38 @@ def grip_inputs(design: Record, load_case: Record) -> Record:
     return chain_inputs(design, pid, point, _force(load_case, "hand_force", 300.0), list(dirs.values()))[0]
 
 
+def grip_bound_inputs(design: Record, load_case: Record) -> Record:
+    """load_path.grip_bound's inputs for the hand control's grip (params hand_part, hand_force): the compliance bound
+    along the hand direction that gives the largest bound (the tool reports the largest of its three directions), and
+    the bounds along x, y and z summed. Each bound: the whole force through the shortest chain of contacts (each
+    contact 1/k_t + |r x e|^2/k_r, r from the contact to the grip) plus the members-only frame's flexibility at the
+    chain's landing point (frame_inputs.members_flexibility, held as the tool holds: default_holds) under the force and
+    its moment about that point."""
+    from hiraku.solvers.k0_handcalc.frame_inputs import members_flexibility
+    from hiraku.solvers.shelf.load_path import default_holds, find_contacts, grip, hand_controls
+
+    pid = (load_case.get("params") or {}).get("hand_part") or next((p["id"] for p in hand_controls(design)), None)
+    if pid is None:
+        raise BuildError("the design has no hand control")
+    p, dirs = grip(next(x for x in design["parts"] if x["id"] == pid))
+    chain = _chain(find_contacts(design), pid)
+    if chain is None:
+        raise BuildError(f"{pid} is joined to no frame member by touching parts: no chain to bound")
+    last = chain[-1]
+    C6, x = members_flexibility(design, last.b.split(":", 1)[1], float(last.t), default_holds(design))
+
+    def compliance(e) -> float:
+        e = np.asarray(e, float) / float(np.linalg.norm(e))
+        ch = sum(1.0 / c.k_t + float(np.dot(np.cross(p - c.point, e), np.cross(p - c.point, e))) / c.k_r for c in chain)
+        g = np.concatenate([e, np.cross(p - x, e)])
+        return ch + float(g @ C6 @ g)
+
+    c_sum = sum(compliance(e) for e in np.eye(3))
+    c_e = max(compliance(e) for e in dirs.values())
+    return {"F": q(_force(load_case, "hand_force", 300.0), "N"), "k_e": q(1.0 / c_e, "N/mm"),
+            "k_tr": q(1.0 / c_sum, "N/mm")}
+
+
 def pedal_inputs(design: Record, load_case: Record) -> Record:
     """control_deflection's inputs for the pedal whose hand calculation moves the most (params foot_parts,
     foot_force)."""
@@ -828,12 +860,16 @@ _CONTROL = {k: f"from.{k}" for k in ("F", "k_t", "k_r", "L", "E", "I", "delta_pl
 
 R7_PLAN = {
     "tool": "load_path",
-    "say": ("操作部から枠まで、触れている部品をたどります。繋がらない部品を数え、繋がっていれば、触れている所のばねを直列に"
-            "つないだ鎖と、着いた部材の片持ちで、握る点と踏む面の動きを先に出します"),
+    "say": ("操作部から枠まで、触れている部品をたどります。繋がらない部品を数え、繋がっていれば、握る点は、触れている所の"
+            "鎖 1 本と板を入れない部材だけの枠で動きを上から押さえ、踏む面は、触れている所のばねの鎖と着いた部材の片持ちで、"
+            "動きを先に出します"),
     "predictions": [
         FREE_PREDICTION,
-        {"quantity": "grip_deflection", "formula_id": "load_path.control_deflection", "output": "delta",
-         "assumptions": _CHAIN, "inputs": _CONTROL, "inputs_from": grip_inputs},
+        {"quantity": "grip_deflection", "formula_id": "load_path.grip_bound", "output": "delta",
+         "assumptions": ["力は全部、触れている所のいちばん短い鎖 1 本を通る (ほかの道と、板・ほかの部品は力を持たない)",
+                         "枠は部材だけの梁。支えはツールと同じピン",
+                         "握る点の 3 つの向きのうち、押さえがいちばん大きい向き (ツールも 3 つの向きの大きい方)"],
+         "inputs": {k: f"from.{k}" for k in ("F", "k_e", "k_tr")}, "inputs_from": grip_bound_inputs},
         {"quantity": "pedal_deflection", "formula_id": "load_path.control_deflection", "output": "delta",
          "assumptions": _CHAIN + ["ペダルが 2 つ以上あれば、手計算でいちばん動くもの"], "inputs": _CONTROL,
          "inputs_from": pedal_inputs},
@@ -843,22 +879,25 @@ R7_PLAN = {
     # mm; the contacts and parts add -0.03 mm). K0 now holds each part of the chain on all its contacts in parallel
     # (supports_turning): 0.198 mm on those versions (0.089 the contacts turning, 0.108 the landing member's twist).
     # Before, one chain of contacts turning in series gave 0.659 mm, and version 3's 0.768 against 0.704 was that
-    # error cancelling the frame's. The frame with its plates has no hand calculation here; the members without the
-    # plates (K1 beam frame) move the grip 7.3-7.9 mm, over the 5 mm limit on every version, so no bound either.
+    # error cancelling the frame's. The frame with its plates has no hand calculation here, so the grip is predicted
+    # by an upper bound (load_path.grip_bound, 2026-11-05): N15 version 5 9.10 mm, demo version 4 9.66 mm against
+    # the tool's 0.54 mm (fore-and-aft; the members-only frame 6.0-6.5 mm of the along-load bound, the chain 0.33).
     # One entry by quantity (tools.plan.expected_entries): the grip's, and the pedal's on a rail strut.
     "expected_mismatch": [{
         "quantity": "grip_deflection",
         "source": ("the analysis department's split of the tool's grip movement on the design department's runs "
-                   "(demo versions 2-4, N15 version 5) and a K1 beam frame of the members alone, 2026-11-04"),
+                   "(demo versions 2-4, N15 version 5) and load_path.grip_bound on N15 version 5 and demo version 4 "
+                   "(9.10 and 9.66 mm against the tool's 0.54 mm), 2026-11-05"),
         "cause": ("ツールの握る点の動きは、ほぼ全部が、ハンドルの柱の金具が着く所の枠 (ダッシュと塔の部材と、留まった隔壁と床の板) "
-                  "の動き (着く所と一緒の剛体の動きで、組の無い版 2 は 1.116 対 1.092 mm、N15 の版 5 は 0.450 対 0.422 mm)。"
-                  "金具は 2 本の部材 (dash_post_R と dash_cross) に、柱は軸とラックの道でも止まっていて、触れている所の回りは"
-                  "ほぼ 0。手計算は触れている所を並びで止まる剛体とみて (0.089 mm) 着いた部材のねじれ (0.108 mm) を足すが、"
-                  "枠は硬いとみるので小さい (0.198 mm)。板の入った枠は手で解けない。板を入れない部材だけの枠 (K1) では "
-                  "7.3〜7.9 mm で、限界 5 mm を超え、上から押さえる値にも使えない。前の手計算 (触れている所が直列に回る、"
-                  "0.768 mm) が版 3 で合った (0.704 mm) のは、多すぎる回りと足りない枠の打ち消しによる偶然だった"),
-        "fix": "手計算で予測し直す式は無い。原因を記録して、この荷重条件は判定なしで次へ進む",
-        "end": True,
+                  "の動き。板の入った枠は手で解けないので、手計算は上から押さえる値 (load_path.grip_bound) を出す: 力を全部、"
+                  "触れている所の鎖 1 本と、板を入れない部材だけの枠に通したときの補エネルギーから。板と、並んだ別の道が持つ分を"
+                  "入れないので、ツールよりずっと大きい"),
+        "fix": "板の入った枠を手で解く式は無い。手計算は上から押さえる値なので、安全側の値として合否を出す",
+        "safe_side": True,
+        "safe_side_reason": ("補エネルギーの定理: 釣り合っている力の分布のどれでも、その補エネルギーは本当の値以上なので、荷重の"
+                             "向きの動きは上から押さえられる。板とほかの道に力を持たせない分布はその 1 つ。動きの大きさは、"
+                             "3 つの向きの押さえの和 (柔らかさの行列の跡 ≥ 最大固有値) で押さえる。基準は grip_deflection "
+                             "<= Q67 なので、大きい方が不利"),
     }, {
         "quantity": "pedal_deflection",
         "source": ("the analysis department's split of the tool's pedal movement on the design department's run r8 "
