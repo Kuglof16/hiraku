@@ -1454,6 +1454,18 @@ def envelope_breaches(design: Record, modules: list[str]) -> list[tuple[str, str
     return out
 
 
+def _outside_envelopes(ctx: RunContext, design: Record, modules: list[str]) -> list[tuple[str, str, float]]:
+    """(module, part or member id, mm outside) of the modules given: hiraku.designgen.modules.outside (the check
+    H1-envelope makes) when the run's designgen has it, else the stand-in envelope_breaches (test designgens)."""
+    outside = None
+    if getattr(ctx.designgen, "__name__", "") == "hiraku.designgen":
+        from hiraku.designgen.modules import outside
+    if outside is None:
+        return envelope_breaches(design, modules)
+    envs = {m["module_id"]: m.get("envelope") or [] for m in design.get("modules") or []}
+    return [(m, body.split(":", 1)[-1], float(mm)) for body, m, mm in outside(design, envs) if m in modules]
+
+
 def _apply_layout(modules: list[Record], envelopes: Record, interfaces: list[Record]) -> list[Record]:
     """The modules with the packager's new envelopes (module_id -> boxes) and interfaces (each put into both
     modules it is between, replacing one of the same id)."""
@@ -1522,7 +1534,14 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     merged_changes.update(own)
     spec, revisable, changes = _checked_changes(ctx, design, merged_changes, merged_choices)
     new = _regenerate(ctx, design, {**changes, **merged_choices}, "build_version")
-    new["modules"] = _apply_layout(new.get("modules") or design["modules"], envelopes, interfaces)
+    fresh = copy.deepcopy(new.get("modules") or design["modules"])
+    if not own:  # no layout change: every module keeps the previous version's space and mounts (designgen.modules)
+        before = {m["module_id"]: m for m in design["modules"]}
+        for m in fresh:
+            if m["module_id"] in before:
+                m["envelope"] = copy.deepcopy(before[m["module_id"]].get("envelope") or [])
+                m["interfaces"] = copy.deepcopy(before[m["module_id"]].get("interfaces") or [])
+    new["modules"] = _apply_layout(fresh, envelopes, interfaces)
     moved, after = _moved(ctx, spec, revisable, new, changes)
     package_vars = set((mods.get("package") or {}).get("variables") or [])
     own_moved = {k: (dict(changes[k]) if k in own else {"value": after[k]["value"], "unit": after[k]["unit"]})
@@ -1534,7 +1553,7 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     touched = list(dict.fromkeys([c["module_id"] for c in pending] + list(envelopes)))
     if own or interfaces:  # the layout moved: every module's parts may have moved with it
         touched = [m for m in mods if m != "package"]
-    breaches = envelope_breaches(new, touched)
+    breaches = _outside_envelopes(ctx, new, touched)
     if breaches:
         by_module: dict[str, list[str]] = {}
         for c in pending:
