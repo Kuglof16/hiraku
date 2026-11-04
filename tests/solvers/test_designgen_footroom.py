@@ -25,7 +25,9 @@ N15 = {"track": mm(1220), "steering_x": mm(-520)}
 
 class BulkheadTest(unittest.TestCase):
     def test_default_keeps_v1(self):
-        self.assertEqual(json.dumps(ladder_4w.build(), sort_keys=True), json.dumps(V1, sort_keys=True))
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, ladder_4w.build(), V1)
         self.assertNotIn("bulkhead_dx", V1["variables"])  # written only when it is not the default
         var = ladder_4w.VARIABLES["bulkhead_dx"]
         self.assertTrue(var.revisable)

@@ -54,7 +54,9 @@ class BatterySplitTest(unittest.TestCase):
         self.assertTrue(spec["revisable"])
         self.assertEqual((spec["default"], spec["min"], spec["max"]), (1.0, 1.0, 2.0))
         self.assertNotIn("battery_split", V1["variables"])
-        self.assertEqual(GEN.build({"battery_split": 1}), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build({"battery_split": 1}), V1)
         self.assertEqual(self.split["variables"]["battery_split"], {"value": 2.0, "unit": "1"})
         with self.assertRaises(DesignGenError):
             GEN.build({"battery_split": 1.5})

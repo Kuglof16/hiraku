@@ -34,8 +34,10 @@ class PlateThicknessTest(unittest.TestCase):
         self.assertEqual(GEN.PLATE_KG_M2, {2.3: 19.73, 3.2: 26.79})
 
     def test_defaults_build_version_1(self):
-        self.assertEqual(GEN.build(), V1)
-        self.assertEqual(GEN.build({"floor_t": 3.2, "deck_t": 3.2, "bulkhead_t": 2.3}), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build(), V1)
+        assert_same_design(self, GEN.build({"floor_t": 3.2, "deck_t": 3.2, "bulkhead_t": 2.3}), V1)
 
     def test_only_catalogue_thicknesses(self):
         for k, t in (("floor_t", 2.6), ("bulkhead_t", 3.0), ("deck_t", 4.5)):

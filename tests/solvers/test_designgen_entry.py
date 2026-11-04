@@ -31,7 +31,9 @@ def parts(d, kind):
 
 class DefaultsTest(unittest.TestCase):
     def test_off_by_default(self):
-        self.assertEqual(GEN.build(), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build(), V1)
         self.assertEqual(GEN.choices_of(V1)["side_opening"], "none")
         self.assertEqual(GEN.choices_of(V1)["grab_bar"], "none")
         for k in ("side_opening", "side_bar_reach", "grab_bar", "grab_bar_d"):
