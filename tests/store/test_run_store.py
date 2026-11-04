@@ -108,6 +108,23 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual(last["data"], on_disk)
         self.assertEqual(self.store.get("prediction", "pred-0001"), on_disk)
 
+    def test_reading_reads_each_record_file_once_until_the_next_write(self):
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        self.assertIsNot(self.store.get("prediction", "pred-0001"), self.store.get("prediction", "pred-0001"))
+        with self.store.reading():
+            with self.store.reading():  # nested: the same stretch
+                first = self.store.get("prediction", "pred-0001")
+            self.assertIs(self.store.records("prediction", 1)[0], first)
+            self.store.add_record("prediction", dict(pred, assumptions=["again"]), design_version=1,
+                                  agent="cae.strength", domain="strength")  # a write: read the file again
+            again = self.store.get("prediction", "pred-0001")
+            self.assertIsNot(again, first)
+            self.assertEqual(again["assumptions"], ["again"])
+        self.assertIsNone(self.store._read_cache)
+
     def test_invalid_record_is_not_written(self):
         self.store.write_design(example("design.json"))
         bad = example("prediction.json")

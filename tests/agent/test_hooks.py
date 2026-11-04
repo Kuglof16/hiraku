@@ -98,6 +98,24 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual(blocked[0]["data"]["rule"], rules.HK4)
         self.assert_events_fit()
 
+    def test_the_leads_stop_while_a_role_runs(self):
+        """The SDK run lets it through (its runner waits for the role); the plugin blocks it, not counted against
+        HK4, and tells the lead to wait with its wait tool, at most MAX_WAIT_BLOCKS times."""
+        from hiraku.agent import hooks as H
+
+        self.hooks.running["a1"] = "cae.strength"
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
+        self.hooks.wait_tool = "wait_tool_name"
+        out = run(self.hooks.stop({"stop_hook_active": False}, None, None))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("wait_tool_name", out["reason"])
+        self.assertIn("cae.strength", out["reason"])
+        self.assertEqual((self.hooks.stop_blocks, self.hooks.wait_blocks), (0, 1))
+        self.assertEqual([e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"], [])
+        self.assertEqual(self.hooks.state()["wait_blocks"], 1)
+        self.hooks.wait_blocks = H.MAX_WAIT_BLOCKS
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})
+
     def test_stop_passes_when_judged(self):
         ana, _, _ = self.run_p1()
         r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
