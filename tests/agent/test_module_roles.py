@@ -284,6 +284,58 @@ class RunnerRoutingTest(unittest.TestCase):
         self.assertIsNone(new_routing(ctx, SimpleNamespace(running={}), {}))
 
 
+class PluginHooksRoutingTest(unittest.TestCase):
+    """The plugin has no runner to send the routing: its hooks tell the lead (tell_routing), once per version."""
+
+    TOOL = "mcp__plugin_hiraku_hiraku__get_context"
+
+    def hooks(self, design=MODULAR_DESIGN, tell=True):
+        from hiraku.agent.hooks import Hooks
+
+        ctx = fake_ctx(design, LOAD_CASES, [LEAD], [red(1, "R1-frame-bending")])
+        ctx.store.stop_requested = lambda: False
+        h = Hooks(ctx, attribution=None, emit=lambda *a, **k: None)
+        h.tell_routing = tell
+        return h
+
+    def test_the_leads_next_tool_call_carries_the_routing_once(self):
+        h = self.hooks()
+        out = h.decide("PostToolUse", {"tool_name": self.TOOL, "tool_input": {}})
+        text = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("HIRAKU の振り分け (版 1", text)
+        self.assertIn("designer-frame", text)
+        self.assertEqual(h.decide("PostToolUse", {"tool_name": self.TOOL, "tool_input": {}}), {})  # told already
+        self.assertEqual(h.state()["routed"], {"1": text})
+        again = self.hooks()
+        again.load_state(h.state())  # the plugin keeps it between hook commands
+        self.assertIsNone(again.routing_for_lead())
+
+    def test_a_roles_call_or_a_role_at_work_waits(self):
+        h = self.hooks()
+        self.assertEqual(h.decide("PostToolUse", {"tool_name": self.TOOL, "tool_input": {},
+                                                  "agent_type": "hiraku:designer-frame"}), {})
+        h.running = {"a1": "designer.frame"}
+        self.assertIsNone(h.routing_for_lead())
+
+    def test_the_leads_stop_is_held_once_with_the_routing(self):
+        from unittest import mock
+
+        h = self.hooks()
+        with mock.patch("hiraku.tools.rules.design_refusal", return_value=None), \
+                mock.patch("hiraku.tools.rules.excused_pending", return_value=None), \
+                mock.patch("hiraku.tools.rules.stop_reason", return_value=None), \
+                mock.patch("hiraku.tools.rules.red_left_reason", return_value=None):
+            out = h.decide("Stop", {})
+            self.assertEqual(out["decision"], "block")
+            self.assertIn("designer.frame", out["reason"])
+            self.assertEqual(h.stop_blocks, 0)  # not an HK4 block
+            self.assertEqual(h.decide("Stop", {}), {})
+
+    def test_off_for_the_sdk_run_and_without_modules(self):
+        self.assertIsNone(self.hooks(tell=False).routing_for_lead())  # the runner sends it there
+        self.assertIsNone(self.hooks(design=PLAIN_DESIGN).routing_for_lead())
+
+
 class SessionAgentsTest(unittest.TestCase):
     def test_agents_with_modules(self):
         props = {"designer": "pencil", "packager": "spanner"}
