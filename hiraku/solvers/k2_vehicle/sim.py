@@ -132,6 +132,27 @@ def _k_path(rows, s, lo, hi, hx, hy, hz, side, camber0, toe0, cc, ct):
 
 
 @njit
+def _k_comply(rows, s, lo, hi, rot, lx, ly, lz, tx, ty, tz, fl, ft, mz, side):
+    """Sim._comply_py for one corner: (toe, camber) of the compliance table at the travel times the force."""
+    sc = lo if s < lo else (hi if s > hi else s)
+    vals = np.empty(rows.shape[0])
+    for r in range(rows.shape[0]):
+        v = rows[r, 0]
+        for k in range(1, rows.shape[1]):
+            v = v * sc + rows[r, k]
+        vals[r] = v
+    r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
+    lbx, lby = r00 * lx + r10 * ly + r20 * lz, r01 * lx + r11 * ly + r21 * lz
+    tbx, tby = r00 * tx + r10 * ty + r20 * tz, r01 * tx + r11 * ty + r21 * tz
+    fx = fl * lbx + ft * tbx
+    fy = fl * lby + ft * tby
+    m = mz
+    if side < 0:
+        fy, m = -fy, -m
+    return vals[0] * fx + vals[2] * fy + vals[4] * m, vals[1] * fx + vals[3] * fy + vals[5] * m
+
+
+@njit
 def _solve_pairs(mm, rhs, pairs):
     """Sim._solve_sym_py: M x = b on the mirror pairs' sums and differences (mm and rhs are changed)."""
     for k in range(pairs.shape[0]):
@@ -200,6 +221,8 @@ class Sim:
         self.s_lo = [c.path.s_lo if c.path is not None else -1.0 for c in cs]
         self.s_hi = [c.path.s_hi if c.path is not None else 1.0 for c in cs]
         self.comp = [c.path.comp.tolist() if c.path is not None and c.path.comp is not None else None for c in cs]
+        self._comp = [np.ascontiguousarray(c.path.comp, dtype=np.float64)
+                      if c.path is not None and c.path.comp is not None else None for c in cs]  # for _k_comply
         pos = {i: k for k, i in enumerate(self.dofidx)}
         self.pairs = []
         for i, c in enumerate(cs):
@@ -731,6 +754,18 @@ class Sim:
         """Toe and camber of the K&C compliance for the next step: the table's compliance at the
         travel times this step's tyre force at the contact (body x, y) and aligning moment. The
         tables are for a left wheel, so a right wheel's Fy and Mz go in mirrored."""
+        if not JIT:
+            return self._comply_py(keep, fl, ft, mz, rot)
+        for i in range(self.n):
+            rows = self._comp[i]
+            if rows is None or keep[i] is None:
+                continue
+            k = keep[i]
+            self.ct[i], self.cc[i] = _k_comply(rows, self.s[i], self.s_lo[i], self.s_hi[i], rot, k[0], k[1], k[2],
+                                               k[3], k[4], k[5], fl[i], ft[i], mz[i], self.side[i])
+
+    def _comply_py(self, keep, fl, ft, mz, rot):
+        """_comply in plain Python: the reference the compiled _k_comply is tested against."""
         for i in range(self.n):
             rows = self.comp[i]
             if rows is None or keep[i] is None:

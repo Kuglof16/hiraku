@@ -48,6 +48,36 @@ class KcPath(unittest.TestCase):
                     self.assertLessEqual(abs(a - b), 1e-12 * max(1.0, abs(b)), (i, s, got, ref))
 
 
+@unittest.skipUnless(jit.ENABLED, "without numba _comply is _comply_py")
+class Comply(unittest.TestCase):
+    def test_the_same_toe_and_camber_as_python(self):
+        rng = np.random.default_rng(5)
+        n = 4
+        comp = [rng.normal(scale=1e-5, size=(6, 4)) for _ in range(n)]
+
+        def corners():
+            return types.SimpleNamespace(n=n, comp=[c.tolist() for c in comp], _comp=comp, s=list(rng.uniform(-0.12, 0.12, n)),
+                                         s_lo=[-0.1] * n, s_hi=[0.1] * n, side=[1.0, -1.0, 1.0, -1.0],
+                                         ct=[0.0] * n, cc=[0.0] * n)
+
+        for _ in range(200):
+            a = rng.normal(size=4)
+            q = a / np.linalg.norm(a)
+            from hiraku.solvers.k2_vehicle.sim import _r_tuple
+
+            rot = _r_tuple(list(q))
+            keep = [tuple(rng.normal(size=15)) for _ in range(n)]
+            fl, ft, mz = list(rng.normal(scale=2000.0, size=n)), list(rng.normal(scale=2000.0, size=n)), \
+                list(rng.normal(scale=50.0, size=n))
+            ref = corners()
+            got = types.SimpleNamespace(**vars(ref))
+            got.ct, got.cc = [0.0] * n, [0.0] * n
+            Sim._comply_py(ref, keep, fl, ft, mz, rot)
+            Sim._comply(got, keep, fl, ft, mz, rot)
+            for a_, b_ in zip(got.ct + got.cc, ref.ct + ref.cc):
+                self.assertLessEqual(abs(a_ - b_), 1e-12 * max(1e-9, abs(b_)), (got.ct, ref.ct))
+
+
 class Switch(unittest.TestCase):
     def test_jit_is_on_with_numba(self):
         import importlib.util
