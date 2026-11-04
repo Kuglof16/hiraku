@@ -232,28 +232,55 @@ def blocked_inputs(design: dict) -> dict:
     already overlaps the part at rest is not counted as stopping it (that overlap is H1-interference's)."""
     bs = k4.bodies(design)
     bx = {k: v for k, v in boxes(design).items() if k in bs}
-    fixed = {k: v for k, v in bx.items() if k.startswith("member:") or bs[k].kind in NOT_ASSEMBLED}
+    # the frame and what is welded to it; and a side net bolted to the side frame (part of the guard, put on with the
+    # frame), not one on quick-release clips that opens (k4_geometry.entry.openable_parts)
+    from ..k4_geometry.entry import openable_parts
+
+    opens = set(openable_parts(design))
+    fixed = {k: v for k, v in bx.items() if k.startswith("member:") or bs[k].kind in NOT_ASSEMBLED
+             or (bs[k].kind == "side_net" and k.split(":", 1)[1] not in opens)}
     at_rest = {frozenset((a, b)) for a, b, _ in overlaps(design)}  # counted in H1-interference, not here
     far = 1.0e6
     blocked = []
+    def hits(k, lo, hi) -> bool:
+        return any(box_overlap((lo, hi), f) > k4.allowance(bs[k], bs[kf], design)
+                   for kf, f in fixed.items() if kf != k and frozenset((k, kf)) not in at_rest)
+
+    def straight(k, lo, hi, axis, sign) -> bool:
+        s_lo, s_hi = lo.copy(), hi.copy()
+        if sign > 0:
+            s_hi[axis] = far
+        else:
+            s_lo[axis] = -far
+        return not hits(k, s_lo, s_hi)
+
     for p in design.get("parts", []):
         k = f"part:{p['id']}"
         if p["kind"] in NOT_ASSEMBLED or k not in bx:
             continue
         lo, hi = bx[k]
-        ways = 0
-        for axis in range(3):
-            for sign in (-1.0, 1.0):
-                s_lo, s_hi = lo.copy(), hi.copy()
-                if sign > 0:
-                    s_hi[axis] = far
-                else:
-                    s_lo[axis] = -far
-                if any(box_overlap((s_lo, s_hi), f) > k4.allowance(bs[k], bs[kf], design)
-                       for kf, f in fixed.items() if kf != k and frozenset((k, kf)) not in at_rest):
-                    continue
-                ways += 1
-        if ways == 0:
+        free = any(straight(k, lo, hi, a, s) for a in range(3) for s in (-1.0, 1.0))
+        if not free:
+            # or a slide first: along one axis by half or all of its own size (the box swept over the slide clear),
+            # then straight along another
+            size = hi - lo
+            for a in range(3):
+                for s in (-1.0, 1.0):
+                    for frac in (0.5, 1.0):
+                        shift = np.zeros(3)
+                        shift[a] = s * frac * size[a]
+                        sw_lo, sw_hi = np.minimum(lo, lo + shift), np.maximum(hi, hi + shift)
+                        if hits(k, sw_lo, sw_hi):
+                            continue
+                        if any(straight(k, lo + shift, hi + shift, b, t) for b in range(3) if b != a
+                               for t in (-1.0, 1.0)):
+                            free = True
+                            break
+                    if free:
+                        break
+                if free:
+                    break
+        if not free:
             blocked.append(p["id"])
     return {"n_blocked": float(len(blocked)), "parts": blocked}
 

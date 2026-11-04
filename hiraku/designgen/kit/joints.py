@@ -216,7 +216,19 @@ def strut_box(p: np.ndarray, q: np.ndarray, d: float = STRUT_D_MM) -> dict:
 CLEAR_TRIES = 8  # frame members tried, nearest first, for a strut that passes through nothing
 
 
-def _clear_member(bs, me, first, pid: str):
+def _slide_obstacles(design: dict) -> list:
+    """A sliding seat at both ends of its travel (k4_geometry.people.slide_ends): bodies a strut must also miss."""
+    from hiraku.solvers.k4_geometry import model as k4
+    from hiraku.solvers.k4_geometry.people import slide_ends
+
+    out = []
+    for _label, d_end, moved in slide_ends(design):
+        end_bodies = k4.bodies({**d_end, "parts": [p for p in d_end["parts"] if p["id"] in moved]})
+        out += [b for k, b in end_bodies.items() if k.startswith("part:")]
+    return out
+
+
+def _clear_member(bs, me, first, pid: str, extra=()):
     """The frame member to strut to: `first` if the strut from the part to it passes through no other body (a sheet
     of the body excepted: an anchor goes through it; the members welded at the target's nodes excepted), else the
     nearest member whose strut does; `first` when none is clear (the overlap is then H1-interference's)."""
@@ -231,7 +243,7 @@ def _clear_member(bs, me, first, pid: str):
         sb = from_box(box["center_mm"], box["size_mm"], box["rpy_deg"])
         r_sb = float(np.linalg.norm(sb.half))
         hit = False
-        for k, o in bs.items():
+        for k, o in list(bs.items()) + [(f"slide:{i}", o) for i, o in enumerate(extra)]:
             if o is me or o is cand or o.kind == "body" or k == f"part:{pid}":
                 continue
             if o.kind == "member" and o.nodes & cand.nodes:
@@ -283,6 +295,7 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
     parts = {p["id"]: p for p in design["parts"]}
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     n_re = n_br = n_drop = 0
+    slide_cache: list = []  # a strut must also miss a sliding seat at its travel's ends (made when first needed)
     # the fixed parts first (brackets, sheets, frame pieces), so that the parts resting on them find them anchored
     # (the lamps after the other fixed parts, in a fixed order, so that one fastened to the frame holds the next)
     for p in sorted(list(design["parts"]), key=lambda x: (x["kind"] not in FIXED_KINDS, x["kind"] in LAMP_KINDS,
@@ -299,8 +312,12 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             side = p["id"].rsplit("_", 1)[-1]
             holders = [q for q in parts if q.startswith((f"side_door_hinge_{side}", f"side_door_latch_{side}"))]
         if p["kind"] == "seat_belt" and holders is None:
-            # a belt goes with its seat (the driver's slides with the seat): held by the seat of its side
-            holders = f"seat_{p['id'].rsplit('_', 1)[-1]}"
+            # a belt that touches its seat (a seat that does not slide) is held by it; one behind a sliding seat's
+            # travel (ladder_4w._belt_behind_travel) is anchored to the frame, and the seat slides past it: a strut
+            # from it to the seat would cross the travel
+            seat = f"seat_{p['id'].rsplit('_', 1)[-1]}"
+            if seat in parts and (_gap(design, bs, p["id"], seat) or 0.0) <= JOINT_GAP_MM:
+                holders = seat
         holders = [h for h in ((holders,) if isinstance(holders, str) else holders or ()) if h in parts]
         if holders:
             links = [c for c in links if c["to"] not in nodes and c["to"] not in holders] + [
@@ -349,7 +366,9 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
                 kept.append(c)
                 continue
             if other.kind == "member":
-                other = _clear_member(bs, me, other, p["id"])
+                if not slide_cache:
+                    slide_cache.append(_slide_obstacles(design))
+                other = _clear_member(bs, me, other, p["id"], slide_cache[0])
             fid = _fit(design, parts, p, me, other, bs)
             n_br += 1
             if all(x["to"] != fid for x in kept):
