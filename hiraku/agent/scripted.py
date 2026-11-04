@@ -153,15 +153,15 @@ def scripted_summary(ctx: RunContext) -> str:
 
 
 
-def _deny(ctx: RunContext, agent: str, tool: str, args: Record) -> bool:
-    """Run the same PreToolUse rules the SDK hook runs; record a denial like the hook does."""
+def _deny(ctx: RunContext, agent: str, tool: str, args: Record) -> rules.Denial | None:
+    """Run the same PreToolUse rules the SDK hook runs; record a denial like the hook does and return it."""
     denial = rules.check_call(ctx, tool, args)
     if denial is None:
-        return False
+        return None
     ctx.store.emit("hook.denied", agent=agent, domain=denial.domain, text=denial.reason, data={
         "hook": "PreToolUse", "tool": contract.mcp_name(tool), "rule": denial.rule, "scripted": True,
     })
-    return True
+    return denial
 
 
 class Stop(Exception):
@@ -220,8 +220,8 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
     _check_stop(ctx)
-    denial = rules.check_call(ctx, "analyze", args)
-    if _deny(ctx, agent, "analyze", args):
+    denial = _deny(ctx, agent, "analyze", args)  # the rules once (analyze checks them again inside: _gate)
+    if denial is not None:
         raise Stop(f"a hook rule ({denial.rule}) stopped analyze on {lc['load_case_id']}: {denial.reason}")
     ana = analyze(ctx, args, agent)
     if ana["status"] != "ok":
