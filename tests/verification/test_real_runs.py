@@ -32,7 +32,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.contract import layout
 from qa import check_run as cr
-from qa import compare_runs, procs
+from qa import compare_runs, procs, shared_runs
 
 from ._solvers import tool_or_skip
 
@@ -47,6 +47,10 @@ VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice
 # load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
 # so the run stops not_judged with every other tile of the last version green
 ENDED = {"offroad-4w.yaml": {"R7-hand-300N"}}
+# requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
+# the red's modules, so the run stops not_judged and says the lower stage's red is left
+BEHIND_RED = {"offroad-4w-n15.yaml"}
+LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
 # Subprocess timeout of one scripted run. The video run alone takes about 680 s (600 s
 # erred with TimeoutExpired); this stays below qa.run_tests' 1800 s per-class timeout.
 RUN_TIMEOUT_S = 1200
@@ -119,7 +123,12 @@ class _ScriptedRunTests:
     @classmethod
     def _make_runs(cls):
         # run_dir, not run: an attribute named run would hide TestCase.run
-        cls.run_dir, cls.proc, cls.seconds = _scripted_run(cls.REQ, Path(cls._tmp.name) / cls.REQ.stem)
+        # the run other classes read too (qa.shared_runs: one per requirements file and code version)
+        s = shared_runs.scripted_run(cls.REQ, timeout=RUN_TIMEOUT_S)
+        cls.proc = subprocess.CompletedProcess([], s.returncode, s.stdout, s.stderr)
+        cls.run_dir, cls.seconds = s.run_dir, s.seconds
+        print(f"scripted run {cls.REQ.name}: {s.seconds:.0f} s{' (made by an earlier class)' if s.reused else ''}",
+              file=sys.stderr)
 
     @classmethod
     def tearDownClass(cls):
@@ -158,6 +167,12 @@ class _ScriptedRunTests:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
                 self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
+            elif name in BEHIND_RED:
+                self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
+                self.assertIn(LOWER_RED, project.get("stop_reason") or "", why)
+                last = max(int(d.name[1:]) for d in run.glob("v[0-9][0-9][0-9]") if d.is_dir())
+                tiles = json.loads((layout.version_dir(run, last) / layout.JUDGEMENTS_FILE).read_text(encoding="utf-8"))
+                self.assertIn("red", [j.get("state") for j in tiles if j.get("design_version") == last], why)
             elif name in ENDED:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 self._only_ended_left(run, project, ENDED[name])
@@ -257,6 +272,18 @@ else:
 
 class ScriptedRunWithFakes(unittest.TestCase):
     CASES = {"done": (1.03, 1.03, True), "mismatch": (1.03, 1.4, True), "unusable": (1.03, 1.03, False)}
+    # the tests the fakes are made for: the demo file's own list now adds R8, R7 and H6, whose builders need
+    # parts (controls, nets, fenders) the fake design does not have
+    FAKE_TESTS = ["P1", "R1", "N1", "H1", "H3", "P3"]
+
+    def _requirements(self, tmp: Path) -> Path:
+        """offroad-4w.yaml with the fakes' tests, beside the run (the demo file names more)."""
+        import yaml
+        req = yaml.safe_load((ROOT / "data" / "requirements" / "offroad-4w.yaml").read_text(encoding="utf-8"))
+        req["tests"] = [t for t in req["tests"] if t in self.FAKE_TESTS]
+        out = tmp / "offroad-4w.yaml"
+        out.write_text(yaml.safe_dump(req, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return out
 
     def test_store_output_follows_the_contract(self):
         try:
@@ -265,9 +292,9 @@ class ScriptedRunWithFakes(unittest.TestCase):
             from tests.tools import fakes
         except ImportError as e:
             self.skipTest(f"needs hiraku.agent and tests/tools/fakes.py (design dept): {e}")
-        req = ROOT / "data" / "requirements" / "offroad-4w.yaml"
         for name, (step, frame, checks_pass) in self.CASES.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
+                req = self._requirements(Path(tmp))
                 design = contract.EXAMPLES_DIR / "design.json"
                 if callable(getattr(fakes, "loaded_design", None)):  # the design the fakes are made for
                     design = Path(tmp) / "design.json"
