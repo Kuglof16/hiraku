@@ -32,7 +32,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.contract import layout
 from qa import check_run as cr
-from qa import compare_runs, procs
+from qa import compare_runs, procs, shared_runs
 
 from ._solvers import tool_or_skip
 
@@ -123,7 +123,12 @@ class _ScriptedRunTests:
     @classmethod
     def _make_runs(cls):
         # run_dir, not run: an attribute named run would hide TestCase.run
-        cls.run_dir, cls.proc, cls.seconds = _scripted_run(cls.REQ, Path(cls._tmp.name) / cls.REQ.stem)
+        # the run other classes read too (qa.shared_runs: one per requirements file and code version)
+        s = shared_runs.scripted_run(cls.REQ, timeout=RUN_TIMEOUT_S)
+        cls.proc = subprocess.CompletedProcess([], s.returncode, s.stdout, s.stderr)
+        cls.run_dir, cls.seconds = s.run_dir, s.seconds
+        print(f"scripted run {cls.REQ.name}: {s.seconds:.0f} s{' (made by an earlier class)' if s.reused else ''}",
+              file=sys.stderr)
 
     @classmethod
     def tearDownClass(cls):

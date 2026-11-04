@@ -232,6 +232,38 @@ class SuiteQueue(unittest.TestCase):
         self.assertTrue(said[0].startswith("waiting for ") and str(rt.ROOT) in said[0], said)
 
 
+class _Alone:  # stands for a TestCase (not one, so discovery does not run it)
+    def test_a(self): pass
+    def test_b(self): pass
+
+
+class _Shared(_Alone):
+    @classmethod
+    def setUpClass(cls): pass
+
+
+class _SharedChild(_Shared):
+    pass
+
+
+class SplitByMethod(unittest.TestCase):
+    def test_only_a_class_sharing_nothing_is_split(self):
+        self.assertFalse(rt._shares_setup(_Alone))
+        self.assertTrue(rt._shares_setup(_Shared))
+        self.assertTrue(rt._shares_setup(_SharedChild))  # inherited from a base
+
+    def test_weight_of_a_class_run_split(self):
+        last = {"m.A": 70.0, "m.B.test_x": 50.0, "m.B.test_y": 30.0, "m.BC": 5.0}
+        self.assertEqual(rt._weight("m.A", last), 70.0)
+        self.assertEqual(rt._weight("m.B", last), 80.0)  # not m.BC
+        self.assertIsNone(rt._weight("m.C", last))
+
+    def test_a_method_split_for_the_first_time_gets_its_share(self):
+        groups = {"m.A.test_a": ["m.A.test_a"], "m.A.test_b": ["m.A.test_b"], "m.Z": ["m.Z.t1"]}
+        self.assertEqual(rt._order(groups, {"m.A": 100.0, "m.Z": 40.0}), ["m.A.test_a", "m.A.test_b", "m.Z"])
+        self.assertEqual(rt._order(groups, {"m.A": 100.0, "m.Z": 51.0})[0], "m.Z")
+
+
 class Procs(unittest.TestCase):
     """qa.procs.run stops the command and what it started when the time runs out (subprocess.run
     stops only the command itself, and a process the command started keeps running)."""

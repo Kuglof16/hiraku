@@ -14,7 +14,11 @@ root), splits them by test class and runs each class with unittest in a process
 of its own, N at a time (default: the number of CPUs minus 4, at least 8). The
 slowest classes of the last run (runs/test_times.json, kept locally) start
 first; without that file, the scripted runs, the K2 vehicle and the shell
-solver start first. The environment is passed on as it is.
+solver start first. The environment is passed on as it is. A class that took SPLIT_S
+or more last time and shares nothing between its methods (no setUpClass, tearDownClass
+or setUpModule) runs one process per method (--no-split keeps it whole). --only PREFIX
+runs only the classes whose name starts with PREFIX (its times are added to the file,
+not put in place of it).
 
 A class that failed for lack of memory (MemoryError, numpy's _ArrayMemoryError,
 Windows' "paging file too small" WinError 1455: the machine was full, often
@@ -178,15 +182,51 @@ def _flatten(suite):
             yield x
 
 
-def discover() -> dict[str, list[str]]:
-    """Test ids by the name each worker loads: module.Class, or the module whose import failed."""
+SPLIT_S = 60.0  # a class that took this long last time runs one process per method, when nothing is shared
+
+
+def _shares_setup(cls: type) -> bool:
+    """The class (or a base other than TestCase) has setUpClass/tearDownClass, or its module setUpModule:
+    its methods share what that makes, so they stay in one process."""
+    for base in cls.__mro__:
+        if base in (unittest.TestCase, object):
+            continue
+        if "setUpClass" in vars(base) or "tearDownClass" in vars(base):
+            return True
+    mod = sys.modules.get(cls.__module__)
+    return bool(mod and (hasattr(mod, "setUpModule") or hasattr(mod, "tearDownModule")))
+
+
+def discover(only: list[str] | None = None, split: dict[str, float] | None = None) -> dict[str, list[str]]:
+    """Test ids by the name each worker loads: module.Class, or the module whose import failed.
+    only: keep the names starting with one of these prefixes. split: last times by name; a class
+    whose time (or its methods' sum) is SPLIT_S or more and that shares no setup is given as one
+    name per method (module.Class.method)."""
     groups: dict[str, list[str]] = {}
+    classes: dict[str, type] = {}
     for t in _flatten(unittest.defaultTestLoader.discover(str(ROOT), top_level_dir=str(ROOT))):
         if type(t).__module__ == "unittest.loader":  # _FailedTest: the module did not import
             groups.setdefault(t._testMethodName, []).append(t.id())
         else:
-            groups.setdefault(f"{type(t).__module__}.{type(t).__qualname__}", []).append(t.id())
+            name = f"{type(t).__module__}.{type(t).__qualname__}"
+            classes[name] = type(t)
+            groups.setdefault(name, []).append(t.id())
+    if only:
+        groups = {k: v for k, v in groups.items() if k.startswith(tuple(only))}
+    if split:
+        for name in [k for k, ids in groups.items() if k in classes and len(ids) > 1]:
+            if _weight(name, split) >= SPLIT_S and not _shares_setup(classes[name]):
+                for i in groups.pop(name):
+                    groups[i] = [i]
     return groups
+
+
+def _weight(name: str, last: dict[str, float]) -> float | None:
+    """The last time of a class, or the sum of its methods' when it ran split; None when unknown."""
+    if name in last:
+        return float(last[name])
+    parts = [float(v) for k, v in last.items() if k.startswith(name + ".")]
+    return sum(parts) if parts else None
 
 
 # --- one worker (a separate process) ----------------------------------------------------
@@ -223,15 +263,23 @@ def worker(out: Path, names: list[str]) -> int:
 
 
 # --- the parent -------------------------------------------------------------------------
-def _order(groups: dict[str, list[str]]) -> list[str]:
+def _last_times() -> dict[str, float]:
     try:
-        last = json.loads(TIMES.read_text(encoding="utf-8"))
+        return json.loads(TIMES.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        last = {}
+        return {}
+
+
+def _order(groups: dict[str, list[str]], last: dict[str, float] | None = None) -> list[str]:
+    last = _last_times() if last is None else last
 
     def weight(name: str) -> float:
-        if name in last:
-            return float(last[name])
+        w = _weight(name, last)
+        if w is not None:
+            return w
+        cls = name.rsplit(".", 1)[0]  # a method run on its own for the first time: its share of the class
+        if len(groups[name]) == 1 and groups[name][0] == name and (w := _weight(cls, last)) is not None:
+            return w / max(1, sum(1 for k in groups if k.startswith(cls + ".")))
         return 1000.0 if name.startswith(HEAVY) else len(groups[name]) * 0.1
 
     return sorted(groups, key=weight, reverse=True)
@@ -293,6 +341,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=None,
                     help="processes at a time (default: CPUs - 4, at least 8; 8 with --no-wait)")
     ap.add_argument("--timeout", type=float, default=1800.0, help="seconds one class may take (default 1800)")
+    ap.add_argument("--only", action="append", default=[], metavar="PREFIX",
+                    help="run only the classes whose name starts with PREFIX (e.g. tests.web); may be repeated")
+    ap.add_argument("--no-split", action="store_true",
+                    help=f"keep every class in one process (by default a class that took {SPLIT_S:g} s or more "
+                         "last time and shares no setup runs one process per method)")
     ap.add_argument("--no-wait", action="store_true",
                     help="run at once, without waiting for the machine-wide suite lock (emergencies only)")
     args = ap.parse_args(argv)
@@ -306,11 +359,12 @@ def main(argv: list[str] | None = None) -> int:
     for rec in before:
         print(f"warning: {_overlap(rec)}", file=sys.stderr, flush=True)
     _take_lock(args.jobs)
-    groups = discover()
+    last = _last_times()
+    groups = discover(args.only, None if args.no_split else last)
     expected = {i for ids in groups.values() for i in ids}
     results = []
     with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(_run_one, name, Path(tmp), args.timeout) for name in _order(groups)]
+        futures = [pool.submit(_run_one, name, Path(tmp), args.timeout) for name in _order(groups, last)]
         for f in as_completed(futures):
             results.append(f.result())
         again = _rerun_alone(results, Path(tmp), args.timeout)
@@ -356,7 +410,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"warning: {_overlap(rec)}")
     try:
         TIMES.parent.mkdir(exist_ok=True)
-        TIMES.write_text(json.dumps({r["name"]: round(r["s"], 2) for r in results}, indent=1), encoding="utf-8")
+        if not args.only:  # a whole suite: its names replace the last ones (a class split now drops its old entry)
+            last = {}
+        last.update({r["name"]: round(r["s"], 2) for r in results})
+        TIMES.write_text(json.dumps(last, indent=1), encoding="utf-8")
     except OSError:
         pass
     return 1 if failed else 0
