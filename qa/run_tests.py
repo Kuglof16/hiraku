@@ -21,7 +21,7 @@ runs only the classes whose name starts with PREFIX (its times are added to the 
 not put in place of it).
 
 Memory: each worker reports its peak (runs/test_memory.json, local). A class whose peak
-was HEAVY_GB or more (or one of KNOWN_HEAVY_GB before it was measured) is heavy: at most
+was HEAVY_GB or more (or one of KNOWN_HEAVY_GB, whose value is a floor) is heavy: at most
 --max-heavy (default 2) heavy classes run at once, and a heavy class waits while another
 runs and free memory is under its peak plus RESERVE_GB ("waiting for memory: ..."); the
 lighter classes after it go first meanwhile. A scripted run's own process is not in its
@@ -67,9 +67,11 @@ TIMES = ROOT / "runs" / "test_times.json"  # runs/ is local (not committed)
 MEMORY = ROOT / "runs" / "test_memory.json"  # each class's peak memory (GB) last time, local too
 HEAVY_GB = 4.0  # a class whose peak was this much or more is "heavy": at most --max-heavy of them at once
 RESERVE_GB = 4.0  # a heavy class starts only when free memory is its last peak plus this (unless none runs)
-# heavy before their peak is known: measured on 11/5 00:32 (four at once took about 34 GB)
+# heavy whatever their own process's peak says (the floor of memory_of): measured on 11/5 00:32 (four
+# at once took about 34 GB). SpaceFrameConvergenceTest runs each mesh level in a child process (one at a
+# time by default), whose memory is not in the worker's peak: 14.4 GB is the 14 mm level's (11/5 02:26).
 KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
-                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 8.6,
+                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 14.4,
                   "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
                   "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
 # started first when there are no times yet
@@ -363,13 +365,13 @@ def _last_memory() -> dict[str, float]:
 
 
 def memory_of(name: str, last: dict[str, float]) -> float | None:
-    """The last peak (GB) of a class or method (a method that never ran alone: its class's), else the known one."""
+    """The last peak (GB) of a class or method (a method that never ran alone: its class's), and never less
+    than the known one (KNOWN_HEAVY_GB: a class whose heavy work runs in child processes)."""
+    known = next((KNOWN_HEAVY_GB[k] for k in (name, name.rsplit(".", 1)[0]) if k in KNOWN_HEAVY_GB), None)
     for k in (name, name.rsplit(".", 1)[0]):
         if k in last:
-            return float(last[k])
-        if k in KNOWN_HEAVY_GB:
-            return KNOWN_HEAVY_GB[k]
-    return None
+            return max(float(last[k]), known or 0.0)
+    return known
 
 
 def schedule(names: list[str], jobs: int, run, memory: dict, max_heavy: int = 2,
