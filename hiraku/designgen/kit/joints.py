@@ -482,7 +482,8 @@ def annotate(design: dict) -> int:
                         continue
                     a, b = nearest_points(me, other)
                     at = (a + b) / 2.0
-                c["at_mm"] = [round(float(x), 3) for x in at]
+                # to 0.1 mm: the nearest points settle to 0.001 mm, so a finer figure would differ between builds
+                c["at_mm"] = [round(float(x), 1) for x in at]
                 n += 1
             if c.get("via") in AXIS_VIA and "axis" not in c:
                 c["axis"] = _axis(me, c["via"])
@@ -520,10 +521,30 @@ def brake_master(design: dict) -> str | None:
     return rod["id"]
 
 
+_SKIP = [False]
+
+
+class skipped:
+    """with joints.skipped(): designs built inside are not joined (for searches over the layout that read only where
+    the seats, the pedals and the steering are, designgen.driver_fit: the joints add nothing there and cost a tenth of
+    a second a build). A design kept or handed on is built outside, joined."""
+
+    def __enter__(self):
+        self._was = _SKIP[0]
+        _SKIP[0] = True
+        return self
+
+    def __exit__(self, *exc):
+        _SKIP[0] = self._was
+        return False
+
+
 def join(design: dict) -> dict:
     """Every part's joints made to touch: the occupants' segments to their neighbours, the mounts between their part
     and the frame, the shaft's bearing, the fenders on their knuckles, then step 2 for every other part (the corners'
     arms, damper and ball joints are kit/arms.py's and already touch). Returns what was done."""
+    if _SKIP[0]:
+        return {"skipped": True}
     occ = occupants(design)
     rod = brake_master(design)
     mnt = mounts(design)

@@ -80,9 +80,19 @@ def smallest(m: dict[str, tuple[float, str]] | None) -> float:
     return min((v for v, _ in m.values()), default=float("inf"))
 
 
-def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES, names: tuple[str, ...] = MARGINS,
-                      time_limit_s: float = TIME_LIMIT_S, max_evals: int | None = None,
-                      load_case: Record | None = None) -> Record:
+def best_driver_place(design: Record, **kw) -> Record:
+    """_best_driver_place with the designs it builds left unjoined (designgen kit/joints.skipped): the margins read
+    where the occupants, the seats, the pedals and the steering are, which the joints do not move. The changes it
+    returns are built (and joined) by the caller; H3 checks that design."""
+    from .kit.joints import skipped
+
+    with skipped():
+        return _best_driver_place(design, **kw)
+
+
+def _best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES, names: tuple[str, ...] = MARGINS,
+                       time_limit_s: float = TIME_LIMIT_S, max_evals: int | None = None,
+                       load_case: Record | None = None) -> Record:
     """The values of `variables` (within their ranges, the design's other variables as they are) whose smallest
     margin of `names` is the largest. load_case: the occupants on board as the tool's load case has them
     (hiraku.solvers.shelf.base.on_board); none given, every occupant in the design.
