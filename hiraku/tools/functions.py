@@ -1179,6 +1179,35 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     }
 
 
+def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
+    """Build the run's load cases again on a new version's design (a criterion may read the design,
+    e.g. H5's number of parts) and write them for that version (load_cases.created). The same load
+    case ids as the version before: a test that no longer builds keeps its earlier load case, and
+    the run says so."""
+    from hiraku.catalog import load_catalog
+    from hiraku.catalog.build import build_load_cases
+
+    v = design["design_version"]
+    before = ctx.store.version_load_cases(v - 1)
+    tests = list(dict.fromkeys(lc["test_id"] for lc in before if not lc["load_case_id"].endswith("-beyond")))
+    req = requirements_now(ctx)
+    skipped: list = []
+    try:
+        built = build_load_cases(load_catalog(), req, design, tests, skipped, beyond=req.get("beyond", []))
+    except ValueError as e:
+        built, skipped = [], [("*", str(e))]
+    by_id = {lc["load_case_id"]: lc for lc in built}
+    kept = [lc["load_case_id"] for lc in before if lc["load_case_id"] not in by_id]
+    load_cases = [by_id.get(lc["load_case_id"], lc) for lc in before]
+    changed = [new["load_case_id"] for old, new in zip(before, load_cases) if old != new]
+    text = (f"版 {v} の荷重条件を、この版の設計で作り直しました"
+            + (f" (変わったもの: {'、'.join(changed)})" if changed else " (前の版と同じ)"))
+    if kept:
+        text += f"。この版では作れなかったので前の版のままのもの: {'、'.join(kept)}"
+    ctx.store.write_version_load_cases(v, load_cases, text=text)
+    return load_cases
+
+
 def _round_and_cost_left(ctx: RunContext) -> None:
     """revise_design's and build_version's limits: the revisions stay within round_limit (each new version is one
     round) and the project's cost_usd is below cost_limit_usd (see revise_design)."""
@@ -1242,6 +1271,7 @@ def _new_version(ctx: RunContext, new: Record, agent: str) -> None:
     if errs:
         raise ToolError("組み直した設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     ctx.store.write_design(new, agent=agent)
+    rebuild_load_cases(ctx, new)
     init_judgements(ctx, new["design_version"])
 
 

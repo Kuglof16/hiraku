@@ -1182,6 +1182,24 @@ class DesignContextTest(RunCase, unittest.TestCase):
         self.assertEqual(ch["changed"], [{"variable": "track", "old": {"value": old["value"], "unit": old["unit"]},
                                           "new": {"value": 1400.0, "unit": "mm"}}])
 
+    def test_revise_design_builds_the_load_cases_again_for_the_new_version(self):
+        from hiraku.contract import layout
+        from hiraku.tools.functions import revise_design
+
+        first = [dict(lc) for lc in self.ctx.load_cases]
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "wider"}, "designer")
+        made = [e for e in self.ctx.store.events() if e["kind"] == "load_cases.created"]
+        self.assertEqual([e["design_version"] for e in made], [2])
+        self.assertEqual(made[0]["data"]["design_version"], 2)
+        path = layout.version_dir(self.ctx.store.path, 2) / layout.VERSION_LOAD_CASES_FILE
+        self.assertTrue(path.exists())
+        # the same ids, in the same order; the context reads the new version's; project.load_cases stays version 1's
+        self.assertEqual([lc["load_case_id"] for lc in self.ctx.load_cases], [lc["load_case_id"] for lc in first])
+        self.assertIs(self.ctx.load_cases, self.ctx.store.version_load_cases(2))
+        self.assertEqual(self.ctx.project["load_cases"], first)
+        self.assertEqual(self.ctx.store.version_load_cases(1), first)
+        self.assert_events_fit()
+
 
 class UnpredictableCaseTest(RunCase, unittest.TestCase):
     """HK4's stop text for a load case with no usable tool, and one no K0 formula can predict."""

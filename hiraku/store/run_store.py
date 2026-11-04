@@ -93,6 +93,7 @@ class RunStore:
         self._wall = wall
         self._mono = mono
         self._lock = threading.RLock()
+        self._version_lcs: dict[int, list[Record]] = {}  # v -> load cases of v00N/load_cases.json
         self._seq = 0
         self._t0_mono = mono()
         self._t_offset = 0.0  # t of the last event when reopened
@@ -280,6 +281,35 @@ class RunStore:
             self._save_project()
             self.emit("design.created", agent=agent, design_version=v, data=design, text=design.get("change_reason"))
             return design
+
+    def write_version_load_cases(self, version: int, load_cases: list[Record], *, agent: str = "system",
+                                 text: str | None = None) -> Record:
+        """Write v<NNN>/load_cases.json, the load cases built for a version from 2 on, and emit
+        load_cases.created (data: version_load_cases). project.load_cases stays the first version's."""
+        with self._lock:
+            if version < 2 or version not in (self._project.get("design_versions") or []):
+                raise StoreError(f"load cases are written per version from version 2, for a version that exists (got {version})")
+            data = {"design_version": version, "load_cases": load_cases}
+            contract.validate("version_load_cases", data)
+            _write_json(layout.version_dir(self.path, version) / layout.VERSION_LOAD_CASES_FILE, data)
+            self._version_lcs[version] = load_cases
+            self.emit("load_cases.created", agent=agent, design_version=version, data=data, text=text)
+            return data
+
+    def version_load_cases(self, version: int | None = None) -> list[Record]:
+        """The load cases of a version: its own load_cases.json, else the nearest earlier version's,
+        else project.load_cases (version 1, and runs made before load cases were built per version)."""
+        with self._lock:
+            v = version or self.design_version
+            while v and v >= 2:
+                if v not in self._version_lcs:  # a version's file is written once, never rewritten
+                    path = layout.version_dir(self.path, v) / layout.VERSION_LOAD_CASES_FILE
+                    if path.exists():
+                        self._version_lcs[v] = _read_json(path)["load_cases"]
+                if v in self._version_lcs:
+                    return self._version_lcs[v]
+                v -= 1
+            return self._project.get("load_cases") or []
 
     def design(self, version: int | None = None) -> Record:
         v = version or self.design_version
