@@ -49,18 +49,31 @@
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
   # The designer's revisions, one per round, used when a tile comes out red
-  # (revise_design: the variables of hiraku.designgen, absolute values). With `fit: driver` the seat,
-  # steering and pedals are searched by code on the design with the entry's changes
+  # (revise_design: the variables of hiraku.designgen, absolute values; `choices` the generator's short ways).
+  # With `fit: driver` the seat, steering and pedals are searched by code on the design with the entry's changes
   # (hiraku.designgen.driver_fit; `fit_evals` the designs it measures, `fit_time_s` a time guard) and added to them.
+  # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
+  # version 1 layout (stage 0) -> version 2 load path and controls (stage 1, R8 and R7) -> version 3 the
+  # vehicle's motion (stage 2, P3; HK5 holds it until stage 1 is green) -> version 4 every tile green.
   revise:
-    # HK5, light first: the layout (stage 0) is fixed before anything else, then each red stage
-    - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
+    - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、運転席の位置を直します
       fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
       fit_evals: 150  # designs the fit builds and measures: a fixed count, so every machine finds the same place
-      # R8 and R7: the parts and the controls get a load path (the analysis department's set, load_path)
-      choices: {part_mounts: brackets, pedal_mount: post, side_guard: bars_net}
+      choices: {fenders: wheel}  # H6: the mud the wheels throw reaches the occupants
       changes:
         track: {value: 1220, unit: mm}
+      reason: >-
+        H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
+        H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す。
+        H6: 車輪が巻き上げた泥が乗員に届くので、車輪にフェンダーを付ける
+      source: >-
+        the demo scripted run 20261104-093402-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg),
+        H3 ver-0002 (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm), H6 ver-0004 (37 spray lines reach an occupant);
+        version 2 with this change (the fit: seat_height 233.5 mm, steering_column_angle 20 deg and seat_slide 300 mm, the last
+        two on a bound of their range): H1 ver-0005 (30 deg), H3 ver-0006 (27.06 mm), ver-0007 (61.79 mm), H6 ver-0008 (0)
+    - say: 荷重の通り道 (段 1) の赤を直すため、部品を枠に留める金具、ペダルの柱、横の守りを足します
+      choices: {part_mounts: brackets, pedal_mount: post, side_guard: bars_net}
+      changes:
         # the side guard's posts stand at rollbar_width / 2 and must clear the floor of the wider track: the smallest
         # width designgen builds, in 5 mm steps from 1200 (1200 refused: side_post_LS2_1 21.4 mm into the floor)
         rollbar_width: {value: 1265, unit: mm}
@@ -68,21 +81,22 @@ offroad-4w:
         # through the rail's node LS1 (the analysis department, on version 2 of run 20261104-072246)
         rollbar_foot_h: {value: 60, unit: mm}
       reason: >-
-        H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す
+        R8: 10 個の部品が枠まで荷重の通り道を持たず (浮いている)、横から押される 2 人の腰と肩 (4 か所) を受ける物が無い。
+        R7: アクセルとブレーキのペダル (2 か所) に、踏む力の通り道が無い。部品を枠に留める金具、ペダルを立てる柱、
+        横の守り (棒と網) を足す
       source: >-
-        the demo scripted run 20261104-084022-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002
-        (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm); version 2 with this change (the fit found seat_height 233.5 mm,
-        steering_column_angle 20 deg and seat_slide 300 mm, the last two on a bound of their range): H1 ver-0004 (30 deg),
-        H3 ver-0005 (knee_room 2.06 mm), ver-0006 (knee_angle_room 60.57 mm); R8 ver-0009..0011 and R7 ver-0012..0013 pass
+        the demo scripted run 20261104-093402-offroad-4w-scripted, version 2: R8-free ver-0011, R8-stress ver-0012 and R8-push ver-0013 (unsupported_load 10, 10 and 4:
+        parts and the occupants' push with no path to the frame), R7-foot ver-0014 (unsupported_load 2: the pedals);
+        version 3 with this change: R8 ver-0021..0023 and R7 ver-0024..0025 pass (R8-push 13.0 mm on the safe side).
+        The set: the analysis department (claude/dept-analysis-cf6cf8, load_path)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 15, unit: kW}
       reason: >-
         P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
       source: >-
-        the demo scripted run 20261104-084022-offroad-4w-scripted, version 2: P3 ver-0014 (time_to_speed 7.315 s against 6 s); version 3 with this change
-        (15 kW): P3 ver-0025 (5.842 s). On version 3 of run 20261104-080230 the launch tool gave 6.184 s at 13 kW and 5.986 s at 14 kW
+        the demo scripted run 20261104-093402-offroad-4w-scripted, version 3: P3 ver-0026 (time_to_speed 7.332 s against 6 s); version 4 with this change (15 kW):
+        P3 ver-0038 (5.855 s). On version 3 of run 20261104-080230 the launch tool gave 6.184 s at 13 kW and 5.986 s at 14 kW
   steps:
     - &p1_step
       load_case: P1-step100
@@ -146,13 +160,13 @@ offroad-4w:
           後ろの車軸のところでレールを曲げる (張り出しの曲げ) が、両端で支えた梁の式では支点の曲げは 0 になる。
           また、車輪はレールの外側にあるので、車輪の力はレールに横の曲げとねじりも加えるが、梁の式には入っていない
         fix: &r1_fix1 >-
-          張り出しの曲げと、外側から入る車輪の力による横の曲げとねじりを入れた式 frame_static.rail_joint_stress で、
+          張り出しの曲げと、外側から入る車輪の力による横の曲げとねじりを入れた式 frame_static.rail_joint_stress_closed (後ろの端の横の部材 cross_E が閉じたレールを 3 本目の枝とみる) で、
           後ろの車軸の継ぎ手のレールの応力を予測し直す
         retry:
           say: &r1_retry_say 後ろの車軸の継ぎ手で、張り出しと押す力による縦の曲げに、車輪のずれから来る横の曲げとねじりを足して予測し直します
           predictions: &r1_joint
             - quantity: max_stress
-              formula_id: frame_static.rail_joint_stress
+              formula_id: frame_static.rail_joint_stress_closed
               output: sigma
               assumptions:
                 - 左右は同じように押される
@@ -173,21 +187,14 @@ offroad-4w:
                 b_c: load.rail_joint.b_c
                 h_c: load.rail_joint.h_c
                 t_c: load.rail_joint.t_c
-          expected_mismatch:
-            quantity: max_stress
-            source: >-
-              frame_static against frame_static.rail_joint_stress on the demo vehicle, the vertical bending
-              and the sideways bending and twist each
-            cause: >-
-              今度は手計算が大きい。鉛直の曲げは 1 % で合い、横の曲げとねじりが倍に出る。
-              式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
-            fix: &r1_fix2 >-
-              合否は安全側の手計算の値で出す。もっと近い値が要るときは、隣の継ぎ手も回るとみた式で予測し直す
-            safe_side: true
-            safe_side_reason: >-
-              鉛直の曲げは解析と 1 % で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
-              継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
-              大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている
+                # the end cross member cross_E closing the rail behind the rear axle: a third branch (0dac13b)
+                a: load.rail_joint.a
+                L_e: load.rail_joint.L_e
+                b_e: load.rail_joint.b_e
+                h_e: load.rail_joint.h_e
+                t_e: load.rail_joint.t_e
+          # matches frame_static within R1's 15 % (the analysis department, 0dac13b: video step100 47.5 vs 52.7,
+          # step250-beyond 138.8 vs 126.2, N15 versions 2 and 3 78.9 vs 73.0 and 79.2 vs 72.7)
     # R1s (files that list it): the same step on the frame as shells (frame_shell), judged on the
     # hot-spot stress where a cross member's end bends the rail's side wall. Before the driven P1,
     # for the same reason as R1. Inputs from the analysis builders' joint_wall_calc.
@@ -230,21 +237,8 @@ offroad-4w:
         retry:
           say: *r1_retry_say
           predictions: *r1_joint
-          expected_mismatch:
-            quantity: max_stress
-            source: >-
-              frame_static against frame_static.rail_joint_stress on the demo vehicle at the 250 mm step, before
-              and after the designer's revision, the vertical bending, the sideways bending, the twist and the
-              axial force each (before: 0.5 %, 2.3 x, 2.0 x; after: 0.3 %, 2.3 x, 1.9 x)
-            cause: >-
-              今度も手計算が大きい (約 20〜24 %)。鉛直の曲げは 1 % 以内で合い、横の曲げは約 2.3 倍、ねじりは約 2 倍に出る。
-              式が隣の継ぎ手 S2 を固定とみなしているのに、フレームではそこも回るため
-            fix: *r1_fix2
-            safe_side: true
-            safe_side_reason: >-
-              鉛直の曲げは解析と 1 % 以内で合っていて、外れているのは隣の継ぎ手を固定とみた分 (横の曲げとねじり) だけ。
-              継ぎ手を固定とみるとレールは実際より硬く、横の曲げとねじりを多く受け持つので、手計算の応力は
-              大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている
+          # matches frame_static within R1's 15 % (the analysis department, 0dac13b: video step100 47.5 vs 52.7,
+          # step250-beyond 138.8 vs 126.2, N15 versions 2 and 3 78.9 vs 73.0 and 79.2 vs 72.7)
     - <<: *p1_dynamic
       load_case: P1-step250-beyond
       expected_mismatch:
@@ -285,60 +279,52 @@ offroad-4w:
 # 80 mm and 3.2 mm 154.0 MPa against 163.3 (the hand calculation 140.6, -9 %).
 offroad-4w-video:
   extends: offroad-4w
-  revise:
-    - say: 組み立て・動力・強度 (つなぎ目) の赤を直すため、トレッドを広げ、ステアリングを前へ出し、モーターを強くし、レールの肉厚を上げてつなぎ目にガセットを足します
-      fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
-      changes:
-        track: {value: 1220, unit: mm}
-        motor_peak_power: {value: 12, unit: kW}
-        rail_t: {value: 4.5, unit: mm}
-        gusset_leg: {value: 80, unit: mm}
-        gusset_thickness: {value: 3.2, unit: mm}
-      reason: >-
-        H1: 前輪を切るとレールに当たるので、トレッドを広げて輪をレールから離す。
-        H3: 運転者の膝とステアリングのすき間が足りないので、運転席・ステアリング・ペダルの位置を直す。
-        P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる。
-        R1s: 横の部材の端がレールの側の壁を曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm にし、
-        つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足す (トレッドを広げると横の部材が長くなり、肉厚だけでは足りない)
-      source: >-
-        the assembly tool's H1 and H3 and the launch tool's P3 on the demo vehicle, before and after this change;
-        frame_shell and joint_wall_bending with this revision, rail_t 4.5 mm with and without gussets (the analysis department)
-
-# Video scene N15, data/requirements/offroad-4w-n15.yaml: the offroad-4w plan on the demo vehicle
-# (roll bar, floors, parts with their systems) with the video file's tests, R1s included, revised
-# round by round until every tile is green (tests/agent/test_scene_n15.py). Each revision fixes the
-# reds of the version before it; the values were read off the scripted runs' records (`source`).
-offroad-4w-n15:
-  extends: offroad-4w
-  # HK5, light first: one revision per red stage. Version 1: the layout (stage 0) is red ->
-  # version 2: stage 0 and 1 green, the vehicle dynamics (stage 2) red at P3 -> version 3: stages
-  # 0-2 green, the shells (stage 3) red at R1s -> version 4: every tile green.
-  # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
-  # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
-  notes:
-    - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
+  # One revision per red stage, as N15 (the shape comes from the requirements' reds)
   revise:
     - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
       fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
+      fit_evals: 150  # a fixed count, so every machine finds the same place
+      choices: {fenders: wheel}  # H6: the mud the wheels throw reaches the occupants
       changes:
         track: {value: 1220, unit: mm}
       reason: >-
         H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
-        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、運転席・ステアリング・ペダルの位置を直す
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、運転席・ステアリング・ペダルの位置を直す。
+        H6: 車輪が巻き上げた泥が乗員に届くので、車輪にフェンダーを付ける
       source: >-
-        the N15 scripted run 20261104-062643-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg), H3 ver-0002 (knee_room -69.25 mm), ver-0003
-        (knee_angle_room -46.36 mm); version 2 with this change (the fit found seat_slide 158.5 mm): H1 ver-0005 (30 deg),
-        H3 ver-0006 (knee_room 10.0 mm), ver-0007 (knee_angle_room 28.26 mm)
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg),
+        H3 ver-0002 (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm), H6 ver-0004 (37 spray lines reach an occupant);
+        version 2 with this change (the fit: seat_height 233.5 mm, steering_column_angle 20 deg and seat_slide 300 mm, the last
+        two on a bound of their range): H1 ver-0006 (30 deg), H3 ver-0007 (27.06 mm), ver-0008 (61.79 mm), H6 ver-0009 (0)
+    - say: 荷重の通り道 (段 1) の赤を直すため、部品を枠に留める金具、ペダルの柱、横の守りを足します
+      choices: {part_mounts: brackets, pedal_mount: post, side_guard: bars_net}
+      changes:
+        # the side guard's posts stand at rollbar_width / 2 and must clear the floor of the wider track: the smallest
+        # width designgen builds, in 5 mm steps from 1200 (1200 refused: side_post_LS2_1 21.4 mm into the floor)
+        rollbar_width: {value: 1265, unit: mm}
+        # the side guard's foot arm needs its own section, or the shell mesh joins it with cross_S1 into one tube
+        # through the rail's node LS1 (the analysis department, on version 2 of run 20261104-072246)
+        rollbar_foot_h: {value: 60, unit: mm}
+      reason: >-
+        R8: 10 個の部品が枠まで荷重の通り道を持たず (浮いている)、横から押される 2 人の腰と肩 (4 か所) を受ける物が無い。
+        R7: アクセルとブレーキのペダル (2 か所) に、踏む力の通り道が無い。部品を枠に留める金具、ペダルを立てる柱、
+        横の守り (棒と網) を足す
+      source: >-
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 2: R8-free ver-0018, R8-stress ver-0019 and R8-push ver-0020 (unsupported_load 10, 10 and 4:
+        parts and the occupants' push with no path to the frame), R7-foot ver-0021 (unsupported_load 2: the pedals);
+        version 3 with this change: R8 ver-0034..0036 and R7-foot ver-0037 pass (R8-push 13.0 mm).
+        The set: the analysis department (claude/dept-analysis-cf6cf8, load_path)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 15, unit: kW}
+        motor_peak_power: {value: 17, unit: kW}
       reason: >-
-        P3: 40 km/h までが 7.00 s で 6 s を超えるので、モーターの最大出力を 10 kW から 15 kW に上げる
-        (あとで強度のためにレールを重くしても 6 s に収まるように)
+        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
+        このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
       source: >-
-        the N15 scripted run 20261104-062643-offroad-4w-scripted, version 2: P3 ver-0021 (time_to_speed 7.004 s); version 3 with this change: P3 ver-0038 (5.612 s);
-        version 4 (heavier rails): P3 ver-0057 (5.840 s). Before the plates' catalogue mass, version 4 gave 6.080 s at 13 kW
-        and 5.886 s at 14 kW (the launch tool)
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
+        (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
+        With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
+        the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
     - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
       changes:
         rail_t: {value: 4.5, unit: mm}
@@ -348,10 +334,84 @@ offroad-4w-n15:
       reason: >-
         R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
         レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (版 3 で、つなぎ目のホットスポットは 562 MPa、限界 163 MPa)
+        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
       source: >-
-        the N15 scripted run 20261104-062643-offroad-4w-scripted, version 3: R1s ver-0039 (frame_shell ana-0049 max_hot_spot_stress 562.1 MPa at rail_R_BE, cmp-0087);
-        version 4 with this change: R1s ver-0058 (frame_shell ana-0074 124.2 MPa at rail_L_BE, cmp-0131).
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
+        at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
+        The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
+
+# Video scene N15, data/requirements/offroad-4w-n15.yaml: the offroad-4w plan on the demo vehicle
+# (roll bar, floors, parts with their systems) with the video file's tests, R1s included, revised
+# round by round until every tile is green but strength's R7-hand (tests/agent/test_scene_n15.py). Each revision fixes the
+# reds of the version before it; the values were read off the scripted runs' records (`source`).
+offroad-4w-n15:
+  extends: offroad-4w
+  # HK5, light first: one revision per red stage. Version 1: the layout (stage 0) is red ->
+  # version 2: the load path and the controls (stage 1, R8 and R7) red -> version 3: the vehicle
+  # dynamics (stage 2) red at P3 -> version 4: the shells (stage 3) red at R1s -> version 5: every tile green but
+  # strength, where R7-hand stays not judged (its mismatch's cause ends it: expected_mismatch end, ends_case).
+  # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
+  # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
+  notes:
+    - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
+  revise:
+    - say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、ステアリングを前へ出します
+      fit: driver  # the seat, steering and pedals: designgen.driver_fit on the design with these changes
+      fit_evals: 150  # a fixed count, so every machine finds the same place
+      choices: {fenders: wheel}  # H6: the mud the wheels throw reaches the occupants
+      changes:
+        track: {value: 1220, unit: mm}
+      reason: >-
+        H1: 前輪を切るとレールに当たり、切れる角が 16.5° で 30° に足りないので、トレッドを 1100 mm から 1220 mm に広げて輪をレールから離す。
+        H3: 運転者の膝の前の余裕が -69 mm (ステアリングの柱に当たる) なので、運転席・ステアリング・ペダルの位置を直す。
+        H6: 車輪が巻き上げた泥が乗員に届くので、車輪にフェンダーを付ける
+      source: >-
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 1: H1 ver-0001 (free_steer_angle 16.48 deg),
+        H3 ver-0002 (knee_room -69.25 mm), ver-0003 (knee_angle_room -46.36 mm), H6 ver-0004 (37 spray lines reach an occupant);
+        version 2 with this change (the fit: seat_height 233.5 mm, steering_column_angle 20 deg and seat_slide 300 mm, the last
+        two on a bound of their range): H1 ver-0006 (30 deg), H3 ver-0007 (27.06 mm), ver-0008 (61.79 mm), H6 ver-0009 (0)
+    - say: 荷重の通り道 (段 1) の赤を直すため、部品を枠に留める金具、ペダルの柱、横の守りを足します
+      choices: {part_mounts: brackets, pedal_mount: post, side_guard: bars_net}
+      changes:
+        # the side guard's posts stand at rollbar_width / 2 and must clear the floor of the wider track: the smallest
+        # width designgen builds, in 5 mm steps from 1200 (1200 refused: side_post_LS2_1 21.4 mm into the floor)
+        rollbar_width: {value: 1265, unit: mm}
+        # the side guard's foot arm needs its own section, or the shell mesh joins it with cross_S1 into one tube
+        # through the rail's node LS1 (the analysis department, on version 2 of run 20261104-072246)
+        rollbar_foot_h: {value: 60, unit: mm}
+      reason: >-
+        R8: 10 個の部品が枠まで荷重の通り道を持たず (浮いている)、横から押される 2 人の腰と肩 (4 か所) を受ける物が無い。
+        R7: アクセルとブレーキのペダル (2 か所) に、踏む力の通り道が無い。部品を枠に留める金具、ペダルを立てる柱、
+        横の守り (棒と網) を足す
+      source: >-
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 2: R8-free ver-0018, R8-stress ver-0019 and R8-push ver-0020 (unsupported_load 10, 10 and 4:
+        parts and the occupants' push with no path to the frame), R7-foot ver-0021 (unsupported_load 2: the pedals);
+        version 3 with this change: R8 ver-0034..0036 and R7-foot ver-0037 pass (R8-push 13.0 mm).
+        The set: the analysis department (claude/dept-analysis-cf6cf8, load_path)
+    - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
+      changes:
+        motor_peak_power: {value: 17, unit: kW}
+      reason: >-
+        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
+        このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
+      source: >-
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
+        (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
+        With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
+        the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
+    - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
+      changes:
+        rail_t: {value: 4.5, unit: mm}
+        gusset_leg: {value: 80, unit: mm}
+        gusset_thickness: {value: 3.2, unit: mm}
+        cross_h: {value: 50, unit: mm}
+      reason: >-
+        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
+        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
+        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
+      source: >-
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
+        at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
         The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall

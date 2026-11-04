@@ -24,7 +24,7 @@ HK2 = "HK2_tool_usable"
 HK3 = "HK3_cause_before_continue"
 HK4 = "HK4_no_stop_before_judged"
 HK5 = "HK5_light_first"
-HK6 = "HK6_module_scope"
+HK6 = "HK6_module_scope"  # designs with modules (contract d9631a5)
 
 assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4, HK5, HK6}
 
