@@ -7,6 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
+//   ?on=joints      turn overlays on at load (joints: the joint marks, off by default; A7 follows it too)
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 //   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
@@ -28,6 +29,7 @@ import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
+import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
@@ -52,7 +54,7 @@ let asmPanel = null; // mounted on first show
 const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false }, // joints: off at first
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -72,6 +74,8 @@ const ui = {
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+// joints: ?on=joints turns overlays on at load (the joint marks are off by default)
+for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
 
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
@@ -939,6 +943,7 @@ function renderToggles(motion, lc, graphs = false) {
     btn("cg", "重心", t.cg) +
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
+    btn("joints", "接合", t.joints) + // joints:
     (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion || graphs ? btn("graph", "グラフ", t.graph) : "");
 }
@@ -1222,6 +1227,7 @@ function draw() {
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
+    renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && tab === "bench"); // joints:
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
     $("now").textContent = now;

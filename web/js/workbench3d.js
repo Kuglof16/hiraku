@@ -46,6 +46,7 @@ import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
 import { mergePieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
+import { JointMarks } from "./joints.js"; // joints: the joint marks (toggle 接合)
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
@@ -456,6 +457,7 @@ export class Workbench3D {
     this.fitted = false;
     this.keys = { contour: null, vectors: null };
     this.size = { w: 1, h: 1 };
+    this.joints = new JointMarks(this); // joints: marks in the body group, off until the toggle
   }
 
   resize(w, h, pixelRatio) {
@@ -491,7 +493,7 @@ export class Workbench3D {
     this.props.clear();
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
-    if (!design) return;
+    if (!design) return void this.joints.setDesign(null); // joints:
 
     const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
     this.nodes = nodes;
@@ -662,6 +664,7 @@ export class Workbench3D {
       this.fitted = true;
     }
     this.lightAll(); // a rule hit pointed at before stays lit on the new version
+    this.joints.setDesign(design); // joints:
   }
 
   // Light what a rule hit names (the person points at it in A2): ids of parts, frame members,
@@ -839,6 +842,7 @@ export class Workbench3D {
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
+    this.joints?.partLook(); // joints: the parts see-through while the joints are on
   }
 
   // Centre of gravity used only to place the mark when the analysis gives none:
@@ -1757,6 +1761,8 @@ export class Workbench3D {
     this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
     this.cg.visible = !!t.cg && !!this.cgPos && !this.closeUp;
     this.placeMotionArrows(this.frame);
+    if ("joints" in t) this.joints.setOn(t.joints); // joints: (a view given no joints key keeps its own)
+    else this.joints.sync();
   }
 
   // Time-driven effects use the playhead only, so a frozen ?t= frame is repeatable.

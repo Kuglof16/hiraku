@@ -19,6 +19,7 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { esc, fmt } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { assemblyJointControls } from "./joints.js"; // joints:
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -266,6 +267,7 @@ export class AssemblyStage {
       if (idx === current) cur = { m, at };
     });
     this.markCurrent(cur);
+    v.joints.sync(true); // joints: the marks of the parts in place, moving with the part coming in
   }
 
   markCurrent(cur) {
@@ -425,6 +427,7 @@ export class AssemblyPanel {
     this.gl = this.q(".asm-gl");
     this.view = new Workbench3D(this.gl, "zu");
     this.stage = new AssemblyStage(this.view);
+    this.jointCtl = assemblyJointControls(this.q(".asm-3d"), this.view); // joints: its own 接合 switch and legend
     this.seek = new AssemblySeek(this.q(".asm-bar"), {
       interactive: true,
       onSeek: (u) => {
@@ -499,6 +502,8 @@ export class AssemblyPanel {
     this.drawnCurrent = null;
     this.playing = false;
     this.stage.setRecord(rec);
+    if (this.jointCtl.want) this.jointCtl.set(true), (this.jointCtl.want = false); // joints: ?on=joints
+    this.jointCtl.refresh(); // joints:
     if (!rec) return;
     this.u = rec.steps.length; // opens on the vehicle built, the last step marked
     this.seek.setSteps(rec.steps);
