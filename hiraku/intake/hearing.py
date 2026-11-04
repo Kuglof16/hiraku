@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -169,10 +170,74 @@ def loading_answer(value: Any) -> str | None:
     return words.get(squeeze(value))
 
 
+_NUMBER_WITH_UNIT = re.compile(r"^\s*([-+]?\d+(?:[.,]\d+)?)\s*(.*?)\s*$")
+# what a person may write after the number -> (the unit the requirement is kept in, the factor to it)
+_UNIT_WORDS: dict[str, tuple[str, float]] = {
+    "kg": ("kg", 1), "キロ": ("kg", 1), "キログラム": ("kg", 1), "g": ("g", 1), "グラム": ("g", 1), "t": ("kg", 1000), "トン": ("kg", 1000),
+    "mm": ("mm", 1), "cm": ("mm", 10), "m": ("mm", 1000), "n": ("N", 1), "kn": ("N", 1000),
+    "km/h": ("km/h", 1), "kmh": ("km/h", 1), "m/s": ("m/s", 1), "度": ("deg", 1), "°": ("deg", 1), "deg": ("deg", 1),
+    "℃": ("degC", 1), "度c": ("degC", 1), "degc": ("degC", 1), "%": ("%", 1), "km": ("km", 1), "s": ("s", 1), "秒": ("s", 1), "分": ("min", 1),
+}
+_UNIT_CONVERT = {("km/h", "m/s"): 1 / 3.6, ("m/s", "km/h"): 3.6, ("kg", "g"): 1000.0, ("g", "kg"): 0.001, ("mm", "m"): 0.001}
+
+
+def expected_unit(it: Record) -> str | None:
+    """The unit a numeric answer to this item is kept in: the item's own `unit`, else the unit of a numeric default."""
+    if it.get("unit"):
+        return str(it["unit"])
+    units = {c["unit"] for c in it.get("choices") or [] if c.get("unit")}
+    if len(units) == 1:
+        return units.pop()
+    default = it.get("default") or {}
+    value = default.get("value")
+    numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
+    return str(default["unit"]) if numeric and default.get("unit") not in (None, "", "1") else None
+
+
+def _with_unit(it: Record, spec: Record) -> Record:
+    """A number typed as text ('150 kg', '150', '12 度') becomes {value: 150, unit: 'kg'}. A person does not type a unit
+    field: without this the run stops at its start ('must be in kg, got None')."""
+    want = expected_unit(it)
+    if "unit" in spec:
+        return spec
+    value = spec["value"]
+    if want is None:  # nothing says the unit: only a number with a unit word that is known is split ('100 mm'); a word stays a word
+        m = _NUMBER_WITH_UNIT.match(str(value)) if isinstance(value, str) else None
+        got = _UNIT_WORDS.get(m.group(2).lower().replace(" ", "")) if m and m.group(2) else None
+        if not got:
+            return spec
+        number = float(m.group(1).replace(",", ".")) * got[1]
+        return {**spec, "value": int(number) if number == int(number) else round(number, 6), "unit": got[0]}
+    example = it.get("example")
+    hint = f"「{it['name']}」は数と単位 ({want}) で書いてください" + (f" (例: {example})" if example else "")
+    if isinstance(value, bool):
+        raise IntakeError(hint)
+    if isinstance(value, (int, float)):
+        return {**spec, "unit": want}
+    m = _NUMBER_WITH_UNIT.match(str(value))
+    if not m:
+        raise IntakeError(hint)
+    number = float(m.group(1).replace(",", "."))
+    word = m.group(2).lower().replace(" ", "")
+    if word:
+        got = _UNIT_WORDS.get(word)
+        factor = got[1] if got else None
+        if got and got[0] != want:
+            factor = _UNIT_CONVERT.get((got[0], want))
+            factor = factor * got[1] if factor is not None else None
+        if factor is None:
+            raise IntakeError(f"{hint} ({m.group(2)} は使えません)")
+        number *= factor
+    out = int(number) if number == int(number) else round(number, 6)
+    return {**spec, "value": out, "unit": want}
+
+
 def _answer_requirement(it: Record, answer: Any) -> Record:
     spec = answer if isinstance(answer, dict) else {"value": answer}
     if "value" not in spec:
         raise IntakeError(f"{it['key']} の答えに value がありません")
+    if it["key"] != LOADING_KEY:
+        spec = _with_unit(it, spec)
     if it["key"] == LOADING_KEY:  # the catalog and the analyses take only these four (hiraku.contract.loading)
         loading = loading_answer(spec["value"])
         if loading is None:

@@ -315,6 +315,141 @@ console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state
 
 
 @unittest.skipUnless(NODE, "node is not installed")
+class FirstTimeTroubleTest(unittest.TestCase):
+    """What a person new to the screens can trip on: sending with nothing filled in, a refused answer, a run that ended
+    while a question was open, a file of the wrong shape."""
+
+    A2 = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const asked = e(1, 1, 'hearing.asked', {{ questions: [
+    {{ req_key: 'Q40', name: '積載', text: '載せる荷の重さの上限は。', ask: 'must' }},
+    {{ req_key: 'Q34', name: '弱い人', text: 'いますか', ask: 'confirm', choices: [{{ value: 'none', label: 'いない' }}] }}],
+  rule_questions: [{{ rule_id: 'U1-04', parts: ['battery'], text: '電池が重い' }}] }});
+let events = [asked];
+const sent = [];
+let reject = null;
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => {{ sent.push(b); if (reject) throw new Error(reject); }} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2' }});
+const button = (t) => el.all('button').find((b) => b.text() === t);
+const wait = () => new Promise((r) => setTimeout(r, 20));
+{{BODY}}
+"""
+
+    A5 = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const files = (...fs) => ({{ dataTransfer: {{ files: fs }}, preventDefault() {{}} }});
+const file = (name, text, size) => ({{ name, size: size ?? text?.length ?? 0, text: async () => {{ if (text instanceof Error) throw text; return text; }} }});
+const wait = () => new Promise((r) => setTimeout(r, 20));
+const mount = (api) => {{ const el = new El('div'); mountIntake(el, {{ events: () => [], onEvent: () => () => {{}}, ...api }}, {{ screen: 'A5' }}); return [el, el.children[0]]; }};
+{{BODY}}
+"""
+
+    def a2(self, body: str) -> dict:
+        return node(self.A2.replace("{BODY}", body))
+
+    def a5(self, body: str) -> dict:
+        return node(self.A5.replace("{BODY}", body))
+
+    def test_sending_with_nothing_filled_in_sends_empty_answers_and_asks_for_the_defaults(self):
+        got = self.a2("""
+const before = { must: el.text().includes('この質問に答えるまで先へ進めません') };
+button('答えて進める').listeners.click[0]();
+await wait();
+console.log(JSON.stringify({ before, sent }));
+""")
+        self.assertTrue(got["before"]["must"])
+        self.assertEqual(got["sent"], [{"answers": {}, "ruleAnswers": [], "note": "", "useDefaults": True}])
+
+    def test_blank_text_is_not_an_answer(self):
+        got = self.a2("""
+const input = el.all('input').find((i) => i.className === 'in-other');
+input.value = '   '; input.listeners.input[0]({ target: input });
+button('答えて進める').listeners.click[0]();
+await wait();
+console.log(JSON.stringify(sent));
+""")
+        self.assertEqual(got[0]["answers"], {})
+
+    def test_a_refused_answer_is_explained_and_the_person_can_press_again(self):
+        got = self.a2("""
+reject = 'Q40 の単位 lbf は使えません';
+button('答えて進める').listeners.click[0]();
+await wait();
+const again = button('答えて進める');
+console.log(JSON.stringify({ shown: el.text().includes('受け付けられませんでした。Q40 の単位 lbf は使えません'), enabled: !again.disabled, sentCount: sent.length }));
+""")
+        self.assertEqual(got, {"shown": True, "enabled": True, "sentCount": 1})
+
+    def test_a_run_that_ended_with_a_question_open_stops_asking(self):
+        got = self.a2("""
+const open = button('答えて進める').disabled;
+events = [asked, e(2, 9, 'run.finished', { status: 'stopped', stop_code: 'user_stop', stop_reason: '止めました' })];
+intake.update();
+const text = el.text();
+console.log(JSON.stringify({ open, sendDisabled: button('答えて進める').disabled, defaultsDisabled: button('標準の値のまま進める').disabled,
+  ended: text.includes('実行が終わりました'), noMust: !text.includes('この質問に答えるまで先へ進めません'), noBlock: !text.includes('先へ進めません'),
+  choiceDisabled: el.all('button').filter((b) => ['いない', '設計を直す', 'このルールを使わない'].includes(b.text())).every((b) => b.disabled) }));
+""")
+        self.assertEqual(got, {"open": False, "sendDisabled": True, "defaultsDisabled": True, "ended": True, "noMust": True, "noBlock": True,
+                               "choiceDisabled": True})
+
+    def test_a_question_answered_before_the_run_ended_keeps_its_answer(self):
+        got = self.a2("""
+events = [asked, e(2, 5, 'hearing.answered', { answers: [{ key: 'Q40', name: '積載', value: 150, unit: 'kg', source: 'hearing', trust: 1 }], rule_answers: [] }),
+  e(3, 9, 'run.finished', { status: 'done', stop_code: 'done' })];
+intake.update();
+const t = el.text();
+console.log(JSON.stringify({ kept: t.includes('答えました'), skipped: t.includes('答えなしで進みました'), ended: t.includes('実行が終わりました') }));
+""")
+        self.assertEqual(got, {"kept": True, "skipped": True, "ended": False})  # the answer skipped Q34 and the rule hit: they were left open, not ended
+
+    def test_a_file_the_host_cannot_read_is_reported_under_its_name_and_a_good_one_is_accepted(self):
+        got = self.a5("""
+const seen = [];
+const [el, root] = mount({ dropFile: async (name, text) => { seen.push([name, text]); if (!text.trim()) throw new Error('ルールが 1 つも見つかりません'); return name.endsWith('.csv') ? '3 件のルールを読みました' : ''; } });
+root.listeners.drop[0](files(file('empty.md', '  '), file('rules.csv', 'a,b'), file('plain.txt', 'x')));
+await wait();
+const text = el.text();
+console.log(JSON.stringify({ seen, bad: text.includes('empty.md') && text.includes('読めませんでした: ルールが 1 つも見つかりません'),
+  good: text.includes('3 件のルールを読みました'), plain: text.includes('受け取りました') }));
+""")
+        self.assertEqual([n for n, _ in got["seen"]], ["empty.md", "rules.csv", "plain.txt"])
+        self.assertTrue(got["bad"] and got["good"] and got["plain"])
+
+    def test_a_file_that_cannot_be_read_as_text_does_not_stop_the_next_file(self):
+        got = self.a5("""
+const seen = [];
+const [el, root] = mount({ dropFile: async (name, text) => { seen.push(name); return 'ok ' + name; } });
+root.listeners.drop[0](files(file('photo.png', new Error('not text')), file('rules.md', 'x')));
+await wait();
+const text = el.text();
+console.log(JSON.stringify({ seen, bad: text.includes('photo.png') && text.includes('読めませんでした: not text'), next: text.includes('ok rules.md') }));
+""")
+        self.assertEqual(got, {"seen": ["rules.md"], "bad": True, "next": True})
+
+    def test_values_are_shown_in_japanese_units_and_the_trust_marks_have_a_key(self):
+        got = self.a2("""
+import { showValue } from "%s";
+events = [asked, e(2, 5, 'hearing.answered', { answers: [{ key: 'Q19', name: '気温', value: 40, unit: 'degC', source: 'default', trust: 3, basis: 'x' }], rule_answers: [] })];
+intake.update();
+console.log(JSON.stringify({ deg: showValue(15, 'deg'), temp: showValue(40, 'degC'), sec: showValue(6, 's'), kg: showValue(150, 'kg'), none: showValue(1.5, '1'),
+  table: el.text().includes('40 ℃'), legend: el.text().includes('確かさ: ') && el.text().includes('仮の値 (確かめていない)') }));
+""" % url('model.js'))
+        self.assertEqual(got, {"deg": "15 度", "temp": "40 ℃", "sec": "6 秒", "kg": "150 kg", "none": "1.5", "table": True, "legend": True})
+
+    def test_a_replay_that_cannot_take_files_says_so(self):
+        got = self.a5("""
+const [el, root] = mount({});
+root.listeners.drop[0](files(file('rules.md', 'x')));
+await wait();
+console.log(JSON.stringify({ said: el.text().includes('この画面では受け取れません') }));
+""")
+        self.assertEqual(got, {"said": True})
+
+
+@unittest.skipUnless(NODE, "node is not installed")
 class DraftAndGlowTest(unittest.TestCase):
     """The code's first picks are pale candidates; Claude's choice lights the cards, and the glow follows the playback time."""
 
