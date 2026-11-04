@@ -672,6 +672,23 @@ R7_PLAN = {
          "assumptions": _CHAIN + ["ペダルが 2 つ以上あれば、手計算でいちばん動くもの"], "inputs": _CONTROL,
          "inputs_from": pedal_inputs},
     ],
+    # Measured (2026-11-04) on the design department's version 2 without the option set (track 1220, the driver's
+    # place, fenders; runs/20261104-092433): K0 0.768 mm against the tool's 1.092 mm (+42 %). With the option set
+    # (part_mounts brackets, pedal_mount post, side_guard bars_net, rollbar_width 1265) K0 0.768 against 0.700 mm.
+    "expected_mismatch": {
+        "quantity": "grip_deflection",
+        "source": ("the analysis department's split of the tool's grip movement on version 2 without the option set "
+                   "(K0 0.768 mm, load_path 1.092 mm) and a K1 beam frame without the plates, 2026-11-04"),
+        "cause": ("取付の組 (金具・柱のペダルの台・横の棒) の無い版で起きる食い違い。ツールでは、握る点の動きの大部分は、ダッシュと"
+                  "塔の枠の節と一緒の剛体の動き (ハンドルの柱の金具が着く dash_post_R の節 RDT と一緒なら 1.116 mm、塔の上の"
+                  "節 RAt2 なら 1.058 mm。ツール全体は 1.092 mm) で、留まった隔壁と床の板もその硬さに効いている。手計算は、"
+                  "着いた部材の先の枠を硬いとみていて、その大部分 (0.659 mm) は触れている所のばねの回る分。板の入った枠は手で"
+                  "解けない。板の無い梁の枠 (K1) では 7.87 mm で、上から押さえる値にも使えない (限界 5 mm を超え、ツールが通す"
+                  "設計を落とす)"),
+        "fix": ("手計算で予測し直す式は無い。原因を記録して、この荷重条件は判定なしで次へ進む。取付の組を入れた版では"
+                "手計算とツールが合う (0.768 対 0.700 mm)"),
+        "end": True,
+    },
 }
 _PUSH = {k: f"from.{k}" for k in ("F", "a", "b", "E", "I", "h_A", "E_A", "I_A", "h_B", "E_B", "I_B")}
 PUSH_PREDICTION = {
