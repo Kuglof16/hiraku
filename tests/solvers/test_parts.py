@@ -164,8 +164,10 @@ class MassTest(unittest.TestCase):
             self.assertAlmostEqual(mass(d, pid), panel_kg(d, pid), places=9)
         for s in ("R", "L"):
             self.assertAlmostEqual(mass(d, f"seat_{s}", f"seat_belt_{s}"), BEFORE["seat"], places=9)
-        for sid in ("FL", "FR", "RL", "RR"):
-            self.assertAlmostEqual(mass(d, f"susp_{sid}", f"knuckle_{sid}", f"caliper_{sid}", f"toe_link_{sid}"),
+        from hiraku.designgen.kit.arms import part_ids
+
+        for sid in ("FL", "FR", "RL", "RR"):  # the suspension box is now the arms, damper and ball joints (kit/arms)
+            self.assertAlmostEqual(mass(d, *part_ids(sid).values(), f"knuckle_{sid}", f"caliper_{sid}", f"toe_link_{sid}"),
                                    BEFORE["suspension"], places=9)
         self.assertAlmostEqual(mass(d, "aux", "main_switch"), BEFORE["aux"], places=9)
 
