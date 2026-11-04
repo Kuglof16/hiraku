@@ -19,10 +19,13 @@ BY_TEST = {
     "S4": ["suspension", "package"], "S5": ["suspension", "package"],
     "F1": ["body", "package"], "F2": ["body"], "F3": ["body"],
     "P1": ["powertrain"], "P2": ["powertrain"], "P3": ["powertrain"], "P4": ["powertrain"], "P5": ["powertrain"],
-    "C1": ["frame", "body"], "C2": ["body"], "C3": ["occupant", "frame"],
-    "R1": ["frame"], "R1s": ["frame"], "R2": ["frame", "suspension"], "R3": ["frame"], "R4": ["occupant", "frame"],
-    "R5": ["frame"], "R6": ["powertrain", "frame"], "R7": ["steering", "frame"], "R8": ["frame", "occupant"],
-    "N1": ["frame"], "N2": ["suspension"], "N3": ["powertrain"],
+    # the cases over every frame member also name steering: the dash members (dash_post_*, dash_cross) and the
+    # bulkhead are steering's (ladder_4w_modules: a part is in the module of the variables that place it)
+    "C1": ["frame", "body", "steering"], "C2": ["body"], "C3": ["occupant", "frame"],
+    "R1": ["frame", "steering"], "R1s": ["frame", "steering"], "R2": ["frame", "suspension"],
+    "R3": ["frame", "steering"], "R4": ["occupant", "frame"],
+    "R5": ["frame"], "R6": ["powertrain", "frame"], "R7": ["steering", "frame"], "R8": ["frame", "occupant", "steering"],
+    "N1": ["frame", "steering"], "N2": ["suspension"], "N3": ["powertrain"],
     "T1": ["powertrain"], "T2": ["powertrain"], "T3": ["powertrain"],
     "H1": ["package"], "H2": ["package"], "H3": ["occupant", "steering", "package"], "H4": ["occupant"],
     "H5": ["package"], "H6": ["body"], "H7": ["occupant"], "G1": ["package"], "G2": ["package"],

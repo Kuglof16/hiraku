@@ -110,8 +110,15 @@ class BulkheadTest(unittest.TestCase):
 
         d = GEN.build(GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "bulkhead",
                                          "side_guard": "bars_net"}, {}))
-        pred, tool = self.run_both(d)  # K0 45.0 mm, the tool 49.5 mm
+        # the pedal held by its stand alone (the pushrod taken out): K0 47.0 mm, the tool 49.5 mm
+        alone = dict(d, parts=[dict(p, connects_to=[c for c in p.get("connects_to", []) if c["to"] != "pushrod_brake"])
+                               for p in d["parts"] if p["id"] != "pushrod_brake"])
+        pred, tool = self.run_both(alone)
         self.assertLessEqual(abs(tool - pred) / pred, R7_TOL, f"K0 {pred:.2f} mm, tool {tool:.2f} mm")
+        # as generated, the pushrod pinned to the master cylinder (on the bulkhead) holds the pedal too: the tool
+        # about 26 mm. K0 follows the stand's path alone, so it is the larger (the safe side for pedal <= limit)
+        pred, tool = self.run_both(d)
+        self.assertGreater(pred, 1.3 * tool, f"K0 {pred:.2f} mm, tool {tool:.2f} mm")
 
     def test_no_plate_no_term(self):
         lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, V1) if c["load_case_id"] == "R7-hand-300N")
