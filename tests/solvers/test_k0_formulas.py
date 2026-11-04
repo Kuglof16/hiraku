@@ -137,8 +137,12 @@ class FormulaLedgerTest(unittest.TestCase):
 
         from hiraku.designgen import ladder_4w
 
-        # the ladder alone: the roll bar (on by default) splits the rail S2B at its node H
-        design = ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
+        from hiraku.designgen.kit.joints import skipped
+
+        # the ladder alone: the roll bar (on by default) splits the rail S2B at its node H; without the joints'
+        # struts (kit/joints.py), whose few grams on the rear nodes the hand sum below does not count
+        with skipped():
+            design = ladder_4w.build({"rollbar": {"value": 0.0, "unit": "1"}})
         ji = rail_joint_inputs(design, loading="two_cargo")
         self.assertEqual((ji["rail_member"][-3:], ji["cross_member"]), ("S2B", "cross_B"))
         ins = {k: v["value"] for k, v in ji["inputs"].items()}

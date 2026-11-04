@@ -33,6 +33,10 @@ def _plain(parts, nodes=(), members=(), supports=()):
             "nodes": list(nodes), "members": list(members), "sections": {}, "materials": {}}
 
 
+CACHE_SIZE = 8  # designs (with their occupants on board) whose results are kept in the process
+_CACHE: dict[str, Record] = {}
+
+
 class Assembly(BuiltinTool):
     name = "assembly"
     stage = 0  # layout: interference, occupant fit, assembly order
@@ -138,8 +142,23 @@ class Assembly(BuiltinTool):
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: load_case_params. Design variable max_steer_angle (deg) turns on the steering sweep."""
-        design = on_board(design, load_case)
+        """Load case params: load_case_params. Design variable max_steer_angle (deg) turns on the steering sweep.
+        The result depends on the design with its occupants and load on board (params.loading) only, not on the rest
+        of the load case nor on the run params: it is kept in this process by a hash of that design (CACHE_SIZE
+        designs), so the cases of one version (H1's five, H3's, H5's) measure it once."""
+        import copy
+        import hashlib
+        import json
+
+        on = on_board(design, load_case)
+        key = hashlib.sha256(json.dumps(on, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        if key not in _CACHE:
+            _CACHE[key] = self._analyse(on)
+            while len(_CACHE) > CACHE_SIZE:
+                _CACHE.pop(next(iter(_CACHE)))
+        return copy.deepcopy(_CACHE[key])
+
+    def _analyse(self, design: Record) -> Record:
         bs = bodies(design)
         static = interferences(design, bs)
         # the driver's seat at both ends of its slide (its box is at the middle): the overlaps of the moved seat
@@ -168,8 +187,11 @@ class Assembly(BuiltinTool):
         ]
         joints = joint_gaps(design, bs)
         results += [
-            result("joint_gap_count", float(len(joints["gaps"]) + len(joints["unjoined"])), "1",
+            # joints that do not touch (or whose at_mm is off either shape), joints that do not say where (no at_mm),
+            # and parts joined to nothing
+            result("joint_gap_count", float(len(joints["gaps"]) + len(joints["no_at"]) + len(joints["unjoined"])), "1",
                    ", ".join(joints["unjoined"][:5]) or None),
+            result("joints_without_at", float(len(joints["no_at"])), "1"),
             result("joint_gaps", float(len(joints["gaps"])), "1"),
             result("unjoined_parts", float(len(joints["unjoined"])), "1"),
             result("worst_joint_gap", joints["gaps"][0][3] if joints["gaps"] else 0.0, "mm",

@@ -20,6 +20,8 @@ from tests.solvers.test_load_path import touch_nearest
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): its floating pedals and column cases
+UNJOINED = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 PRED = [{"prediction_id": "pred-0001"}]
 FORMULAS = solvers.formula_registry()
 SPECS = {
@@ -141,17 +143,20 @@ class DemoV1Test(unittest.TestCase):
             self.assertEqual(rec["status"], "ok", f"{k}: {rec.get('error')}")
 
     def test_verdicts_on_version_1(self):
-        got = {k: judged(lc, self.runs[k]) for k, lc in self.cases.items()}
+        """On version 1 as generated before the joints (its pedals float, nothing stands outboard of point R)."""
+        runs = {k: LoadPath().run(UNJOINED, lc, PRED, {}) for k, lc in self.cases.items()}
+        got = {k: judged(lc, runs[k]) for k, lc in self.cases.items()}
         self.assertTrue(got["R7-hand-300N"])  # the column reaches the dash through bracket_column
         self.assertIsNone(got["R7-foot-500N"])  # both pedals float: no deflection, free_parts says why
         self.assertFalse(got["R8-free"])
         self.assertTrue(got["R8-stress"])
         self.assertIsNone(got["R8-push-725N"])  # nothing outboard of point R
-        foot = results(self.runs["R7-foot-500N"])
+        foot = results(runs["R7-foot-500N"])
         self.assertIn("pedal_brake", foot["free_parts"]["where"])
-        self.assertEqual(results(self.runs["R8-push-725N"])["occupant_push_open"]["value"], 4.0)
+        self.assertEqual(results(runs["R8-push-725N"])["occupant_push_open"]["value"], 4.0)
         # nothing outboard of point R on version 1: the push's hand calculation does not apply (its reader refuses)
-        self.assertEqual(predict(PLANS["R8"], V1, self.cases["R8-push-725N"]).get("refused"), ["occupant_push_deflection"])
+        self.assertEqual(predict(PLANS["R8"], UNJOINED, self.cases["R8-push-725N"]).get("refused"),
+                         ["occupant_push_deflection"])
 
     def test_plans_predict(self):
         for k, lc in self.cases.items():
@@ -170,13 +175,15 @@ class DemoV1Test(unittest.TestCase):
                 # the plan names this mismatch as safe side: the prediction must be the unfavourable value
                 self.assertGreaterEqual(pred[q], got[q]["value"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
             elif q in pred and q in got:
-                rel = abs(got[q]["value"] - pred[q]) / abs(pred[q])
+                # as compare: a prediction of 0 divides by |analysed| (0 when both are 0; R8-free on the joined v1)
+                rel = (abs(got[q]["value"] - pred[q]) / abs(pred[q]) if pred[q] else
+                       (0.0 if not got[q]["value"] else 1.0))
                 self.assertLessEqual(rel, lc["tolerance_rel"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
 
     def test_column_held_two_ways_on_version_1(self):
-        # version 1's column touches bracket_column (0.8 mm gap) and steering_shaft; without the bracket the shaft
-        # and rack still hold it, so the hand case keeps a deflection
-        d = copy.deepcopy(V1)
+        # version 1's column (before the joints) touches bracket_column (0.8 mm gap) and steering_shaft; without the
+        # bracket the shaft and rack still hold it, so the hand case keeps a deflection
+        d = copy.deepcopy(UNJOINED)
         d["parts"] = [p for p in d["parts"] if p["id"] != "bracket_column"]
         rec = LoadPath().run(d, self.cases["R7-hand-300N"], PRED, {})
         self.assertIn("grip_deflection", results(rec))
@@ -184,7 +191,7 @@ class DemoV1Test(unittest.TestCase):
 
     def test_floating_column_is_found(self):
         # with neither the bracket nor the shaft, the column and the wheel float: no grip deflection, both named first
-        d = copy.deepcopy(V1)
+        d = copy.deepcopy(UNJOINED)
         d["parts"] = [p for p in d["parts"] if p["id"] not in ("bracket_column", "steering_shaft")]
         lc = self.cases["R7-hand-300N"]
         rec = LoadPath().run(d, lc, PRED, {})
@@ -201,7 +208,7 @@ class DemoV1Test(unittest.TestCase):
         bulkhead, a 2.3 mm sheet (designgen.ladder_4w.PLATE_T_MM) and not the 20 mm solid box it was, moves more
         than Q69. The K0 prediction with the plate strip (load_path.plate_strip) against the tool is in
         test_load_path_plate_k0."""
-        d = touch_nearest(V1, "pedal_brake", "part:bulkhead")
+        d = touch_nearest(UNJOINED, "pedal_brake", "part:bulkhead")  # the floating pedals, before the joints
         d = touch_nearest(d, "pedal_accel", "member:tower_post_RA2")
         lc = self.cases["R7-foot-500N"]
         rec = LoadPath().run(d, lc, PRED, {})

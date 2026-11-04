@@ -19,7 +19,8 @@ from tests.solvers.test_builders_load_path import PRED, REQ, SPECS, predict, res
 from tests.solvers.test_load_path import touch_nearest
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the floating pedal these tests move
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 REG = solvers.formula_registry()
 E, G, T = 205000.0, 205000.0 / 2.6, 2.3
 
@@ -100,7 +101,9 @@ class BulkheadTest(unittest.TestCase):
         point, n = pedal_face(face)
         inputs, notes = chain_inputs(d, "pedal_brake", point, 500.0, [n])
         self.assertIn("板の帯: bulkhead", notes)
-        self.assertGreater(inputs["delta_plate"]["value"] / pred, 0.95)  # the plate strip is nearly all of it
+        # the plate strip is most of it (0.90); the rest is mostly the landing post's root node turning
+        # (load_path._node_turning), counted since the node of several members is not taken rigid
+        self.assertGreater(inputs["delta_plate"]["value"] / pred, 0.85)
 
     def test_version_2_stands_on_the_bulkhead(self):
         from hiraku.designgen import ladder_4w as GEN
