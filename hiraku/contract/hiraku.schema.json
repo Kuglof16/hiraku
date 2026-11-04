@@ -795,6 +795,10 @@
         },
         "module": {
           "$ref": "#/$defs/module_id"
+        },
+        "name": {
+          "type": "string",
+          "description": "The member's name for a person (Japanese), e.g. 左のレール (前の車軸から足元まで); written by the generator, shown by the screen."
         }
       }
     },
@@ -891,6 +895,13 @@
         "archetype": {
           "type": "string",
           "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a hand-made design."
+        },
+        "variable_names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Design variable name -> its name for a person (Japanese), written by the generator; the screen shows these instead of the variable ids."
         }
       }
     },
@@ -4123,8 +4134,11 @@
                   "bolt",
                   "weld",
                   "rest",
-                  "pin"
-                ]
+                  "pin",
+                  "bushing",
+                  "ball_joint"
+                ],
+                "description": "How it is fixed at that step: bushing and ball_joint are fixed with their own through-bolt or castle nut, so they need the same tool clearance as a bolt."
               },
               "at_mm": {
                 "$ref": "#/$defs/vec3"
