@@ -83,7 +83,8 @@ CLASS_SKIP_RE = re.compile(r"^setUpClass \(([\w.]+)\)$")
 # (commitment limit) or 0xC0000017 (no memory) leaves only its exit code; on Linux the OOM killer's SIGKILL is exit -9
 MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]|Memory allocation still failed"
                        r"|\bexit (3221225773|3221225495|-9)\b")
-LOCK_DIR = Path(tempfile.gettempdir()) / "hiraku-run-tests"  # one file per qa.run_tests running on this PC
+# one file per qa.run_tests running on this PC; HIRAKU_RUN_TESTS_LOCK_DIR moves it (tests of the lock itself)
+LOCK_DIR = Path(os.environ.get("HIRAKU_RUN_TESTS_LOCK_DIR") or Path(tempfile.gettempdir()) / "hiraku-run-tests")
 
 
 # --- other suites on the same PC ----------------------------------------------------------
@@ -160,9 +161,10 @@ def _lock_byte(f) -> bool:
         return False
 
 
-def take_queue(jobs: int, wait: bool = True, say=print):
+def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_tests"):
     """The machine-wide suite lock: the open lock file (keep it open while the suite runs; the OS frees
-    the lock when the process ends), or None when another run holds it and wait is False."""
+    the lock when the process ends), or None when another run holds it and wait is False. what: the
+    holder's job, shown to those waiting (qa.slot takes the same lock for other heavy jobs)."""
     LOCK_DIR.mkdir(exist_ok=True)
     f = open(LOCK_DIR / QUEUE_FILE, "a+b")
     shown = None
@@ -176,10 +178,10 @@ def take_queue(jobs: int, wait: bool = True, say=print):
             holder = {}
         if holder.get("pid") != shown:
             shown = holder.get("pid")
-            say(f"waiting for {holder.get('pid', '?')} ({holder.get('root', '?')}, since {holder.get('started', '?')})",
-                flush=True)
+            say(f"waiting for {holder.get('pid', '?')} ({holder.get('what', 'qa.run_tests')}, {holder.get('root', '?')}, "
+                f"since {holder.get('started', '?')})", flush=True)
         time.sleep(POLL_S)
-    (LOCK_DIR / QUEUE_INFO).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs,
+    (LOCK_DIR / QUEUE_INFO).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs, "what": what,
                                                    "started": time.strftime("%H:%M")}), encoding="utf-8")
     return f
 
