@@ -3,14 +3,12 @@ vehicle round by round (data/catalog/scripted.yaml, plan offroad-4w-n15). The ve
 modules: each round the module designers propose and the packager builds the version (contract
 d9631a5). On the joined design (the parts' fittings and the struts are in version 1), one revision
 answers each version's red stage: the layout and a hand hold to get in by (H7-handhold), then the
-opening the bolted side net shuts (H7-opening), then the motor (P3), then the rails and gussets
-(R1s). Version 5 has no red tile; R7-hand and R7-foot end without a verdict (their mismatch's cause
-says the hand calculation does not reach the frame's movement: ends_case). The plan's revision for
-the ended R7-foot (answers_ended) puts the pedals on the post (pedal_mount post, as its cause's fix
-says): on version 6 R7-foot's hand calculation and tool agree and it passes. R7-hand still ends, so
-strength stays not judged and the run stops not judged. The red domains of each version and the load cases left
-without a verdict are written below; when a tool, a builder or the demo design changes them, this
-test says so."""
+opening the bolted side net shuts (H7-opening), then the controls (R7-hand red on the hand calculation's
+upper bound, load_path.grip_bound: the towers and dash members thicker; R7-foot ended without a verdict,
+its cause's fix: the pedals on the post), then the motor (P3), then the rails and gussets (R1s).
+Version 6 has every tile green: R7-hand passes on the bound (safe side) and R7-foot on a matched hand
+calculation, so the run ends done. The red domains of each version are written below; when a tool, a
+builder or the demo design changes them, this test says so."""
 
 import json
 import os
@@ -22,20 +20,19 @@ from pathlib import Path
 EXPECTED_REDS = {
     1: {"assembly"},  # stage 0: H1-motion, H1-steer, H3, H6 and H7-handhold (nothing to hold to get in)
     2: {"assembly"},  # stage 0: H7-opening (the bolted side net shuts the way in)
-    3: {"powertrain"},  # stage 2: P3 (time to 40 km/h)
-    4: {"strength"},  # stage 3: R1s (the hot spot at the rail joints)
-    5: set(),  # R7-hand and R7-foot end without a verdict
-    6: set(),  # the pedals on the post (answers R7-foot's ended case)
+    3: {"strength"},  # stage 1: R7-hand (the grip's bound past 5 mm); R7-foot ends without a verdict
+    4: {"powertrain"},  # stage 2: P3 (time to 40 km/h)
+    5: {"strength"},  # stage 3: R1s (the hot spot at the rail joints)
+    6: set(),
 }
-ENDED_CASES = ("R7-hand-300N",)  # no verdict on the last version: its mismatch's cause ends it (K0 does not reach)
-JUDGED_ON_LAST = ("R7-foot-500N",)  # judged on the last version (the pedal post)
+JUDGED_ON_LAST = ("R7-hand-300N", "R7-foot-500N")  # both judged on the last version, and passing
 
 
 @unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "the N15 scripted run takes about half an hour (HIRAKU_SLOW_TESTS=1)")
 class SceneN15Test(unittest.TestCase):
     """The N15 scripted run with the real solvers."""
 
-    def test_the_run_ends_with_no_red_and_r7_not_judged(self):
+    def test_the_run_ends_with_every_tile_green(self):
         from qa import shared_runs  # the N15 run made once per code version, shared with QA's run checks
 
         root = Path(__file__).resolve().parents[2]
@@ -46,9 +43,8 @@ class SceneN15Test(unittest.TestCase):
 
         finished = [e for e in events if e["kind"] == "run.finished"]
         self.assertEqual(len(finished), 1)
-        self.assertEqual((finished[0]["data"]["status"], finished[0]["data"]["stop_code"]), ("stopped", "not_judged"))
-        for case in ENDED_CASES:
-            self.assertIn(case, finished[0]["data"]["stop_reason"])
+        self.assertEqual((finished[0]["data"]["status"], finished[0]["data"]["stop_code"]), ("done", "done"),
+                         finished[0]["data"].get("stop_reason"))
 
         tiles: dict[tuple[int, str], str] = {}  # the newest state of each tile
         for e in events:
@@ -59,11 +55,10 @@ class SceneN15Test(unittest.TestCase):
         self.assertEqual(reds, EXPECTED_REDS)
 
         last = versions[-1]
-        self.assertEqual({d: s for (w, d), s in tiles.items() if w == last and s != "green"}, {"strength": "pending"})
+        self.assertEqual({d: s for (w, d), s in tiles.items() if w == last and s != "green"}, {})
         verdicts = {e["data"]["load_case_id"]: e["data"]["pass"] for e in events if e["kind"] == "verdict.recorded"
                     and e.get("design_version") == last}
         self.assertTrue(verdicts and all(verdicts.values()), verdicts)
-        self.assertFalse(set(ENDED_CASES) & set(verdicts))
         self.assertTrue(set(JUDGED_ON_LAST) <= set(verdicts), verdicts)
         # each round after the first: the module designers proposed and the packager built the version
         built = [e for e in events if e["kind"] == "design.created" and e["data"]["design_version"] > 1]
