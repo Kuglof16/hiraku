@@ -41,7 +41,7 @@ class Assembly(BuiltinTool):
     tests = ["H1", "H3", "H5"]
     formulas = ["geometry.free_steer_angle", "geometry.free_steer_angle_limited", "occupant.knee_room",
                 "occupant.knee_angle_room",
-                "assembly.part_count"]
+                "assembly.part_count", "assembly.overlap_count", "assembly.motion_count", "assembly.blocked_count"]
     load_case_params = (LOADING,)
     predicts = (
         Predicts("free_steer_angle", "geometry.free_steer_angle_limited", "theta",
@@ -55,6 +55,13 @@ class Assembly(BuiltinTool):
                  "both body sizes' leg links and their knee angles as K4 seats them (k0_handcalc.scene_inputs."
                  "knee_angle_inputs), against 99-138 deg"),
         Predicts("assembly_steps", "assembly.part_count", "steps", "n = parts in the design, n_out = occupants and cargo"),
+        Predicts("interference_count", "assembly.overlap_count", "n",
+                 "n_rest, n_slide from hiraku.solvers.k0_handcalc.assembly_inputs.overlap_inputs (axis-aligned boxes, "
+                 "turned parts and slanted members left out, this tool's allowance)"),
+        Predicts("motion_interference_count", "assembly.motion_count", "n",
+                 "n_wheel, n_rod from assembly_inputs.motion_inputs (the wheels' boxes and the tie rods swept)"),
+        Predicts("blocked_parts", "assembly.blocked_count", "n",
+                 "n_blocked from assembly_inputs.blocked_inputs (each part pushed along +-x, +-y, +-z against the frame)"),
     )
 
     def known_answers(self) -> list[Record]:
