@@ -85,7 +85,9 @@ def required_case(tool, test_id):
     values = {"step_height": q(100, "mm"), "distance": q(2, "km"), "grade_low": q(5, "%"), "grade_high": q(15, "%"),
               "speed_low": q(10, "km/h"), "speed_high": q(25, "km/h"), "ambient_temperature": q(30, "degC"),
               "speed": q(20, "km/h"), "actuator": "back", "n_seat": q(10000, "1"), "n_raise": q(1000, "1"),
-              "uses_per_hour": q(6, "1")}
+              "uses_per_hour": q(6, "1"),
+              # spray_reach (H6): the tread arc of requirement items Q87 and Q88 (data/requirements/offroad-4w.yaml)
+              "arc_front": q(30, "deg"), "arc_rear": q(50, "deg")}
     params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
     if tool.name == "fatigue":
         params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
