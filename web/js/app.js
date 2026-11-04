@@ -7,6 +7,7 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
+//   ?on=joints      turn overlays on at load (joints: the joint marks, off by default; A7 follows it too)
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 //   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
@@ -14,7 +15,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVER_JA, PICK_DEMO_ID, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -28,8 +29,13 @@ import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
+import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
+import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
+import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
+import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
+import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -42,7 +48,7 @@ const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
 const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of replay
 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
-const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
+const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : id?.startsWith("designer.") ? moduleColor(id.slice(9)) : "#c9c3b6"); // modules: designer.<module>
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
 const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
@@ -51,7 +57,7 @@ let asmPanel = null; // mounted on first show
 const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false }, // joints: off at first; modules: modules, spaces (modules.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -71,6 +77,9 @@ const ui = {
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+// joints, modules: ?on=joints,modules,spaces turns those on at load (modules and spaces take the contour's place)
+for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
+if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
 
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
@@ -83,6 +92,7 @@ function fitStage() {
   const left = (window.innerWidth - STAGE_W * stageScale) / 2;
   const top = (window.innerHeight - STAGE_H * stageScale) / 2;
   stage.style.transform = `translate(${left}px, ${top}px) scale(${stageScale})`;
+  agentPets?.setPixel((window.devicePixelRatio || 1) * stageScale);
   resize3d();
 }
 
@@ -92,6 +102,7 @@ const look = lookFromParams(params); // ?look=real: the photograph-like look (de
 document.body.classList.add(`look-${look}`);
 const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 const bench = new Workbench3D(viewport, look, { quality });
+const modLayer = new ModuleLayer(bench); // modules:
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -103,6 +114,16 @@ function resize3d() {
 }
 new ResizeObserver(resize3d).observe(viewport);
 window.addEventListener("resize", fitStage);
+
+// ---- the agents' pets (js/agent_pets.js) ------------------------------------
+// promo/pets/pet3d.js and layout.json's n00 camera; ?pets=0, or either missing: circles and names.
+let agentPets = null;
+const petsReady = (params.get("pets") === "0" ? Promise.resolve(null) : AgentPets.load().catch(() => null)).then((p) => {
+  agentPets = p;
+  document.documentElement.dataset.agentPets = p ? "on" : "none";
+  if (p) p.setPixel((window.devicePixelRatio || 1) * stageScale);
+  drawn.rev = -1;
+});
 
 // ---- player ---------------------------------------------------------------
 const player = new Player();
@@ -477,25 +498,47 @@ function renderChips(s, lcId) {
   $("chips").innerHTML = DOMAINS.map((d) => {
     const j = judgementState(s, d);
     const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : "この実行では選んでいない");
-    return `<span class="chip ${j.state} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
+    const held = heldCases(s, d, s.currentVersion).length ? " held" : ""; // held: a count not judged (held.js)
+    return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
   }).join("");
+  // held: the workbench's 保留 band above the 3D (every domain's load cases without a criterion whose count is not 0)
+  let band = $("heldband");
+  if (!band) {
+    band = document.createElement("div");
+    band.id = "heldband";
+    band.className = "heldband bench";
+    $("viewport").before(band);
+  }
+  const html = heldBandHtml(heldAll(s, DOMAINS), { withDomain: true });
+  band.hidden = !html;
+  if (band.innerHTML !== html) band.innerHTML = html;
 }
 
+const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
+
+// The agents: with pets (js/agent_pets.js), each its 3D pet, name, status and bubble; without
+// (no /pets/pet3d.js), or for an agent whose role has no pet, a circle and the name.
 function renderAgents(s) {
-  const order = [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
-  $("agents").classList.toggle("many", order.length > 6);
-  $("agents").innerHTML = order
+  const order = agentOrder(s);
+  const ul = $("agents");
+  ul.classList.toggle("many", order.length > 6);
+  ul.classList.toggle("lots", order.length > 8); // modules: the six module designers come on top of the others
+  ul.classList.toggle("pets", !!agentPets);
+  ul.innerHTML = order
     .map((id) => {
       const a = s.agents[id];
       const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
+      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls });
       return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
     })
     .join("");
+  agentPets?.mount(ul, "bench");
 }
 
 function rank(id) {
   const fixed = ["lead", "designer", "packager"];
   if (fixed.includes(id)) return fixed.indexOf(id);
+  if (id.startsWith("designer.")) return 1.5; // modules: the module designers after the designer, in the record's order
   if (id.startsWith("cae.")) return 3 + DOMAINS.indexOf(id.slice(4));
   return 20;
 }
@@ -511,13 +554,17 @@ function hookLogItem(e, hook, resolved) {
   );
 }
 
+// Escaped text with each short aside in brackets (up to 24 characters) kept on one line (.nw).
+const keepAsides = (s) => esc(s).replace(/\(([^()]{1,24})\)/g, '<span class="nw">($1)</span>');
+
 function logItem(e, ctx = null) {
   if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
   // What an agent said can run long: the line shows its first lines, the record keeps all of it.
-  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${esc(e.text)}</span>` : esc(e.text);
+  // A short aside in brackets stays on one line: not "(形の見 / 本)".
+  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${keepAsides(e.text)}</span>` : keepAsides(e.text);
   return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
@@ -905,16 +952,19 @@ const LEGEND_GAP_PX = 12;
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
 
 // graphs: the analysis has series to chart without a motion (series against x).
-function renderToggles(motion, lc, graphs = false) {
+function renderToggles(motion, lc, graphs = false, design = null) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
+    // modules: the two switches only for a design split into modules
+    (hasModules(design) ? btn("modules", "モジュール", t.modules) + btn("spaces", "モジュールの空間", t.spaces) : "") +
     btn("shape", "形状", !t.contour) +
     btn("contour", "コンター", t.contour) +
     btn("arrows", "力の矢印", t.arrows) +
     btn("cg", "重心", t.cg) +
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
+    btn("joints", "接合", t.joints) + // joints:
     (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion || graphs ? btn("graph", "グラフ", t.graph) : "");
 }
@@ -1018,7 +1068,8 @@ const board = new TileBoard($("grid-head"), $("tiles"));
 
 // A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
-  const { reds, atLimit } = board.render(s);
+  const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
+  agentPets?.mount($("view-grid"), "grid");
   const banner = $("grid-banner");
   banner.hidden = !(atLimit && reds.length);
   if (!banner.hidden) {
@@ -1165,7 +1216,7 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0);
+    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null);
     const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
@@ -1197,6 +1248,10 @@ function draw() {
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
+    // modules: the module colours and spaces on the 3D, and their legend
+    modLayer.set({ colors: ui.toggles.modules, spaces: ui.toggles.spaces });
+    renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces });
+    renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && tab === "bench"); // joints:
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
     $("now").textContent = now;
@@ -1207,6 +1262,9 @@ function draw() {
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
+  // modules: the round's proposals (or the version built from them) at the replay's time, under the now line
+  const rc = renderRoundCard(viewport, tab === "bench" ? roundCardHtml(s, player.playhead) : "");
+  if (!rc.hidden) rc.style.top = `${$("now").hidden ? 10 : $("now").offsetTop + $("now").offsetHeight + 8}px`;
   if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
   renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
@@ -1220,6 +1278,9 @@ function draw() {
     }
   }
   else if (tab === "grid") board.tick(player.playhead);
+  // the pets of the list (the workbench; hidden in the present mode) or of the grid
+  // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
+  if (agentPets && (tab === "bench" || tab === "grid")) agentPets.tick(s, player.events, player.playhead, tab, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
@@ -1266,6 +1327,8 @@ window.hiraku = {
   seek: seekAndDraw,
   state: () => player.state,
   bench,
+  modules: modLayer, // modules: what the module layer draws (for the tests)
+  pets: () => agentPets,
   // Replace what is shown with these events (parsed objects) and stop at t.
   load: (events, t = 0) => {
     feed?.stop();
@@ -1333,6 +1396,9 @@ $("toggles").addEventListener("click", (ev) => {
   const k = b.dataset.toggle;
   if (k === "shape") ui.toggles.contour = false;
   else ui.toggles[k] = !ui.toggles[k];
+  // modules: the module colours or spaces and the contour take turns (one legend in its place)
+  if ((k === "modules" || k === "spaces") && ui.toggles[k]) ui.toggles.contour = false;
+  if (k === "contour" && ui.toggles.contour) ui.toggles.modules = ui.toggles.spaces = false;
 });
 $("viewswitch").addEventListener("click", (ev) => {
   const b = ev.target.closest("button");
@@ -1402,6 +1468,10 @@ function resetPlayer() {
 }
 
 function startPlayback() {
+  // the pets first (a page opened at ?t= draws them in its first frame)
+  Promise.all([petsReady, loadModuleNames()]).then(play); // modules: the module names before the first frame
+}
+function play() {
   if (params.has("t")) {
     seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
     return;
@@ -1458,6 +1528,10 @@ async function openRun(runId) {
   startPlayback();
 }
 
+// A text of the run list (a want, a demo row's line), escaped, with each short aside in brackets
+// kept on one line (the run list's .nw): not "(無料・ / Claude なし)".
+const prose = (s) => esc(s).replace(/\(([^()]{1,40})\)/g, '<span class="nw">($1)</span>');
+
 async function fetchRuns() {
   return (await fetch("/api/runs", { cache: "no-store" })).json();
 }
@@ -1481,7 +1555,15 @@ async function showRunList(message = "", runs = null) {
     // for people: the want, done or going, and one verb; the run ids and the contract sample under ?dev=1
     const row = (r) => {
       const href = `?run=${encodeURIComponent(r.run_id)}`;
-      return `<tr data-run="${esc(r.run_id)}"><td>${esc(r.want || "(依頼の文なし)")}${drvOf(r)}</td><td>${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
+      // when, how it ended, how it was driven: one line under the want (what is not in the record is left out)
+      const ending = endingJa(r);
+      const tone = ending === "実行中" ? "going" : /^(途中で止まった|エラー)/.test(ending) ? "stopped" : "done"; // red only when it stopped short
+      const meta = [
+        r.when ? `<span class="nw when">${esc(r.when)}</span>` : "",
+        `<span class="nw end" data-end="${tone}">${esc(ending)}</span>`,
+        DRIVEN_JA[r.driver] ? `<span class="nw how" data-driver="${esc(r.driver)}">${DRIVEN_JA[r.driver]}</span>` : "",
+      ].filter(Boolean);
+      return `<tr data-run="${esc(r.run_id)}"><td>${prose(r.want || "(依頼の文なし)")}<div class="rmeta">${meta.join('<span class="sep"> · </span>')}</div></td><td class="state">${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
     };
     const table = (title, list) => (list.length ? `<h3>${title}</h3><table>${list.map(row).join("")}</table>` : "");
     box.innerHTML =
@@ -1495,9 +1577,9 @@ async function showRunList(message = "", runs = null) {
   const row = (r) => {
     const st = r.sample ? "形の見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
     const href = withDev(`?run=${encodeURIComponent(r.run_id)}`);
-    const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
+    const links = r.finished ? `<a href="${href}">再生</a><a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
     const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
-    return `<tr data-run="${esc(r.run_id)}"><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}${drvOf(r)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+    return `<tr data-run="${esc(r.run_id)}"><td>${prose(r.want)}<div class="rid">${esc(r.run_id)}${drvOf(r)}</div></td><td><span class="state">${esc(st)}</span>${mark}</td><td class="acts"><div class="links">${links}</div></td></tr>`;
   };
   const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
@@ -1538,7 +1620,7 @@ async function renderLaunch(message = "") {
   const rows = (info.requirements ?? [])
     .map((r) => {
       if (r.error) return `<div class="lreq"><div>${esc(r.file)}<div class="err">読めなかった: ${esc(r.error)}</div></div></div>`;
-      return `<div class="lreq"><div>${esc(r.want)}<div class="rid">${esc(r.file)}</div></div>${runButtons(info, r, r.file, busy)}</div>`;
+      return `<div class="lreq"><div>${prose(r.want)}<div class="rid">${esc(r.file)}</div></div>${runButtons(info, r, r.file, busy)}</div>`;
     })
     .join("");
   const rid = info.running?.run_id ?? "";
@@ -1599,7 +1681,7 @@ function demoSection(info, busy) {
     const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
     const head =
       `<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>` +
-      (d.shows ? `<div class="shows">${esc(d.shows)}</div>` : "");
+      (d.shows ? `<div class="shows">${prose(d.shows)}</div>` : "");
     let left, right = "";
     if (d.error) left = `<div class="err">使えない: ${esc(d.error)}${d.file ? ` (${esc(d.file)})` : ""}</div>`;
     else if (d.file) {
@@ -1610,7 +1692,7 @@ function demoSection(info, busy) {
         `<div class="rid">${esc(d.file)}</div>`;
       right = runButtons(info, d, `demo:${d.id}`, busy);
     } else {
-      left = `<div class="rid">${esc(d.want)} (products/${esc(d.product)}.yaml)</div>`;
+      left = `<div class="rid">${prose(d.want)} <span class="nw">(products/${esc(d.product)}.yaml)</span></div>`;
       right =
         `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">A1 で依頼する</a>` +
         `<span class="why">依頼の文が入った A1 が開く。送るのは押してから</span></div>`;
@@ -1648,14 +1730,14 @@ function pickHtml(info, busy) {
   const head = `<span class="tag">おすすめ</span>`;
   if (run)
     return (
-      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、不合格の所を直すまでを、保存した記録で見ます (無料・すぐ)` +
+      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、不合格の所を直すまでを、保存した記録で見ます <span class="nw">(無料・すぐ)</span>` +
       `${run.want ? `<div class="sub">依頼: ${esc(run.want)}</div>` : ""}</div><a class="go" href="?run=${encodeURIComponent(run.run_id)}">見る</a></div>`
     );
   const d = (info.demo_runs ?? []).find((r) => r.id === PICK_DEMO_ID && r.file && !r.error && (r.modes ?? []).includes("scripted"));
   if (!d) return "";
   return (
-    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、不合格の所を直すまでを、決まった手順で再現します (無料・Claude なし)` +
-    `${d.want ? `<div class="sub">依頼: ${esc(d.want)}</div>` : ""}</div><button class="go" data-launch="scripted" data-req="${esc(d.file)}" ${busy ? "disabled" : ""}>再現する</button></div>`
+    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、不合格の所を直すまでを、決まった手順で再現します <span class="nw">(無料・Claude なし)</span>` +
+    `${d.want ? `<div class="sub">依頼: ${prose(d.want)}</div>` : ""}</div><button class="go" data-launch="scripted" data-req="${esc(d.file)}" ${busy ? "disabled" : ""}>再現する</button></div>`
   );
 }
 
@@ -1673,12 +1755,12 @@ function demoDetail(d) {
   const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
   const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
   const lines = [`<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>`];
-  if (d.shows) lines.push(`<div class="shows">${esc(d.shows)}</div>`);
+  if (d.shows) lines.push(`<div class="shows">${prose(d.shows)}</div>`);
   if (d.error) lines.push(`<div class="err">使えない: ${esc(d.error)}</div>`);
   if (d.file) {
     lines.push(`<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}${overLimit(d) ? " (見込みが上限を超えるので、上限で止まる)" : ""}</div>`);
     lines.push(`<div class="rid">${esc(d.file)}</div>`);
-  } else if (d.product) lines.push(`<div class="rid">${esc(d.want ?? "")} (products/${esc(d.product)}.yaml)</div>`);
+  } else if (d.product) lines.push(`<div class="rid">${prose(d.want ?? "")} <span class="nw">(products/${esc(d.product)}.yaml)</span></div>`);
   return lines.join("");
 }
 
@@ -1716,7 +1798,7 @@ function plainLaunch(info, message) {
         if (d.error) btns = `<div class="lbtns"><span class="why">いまは使えません</span></div>`;
         else if (d.file) btns = plainButtons(info, d, busy);
         else btns = `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">試す</a></div>`;
-        return `<div class="lreq demo" data-demo="${esc(d.id)}"><div class="dline">${esc(line)}<details class="more"><summary>くわしく</summary>${demoDetail(d)}</details></div>${btns}</div>`;
+        return `<div class="lreq demo" data-demo="${esc(d.id)}"><div class="dline">${prose(line)}<details class="more"><summary>くわしく</summary>${demoDetail(d)}</details></div>${btns}</div>`;
       });
   const fresh =
     `<div class="lreq fresh"><div class="dline">自分で頼む — 作りたいものを文で書いて、はじめから頼みます</div>` +

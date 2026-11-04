@@ -466,6 +466,8 @@ export const MATERIAL_OF = {
     rim: { finish: "aluminium" },
     hub: { finish: "galvanized", color: "#7e8489" },
     spring: { finish: "painted_steel", color: "#8e2f22" },
+    // the damper's cylinder and rod (shapes.js damper): black paint
+    damper: { finish: "painted_steel", color: "#1f2326" },
   },
   id: {
     body: [
@@ -482,6 +484,11 @@ export const MATERIAL_OF = {
     rollbar: { finish: "painted_steel", color: "#c4c1b8" },
     bracket: { finish: "black_steel" },
     suspension: { finish: "painted_steel", color: "#2f3438" },
+    // the suspension's own parts (K2 arms): the arms painted steel tube as the suspension, the
+    // damper's body by its sub (damper, spring), the ball joint a grey forged steel
+    link: { finish: "painted_steel", color: "#2f3438" },
+    damper: { finish: "painted_steel", color: "#1f2326" },
+    ball_joint: { finish: "galvanized", color: "#8a9094" },
     tie_rod: { finish: "galvanized" },
     knuckle: { finish: "galvanized", color: "#8a9094" },
     driveshaft: { finish: "galvanized" },
@@ -607,7 +614,11 @@ export function memberEntry(material, part = null) {
 }
 
 // Colours of the parts in the diagram look (pale, see-through).
-const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6" };
+const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6", link: "#6b665c", damper: "#3a3e44", ball_joint: "#6b665c" };
+// the diagram look's thin suspension parts (arms, damper, ball joints): less see-through than a box,
+// so a 25 mm tube reads; the coil of a damper its spring red
+const ZU_SOLID = { link: 0.75, damper: 0.75, ball_joint: 0.75 };
+const ZU_SUB = { spring: "#c8402a" };
 
 const ENV = new WeakMap(); // renderer -> RoomEnvironment texture (the fall-back sky light)
 const HDRI = new WeakMap(); // renderer -> Map(role -> Promise of { tex, el, az, haze } or null)
@@ -998,8 +1009,9 @@ export class Look {
       return m;
     }
     if (sub === "tyre" || sub === "rim" || sub === "hub") return new THREE.MeshLambertMaterial({ color: "#fbf9f4" });
-    const color = ZU_PART[kind] ?? "#c9c3b6";
-    const opacity = kind === "occupant" ? 0.8 : 0.32;
+    // (ZU_SUB only for the suspension's own parts: the suspension drawn from its mounting points keeps its colours)
+    const color = (ZU_SOLID[kind] && ZU_SUB[sub]) || (ZU_PART[kind] ?? "#c9c3b6");
+    const opacity = kind === "occupant" ? 0.8 : ZU_SOLID[kind] ?? 0.32;
     const m = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, depthWrite: false });
     m.userData.baseOpacity = opacity;
     m.userData.baseColor = color;

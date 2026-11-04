@@ -19,6 +19,8 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { esc, fmt } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
+import { mountAssemblySwitch } from "./modules.js"; // modules:
+import { assemblyJointControls } from "./joints.js"; // joints:
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -31,7 +33,8 @@ export const FASTEN_JA = { bolt: "ボルト", weld: "溶接", rest: "載せる",
 const CURRENT = "#e9893a";
 const NG = "#c8402a";
 const PATH = "#2b59c3";
-const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#8e6bbf" };
+// pin: joints.js's pin colour, not #8e6bbf (the packager's module colour on A7's 3D, proposals.js)
+const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#1d1d9e" };
 // Parts that are not built into the vehicle (people and their load): not drawn on the bench.
 const NOT_BUILT = new Set(["occupant", "cargo"]);
 
@@ -66,23 +69,24 @@ export function nameOf(names, id) {
   return CORNER_JA[m[1]] ? `${CORNER_JA[m[1]]}の足まわり (先に組んだ組)` : `${m[1]} の角の組`;
 }
 
-// "node LB" -> "節点 LB", "member x" -> "部材 x", "part susp_RR" -> that part's name.
-export function fastenTarget(to, names) {
+// "node LB" -> "節点 LB", "member x" -> its member.name (memberNames), else "部材 x",
+// "part susp_RR" -> that part's name.
+export function fastenTarget(to, names, memberNames = {}) {
   const [head, ...rest] = String(to).split(" ");
   const id = rest.join(" ");
   if (head === "node") return `節点 ${id}`;
-  if (head === "member") return `部材 ${id}`;
+  if (head === "member") return memberNames[id] ? shortName(memberNames[id]) : `部材 ${id}`;
   if (head === "part") return shortName(names[id] ?? id);
   return String(to);
 }
 
-export function fastenText(step, names) {
+export function fastenText(step, names, memberNames = {}) {
   const fs = step.fastenings ?? [];
   if (!fs.length) return "";
   const byKind = new Map();
   for (const f of fs) {
     if (!byKind.has(f.kind)) byKind.set(f.kind, []);
-    const t = fastenTarget(f.to, names);
+    const t = fastenTarget(f.to, names, memberNames);
     if (!byKind.get(f.kind).includes(t)) byKind.get(f.kind).push(t);
   }
   return [...byKind].map(([k, ts]) => `${FASTEN_JA[k] ?? k}: ${ts.join("・")}`).join(" / ");
@@ -266,6 +270,7 @@ export class AssemblyStage {
       if (idx === current) cur = { m, at };
     });
     this.markCurrent(cur);
+    v.joints.sync(true); // joints: the marks of the parts in place, moving with the part coming in
   }
 
   markCurrent(cur) {
@@ -324,6 +329,7 @@ const mark = (ok) => (ok ? `<span class="ok">✓</span>` : `<span class="ng">✕
 // its fastenings and what blocks it when a check fails. opts.box: data-box prefix.
 export function stepRowsHtml(rec, current, opts = {}) {
   const names = partNames(rec.design);
+  const memberNames = Object.fromEntries((rec.design?.members ?? []).filter((m) => m.name).map((m) => [m.id, m.name]));
   return rec.steps
     .map((s) => {
       const name = shortName(nameOf(names, s.part));
@@ -334,7 +340,7 @@ export function stepRowsHtml(rec, current, opts = {}) {
       if (opts.compact) {
         return `<li class="${cls}" data-order="${s.order}"${box}><span class="no">${s.order}</span><span class="nm">${esc(name)}</span><span class="cks">${checks}</span></li>`;
       }
-      const fasten = fastenText(s, names);
+      const fasten = fastenText(s, names, memberNames);
       return (
         `<li class="${cls}" data-order="${s.order}"${box}>` +
         `<div class="row1"><span class="no">${s.order}</span><span class="nm" title="${esc(names[s.part] ?? s.part)}">${esc(name)}</span><span class="cks">${checks}</span></div>` +
@@ -425,6 +431,8 @@ export class AssemblyPanel {
     this.gl = this.q(".asm-gl");
     this.view = new Workbench3D(this.gl, "zu");
     this.stage = new AssemblyStage(this.view);
+    this.modules = mountAssemblySwitch(this); // modules: the module colours and spaces (modules.js)
+    this.jointCtl = assemblyJointControls(this.q(".asm-3d"), this.view); // joints: its own 接合 switch and legend
     this.seek = new AssemblySeek(this.q(".asm-bar"), {
       interactive: true,
       onSeek: (u) => {
@@ -488,6 +496,7 @@ export class AssemblyPanel {
     this.seek.set(this.u, this.playing);
     const { current } = stepAt(this.u, n);
     if (current !== this.drawnCurrent) this.drawList(current);
+    this.modules.update(); // modules:
     this.view.render();
   }
 
@@ -499,6 +508,8 @@ export class AssemblyPanel {
     this.drawnCurrent = null;
     this.playing = false;
     this.stage.setRecord(rec);
+    if (this.jointCtl.want) this.jointCtl.set(true), (this.jointCtl.want = false); // joints: ?on=joints
+    this.jointCtl.refresh(); // joints:
     if (!rec) return;
     this.u = rec.steps.length; // opens on the vehicle built, the last step marked
     this.seek.setSteps(rec.steps);

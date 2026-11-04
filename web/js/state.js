@@ -20,6 +20,7 @@ import {
   ruleOf,
 } from "./labels.js";
 import { kindCountText } from "./meshkind.js";
+import { proposalText } from "./proposals.js";
 
 const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts", "meshes"];
 
@@ -62,6 +63,9 @@ export function initialState() {
     // What the intake events brought (drawn by js/intake/): the picked domains, the
     // hearing, the rule documents and the rule checks (the last per rule_check_id).
     intake: { picked: null, questions: [], answers: [], note: null, docs: [], rules: {}, ruleChecks: {} },
+    proposals: [], // modules: design.change_proposed data (module_change), with t, seq and baseVersion
+    builtT: {}, // modules: design version -> t of its design.created when it was built from proposals
+    versionLoadCases: {}, // design version -> its load cases (load_cases.created, from version 2 on; project.load_cases is version 1's)
   };
   for (const r of RECORDS) {
     s[r] = {};
@@ -292,8 +296,33 @@ export function applyEvent(s, ev) {
       s.currentVersion = Math.max(...s.versions);
       ensureAgent(s, ev.agent ?? "designer");
       if (agent) agent.status = `版 ${v}`;
+      // modules: a version built from module designers' proposals says so (modules.js builtLine)
+      const n = (d.module_changes ?? []).length;
+      if (n) {
+        s.builtT[v] = ev.t;
+        log(s, ev, "info", `${who(ev)}が ${n} つの提案を版 ${v} にまとめた`);
+        setActivity(s, ev, `${who(ev)}が ${n} つの提案を版 ${v} にまとめた`);
+        break;
+      }
       log(s, ev, "info", `${who(ev)}: 版 ${v} を作った${d.change_reason ? ` (${d.change_reason})` : ""}`);
       setActivity(s, ev, `版 ${v} の設計を作った`);
+      break;
+    }
+    case "design.change_proposed": {
+      // modules: one module designer's proposal for the next version (data: module_change)
+      s.proposals.push({ ...d, t: ev.t, seq: ev.seq, baseVersion: ev.design_version ?? s.currentVersion });
+      if (agent) agent.status = "提案した";
+      const txt = proposalText(d, s.designs[ev.design_version ?? s.currentVersion]);
+      log(s, ev, "step", `${agentName(d.agent_id ?? ev.agent)}: ${txt}`);
+      setActivity(s, ev, txt);
+      break;
+    }
+    case "load_cases.created": {
+      // The load cases built again for a design version (data: version_load_cases, contract
+      // 39b6a8c). Kept per version; the screen's lookups still read project.load_cases (version 1's).
+      const v = d.design_version ?? ev.design_version;
+      if (v != null) s.versionLoadCases[v] = d.load_cases ?? [];
+      log(s, ev, "info", `版 ${v} の荷重条件を作り直した: ${(d.load_cases ?? []).length}`);
       break;
     }
     case "mesh.created": {
