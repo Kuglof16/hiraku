@@ -150,11 +150,12 @@ function sectionSides(design, m) {
 }
 
 // ---- reading the design ---------------------------------------------------------------
-// Every joint of a design: { joints: [...], counts: {kind: n}, frameRule: n, unplaced: n }.
+// Every joint of a design: { joints: [...], counts: {kind: n}, frameRule: n, unplaced: n, byPart: n }
+// (byPart: joints by via ball_joint whose one end is a part of kind ball_joint: counted, no mark).
 // A joint: { kind (the via or node joint), source ("part" | "node"), owner, to, toKind,
 // rule (true: the frame node rule), marks: [{shape, at [x,y,z], axis [x,y,z], scale, gap}] }.
 export function readJoints(design) {
-  const out = { joints: [], counts: {}, frameRule: 0, unplaced: 0 };
+  const out = { joints: [], counts: {}, frameRule: 0, unplaced: 0, byPart: 0 };
   if (!design) return out;
   const parts = Object.fromEntries((design.parts ?? []).map((p) => [p.id, p]));
   const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, n]));
@@ -204,6 +205,13 @@ export function readJoints(design) {
       out.joints.push(joint);
       if (!target || !p.box) {
         out.unplaced += 1;
+        continue;
+      }
+      // a ball joint that is a part of the design (kind ball_joint, drawn as a ball by shapes.js):
+      // the part is its mark, no second ball (counted all the same)
+      if (c.via === "ball_joint" && (p.kind === "ball_joint" || parts[c.to]?.kind === "ball_joint")) {
+        joint.byPart = c.to in parts && parts[c.to].kind === "ball_joint" ? c.to : p.id;
+        out.byPart += 1;
         continue;
       }
       const box = boxOf(p);
@@ -384,6 +392,7 @@ export class JointMarks {
       counts: { ...this.info.counts },
       frameRule: this.info.frameRule,
       unplaced: this.info.unplaced,
+      byPart: this.info.byPart,
       instances: Object.fromEntries(Object.entries(this.meshes).map(([k, m]) => [k, m.count])),
       marks: this.slots.map((s) => ({ kind: s.joint.kind, source: s.joint.source, owner: s.joint.owner, to: s.joint.to, toKind: s.joint.toKind, rule: s.joint.rule, shape: s.shape, shown: s.shown, now: s.now ?? null, ...s.mark })),
     };
@@ -406,6 +415,7 @@ export function jointLegendHtml(info) {
     .join("");
   const notes = [info.frameRule ? `<div class="jl-note">※ ${esc(NODE_RULE_NOTE)}</div>` : "", total - info.frameRule > 0 ? `<div class="jl-note">${esc(PLACE_NOTE)}</div>` : ""];
   if (info.unplaced) notes.push(`<div class="jl-note">相手の見つからない接合 ${info.unplaced} は印なし</div>`);
+  if (info.byPart) notes.push(`<div class="jl-note">ボールジョイントのうち ${info.byPart} は部品の球がそのまま印</div>`);
   return `<div class="jl-ttl">接合 <small>${total} 所</small></div><div class="jl-rows">${rows}</div>${notes.join("")}`;
 }
 
