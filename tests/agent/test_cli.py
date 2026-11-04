@@ -13,7 +13,17 @@ from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER, intake_for,
 from hiraku.catalog import load_requirements
 from hiraku.contract import layout
 from tests.tools import fakes
-from tests.tools.helpers import EXAMPLE_DESIGN, REQUIREMENTS, RunCase
+from tests.tools.helpers import EXAMPLE_DESIGN, REQUIREMENTS, RunCase, requirements_with_tests
+
+_FAKE_REQ = []
+
+
+def fake_design_requirements() -> Path:
+    """The demo requirements with the tests the fake designs can be built for (they have no controls: no R7, R8)."""
+    if not _FAKE_REQ:
+        tmp = tempfile.mkdtemp()
+        _FAKE_REQ.append(requirements_with_tests(Path(tmp), ["P1", "R1", "N1", "H1", "H3", "P3"]))
+    return _FAKE_REQ[0]
 
 
 class CliTest(unittest.TestCase):
@@ -110,7 +120,7 @@ class StartInterruptTest(unittest.TestCase):
             design = Path(tmp) / "design.json"
             design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
             with self.assertRaises(KeyboardInterrupt):
-                start_run(REQUIREMENTS, design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(),
+                start_run(fake_design_requirements(), design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(),
                           tools=tools)
             (folder,) = (Path(tmp) / "runs").iterdir()
             project = json.loads((folder / layout.PROJECT_FILE).read_text(encoding="utf-8"))
@@ -133,7 +143,7 @@ class StartInterruptTest(unittest.TestCase):
                 tools[name].check = mock.Mock(side_effect=AssertionError(f"{name} checked after the press"))
             design = Path(tmp) / "design.json"
             design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
-            ctx = start_run(REQUIREMENTS, design_path=design, root=runs, formulas=fakes.FakeFormulas(), tools=tools)
+            ctx = start_run(fake_design_requirements(), design_path=design, root=runs, formulas=fakes.FakeFormulas(), tools=tools)
             self.assertEqual(list(ctx.specs), [first])
             self.assertEqual(run_scripted(ctx), "stopped")
             self.assertEqual(ctx.store.events()[-1]["data"]["stop_code"], "user_stop")
@@ -148,7 +158,7 @@ class StartInterruptTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             design = Path(tmp) / "design.json"
             design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
-            ctx = start_run(REQUIREMENTS, design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(),
+            ctx = start_run(fake_design_requirements(), design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(),
                             tools=fakes.shelf(), intake=True)
             events = ctx.store.events()
             self.assertEqual([e["kind"] for e in events[:len(given) + 1]], ["run.started"] + [e["kind"] for e in given])
@@ -194,7 +204,7 @@ class StartInterruptTest(unittest.TestCase):
             design = Path(tmp) / "design.json"
             design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
             kw = dict(design_path=design, root=Path(tmp) / "runs", formulas=fakes.FakeFormulas(), tools=fakes.shelf())
-            ctx = start_run(REQUIREMENTS, intake_events=given, **kw)
+            ctx = start_run(fake_design_requirements(), intake_events=given, **kw)
             events = ctx.store.events()[1:len(given) + 1]
             self.assertEqual([(e["kind"], e["data"]) for e in events], [(e["kind"], e["data"]) for e in given])
             for bad in ({"kind": "verdict.recorded", "data": {}}, {"kind": "domains.picked"}, "x"):

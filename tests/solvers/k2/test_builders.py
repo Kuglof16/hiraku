@@ -117,8 +117,9 @@ class Builders(unittest.TestCase):
         # the demo design's cargo box stands on its floor with its centre 150 mm up
         self.assertAlmostEqual(h[150.0], h[None], places=6)
         # 712.7 mm before the roll bar was on by default (its tubes raise the centre of gravity), 718.8 mm before
-        # the suspension towers, the dash and the occupants' bodies as parts
-        self.assertAlmostEqual(h[620.0], 726.5, delta=0.5)
+        # the suspension towers, the dash and the occupants' bodies as parts, 726.5 mm before the floors and the deck
+        # were steel sheets 3.2 mm thick (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down
+        self.assertAlmostEqual(h[620.0], 710.4, delta=0.5)
 
     def test_cases_past_the_limit(self):
         for tid in BEYOND:

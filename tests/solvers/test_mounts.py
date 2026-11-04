@@ -145,8 +145,9 @@ class FootwellAndDashTest(unittest.TestCase):
         dash = next(m for m in V1["members"] if m["id"] == "dash_cross")
         self.assertEqual(sorted(col["carried_by"]), sorted([dash["node_a"], dash["node_b"]]))
         self.assertEqual(part(V1, "bulkhead")["kind"], "body")
+        bh = part(V1, "bulkhead")["box"]
         self.assertAlmostEqual(part(V1, "brake_master")["box"]["center_mm"][0] + 60.0,
-                               part(V1, "bulkhead")["box"]["center_mm"][0] - 10.0, places=6)  # on its back face
+                               bh["center_mm"][0] - bh["size_mm"][0] / 2.0, places=6)  # on its back face
 
     def test_the_three_layout_errors_are_gone(self):
         """The right leg was 5 mm into the front wheel, the feet 146 mm off the footwell floor, and the rear
@@ -164,9 +165,11 @@ class FootwellAndDashTest(unittest.TestCase):
         self.assertEqual(interferences(on), [])
 
     def test_h3_numbers_stay_for_the_revision(self):
-        """The small driver's reach to the pedal is H3's check (the revision fixes it), not a layout error."""
+        """The small driver's leg to the pedal is H3's check (the revision fixes it), not a layout error: she
+        reaches it (pedal_reach), with the knee straighter than the comfortable range (knee_angle_room)."""
         f = fit(on_board(V1, "two_cargo"))
-        self.assertLess(f["pedal_reach.occupant_R"][0], 0.0)
+        self.assertGreater(f["pedal_reach.occupant_R"][0], 0.0)
+        self.assertLess(f["knee_angle_room.occupant_R"][0], 0.0)
         self.assertIn("wheel_reach.occupant_R", f)
 
 

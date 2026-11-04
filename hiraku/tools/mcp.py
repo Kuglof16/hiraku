@@ -19,6 +19,7 @@ from typing import Any, Callable
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 from hiraku import contract
+from hiraku.contract import layout
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
@@ -99,7 +100,9 @@ INPUT_SCHEMAS: dict[str, Record] = {
         "limit": {"type": "integer", "minimum": 1, "description": f"design_part をいくつ (既定 {DESIGN_PAGE})"},
     }},
     "get_tool_template": {"type": "object", "additionalProperties": False, "properties": {"api_of": API_OF}},
-    "list_formulas": _domain_filter({"tool": {"type": "string", "description": "このツールが予測に使う式だけ"}}),
+    "list_formulas": _domain_filter({"tool": {"type": "string", "description": "このツールが予測に使う式だけ (全部の欄で)"},
+                                     "formula_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1,
+                                                     "description": "この式だけを全部の欄で (説明・前提・出典)"}}),
     "list_tools": _domain_filter({
         "tool": {"type": "string", "description": "このツールの全体 (答えの分かっている例と式の一覧)"},
         "test_id": {"type": "string", "description": "この試験を解析できるツールだけ"},
@@ -136,7 +139,8 @@ DESCRIPTIONS = {
         "強度のツールの見本。rule はツールが使えるための決まり (formulas に予測の式、出典つきで 0 でない答えの例)"
     ),
     "list_formulas": (
-        "手計算 (K0) の式の一覧。formula_id・入力の名前と単位・出力・前提。tool を付けると {formulas: そのツールの式, "
+        "手計算 (K0) の式の一覧。何も付けないか domain だけなら短い一覧 (formula_id・題・入力と出力の名前と単位)。"
+        "式の説明・前提・出典は formula_ids で。tool を付けると {formulas: そのツールの式 (全部の欄), "
         "predicts: ツールの結果の量と式の出力の対 (note つき)}"
     ),
     "list_tools": (
@@ -232,7 +236,7 @@ NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなか�
 RECORDED_REFUSALS = ("propose_design",)
 
 
-TOOL_ERRORS_FILE = "tool.errors.log"  # in the run folder: the traceback of each exception a tool let out
+TOOL_ERRORS_FILE = layout.TOOL_ERRORS_FILE  # in the run folder: the traceback of each exception a tool let out
 
 
 def tool_failure(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None, e: BaseException) -> str:

@@ -127,7 +127,14 @@ class StartTest(RunCase, unittest.TestCase):
         self.assertEqual(got["predicts"], pairs)
         self.assertIn("note", got["how"])
         self.assertEqual(list_formulas(self.ctx, {"tool": "step_climb"})["predicts"], [])  # no describe()
-        self.assertIsInstance(list_formulas(self.ctx), list)  # without tool: the formulas as before
+        short = list_formulas(self.ctx)
+        self.assertIsInstance(short, list)  # without tool: the short list (run N13: the whole one was too large)
+        self.assertEqual(set(short[0]), {"formula_id", "title", "domain", "inputs", "outputs"})
+        fid = short[0]["formula_id"]
+        (whole,) = list_formulas(self.ctx, {"formula_ids": [fid]})
+        self.assertEqual(whole, next(f for f in self.ctx.formulas.list_formulas() if f["formula_id"] == fid))
+        with self.assertRaises(ToolError):
+            list_formulas(self.ctx, {"formula_ids": ["no.such"]})
         from hiraku import contract
 
         for f in got["formulas"]:
@@ -418,6 +425,17 @@ class UnsupportedLoadTest(RunCase, unittest.TestCase):
         self.assertEqual(compute_judgement(self.ctx, "strength")["state"], "red")
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
+        # run N13 (ver-0009): write_report and the export read a verdict without a comparison
+        from hiraku.export.tables import comparison_rows
+        from hiraku.tools.functions import write_report
+        from hiraku.tools.report import domain_parts
+
+        strength = next(p for p in domain_parts(self.ctx) if p["domain"] == "strength")
+        case = next(c for c in strength["cases"] if c["load_case_id"] == "R1-step100")
+        self.assertEqual(case["verdict_id"], ver["verdict_id"])
+        self.assertIn("unsupported_load", case["line"])
+        write_report(self.ctx, {"summary": f"R1 は荷重の通り道が無い ({ver['verdict_id']})", "next": []}, "lead")
+        comparison_rows(self.ctx.store)
 
     def test_no_unsupported_load_no_verdict(self):
         ana, _, _ = self.run_p1()
@@ -1078,6 +1096,21 @@ class FormulaInputsTest(RunCase, unittest.TestCase):
         (entry,) = case["formulas"]
         self.assertEqual(entry["tool"], "made_r1")
         self.assertEqual(entry["inputs"]["L"]["value"], 1800.0)
+
+    def test_a_load_cases_own_builder_step_comes_before_its_tests(self):
+        """R8: one step serves R8-free and R8-push; R8-stress has its own (PLANS keyed by the load case id)."""
+        from hiraku.catalog.build import recipe_for
+        from hiraku.tools import plan
+
+        for_test = {"tool": "frame_static", "say": "the test's", "predictions": []}
+        for_case = {"tool": "frame_static", "say": "the load case's own", "predictions": []}
+        own = {"steps": [s for s in plan.plan_of(self.ctx)["steps"] if s["load_case"] != "R1-step100"]}
+        with mock.patch.object(plan, "plan_of", return_value=own),                 mock.patch.object(plan, "external_builders", return_value=({}, {}, {"R1": for_test, "R1-step100": for_case})):
+            steps = {s["load_case"]: s for s in plan.compose_plan(self.ctx)["steps"]}
+        self.assertEqual(steps["R1-step100"]["say"], "the load case's own")
+        lc = {"load_case_id": "R1-step250", "test_id": "R1"}
+        self.assertIs(recipe_for({"R1": for_test, "R1-step100": for_case}, lc), for_test)  # another case: the test's
+        self.assertIsNone(recipe_for({}, lc))
 
     def test_role_facing_text_points_at_the_section_not_at_python(self):
         from hiraku.tools.functions import CODE_CALL_FOR_ROLE, for_role

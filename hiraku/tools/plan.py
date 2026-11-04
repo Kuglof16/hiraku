@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from hiraku.catalog import CATALOG_DIR, beyond_plans, external_builders, is_beyond, loading_of, read_data
-from hiraku.catalog.build import product_step
+from hiraku.catalog.build import product_step, recipe_for
 from hiraku.tools.context import RunContext
 from hiraku.tools.summary import design_summary
 
@@ -108,8 +108,9 @@ def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
         if lc["load_case_id"] in have:
             continue
         # the product's own step first (hiraku.catalog.build.plan_steps keeps the same order)
-        recipe = (product_step(ctx.project["product"], lc) or (is_beyond(lc) and past.get(lc["test_id"]))
-                  or recipes.get(lc["test_id"]))
+        # a load case's own step before its test's (recipe_for: R8-stress apart from R8-free and R8-push)
+        recipe = (product_step(ctx.project["product"], lc) or (is_beyond(lc) and recipe_for(past, lc))
+                  or recipe_for(recipes, lc))
         if recipe is None:
             out["missing"].append(lc["load_case_id"])
         elif ctx.tools and recipe["tool"] not in ctx.tools:

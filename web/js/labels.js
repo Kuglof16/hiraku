@@ -431,9 +431,25 @@ export function fmtVU(value, unit, sig) {
   return fmtQ({ value, unit }, sig);
 }
 
-// project.driver: what drove the run (台本 = scripted, no Claude; API キー = HIRAKU's agent loop with
-// the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
-export const DRIVER_JA = { scripted: "台本", agent_sdk: "API キー", claude_code_plugin: "Claude Code" };
+// project.driver: what drove the run (決まった手順 = scripted, no Claude; API キー = HIRAKU's agent loop
+// with the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
+export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (API キー)", claude_code_plugin: "Claude Code" };
+
+// The run list for people (no ?dev=1): one line per demo run of data/catalog/demo_runs.yaml, by its id,
+// saying what it lets you do. The yaml's title and shows are written for the developers; an id not here
+// shows its title.
+export const DEMO_LINE_JA = {
+  "n09-electric-guitar": "ギターを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
+  "n09-care-bed": "介護ベッドを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
+  "n09-serving-robot": "料理を運ぶロボットを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
+  "n11-n12": "要件の書き間違いを見つける — 手計算と解析の食い違いから、cm と mm の取り違えを見つけて直します",
+  n13: "手元に無い計算を作る — 横転したときの計算のツールを Claude がその場で書き、確かめてから使います",
+  n14: "メモを渡して決まりにする — 途中で渡した設計のメモが決まりになり、当てはまる部品について聞き返します",
+  video: "小さなオフロード車を試験して直す — 不合格の所を直してもう一度確かめます。限界を超える試験も入っています",
+  demo: "小さなオフロード車の 6 つの試験 — 不合格の所を直して、2 回目で全部合格します",
+};
+// The demo run recommended at the top of the run list when no saved run is there (its scripted run).
+export const PICK_DEMO_ID = "video";
 
 // A verdict's margin: margin_pct (% of the limit), or, when the record gives none (the
 // limit is 0, so margin_pct is null), the margin in its own unit.
