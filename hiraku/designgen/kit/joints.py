@@ -22,7 +22,7 @@ import math
 import numpy as np
 
 BEARING_MM = 40.0  # the steering shaft's bearing in the bulkhead (HIRAKU's choice, no source)
-BRIDGE_MAX_MM = 250.0  # a gap longer than this is not bridged by a bracket (left for the layout)
+BRIDGE_MAX_MM = 600.0  # a gap longer than this is not bridged by a bracket (left for the layout)
 STEEL_KG_M3 = 7850.0
 JOINT_GAP_MM = 2.0
 NOT_TOUCHING_VIA = ("wire", "hose")
@@ -55,6 +55,28 @@ def _gap(design: dict, bs, pid: str, to: str) -> float | None:
     if to in sups:
         return point_gap(np.asarray(sups[to], float), me)
     return None
+
+
+FIXED_KINDS = ("body", "frame", "gusset", "rollbar")  # parts fixed to the frame that others may be fastened to
+
+
+def _touching_fixed_part(bs, pid: str, near) -> str | None:
+    """A fixed part (FIXED_KINDS: a sheet of the body, a piece of the frame) the part touches, nearest `near`."""
+    from hiraku.solvers.k4_geometry.model import shape_overlap
+
+    me = bs[f"part:{pid}"]
+    r_me = float(np.linalg.norm(me.obb.half))
+    best = None
+    for k, b in bs.items():
+        if b.kind not in FIXED_KINDS or k == f"part:{pid}":
+            continue
+        if float(np.linalg.norm(b.obb.center - me.obb.center)) > r_me + float(np.linalg.norm(b.obb.half)) + JOINT_GAP_MM:
+            continue
+        if -shape_overlap(me, b) <= JOINT_GAP_MM:
+            d = float(np.linalg.norm(b.obb.center - near))
+            if best is None or d < best[0]:
+                best = (d, k.split(":", 1)[1])
+    return best[1] if best else None
 
 
 def _touching_member(bs, pid: str, near) -> str | None:
@@ -164,7 +186,14 @@ def _fit(design: dict, parts: dict, p: dict, me, other) -> str:
         else:
             carried = list(parts.get(to_id, {}).get("carried_by") or [])
         extra = {"carried_by": carried} if carried else {}
-        parts[fid] = _add(design, {"id": fid, "name": f"{p.get('name', p['id'])} の金具", "kind": "bracket", **extra,
+        # a strut that crosses a sheet of the body is an anchor: a bolt through the sheet into the frame
+        # (k4_geometry.model.THROUGH_PANEL_KINDS lets it pass)
+        from hiraku.solvers.k4_geometry.obb import from_box, overlap
+
+        sb = from_box(box["center_mm"], box["size_mm"], box["rpy_deg"])
+        through = any(b.kind == "body" and overlap(sb, b.obb) > 1.0 for b in _bodies(design).values())
+        parts[fid] = _add(design, {"id": fid, "name": f"{p.get('name', p['id'])} の" + ("止め (板を通す)" if through else "金具"),
+                                   "kind": "anchor" if through else "bracket", **extra,
                                    "box": box, "mass_kg": STEEL_KG_M3 * math.pi * (STRUT_D_MM - STRUT_T_MM) * STRUT_T_MM
                                    * box["size_mm"][0] * 1e-9,
                                    "connects_to": [{"to": to_id, "via": "weld" if other.kind == "member" else "bolt",
@@ -202,7 +231,8 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
                 kept.append(c)
                 continue
             near = nodes.get(c["to"], me.obb.center)
-            mem = _touching_member(bs, p["id"], near)
+            # the frame member it touches, else a fixed part it rests on (a seat on the floor sheet)
+            mem = _touching_member(bs, p["id"], near) or _touching_fixed_part(bs, p["id"], near)
             if mem is not None:
                 if all(x["to"] != mem for x in kept):
                     kept.append(dict(c, to=mem))
@@ -260,21 +290,102 @@ def fenders(design: dict) -> int:
     return n
 
 
-# the parts this file joins (the arms, the damper and the ball joints are kit/arms.py's, the other parts
-# kit/fittings.py's)
-MINE_KINDS = ("steering", "steering_column", "steering_shaft", "steering_rack", "brake_master_cylinder",
-              "brake_pedal", "accelerator_pedal", "fender")
-MINE_IDS = ("bracket_column", "stand_pedal", "bearing_steering_shaft")
+# an occupant's segments joined each to the next toward the trunk (kit/body: they overlap at the joints)
+OCCUPANT_PARENT = {"foot": "shank", "shank": "thigh", "thigh": None, "hand": "forearm", "forearm": "arm", "arm": None,
+                   "head": "neck", "neck": None}
 
 
-def mine(part: dict) -> bool:
-    return part["kind"] in MINE_KINDS or part["id"].startswith(MINE_IDS)
+def occupants(design: dict) -> int:
+    """Each segment of a person joined to its neighbour toward the trunk (a pin), not to the trunk across the body."""
+    ids = {p["id"] for p in design["parts"]}
+    n = 0
+    for p in design["parts"]:
+        if p["kind"] != "occupant" or "." not in p["id"]:
+            continue
+        person, seg = p["id"].split(".", 1)
+        name, _, side = seg.partition("_")
+        if name not in OCCUPANT_PARENT:
+            continue
+        up = OCCUPANT_PARENT[name]
+        to = person if up is None else f"{person}.{up}" + (f"_{side}" if side else "")
+        if to not in ids:
+            continue
+        p["connects_to"] = [{"to": to, "via": "pin", "carries": "load"}]
+        n += 1
+    return n
+
+
+def mounts(design: dict) -> int:
+    """A mount (part_mounts: kind bracket, id mount_*) that touches no frame member is made again between the part it
+    holds and the frame member at the node it names, nearest that part: a box from the part's nearest point to the
+    member's, as thick as the mount's thinnest side, carried by the member's nodes and welded to it."""
+    bs = _bodies(design)
+    parts = {p["id"]: p for p in design["parts"]}
+    nodes = {n["id"] for n in design.get("nodes", [])}
+    held_by = {}
+    for p in design["parts"]:
+        for c in p.get("connects_to") or []:
+            if c["to"].startswith("mount_"):
+                held_by.setdefault(c["to"], p["id"])
+    n = 0
+    for p in design["parts"]:
+        if not p["id"].startswith("mount_") or p["kind"] != "bracket" or f"part:{p['id']}" not in bs:
+            continue
+        if _touching_member(bs, p["id"], bs[f"part:{p['id']}"].obb.center) is not None:
+            continue
+        held = bs.get(f"part:{held_by.get(p['id'], '')}")
+        named = [c["to"] for c in p.get("connects_to") or [] if c["to"] in nodes]
+        cands = [b for b in bs.values() if b.kind == "member" and (b.nodes & set(named) or not named)]
+        if held is None or not cands:
+            continue
+        member = min(cands, key=lambda b: float(np.linalg.norm(nearest_points(held, b)[0] - nearest_points(held, b)[1])))
+        a, b = nearest_points(held, member)
+        d = max(10.0, float(min(p["box"]["size_mm"])))
+        p["box"] = strut_box(a, b, d)
+        p["carried_by"] = sorted(member.nodes)
+        mid = member.id.split(":", 1)[1]
+        p["connects_to"] = [{"to": mid, "via": "weld", "carries": "load"}]
+        n += 1
+    return n
+
+
+PUSHROD_D_MM = 10.0  # the brake pedal's pushrod (HIRAKU's choice, no source)
+
+
+def brake_master(design: dict) -> str | None:
+    """The master cylinder on the front face of the bulkhead in line with the brake pedal (its y and z), and a
+    pushrod (kind pushrod) from the pedal's nearest point to the cylinder's rear face, through the bulkhead: the
+    pedal pushes the cylinder only where the two meet (the requirement), so the cylinder sits ahead of the pedal."""
+    parts = {p["id"]: p for p in design["parts"]}
+    m, pedal, wall = parts.get("brake_master"), parts.get("pedal_brake"), parts.get("bulkhead")
+    if m is None or pedal is None or wall is None:
+        return None
+    x_face = float(wall["box"]["center_mm"][0]) + float(wall["box"]["size_mm"][0]) / 2.0
+    L = float(m["box"]["size_mm"][0])
+    py, pz = float(pedal["box"]["center_mm"][1]), float(pedal["box"]["center_mm"][2])
+    m["box"] = {"center_mm": [x_face + L / 2.0, py, pz], "size_mm": list(m["box"]["size_mm"])}
+    bs = _bodies(design)
+    rear = np.array([x_face, py, pz])
+    a = closest(bs["part:pedal_brake"], rear)
+    rod = _add(design, {"id": "pushrod_brake", "name": "ブレーキの押し棒", "kind": "pushrod",
+                        "box": strut_box(a, rear, PUSHROD_D_MM), "mass_kg": 0.1,
+                        "connects_to": [{"to": "brake_master", "via": "pin", "carries": "brake"}]})
+    pedal["connects_to"] = [c for c in pedal.get("connects_to") or [] if c["to"] != "brake_master"] + [
+        {"to": rod["id"], "via": "pin", "carries": "brake"}]
+    m["connects_to"] = [c for c in m.get("connects_to") or [] if c["to"] not in {n["id"] for n in design["nodes"]}]
+    if all(c["to"] != "bulkhead" for c in m["connects_to"]):
+        m["connects_to"].append({"to": "bulkhead", "via": "bolt", "carries": "load"})
+    return rod["id"]
 
 
 def join(design: dict) -> dict:
-    """Steps 2 to 4 for the steering, the pedals and the master cylinder, and the fenders (MINE_KINDS, MINE_IDS);
-    step 1 (the corners' arms) is kit/arms.py's. Returns what was done."""
+    """Every part's joints made to touch: the occupants' segments to their neighbours, the mounts between their part
+    and the frame, the shaft's bearing, the fenders on their knuckles, then step 2 for every other part (the corners'
+    arms, damper and ball joints are kit/arms.py's and already touch). Returns what was done."""
+    occ = occupants(design)
+    rod = brake_master(design)
+    mnt = mounts(design)
     brg = bearing(design)
     fen = fenders(design)
-    done = retarget_and_bridge(design, {p["id"] for p in design["parts"] if mine(p)})
-    return {"added": [brg] if brg else [], "fenders": fen, **done}
+    done = retarget_and_bridge(design, {p["id"] for p in design["parts"] if p["kind"] not in ("occupant",)})
+    return {"added": [x for x in (brg, rod) if x], "fenders": fen, "occupants": occ, "mounts": mnt, **done}

@@ -32,7 +32,7 @@ MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is m
 # Part kinds held as capsules: shafts, steering links and rods. Kinds not in a design yet
 # are listed so that designs using them get capsules without a change here.
 SLENDER_KINDS = ("driveshaft", "propshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "steering_column",
-                 "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper")
+                 "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper", "pushrod")
 WELDED = {"frame", "gusset", "rollbar", "bracket"}  # part kinds welded into the frame at their carried_by joints
 # The parts of a person (kind occupant, one person per id before the first ".": hiraku.contract.loading.
 # person_of) touch each other and what the person sits on, rests the feet on and holds any amount; anything
@@ -48,7 +48,8 @@ FRAME_PIECES = ("frame", "rollbar", "side_rail")
 LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
 # Kinds that go through a hole in a panel (a part of kind body) on their way: the steering column
 # through the floor (assumption: the panel has the hole).
-THROUGH_PANEL_KINDS = ("steering_column", "steering_shaft")
+# anchor: a bolt through a sheet, pushrod: the brake pedal's through the bulkhead (designgen kit/joints)
+THROUGH_PANEL_KINDS = ("steering_column", "steering_shaft", "anchor", "pushrod")
 PANEL_KINDS = ("body",)
 
 
