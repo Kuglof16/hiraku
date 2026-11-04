@@ -891,6 +891,13 @@
         "archetype": {
           "type": "string",
           "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a hand-made design."
+        },
+        "variable_names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Design variable name -> its name for a person (Japanese), written by the generator; the screen shows these instead of the variable ids."
         }
       }
     },
