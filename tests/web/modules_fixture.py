@@ -35,6 +35,8 @@ BATTERY_GROW_MM = 160.0  # version 3's battery is this much longer along x (stic
 KIND_MODULE = {
     "bracket": "frame",
     "wheel": "suspension", "suspension": "suspension", "knuckle": "suspension", "brake_caliper": "suspension",
+    "link": "suspension", "damper": "suspension", "ball_joint": "suspension",  # the arms (designgen kit/arms.py)
+    "pushrod": "steering", "bearing": "steering", "anchor": "frame",  # designgen kit/joints.py's parts
     "steering": "steering", "steering_column": "steering", "steering_shaft": "steering", "steering_rack": "steering",
     "accelerator_pedal": "steering", "brake_pedal": "steering", "brake_master_cylinder": "steering",
     "seat": "occupant", "seat_belt": "occupant", "occupant": "occupant", "rollbar": "occupant",
