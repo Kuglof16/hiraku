@@ -195,8 +195,12 @@ def nearest_points(a, b, rounds: int = 40) -> tuple[np.ndarray, np.ndarray]:
     q = b.obb.center.copy()
     p = closest(a, q)
     for _ in range(rounds):
-        q = closest(b, p)
-        p = closest(a, q)
+        q_new = closest(b, p)
+        p_new = closest(a, q_new)
+        settled = float(np.linalg.norm(p_new - p)) < 1e-3 and float(np.linalg.norm(q_new - q)) < 1e-3
+        p, q = p_new, q_new
+        if settled:  # the points no longer move (0.001 mm)
+            break
     return p, q
 
 
@@ -242,7 +246,7 @@ def _clear_member(bs, me, first, pid: str):
     return first
 
 
-def _fit(design: dict, parts: dict, p: dict, me, other) -> str:
+def _fit(design: dict, parts: dict, p: dict, me, other, bs=None) -> str:
     to_id = other.id.split(":", 1)[1]
     fid = f"fit_{p['id']}_{to_id}"
     if fid not in parts:
@@ -260,7 +264,8 @@ def _fit(design: dict, parts: dict, p: dict, me, other) -> str:
         from hiraku.solvers.k4_geometry.obb import from_box, overlap
 
         sb = from_box(box["center_mm"], box["size_mm"], box["rpy_deg"])
-        through = any(b.kind == "body" and overlap(sb, b.obb) > 1.0 for b in _bodies(design).values())
+        # (the body sheets do not change while the joints are made: the bodies of the step serve)
+        through = any(b.kind == "body" and overlap(sb, b.obb) > 1.0 for b in (bs or _bodies(design)).values())
         parts[fid] = _add(design, {"id": fid, "name": f"{p.get('name', p['id'])} の" + ("止め (板を通す)" if through else "金具"),
                                    "kind": "anchor" if through else "bracket", **extra,
                                    "box": box, "mass_kg": STEEL_KG_M3 * math.pi * (STRUT_D_MM - STRUT_T_MM) * STRUT_T_MM
@@ -345,7 +350,7 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
                 continue
             if other.kind == "member":
                 other = _clear_member(bs, me, other, p["id"])
-            fid = _fit(design, parts, p, me, other)
+            fid = _fit(design, parts, p, me, other, bs)
             n_br += 1
             if all(x["to"] != fid for x in kept):
                 kept.append(dict(c, to=fid))
