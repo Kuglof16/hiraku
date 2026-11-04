@@ -862,6 +862,17 @@ class LaunchTest(unittest.TestCase):
             else:
                 self.assertTrue(r["product"] and r["want"], r["id"])
 
+    def test_the_estimate_from_estimates_usd(self):
+        """Without estimate_usd, a row shows the default mix's usd of its estimates_usd (null: none)."""
+        from hiraku.webserve.launch import demo_run_estimate_of
+
+        self.assertEqual(demo_run_estimate_of({"estimates_usd": {"default": {"usd": 3.52, "upper_usd": 3.52}, "cae-haiku": {"usd": 0.09, "upper_usd": 0.88}}}), 3.52)
+        self.assertIsNone(demo_run_estimate_of({"estimates_usd": None}))
+        self.assertIsNone(demo_run_estimate_of({}))
+        self.assertEqual(demo_run_estimate_of({"estimate_usd": 1.1, "estimates_usd": {"default": {"usd": 9.0}}}), 1.1)
+        with self.assertRaises(ValueError):
+            demo_run_estimate_of({"estimates_usd": {"cae-haiku": {"usd": 0.1}}})
+
     def test_refuses_other_files_and_other_pages(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
         port = base.rsplit(":", 1)[1]

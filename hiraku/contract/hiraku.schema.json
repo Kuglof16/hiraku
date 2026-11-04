@@ -93,9 +93,9 @@
       ]
     },
     "agent_id": {
-      "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person.",
+      "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person. designer.<module> = モジュールごとの設計役 (designs with modules).",
       "type": "string",
-      "pattern": "^(lead|designer|packager|system|user|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
+      "pattern": "^(lead|designer|packager|system|user|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
     },
     "base": {
       "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity.",
@@ -723,6 +723,9 @@
             "molded"
           ],
           "description": "Surface of the part as made (for the look and for corrosion notes); missing: as its material comes."
+        },
+        "module": {
+          "$ref": "#/$defs/module_id"
         }
       }
     },
@@ -739,6 +742,14 @@
         },
         "xyz_mm": {
           "$ref": "#/$defs/vec3"
+        },
+        "joint": {
+          "enum": [
+            "weld",
+            "bolt",
+            "pin"
+          ],
+          "description": "How the members meeting at this node are joined. Absent: not stated (the ladder_4w generator's frame nodes are welded)."
         }
       }
     },
@@ -773,6 +784,9 @@
         "part": {
           "type": "string",
           "description": "Part id this member belongs to."
+        },
+        "module": {
+          "$ref": "#/$defs/module_id"
         }
       }
     },
@@ -851,6 +865,20 @@
           "additionalProperties": {
             "$ref": "#/$defs/material"
           }
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module"
+          },
+          "description": "Present when the design's generator splits it into modules; then revise_design takes module and build_version makes versions."
+        },
+        "module_changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_change"
+          },
+          "description": "The proposals this version was built from (empty or absent for version 1 and for designs without modules)."
         }
       }
     },
@@ -958,6 +986,14 @@
             "type": "string"
           },
           "description": "Load cases that take this case's results as input (e.g. P1 wheel force feeds R1)."
+        },
+        "modules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "description": "The modules whose designers answer a red of this case (set by the builder; package when only the layout can fix it)."
         }
       }
     },
@@ -3083,6 +3119,9 @@
         "prop": {
           "type": "string",
           "description": "The pet's prop: binder, pencil, spanner, steering_wheel, battery, windsock, crash_target, i_beam, tuning_fork, thermometer."
+        },
+        "module": {
+          "$ref": "#/$defs/module_id"
         }
       }
     },
@@ -3241,7 +3280,9 @@
         "hearing.answered",
         "knowledge.imported",
         "rule_check.recorded",
-        "mesh.created"
+        "mesh.created",
+        "design.change_proposed",
+        "load_cases.created"
       ]
     },
     "event": {
@@ -3843,6 +3884,44 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "design.change_proposed"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/module_change"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "load_cases.created"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/version_load_cases"
+              }
+            }
+          }
         }
       ]
     },
@@ -4132,6 +4211,16 @@
               "number",
               "boolean"
             ]
+          }
+        },
+        "module": {
+          "$ref": "#/$defs/module_id",
+          "description": "Required when the design has modules: the change is then a proposal for this module only (its variables and choices), recorded as design.change_proposed; build_version makes the version."
+        },
+        "load_case_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       },
@@ -4858,6 +4947,217 @@
             ]
           },
           "description": "Missing: both."
+        }
+      }
+    },
+    "module_id": {
+      "enum": [
+        "package",
+        "frame",
+        "suspension",
+        "steering",
+        "occupant",
+        "powertrain",
+        "body"
+      ],
+      "description": "A design module (2026-11-04). package = レイアウト (wheelbase, track, rail spacing and height, where each module's space is; owned by the packager, no parts); frame = 枠 (rails, cross members, towers, posts, gussets, the frame's own brackets); suspension = 足まわり (wheels, knuckles, arms, dampers, their mounts on the frame); steering = 操作系 (steering wheel, column, shaft, rack, tie rods, pedals, pedal post, master cylinder); occupant = 乗員まわり (seats, belts, side guard, door or opening, grab bars, roll bar; the people are placed here); powertrain = 動力 (motor, reducer, driveshafts, battery, controller, aux, switch, wiring); body = 車体 (floor, deck, bulkhead, front body, fenders, cargo)."
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "between",
+        "via"
+      ],
+      "description": "Where two modules meet: the packager fixes it; module designers may not move it.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "between": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "node": {
+          "type": "string",
+          "description": "A frame node id, when the interface is at a node."
+        },
+        "point_mm": {
+          "$ref": "#/$defs/vec3"
+        },
+        "via": {
+          "type": "string",
+          "description": "As connects_to.via: weld, bolt, bushing, ball_joint, pin, ..."
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module_id",
+        "owner",
+        "envelope",
+        "variables"
+      ],
+      "description": "One module of a design: who owns it, the space it may use and the variables and choices it may change.",
+      "properties": {
+        "module_id": {
+          "$ref": "#/$defs/module_id"
+        },
+        "title": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "envelope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/part/properties/box"
+          },
+          "description": "Boxes of space this module's parts and members must stay inside (set by the packager; empty for package)."
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          }
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Design variables this module's designer may change."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Generator choices this module's designer may make."
+        }
+      }
+    },
+    "module_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_id",
+        "module_id",
+        "agent_id",
+        "reason"
+      ],
+      "description": "One module designer's proposal for the next version (revise_design with module). build_version builds every pending proposal of the round into one version. The packager's own change of a round may be one more entry with module_id package and agent_id packager.",
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "pattern": "^chg-[0-9]{4,}$"
+        },
+        "module_id": {
+          "$ref": "#/$defs/module_id"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "load_case_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The red load cases this change answers."
+        },
+        "changes": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "design variable name -> new value in the variable's own unit",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "choices": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "generator choice name -> chosen value (as in propose_design.choices; the choices a design's generator offers are in get_context design_choices)",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The version this proposal was made on (the red it answers is on that version)."
+        }
+      }
+    },
+    "tool_input.build_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason"
+      ],
+      "description": "Agent-facing MCP tool for the packager only, for designs with modules: builds the next version from every pending module_change of the round plus the packager's own changes (package variables, envelopes, interfaces). Refused while two proposals change the same variable or a proposal's parts would leave its module's envelope.",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "design variable name -> new value in the variable's own unit",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "envelopes": {
+          "type": "object",
+          "description": "module_id -> new envelope boxes",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/part/properties/box"
+            }
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          }
+        }
+      }
+    },
+    "version_load_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_version",
+        "load_cases"
+      ],
+      "description": "The load cases built for one design version (a builder's criterion may read the version's own design, e.g. how many parts to assemble). Written to v00N/load_cases.json; project.load_cases stays the first version's.",
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "load_cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/load_case"
+          }
         }
       }
     }

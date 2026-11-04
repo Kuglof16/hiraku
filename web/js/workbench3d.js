@@ -52,6 +52,9 @@ const MUTED = "#6b665c";
 const RULE = "#e2dccf";
 const RULE_MAJOR = "#c9c3b6";
 const LIMIT_RED = "#c8402a";
+// What a rule hit lights (setRuleFocus): a see-through fill and a thick outline, over everything.
+const LIT_FILL = "#ffc400";
+const LIT_LINE = "#ff6a00";
 // joint: the force the body takes at a suspension mounting point (at "<support>.<point>")
 const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a", joint: "#1f6f6b" };
 const UP = new THREE.Vector3(0, 1, 0);
@@ -281,6 +284,21 @@ function segmentDistance(p, ax, ay, bx, by) {
 const LEADER_GAP_PX = 18; // between the vehicle's outline on screen and a label laid outside it
 const LABEL_MARGIN = { top: 52, bottom: 124, side: 10 }; // the view's edges kept for its buttons and bars
 
+// A drawn solid of the picture (not a line, not an overlay twin, not a lit copy).
+function isSolid(x) {
+  return x.isMesh && !x.isLineSegments2 && x.layers.isEnabled(0) && !x.userData.lit;
+}
+
+// The matrix of obj in root's frame (its local matrices up to root).
+function relMatrix(obj, root) {
+  const m = new THREE.Matrix4();
+  for (let o = obj; o && o !== root; o = o.parent) {
+    if (o.matrixAutoUpdate) o.updateMatrix();
+    m.premultiply(o.matrix);
+  }
+  return m;
+}
+
 function disposeTree(obj) {
   obj.traverse((o) => {
     o.geometry?.dispose?.();
@@ -387,7 +405,8 @@ export class Workbench3D {
     this.overGhosts = new THREE.Group();
     this.names = new THREE.Group();
     this.shells = new THREE.Group(); // shell meshes (one per mesh_id, built when a contour needs it)
-    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names);
+    this.lit = new THREE.Group(); // a rule hit's lit parts, nodes and the design's box (setRuleFocus); shown with the parts off too
+    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names, this.lit);
 
     this.wheels = new THREE.Group();
     this.arrows = new THREE.Group();
@@ -399,7 +418,12 @@ export class Workbench3D {
     this.inkMat = new LineMaterial({ color: INK, linewidth: 1.7 });
     this.mutedMat = new LineMaterial({ color: MUTED, linewidth: 1.1 });
     this.freeEdgeMat = new LineMaterial({ color: FREE_EDGE_COLOR, linewidth: 4, depthTest: false, transparent: true });
-    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.userData.shared = true;
+    this.litLine = new LineMaterial({ color: LIT_LINE, linewidth: 3.5, depthTest: false, transparent: true });
+    this.litFill = new THREE.MeshBasicMaterial({ color: LIT_FILL, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false, toneMapped: false, fog: false, side: THREE.DoubleSide });
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat, this.litLine, this.litFill]) m.userData.shared = true;
+    this.litObjs = []; // what setRuleFocus added (overlay only), taken away by clearLit
+    this.litIds = [];
+    this.litShown = [];
     this.links = new LineSegments2(new LineSegmentsGeometry(), this.mutedMat);
     this.iso.add(this.links);
 
@@ -445,13 +469,14 @@ export class Workbench3D {
       this.post?.setSize(w, h, this.renderer.getPixelRatio());
     }
     this.applyAspect();
-    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.resolution.set(w, h);
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat, this.litLine]) m.resolution.set(w, h);
     this.props.resize(w, h);
   }
 
   setDesign(design) {
     if (design === this.design) return;
     this.design = design;
+    this.clearLit(); // before the meshes it hangs on go
     for (const g of [this.model, this.shells, this.parts, this.names, this.overGhosts, this.markers, this.wheels]) disposeTree(g);
     this.shellObjs = {};
     this.model.visible = true;
@@ -614,6 +639,134 @@ export class Workbench3D {
       this.fit();
       this.fitted = true;
     }
+    this.lightAll(); // a rule hit pointed at before stays lit on the new version
+  }
+
+  // Light what a rule hit names (the person points at it in A2): ids of parts, frame members,
+  // frame nodes, "support:<id>" (that wheel and its suspension's mounting points),
+  // "<support>.<point>" (one mounting point) and "design" (the whole design: a box round it).
+  // Only the look changes: a see-through fill and a thick outline drawn over everything in the
+  // overlay, on the objects' own geometry (no material, number or shape of the design is
+  // touched, so the running glow of animate() and the contour stay as they are). An id with
+  // nothing in the 3D is left out. [] puts everything back. Returns the ids that were lit.
+  setRuleFocus(ids) {
+    const list = [...new Set((Array.isArray(ids) ? ids : []).filter((x) => typeof x === "string" && x))];
+    if (list.join("\n") === this.litIds.join("\n")) return this.litShown;
+    this.litIds = list;
+    this.lightAll();
+    return this.litShown;
+  }
+
+  lightAll() {
+    this.clearLit();
+    this.litShown = this.design ? this.litIds.filter((id) => this.lightOne(id)) : [];
+  }
+
+  clearLit() {
+    for (const o of this.litObjs) {
+      o.parent?.remove(o);
+      if (o.userData.ownGeometry) o.geometry.dispose(); // a twin's geometry is its mesh's own
+    }
+    this.litObjs = [];
+    this.litShown = [];
+  }
+
+  lightOne(id) {
+    const d = this.design;
+    if (id === "design") return this.litBox(this.bboxIso);
+    if (id.startsWith("support:")) {
+      const sid = id.slice("support:".length);
+      const s = (d.supports ?? []).find((x) => x.id === sid);
+      if (!s) return false;
+      let hit = this.litWheel(sid);
+      for (const p of Object.values(s.suspension?.hardpoints_mm ?? {})) hit = this.litDot(p) || hit;
+      return hit;
+    }
+    let hit = false;
+    const part = this.partObjs[id];
+    if (part) {
+      // under the body (not the parts' group), so it shows with the parts switched off too
+      part.group.traverse((x) => {
+        if (isSolid(x)) hit = this.litTwin(x, this.lit, relMatrix(x, this.body)) || hit;
+      });
+    }
+    // a wheel listed as a part is drawn from its support
+    const asPart = (d.parts ?? []).find((p) => p.id === id);
+    if (!part && asPart?.kind === "wheel") {
+      const c = v3(asPart.box.center_mm);
+      const s = (d.supports ?? []).find((sp) => v3(sp.position_mm).distanceTo(c) < 50);
+      if (s) hit = this.litWheel(s.id) || hit;
+    }
+    // a frame member, or the members of a part (member.part)
+    for (const m of d.members ?? []) {
+      if ((m.id === id || m.part === id) && this.members[m.id]) hit = this.litTwin(this.members[m.id].mesh, this.members[m.id].mesh, null) || hit;
+    }
+    if (!hit && this.nodes?.[id]) hit = this.litDot(this.nodes[id].toArray());
+    if (!hit) {
+      // "<support>.<point>": a suspension mounting point
+      const dot = id.indexOf(".");
+      const s = dot > 0 ? (d.supports ?? []).find((x) => x.id === id.slice(0, dot)) : null;
+      const p = s?.suspension?.hardpoints_mm?.[id.slice(dot + 1)];
+      if (p) hit = this.litDot(p);
+    }
+    return hit;
+  }
+
+  // A lit copy of a mesh on its own geometry: the fill, and the outline of its edges.
+  litTwin(mesh, parent, matrix, ownGeometry = false) {
+    const fill = new THREE.Mesh(mesh.geometry, this.litFill);
+    fill.userData.ownGeometry = ownGeometry;
+    fill.matrixAutoUpdate = false;
+    if (matrix) fill.matrix.copy(matrix);
+    fill.renderOrder = 7;
+    const lines = [];
+    pushEdges(lines, mesh.geometry, matrix, 35);
+    const edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines.length ? lines : [0, 0, 0, 0, 0, 0]), this.litLine);
+    edges.userData.ownGeometry = true;
+    edges.renderOrder = 8;
+    for (const o of [fill, edges]) {
+      overlayOnly(o);
+      o.userData.lit = true;
+      parent.add(o);
+      this.litObjs.push(o);
+    }
+    return true;
+  }
+
+  litWheel(sid) {
+    const w = this.wheelObjs[sid];
+    if (!w) return false;
+    let hit = false;
+    for (const x of [...w.group.children]) if (x !== w.ring && isSolid(x)) hit = this.litTwin(x, w.group, null) || hit;
+    return hit;
+  }
+
+  // A point (ISO mm, on the body): a ball sized to the design.
+  litDot(p) {
+    if (!Array.isArray(p) || p.length !== 3 || !p.every(Number.isFinite)) return false;
+    const size = this.bboxIso ? this.bboxIso.getSize(new THREE.Vector3()).length() : 2000;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(Math.max(20, size * 0.012), 16, 10), this.litFill);
+    ball.position.copy(v3(p));
+    ball.updateMatrix();
+    return this.litTwin(ball, this.lit, ball.matrix, true); // the ball itself is not drawn: its lit copy owns the geometry
+  }
+
+  // A box round the whole design (the outline only).
+  litBox(box) {
+    if (!box || box.isEmpty()) return false;
+    const pad = box.getSize(new THREE.Vector3()).length() * 0.02;
+    const geo = new THREE.BoxGeometry(...box.getSize(new THREE.Vector3()).addScalar(2 * pad).toArray());
+    const lines = [];
+    pushEdges(lines, geo, new THREE.Matrix4().makeTranslation(box.getCenter(new THREE.Vector3())), 35);
+    geo.dispose();
+    const edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.litLine);
+    edges.userData.ownGeometry = true;
+    edges.userData.lit = true;
+    edges.renderOrder = 8;
+    overlayOnly(edges);
+    this.lit.add(edges);
+    this.litObjs.push(edges);
+    return true;
   }
 
   // Who is on board for a load case's params.loading (empty / driver / two /
@@ -1707,7 +1860,7 @@ export class Workbench3D {
   // scale: device pixels per stage pixel, so ink lines keep their stage width.
   renderInto(ctx, w, h, scale = 1) {
     if (this.size.w !== w || this.size.h !== h) this.resize(w, h);
-    for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w / scale, h / scale);
+    for (const m of [this.inkMat, this.mutedMat, this.litLine]) m.resolution.set(w / scale, h / scale);
     this.props.resize(w / scale, h / scale);
     const r = this.renderer;
     const H = r.domElement.height;

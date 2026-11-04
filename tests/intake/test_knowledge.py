@@ -222,7 +222,18 @@ class SampleNotesTest(unittest.TestCase):
         self.assertEqual(by["U1-02"]["applies_to"], {"kinds": ["body"]})
         design = read_data(REPO_ROOT / "data" / "designs" / "offroad-4w-v1.json")
         checks = {c["rule_id"]: c for c in rulecheck.check_all(got.record["rules"], design, load_product("offroad-4w")["requirements"])}
-        self.assertEqual({k: [h["part_id"] for h in c["hits"]] for k, c in checks.items() if c["hits"]}, {"U1-04": ["battery"]})
+        # what the rules hit is worked out from the design's own numbers (they change with the design): a battery over
+        # 30 kg, a seat narrower than 400 mm, a body plate thinner than 3 mm (a box's thickness is its smallest side)
+        parts = design["parts"]
+        expected = {
+            "U1-04": [p["id"] for p in parts if p["kind"] == "battery" and p["mass_kg"] > 30],
+            "U1-06": [p["id"] for p in parts if p["kind"] == "seat" and p["box"]["size_mm"][1] < 400],
+            "U1-07": [p["id"] for p in parts if p["kind"] == "body" and min(p["box"]["size_mm"]) < 3],
+        }
+        expected = {k: v for k, v in expected.items() if v}
+        self.assertEqual({k: [h["part_id"] for h in c["hits"]] for k, c in checks.items() if c["hits"] and k in ("U1-04", "U1-06", "U1-07")}, expected)
+        self.assertEqual([k for k, c in checks.items() if c["hits"] and k in ("U1-01", "U1-02")], [])  # these only say not evaluable
+        self.assertIn("U1-04", expected)  # the video's one hit: the battery is over 30 kg
         plates = [p["id"] for p in design["parts"] if p["kind"] == "body"]  # whatever plates the demo design has
         self.assertGreaterEqual(len(plates), 4)
         for rid in ("U1-01", "U1-02"):  # the sheet-metal rules look at the same plates as SM-01 and judge none of them

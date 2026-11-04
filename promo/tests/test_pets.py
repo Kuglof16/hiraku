@@ -267,6 +267,31 @@ class Roles(unittest.TestCase):
         self.assertIsNone(re.search(r"^\s*(import|export)\s", PET3D, re.M))
         self.assertIn("window.HirakuPets", PET3D)
 
+    def test_pose_terms_and_anim_in_the_source(self):
+        # the extra pose terms a page may pass to update (o), and the shared
+        # jump curves (anim) the title cuts use
+        for term in ("ex.squash", "ex.lean", "ex.tilt", "ex.antenna", "ex.turn", "ex.arm",
+                     "ex.lookX", "ex.lookY", "ex.report", "ex.check", "ex.shadow"):
+            self.assertIn(term, PET3D)
+        self.assertIn("const ex = o || {};", PET3D)
+        self.assertRegex(PET3D, r"window\.HirakuPets = \{[^}]*\banim\b")
+        for name in ("function hop(tau, J)", "function jumpY(q, rise, over)", "function easeBack(u, over)"):
+            self.assertIn(name, PET3D)
+
+    def test_walk_sit_and_route_in_the_source(self):
+        # walking and sitting pose terms (zero when not given, so other cuts' pets
+        # move as before), and the route of beats the title cuts use
+        for term in ("ex.legs", "ex.arms", "ex.drop", "ex.sit"):
+            self.assertIn(term, PET3D)
+        self.assertIn("-h.sx * (ex.legs || 0) - legSit", PET3D)
+        self.assertIn("const legSit = run ? 0 : (ex.sit || 0) * LEG.sit_legs;", PET3D)
+        for name in ("function walkLegs(d, D, L, swing)", "function route(t, start, beats, ctx)",
+                     "function routeEnd(beats)", "function travel(u, ramp)"):
+            self.assertIn(name, PET3D)
+        self.assertRegex(PET3D, r"window\.HirakuPets = \{[^}]*\bLEG\b")
+        kinds = re.search(r"const BEAT_KINDS = \[([^\]]*)\]", PET3D).group(1)
+        self.assertEqual(re.findall(r'"(\w+)"', kinds), ["walk", "hop", "hops", "turn", "sit", "act", "fade", "tick"])
+
 
 @unittest.skipUnless(HAS_PLAYWRIGHT, "needs playwright (the video Python, not the HIRAKU venv)")
 @unittest.skipUnless(HAS_PLAYWRIGHT and has_network(), "needs the network (three.js comes from jsDelivr)")
@@ -1011,6 +1036,102 @@ class Viewer(unittest.TestCase):
         w0, w1 = res["wheels"]
         self.assertEqual(len(w0), 2)
         self.assertNotEqual(w0, w1, "the wheels turn when running")
+
+    def test_anim_hop(self):
+        # anim.hop: still before it starts; a crouch (squashed, on the ground);
+        # a parabola in time (second differences the same), stretched while
+        # fast; a squash on landing; small bounces; at rest at end
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=one&role=lead&t=0"
+        js = """() => {
+          const A = window.HirakuPets.anim;
+          const J = { crouch_s: 0.2, crouch: 0.2, air_s: 0.5, rise_px: 300, over_px: 40, stretch: 0.15,
+                      land_sq: 0.3, land_s: 0.12, bounces: [[10, 0.16], [4, 0.1]], settle_s: 0.3,
+                      lean_k: 0.8, antenna_k: 2, antenna_lag_s: 0.06 };
+          const at = (x) => A.hop(x, J);
+          const air = [];
+          for (let i = 0; i <= 10; i++) air.push(at(0.2 + 0.05 * i).y);
+          const end = at(0).end;
+          return { before: at(-0.1), crouch: at(0.19), mid: at(0.2 + 0.25), land: at(0.7 + 0.04), air,
+                   bounce: at(0.7 + 0.12 + 0.08), after: at(end + 0.01), end, landT: at(0).land,
+                   back: [A.back(0, 0.2), A.back(1, 0.2), Math.max(...Array.from({ length: 99 }, (_, i) => A.back((i + 1) / 100, 0.2)))],
+                   flat: A.hop(0.5, { air_s: 0.4, over_px: 20 }) };
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                self.open(page, page_url)
+                r = page.evaluate(js)
+            finally:
+                browser.close()
+        self.assertEqual((r["before"]["y"], r["before"]["squash"]), (0, 0))
+        self.assertEqual(r["crouch"]["y"], 0)                                    # crouching on the ground
+        self.assertGreater(r["crouch"]["squash"], 0.15)                          # squashed down (anticipation)
+        self.assertGreater(r["crouch"]["lean"], 0)
+        self.assertLess(r["mid"]["squash"], 0)                                   # stretched in the air
+        self.assertTrue(r["mid"]["air"])
+        self.assertAlmostEqual(r["landT"], 0.7)
+        y = r["air"]
+        d2 = [y[i + 1] - 2 * y[i] + y[i - 1] for i in range(1, len(y) - 1)]
+        for v in d2:
+            self.assertAlmostEqual(v, d2[0], places=6)                           # a parabola in time
+        self.assertLess(d2[0], 0)
+        self.assertAlmostEqual(y[-1], 300, places=6)                             # lands rise_px up
+        self.assertAlmostEqual(max(y), 340, delta=2)                             # topping out over_px above
+        self.assertGreater(r["land"]["squash"], 0.2)                             # squashed on landing
+        self.assertGreater(r["bounce"]["bounce"], 0)                             # a small bounce after
+        self.assertLess(r["bounce"]["bounce"], 10 + 1e-9)
+        self.assertAlmostEqual(r["end"], 0.2 + 0.5 + 0.12 + 0.16 + 0.12 * (0.5 + 0.5 * 0.5) + 0.1
+                               + 0.12 * (0.5 + 0.5 * (4 / 40) ** 0.5) + 0.3, places=6)
+        a = r["after"]
+        self.assertEqual((a["y"], a["squash"], a["bounce"], a["lean"]), (300, 0, 0, 0))   # at rest at the end
+        self.assertEqual(r["back"][:2], [0, 1])
+        self.assertAlmostEqual(r["back"][2], 1.2, delta=0.002)                   # overshoots by over
+        self.assertAlmostEqual(r["flat"]["y"], 0)                                # no crouch, no air given: still
+
+    def test_pose_terms(self):
+        # update(t, state, camera, o): without o (or with o = {}) the pose is the
+        # state's; o.squash squashes the torso, o.check shows the tick
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=one&role=lead&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const HP = window.HirakuPets;
+          const p = HP.create(THREE, { role: 'cae.nvh' });
+          const snap = () => { const a = []; p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => a.push(o.matrixWorld.elements.map((v) => v.toFixed(6)).join(','), o.visible)); return a.join(';'); };
+          const torsoTop = () => { let y = -1e9; p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => { if (o.isMesh && o.geometry.type === 'IcosahedronGeometry' && o.geometry.parameters.radius === 0.15) y = o.getWorldPosition(new THREE.Vector3()).y; }); return y; };
+          p.update(1.3, 'idle'); const a = snap(), topA = torsoTop();
+          p.update(1.3, 'idle', null, {}); const b = snap();
+          p.update(1.3, 'report'); const c = snap();
+          p.update(1.3, 'idle', null, { report: 1 }); const tiltR = snap();
+          p.update(1.3, 'idle', null, { squash: 0.3 }); const topS = torsoTop();
+          p.update(1.3, 'idle', null, { squash: -0.15 }); const topT = torsoTop();
+          p.update(1.3, 'idle', null, { check: true });
+          const vis = []; p.group.traverse((o) => vis.push(o.visible));
+          p.update(1.3, 'idle'); const vis0 = []; p.group.traverse((o) => vis0.push(o.visible));
+          p.dispose();
+          return { same: a === b, reportDiffers: a !== c, reportMix: tiltR !== a, topA, topS, topT,
+                   tickShown: vis.filter(Boolean).length > vis0.filter(Boolean).length };
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                self.open(page, page_url)
+                r = page.evaluate(js)
+            finally:
+                browser.close()
+        self.assertTrue(r["same"])                     # o = {} changes nothing
+        self.assertTrue(r["reportDiffers"])
+        self.assertTrue(r["reportMix"])
+        self.assertLess(r["topS"], r["topA"] - 0.1)    # squashed: the antenna tip comes down
+        self.assertGreater(r["topT"], r["topA"] + 0.05)  # stretched: it goes up
+        self.assertTrue(r["tickShown"])
 
     def test_free_rotation_and_url(self):
         # drag in the one-pet view up to a view from straight above, then from
