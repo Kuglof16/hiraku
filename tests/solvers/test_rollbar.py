@@ -83,7 +83,16 @@ class RollbarDesignTest(unittest.TestCase):
         self.assertEqual(ROLLBAR_MEMBERS, {m for m in ids if m.startswith("rollbar")})
         self.assertEqual(RB["materials"]["stkm13a"]["yield_MPa"], 215.0)
         # the parts are where v1 has them: the roll bar does not move them or their fixing nodes
-        self.assertEqual([p for p in RB["parts"] if p["id"] != "rollbar"], V1["parts"])  # and its own part of 0 kg
+        # (and its own part of 0 kg). The rail is split at the roll bar's node, so the brackets there name the piece
+        # they are welded to (rail_L_HB, not rail_L_S2B) at the same points, and the deck's struts (kit/joints.py)
+        # go to the members nearest now (cross_S2 in place of the two rail pieces)
+        def placed(design):
+            return [dict(p, connects_to=[c.get("at_mm") for c in p.get("connects_to", [])])
+                    for p in design["parts"] if p["id"] != "rollbar" and not p["id"].startswith("fit_deck_")
+                    and p["id"] != "deck"]
+        self.assertEqual(placed(RB), placed(V1))
+        deck = lambda d: next(dict(p, connects_to=None) for p in d["parts"] if p["id"] == "deck")
+        self.assertEqual(deck(RB), deck(V1))
 
     def test_revised_variables_move_it(self):
         v2 = designgen.regenerate(RB, {"rollbar_offset": q(150, "mm"), "rollbar_height": q(1000, "mm"),
@@ -107,7 +116,10 @@ class RollbarDesignTest(unittest.TestCase):
         props = member_props(RB)
         added = sum(float(mp["material"]["density_kg_m3"]) * mp["section"]["A"] * mp["length"] * 1e-9
                     for mid, mp in props.items() if mid in ROLLBAR_MEMBERS)
-        self.assertAlmostEqual(mass_summary(RB)["mass_kg"] - mass_summary(V1)["mass_kg"], added, places=6)
+        # and the deck's struts, which go to other members once the roll bar splits the rails (kit/joints.py)
+        struts = lambda d: sum(p["mass_kg"] for p in d["parts"] if p["id"].startswith("fit_deck_"))
+        self.assertAlmostEqual(mass_summary(RB)["mass_kg"] - mass_summary(V1)["mass_kg"],
+                               added + struts(RB) - struts(V1), places=6)
         self.assertGreater(added, 5.0)
 
     def test_twist_hand_calculation_counts_only_cross_members(self):
