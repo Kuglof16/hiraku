@@ -1356,6 +1356,13 @@ class Modules(unittest.TestCase):
                     v2["data"]["module_changes"][0]["reason"] = "another reason"
                 self.assertTrue(self.hk6(ev), why)
 
+    def test_a_variable_no_module_lists_may_follow_with_a_warning(self):
+        ev = modular()
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["variables"]["wheel_inertia"] = {"value": 2.0, "unit": "kg*m^2"}  # worked out from wheel_radius
+        self.assertEqual(self.hk6(ev), set())
+        self.assertTrue(any("wheel_inertia, which no module lists" in m for m in self.hk6(ev, "warn")))
+
     def test_one_variable_is_changed_once_a_round(self):
         one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
                "reason": "r", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}

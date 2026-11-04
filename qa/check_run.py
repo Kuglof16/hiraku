@@ -66,7 +66,8 @@ their basis. What it looks at:
   made by the packager, its module_changes are the round's proposals (since the previous version)
   in order and unchanged, plus at most one package change from the packager with package variables
   only; no variable is changed twice in a round, and every variable that moved is in that package
-  change or a variable of a module proposed in the round (a proposal's code may set it, as fit: driver does);
+  change or a variable of a module proposed in the round (a proposal's code may set it, as fit: driver does;
+  a variable no module lists, worked out by the generator, is a warning);
   warning (module.envelope) for a part box or member end outside its module's envelope boxes; no
   proposal in a design without modules
 - agents: each agent.started has its agent.stopped before run.finished (warning:
@@ -574,6 +575,9 @@ class RunChecker:
             return p[1].get("design_version") if p else None
         if rkind in ("cause", "verdict"):
             c = self.recs["comparison"].get(rec.get("comparison_id"))
+            if c is None and rkind == "verdict" and rec.get("analysis_id"):  # an unsupported_load verdict
+                a = self.recs["analysis"].get(rec.get("analysis_id"))
+                return a[1].get("design_version") if a else None
             return self.version_of("comparison", c[1]) if c else None
         return None
 
@@ -1659,10 +1663,15 @@ class RunChecker:
                 allowed |= set((mods.get(p.get("module_id")) or {}).get("variables") or [])
             a, b = prev.get("variables") or {}, d.get("variables") or {}
             moved = sorted(x for x in set(a) | set(b) if a.get(x) != b.get(x))
-            bad = [x for x in moved if x not in allowed]
+            owned = {x for m in mods.values() for x in m.get("variables") or []}
+            bad = [x for x in moved if x not in allowed and x in owned]
             if bad:
                 self.error(rule, w, f"v{v} moved {', '.join(bad)}: neither in the packager's package change nor a "
                                     f"variable of a module proposed in the round")
+            derived = [x for x in moved if x not in allowed and x not in owned]
+            if derived:
+                self.warn(rule, w, f"v{v} moved {', '.join(derived)}, which no module lists (worked out by the "
+                                   f"generator from the changes?)")
             for p in rnd + pkg:
                 for var, q in (p.get("changes") or {}).items():
                     if b.get(var) != q:
