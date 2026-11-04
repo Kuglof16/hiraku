@@ -98,6 +98,40 @@ def _to_body(rot, x, y, z):
 
 
 @njit
+def _k_path(rows, s, lo, hi, hx, hy, hz, side, camber0, toe0, cc, ct):
+    """Sim._path_py over the K&C table's polynomial rows (wheel centre x, y, z, camber, toe)."""
+    sc = lo if s < lo else (hi if s > hi else s)
+    ext = s - sc
+    ncoef = rows.shape[1]
+    out = np.empty((5, 3))
+    for r in range(2):  # wheel centre x and y: value, first and second derivative
+        v, d1, d2 = rows[r, 0], 0.0, 0.0
+        for k in range(1, ncoef):
+            ck = rows[r, k]
+            d2 = d2 * sc + 2.0 * d1
+            d1 = d1 * sc + v
+            v = v * sc + ck
+        if ext != 0.0:
+            v = v + d1 * ext
+            d2 = 0.0
+        out[r, 0], out[r, 1], out[r, 2] = v, d1, d2
+    out[2, 0], out[2, 1], out[2, 2] = (sc + 1.0 * ext if ext != 0.0 else sc), 1.0, 0.0
+    for r in range(3, 5):  # camber and toe: value and first derivative
+        v, d1 = rows[r, 0], 0.0
+        for k in range(1, ncoef):
+            ck = rows[r, k]
+            d1 = d1 * sc + v
+            v = v * sc + ck
+        if ext != 0.0:
+            v = v + d1 * ext
+        out[r, 0], out[r, 1], out[r, 2] = v, d1, 0.0
+    sd_ = -1.0 if side < 0 else 1.0
+    return (hx + out[0, 0], hy + sd_ * out[1, 0], hz + out[2, 0], out[0, 1], sd_ * out[1, 1], out[2, 1],
+            out[0, 2], sd_ * out[1, 2], out[2, 2], -side * out[3, 1], -side * out[4, 1],
+            camber0 + out[3, 0] + cc, toe0 + out[4, 0] + ct)
+
+
+@njit
 def _solve_pairs(mm, rhs, pairs):
     """Sim._solve_sym_py: M x = b on the mirror pairs' sums and differences (mm and rhs are changed)."""
     for k in range(pairs.shape[0]):
@@ -159,6 +193,8 @@ class Sim:
             self.m_dof = self.m_dof + self.mu_[i]
         self.kc = [c.path is not None and bool(np.any(c.path.coef[[0, 1, 3, 4]])) for c in cs]
         self.coef = [c.path.coef.tolist() if c.path is not None else None for c in cs]
+        self._coef = [np.ascontiguousarray(c.path.coef, dtype=np.float64) if c.path is not None else None
+                      for c in cs]  # for the compiled _k_path
         self.camber0 = [c.path.camber0 if c.path is not None else 0.0 for c in cs]
         self.toe0 = [c.path.toe0 if c.path is not None else 0.0 for c in cs]
         self.s_lo = [c.path.s_lo if c.path is not None else -1.0 for c in cs]
@@ -233,6 +269,14 @@ class Sim:
             return hx, hy, hz, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.camber0[i], self.toe0[i]
         if not self.kc[i]:
             return hx, hy, hz + s, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        if JIT:
+            return _k_path(self._coef[i], float(s), self.s_lo[i], self.s_hi[i], hx, hy, hz, self.side[i],
+                           self.camber0[i], self.toe0[i], self.cc[i], self.ct[i])
+        return self._path_py(i, s)
+
+    def _path_py(self, i: int, s: float):
+        """_path on a K&C table in plain Python: the reference the compiled _k_path is tested against."""
+        hx, hy, hz = self.hard[i]
         lo, hi = self.s_lo[i], self.s_hi[i]
         sc = lo if s < lo else (hi if s > hi else s)
         ext = s - sc
