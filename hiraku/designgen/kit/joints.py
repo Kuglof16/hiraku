@@ -25,7 +25,8 @@ BEARING_MM = 40.0  # the steering shaft's bearing in the bulkhead (HIRAKU's choi
 BRIDGE_MAX_MM = 600.0  # a gap longer than this is not bridged by a bracket (left for the layout)
 STEEL_KG_M3 = 7850.0
 JOINT_GAP_MM = 2.0
-NOT_TOUCHING_VIA = ("wire", "hose")
+# joints that run between the two without touching: wires, hoses, and a belt's webbing (strap) to its seat
+NOT_TOUCHING_VIA = ("wire", "hose", "strap")
 
 
 def _cube(c, s: float) -> dict:
@@ -314,13 +315,17 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             # a door hangs on its hinges and its latch (designgen's side_opening: side_door_hinge_<side><n>, _latch_)
             side = p["id"].rsplit("_", 1)[-1]
             holders = [q for q in parts if q.startswith((f"side_door_hinge_{side}", f"side_door_latch_{side}"))]
+        strap = None
         if p["kind"] == "seat_belt" and holders is None:
             # a belt that touches its seat (a seat that does not slide) is held by it; one behind a sliding seat's
             # travel (ladder_4w._belt_behind_travel) is anchored to the frame, and the seat slides past it: a strut
-            # from it to the seat would cross the travel
+            # from it to the seat would cross the travel. Its webbing still reaches the seat (a strap, not touching)
             seat = f"seat_{p['id'].rsplit('_', 1)[-1]}"
             if seat in parts and (_gap(design, bs, p["id"], seat) or 0.0) <= JOINT_GAP_MM:
                 holders = seat
+            elif seat in parts:
+                strap = seat
+                links = [c for c in links if c["to"] != seat]
         holders = [h for h in ((holders,) if isinstance(holders, str) else holders or ()) if h in parts]
         if holders:
             links = [c for c in links if c["to"] not in nodes and c["to"] not in holders] + [
@@ -386,6 +391,8 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             hold = next((x for x in kept if x.get("via") not in NOT_TOUCHING_VIA + ("ball_joint",)), None)
             if hold is not None:  # the same joint also carries the load (it still passes the steer or the torque on)
                 kept.append(dict(hold, carries="load"))
+        if strap is not None:
+            kept.append({"to": strap, "via": "strap", "carries": "load"})
         p["connects_to"] = kept
     return {"retargeted": n_re, "brackets": n_br, "dropped": n_drop}
 
