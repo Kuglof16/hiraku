@@ -1,7 +1,7 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
 H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). R7 and R8 (load_path)
-are in load_path.py and joined to BUILDERS and PLANS here.
+are in load_path.py, H6 (spray_reach) in spray.py, joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
 predict). A prediction's inputs_from works out by code the values its from.<name>
@@ -910,9 +910,12 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
 
 from hiraku.catalog.builders.load_path import BUILDERS as _LOAD_PATH_BUILDERS  # noqa: E402  (R7, R8: load_path.py)
 from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa: E402
+from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E402  (H6: spray.py)
+from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 
 BUILDERS = {
     **_LOAD_PATH_BUILDERS,
+    **_SPRAY_BUILDERS,
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
@@ -925,5 +928,5 @@ BUILDERS = {
     "H5": h5_assembly,
 }
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN,
-         "H3": H3_PLAN, "H5": H5_PLAN, **_LOAD_PATH_PLANS}
+         "H3": H3_PLAN, "H5": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS}
 FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
