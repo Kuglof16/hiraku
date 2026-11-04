@@ -72,6 +72,29 @@ class RunStoreTest(unittest.TestCase):
         with self.assertRaises(StoreError):
             self.store.write_design(d3)
 
+    def test_load_cases_per_version(self):
+        d = example("design.json")
+        self.store.write_design(d)
+        first = self.store.project["load_cases"]
+        self.assertEqual(self.store.version_load_cases(1), first)
+        with self.assertRaises(StoreError):  # version 1's are project.load_cases
+            self.store.write_version_load_cases(1, first)
+        self.store.write_design(dict(d, design_version=2, parent_version=1))
+        self.store.write_design(dict(d, design_version=3, parent_version=2))
+        self.assertEqual(self.store.version_load_cases(3), first)  # nothing written yet: project.load_cases
+        changed = [dict(lc, params=dict(lc.get("params") or {}, note={"value": 1.0, "unit": "1"})) for lc in first[:1]] + first[1:]
+        self.store.write_version_load_cases(2, changed)
+        self.assertEqual(self.store.version_load_cases(2), changed)
+        self.assertEqual(self.store.version_load_cases(3), changed)  # the nearest earlier version's
+        self.assertEqual(self.store.project["load_cases"], first)
+        ev = self.store.events()[-1]
+        self.assertEqual((ev["kind"], ev["design_version"], ev["data"]["design_version"]), ("load_cases.created", 2, 2))
+        self.assertEqual(json.loads((layout.version_dir(self.store.path, 2) / layout.VERSION_LOAD_CASES_FILE)
+                                    .read_text(encoding="utf-8")), ev["data"])
+        self.assertEqual(contract.errors("event", ev), [])
+        with self.assertRaises(StoreError):  # a version that does not exist
+            self.store.write_version_load_cases(4, first)
+
     def test_record_file_equals_event_data(self):
         self.store.write_design(example("design.json"))
         pred = example("prediction.json")
