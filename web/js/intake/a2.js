@@ -136,5 +136,6 @@ export function renderA2(el, m, api, ui) {
               h("thead", {}, h("tr", {}, ["項目", "値", "どうやって決めたか", "確かさ"].map((t) => h("th", {}, t)))),
               h("tbody", {}, [...m.requirements].sort((a, b) => a.key.localeCompare(b.key)).map(requirementRow)))
           : h("p", { class: "in-empty" }, "決まったことが入るとここに並びます")),
-      h("p", { class: "in-foot" }, `仮の値が ${assumptions(m).length} 件あります。最後の報告に「確かめていないこと」として載ります。行に重ねると、根拠が出ます`)));
+      h("p", { class: "in-foot" }, `仮の値が ${assumptions(m).length} 件あります。最後の報告に「確かめていないこと」として載ります。行に重ねると、根拠が出ます`),
+      h("p", { class: "in-foot in-legend" }, "確かさ: ", [1, 2, 3].map((n) => h("span", {}, h("span", { class: `in-dot t${n}` }, n), ` ${TRUST_JA[n]}  `)))));
 }

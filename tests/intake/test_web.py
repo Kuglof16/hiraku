@@ -429,6 +429,16 @@ console.log(JSON.stringify({ seen, bad: text.includes('photo.png') && text.inclu
 """)
         self.assertEqual(got, {"seen": ["rules.md"], "bad": True, "next": True})
 
+    def test_values_are_shown_in_japanese_units_and_the_trust_marks_have_a_key(self):
+        got = self.a2("""
+import { showValue } from "%s";
+events = [asked, e(2, 5, 'hearing.answered', { answers: [{ key: 'Q19', name: '気温', value: 40, unit: 'degC', source: 'default', trust: 3, basis: 'x' }], rule_answers: [] })];
+intake.update();
+console.log(JSON.stringify({ deg: showValue(15, 'deg'), temp: showValue(40, 'degC'), sec: showValue(6, 's'), kg: showValue(150, 'kg'), none: showValue(1.5, '1'),
+  table: el.text().includes('40 ℃'), legend: el.text().includes('確かさ: ') && el.text().includes('仮の値 (確かめていない)') }));
+""" % url('model.js'))
+        self.assertEqual(got, {"deg": "15 度", "temp": "40 ℃", "sec": "6 秒", "kg": "150 kg", "none": "1.5", "table": True, "legend": True})
+
     def test_a_replay_that_cannot_take_files_says_so(self):
         got = self.a5("""
 const [el, root] = mount({});

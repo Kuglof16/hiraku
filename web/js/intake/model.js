@@ -253,7 +253,11 @@ export function ruleNeeds(rule, facts = {}) {
                    label: facts[n]?.label || (n.startsWith("req_") ? `要件 ${n.slice(4)} の数値` : "設計の変数の値") }));
 }
 
+/** Units as a person reads them (the requirement keeps deg, degC, s: those are for the code). */
+export const UNIT_JA = { deg: "度", degC: "℃", s: "秒", min: "分", h: "時間" };
+
 export function showValue(v, unit) {
-  if (typeof v === "number") return unit && unit !== "1" ? `${+v.toFixed(4)} ${unit}` : `${+v.toFixed(4)}`;
-  return unit && unit !== "1" ? `${v} ${unit}` : String(v);
+  const u = unit && unit !== "1" ? UNIT_JA[unit] || unit : "";
+  const body = typeof v === "number" ? +v.toFixed(4) : v;
+  return u ? `${body} ${u}` : String(body);
 }
