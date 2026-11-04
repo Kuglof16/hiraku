@@ -30,9 +30,10 @@ from hiraku.catalog.loading import LOADING_JA
 # for that v1 case, 45.0 against 49.5 mm with version 2's stands on the bulkhead (tests/solvers/
 # test_load_path_plate_k0). With the pedals on the post's beam (pedal_mount = post, 2026-11-04) the beam's twist
 # (F r_t^2 L / (G J)) and the post node (load_path.post_node) were added: version 2 at track 1220, K0 0.282 mm
-# (0.080 before: bending only) against the tool's 0.338 mm (+20 %). The rest is the frame under the post: in the
-# tool the post's foot drops 0.087 mm and tips 2.5e-4 rad, which K0 takes as rigid. The twist term moved the
-# demo's grip from 0.87 to 0.95 mm (the tool 1.05 mm, +10 %).
+# (0.080 before: bending only) against the tool's 0.338 mm (+20 %; 0.277 since the chain's parts are held on their
+# contacts in parallel, supports_turning). The rest is the frame under the post: in the tool the post's foot drops
+# 0.087 mm and tips 2.5e-4 rad, which K0 takes as rigid. The grip is not within this: see R7_PLAN's expected
+# mismatch (the tool's grip moves with the plated frame).
 R7_TOL = 0.3
 # R8: free_parts is a count; the graph search and rigid_body_check find the same parts (the contacts are the same).
 R8_TOL = 0.05
@@ -300,7 +301,8 @@ def chain_inputs(design: Record, part_id: str, point, F: float, directions=None)
 
     props = member_props(design)
     p = np.asarray(point, float)
-    chain = _chain(find_contacts(design), part_id)
+    contacts = find_contacts(design)
+    chain = _chain(contacts, part_id)
     notes = []
     d_plate = 0.0
     if chain is None:
@@ -347,11 +349,51 @@ def chain_inputs(design: Record, part_id: str, point, F: float, directions=None)
         r_t, d_root, root_note = _twist_and_root(design, props, mid, last.t, near, s, p, F, directions)
         notes += root_note
     ct = sum(1.0 / k for k, _, _ in joints)
-    cr = sum(float(np.dot(p - x, p - x)) / kr for _, kr, x in joints)
-    k_r = 1.0 / cr if cr > 0 else 1e12  # every contact on the load's line: its rotation does not move the point
+    if chain is None:
+        cr = sum(float(np.dot(p - x, p - x)) / kr for _, kr, x in joints)
+        k_r = 1.0 / cr if cr > 0 else 1e12  # every contact on the load's line: its rotation does not move the point
+    else:
+        # each part of the chain a rigid body on all its contacts away from the load (in parallel); its support's
+        # turning read at the load point, the parts in series (supports_turning); k_r is that over F
+        turn = supports_turning(contacts, chain, part_id, p, F, directions)
+        k_r = F / turn if turn > 0 else 1e12
+        notes.append("触れている所の回り: 鎖の部品ごとに、荷重の側を除いた触れている所ぜんぶ (並び) で止まる剛体とみた")
     return {"F": q(F, "N"), "k_t": q(1.0 / ct, "N/mm"), "k_r": q(k_r, "N/mm"), "L": q(L, "mm"), "E": q(E, "MPa"),
             "I": q(min(s["Iy"], s["Iz"]), "mm^4"), "delta_plate": q(d_plate, "mm"), "G": q(G, "MPa"),
             "J": q(float(s["J"]), "mm^4"), "r_t": q(r_t, "mm"), "delta_root": q(d_root, "mm")}, notes
+
+
+def supports_turning(contacts, chain, start: str, p, F: float, directions=None) -> float:
+    """The load point's movement from the chain's parts turning on their supports (mm, F at p): each part of the chain
+    (the start part, then each part the chain passes) is a rigid body held by all its contacts but those with the
+    parts nearer the load (the bodies beyond taken as rigid), each contact a translation spring k_t and a rotation
+    spring k_r at its point; the 6 x 6 stiffness of those springs at p, loaded by F along the load's direction,
+    gives the part's movement there; its translation part alone is left out (the chain's translation springs in
+    series give that, k_t). The parts add in series. The largest over `directions` (none: the worst axis)."""
+    p = np.asarray(p, float)
+    by: dict[str, list] = {}
+    for c in contacts:
+        by.setdefault(c.a, []).append((c.b, c))
+        by.setdefault(c.b, []).append((c.a, c))
+    parts = [f"part:{start}"] + [c.b for c in chain[:-1]]
+    dirs = [np.asarray(u, float) / np.linalg.norm(u) for u in directions] if directions else list(np.eye(3))
+    best = 0.0
+    for u in dirs:
+        total = 0.0
+        for i, body in enumerate(parts):
+            nearer = set(parts[:i])
+            held = [c for other, c in by.get(body, []) if other not in nearer]
+            K = np.zeros((6, 6))
+            for c in held:
+                r = np.asarray(c.point, float) - p
+                A = np.hstack([np.eye(3), -np.array([[0, -r[2], r[1]], [r[2], 0, -r[0]], [-r[1], r[0], 0]])])
+                K += c.k_t * A.T @ A
+                K[3:, 3:] += c.k_r * np.eye(3)
+            q_all = np.linalg.lstsq(K, np.concatenate([F * u, np.zeros(3)]), rcond=None)[0]
+            Kt = sum(c.k_t for c in held)  # the same springs moving the part without turning it
+            total += max(0.0, float(u @ q_all[:3]) - F / Kt)
+        best = max(best, total)
+    return best
 
 
 def _column_at(design: Record, props: dict, node: str, mid: str):
@@ -672,21 +714,25 @@ R7_PLAN = {
          "assumptions": _CHAIN + ["ペダルが 2 つ以上あれば、手計算でいちばん動くもの"], "inputs": _CONTROL,
          "inputs_from": pedal_inputs},
     ],
-    # Measured (2026-11-04) on the design department's version 2 without the option set (track 1220, the driver's
-    # place, fenders; runs/20261104-092433): K0 0.768 mm against the tool's 1.092 mm (+42 %). With the option set
-    # (part_mounts brackets, pedal_mount post, side_guard bars_net, rollbar_width 1265) K0 0.768 against 0.700 mm.
+    # Measured (2026-11-04) on the design department's runs: the tool's grip moves almost wholly with the frame where
+    # the column's bracket lands (rigidly with that point: N15 version 3 0.734 of 0.704 mm, version 5 0.450 of 0.422
+    # mm; the contacts and parts add -0.03 mm). K0 now holds each part of the chain on all its contacts in parallel
+    # (supports_turning): 0.198 mm on those versions (0.089 the contacts turning, 0.108 the landing member's twist).
+    # Before, one chain of contacts turning in series gave 0.659 mm, and version 3's 0.768 against 0.704 was that
+    # error cancelling the frame's. The frame with its plates has no hand calculation here; the members without the
+    # plates (K1 beam frame) move the grip 7.3-7.9 mm, over the 5 mm limit on every version, so no bound either.
     "expected_mismatch": {
         "quantity": "grip_deflection",
-        "source": ("the analysis department's split of the tool's grip movement on version 2 without the option set "
-                   "(K0 0.768 mm, load_path 1.092 mm) and a K1 beam frame without the plates, 2026-11-04"),
-        "cause": ("取付の組 (金具・柱のペダルの台・横の棒) の無い版で起きる食い違い。ツールでは、握る点の動きの大部分は、ダッシュと"
-                  "塔の枠の節と一緒の剛体の動き (ハンドルの柱の金具が着く dash_post_R の節 RDT と一緒なら 1.116 mm、塔の上の"
-                  "節 RAt2 なら 1.058 mm。ツール全体は 1.092 mm) で、留まった隔壁と床の板もその硬さに効いている。手計算は、"
-                  "着いた部材の先の枠を硬いとみていて、その大部分 (0.659 mm) は触れている所のばねの回る分。板の入った枠は手で"
-                  "解けない。板の無い梁の枠 (K1) では 7.87 mm で、上から押さえる値にも使えない (限界 5 mm を超え、ツールが通す"
-                  "設計を落とす)"),
-        "fix": ("手計算で予測し直す式は無い。原因を記録して、この荷重条件は判定なしで次へ進む。取付の組を入れた版では"
-                "手計算とツールが合う (0.768 対 0.700 mm)"),
+        "source": ("the analysis department's split of the tool's grip movement on the design department's runs "
+                   "(demo versions 2-4, N15 version 5) and a K1 beam frame of the members alone, 2026-11-04"),
+        "cause": ("ツールの握る点の動きは、ほぼ全部が、ハンドルの柱の金具が着く所の枠 (ダッシュと塔の部材と、留まった隔壁と床の板) "
+                  "の動き (着く所と一緒の剛体の動きで、組の無い版 2 は 1.116 対 1.092 mm、N15 の版 5 は 0.450 対 0.422 mm)。"
+                  "金具は 2 本の部材 (dash_post_R と dash_cross) に、柱は軸とラックの道でも止まっていて、触れている所の回りは"
+                  "ほぼ 0。手計算は触れている所を並びで止まる剛体とみて (0.089 mm) 着いた部材のねじれ (0.108 mm) を足すが、"
+                  "枠は硬いとみるので小さい (0.198 mm)。板の入った枠は手で解けない。板を入れない部材だけの枠 (K1) では "
+                  "7.3〜7.9 mm で、限界 5 mm を超え、上から押さえる値にも使えない。前の手計算 (触れている所が直列に回る、"
+                  "0.768 mm) が版 3 で合った (0.704 mm) のは、多すぎる回りと足りない枠の打ち消しによる偶然だった"),
+        "fix": "手計算で予測し直す式は無い。原因を記録して、この荷重条件は判定なしで次へ進む",
         "end": True,
     },
 }
