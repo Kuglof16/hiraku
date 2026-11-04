@@ -212,12 +212,20 @@ class DriveshaftsVariableTest(unittest.TestCase):
     def test_revised_back_is_v1(self):
         d = designgen.regenerate(NODS, {"driveshafts": {"value": 1, "unit": "1"}})
         keep = ("design_version", "parent_version", "name", "change_reason")
-        self.assertEqual({k: v for k, v in d.items() if k not in keep}, {k: v for k, v in V1.items() if k not in keep})
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, {k: v for k, v in d.items() if k not in keep},
+                           {k: v for k, v in V1.items() if k not in keep})
 
     def test_the_file_is_its_script(self):
+        from tests.solvers.same_design import assert_same_design
+
         built = ladder_4w.build({"driveshafts": q(0, "1")}, name=NODS["name"], reason=NODS["change_reason"])
         text = (ROOT / "data" / "designs" / "offroad-4w-nodriveshaft.json").read_text(encoding="utf-8")
-        self.assertEqual(json.dumps(built, ensure_ascii=False, indent=2) + "\n", text)
+        # written as the script writes it (indent 2, the characters as they are), and the same design up to the
+        # numbers' last bits, which differ between operating systems (tests.solvers.same_design)
+        self.assertEqual(json.dumps(json.loads(text), ensure_ascii=False, indent=2) + "\n", text)
+        assert_same_design(self, built, json.loads(text))
         contract.validate("design", NODS)
 
 
