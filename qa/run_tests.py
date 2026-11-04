@@ -64,8 +64,9 @@ HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verific
 CLASS_SKIP_RE = re.compile(r"^setUpClass \(([\w.]+)\)$")
 # out of memory: MemoryError and numpy's _ArrayMemoryError; WinError 1455 is "the paging file is too small";
 # OpenBLAS gives up with "Memory allocation still failed"; a worker that died with Windows' 0xC000012D
-# (commitment limit) or 0xC0000017 (no memory) leaves only its exit code
-MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]|Memory allocation still failed|\bexit (3221225773|3221225495)\b")
+# (commitment limit) or 0xC0000017 (no memory) leaves only its exit code; on Linux the OOM killer's SIGKILL is exit -9
+MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]|Memory allocation still failed"
+                       r"|\bexit (3221225773|3221225495|-9)\b")
 LOCK_DIR = Path(tempfile.gettempdir()) / "hiraku-run-tests"  # one file per qa.run_tests running on this PC
 
 

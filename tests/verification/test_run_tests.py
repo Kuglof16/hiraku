@@ -94,6 +94,8 @@ class RunTests(unittest.TestCase):
         self.assertTrue(rt._out_of_memory(self._failed("m.C", "ERROR", "OSError: [WinError 1455] (paging file)")))
         self.assertTrue(rt._out_of_memory({"name": "m.D", "s": 1.0, "crash": "exit 1: ... | MemoryError"}))
         self.assertTrue(rt._out_of_memory({"name": "m.D2", "s": 1.0, "crash": "exit 3221225773: "}))  # 0xC000012D
+        self.assertTrue(rt._out_of_memory({"name": "m.D5", "s": 1.0, "crash": "exit -9: "}))  # Linux's OOM killer
+        self.assertFalse(rt._out_of_memory({"name": "m.D6", "s": 1.0, "crash": "exit -90: "}))
         self.assertTrue(rt._out_of_memory({"name": "m.D3", "s": 1.0, "crash": "exit 1: OpenBLAS error: Memory "
                                                                             "allocation still failed after 10 retries"}))
         self.assertFalse(rt._out_of_memory({"name": "m.D4", "s": 1.0, "crash": "exit 1: 32212257730 lines"}))
