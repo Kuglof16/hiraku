@@ -73,10 +73,18 @@ def system_of(part: Record) -> str:
     return SYSTEM_OF_KIND.get(part["kind"], "other")
 
 
-def _c(to: str, via: str, carries: str | None = None) -> Record:
+def _c(to: str, via: str, carries: str | None = None, at=None, axis=None) -> Record:
+    """A connects_to record; at: where the two are joined (mm), axis: a pin's, bushing's or ball joint's
+    axis (normalised here)."""
     out = {"to": to, "via": via}
     if carries:
         out["carries"] = carries
+    if at is not None:
+        out["at_mm"] = [float(v) for v in at]
+    if axis is not None:
+        a = [float(v) for v in axis]
+        n = sum(v * v for v in a) ** 0.5
+        out["axis"] = [v / n for v in a]
     return out
 
 
@@ -140,17 +148,31 @@ def links(design: Record) -> dict[str, Record]:
         held = body_mounts(design, s)
         arm = arm_parts(sid, ids)  # kit/arms.py: the arms' legs, damper, ball joints (in place of the box)
         if len(arm) == len(ARM_ROLES):
-            # each pivot and the damper's top: a bushing at the bracket (or node) that holds it
-            owner = {"lca_front": arm["lca_f"], "lca_rear": arm["lca_r"], "uca_front": arm["uca_f"],
-                     "uca_rear": arm["uca_r"], "damper_upper": arm["damper"]}
+            import numpy as np
+
+            hp = {k: np.asarray(v, float) for k, v in s["suspension"]["hardpoints_mm"].items()}
+            lower_axis, upper_axis = hp["lca_front"] - hp["lca_rear"], hp["uca_front"] - hp["uca_rear"]
+            kingpin = hp["uca_outer"] - hp["lca_outer"]
+            # each pivot and the damper's top: a bushing at the bracket (or node) that holds it, its pin along
+            # the arm's pivot axis (the damper's eyes parallel to the lower arm's)
+            owner = {"lca_front": (arm["lca_f"], lower_axis), "lca_rear": (arm["lca_r"], lower_axis),
+                     "uca_front": (arm["uca_f"], upper_axis), "uca_rear": (arm["uca_r"], upper_axis),
+                     "damper_upper": (arm["damper"], lower_axis)}
             for mount in BODY_MOUNTS:
                 if mount in held:
-                    add(owner[mount], _c(held[mount], "bushing", "load"))
-            add(arm["lca_x"], _c(arm["lca_f"], "weld", "load"), _c(arm["lca_r"], "weld", "load"))
-            add(arm["damper"], _c(arm["lca_x"], "bushing", "load"))  # damper_lower on the lower arm's cross tube
-            add(arm["bj_lower"], _c(arm["lca_f"], "weld", "load"), _c(arm["lca_r"], "weld", "load"))
-            add(arm["bj_upper"], _c(arm["uca_f"], "weld", "load"), _c(arm["uca_r"], "weld", "load"))
-            add(knuckle, _c(arm["bj_lower"], "ball_joint", "load"), _c(arm["bj_upper"], "ball_joint", "load"))
+                    pid, ax = owner[mount]
+                    add(pid, _c(held[mount], "bushing", "load", at=hp[mount], axis=ax))
+            from hiraku.designgen.kit.arms import cross_ends
+
+            ends = cross_ends(hp)
+            add(arm["lca_x"], _c(arm["lca_f"], "weld", "load", at=ends[0]), _c(arm["lca_r"], "weld", "load", at=ends[1]))
+            add(arm["damper"], _c(arm["lca_x"], "bushing", "load", at=hp["damper_lower"], axis=lower_axis))
+            add(arm["bj_lower"], _c(arm["lca_f"], "weld", "load", at=hp["lca_outer"]),
+                _c(arm["lca_r"], "weld", "load", at=hp["lca_outer"]))
+            add(arm["bj_upper"], _c(arm["uca_f"], "weld", "load", at=hp["uca_outer"]),
+                _c(arm["uca_r"], "weld", "load", at=hp["uca_outer"]))
+            add(knuckle, _c(arm["bj_lower"], "ball_joint", "load", at=hp["lca_outer"], axis=kingpin),
+                _c(arm["bj_upper"], "ball_joint", "load", at=hp["uca_outer"], axis=kingpin))
             hub = knuckle
         else:
             if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
