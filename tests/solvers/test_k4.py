@@ -146,7 +146,7 @@ class AssemblyKitTest(unittest.TestCase):
         # the lower arm's front leg on its pin in the clevis bracket at the lower leg's end
         self.assertEqual([f["to"] for f in part_fastenings(DESIGN, "wheel_FL", bs)], ["part knuckle_FL", "part caliper_FL"])
         self.assertEqual([(f["to"], f["kind"]) for f in part_fastenings(DESIGN, "lca_FL_f", bs)],
-                         [("part bracket_lca_FL1", "pin")])
+                         [("part bracket_lca_FL1", "bushing")])
         self.assertEqual(part_fastenings(DESIGN, "cargo", bs), [])
         self.assertEqual(text_of(bat, {}), "LS1・RS1・LS2・RS2 の節点にボルトで留める")
         joints = {w["node"]: w["members"] for w in welds(DESIGN)}

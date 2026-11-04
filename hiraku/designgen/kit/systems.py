@@ -144,6 +144,7 @@ def links(design: Record) -> dict[str, Record]:
         for n in nodes:
             add(pid, _c(n, via, "load"))
     sups = design.get("supports", [])
+    joint_at: dict[str, dict] = {}  # support id -> the hub's and the tie rod end's points (corners of arms)
     for s in sups:  # the corners
         sid = s["id"]
         susp, knuckle, wheel = f"susp_{sid}", f"knuckle_{sid}", f"wheel_{sid}"
@@ -176,6 +177,14 @@ def links(design: Record) -> dict[str, Record]:
             add(knuckle, _c(arm["bj_lower"], "ball_joint", "load", at=hp["lca_outer"], axis=kingpin),
                 _c(arm["bj_upper"], "ball_joint", "load", at=hp["uca_outer"], axis=kingpin))
             hub = knuckle
+            # the hub's face (the knuckle's outer face on the wheel's axle line) and the tie rod's or toe link's
+            # outer ball joint (tie_outer): where those are fastened, so the hands are checked at the real points
+            kb = _part(parts, knuckle)["box"]
+            sy = 1.0 if float(s["position_mm"][1]) > 0 else -1.0
+            face = float(kb["center_mm"][1]) + sy * float(kb["size_mm"][1]) / 2.0
+            wc = hp.get("wheel_center", np.asarray(s["position_mm"], float))
+            joint_at[sid] = {"hub": [float(wc[0]), face, float(wc[2])], "tie": hp.get("tie_outer"),
+                             "axle": [0.0, sy, 0.0]}
         else:
             if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
                 for mount in BODY_MOUNTS:
@@ -186,11 +195,12 @@ def links(design: Record) -> dict[str, Record]:
             add(susp, _c(sid, "bushing", "load"))
             add(knuckle, _c(susp, "ball_joint", "load"))
             hub = knuckle if knuckle in ids else susp
-        add(wheel, _c(hub, "bolt", "load"), _c(sid, "rest", "load"))
+        ja = joint_at.get(sid, {})
+        add(wheel, _c(hub, "bolt", "load", at=ja.get("hub"), axis=ja.get("axle")), _c(sid, "rest", "load"))
         add(f"caliper_{sid}", _c(hub, "bolt", "load"))
         toe = f"toe_link_{sid}"
         if toe in ids:
-            add(toe, _c(knuckle, "ball_joint", "load"))
+            add(toe, _c(knuckle, "ball_joint", "load", at=ja.get("tie")))
             inner = held.get("tie_inner") if held else None
             if inner or s.get("frame_node"):
                 add(toe, _c(inner or s["frame_node"], "ball_joint", "load"))
@@ -221,9 +231,10 @@ def links(design: Record) -> dict[str, Record]:
             continue
         rod, knuckle, wheel = f"tie_rod_{s['id']}", f"knuckle_{s['id']}", f"wheel_{s['id']}"
         if rack and rod in ids:
+            ja = joint_at.get(s["id"], {})
             add(rack, _c(rod, "ball_joint", "steer"))
-            add(rod, _c(knuckle, "ball_joint", "steer"))
-            add(knuckle, _c(wheel, "bolt", "steer"))
+            add(rod, _c(knuckle, "ball_joint", "steer", at=ja.get("tie")))
+            add(knuckle, _c(wheel, "bolt", "steer", at=ja.get("hub"), axis=ja.get("axle")))
             add(wheel, _c(s["id"], "rest", "steer"))
     # brake
     pedal, master = first("brake_pedal"), first("brake_master_cylinder")

@@ -23,8 +23,9 @@ NOT_FASTENED = ("occupant", "cargo")
 # A corner built of its arms (designgen kit/arms.py): its parts are held as their connects_to say (the legs in
 # the frame's brackets, the ball joints on the legs, the knuckle on the ball joints, the wheel on the knuckle)
 ARM_KINDS = ("link", "ball_joint")
-# connects_to via -> fastening kind (the contract's bolt, weld, rest, pin): a bushing or ball joint turns on its pin
-FASTENING_VIAS = {"bolt": "bolt", "weld": "weld", "pin": "pin", "bushing": "pin", "ball_joint": "pin"}
+# connects_to via -> fastening kind (the contract's assembly fastenings: a bushing or ball joint is fixed with its
+# own through-bolt or castle nut, so it is a fastening of its own kind)
+FASTENING_VIAS = {"bolt": "bolt", "weld": "weld", "pin": "pin", "bushing": "bushing", "ball_joint": "ball_joint"}
 
 
 def _linked(design: Record, p: Record, bs: dict[str, Body], nodes: dict) -> list[Record]:
