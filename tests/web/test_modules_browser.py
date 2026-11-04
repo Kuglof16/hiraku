@@ -235,6 +235,22 @@ class ModulesBrowserTest(unittest.TestCase):
         for a in contract.MODULE_DESIGNERS:
             self.assertEqual(page.locator(f'#grid-head [data-pet-slot="{a}"]').count(), 1, a)
 
+    def test_assembly_tab_switches(self):
+        page = self.open(f"run={RUN_ID}&tab=A7&pace=0&pets=0&t=1e6")
+        page.wait_for_selector('#view-asm .modtoggles [data-toggle="modules"]', timeout=20000)
+        page.click('#view-asm .modtoggles [data-toggle="modules"]')
+        page.click('#view-asm .modtoggles [data-toggle="spaces"]')
+        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.modules.layer.shown().boxes > 0", timeout=20000)
+        shown = page.evaluate("window.hiraku.asm.modules.layer.shown()")
+        self.assertEqual(shown["boxes"], sum(len(m["envelope"]) for m in self.v3["modules"]))
+        self.assertIn(OUTSIDE, shown["covers"])
+        self.assertEqual(page.locator("#view-asm .modlegend .mout").get_attribute("data-outside"), "1")
+        # A7 of a design without modules: no switches
+        page = self.open(f"run={PLAIN}&tab=A7&pace=0&pets=0&t=1e6")
+        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.view.design", timeout=20000)
+        page.wait_for_timeout(200)
+        self.assertEqual(page.locator('#view-asm .modtoggles [data-toggle="modules"]').count(), 0)
+
     def test_no_switches_without_modules(self):
         page = self.open(f"run={PLAIN}&tab=bench&pace=0&pets=0&t=1e6&on=modules,spaces")
         self.assertEqual(page.locator('#toggles [data-toggle="modules"]').count(), 0)

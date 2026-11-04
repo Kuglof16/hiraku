@@ -261,6 +261,8 @@ const STYLE = `
 .roundcard .rc-list .mdot { grid-row: span 2; margin-top: 4px; }
 .roundcard .pr { color: var(--muted, #6b665c); font-size: 13px; }
 .roundcard .rc-foot { margin-top: 4px; color: var(--muted, #6b665c); font-size: 13px; }
+.asm-3d .modtoggles { top: 60px; }
+.asm-3d .modlegend { bottom: 80px; }
 .petbox .modmark { position: absolute; left: 0; bottom: 0; width: 13px; height: 13px; border-radius: 3px; background: var(--mod); border: 1.5px solid #fff; z-index: 1; }
 .pet.modpet { box-shadow: 0 0 0 3px var(--mod) inset; }
 `;
@@ -288,6 +290,40 @@ export function renderModuleLegend(host, design, on) {
   el.hidden = !html;
   if (el.innerHTML !== html) el.innerHTML = html;
   return el;
+}
+
+// A7 (assembly.js AssemblyPanel): the two switches over its 3D, its own layer and legend.
+// update() each frame: the switches only while the view's design has modules.
+export function mountAssemblySwitch(panel) {
+  moduleStyle();
+  const host = panel.q(".asm-3d");
+  const bar = document.createElement("div");
+  bar.className = "toggles modtoggles";
+  host.append(bar);
+  const on = { colors: false, spaces: false };
+  const layer = new ModuleLayer(panel.view);
+  bar.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-toggle]");
+    if (!b) return;
+    const k = b.dataset.toggle === "modules" ? "colors" : "spaces";
+    on[k] = !on[k];
+  });
+  let drawn = "";
+  return {
+    on,
+    layer,
+    update() {
+      const d = panel.view.design;
+      const show = hasModules(d);
+      const html = show
+        ? `<button data-toggle="modules" class="${on.colors ? "on" : ""}">モジュール</button><button data-toggle="spaces" class="${on.spaces ? "on" : ""}">モジュールの空間</button>`
+        : "";
+      if (html !== drawn) bar.innerHTML = drawn = html;
+      bar.hidden = !show;
+      layer.set(show ? on : { colors: false, spaces: false });
+      renderModuleLegend(host, d, show ? on : {});
+    },
+  };
 }
 
 // The round card (proposals.js roundCardHtml) in a host.

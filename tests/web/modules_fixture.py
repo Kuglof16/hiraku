@@ -222,6 +222,17 @@ def module_events() -> list[dict]:
         nxt["change_reason"] = f"{len(changes)} つのモジュールの提案をまとめた (形の見本)"
         events.append(ev("design.created", "packager", copy.deepcopy(nxt), nxt["design_version"], dt=1.5))
         v = nxt
+    # an assembly order of the last version, for A7 (three steps; shape example)
+    steps = [{"order": i + 1, "part": pid, "direction": "-z", "depends_on": [], "no_interference": True, "tool_clearance": True, "hand_reach": True}
+             for i, pid in enumerate(("battery", "seat_R", "seat_L"))]
+    ana = {"analysis_id": "ana-0801", "tool": "assembly", "base": "K4", "design_version": v["design_version"], "load_case_id": "H5-order",
+           "prediction_ids": ["pred-0801"], "status": "ok", "results": [{"quantity": "assembly_steps", "value": 3.0, "unit": "1"}], "assembly": steps}
+    pred = {"prediction_id": "pred-0801", "load_case_id": "H5-order", "design_version": v["design_version"], "quantity": "blocked_parts",
+            "test_id": "H5", "domain": "assembly", "agent": "lead", "created_at": run["ts"],
+            "formula_id": "assembly.blocked_count", "expression": "n = n_blocked", "value": 0.0, "unit": "1",
+            "inputs": {"n_blocked": {"value": 0.0, "unit": "1"}}, "assumptions": []}
+    events.append(ev("prediction.recorded", "lead", pred, v["design_version"], dt=0.3))
+    events.append(ev("analysis.finished", "lead", ana, v["design_version"], dt=0.5))
     events.append(ev("run.finished", "system", {"status": "stopped", "stop_code": "round_limit", "stop_reason": "形の見本の終わり"}, dt=2.0))
     for i, e in enumerate(events):
         e["seq"] = i
