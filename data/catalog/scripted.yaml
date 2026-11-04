@@ -54,8 +54,9 @@ offroad-4w:
   # (hiraku.designgen.driver_fit; `fit_evals` the designs it measures, `fit_time_s` a time guard) and added to them.
   # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
   # version 1 layout and the hand hold to get in by (stage 0) -> version 2 the opening, shut by the bolted net
-  # (stage 0, H7) -> version 3 load path and controls (stage 1, R8 and R7) -> version 4 the vehicle's motion
-  # (stage 2, P3; HK5 holds it until stage 1 is green) -> version 5 every tile green.
+  # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3; the joined design's load path and controls pass
+  # stage 1, R7's pedal ended not judged: K0 does not reach the ladder's twist) -> version 4.
+  # No revision adds the parts' brackets or the pedal post: no red of a version asks for them.
   revise:
     - &rev_layout
       say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、運転席の位置を直し、横の守りと握り棒を付けます
@@ -96,16 +97,6 @@ offroad-4w:
         the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json with the previous
         revision's choices and values (no fit): entry_blocked 3; with this choice 0, entry_handhold 3. The analysis department:
         clip_net and door both open (not counted by H7, not pushed on or stiffening in R8); the opening is 703 mm either way
-    - say: 荷重の通り道 (段 1) の赤を直すため、部品を枠に留める金具とペダルの柱を足します
-      choices: {part_mounts: brackets, pedal_mount: post}
-      reason: >-
-        R8: 部品が枠まで荷重の通り道を持たない (浮いている)。
-        R7: アクセルとブレーキのペダルに、踏む力の通り道が無い。部品を枠に留める金具と、ペダルを立てる柱を足す
-      source: >-
-        the demo scripted run 20261104-093402-offroad-4w-scripted, version 2: R8-free ver-0011, R8-stress ver-0012 and R8-push ver-0013 (unsupported_load 10, 10 and 4:
-        parts and the occupants' push with no path to the frame), R7-foot ver-0014 (unsupported_load 2: the pedals);
-        version 3 with this change and the side guard: R8 ver-0021..0023 and R7 ver-0024..0025 pass (R8-push 13.0 mm on the safe side).
-        The set: the analysis department (claude/dept-analysis-cf6cf8, load_path)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 15, unit: kW}
@@ -300,17 +291,6 @@ offroad-4w-video:
   revise:
     - *rev_layout
     - *rev_opening
-    - &rev_mounts_n15
-      say: 荷重の通り道 (段 1) の赤を直すため、部品を枠に留める金具とペダルの柱を足します
-      choices: {part_mounts: brackets, pedal_mount: post}
-      reason: >-
-        R8: 部品が枠まで荷重の通り道を持たない (浮いている)。
-        R7: アクセルとブレーキのペダルに、踏む力の通り道が無い。部品を枠に留める金具と、ペダルを立てる柱を足す
-      source: >-
-        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 2: R8-free ver-0018, R8-stress ver-0019 and R8-push ver-0020 (unsupported_load 10, 10 and 4:
-        parts and the occupants' push with no path to the frame), R7-foot ver-0021 (unsupported_load 2: the pedals);
-        version 3 with this change and the side guard: R8 ver-0034..0036 and R7-foot ver-0037 pass (R8-push 13.0 mm).
-        The set: the analysis department (claude/dept-analysis-cf6cf8, load_path)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 17, unit: kW}
@@ -355,7 +335,6 @@ offroad-4w-n15:
   revise:
     - *rev_layout
     - *rev_opening
-    - *rev_mounts_n15
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 17, unit: kW}
