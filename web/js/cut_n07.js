@@ -42,7 +42,7 @@ import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
 import { OK_WORD, esc, fmt, unitLabel } from "./labels.js";
-import { VIEWS, cutView, isoToThree } from "./workbench3d.js";
+import { OVERLAY, VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { PACE_LIMIT_DEG_S } from "./pace.js";
 
@@ -349,13 +349,15 @@ export class CutN07 {
   // light fill.
   diffMarks(v, design, diff) {
     const group = new THREE.Group();
-    const fill = new THREE.MeshBasicMaterial({ color: DIFF_COLOR, transparent: true, opacity: 0.18, depthWrite: false });
+    const fill = new THREE.MeshBasicMaterial({ color: DIFF_COLOR, transparent: true, opacity: 0.3, depthWrite: false, depthTest: false });
     const line = new THREE.LineBasicMaterial({ color: DIFF_COLOR, depthTest: false, transparent: true });
     const add = (geo, matrix) => {
       for (const obj of [new THREE.Mesh(geo, fill), new THREE.LineSegments(new THREE.EdgesGeometry(geo), line)]) {
         obj.matrixAutoUpdate = false;
         obj.matrix.copy(matrix);
         obj.renderOrder = 10;
+        // in the overlay's pass, after the contour's plates (workbench3d renderOverlay)
+        obj.layers.set(OVERLAY);
         group.add(obj);
       }
     };
