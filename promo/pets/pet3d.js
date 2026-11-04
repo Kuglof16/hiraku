@@ -33,6 +33,26 @@
 // opts.packagerStyle = "box"); the v7 burr is kept as "burr" and the rings
 // as "rings". The box body is light (shared block geometry, instanced edge
 // rods; about a twentieth of the triangles of the burr).
+// v9: two more states at the end of STATES. "waiting" (a long wait for an
+// answer: weight from foot to foot, looks up and around now and then, the
+// antenna droops; "..." with the dots lit in turn) and "blocked" (stopped by
+// a hook: a flinch back, then frozen with the antenna bent back and the free
+// hand held out; a red stop sign). blocked takes u = t - o.since, or
+// t mod 3 s without o.since. o.mark = false hides every mark above the head.
+// opts.lite (or setOptions({ lite })) builds a light pet for small sizes
+// (fewer segments, no thin outlines, no node dots, fewer shadow casters);
+// pet.cost() gives the draw calls and triangles. Without lite the picture
+// is the v8 one, pixel for pixel.
+// v10: six module designers at the end of ROLES (the rows with a `module`
+// key): frame, suspension, steering, occupant, powertrain and body. Each
+// one is the designer's CAD body (cad-model, no contour) with the face
+// colour tinted by MODULE_TINT of its role colour, and a prop of its own
+// (welding torch, coil spring, pedal, seat, spark plug, fender panel). The
+// role ids live in ROLES only (BODIES takes the module rows from
+// MODULE_BODIES by the module key). The six role colours are kept here
+// (the app takes them from ROLES); their CIEDE2000 distance to the ten
+// older colours and to each other is at least 21 (checked in the tests).
+// The ten older pets draw as in v9, pixel for pixel (with and without lite).
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -42,7 +62,8 @@
 // web/js/colormap.js; the CAE domain colours --d-*, --paper, --night,
 // --pass, --miss, --s4/--s5 (props) and --ink-* come from
 // promo/screens/common.css; lead / designer / packager colours come from
-// PET_COLORS in web/js/app.js.
+// PET_COLORS in web/js/app.js. The six module designer colours are not in
+// the app yet; they are defined in ROLES here.
 
 (function () {
   "use strict";
@@ -71,7 +92,18 @@
     { id: "cae.strength", name: "強度信頼性", color: "#55524b", prop: "ibeam", propName: "I 形の梁" },
     { id: "cae.nvh", name: "音振", color: "#8a5cc2", prop: "fork", propName: "音叉" },
     { id: "cae.thermal", name: "熱", color: "#e0682a", prop: "thermometer", propName: "温度計" },
+    // v10: the module designers (ids not settled yet; change them here only).
+    // The module key comes first: rows starting with `{ id:` are the ten app roles.
+    { module: "frame", id: "designer.frame", name: "枠の設計役", color: "#2b6e40", prop: "torch", propName: "溶接のトーチ" },
+    { module: "suspension", id: "designer.suspension", name: "足まわりの設計役", color: "#8db33a", prop: "coil", propName: "コイルばね" },
+    { module: "steering", id: "designer.steering", name: "操作系の設計役", color: "#e2759f", prop: "pedal", propName: "ペダル" },
+    { module: "occupant", id: "designer.occupant", name: "乗員まわりの設計役", color: "#917430", prop: "seat", propName: "座席" },
+    { module: "powertrain", id: "designer.powertrain", name: "動力の設計役", color: "#7d2240", prop: "plug", propName: "点火プラグ" },
+    { module: "body", id: "designer.body", name: "車体の設計役", color: "#57b8a0", prop: "fender", propName: "フェンダーの板" },
   ];
+  // v10: share of the role colour mixed into the designer's CAD face colour
+  // on the module designers (the designer itself keeps its own colour)
+  const MODULE_TINT = 0.34;
 
   // One body per role: what analysis picture it is and what the colour shows.
   // quantity null = no contour on that body (and no legend).
@@ -87,8 +119,35 @@
     "cae.nvh": { kind: "mode-shape", quantity: "変位 (相対)", analysis: "固有モードで揺れる網目と、変形前の形の薄い線" },
     "cae.thermal": { kind: "heat", quantity: "温度 (相対)", analysis: "下から温まる温度のコンターと等温線、立ちのぼる熱の線" },
   };
+  // v10: the module designers' bodies, by the module key of ROLES (so the
+  // role ids are written in ROLES only). All are the designer's CAD model
+  // with the face colour tinted toward the role colour.
+  const MODULE_BODIES = {
+    frame: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に枠の色を少し混ぜる。持ち場は枠 (フレーム) の設計" },
+    suspension: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に足まわりの色を少し混ぜる。持ち場は足まわり (サスペンション) の設計" },
+    steering: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に操作系の色を少し混ぜる。持ち場はペダル・ハンドルまわりの操作系の設計" },
+    occupant: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に乗員まわりの色を少し混ぜる。持ち場は座席・乗員の空間の設計" },
+    powertrain: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に動力の色を少し混ぜる。持ち場はエンジン・モーターの載せ方の設計" },
+    body: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に車体の色を少し混ぜる。持ち場は車体の外板の設計" },
+  };
+  for (const r of ROLES) if (r.module) BODIES[r.id] = MODULE_BODIES[r.module];
 
-  const STATES = ["idle", "report", "pass", "mismatch", "working", "run"];
+  const STATES = ["idle", "report", "pass", "mismatch", "working", "run", "waiting", "blocked"];
+  // waiting: a long calm wait. The weight goes from foot to foot every
+  // WAIT.sway seconds; in each WAIT.period cycle the pet looks up (from
+  // WAIT.up[0] to WAIT.up[1] s) and looks around, left then right (WAIT.look);
+  // the antenna droops and sways; "..." above the head, one more dot lit
+  // every WAIT.dot seconds (0, 1, 2, 3 dots).
+  const WAIT = { period: 8.0, sway: 5.2, up: [2.2, 4.4], look: [4.8, 7.6], dot: 0.45 };
+  // blocked: stopped by a hook. u = seconds since it was stopped (o.since, or
+  // t mod BLOCK.react). A flinch back (peak at BLOCK.jolt s), then the pet
+  // freezes with the antenna bent back and the free hand held out; a red stop
+  // sign pops up above the head.
+  const BLOCK = { react: 3.0, jolt: 0.1, back: 0.13, freeze: 0.3 };
+  // lite: hull outlines narrower than LITE.hull and shadow casters smaller
+  // than LITE.shadow (bounding radius, pet units) are left out; liteThree
+  // takes the segment counts down by LITE.seg (with the floors in liteThree)
+  const LITE = { hull: 0.02, shadow: 0.22, seg: 0.45 };
   // run: one stride (each leg forward and back once) in RUN.period seconds;
   // "across" crosses RUN.span pet units to the right in RUN.cross seconds
   const RUN = { period: 0.6, swing: 0.8, bob: 0.09, lean: 0.17, span: 7.2, cross: 3.0, yaw: 0.75 };
@@ -102,6 +161,14 @@
   const SHAPE = { sx: 1.0, sy: 0.93, sz: 0.9, egg: 0.07 };
   // Box the viewer frames: covers feet, prop and the marks above the head.
   const FRAME = { cx: 0.32, cy: 1.87, w: 3.6, h: 4.0 };
+  // Legs for walking and sitting (pose terms legs, drop, sit): hip_y is the
+  // height of the hips over the soles (the legs turn about the hips: the
+  // torso pivot at BODY_Y - 0.92 SHAPE.sy, plus 0.22); swing the largest
+  // walking swing (radians); waddle the side tilt of a step; sit_legs the
+  // legs' swing forward when sitting (the body then drops hip_y (1 - cos)
+  // and the bottom of the body comes down to about the soles); sit_lean
+  // the lean back when sitting.
+  const LEG = { hip_y: BODY_Y - SHAPE.sy * 0.92 + 0.22, swing: 0.75, waddle: 0.1, sit_legs: 1.13, sit_lean: 0.1 };
 
   // ---- contour colours: same values as web/js/colormap.js ------------------
   const BANDS = 10;
@@ -137,6 +204,7 @@
   const PROP_MASS = {
     clipboard: 0.3, pencil: 0.24, spanner: 0.34, wheel: 0.4, battery: 0.48,
     windsock: 0.3, target: 0.36, ibeam: 0.5, fork: 0.26, thermometer: 0.24,
+    torch: 0.3, coil: 0.32, pedal: 0.3, seat: 0.36, plug: 0.22, fender: 0.3,
   };
 
   // Load factor over time: the working state steps the load up in 10
@@ -1620,7 +1688,9 @@
     const first = RB.place(HALF, R0);
     const fe = feMesh(THREE, first.P, RB.elems, { smooth: true, normals: first.N });
     const group = new THREE.Group();
-    const mat = cadMaterial(THREE, ctx.U, { color: mixHex(C.inkFaint, C.s[0], 0.3), rough: 0.38, metal: 0.1 });
+    // v10: a module designer tints the face colour toward its role colour
+    const face = mixHex(C.inkFaint, C.s[0], 0.3);
+    const mat = cadMaterial(THREE, ctx.U, { color: ctx.role.module ? mixHex(face, hexNum(ctx.role.color), MODULE_TINT) : face, rough: 0.38, metal: 0.1 });
     const mesh = new THREE.Mesh(fe.geom, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -2703,6 +2773,48 @@
       if (hull) addHull(THREE, m, hull, hulls);
       return m;
     };
+    // v10: one mesh per material for the module props (one draw call, one
+    // outline). parts: [geometry, x, y, z, rx, ry, rz]; hull = outline
+    // width (0 = none); parent defaults to the prop group.
+    const LT = !!THREE.liteSegments;
+    const HL = 0.018;
+    const merged = (mat, parts, hull, parent) => {
+      const geoms = parts.map(([geo, x, y, z, rx, ry, rz]) => {
+        const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(1, 1, 1));
+        const n = geo.index ? geo.toNonIndexed() : geo;
+        n.applyMatrix4(m);
+        return n;
+      });
+      const out = new THREE.BufferGeometry();
+      for (const k of ["position", "normal"]) {
+        const arr = new Float32Array(geoms.reduce((s, q) => s + q.attributes[k].array.length, 0));
+        let at = 0;
+        for (const q of geoms) {
+          arr.set(q.attributes[k].array, at);
+          at += q.attributes[k].array.length;
+        }
+        out.setAttribute(k, new THREE.BufferAttribute(arr, 3));
+      }
+      const mesh = new THREE.Mesh(out, mat);
+      mesh.castShadow = true;
+      (parent || g).add(mesh);
+      if (hull) addHull(THREE, mesh, hull, hulls);
+      return mesh;
+    };
+    // a spark (one mesh): a small ball and three rays, in --s4 yellow
+    const sparkMesh = (x, y, z, r, len, off, a0) => {
+      const grp = new THREE.Group();
+      grp.position.set(x, y, z);
+      g.add(grp);
+      const parts = [[new THREE.IcosahedronGeometry(r, 0), 0, 0, 0]];
+      for (let i = 0; i < 3; i++) {
+        const a = a0 + (i * TAU) / 3;
+        parts.push([new THREE.BoxGeometry(len, 0.014, 0.014), Math.cos(a) * off, Math.sin(a) * off, 0, 0, 0, a]);
+      }
+      const m = merged(new THREE.MeshBasicMaterial({ color: C.s[3] }), parts, 0, grp);
+      m.castShadow = false;
+      return grp;
+    };
     const accent = std(THREE, role.color, 0.45);
     const H = 0.022; // prop outline width
 
@@ -2881,6 +2993,116 @@
         g.rotation.set(0, -0.2, -0.1);
         break;
       }
+      // ---- v10: the module designers' props ----
+      // Built with merged (one mesh per material) and few segments, so each
+      // prop costs no more than the designer's pencil (pet.cost()). In lite
+      // the segment counts go down further (LT) and the outlines of width
+      // HL (< LITE.hull) are left out by prunePet.
+      case "torch": {
+        // MIG welding gun: grip (role colour), bent neck and cable (ink),
+        // nozzle (metal) and the arc spark at its tip
+        merged(accent, [[new THREE.CylinderGeometry(0.07, 0.078, 0.32, LT ? 6 : 8), 0, 0.06, 0]], H);
+        const cable = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, -0.1, 0), new THREE.Vector3(0, -0.3, 0.02), new THREE.Vector3(-0.2, -0.36, 0.04));
+        merged(M.ink, [
+          [new THREE.CylinderGeometry(0.032, 0.032, 0.3, LT ? 5 : 6, 1, true), 0.1, 0.33, 0, 0, 0, -0.75],
+          [new THREE.TubeGeometry(cable, LT ? 5 : 6, 0.026, 3, false), 0, 0, 0],
+        ], HL);
+        merged(M.metal, [[new THREE.CylinderGeometry(0.042, 0.058, 0.13, LT ? 6 : 8), 0.235, 0.455, 0, 0, 0, -0.75]], H);
+        live.spark = sparkMesh(0.3, 0.515, 0, 0.065, 0.11, 0.08, 0.35);
+        g.scale.setScalar(1.3);
+        g.rotation.set(0, -0.25, 0.05);
+        break;
+      }
+      case "coil": {
+        // coil spring (role colour) between two metal spring seats; it is
+        // squeezed in time while working (live.coil)
+        const turns = 5, R = 0.12, Hc = 0.5;
+        const helix = new THREE.Curve();
+        helix.getPoint = (u, out = new THREE.Vector3()) => out.set(R * Math.cos(TAU * turns * u), Hc * u, R * Math.sin(TAU * turns * u));
+        const coil = new THREE.Group();
+        coil.position.set(0, -0.02, 0);
+        g.add(coil);
+        merged(accent, [[new THREE.TubeGeometry(helix, turns * 4, 0.032, 3, false), 0, 0, 0]], HL, coil);
+        const seat = () => new THREE.CylinderGeometry(0.165, 0.165, 0.035, 6);
+        merged(M.metal, [[seat(), 0, -0.03, 0], [seat(), 0, Hc + 0.03, 0]], HL, coil);
+        live.coil = coil;
+        g.scale.setScalar(1.12);
+        g.rotation.set(0.25, 0, -0.18);
+        break;
+      }
+      case "pedal": {
+        // a pedal: pivot (metal) at the bottom, the pedal arm (role colour)
+        // with a bend, and the pad (ink) with ribs (paper) at the top
+        merged(M.metal, [[new THREE.CylinderGeometry(0.045, 0.045, 0.12, LT ? 6 : 8), 0, -0.12, 0, Math.PI / 2, 0, 0]], H);
+        merged(accent, [
+          [new THREE.BoxGeometry(0.095, 0.3, 0.05), 0, 0.02, 0],
+          [new THREE.BoxGeometry(0.095, 0.22, 0.05), 0.04, 0.24, 0, 0, 0, -0.35],
+        ], H);
+        const pad = new THREE.Group();
+        pad.position.set(0.08, 0.41, 0.02);
+        pad.rotation.set(-0.15, 0, -0.1);
+        g.add(pad);
+        merged(M.ink, [[new THREE.BoxGeometry(0.34, 0.25, 0.05), 0, 0, 0]], H, pad);
+        merged(M.paper, [0, 1, 2].map((i) => [new THREE.BoxGeometry(0.27, 0.03, 0.016), 0, -0.07 + i * 0.07, 0.031]), 0, pad);
+        g.scale.setScalar(1.25);
+        g.rotation.set(0, -0.3, 0.12);
+        break;
+      }
+      case "seat": {
+        // a car seat: cushion, rounded backrest and headrest (role colour),
+        // a stripe (paper) on the backrest, head rest posts (metal), the rail (ink)
+        const back = -0.22;
+        merged(accent, [
+          [new THREE.BoxGeometry(0.38, 0.11, 0.38), 0, 0.0, 0.03],
+          [roundedBlock(THREE, 0.18, 0.23, 0.055, 0.045, 1), 0, 0.26, -0.15, back, 0, 0],
+          [new THREE.BoxGeometry(0.2, 0.12, 0.09), 0, 0.6, -0.27, back, 0, 0],
+        ], HL);
+        merged(M.paper, [[new THREE.BoxGeometry(0.05, 0.3, 0.012), 0, 0.27, -0.09, back, 0, 0]], 0);
+        merged(M.metal, [-1, 1].map((sx) => [new THREE.CylinderGeometry(0.012, 0.012, 0.1, LT ? 4 : 6, 1, true), sx * 0.05, 0.52, -0.25, back, 0, 0]), 0);
+        merged(M.ink, [[new THREE.BoxGeometry(0.34, 0.035, 0.05), 0, -0.09, 0.03]], 0);
+        g.scale.setScalar(1.12);
+        g.rotation.set(0.1, -0.75, 0);
+        break;
+      }
+      case "plug": {
+        // spark plug, upright: terminal and threaded shell (metal), white
+        // insulator, hex (role colour), ground electrode and a spark
+        merged(M.metal, [
+          [new THREE.CylinderGeometry(0.024, 0.024, 0.07, LT ? 4 : 6), 0, 0.6, 0],
+          [new THREE.CylinderGeometry(0.05, 0.05, 0.17, LT ? 6 : 8), 0, 0.145, 0],
+          [new THREE.BoxGeometry(0.02, 0.06, 0.02), 0.035, 0.035, 0],
+          [new THREE.BoxGeometry(0.05, 0.018, 0.02), 0.018, 0.01, 0],
+        ], HL);
+        merged(M.white, [[new THREE.CylinderGeometry(0.044, 0.056, 0.26, LT ? 5 : 8), 0, 0.44, 0]], H);
+        merged(accent, [[new THREE.CylinderGeometry(0.088, 0.088, 0.08, 6), 0, 0.27, 0]], H);
+        live.spark = sparkMesh(0, -0.01, 0.02, 0.035, 0.08, 0.06, -0.4);
+        g.position.y = -0.05;
+        g.scale.setScalar(1.4);
+        g.rotation.set(0, -0.2, -0.22);
+        break;
+      }
+      case "fender": {
+        // a fender panel: the outer face (role colour, painted) with the
+        // wheel arch cut out, and the top of a tyre with its hub in the arch
+        const s = 0.78, Ra = 0.24 * s, y0 = -0.02;
+        const P = new THREE.Shape();
+        P.moveTo(-0.52 * s, y0);
+        P.lineTo(-Ra, y0);
+        P.absarc(0, y0, Ra, Math.PI, 0, true);
+        P.lineTo(0.52 * s, y0);
+        P.lineTo(0.54 * s, y0 + 0.22 * s);
+        P.quadraticCurveTo(0.46 * s, y0 + 0.44 * s, 0, y0 + 0.46 * s);
+        P.quadraticCurveTo(-0.48 * s, y0 + 0.45 * s, -0.54 * s, y0 + 0.26 * s);
+        P.closePath();
+        const paint = std(THREE, role.color, 0.32, 0.25);
+        merged(paint, [[new THREE.ExtrudeGeometry(P, { depth: 0.04, bevelEnabled: false, curveSegments: LT ? 4 : 6 }), 0, 0.18, 0]], H);
+        const yc = 0.18 + y0 - 0.03;
+        merged(M.ink, [[new THREE.CylinderGeometry(Ra - 0.035, Ra - 0.035, 0.1, LT ? 8 : 10), 0, yc, -0.05, Math.PI / 2, 0, 0]], 0);
+        merged(M.metal, [[new THREE.CylinderGeometry(0.07, 0.07, 0.104, LT ? 5 : 6), 0, yc, -0.05, Math.PI / 2, 0, 0]], 0);
+        g.scale.setScalar(1.12);
+        g.rotation.set(0, -0.4, 0.06);
+        break;
+      }
     }
     return g;
   }
@@ -2921,6 +3143,184 @@
     return g;
   }
 
+  // "..." for waiting: three dots on a paper badge (lit in turn in update).
+  function buildWait(THREE, M, hulls) {
+    const g = new THREE.Group();
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 40), M.paper);
+    badge.rotation.x = Math.PI / 2;
+    g.add(badge);
+    addHull(THREE, badge, 0.03, hulls);
+    g.userData.dots = [-1, 0, 1].map((k) => {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.048, 14, 10), new THREE.MeshStandardMaterial({ color: C.ink, roughness: 0.5 }));
+      d.position.set(k * 0.13, -0.01, 0.05);
+      g.add(d);
+      return d;
+    });
+    return g;
+  }
+
+  // Stop sign for blocked: a red disc (C.miss) with a white bar across.
+  function buildStop(THREE, M, hulls) {
+    const g = new THREE.Group();
+    const red = new THREE.MeshStandardMaterial({ color: C.miss, roughness: 0.45 });
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 40), red);
+    badge.rotation.x = Math.PI / 2;
+    g.add(badge);
+    addHull(THREE, badge, 0.03, hulls);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.085, 0.03), M.paper);
+    bar.position.z = 0.035;
+    g.add(bar);
+    return g;
+  }
+
+  // Smooth bump: 0 outside (a, b), sin^2 inside, 1 in the middle.
+  function bump(x, a, b) {
+    if (x <= a || x >= b) return 0;
+    return Math.sin((Math.PI * (x - a)) / (b - a)) ** 2;
+  }
+  const smooth01 = (x) => {
+    x = clamp(x, 0, 1);
+    return x * x * (3 - 2 * x);
+  };
+
+  // waiting pose terms at t (t only)
+  function waitPose(t) {
+    const c = ((t % WAIT.period) + WAIT.period) % WAIT.period;
+    const up = bump(c, WAIT.up[0], WAIT.up[1]);
+    const look = Math.sin((TAU * (c - WAIT.look[0])) / (WAIT.look[1] - WAIT.look[0])) * bump(c, WAIT.look[0], WAIT.look[1]);
+    const sway = Math.sin((TAU * t) / WAIT.sway);
+    const dots = Math.floor((((t / WAIT.dot) % 4) + 4) % 4);
+    return {
+      tilt: 0.075 * sway,             // weight from foot to foot
+      shift: 0.035 * sway,            // the torso over the loaded foot
+      lean: -0.07 * up,               // leans back a little looking up
+      turn: 0.22 * look,              // looks around
+      lookX: 0.04 * look - 0.01 * sway,
+      lookY: 0.05 * up,
+      antZ: -0.3 + 0.09 * Math.sin((TAU * t) / 3.4),   // droops to the side, sways
+      antX: 0.14 + 0.04 * Math.sin((TAU * t) / 4.1),   // and forward
+      dots,
+    };
+  }
+
+  // u for blocked: seconds since o.since, else t mod BLOCK.react
+  function blockedU(t, o) {
+    if (o && o.since !== undefined && o.since !== null) return Math.max(0, t - o.since);
+    return ((t % BLOCK.react) + BLOCK.react) % BLOCK.react;
+  }
+
+  // blocked pose terms at u: flinch (a) up to 1 in BLOCK.jolt s, eases back
+  // to 0.6 by BLOCK.jolt + 0.5 s and holds; a short shake after the jolt
+  // (gone by 0.8 s); from then on the pose does not change.
+  function blockPose(u) {
+    const J = BLOCK.jolt;
+    const a = u < J ? Math.sin((Math.PI / 2) * (u / J)) : 0.6 + 0.4 * (1 - smooth01((u - J) / 0.5));
+    const shake = u > 0.08 && u < 0.8 ? Math.sin(TAU * 11 * (u - 0.08)) * Math.exp(-(u - 0.08) / 0.15) * (1 - smooth01((u - 0.5) / 0.3)) : 0;
+    const hold = smooth01((u - 0.05) / 0.35);
+    const pop = u < 0.3 ? 0.35 + 0.65 * Math.sin((Math.PI / 2) * (u / 0.3)) + 0.2 * Math.sin((Math.PI * u) / 0.3) : 1;
+    return {
+      back: BLOCK.back * a,           // pulled back (away from the camera)
+      lean: -0.16 * a,
+      squash: 0.04 * a,
+      shrink: 0.06 * a,               // the body draws in
+      tilt: 0.035 * shake,
+      live: 1 - smooth01(u / 0.3),    // the idle bob and breathing stop
+      armL: 1.3 * hold,               // the free hand held out in front
+      armR: 0.45 * hold,
+      antX: -0.6 * smooth01(u / J),   // antenna bent back
+      antZ: 0.07 * shake,
+      eye: 1 + 0.16 * a,              // eyes wide
+      mark: pop,
+      markRoll: 0.12 * shake,
+    };
+  }
+
+  // A copy of the THREE namespace whose round geometries have fewer
+  // segments (lite pets). Counts at or under the floor are kept as they are
+  // (hexagons, square bars, the 5-sided streamline tubes stay the same).
+  const liteCache = new WeakMap();
+  function liteThree(T) {
+    if (liteCache.has(T)) return liteCache.get(T);
+    const k = LITE.seg;
+    const cut = (n, floor) => (n > floor ? Math.max(floor, Math.round(n * k)) : n);
+    // (an ES module namespace cannot be written to, so the new classes are
+    // own properties of an object that inherits the rest)
+    const own = {
+      SphereGeometry: class extends T.SphereGeometry {
+        constructor(r, w = 32, h = 16, ...a) { super(r, cut(w, 8), cut(h, 6), ...a); }
+      },
+      CylinderGeometry: class extends T.CylinderGeometry {
+        constructor(rt, rb, h, rad = 32, ...a) { super(rt, rb, h, cut(rad, 8), ...a); }
+      },
+      ConeGeometry: class extends T.ConeGeometry {
+        constructor(r, h, rad = 32, ...a) { super(r, h, cut(rad, 8), ...a); }
+      },
+      CapsuleGeometry: class extends T.CapsuleGeometry {
+        constructor(r, len, cap = 4, rad = 8) { super(r, len, cut(cap, 2), cut(rad, 6)); }
+      },
+      TorusGeometry: class extends T.TorusGeometry {
+        constructor(r, tube, rad = 12, tub = 48, ...a) { super(r, tube, cut(rad, 4), cut(tub, 12), ...a); }
+      },
+      TubeGeometry: class extends T.TubeGeometry {
+        constructor(path, tub = 64, r = 1, rad = 8, closed = false) { super(path, cut(tub, 8), r, cut(rad, 4), closed); }
+      },
+      liteSegments: true,
+    };
+    const desc = {};
+    for (const k of Object.keys(own)) desc[k] = { value: own[k], enumerable: true };
+    const L = Object.create(T, desc);
+    liteCache.set(T, L);
+    return L;
+  }
+
+  // lite: merge mesh b into mesh a (same parent, same material, neither moves
+  // on its own), so the pair is one draw call. Positions and normals only.
+  function mergeInto(THREE, a, b) {
+    a.updateMatrix();
+    b.updateMatrix();
+    const m = a.matrix.clone().invert().multiply(b.matrix);
+    const parts = [a.geometry, b.geometry.clone().applyMatrix4(m)].map((g) => (g.index ? g.toNonIndexed() : g));
+    const out = new THREE.BufferGeometry();
+    for (const k of ["position", "normal"]) {
+      const arr = new Float32Array(parts.reduce((n, g) => n + g.attributes[k].array.length, 0));
+      let at = 0;
+      for (const g of parts) {
+        arr.set(g.attributes[k].array, at);
+        at += g.attributes[k].array.length;
+      }
+      out.setAttribute(k, new THREE.BufferAttribute(arr, 3));
+    }
+    a.geometry.dispose();
+    b.geometry.dispose();
+    a.geometry = out;
+    b.parent.remove(b);
+  }
+
+  // lite: leave out thin hulls, node dots and small shadow casters.
+  function prunePet(THREE, root, hulls, dots) {
+    for (let i = hulls.length - 1; i >= 0; i--) {
+      const h = hulls[i];
+      if ((h.userData.hullWidth ?? 0.022) < LITE.hull) {
+        h.parent.remove(h);
+        h.geometry.dispose();
+        hulls.splice(i, 1);
+      }
+    }
+    for (const d of dots) {
+      d.parent.remove(d);
+      d.geometry.dispose();
+    }
+    dots.length = 0;
+    root.updateMatrixWorld(true);
+    const s = new THREE.Vector3();
+    root.traverse((o) => {
+      if (!o.isMesh || !o.castShadow) return;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.getWorldScale(s);
+      if (o.geometry.boundingSphere.radius * Math.max(s.x, s.y, s.z) < LITE.shadow) o.castShadow = false;
+    });
+  }
+
   // Contact shadow: radial falloff drawn into a small data texture.
   function blobTexture(THREE) {
     const N = 64;
@@ -2944,8 +3344,46 @@
 
   // ---- create -------------------------------------------------------------
 
+  // create(THREE, opts): the pet in pet.group. opts.lite builds the light
+  // version for small pets (liteThree + prunePet); setOptions({ lite })
+  // rebuilds the pet inside the same group, keeping theme, edges, nodes and
+  // the pixel scale.
   function create(THREE, opts) {
+    opts = Object.assign({}, opts || {});
+    const root = new THREE.Group();
+    root.name = "pet:" + ((ROLES.find((r) => r.id === opts.role) || ROLES[0]).id);
+    const keep = { px: null };
+    let P = null;
+    const api = { group: root };
+    function make() {
+      P = build(THREE, opts, root);
+      Object.assign(api, { role: P.role, body: P.body, counts: P.counts, field: P.field, arrows: P.arrows, lite: !!opts.lite });
+      if (keep.px !== null) P.setPixelScale(keep.px);
+    }
+    make();
+    api.update = (t, state, camera, o) => P.update(t, state, camera, o);
+    api.contour = (t, state) => P.contour(t, state);
+    api.cost = () => P.cost();
+    api.setPixelScale = (px) => {
+      keep.px = px;
+      P.setPixelScale(px);
+    };
+    api.setOptions = (o) => {
+      for (const k of ["edges", "nodes", "theme"]) if (o[k] !== undefined) opts[k] = o[k];
+      if (o.lite !== undefined && !!o.lite !== !!opts.lite) {
+        opts.lite = !!o.lite;
+        P.dispose();
+        root.clear();
+        make();
+      } else P.setOptions(o);
+    };
+    api.dispose = () => P.dispose();
+    return api;
+  }
+
+  function build(THREE, opts, root) {
     opts = Object.assign({ role: "lead", mesh: "coarse", edges: true, nodes: true, theme: "paper" }, opts || {});
+    if (opts.lite) THREE = liteThree(THREE);
     const role = ROLES.find((r) => r.id === opts.role) || ROLES[0];
     const spec = BODIES[role.id];
     const seed = hashString(role.id);
@@ -2971,8 +3409,6 @@
     const hulls = [];
     const live = {};
 
-    const root = new THREE.Group();
-    root.name = "pet:" + role.id;
     // mover carries the whole pet with its shadow and marks across the
     // ground when it runs across (root itself is left to the caller)
     const mover = new THREE.Group();
@@ -3046,6 +3482,7 @@
       foot.position.set(sx * 0.37, 0.075, 0.1).sub(top);
       foot.castShadow = true;
       hip.add(foot);
+      if (opts.lite) mergeInto(THREE, leg, foot);
     }
 
     // eyes, sitting on the body surface (re-placed each frame on bodies that
@@ -3115,9 +3552,10 @@
       const arm = capsuleBetween(THREE, new THREE.Vector3(), hand.clone().sub(sh), 0.06, M.limb, 2, 6);
       arm.castShadow = true;
       pivot.add(arm);
-      const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, 1), M.limb);
+      const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, opts.lite ? 0 : 1), M.limb);
       h.position.copy(hand).sub(sh);
       pivot.add(h);
+      if (opts.lite) mergeInto(THREE, arm, h);
       shoulders[k] = pivot;
     }
     const prop = buildProp(THREE, role, M, hulls, live);
@@ -3137,6 +3575,13 @@
     check.scale.setScalar(0.9);
     question.scale.setScalar(0.9);
     marks.add(check, question);
+    // v9: "..." (waiting) and the stop sign (blocked)
+    const waitMark = buildWait(THREE, M, hulls);
+    const stopMark = buildStop(THREE, M, hulls);
+    waitMark.scale.setScalar(0.9);
+    stopMark.scale.setScalar(0.9);
+    waitMark.visible = stopMark.visible = false;
+    marks.add(waitMark, stopMark);
 
     // contact shadow
     const blob = new THREE.Mesh(
@@ -3166,6 +3611,7 @@
       blob.material.opacity = night ? 0.55 : 0.3;
       blob.material.color.setHex(night ? 0x000000 : C.ink);
     }
+    if (opts.lite) prunePet(THREE, root, hulls, ctx.dots);
     applyTheme(opts.theme);
 
     const qTmp = new THREE.Quaternion();
@@ -3187,12 +3633,33 @@
       };
     }
 
-    // o.across (or opts.run = "across" at create): run across instead of in place
+    // o.across (or opts.run = "across" at create): run across instead of in place.
+    // Extra pose terms a page may add on top of the state (all optional; with
+    // none given the pose is exactly the state's):
+    //   o.squash  + squashes the body down (and wider), - stretches it up
+    //   o.lean    forward lean of the torso (radians, as report's)
+    //   o.tilt    sideways tilt of the torso (radians, as mismatch's)
+    //   o.antenna bend of the antenna to the side (radians)
+    //   o.turn    turn of the body and legs about the vertical (radians)
+    //   o.arm     swing of the prop arm (radians, - raises the prop forward)
+    //   o.lookX, o.lookY  shift of the pupils (body units)
+    //   o.report  0..1: mixes in report's lean (to ease into report from idle)
+    //   o.check   true / false: show / hide the tick (default: state "pass")
+    //   o.shadow  scale of the contact shadow (default 1)
+    //   o.legs    walking: the right foot swung forward (radians), the left back
+    //   o.arms    walking: swing of the free arm (radians; the prop arm a little against it)
+    //   o.drop    walking: how far the hips come down (body units; anim.walkLegs)
+    //   o.sit     0..1: sits down (legs forward by LEG.sit_legs, body lowered onto the soles)
     function update(t, state, camera, o) {
       state = STATES.includes(state) ? state : "idle";
+      const ex = o || {};
       const across = o && o.across !== undefined ? !!o.across : opts.run === "across";
-      U.uT.value = t;
-      B.update(t, state);
+      // blocked: the body's own motion (contour, flow, mechanism) stops
+      // BLOCK.freeze s after the block; tb = t in every other state
+      const uB = state === "blocked" ? blockedU(t, o) : 0;
+      const tb = state === "blocked" ? t - Math.max(0, uB - BLOCK.freeze) : t;
+      U.uT.value = tb;
+      B.update(tb, state);
       if (B.deforms || B.anchor) placeFace();
 
       // idle base motion: bob, breathe, antenna sway, blink
@@ -3200,11 +3667,25 @@
       const breathe = Math.sin((TAU * t) / 2.6 + 0.6);
       let hopY = 0, lean = 0, tilt = 0, squash = 0;
       const run = state === "run" ? runPose(t, across) : null;
+      // v9 states (null in the others, which then take exactly the v8 path)
+      const W = state === "waiting" ? waitPose(t) : null;
+      const K = state === "blocked" ? blockPose(uB) : null;
       mover.position.x = run ? run.x : 0;
-      hop.rotation.y = run ? run.yaw : 0;
-      for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : 0;
-      shoulders.L.rotation.x = run ? 0.75 * run.swing : 0;
-      shoulders.R.rotation.x = run ? -0.3 * run.swing : 0;
+      hop.rotation.y = (run ? run.yaw : 0) + (ex.turn || 0);
+      if (W) hop.rotation.y += W.turn;
+      hop.position.z = K ? -K.back : 0;
+      torso.position.x = W ? W.shift : 0;
+      // walk and sit pose terms (zero when not given): legs swings the right
+      // foot forward by that angle and the left back; sit (0..1) swings both
+      // forward by LEG.sit_legs and lowers the body so the feet stay on the ground
+      const legSit = run ? 0 : (ex.sit || 0) * LEG.sit_legs;
+      for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : -h.sx * (ex.legs || 0) - legSit;
+      shoulders.L.rotation.x = (run ? 0.75 * run.swing : 0) + (ex.arms || 0);
+      shoulders.R.rotation.x = (run ? -0.3 * run.swing : 0) + (ex.arm || 0) - 0.4 * (ex.arms || 0);
+      if (K) {
+        shoulders.L.rotation.x -= K.armL;
+        shoulders.R.rotation.x -= K.armR;
+      }
       if (run) {
         hopY = run.hopY;
         lean = run.lean;
@@ -3216,41 +3697,90 @@
         lean = 0.2 + 0.025 * Math.sin((TAU * t) / 1.8);
       } else if (state === "mismatch") {
         tilt = 0.24 + 0.03 * Math.sin((TAU * t) / 2.2);
+      } else if (W) {
+        tilt = W.tilt;
+        lean = W.lean;
+      } else if (K) {
+        lean = K.lean;
+        tilt = K.tilt;
+        squash = K.squash;
       }
-      hop.position.y = hopY;
+      if (ex.report !== undefined && state !== "report") lean += ex.report * (0.2 + 0.025 * Math.sin((TAU * t) / 1.8));
+      lean += ex.lean || 0;
+      tilt += ex.tilt || 0;
+      squash += ex.squash || 0;
+      lean -= LEG.sit_lean * (ex.sit || 0);
+      hop.position.y = hopY - (ex.drop || 0) - LEG.hip_y * (1 - Math.cos(legSit));
       torso.position.y = PIVOT_Y + (state === "pass" || run ? 0 : bob);
       // bodies that lean by themselves (handling rolls in the corner)
-      torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(t, state) : 0));
+      torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(tb, state) : 0));
       const sy = 1 + 0.018 * breathe - squash;
       const sxz = 1 - 0.012 * breathe + squash * 0.6;
       torso.scale.set(sxz, sy, sxz);
+      if (K) {
+        // frozen: the bob and the breathing fade out; the body draws in
+        torso.position.y = PIVOT_Y + bob * K.live;
+        const br = breathe * K.live, f = 1 - K.shrink;
+        torso.scale.set((1 - 0.012 * br + squash * 0.6) * f, (1 + 0.018 * br - squash) * f, (1 - 0.012 * br + squash * 0.6) * f);
+      }
 
-      antenna.rotation.z = 0.07 * Math.sin((TAU * t) / 1.9 + 0.4) - tilt * 0.3 - (state === "pass" ? 0.12 * Math.sin(Math.PI * ((t / 0.9) % 1)) : 0);
+      antenna.rotation.z = 0.07 * Math.sin((TAU * t) / 1.9 + 0.4) - tilt * 0.3 - (state === "pass" ? 0.12 * Math.sin(Math.PI * ((t / 0.9) % 1)) : 0) + (ex.antenna || 0);
       antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) - lean * 0.4 - (run ? 0.5 * run.hopY : 0);
+      if (W) {
+        antenna.rotation.z += W.antZ;
+        antenna.rotation.x += W.antX;
+      } else if (K) {
+        // still and bent back (the idle sway stops with the body)
+        antenna.rotation.z = (antenna.rotation.z + tilt * 0.3) * K.live - tilt * 0.3 + K.antZ;
+        antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) * K.live - lean * 0.4 + K.antX;
+      }
 
       const bp = t % 4.3;
       const blink = bp < 0.16 ? 1 - 0.9 * Math.sin((Math.PI * bp) / 0.16) : 1;
-      const lookX = state === "working" ? 0.035 : state === "mismatch" ? 0.02 : 0;
-      const lookY = state === "working" ? -0.04 : state === "report" ? -0.005 : 0.005;
+      let lookX = (state === "working" ? 0.035 : state === "mismatch" ? 0.02 : 0) + (ex.lookX || 0);
+      let lookY = (state === "working" ? -0.04 : state === "report" ? -0.005 : 0.005) + (ex.lookY || 0);
+      if (W) {
+        lookX += W.lookX;
+        lookY += W.lookY;
+      } else if (K) lookY += 0.03;
       for (const e of eyes) {
-        e.lid.scale.y = blink;
+        e.lid.scale.y = K ? K.eye : blink;
+        e.lid.scale.x = K ? K.eye : 1;
         e.pupil.position.set(lookX - e.side * 0.008, lookY, 0);
       }
 
       tipMat.emissiveIntensity = state === "working" ? 0.25 + 0.25 * Math.sin(TAU * t * 1.2) : 0;
 
-      check.visible = state === "pass";
+      check.visible = ex.check !== undefined ? !!ex.check : state === "pass";
       question.visible = state === "mismatch";
+      waitMark.visible = !!W;
+      stopMark.visible = !!K;
+      if (ex.mark === false) check.visible = question.visible = waitMark.visible = stopMark.visible = false;
+      if (W) {
+        waitMark.userData.dots.forEach((d, i) => {
+          const on = i < W.dots;
+          d.material.color.setHex(on ? C.ink : C.inkFaint);
+          d.scale.setScalar(on ? 1.12 : 0.8);
+          d.position.y = on ? 0.0 : -0.01;
+        });
+      }
+      if (K) stopMark.scale.setScalar(0.9 * K.mark);
       marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * t) / 1.4) + hopY;
       marks.rotation.z = state === "mismatch" ? 0.12 * Math.sin((TAU * t) / 2.2) : 0;
+      if (K) {
+        // the sign holds still with the pet
+        marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * tb) / 1.4) + hopY;
+        marks.rotation.z = K.markRoll;
+      }
       if (camera) {
         root.updateWorldMatrix(true, true);
         marks.parent.getWorldQuaternion(qTmp).invert();
         marks.quaternion.copy(qTmp.multiply(camera.quaternion));
         if (state === "mismatch") marks.rotateZ(0.12 * Math.sin((TAU * t) / 2.2));
+        if (K) marks.rotateZ(K.markRoll);
       }
 
-      const s = 1.55 * (1 - hopY * 1.1);
+      const s = 1.55 * (1 - hopY * 1.1) * (ex.shadow ?? 1);
       blob.scale.set(s * 1.25, s, 1);
 
       // links between the moved torso and the feet frame (handling)
@@ -3260,11 +3790,11 @@
       }
 
       if (live.sock) {
-        live.sock.rotation.y = 0.18 * Math.sin((TAU * t) / 1.3);
-        live.sock.rotation.z = -0.06 + 0.05 * Math.sin((TAU * t) / 0.7);
+        live.sock.rotation.y = 0.18 * Math.sin((TAU * tb) / 1.3);
+        live.sock.rotation.z = -0.06 + 0.05 * Math.sin((TAU * tb) / 0.7);
       }
       if (live.arcs) {
-        const k = 1 + 0.08 * Math.sin(TAU * t * 1.5);
+        const k = 1 + 0.08 * Math.sin(TAU * tb * 1.5);
         live.arcs.scale.set(k, k, 1);
       }
       if (live.liquid) {
@@ -3272,6 +3802,12 @@
         live.liquid.scale.y = lvl;
         live.liquid.position.y = lvl / 2;
       }
+      // v10: the torch / plug spark flickers and the coil is squeezed while working
+      if (live.spark) {
+        const k = state === "working" ? 0.75 + 0.45 * Math.abs(Math.sin(TAU * tb * 2.3)) : 0.85;
+        live.spark.scale.setScalar(k);
+      }
+      if (live.coil) live.coil.scale.y = state === "working" ? 0.86 + 0.14 * Math.cos(TAU * tb / 1.1) : 1;
     }
 
     // pxPerUnit: framebuffer pixels per pet unit. Small pets get lighter
@@ -3312,9 +3848,35 @@
       return Object.assign({ quantity: spec.quantity }, B.contour(t, state));
     }
 
+    // What the renderer draws for the pet as it is now (after update): draw
+    // calls and triangles of the visible meshes (hulls included; instanced
+    // meshes count once per call, triangles times the instances), and of the
+    // shadow casters (the shadow map pass of a light that casts shadows).
+    function cost() {
+      const out = { calls: 0, triangles: 0, shadowCalls: 0, shadowTriangles: 0, hulls: 0, meshes: 0, lite: !!opts.lite };
+      mover.traverse((o) => { if (o.isMesh) out.meshes++; });
+      mover.traverseVisible((o) => {
+        if (!o.isMesh || !o.material) return;
+        const g = o.geometry;
+        const n = Math.min(g.index ? g.index.count : g.attributes.position.count, g.drawRange.count) / 3;
+        const tris = n * (o.isInstancedMesh ? o.count : 1);
+        out.calls++;
+        out.triangles += tris;
+        if (o.castShadow) {
+          out.shadowCalls++;
+          out.shadowTriangles += tris;
+        }
+        if (o.userData.hullWidth !== undefined) out.hulls++;
+      });
+      out.triangles = Math.round(out.triangles);
+      out.shadowTriangles = Math.round(out.shadowTriangles);
+      return out;
+    }
+
     applyScale();
     update(0, "idle");
     return {
+      cost,
       group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption, parts: B.parts || null, style: B.style || null },
       counts: B.counts, field: B.field || null,
       // strength: the tension arrows in body coordinates (frame = the body group)
@@ -3323,5 +3885,325 @@
     };
   }
 
-  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, loadFactor, create };
+  // ---- anim: curves for pages that move pets about -----------------------
+  // Pure functions of time (no clock, no random numbers), so a page that uses
+  // them stays a function of t. Lengths are whatever the page passes (px).
+  const c01 = (u) => clamp(u, 0, 1);
+  const easeIo = (u) => { u = c01(u); return u * u * (3 - 2 * u); };
+  const easeOut = (u) => 1 - (1 - c01(u)) ** 3;
+  // ease out past 1 and back: 0 at 0, 1 at 1, peaking at 1 + over (over >= 0).
+  // f(u) = 1 + (s + 1)(u - 1)^3 + s (u - 1)^2 peaks at 1 + 4 s^3 / (27 (s + 1)^2);
+  // s is found from over by bisection
+  const backS = new Map();
+  function easeBack(u, over) {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    if (!(over > 0)) return easeOut(u);
+    let s = backS.get(over);
+    if (s === undefined) {
+      let lo = 0, hi = 20;
+      for (let i = 0; i < 60; i++) {
+        const m = (lo + hi) / 2;
+        if ((4 * m ** 3) / (27 * (m + 1) ** 2) < over) lo = m; else hi = m;
+      }
+      s = (lo + hi) / 2;
+      backS.set(over, s);
+    }
+    const v = u - 1;
+    return 1 + (s + 1) * v ** 3 + s * v * v;
+  }
+  const hump = (u) => (u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u));
+  // Height at q in [0, 1] of a jump that ends rise up from where it started and
+  // tops out over above the higher end: y(q) = b q - (b - rise) q^2, a parabola
+  // in time (constant gravity), with top = max(rise, 0) + over,
+  // b = 2 top + 2 sqrt(top (top - rise)). Also its slope dy/dq.
+  function jumpY(q, rise, over) {
+    const top = Math.max(rise, 0) + over;
+    const b = 2 * top + 2 * Math.sqrt(top * (top - rise));
+    return { y: b * q - (b - rise) * q * q, v: b - 2 * (b - rise) * q, v0: b, v1: Math.abs(2 * rise - b) };
+  }
+  // shape of the curves inside hop (fractions of a contact, of the flight,
+  // and the settle's turns)
+  const HOP = { hit: 0.35, release: 0.2, settleTurns: 1.5, settleAmp: 0.4 };
+  // One jump the way an animator draws it, at tau seconds after it starts:
+  // crouch (anticipation) for crouch_s, squashing to crouch; flight for air_s on
+  // jumpY(rise_px, over_px), stretched along its speed (stretch at the fastest);
+  // the landing squashes to land_sq over land_s; then the small bounces
+  // [[up_px, dur_s], ...], each landing squashing less; then a settle that
+  // stretches and squashes once more and dies out over settle_s.
+  // Returns y (up, px, from the start), bounce (y above the end, after the
+  // landing), q (flight 0..1), air (off the ground), squash (+ squashed,
+  // - stretched), lean (lean_k x squash), antenna (antenna_k x the squash
+  // antenna_lag_s ago: the antenna follows through), land (the landing's
+  // tau) and end (tau at which everything is back at rest).
+  function hop(tau, J) {
+    const c = J.crouch_s || 0, a = J.air_s || 0, rise = J.rise_px || 0, over = J.over_px || 0;
+    const fall = Math.max(over, 1e-6);
+    const segs = [];
+    let at = 0;
+    const add = (kind, dur, o) => { segs.push(Object.assign({ kind, t0: at, dur }, o)); at += dur; };
+    if (c > 0) add("crouch", c);
+    let sEnd = 0;
+    if (a > 0) {
+      const j = jumpY(1, rise, over);
+      sEnd = -(J.stretch || 0) * j.v1 / Math.max(j.v0, j.v1);
+      add("air", a);
+    }
+    const land = at;
+    const bs = J.bounces || [];
+    let amp = J.land_sq || 0, ls = J.land_s || 0;
+    let s0 = a > 0 ? sEnd : (c > 0 ? (J.crouch || 0) : 0);
+    for (let i = 0; i <= bs.length; i++) {
+      const next = bs[i];
+      const k = next ? Math.sqrt(Math.min(1, next[0] / fall)) : 0;
+      const st = next ? (J.stretch || 0) * k : 0;
+      add("contact", ls, { s0, amp, s1: -st });
+      if (next) {
+        add("bounce", next[1], { up: next[0], st });
+        s0 = -st;
+        amp = (J.land_sq || 0) * k;
+        ls = (J.land_s || 0) * (0.5 + 0.5 * k);
+      }
+    }
+    add("settle", J.settle_s || 0, { amp });
+    const end = at;
+
+    function sample(x) {
+      const r = { y: 0, bounce: 0, q: 0, air: false, squash: 0 };
+      if (x <= 0) return r;
+      if (x >= end) { r.y = rise; r.q = 1; return r; }
+      for (const g of segs) {
+        if (x >= g.t0 + g.dur) {
+          if (g.kind === "air") r.q = 1;
+          continue;
+        }
+        const u = g.dur > 0 ? (x - g.t0) / g.dur : 1;
+        if (g.kind === "crouch") {
+          r.squash = (J.crouch || 0) * easeIo(u);
+        } else if (g.kind === "air") {
+          const j = jumpY(u, rise, over);
+          r.y = j.y;
+          r.q = u;
+          r.air = true;
+          const stretch = -(J.stretch || 0) * Math.abs(j.v) / Math.max(j.v0, j.v1);
+          const from = c > 0 ? (J.crouch || 0) : 0;
+          r.squash = from + (stretch - from) * easeIo(u / HOP.release);
+        } else {
+          r.y = rise;
+          if (a > 0) r.q = 1;
+          if (g.kind === "contact") {
+            r.squash = u < HOP.hit ? g.s0 + (g.amp - g.s0) * easeOut(u / HOP.hit)
+                                   : g.amp + (g.s1 - g.amp) * easeIo((u - HOP.hit) / (1 - HOP.hit));
+          } else if (g.kind === "bounce") {
+            r.bounce = 4 * g.up * u * (1 - u);
+            r.y = rise + r.bounce;
+            r.air = true;
+            r.squash = -g.st * Math.abs(1 - 2 * u);
+          } else {
+            r.squash = -g.amp * HOP.settleAmp * Math.sin(2 * Math.PI * HOP.settleTurns * u) * (1 - u) ** 2;
+          }
+        }
+        return r;
+      }
+      return r;
+    }
+    const r = sample(tau);
+    r.lean = (J.lean_k || 0) * r.squash;
+    r.antenna = (J.antenna_k || 0) * sample(tau - (J.antenna_lag_s || 0)).squash;
+    r.land = land;
+    r.end = end;
+    return r;
+  }
+  // The legs at d pet units into a walk of D units (L: hip height, swing: the
+  // wanted largest swing, radians), in n whole steps so the feet are together
+  // at the start and at the end. The foot on the ground goes from c in front
+  // of the hips to c behind them (c = D / (2 n)) while the body moves 2c over
+  // it, so it does not slide; then it lifts and the other foot, which swung
+  // the opposite way, takes the ground. Returns legs (the right foot's swing
+  // forward, radians; the page passes it to update), drop (how far the hips
+  // come down, L (1 - cos)), tilt (a waddle towards the foot on the ground,
+  // none on the first and last half step), n and the step's fraction f.
+  function walkLegs(d, D, L, swing) {
+    let n = Math.max(1, Math.round(D / (2 * L * Math.sin(swing))));
+    while (D / (2 * n) > L * Math.sin(LEG.swing)) n++;
+    const c = D / (2 * n);
+    d = clamp(d, 0, D);
+    const k = Math.floor((d + c) / (2 * c));
+    const m = Math.max(0, d + c - k * 2 * c);     // (one step's k and m, so they switch together)
+    const th = Math.asin(clamp((c - m) / L, -1, 1));
+    const side = k % 2 ? -1 : 1;
+    const env = Math.min(1, d / c, (D - d) / c);
+    return { legs: side * th, drop: L * (1 - Math.cos(th)), tilt: LEG.waddle * side * Math.sin((Math.PI * m) / (2 * c)) * env,
+             n, f: m / (2 * c), p: c - m, k };
+  }
+  // Distance (0..1) at u (0..1) of a move that speeds up over the first ramp
+  // of its time and slows down over the last ramp (the speed rises and falls
+  // linearly, so it neither starts nor stops with a jerk).
+  function travel(u, ramp) {
+    const r = clamp(ramp, 1e-3, 0.5);
+    u = c01(u);
+    const v = 1 / (1 - r);                     // the top speed
+    if (u < r) return (v * u * u) / (2 * r);
+    if (u > 1 - r) return 1 - (v * (1 - u) ** 2) / (2 * r);
+    return v * (u - r / 2);
+  }
+  // The shape of a move out and back (0..1): out with an overshoot by the
+  // fraction inn, held, and back from 1 - outt (stay: it stays out).
+  function outBack(u, inn, outt, over, stay) {
+    if (u <= 0) return 0;
+    if (u < inn) return easeBack(u / inn, over);
+    if (stay || u < 1 - outt) return 1;
+    return u >= 1 ? 0 : 1 - easeIo((u - (1 - outt)) / outt);
+  }
+  const rad = (d) => (d * Math.PI) / 180;
+  const BEAT_KINDS = ["walk", "hop", "hops", "turn", "sit", "act", "fade", "tick"];
+  // How long a beat lasts (s).
+  function beatDur(b) {
+    if (b.do === "hop") return hop(0, b).end;
+    if (b.do === "hops") return (b.n - 1) * b.every_s + hop(0, b).end;
+    return b.dur_s || 0;
+  }
+  // The time at which every beat of a route is over.
+  function routeEnd(beats) {
+    return beats.reduce((m, b) => Math.max(m, b.t + beatDur(b)), 0);
+  }
+  // Where a pet is at t and how it stands, from a start and a list of beats
+  // in time order (pages that move pets about; a function of t only).
+  // start: {at, h, yaw_deg, alpha, sit}. A place (at, to) is whatever the
+  // page's ctx.place(place, t) turns into the feet {x, y} in its px ([x, y],
+  // or a seat on a letter that moves). Each beat is {do, t (its start, s), ...}:
+  //   walk {to, dur_s, ramp, swing, carry_deg}: there on foot in whole steps
+  //        (walkLegs), the speed easing in and out (travel); the pet is
+  //        turned so that its heading on the screen points along the way
+  //        (ctx.yawTo(dx, dy, h) -> {yaw, px}: px = screen px per pet unit
+  //        along that heading for a box h high), so the steps match the
+  //        ground it covers. It turns into the walk over turn_s; carry_deg
+  //        holds the prop up in front while walking
+  //   hop  {to, h, yaw_deg, ...anim.hop values}: one jump there (x even in
+  //        time, y on its parabola, the box going to h high); hops: n equal
+  //        hops there, one every every_s
+  //   turn {yaw_deg, dur_s, over}, sit {to (0..1), dur_s, over, thump}
+  //   act  {kind, dur_s, amp_deg, ...}: look, nod, sway, fiddle, bow, peek
+  //        (leans out by roll_deg and dx_px and looks, back unless stay)
+  //   fade {to, dur_s}: the pet's opacity; tick {dur_s}: the tick over its head
+  // Returns {x, y (feet), h, yaw, roll, alpha, check, air, pose (update's
+  // terms)}.
+  function route(t, start, beats, ctx) {
+    const pose = { legs: 0, arms: 0, drop: 0, sit: start.sit || 0, squash: 0, lean: 0, antenna: 0, tilt: 0, turn: 0,
+                   arm: 0, lookX: 0, lookY: 0 };
+    const r = { h: start.h, yaw: rad(start.yaw_deg || 0), roll: 0, alpha: start.alpha ?? 1, check: false, air: false, pose };
+    let at = start.at, dx = 0;
+    let foot = ctx.place(at, t);
+    const addHop = (h) => { pose.squash += h.squash; pose.lean += h.lean; pose.antenna += h.antenna; };
+    for (const b of beats) {
+      const tau = t - b.t;
+      if (tau <= 0) break;
+      const dur = beatDur(b), u = dur > 0 ? tau / dur : 1;
+      if (b.do === "walk") {
+        const to = ctx.place(b.to, t);
+        const wx = to.x - foot.x, wy = to.y - foot.y, D = Math.hypot(wx, wy);
+        if (D < 1e-6) { at = b.to; continue; }
+        const head = ctx.yawTo(wx / D, wy / D, r.h);
+        if (u >= 1) { at = b.to; foot = to; r.yaw = head.yaw; continue; }
+        const s = travel(u, b.ramp ?? 0.3);
+        const ts = Math.min(b.turn_s ?? 0.25, 0.3 * dur);
+        r.yaw += (head.yaw - r.yaw) * easeIo(tau / ts);
+        const lg = walkLegs((s * D) / head.px, D / head.px, LEG.hip_y, b.swing ?? 0.55);
+        pose.legs += lg.legs;
+        pose.arms -= 0.9 * lg.legs;
+        pose.drop += lg.drop;
+        pose.tilt += lg.tilt;
+        if (b.carry_deg) pose.arm -= rad(b.carry_deg) * outBack(u, 0.15, 0.12, 0, false);
+        foot = { x: foot.x + wx * s, y: foot.y + wy * s };
+        // the foot on the ground (step k of the walk), where it stands on the screen
+        r.plant = { k: lg.k, x: foot.x + (wx / D) * lg.p * head.px, y: foot.y + (wy / D) * lg.p * head.px };
+        continue;
+      }
+      if (b.do === "hop" || b.do === "hops") {
+        const n = b.do === "hops" ? b.n : 1;
+        const from = foot, to = ctx.place(b.to, t);
+        const k = Math.min(n - 1, Math.floor(tau / (b.every_s || 1e9)));
+        const a = { x: from.x + ((to.x - from.x) * k) / n, y: from.y + ((to.y - from.y) * k) / n };
+        const z = { x: from.x + ((to.x - from.x) * (k + 1)) / n, y: from.y + ((to.y - from.y) * (k + 1)) / n };
+        const J = Object.assign({}, b, { rise_px: a.y - z.y });
+        const h = hop(tau - k * (b.every_s || 0), J);
+        addHop(h);
+        if (b.yaw_deg !== undefined) {
+          const y1 = rad(b.yaw_deg);
+          r.yaw += (y1 - r.yaw) * easeIo(tau / Math.max(1e-3, (b.crouch_s || 0) + 0.3 * (b.air_s || 0)));
+        }
+        if (b.h !== undefined) {
+          // the box takes its new size over the first 60 % of the way (a pet
+          // jumping away from the viewer is small by the time it is high up)
+          const q = (k + h.q) / n;
+          r.h += (b.h - r.h) * easeIo(q / 0.6);
+        }
+        r.air = h.air;
+        if (u >= 1) { at = b.to; foot = to; continue; }
+        foot = { x: a.x + (z.x - a.x) * h.q, y: a.y - h.y };
+        if (h.air && b.shadow_air !== undefined) pose.shadow = b.shadow_air;
+        if (b.look_up && !h.air && h.q === 0) pose.lookY += b.look_up * easeIo(tau / Math.max(1e-3, b.crouch_s || 0));
+        continue;
+      }
+      if (b.do === "turn") {
+        r.yaw += (rad(b.yaw_deg) - r.yaw) * easeBack(u, b.over ?? 0.08);
+        continue;
+      }
+      if (b.do === "sit") {
+        const s0 = pose.sit;
+        pose.sit = s0 + (b.to - s0) * easeBack(u, b.over ?? 0.1);
+        const v = (u - 0.55) / 0.45;
+        if (b.thump && v > 0 && v < 1) pose.squash += b.thump * Math.sin(Math.PI * v) * (1 - v);
+        continue;
+      }
+      if (b.do === "fade") {
+        const a0 = r.alpha;
+        r.alpha = a0 + (b.to - a0) * easeIo(u);
+        continue;
+      }
+      if (b.do === "tick") {
+        if (u < 1) r.check = true;
+        continue;
+      }
+      if (b.do === "act" && u < 1) {
+        const amp = rad(b.amp_deg || 0), hm = hump(u), eye = b.eye ?? 0.035;
+        if (b.kind === "look") {             // turns to one side, then the other
+          const s = Math.sin(2 * Math.PI * u) * hm;
+          pose.turn += amp * s;
+          pose.lookX += eye * s;
+        } else if (b.kind === "nod") {       // nods twice
+          pose.lean += amp * Math.sin(2 * Math.PI * u) ** 2;
+        } else if (b.kind === "sway") {      // rocks side to side twice
+          pose.tilt += amp * Math.sin(4 * Math.PI * u) * hm;
+        } else if (b.kind === "fiddle") {    // lifts its prop and turns it about, looking at it
+          pose.arm += -amp * hm + 0.3 * amp * Math.sin(6 * Math.PI * u) * hm;
+          pose.lookX += eye * hm;
+          pose.lookY -= eye * hm;
+        } else if (b.kind === "bow") {       // bends forward, holds, comes back up past upright
+          const s = outBack(u, 0.3, 0.35, 0, false);
+          const back = u > 0.65 ? -0.15 * hump((u - 0.65) / 0.35) : 0;
+          pose.lean += amp * (s + back);
+          pose.lookY += eye * s;
+        }
+      }
+      if (b.do === "act" && b.kind === "peek") {   // leans out from behind something
+        const s = outBack(Math.min(u, 1), 0.3, 0.3, b.over ?? 0.12, !!b.stay);
+        r.roll += rad(b.roll_deg || 0) * s;
+        dx += (b.dx_px || 0) * s;
+        if (u < 1) {
+          const lk = Math.sin(2 * Math.PI * u) * hump(u);
+          pose.turn += rad(b.amp_deg || 0) * lk;
+          pose.lookX += (b.eye ?? 0.035) * lk;
+        }
+      }
+    }
+    r.x = foot.x + dx;
+    r.y = foot.y;
+    r.at = at;
+    return r;
+  }
+  const anim = { smooth: easeIo, out: easeOut, back: easeBack, hump, jumpY, hop, HOP, walkLegs, travel, outBack, route,
+                 routeEnd, beatDur, BEAT_KINDS };
+
+  window.HirakuPets = { ROLES, BODIES, STATES, WAIT, BLOCK, LITE, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, LEG, loadFactor, create, anim };
 })();

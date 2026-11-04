@@ -1,0 +1,243 @@
+"""The agents as their 3D pets on the app's screen (js/agent_pets.js): the workbench's list and the grid.
+
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed.
+The pets are the promo department's promo/pets/pet3d.js, served at /pets/pet3d.js (the server's
+default file); a test that needs it is skipped when it is not in the checkout. The run is the A6
+fixture (tests.web.domains_fixture: lead, designer and the seven CAE agents) with the events below
+added, so that every agent and every motion of agent_pets.js PET_EVENTS shows. Shape example
+only: none of the values is a calculation result.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+from hiraku import contract
+from hiraku.webserve.server import PETS_FILE, make_server
+from tests.web.domains_fixture import domain_events
+from tests.web.test_browser import ENABLED, sync_playwright
+
+RUN = "20261104-120000-pets"
+CAE = ["cae.crash", "cae.nvh", "cae.strength", "cae.thermal", "cae.handling", "cae.powertrain", "cae.aero"]
+AGENTS = ["lead", "designer", "packager", *CAE]
+SAID = "前の当たり方を先に見積もってから、壁にぶつける解析を回します (形の見本)"
+
+
+def ten_agents() -> list[dict]:
+    """domain_events() with the packager, every agent started, and one event of each kind that moves a pet."""
+    events = domain_events()
+    base = events[0]
+    cmp = json.loads((contract.EXAMPLES_DIR / "comparison.json").read_text(encoding="utf-8"))
+    cmp.update({"comparison_id": "cmp-pets", "analysis_id": "ana-0002", "status": "mismatch", "diff_rel": 0.3, "diff_abs": 36.0})
+    asked = json.loads((contract.EXAMPLES_DIR / "hearing_asked.json").read_text(encoding="utf-8"))
+    answered = json.loads((contract.EXAMPLES_DIR / "hearing_answered.json").read_text(encoding="utf-8"))
+
+    def ev(t, kind, agent, data=None, text=None):
+        e = {"seq": 0, "ts": base["ts"], "t": t, "run_id": base["run_id"], "kind": kind, "agent": agent, "data": data or {}}
+        if text is not None:
+            e["text"] = text
+        return e
+
+    extra = [ev(0.1 + 0.01 * i, "agent.started", a, {"agent_id": a}) for i, a in enumerate(AGENTS)]
+    extra += [
+        ev(0.3, "hearing.asked", "lead", asked),
+        ev(1.0, "hearing.answered", "user", answered),
+        ev(2.7, "comparison.recorded", "cae.nvh", cmp),
+        ev(3.2, "agent.said", "cae.crash", text=SAID),
+        ev(5.2, "hook.denied", "cae.thermal", {"hook": "PreToolUse", "tool": "mcp__hiraku__analyze", "rule": "HK1_prediction_first"}, "予測が無いので解析は止めました (形の見本)"),
+        ev(15.6, "hook.blocked_stop", "lead", {"rule": "HK4", "count": 1, "limit": 3}, "判定がそろっていないので終われない (形の見本)"),
+    ]
+    out = sorted(events + extra, key=lambda e: e["t"])
+    for i, e in enumerate(out):
+        e["seq"] = i
+    return out
+
+
+# (t, {agent: motion}) at pace=0 (display t = recorded t); agents not named: as `rest`.
+EXPECT = [
+    (0.05, {}, "waiting"),  # nothing started yet
+    (0.25, {}, "working"),  # all started
+    (0.5, {"lead": "waiting"}, "working"),  # the lead asked (hearing.asked)
+    (1.1, {}, "working"),  # answered: the lead works again
+    (2.8, {"cae.nvh": "mismatch"}, "working"),  # its comparison did not match
+    (3.3, {"cae.crash": "report", "cae.nvh": "mismatch"}, "working"),  # said something
+    (4.6, {"cae.crash": "report", "cae.nvh": "mismatch", "cae.strength": "pass"}, "working"),  # judged green (none before)
+    (5.3, {"cae.crash": "report", "cae.nvh": "mismatch", "cae.strength": "pass", "cae.thermal": "blocked"}, "working"),  # stopped by hooks
+    (6.0, {"cae.crash": "report", "cae.strength": "pass", "cae.thermal": "blocked"}, "working"),  # nvh's 3 s are over
+    (12.1, {"cae.nvh": "pass"}, "working"),  # red -> green
+    (13.1, {"cae.nvh": "pass"}, "working"),  # strength green -> green: no reaction (nvh's 3 hops from 12.0 go on)
+    (14.8, {"cae.thermal": "pass"}, "working"),  # thermal red -> green at 14.0; nvh's pass is over
+    (15.7, {"lead": "blocked", "cae.thermal": "pass"}, "working"),  # the lead's stop was blocked (HK4)
+    (17.2, {"lead": "blocked"}, "working"),  # handling, powertrain, aero: green -> green, no reaction
+    (18.7, {}, "working"),  # the lead's 3 s are over
+    (1e6, {}, "idle"),  # the run is over (the replay's end)
+]
+
+READ = """async ({ t, tab }) => {
+  if (tab) document.querySelector(`.tab[data-tab="${tab}"]`).click();
+  await window.hiraku.seek(t ?? window.hiraku.player.playhead);
+  const shown = (e) => e.offsetParent !== null;
+  const pets = [...document.querySelectorAll(".petbox")].filter(shown).map((b) => {
+    const c = b.querySelector("canvas.pet3d");
+    let ink = 0;
+    if (c && c.width) { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) ink += d[i] > 0 ? 1 : 0; }
+    return { agent: b.dataset.agent, role: b.dataset.role, state: b.dataset.petState, draws: Number(b.dataset.petDraws), ink,
+             where: b.closest(".tile")?.dataset.domain ?? (b.closest("#grid-head") ? "head" : b.closest("#agents") ? "list" : null),
+             pixels: c ? c.toDataURL() : null };
+  });
+  const says = [...document.querySelectorAll("[data-say]")].filter(shown).map((e) => ({ agent: e.dataset.say, text: e.textContent, on: Number(e.style.opacity || 0) > 0 }));
+  return { loaded: document.documentElement.dataset.agentPets ?? null, agents: window.hiraku.state().agentOrder, pets, says,
+           circles: [...document.querySelectorAll("#agents li .pet, #tiles .tile .pet")].filter(shown).length,
+           names: [...document.querySelectorAll("#agents li")].map((li) => li.textContent) };
+}"""
+
+
+@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+class AgentPetsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.servers = []
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        for s in cls.servers:
+            s.shutdown()
+            s.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def serve(self, pets_file=PETS_FILE):
+        runs = self.tmp / f"runs-{len(self.servers)}"
+        (runs / RUN).mkdir(parents=True)
+        (runs / RUN / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in ten_agents()), encoding="utf-8")
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, pets_file=pets_file)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.servers.append(server)
+        return f"http://127.0.0.1:{server.server_address[1]}"
+
+    def open(self, base, query):
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/?run={RUN}&pace=0&{query}")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        page.evaluate("window.hiraku.ready")
+        return page, errors
+
+    def need_pets(self):
+        if not PETS_FILE.is_file():
+            self.skipTest("needs promo/pets/pet3d.js (the promo department's) in the checkout")
+
+    def test_one_pet_per_agent_of_the_record(self):
+        """The list has one pet per agent of the record (s.agentOrder), each as its role and drawn;
+        the grid has the same agents: each CAE agent in its domain's tile, the packager in
+        assembly's, the lead and the designer in the head."""
+        self.need_pets()
+        page, errors = self.open(self.serve(), "tab=bench&t=1e6")
+        got = page.evaluate(READ, {"t": None, "tab": None})
+        self.assertEqual(got["loaded"], "on")
+        self.assertEqual(sorted(got["agents"]), sorted(AGENTS))
+        self.assertEqual(sorted(p["agent"] for p in got["pets"]), sorted(AGENTS))
+        for p in got["pets"]:
+            self.assertEqual(p["role"], p["agent"])
+            self.assertEqual(p["where"], "list")
+            self.assertGreater(p["ink"], 0, p["agent"])
+        self.assertEqual(got["circles"], 0)
+        grid = page.evaluate(READ, {"t": None, "tab": "grid"})
+        where = {p["agent"]: p["where"] for p in grid["pets"]}
+        self.assertEqual(sorted(where), sorted(AGENTS))
+        self.assertEqual(where["lead"], "head")
+        self.assertEqual(where["designer"], "head")
+        self.assertEqual(where["packager"], "assembly")
+        for a in CAE:
+            self.assertEqual(where[a], a[4:])
+        self.assertTrue(all(p["ink"] > 0 for p in grid["pets"]))
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_each_motion_at_its_events_time(self):
+        """At each time of EXPECT every pet is in its motion (agent_pets.js PET_EVENTS), in the
+        list and in the grid alike."""
+        self.need_pets()
+        page, errors = self.open(self.serve(), "tab=bench&t=0")
+        for tab in ("bench", "grid"):
+            for t, named, rest in EXPECT:
+                got = page.evaluate(READ, {"t": t, "tab": tab})
+                states = {p["agent"]: p["state"] for p in got["pets"]}
+                want = {a: named.get(a, rest) for a in states}
+                self.assertEqual(states, want, (tab, t))
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_bubbles_say_the_agents_log_line_for_a_while(self):
+        """A bubble is the agent's newest log line, without its name in front, cut short; it shows
+        from its event for agent_pets.js SAY_S (5 s) and is gone after."""
+        self.need_pets()
+        page, errors = self.open(self.serve(), "tab=bench&t=0")
+        got = page.evaluate(READ, {"t": 2.8, "tab": None})
+        on = {s["agent"]: s["text"] for s in got["says"] if s["on"]}
+        self.assertTrue(on["cae.nvh"].startswith("照合: 差"), on)  # the comparison's log line
+        got = page.evaluate(READ, {"t": 3.3, "tab": None})
+        on = {s["agent"]: s["text"] for s in got["says"] if s["on"]}
+        self.assertTrue(on["cae.crash"].endswith("…"), on)
+        self.assertTrue(SAID.startswith(on["cae.crash"][:-1]), on)
+        self.assertLessEqual(len(on["cae.crash"]), 26)
+        self.assertEqual(on["cae.nvh"], "解析が終わった")  # its newer line (analysis.finished at 3.0) replaced it
+        log = page.evaluate("() => [...document.querySelectorAll('#log li')].map((li) => li.textContent)")
+        self.assertTrue(any(line.startswith("音振: 照合: 差") for line in log), log)
+        later = page.evaluate(READ, {"t": 3.2 + 5.05, "tab": None})
+        self.assertNotIn("cae.crash", {s["agent"] for s in later["says"] if s["on"]})
+        # the judgement's line is the bubble of its domain's agent (the event's agent is system)
+        grid = page.evaluate(READ, {"t": 12.2, "tab": "grid"})
+        nvh = {s["agent"]: s["text"] for s in grid["says"] if s["on"]}
+        self.assertTrue(nvh["cae.nvh"].startswith("版 2 の判定は緑"), nvh)
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_same_picture_at_the_same_t(self):
+        """?t= draws the pets the same as a seek to that t (state and pixels), and a still pet is
+        drawn once however often the frame is drawn."""
+        self.need_pets()
+        base = self.serve()
+        a, errors_a = self.open(base, "tab=bench&t=0")
+        a.evaluate(READ, {"t": 4.0, "tab": None})  # (Chrome moves a 2D canvas off the GPU at its first read)
+        sought = a.evaluate(READ, {"t": 4.6, "tab": None})
+        b, errors_b = self.open(base, "tab=bench&t=4.6")
+        b.evaluate(READ, {"t": None, "tab": None})
+        opened = b.evaluate(READ, {"t": None, "tab": None})
+        by = lambda got: {p["agent"]: (p["state"], p["pixels"]) for p in got["pets"]}  # noqa: E731
+        self.assertEqual(by(sought), by(opened))
+        self.assertEqual(by(sought)["cae.strength"][0], "pass")
+        still = b.evaluate(READ, {"t": 1e6, "tab": None})
+        again = b.evaluate(READ, {"t": 1e6, "tab": None})
+        self.assertEqual({p["agent"]: p["draws"] for p in still["pets"]}, {p["agent"]: p["draws"] for p in again["pets"]})
+        self.assertEqual(errors_a + errors_b, [])
+        a.close()
+        b.close()
+
+    def test_without_the_pets_file_circles_and_names(self):
+        """No pet3d.js (404): the list is the circles and names as before, the tiles keep their circles."""
+        page, errors = self.open(self.serve(self.tmp / "no-such-pet3d.js"), "tab=bench&t=1e6")
+        got = page.evaluate(READ, {"t": None, "tab": None})
+        self.assertEqual(got["loaded"], "none")
+        self.assertEqual(got["pets"], [])
+        self.assertEqual(got["circles"], len(AGENTS))
+        self.assertTrue(any(n.startswith("まとめ役") for n in got["names"]), got["names"])
+        grid = page.evaluate(READ, {"t": None, "tab": "grid"})
+        self.assertEqual(grid["pets"], [])
+        self.assertEqual(grid["circles"], 8)  # one per tile, as before
+        self.assertEqual(errors, [])
+        page.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

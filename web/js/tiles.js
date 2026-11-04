@@ -10,6 +10,9 @@ import { OVER_COLOR, colorOf } from "./colormap.js";
 import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fields.js";
 import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from "./series.js";
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
+import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
+import { heldBandHtml, heldCases } from "./held.js";
+import { builtLine } from "./proposals.js"; // modules:
 
 const W = 300;
 const H = 150;
@@ -192,6 +195,15 @@ function tileSvg(s, domain, design, info) {
   return { body, ct, view };
 }
 
+// The tile's pet: its domain's agent when the record has it (agent_pets.js), else none; without
+// pets the circle as before.
+function tilePet(s, d, pets) {
+  if (!pets) return `<span class="pet" style="--pet:#4cbf7a"></span>`;
+  const id = s.agentOrder.find((x) => gridPlaceOf(x) === d);
+  if (!id || !pets.has(id)) return "";
+  return `<span class="say tilesay" data-say="${esc(id)}"></span><span class="petslot tilepet" data-pet-slot="${esc(id)}"></span>`;
+}
+
 export class TileBoard {
   constructor(head, tiles) {
     this.head = head;
@@ -200,20 +212,31 @@ export class TileBoard {
     this.key = null;
   }
 
-  render(s) {
+  // pets (js/agent_pets.js, or null without them): { has(id), order (the agents in the list's
+  // order) }. With pets, each domain's agent stands in its tile's corner (when the record has
+  // that agent) and the other agents in the head; without, the tiles keep their circles.
+  render(s, pets = null) {
     const v = s.currentVersion;
     const reds = DOMAINS.filter((d) => judgementState(s, d).state === "red");
     const flow = s.versions
       .map((ver) => {
         const r = DOMAINS.filter((d) => s.judgements[`${ver}|${d}`]?.state === "red").length;
-        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "now" : ""}">版 ${ver} 赤 ${r}</span>`;
+        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}">版 ${ver} 赤 ${r}</span>`;
       })
       .join(`<span class="varrow">→</span>`);
     const design = v != null ? s.designs[v] : null;
-    const change = design && design.parent_version != null && design.change_reason ? `<span class="change">版 ${design.parent_version} → ${v} で変えたこと: ${esc(design.change_reason)}</span>` : "";
+    // modules: a version built from module designers' proposals names each module's change (proposals.js)
+    const built = design ? builtLine(s, v) : "";
+    const change = built
+      ? `<span class="change" data-built="${v}">${built}</span>`
+      : design && design.parent_version != null && design.change_reason ? `<span class="change">版 ${design.parent_version} → ${v} で変えたこと: ${esc(design.change_reason)}</span>` : "";
+    const headIds = pets ? pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)) : [];
+    const headN = headIds.length;
     this.head.innerHTML =
       `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
-      `<span class="flow">${flow}</span>${change}`;
+      `<span class="flow">${flow}</span>${change}` +
+      (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div" })).join("")}</div>` : "");
+    this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
 
     const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
     this.modeViews = [];
@@ -238,11 +261,14 @@ export class TileBoard {
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
       const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
       const safe = ns ? `<span class="tb safe" title="一致ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
+      // a load case without a criterion whose count is not 0: a 保留 band over the tile's colour (held.js)
+      const held = heldCases(s, d, v);
       return (
-        `<div class="tile ${j.state}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state">${STATE_WORD[j.state]}</span></div>` +
+        `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state">${STATE_WORD[j.state]}</span></div>` +
+        (held.length ? `<div class="heldband">${heldBandHtml(held)}</div>` : "") +
         `<div class="draw">${drawing}</div>${spark}` +
         `<div class="cap">${esc(caption)}</div>` +
-        `<div class="tf"><span class="sum">${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}<span class="pet" style="--pet:#4cbf7a"></span></div></div>`
+        `<div class="tf" data-say-host><span class="sum">${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}${tilePet(s, d, pets)}</div></div>`
       );
     }).join("");
     this.tiles.innerHTML = html;

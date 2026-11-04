@@ -1,6 +1,8 @@
-"""SDK hooks: the contract's HK1-HK5, agent start/stop events and next-step hints.
+"""SDK hooks: the contract's HK1-HK6, agent start/stop events and next-step hints.
 
-- PreToolUse: HK1-HK3 and HK5 (hiraku.tools.rules.check_call). A denial is recorded as a
+- PreToolUse: HK1-HK3, HK5 and HK6 (hiraku.tools.rules.check_call, with the caller's agent id: on a
+  design with modules, revise_design only with module and by designer.<module>, inside its module;
+  build_version only by the packager). A denial is recorded as a
   hook.denied event and its reason (what is missing, what to call next) goes to Claude.
   Allowed calls leave the caller's agent id for the tool handler (Attribution).
 - PostToolUse: after analyze and compare, additionalContext says what to do next.
@@ -139,7 +141,7 @@ class Hooks:
         args = input_data.get("tool_input") or {}
         agent = self.caller(input_data)
         try:
-            denial = rules.check_call(self.ctx, short, args)
+            denial = rules.check_call(self.ctx, short, args, agent)
         except Exception:
             denial = None  # the tool function checks again and reports the problem itself
         full = contract.mcp_name(short)  # one name on both drivers (the plugin's tools are mcp__plugin_...)
@@ -178,7 +180,13 @@ class Hooks:
             return (f"食い違いです (差 {c['diff_rel'] * 100:.1f} %、許す幅 {c['tolerance_rel'] * 100:.0f} %)。"
                     f"record_cause(comparison_id=\"{c['comparison_id']}\", cause=..., fix=...) を書くまで、"
                     f"この分野の analyze と compare は止まります")
-        if short == "revise_design" and v > 1 and s.design(v).get("parent_version") == v - 1:
+        if short == "revise_design" and rules.design_modules(self.ctx) is not None:
+            mine = [c for c in s.pending_proposals(v) if c["module_id"] == args.get("module")]
+            if not mine:
+                return None
+            return (f"提案 {mine[-1]['change_id']} を記録しました (版はまだ作っていません)。パッケージ役が build_version で、"
+                    f"その回の提案をまとめて版 {v + 1} を作ります")
+        if short in ("revise_design", "build_version") and v > 1 and s.design(v).get("parent_version") == v - 1:
             return (f"設計の版 {v} ができました。判定は版ごとなので、まとめ役は全部の荷重条件を版 {v} で"
                     f"やり直すよう各役に頼んでください")
         return None

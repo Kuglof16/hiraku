@@ -85,10 +85,17 @@ def required_case(tool, test_id):
     values = {"step_height": q(100, "mm"), "distance": q(2, "km"), "grade_low": q(5, "%"), "grade_high": q(15, "%"),
               "speed_low": q(10, "km/h"), "speed_high": q(25, "km/h"), "ambient_temperature": q(30, "degC"),
               "speed": q(20, "km/h"), "actuator": "back", "n_seat": q(10000, "1"), "n_raise": q(1000, "1"),
-              "uses_per_hour": q(6, "1")}
+              "uses_per_hour": q(6, "1"),
+              # spray_reach (H6): the tread arc of requirement items Q87 and Q88 (data/requirements/offroad-4w.yaml)
+              "arc_front": q(30, "deg"), "arc_rear": q(50, "deg")}
     params = {p.name: values[p.name] for p in tool.load_case_params if p.required}
     if tool.name == "fatigue":
         params.update(road_class="C", speed=q(10, "km/h"), sample_length=q(50, "m"))
+    if tool.name == "entry_opening":
+        # the opening's and the hand hold's sizes the H7 builder takes from requirement items Q93-Q96, Q49, Q89 (not
+        # in the demo's requirements yet): test values here, so that every quantity the tool predicts is measured
+        params.update(width_upper=q(450, "mm"), width_lower=q(300, "mm"), height_seat=q(900, "mm"),
+                      height_floor=q(400, "mm"), grip_min=q(16, "mm"), grip_max=q(38, "mm"), grip_reach=q(600, "mm"))
     if tool.name in BED_TOOLS:
         params.update(loading="driver")  # a care bed has one occupant; the default loading names two
     return load_case(f"{test_id}-x", test_id, tool.domain, **params)

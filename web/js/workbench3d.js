@@ -45,13 +45,17 @@ import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { mergePieces, partPieces, wheelPieces } from "./shapes.js";
+import { mergePieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
+import { JointMarks } from "./joints.js"; // joints: the joint marks (toggle 接合)
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
 const RULE = "#e2dccf";
 const RULE_MAJOR = "#c9c3b6";
 const LIMIT_RED = "#c8402a";
+// What a rule hit lights (setRuleFocus): a see-through fill and a thick outline, over everything.
+const LIT_FILL = "#ffc400";
+const LIT_LINE = "#ff6a00";
 // joint: the force the body takes at a suspension mounting point (at "<support>.<point>")
 const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a", joint: "#1f6f6b" };
 const UP = new THREE.Vector3(0, 1, 0);
@@ -281,6 +285,21 @@ function segmentDistance(p, ax, ay, bx, by) {
 const LEADER_GAP_PX = 18; // between the vehicle's outline on screen and a label laid outside it
 const LABEL_MARGIN = { top: 52, bottom: 124, side: 10 }; // the view's edges kept for its buttons and bars
 
+// A drawn solid of the picture (not a line, not an overlay twin, not a lit copy).
+function isSolid(x) {
+  return x.isMesh && !x.isLineSegments2 && x.layers.isEnabled(0) && !x.userData.lit;
+}
+
+// The matrix of obj in root's frame (its local matrices up to root).
+function relMatrix(obj, root) {
+  const m = new THREE.Matrix4();
+  for (let o = obj; o && o !== root; o = o.parent) {
+    if (o.matrixAutoUpdate) o.updateMatrix();
+    m.premultiply(o.matrix);
+  }
+  return m;
+}
+
 function disposeTree(obj) {
   obj.traverse((o) => {
     o.geometry?.dispose?.();
@@ -387,7 +406,8 @@ export class Workbench3D {
     this.overGhosts = new THREE.Group();
     this.names = new THREE.Group();
     this.shells = new THREE.Group(); // shell meshes (one per mesh_id, built when a contour needs it)
-    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names);
+    this.lit = new THREE.Group(); // a rule hit's lit parts, nodes and the design's box (setRuleFocus); shown with the parts off too
+    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names, this.lit);
 
     this.wheels = new THREE.Group();
     this.arrows = new THREE.Group();
@@ -399,7 +419,12 @@ export class Workbench3D {
     this.inkMat = new LineMaterial({ color: INK, linewidth: 1.7 });
     this.mutedMat = new LineMaterial({ color: MUTED, linewidth: 1.1 });
     this.freeEdgeMat = new LineMaterial({ color: FREE_EDGE_COLOR, linewidth: 4, depthTest: false, transparent: true });
-    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.userData.shared = true;
+    this.litLine = new LineMaterial({ color: LIT_LINE, linewidth: 3.5, depthTest: false, transparent: true });
+    this.litFill = new THREE.MeshBasicMaterial({ color: LIT_FILL, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false, toneMapped: false, fog: false, side: THREE.DoubleSide });
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat, this.litLine, this.litFill]) m.userData.shared = true;
+    this.litObjs = []; // what setRuleFocus added (overlay only), taken away by clearLit
+    this.litIds = [];
+    this.litShown = [];
     this.links = new LineSegments2(new LineSegmentsGeometry(), this.mutedMat);
     this.iso.add(this.links);
 
@@ -432,6 +457,7 @@ export class Workbench3D {
     this.fitted = false;
     this.keys = { contour: null, vectors: null };
     this.size = { w: 1, h: 1 };
+    this.joints = new JointMarks(this); // joints: marks in the body group, off until the toggle
   }
 
   resize(w, h, pixelRatio) {
@@ -445,13 +471,14 @@ export class Workbench3D {
       this.post?.setSize(w, h, this.renderer.getPixelRatio());
     }
     this.applyAspect();
-    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat]) m.resolution.set(w, h);
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat, this.litLine]) m.resolution.set(w, h);
     this.props.resize(w, h);
   }
 
   setDesign(design) {
     if (design === this.design) return;
     this.design = design;
+    this.clearLit(); // before the meshes it hangs on go
     for (const g of [this.model, this.shells, this.parts, this.names, this.overGhosts, this.markers, this.wheels]) disposeTree(g);
     this.shellObjs = {};
     this.model.visible = true;
@@ -466,7 +493,7 @@ export class Workbench3D {
     this.props.clear();
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
-    if (!design) return;
+    if (!design) return void this.joints.setDesign(null); // joints:
 
     const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
     this.nodes = nodes;
@@ -490,7 +517,12 @@ export class Workbench3D {
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
       if (this.labelRenderer) {
-        const tag = label(esc(m.id), "lbl-id");
+        // member.name (the contract's name for a person) when there is one: its short form (before a
+        // bracket) on the tag, the whole name and the id as the tooltip; else the id as before
+        const short = m.name ? String(m.name).replace(/\s*[（(].*$/, "") || m.name : m.id;
+        const tag = label(esc(short), "lbl-id");
+        tag.element.title = m.name ? `${m.name} (${m.id})` : m.id;
+        tag.element.dataset.member = m.id;
         tag.position.copy(g.mid);
         this.names.add(tag);
       }
@@ -547,7 +579,16 @@ export class Workbench3D {
 
     // Wheels listed as parts are drawn from the supports instead.
     const wheelAt = (c) => (design.supports ?? []).some((sp) => v3(sp.position_mm).distanceTo(c) < 50);
-    let seat = 0;
+    // A seat per person, not per occupant part: an occupant may be given in body segments
+    // ("<person>" the torso, "<person>.<segment>"), and a person's parts board together, in
+    // the order the persons first come in design.parts (hiraku/contract/loading.py).
+    const occupants = (design.parts ?? []).filter((p) => p.kind === "occupant");
+    const seatOf = new Map();
+    for (const p of occupants) if (!seatOf.has(personOf(p))) seatOf.set(personOf(p), seatOf.size);
+    // A person with a head part is drawn segment by segment; a person without one (an occupant
+    // given as one box, or a torso box that still holds the head) keeps the torso drawn as a
+    // capsule with a ball for the head, as before.
+    const headed = new Set(occupants.filter((p) => segmentOf(p) === "head").map(personOf));
     for (const p of design.parts ?? []) {
       const c = v3(p.box.center_mm);
       const sz = p.box.size_mm;
@@ -555,7 +596,20 @@ export class Workbench3D {
       if (p.kind === "wheel" && wheelAt(c)) continue;
       const g = new THREE.Group();
       let edges = null;
-      if (p.kind === "occupant") {
+      if (p.kind === "occupant" && (segmentOf(p) !== null || headed.has(personOf(p)))) {
+        // one rounded shape inside the segment's box, turned with it (rpy_deg as for any part)
+        const holder = new THREE.Group();
+        holder.position.copy(c);
+        const rpy = p.box.rpy_deg ?? [0, 0, 0];
+        holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
+        const mat = this.look.partMaterial("occupant");
+        for (const pc of occupantSegmentPieces(p)) {
+          const mesh = new THREE.Mesh(pc.geo, mat);
+          mesh.castShadow = this.look.real;
+          holder.add(mesh);
+        }
+        g.add(holder);
+      } else if (p.kind === "occupant") {
         const mat = this.look.partMaterial("occupant");
         const r = Math.min(sz[0], sz[1]) * 0.26;
         const head = Math.min(sz[0], sz[1]) * 0.2;
@@ -601,7 +655,7 @@ export class Workbench3D {
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
-      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
+      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seatOf.get(personOf(p)) : null, onBoard: true, center: c, size: sz, short };
     }
 
     this.bboxIso = box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1000, -1000, 0), new THREE.Vector3(1000, 1000, 1000)) : box;
@@ -614,11 +668,141 @@ export class Workbench3D {
       this.fit();
       this.fitted = true;
     }
+    this.lightAll(); // a rule hit pointed at before stays lit on the new version
+    this.joints.setDesign(design); // joints:
+  }
+
+  // Light what a rule hit names (the person points at it in A2): ids of parts, frame members,
+  // frame nodes, "support:<id>" (that wheel and its suspension's mounting points),
+  // "<support>.<point>" (one mounting point) and "design" (the whole design: a box round it).
+  // Only the look changes: a see-through fill and a thick outline drawn over everything in the
+  // overlay, on the objects' own geometry (no material, number or shape of the design is
+  // touched, so the running glow of animate() and the contour stay as they are). An id with
+  // nothing in the 3D is left out. [] puts everything back. Returns the ids that were lit.
+  setRuleFocus(ids) {
+    const list = [...new Set((Array.isArray(ids) ? ids : []).filter((x) => typeof x === "string" && x))];
+    if (list.join("\n") === this.litIds.join("\n")) return this.litShown;
+    this.litIds = list;
+    this.lightAll();
+    return this.litShown;
+  }
+
+  lightAll() {
+    this.clearLit();
+    this.litShown = this.design ? this.litIds.filter((id) => this.lightOne(id)) : [];
+  }
+
+  clearLit() {
+    for (const o of this.litObjs) {
+      o.parent?.remove(o);
+      if (o.userData.ownGeometry) o.geometry.dispose(); // a twin's geometry is its mesh's own
+    }
+    this.litObjs = [];
+    this.litShown = [];
+  }
+
+  lightOne(id) {
+    const d = this.design;
+    if (id === "design") return this.litBox(this.bboxIso);
+    if (id.startsWith("support:")) {
+      const sid = id.slice("support:".length);
+      const s = (d.supports ?? []).find((x) => x.id === sid);
+      if (!s) return false;
+      let hit = this.litWheel(sid);
+      for (const p of Object.values(s.suspension?.hardpoints_mm ?? {})) hit = this.litDot(p) || hit;
+      return hit;
+    }
+    let hit = false;
+    const part = this.partObjs[id];
+    if (part) {
+      // under the body (not the parts' group), so it shows with the parts switched off too
+      part.group.traverse((x) => {
+        if (isSolid(x)) hit = this.litTwin(x, this.lit, relMatrix(x, this.body)) || hit;
+      });
+    }
+    // a wheel listed as a part is drawn from its support
+    const asPart = (d.parts ?? []).find((p) => p.id === id);
+    if (!part && asPart?.kind === "wheel") {
+      const c = v3(asPart.box.center_mm);
+      const s = (d.supports ?? []).find((sp) => v3(sp.position_mm).distanceTo(c) < 50);
+      if (s) hit = this.litWheel(s.id) || hit;
+    }
+    // a frame member, or the members of a part (member.part)
+    for (const m of d.members ?? []) {
+      if ((m.id === id || m.part === id) && this.members[m.id]) hit = this.litTwin(this.members[m.id].mesh, this.members[m.id].mesh, null) || hit;
+    }
+    if (!hit && this.nodes?.[id]) hit = this.litDot(this.nodes[id].toArray());
+    if (!hit) {
+      // "<support>.<point>": a suspension mounting point
+      const dot = id.indexOf(".");
+      const s = dot > 0 ? (d.supports ?? []).find((x) => x.id === id.slice(0, dot)) : null;
+      const p = s?.suspension?.hardpoints_mm?.[id.slice(dot + 1)];
+      if (p) hit = this.litDot(p);
+    }
+    return hit;
+  }
+
+  // A lit copy of a mesh on its own geometry: the fill, and the outline of its edges.
+  litTwin(mesh, parent, matrix, ownGeometry = false) {
+    const fill = new THREE.Mesh(mesh.geometry, this.litFill);
+    fill.userData.ownGeometry = ownGeometry;
+    fill.matrixAutoUpdate = false;
+    if (matrix) fill.matrix.copy(matrix);
+    fill.renderOrder = 7;
+    const lines = [];
+    pushEdges(lines, mesh.geometry, matrix, 35);
+    const edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines.length ? lines : [0, 0, 0, 0, 0, 0]), this.litLine);
+    edges.userData.ownGeometry = true;
+    edges.renderOrder = 8;
+    for (const o of [fill, edges]) {
+      overlayOnly(o);
+      o.userData.lit = true;
+      parent.add(o);
+      this.litObjs.push(o);
+    }
+    return true;
+  }
+
+  litWheel(sid) {
+    const w = this.wheelObjs[sid];
+    if (!w) return false;
+    let hit = false;
+    for (const x of [...w.group.children]) if (x !== w.ring && isSolid(x)) hit = this.litTwin(x, w.group, null) || hit;
+    return hit;
+  }
+
+  // A point (ISO mm, on the body): a ball sized to the design.
+  litDot(p) {
+    if (!Array.isArray(p) || p.length !== 3 || !p.every(Number.isFinite)) return false;
+    const size = this.bboxIso ? this.bboxIso.getSize(new THREE.Vector3()).length() : 2000;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(Math.max(20, size * 0.012), 16, 10), this.litFill);
+    ball.position.copy(v3(p));
+    ball.updateMatrix();
+    return this.litTwin(ball, this.lit, ball.matrix, true); // the ball itself is not drawn: its lit copy owns the geometry
+  }
+
+  // A box round the whole design (the outline only).
+  litBox(box) {
+    if (!box || box.isEmpty()) return false;
+    const pad = box.getSize(new THREE.Vector3()).length() * 0.02;
+    const geo = new THREE.BoxGeometry(...box.getSize(new THREE.Vector3()).addScalar(2 * pad).toArray());
+    const lines = [];
+    pushEdges(lines, geo, new THREE.Matrix4().makeTranslation(box.getCenter(new THREE.Vector3())), 35);
+    geo.dispose();
+    const edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.litLine);
+    edges.userData.ownGeometry = true;
+    edges.userData.lit = true;
+    edges.renderOrder = 8;
+    overlayOnly(edges);
+    this.lit.add(edges);
+    this.litObjs.push(edges);
+    return true;
   }
 
   // Who is on board for a load case's params.loading (empty / driver / two /
   // two_cargo; none means two_cargo). Occupants board in the order they are
-  // listed and cargo rides only with two_cargo, as the solvers do. Parts that
+  // listed (a person's segments with the person, o.seat) and cargo rides only
+  // with two_cargo, as the solvers do. Parts that
   // stay off are drawn faint and left out of the centre of gravity.
   setLoading(loading) {
     if (loading === this.loading) return;
@@ -663,6 +847,7 @@ export class Workbench3D {
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
+    this.joints?.partLook(); // joints: the parts see-through while the joints are on
   }
 
   // Centre of gravity used only to place the mark when the analysis gives none:
@@ -1581,6 +1766,8 @@ export class Workbench3D {
     this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
     this.cg.visible = !!t.cg && !!this.cgPos && !this.closeUp;
     this.placeMotionArrows(this.frame);
+    if ("joints" in t) this.joints.setOn(t.joints); // joints: (a view given no joints key keeps its own)
+    else this.joints.sync();
   }
 
   // Time-driven effects use the playhead only, so a frozen ?t= frame is repeatable.
@@ -1707,7 +1894,7 @@ export class Workbench3D {
   // scale: device pixels per stage pixel, so ink lines keep their stage width.
   renderInto(ctx, w, h, scale = 1) {
     if (this.size.w !== w || this.size.h !== h) this.resize(w, h);
-    for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w / scale, h / scale);
+    for (const m of [this.inkMat, this.mutedMat, this.litLine]) m.resolution.set(w / scale, h / scale);
     this.props.resize(w / scale, h / scale);
     const r = this.renderer;
     const H = r.domElement.height;

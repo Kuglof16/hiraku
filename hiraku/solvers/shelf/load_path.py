@@ -34,7 +34,9 @@ Load case params.load_kind picks the loads:
   section corners).
 - push: push_force outward (away from the vehicle's middle) at each on-board occupant's hip and shoulder
   (point R), on the first thing outboard of that point (a member or a part); occupant_push_deflection
-  along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open.
+  along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open. Nets on
+  quick-release clips and doors (k4_geometry.entry.openable_parts) are taken as open: not pushed on, and left
+  out of the model, so they do not stiffen the frame either.
 
 Every load kind that solves gives, next to max_stress (the largest von Mises stress, whatever the member's
 material), max_utilisation: the largest over the members of stress / (that member's own material yield /
@@ -53,13 +55,14 @@ import numpy as np
 
 from ..fe.beam import Beam
 from ..fe.connect import Spring
-from ..fe.model import FEModel, ModelError, StaticSolver
+from ..fe.model import ElementGroup, FEModel, ModelError, StaticSolver
 from ..fe.precheck import rigid_body_check
 from ..k0_handcalc import sections
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, member_props
 from ..k4_geometry import model as k4
 from ..k4_geometry import people
+from ..k4_geometry.entry import openable_parts
 from ..k4_geometry.obb import OBB, from_member
 from .base import LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_text, param_value, \
     result, run_param
@@ -88,6 +91,22 @@ PLATE_SPREAD_DEG = 45.0
 PLATE_ARM_ELEMENTS = 4  # elements along each strip (the width is taken at each one's middle)
 # without part.material: steel, the round values used for steel elsewhere here (not checked)
 PLATE_MATERIAL = {"name": "steel (assumed)", "E_MPa": 205000.0, "nu": 0.3}
+# Nets (HIRAKU's model, no source): a part of a kind in NET_KINDS is a square mesh of wires that take tension only.
+# Its box's thinnest side is the wire's diameter d, part.material the wire's; the wire area per unit width in each
+# of the two directions is read from the part's mass: a = mass / (2 density area). Lines of wires (cables) run
+# along the box's two in-plane axes NET_CELL_MM apart (each stands for the wires of its width: area a w, pretension
+# N0 w with N0 = NET_PRESTRESS_MPA a), through every load point, and end on the net's border: the convex hull of the
+# points where the net is fastened (a net is taut only between its fastenings). The border is a cable of one line
+# (area a NET_CELL_MM). Each fastening is a spring of one assumed bolt (contact_stiffness) to the member or the part.
+# The cables are solved geometrically non-linear (Newton, the frame stays linear): tension T = max(0, T0 + EA
+# (L - L0) / L0) along the cable's present direction, so a pushed net takes the push by its sag.
+NET_KINDS = ("side_net",)
+NET_CELL_MM = 50.0
+NET_PRESTRESS_MPA = 20.0  # the wires' stress as fitted (assumption, no source; run param net_prestress)
+NET_NEWTON_TOL = 1e-6  # mm per mm of the largest movement
+NET_NEWTON_ITER = 100
+NET_STEP_MM = 20.0  # a Newton step moves no node more than this (the pretension alone gives far too large a first step)
+SLACK_FLOOR = 1e-6
 
 ASSUMPTIONS = [
     "部品は剛体 (6 自由度、質量は箱の中心)。部材は K1 と同じ断面・材料の梁 (せん断の変形は入れない)",
@@ -107,7 +126,14 @@ ASSUMPTIONS = [
     "carried_by の無い部品 (車輪・サスなど) は、K1 と同じく車輪の側 (ばね下) として入れない。乗員と荷は荷重だけで、"
     "体の当たる物 (座席・荷台) に掛ける",
     "フレームは各支持の frame_node で上下を止め、前後・横は 2 点で止める (タイヤは硬い)",
-    "線形の静的解析。弾性の変形を、永久の変形の上限の見積もりとして使う (降伏しない範囲)",
+    "線形の静的解析。弾性の変形を、永久の変形の上限の見積もりとして使う (降伏しない範囲)。ただし網は次の通り",
+    f"網の部品 (kind {', '.join(NET_KINDS)}) は板にしない。引っぱりだけを受ける線 (索) の目: 箱のいちばん薄い向き = 線径、"
+    "線の断面 (幅あたり、二つの向きそれぞれ) = 質量 / (2 × 密度 × 張れる範囲の面積)。"
+    f"張れる範囲 = 網が部材・部品に留まる点 (触れる部材は長さ {NET_CELL_MM:g} mm ごと) の凸包。"
+    f"索は {NET_CELL_MM:g} mm ごとと押す点を通り、自分の幅の線をまとめた断面と張りを持つ。縁は 1 本分の索。"
+    f"初めの張り = 線の応力 {NET_PRESTRESS_MPA:g} MPa (仮定、出典なし。run の params.net_prestress)。"
+    "留め点はボルト 1 本分のばね。索は幾何の非線形 (今の向きの張り T = max(0, T0 + EA ΔL / L0)、ニュートン法で解く) で、"
+    "押されると伸びてたわみ (サグ) で受ける。初めの張りは留め点とつり合っているとして荷重に入れない。網の質量は網の節に等分",
     "max_utilisation = 各部材の応力 / (その部材の材料の降伏 / params.safety_factor) の最大。部材ごとに自分の材料で見る",
 ]
 
@@ -126,6 +152,7 @@ class Contact:
     k_t: float  # N/mm, each direction
     k_r: float  # N*mm/rad, each axis
     t: float | None = None  # where along the member (0 at node_a, 1 at node_b)
+    ts: tuple = ()  # the middles of the member's slices that touch (a net is fastened along them)
 
 
 def contact_stiffness(area: float) -> tuple[float, float, int]:
@@ -160,13 +187,14 @@ class Plate:
 
 
 def plate_parts(design: Record) -> dict[str, Plate]:
-    """The modelled parts taken as plates (see PLATE_RATIO); controls (hand, foot) stay rigid bodies."""
+    """The modelled parts taken as plates (see PLATE_RATIO); controls (hand, foot) stay rigid bodies, nets
+    (NET_KINDS) are cable nets (net_parts)."""
     from ..k4_geometry.obb import from_box
 
     mats = design.get("materials", {})
     out = {}
     for p in modelled_parts(design):
-        if p["kind"] in HAND_KINDS or p["kind"] in FOOT_KINDS:
+        if p["kind"] in HAND_KINDS or p["kind"] in FOOT_KINDS or p["kind"] in NET_KINDS:
             continue
         o = from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"))
         k = np.argsort(o.half, kind="stable")
@@ -218,6 +246,320 @@ def strip_widths(pl: Plate, end: np.ndarray, w0: float, n: int = PLATE_ARM_ELEME
     b_plate = 2.0 * float(np.sum(pl.half * np.abs(pl.inplane @ across)))
     tan = math.tan(math.radians(PLATE_SPREAD_DEG))
     return [min(b_plate, w0 + 2.0 * L * (1.0 - (k + 0.5) / n) * tan) for k in range(n)]
+
+
+# ------------------------------------------------------------------ nets
+
+
+@dataclass
+class Net:
+    """A net part: its plane (centre, normal, the two in-plane axes = the wires' directions, half sizes), the wire's
+    diameter d and material."""
+
+    pid: str
+    center: np.ndarray
+    normal: np.ndarray
+    inplane: np.ndarray  # (2, 3)
+    half: np.ndarray  # (2,)
+    d: float
+    E: float
+    density: float  # kg/m^3
+    mass: float  # kg
+    material: str
+    assumed: bool = False
+
+    def local(self, x) -> np.ndarray:
+        return self.inplane @ (np.asarray(x, float) - self.center)
+
+    def world(self, uv) -> np.ndarray:
+        return self.center + np.asarray(uv, float) @ self.inplane
+
+
+def net_parts(design: Record) -> dict[str, Net]:
+    """The modelled parts of a net kind (NET_KINDS)."""
+    from ..k4_geometry.obb import from_box
+
+    mats = design.get("materials", {})
+    out = {}
+    for p in modelled_parts(design):
+        if p["kind"] not in NET_KINDS:
+            continue
+        o = from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"))
+        k = np.argsort(o.half, kind="stable")
+        key = p.get("material")
+        mat = mats.get(key) if key else None
+        found = mat is not None
+        mat = mat or dict(PLATE_MATERIAL, density_kg_m3=7850.0)
+        out[p["id"]] = Net(p["id"], np.asarray(o.center, float), np.asarray(o.axes[k[0]], float),
+                           np.asarray(o.axes[[1, 2] if k[0] == 0 else [0, 2] if k[0] == 1 else [0, 1]], float),
+                           np.asarray(o.half[[1, 2] if k[0] == 0 else [0, 2] if k[0] == 1 else [0, 1]], float),
+                           2.0 * float(o.half[k[0]]), float(mat["E_MPa"]), float(mat.get("density_kg_m3", 7850.0)),
+                           float(p.get("mass_kg") or 0.0), key if found else PLATE_MATERIAL["name"], assumed=not found)
+    return out
+
+
+def convex_hull(pts) -> np.ndarray:
+    """The convex hull (counter-clockwise, no collinear points) of 2D points (Andrew's monotone chain)."""
+    P = sorted({(round(float(x), 6), round(float(y), 6)) for x, y in pts})
+    if len(P) < 3:
+        return np.array(P, float).reshape(-1, 2)
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower, upper = [], []
+    for p in P:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 1e-9:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(P):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 1e-9:
+            upper.pop()
+        upper.append(p)
+    return np.array(lower[:-1] + upper[:-1], float)
+
+
+def polygon_area(poly: np.ndarray) -> float:
+    if len(poly) < 3:
+        return 0.0
+    x, y = poly[:, 0], poly[:, 1]
+    return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+
+
+def inside_polygon(poly: np.ndarray, p, tol: float = 1e-6) -> bool:
+    """p inside or on a counter-clockwise convex polygon."""
+    if len(poly) < 3:
+        return False
+    for a, b in zip(poly, np.roll(poly, -1, axis=0)):
+        e = b - a
+        if e[0] * (p[1] - a[1]) - e[1] * (p[0] - a[0]) < -tol * max(1.0, float(np.linalg.norm(e))):
+            return False
+    return True
+
+
+def _chord(poly: np.ndarray, axis: int, c: float) -> tuple[float, float] | None:
+    """Where the line {coordinate `axis` = c} crosses a convex polygon: (lo, hi) along the other coordinate."""
+    o = 1 - axis
+    hits = []
+    for a, b in zip(poly, np.roll(poly, -1, axis=0)):
+        if (a[axis] - c) * (b[axis] - c) > 0.0 or a[axis] == b[axis]:
+            if a[axis] == b[axis] == c:
+                hits += [a[o], b[o]]
+            continue
+        s = (c - a[axis]) / (b[axis] - a[axis])
+        hits.append(a[o] + s * (b[o] - a[o]))
+    if len(hits) < 2 or max(hits) - min(hits) < 1e-6:
+        return None
+    return min(hits), max(hits)
+
+
+def _levels(lo: float, hi: float, h: float, extra) -> list[float]:
+    """Line positions strictly between lo and hi: every h, and the extra ones (regular ones within h/4 of an extra
+    dropped)."""
+    ex = sorted({round(float(e), 6) for e in extra if lo + 1e-6 < e < hi - 1e-6})
+    n = int(math.floor((hi - lo) / h))
+    reg = [lo + h * k for k in range(1, n + 1) if lo + h * k < hi - h / 4.0]
+    reg = [r for r in reg if all(abs(r - e) > h / 4.0 for e in ex)]
+    return sorted(reg + ex)
+
+
+def _widths(levels: list[float], lo: float, hi: float) -> list[float]:
+    """The width each line stands for: halfway to its neighbours, the first and the last out to lo and hi."""
+    out = []
+    for i, x in enumerate(levels):
+        a = lo if i == 0 else (levels[i - 1] + x) / 2.0
+        b = hi if i == len(levels) - 1 else (x + levels[i + 1]) / 2.0
+        out.append(b - a)
+    return out
+
+
+@dataclass
+class NetMesh:
+    """A net as built: its hull (local u, v), nodes {(u, v) rounded: model node}, its cables (indices into the
+    model's net cable group) and the wire area per width a (mm^2/mm) and pretension per width N0 (N/mm)."""
+
+    net: Net
+    hull: np.ndarray
+    nodes: dict
+    a: float
+    N0: float
+    cables: list = field(default_factory=list)
+    border: set = field(default_factory=set)  # the keys of the nodes on the hull's sides
+
+
+def net_mesh(net: Net, anchors: list, points: list, prestress: float, h: float = NET_CELL_MM):
+    """The lines of a net between its fastenings. anchors: local (u, v) points; points: local load points.
+    Returns (NetMesh, [(u, v)] node points, cable list [(key a, key b, A, T0)], [(anchor index, key)]) or None when
+    the fastenings do not span an area (fewer than three not on a line)."""
+    hull = convex_hull(anchors)
+    area = polygon_area(hull)
+    if len(hull) < 3 or area <= h * h * 1e-3:
+        return None
+    a = net.mass / (2.0 * net.density * 1e-9 * area) if net.mass > 0 else 0.0
+    if a <= 0.0:
+        return None
+    N0 = prestress * a
+    lo, hi = hull.min(axis=0), hull.max(axis=0)
+    pts = [p for p in points if inside_polygon(hull, p)]
+    lv = [_levels(lo[k], hi[k], h, [p[k] for p in pts]) for k in (0, 1)]
+    wd = [_widths(lv[k], lo[k], hi[k]) for k in (0, 1)]
+    keys: dict = {}
+
+    def key(u, v):
+        k = (round(float(u), 6), round(float(v), 6))
+        keys.setdefault(k, len(keys))
+        return k
+
+    cables = []
+    for axis in (0, 1):  # lines of constant coordinate `axis`, running along the other one
+        for c, w in zip(lv[axis], wd[axis]):
+            ch = _chord(hull, axis, c)
+            if ch is None:
+                continue
+            run = [ch[0]] + [x for x in lv[1 - axis] if ch[0] + 1e-6 < x < ch[1] - 1e-6] + [ch[1]]
+            ks = [key(*((c, x) if axis == 0 else (x, c))) for x in run]
+            cables += [(p, q, a * w, N0 * w) for p, q in zip(ks[:-1], ks[1:])]
+    # the border: along each side of the hull through every node on it (the hull's corners are fastenings)
+    for i in range(len(hull)):
+        key(*hull[i])
+    allk = list(keys)
+    border = set()
+    for i in range(len(hull)):
+        p, q = hull[i], hull[(i + 1) % len(hull)]
+        e = q - p
+        L = float(np.linalg.norm(e))
+        on = []
+        for k in allk:
+            r = np.array(k) - p
+            s = float(r @ e) / L
+            if -1e-6 <= s <= L + 1e-6 and abs(e[0] * r[1] - e[1] * r[0]) / L <= 1e-5:
+                on.append((s, k))
+        on.sort()
+        border.update(k for _, k in on)
+        cables += [(k1, k2, a * h, N0 * h) for (_, k1), (_, k2) in zip(on[:-1], on[1:])]
+    anchor_keys = []
+    for j, p in enumerate(anchors):
+        k = (round(float(p[0]), 6), round(float(p[1]), 6))
+        if k not in keys:  # inside the hull or between nodes of a side: the nearest node
+            k = min(keys, key=lambda q: (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2)
+        anchor_keys.append((j, k))
+    return NetMesh(net, hull, {}, a, N0, border=border), list(keys), cables, anchor_keys
+
+
+class Cable(ElementGroup):
+    """Tension-only cables (2 nodes, 3 DOFs each) of axial stiffness EA / L0 and pretension T0, about the present
+    shape (disp, the nodes' movements): T = max(0, T0 + EA (L - L0) / L0) along the present direction e; the
+    tangent stiffness EA / L0 e e^T (taut) + T / L (I - e e^T). Internal force T e - T0 e0 (the pretension as
+    fitted is in balance with the fastenings and loads nothing)."""
+
+    kind = "cable"
+    n_comp = 3
+
+    def __init__(self, conn, EA, T0, nodes: np.ndarray, A=None, name: str = "nets"):
+        self.conn = np.asarray(conn, int).reshape(-1, 2)
+        self.EA = np.asarray(EA, float)
+        self.A = np.asarray(A, float) if A is not None else None  # mm^2, for the stress T / A
+        self.T0 = np.asarray(T0, float)
+        d0 = nodes[self.conn[:, 1]] - nodes[self.conn[:, 0]]
+        self.L0 = np.linalg.norm(d0, axis=1)
+        self.e0 = d0 / self.L0[:, None]
+        self.disp = np.zeros((len(self.conn), 2, 3))
+        self.name = name
+
+    def state(self, nodes: np.ndarray):
+        """(L, e, T, taut): T the force along e; a slack cable (T0 + EA (L - L0) / L0 <= 0) pushes SLACK_FLOOR of
+        that (a millionth: tension-only, kept continuous so that Newton's method settles)."""
+        d = nodes[self.conn[:, 1]] + self.disp[:, 1] - nodes[self.conn[:, 0]] - self.disp[:, 0]
+        L = np.linalg.norm(d, axis=1)
+        e = d / L[:, None]
+        T = self.T0 + self.EA * (L - self.L0) / self.L0
+        taut = T > 0.0
+        return L, e, np.where(taut, T, SLACK_FLOOR * T), taut
+
+    def stiffness(self, nodes: np.ndarray) -> np.ndarray:
+        L, e, T, taut = self.state(nodes)
+        ee = e[:, :, None] * e[:, None, :]
+        # slack: SLACK_FLOOR of the axial stiffness, and SLACK_FLOOR EA across so that the step stays defined
+        Tg = np.where(taut, T, SLACK_FLOOR * self.EA)
+        Kb = (np.where(taut, 1.0, SLACK_FLOOR)[:, None, None] * (self.EA / self.L0)[:, None, None] * ee
+              + (Tg / L)[:, None, None] * (np.eye(3)[None] - ee))
+        return np.block([[Kb, -Kb], [-Kb, Kb]])
+
+    def forces(self, nodes: np.ndarray) -> np.ndarray:
+        """(E, 6): the internal forces on the two ends, T e - T0 e0 at b and its opposite at a."""
+        _, e, T, _ = self.state(nodes)
+        f = T[:, None] * e - self.T0[:, None] * self.e0
+        return np.hstack([-f, f])
+
+    def tensions(self, nodes: np.ndarray) -> np.ndarray:
+        return np.maximum(self.state(nodes)[2], 0.0)
+
+
+def net_effect(lp, prestress: float) -> Record:
+    """The effect describing the nets as built: wire, the wire area per width and the pitch it means, the
+    pretension, the fastenings, the taut area; and the largest wire stress of the loads solved."""
+    parts = []
+    for pid, m in lp.nets.items():
+        n = m.net
+        pitch = math.pi * n.d ** 2 / 4.0 / m.a
+        parts.append(f"{pid}: 線径 {n.d:g} mm ({n.material})、線の断面 {m.a:.4f} mm²/mm (目 {pitch:.0f} mm 相当)、"
+                     f"初めの張り {m.N0:.2f} N/mm (線の応力 {prestress:g} MPa)、張れる範囲 {polygon_area(m.hull) / 1e6:.3f} m²、"
+                     f"索 {len(m.cables)} 本")
+    top = max(lp.net_stress) if lp.net_stress else 0.0
+    return {"name": "網は引っぱりだけの索 (幾何の非線形、ニュートン法) — " + "; ".join(parts)
+                    + (f"。網の線のいちばん大きな応力 {top:.0f} MPa" if lp.net_stress else ""),
+            "value": top, "unit": "MPa"}
+
+
+def newton_solve(model: FEModel, cables: Cable, F: np.ndarray, tol: float = NET_NEWTON_TOL,
+                 iterations: int = NET_NEWTON_ITER) -> tuple[np.ndarray, object]:
+    """Displacements (N, 6) under F (N, 6) of a model whose only non-linear group is `cables` (Newton's method on
+    the cables' present shape, load in steps when a step does not converge). Returns (U, layout)."""
+    first = True
+    for steps in (1, 4, 16):
+        U = np.zeros((len(model.nodes), 6))
+        ok = True
+        for s in range(1, steps + 1):
+            Fs = F * (s / steps)
+            for it in range(iterations):
+                cables.disp = np.stack([U[cables.conn[:, 0], :3], U[cables.conn[:, 1], :3]], axis=1)
+                model._k_cache = None  # the cables' stiffness changed with their shape
+                try:
+                    solver = StaticSolver(model, check_rigid=first)
+                except ModelError as e:
+                    if first:  # the model as built cannot be solved
+                        raise DesignError(f"the load path model cannot be solved: {e}") from None
+                    ok = False
+                    break
+                first = False
+                lay = solver.layout
+                dofs = lay.element_dofs(cables.conn, 3)
+                u = lay.from_node_array(U)
+                Kc = cables.stiffness(model.nodes)
+                fc = cables.forces(model.nodes)
+                ue = u[dofs]
+                lin = solver.K @ u  # every group's tangent times u
+                np.add.at(lin, dofs, -np.einsum("eij,ej->ei", Kc, ue))  # less the cables' tangent part
+                np.add.at(lin, dofs, fc)  # plus the cables' own forces
+                r = lay.from_node_array(Fs) - lin
+                try:
+                    dU = solver.solve(lay.node_array(r)).displacements
+                except ModelError:
+                    ok = False
+                    break
+                step = float(np.abs(dU[:, :3]).max())
+                U = U + dU * min(1.0, NET_STEP_MM / step) if step > 0.0 else U
+                if step <= tol * max(1.0, float(np.abs(U[:, :3]).max())):
+                    break
+            else:
+                ok = False
+            if not ok:
+                break
+        if ok:
+            cables.disp = np.stack([U[cables.conn[:, 0], :3], U[cables.conn[:, 1], :3]], axis=1)
+            model._k_cache = None
+            return U, lay
+    raise DesignError("the nets' cables did not settle (Newton's method did not converge in 16 load steps)")
 
 
 def _radius(obb: OBB) -> float:
@@ -279,7 +621,7 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
             width = 2.0 * float(min(M.obb.half[1], M.obb.half[2]))
             area = len(hit) * mp["length"] / len(sl) * width
             k_t, k_r, _ = contact_stiffness(area)
-            out.append(Contact(pk, f"member:{mid}", point, area, k_t, k_r, t))
+            out.append(Contact(pk, f"member:{mid}", point, area, k_t, k_r, t, tuple(sorted(t for t, _ in hit))))
         for qk in parts[i + 1:]:
             Q = bs[qk]
             if np.linalg.norm(P.obb.center - Q.obb.center) > rp + _radius(Q.obb) + touch:
@@ -331,6 +673,22 @@ class LoadPathModel:
     plates: dict[str, Plate] = field(default_factory=dict)
     plate_nodes: dict[str, dict[tuple, int]] = field(default_factory=dict)  # plate -> {mid-plane point: node}
     plate_beams: Beam | None = None
+    nets: dict[str, NetMesh] = field(default_factory=dict)
+    net_cables: Cable | None = None
+    slack_nets: list[str] = field(default_factory=list)  # nets whose fastenings span no area (not built)
+    net_stress: list = field(default_factory=list)  # the nets' largest wire stress (MPa) of each load solved
+
+    def net_node(self, pid: str, x) -> int | None:
+        """The node of net pid at the point of its plane under x, None when x is outside where the net is taut
+        (the hull of its fastenings) or no node was made there (build's plate_points)."""
+        m = self.nets[pid]
+        uv = m.net.local(x)
+        if not inside_polygon(m.hull, uv):
+            return None
+        return m.nodes.get((round(float(uv[0]), 6), round(float(uv[1]), 6)))
+
+    def net_node_ids(self, pid: str) -> list[int]:
+        return list(self.nets[pid].nodes.values())
 
     def node_on(self, pid: str, x) -> int:
         """The node a load at x on part pid goes to: a rigid part's node, or the plate's node under x (its centre
@@ -364,10 +722,12 @@ def default_holds(design: Record) -> dict[str, str]:
 
 
 def build(design: Record, contacts: list[Contact], exclude: frozenset = frozenset(),
-          holds: dict[str, str] | None = None, plate_points: dict[str, list] | None = None) -> LoadPathModel:
+          holds: dict[str, str] | None = None, plate_points: dict[str, list] | None = None,
+          net_prestress: float = NET_PRESTRESS_MPA) -> LoadPathModel:
     """The beam-and-rigid-body model; parts in `exclude` (and their contacts) left out. plate_points: points
     loads will be put on, per plate part (each gets its own node and strip; a point load's width there is
-    taken as the plate's thickness)."""
+    taken as the plate's thickness) or net part (its lines pass through them). net_prestress: the nets' wire
+    stress as fitted (MPa)."""
     props = member_props(design)
     if not props:
         raise DesignError("the design has no members, so there is no frame to carry the parts")
@@ -382,8 +742,70 @@ def build(design: Record, contacts: list[Contact], exclude: frozenset = frozense
 
     cuts: dict[str, set[float]] = {mid: set() for mid in props}
     live = [c for c in contacts if c.a.split(":", 1)[1] not in exclude and c.b.split(":", 1)[1] not in exclude]
+    nets = {pid: n for pid, n in net_parts(design).items() if pid not in exclude}
+    # each net's fastenings: (local point, the other body, t along a member or None); a member the net touches
+    # holds it at points about NET_CELL_MM apart along the touching length
+    fast: dict[str, list] = {pid: [] for pid in nets}
+    net_contacts = []
     for c in live:
-        if c.t is not None:
+        ida, idb = c.a.split(":", 1)[1], c.b.split(":", 1)[1]
+        mine = [(ida, c.b)] if ida in nets else []
+        mine += [(idb, c.a)] if c.b.startswith("part:") and idb in nets else []
+        if not mine:
+            continue
+        net_contacts.append(c)
+        for pid, other in mine:
+            n = nets[pid]
+            if other.startswith("member:") and c.ts:
+                mp = props[other.split(":", 1)[1]]
+                keep, last = [], None
+                for t in c.ts:
+                    if last is None or (t - last) * mp["length"] >= NET_CELL_MM:
+                        keep.append(t)
+                        last = t
+                if keep[-1] != c.ts[-1]:
+                    keep.append(c.ts[-1])
+                for t in keep:  # for the hull only (build fastens each border node beside the member)
+                    uv = np.clip(n.local(mp["a"] + (mp["b"] - mp["a"]) * t), -n.half, n.half)
+                    fast[pid].append((uv, other, round(t, 9)))
+            elif other.startswith("part:") and other.split(":", 1)[1] not in nets:
+                fast[pid].append((np.clip(n.local(c.point), -n.half, n.half), other, None))
+    netc = {id(c) for c in net_contacts}
+    pending: dict[str, tuple] = {}
+    slack: list[str] = []
+    for pid, n in nets.items():
+        loads = [n.local(x) for x in (plate_points or {}).get(pid, [])]
+        built = net_mesh(n, [f[0] for f in fast[pid]], loads, net_prestress)
+        if built is None:
+            slack.append(pid)
+            continue
+        mesh, keys, cables, anchor_keys = built
+        # the fastenings: a part's where it touches; a member's at every border node beside the length it touches
+        # (a laced edge holds each wire's end)
+        held = [(q, fast[pid][j][1], None) for j, q in anchor_keys if fast[pid][j][2] is None]
+        for c in net_contacts:
+            other = c.b if c.a == f"part:{pid}" else c.a if c.b == f"part:{pid}" else None
+            if other is None or not other.startswith("member:") or not c.ts:
+                continue
+            mp = props[other.split(":", 1)[1]]
+            ab = mp["b"] - mp["a"]
+            L2 = float(ab @ ab)
+            pad = SLICE_MM / mp["length"]
+            # the member's width (find_contacts: area = slices x slice length x width)
+            reach = c.area / (len(c.ts) * mp["length"] / max(1, int(math.ceil(mp["length"] / SLICE_MM))))
+            for q in sorted(mesh.border):
+                x = n.world(q)
+                t = float((x - mp["a"]) @ ab) / L2
+                if not min(c.ts) - pad <= t <= max(c.ts) + pad:
+                    continue
+                near = n.local(mp["a"] + ab * min(1.0, max(0.0, t)))
+                if float(np.linalg.norm(np.clip(near, -n.half, n.half) - np.asarray(q))) <= reach + n.d + 1e-6:
+                    t = round(min(1.0, max(0.0, t)), 9)
+                    held.append((q, other, t))
+                    cuts[other.split(":", 1)[1]].add(t)
+        pending[pid] = (mesh, keys, cables, held)
+    for c in live:
+        if c.t is not None and id(c) not in netc:
             cuts[c.b.split(":", 1)[1]].add(round(c.t, 9))
     conn, E, G, A, Iy, Iz, J, elem_member = [], [], [], [], [], [], [], []
     member_nodes: dict[str, list[tuple[float, int]]] = {}
@@ -416,7 +838,7 @@ def build(design: Record, contacts: list[Contact], exclude: frozenset = frozense
     model.add(beams)
     part_node = {}
     for p in modelled_parts(design):
-        if p["id"] in exclude:
+        if p["id"] in exclude or p["id"] in nets:
             continue
         i = model.add_node(p["box"]["center_mm"])
         part_node[p["id"]] = i
@@ -451,10 +873,41 @@ def build(design: Record, contacts: list[Contact], exclude: frozenset = frozense
         if pid in plates:
             for x in pts:
                 body_node(pid, x, plates[pid].t)
+    # the nets: their lines and border as cables, each fastening a spring of one bolt to its body
+    sconn, k, pts = [], [], []
+    meshes: dict[str, NetMesh] = {}
+    cab = {"conn": [], "EA": [], "T0": [], "A": []}
+    k_fast, kr_fast, _ = contact_stiffness(AREA_PER_BOLT_MM2)
+    for pid, (mesh, keys, cables, held) in pending.items():
+        n = nets[pid]
+        ids = model.add_nodes([n.world(q) for q in keys])
+        mesh.nodes = {q: int(i) for q, i in zip(keys, ids)}
+        for q, i in mesh.nodes.items():
+            lumps.append((i, n.mass / len(mesh.nodes)))
+        for p_, q_, A_, T_ in cables:
+            mesh.cables.append(len(cab["conn"]))
+            cab["conn"].append((mesh.nodes[p_], mesh.nodes[q_]))
+            cab["EA"].append(n.E * A_)
+            cab["T0"].append(T_)
+            cab["A"].append(A_)
+        for q, other, t in held:
+            i = mesh.nodes[q]
+            if t is not None:
+                b = dict((round(tt, 9), ii) for tt, ii in member_nodes[other.split(":", 1)[1]])[t]
+            else:
+                b = body_node(other.split(":", 1)[1], model.nodes[i], math.sqrt(AREA_PER_BOLT_MM2))
+            sconn.append((i, b))
+            k.append([k_fast] * 3 + [kr_fast] * 3)
+            pts.append(model.nodes[i].copy())
+        meshes[pid] = mesh
+    net_cables = None
+    if cab["conn"]:
+        net_cables = Cable(np.array(cab["conn"]), cab["EA"], cab["T0"], model.nodes, A=cab["A"])
+        model.add(net_cables)
     springs = None
-    if live:
-        sconn, k, pts = [], [], []
-        for c in live:
+    live_rest = [c for c in live if id(c) not in netc]
+    if live_rest or sconn:
+        for c in live_rest:
             w0 = math.sqrt(c.area)
             a = body_node(c.a.split(":", 1)[1], c.point, w0)
             if c.t is None:
@@ -481,7 +934,7 @@ def build(design: Record, contacts: list[Contact], exclude: frozenset = frozense
     for i, m in lumps:
         mass[i] += m
     return LoadPathModel(design, model, beams, elem_member, node_of, member_nodes, part_node, live, springs, mass, props,
-                         plates, plate_nodes, plate_beams)
+                         plates, plate_nodes, plate_beams, meshes, net_cables, slack)
 
 
 def free_parts(lp: LoadPathModel) -> list[str]:
@@ -489,7 +942,7 @@ def free_parts(lp: LoadPathModel) -> list[str]:
     A free group that holds members is an error of the design (the frame itself is not held)."""
     rb = rigid_body_check(lp.model)
     if rb["free_rigid_modes"] == 0:
-        return []
+        return sorted(lp.slack_nets)
     labels = lp.model.connectivity_groups()
     if rb["groups"] == 1:
         raise DesignError(f"the frame is free to move ({', '.join(rb['free_motions'])}); its supports do not hold it")
@@ -498,7 +951,9 @@ def free_parts(lp: LoadPathModel) -> list[str]:
     if groups & frame:
         loose = sorted({lp.elem_member[e] for e, (i, _) in enumerate(lp.beams.conn) if int(labels[i]) in groups})
         raise DesignError(f"members {', '.join(loose[:6])} are not joined to the held frame; join them")
-    return sorted(pid for pid, i in lp.part_node.items() if int(labels[i]) in groups)
+    return sorted([pid for pid, i in lp.part_node.items() if int(labels[i]) in groups]
+                  + [pid for pid, m in lp.nets.items() if int(labels[next(iter(m.nodes.values()))]) in groups]
+                  + list(lp.slack_nets))
 
 
 # ------------------------------------------------------------------ loads and reading back
@@ -537,7 +992,19 @@ def member_stresses(lp: LoadPathModel, U: np.ndarray, lay) -> dict[str, float]:
 
 
 def solve_cases(lp: LoadPathModel, loads: list[np.ndarray]) -> tuple[list[np.ndarray], object]:
-    """Displacements (N, 6) for each load array (N, 6), one factorisation."""
+    """Displacements (N, 6) for each load array (N, 6), one factorisation; with nets, each load by
+    newton_solve (the nets' largest wire stress of each load in lp.net_stress)."""
+    if lp.net_cables is not None:
+        out, lay = [], None
+        lp.net_stress = []
+        A = lp.net_cables.A
+        for F in loads:
+            U, lay = newton_solve(lp.model, lp.net_cables, F)
+            out.append(U)
+            lp.net_stress.append(float(np.max(lp.net_cables.tensions(lp.model.nodes) / A)))
+        lp.net_cables.disp[:] = 0.0
+        lp.model._k_cache = None
+        return out, lay
     try:
         solver = StaticSolver(lp.model)
     except ModelError as e:
@@ -604,6 +1071,16 @@ def occupant_trunks(design: Record) -> list[Record]:
     return [p for p in design.get("parts", []) if p["kind"] == "occupant" and "." not in p["id"]]
 
 
+def occupant_cg(design: Record, trunk: Record) -> np.ndarray:
+    """The occupant's centre of gravity: the mass-weighted centre of its trunk and its segments (parts
+    <trunk id>.<segment>); the trunk's centre when the parts carry no mass."""
+    own = [p for p in design.get("parts", []) if p["id"] == trunk["id"] or p["id"].startswith(trunk["id"] + ".")]
+    m = sum(float(p.get("mass_kg") or 0.0) for p in own)
+    if m <= 0.0:
+        return np.asarray(trunk["box"]["center_mm"], float)
+    return sum(float(p.get("mass_kg") or 0.0) * np.asarray(p["box"]["center_mm"], float) for p in own) / m
+
+
 def point_r(trunk: Record) -> list[tuple[str, np.ndarray, np.ndarray]]:
     """(name, point, outward unit) of the hip and the shoulder on the outer side of an occupant's trunk box: heights
     over the box's bottom (the seat top) from k4_geometry.people (young male 95th percentile, AIST: trochanter
@@ -640,9 +1117,14 @@ def _ray_box(p: np.ndarray, d: np.ndarray, obb: OBB) -> float | None:
 
 
 def first_outboard(design: Record, point: np.ndarray, out: np.ndarray, skip: set[str]) -> tuple[str, float] | None:
-    """The first member or modelled part a ray from `point` along `out` meets: (body id, distance)."""
+    """The first member or modelled part a ray from `point` along `out` meets: (body id, distance). Nets held by
+    quick-release clips and doors with a hinge and a latch (k4_geometry.entry.openable_parts) and their fittings are
+    passed over: a guard the occupant has to put in place does not count as the side guard (the US CPSC's proposed
+    rule for ROVs, 79 FR 68964, sec. 1422.5(c)(4), read by the intake department: such barriers are taken off
+    before the shoulder and hip tests)."""
     bs = k4.bodies(design)
     allowed = {f"part:{p['id']}" for p in modelled_parts(design)} | {k for k in bs if k.startswith("member:")}
+    allowed -= {f"part:{pid}" for pid in openable_parts(design)}
     best = None
     for k in allowed - skip:
         s = _ray_box(point, out, bs[k].obb)
@@ -660,9 +1142,14 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
     accelerations (g) and occupant mass (kg) of the load case, and the part ids picked (hand_part, foot_parts)."""
     contacts = find_contacts(design, touch)
     points = _push_plate_points(design) if kind == "push" else {}
-    full = build(design, contacts, holds=holds, plate_points=points)
+    pre = float(values.get("net_prestress") or NET_PRESTRESS_MPA)
+    # The push takes openable nets and doors as open (CPSC proposed rule sec. 1422.5(c)(4), see first_outboard):
+    # they are pushed on by nobody and do not stiffen the frame either (the unfavourable side).
+    opened = frozenset(openable_parts(design)) if kind == "push" else frozenset()
+    full = build(design, contacts, exclude=opened, holds=holds, plate_points=points, net_prestress=pre)
     free = free_parts(full)
-    lp = build(design, contacts, exclude=frozenset(free), holds=holds, plate_points=points) if free else full
+    lp = (build(design, contacts, exclude=opened | frozenset(free), holds=holds, plate_points=points,
+                net_prestress=pre) if free else full)
     parts = {p["id"]: p for p in design.get("parts", [])}
     effects: list[Record] = []
     assumed = assumed_material_effect(full.plates)  # the free plates too
@@ -736,6 +1223,11 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
         Us, lay = solve_cases(lp, loads)
         worst, where, combo = 0.0, None, None
         for name, U in zip(names, Us):
+            for pid in lp.nets:
+                for i in lp.net_node_ids(pid):
+                    v = float(np.linalg.norm(U[i, :3]))
+                    if v > worst:
+                        worst, where, combo = v, pid, name
             for pid, node in lp.part_node.items():
                 if pid in lp.plates:  # a plate is not rigid: its nodes' movements
                     for i in [node, *lp.plate_nodes[pid].values()]:
@@ -758,14 +1250,23 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
         results += _push(design, lp, values, on_part, vectors, effects)
     else:
         raise DesignError(f"load_kind must be one of {', '.join(LOAD_KINDS)}, got {kind!r}")
-    # the contract's unsupported_load: the load points with no path to the frame (a floating control, or a point R
-    # with nothing outboard to take the push); the judge makes it a failing verdict
+    if lp.nets:
+        effects.append(net_effect(lp, pre))
+    # the contract's unsupported_load: the load points with no path to the frame (a floating control, a point R
+    # with nothing outboard to take the push, or a free part's own weight under the inertia loads); the judge makes
+    # it a failing verdict
     if kind in ("hand", "foot"):
         unsupported = list(dict.fromkeys(lost))
     elif kind == "push":
         opened = next(r for r in results if r["quantity"] == "occupant_push_open")
         unsupported = [w.strip() for w in (opened.get("where") or "").split(",") if w.strip()] if opened["value"] else []
         unsupported = unsupported if len(unsupported) == int(opened["value"]) else [opened.get("where")] * int(opened["value"])
+    elif kind == "inertia":
+        # the weight and the accelerations of a free part with mass reach no member: a load with no path
+        unsupported = [pid for pid in free if float((parts.get(pid) or {}).get("mass_kg") or 0.0) > 0.0]
+        if unsupported:
+            effects.append({"name": "浮いた部品の荷重は載っていない (応力は、枠まで繋がった部品の荷重だけで出した): "
+                                    + ", ".join(unsupported), "value": float(len(unsupported)), "unit": "1"})
     else:
         unsupported = []
     if unsupported:
@@ -831,7 +1332,7 @@ def _inertia_loads(design: Record, lp: LoadPathModel, values: dict, on_part, vec
     for t in occupant_trunks(design):
         seat = _rests_on(design, t, ("seat",))
         if seat:
-            rests.append((seat, np.asarray(t["box"]["center_mm"], float), occ_m, np.array([f_lon, f_lat, 0.0])))
+            rests.append((seat, occupant_cg(design, t), occ_m, np.array([f_lon, f_lat, 0.0])))
     for c in (p for p in design.get("parts", []) if p["kind"] == "cargo"):
         on = _rests_on(design, c, None)
         if on:
@@ -873,8 +1374,8 @@ def _rests_on(design: Record, rider: Record, kinds: tuple[str, ...] | None) -> s
 
 
 def _push_plate_points(design: Record) -> dict[str, list[np.ndarray]]:
-    """The points the push puts its loads on that are on plate parts (they get their own plate nodes)."""
-    plates = plate_parts(design)
+    """The points the push puts its loads on that are on plate or net parts (they get their own nodes)."""
+    plates = {**plate_parts(design), **net_parts(design)}
     occupants = {f"part:{p['id']}" for p in design.get("parts", []) if p["kind"] in RIDER_KINDS}
     out: dict[str, list[np.ndarray]] = {}
     for t in occupant_trunks(design):
@@ -907,6 +1408,13 @@ def _push(design: Record, lp: LoadPathModel, values: dict, on_part, vectors: lis
                             "vector_N": [float(v) for v in F_push * out]})
             if body.startswith("member:"):
                 node = member_point_node(lp, body.split(":", 1)[1], at)
+            elif body.split(":", 1)[1] in lp.nets:
+                node = lp.net_node(body.split(":", 1)[1], at)
+                if node is None:
+                    open_points.append(label)
+                    effects.append({"name": f"{label}: {body} の箱には当たるが、網の張れる範囲 (留め点の凸包) の外"})
+                    continue
+                at = lp.model.nodes[node].copy()  # on the net's plane (a net node has no rotations)
             else:
                 node = on_part(body.split(":", 1)[1])
                 if node is None:
@@ -1032,6 +1540,7 @@ def load_path_known_answers() -> list[Record]:
                                 "(r the tube's radius of gyration, 15.5 mm)"))
 
     out.append(plate_strip_known_answer())
+    out += cable_known_answers()
     out += utilisation_known_answers()
     return out
 
@@ -1064,6 +1573,49 @@ def utilisation_known_answers() -> list[Record]:
                          0.0, "the tip member, not the root (where the stress is largest), governs"),
             check_record(case, "allowable_stress", y_tip / sf, r["allowable_stress"]["value"], "MPa", 1e-9,
                          "the tip's own yield / sf")]
+
+
+def taut_cable_deflection(P: float, L: float, EA: float, T0: float) -> float:
+    """The deflection w of the middle of a cable L long, held at both ends with pretension T0, pushed across at its
+    middle by P: the root of P = 2 T w / sqrt(a^2 + w^2), T = T0 + EA (sqrt(a^2 + w^2) - a) / a, a = L / 2 (the
+    taut string with stretch; bisection)."""
+    a = L / 2.0
+    lo, hi = 0.0, P * L / (4.0 * T0) if T0 > 0 else L
+
+    def f(w):
+        s = math.hypot(a, w)
+        return 2.0 * (T0 + EA * (s - a) / a) * w / s - P
+
+    while f(hi) < 0.0:
+        hi *= 2.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if f(mid) < 0.0 else (lo, mid)
+    return 0.5 * (lo + hi)
+
+
+def cable_known_answers() -> list[Record]:
+    """A cable held at both ends, pushed across at its middle: the first (linear) step P L / (4 T0) and the
+    converged sag (taut_cable_deflection)."""
+    L, d, sigma0, P, E = 600.0, 3.0, 20.0, 200.0, 205000.0
+    A = math.pi * d * d / 4.0
+    T0 = sigma0 * A
+    n = 6
+    model = FEModel(np.array([[L * k / n, 0.0, 0.0] for k in range(n + 1)]))
+    cab = Cable([(k, k + 1) for k in range(n)], [E * A] * n, [T0] * n, model.nodes, A=[A] * n)
+    model.add(cab)
+    model.fix([0, n], "xyz")
+    F = np.zeros((n + 1, 6))
+    F[n // 2, 1] = P
+    lin = StaticSolver(model).solve(F).displacements[n // 2, 1]
+    U, _ = newton_solve(model, cab, F)
+    case = (f"a steel wire {d:g} mm, {L:g} mm between fixed ends, pretension {sigma0:g} MPa ({T0:.1f} N), {P:g} N across "
+            f"at its middle ({n} cables)")
+    return [check_record(case, "linear_deflection", P * L / (4.0 * T0), float(lin), "mm", 1e-9,
+                         "the first Newton step (the pretension's geometric stiffness alone): w = P L / (4 T0)"),
+            check_record(case, "sag", taut_cable_deflection(P, L, E * A, T0), float(U[n // 2, 1]), "mm", 1e-6,
+                         "the taut string with stretch: P = 2 T w / sqrt(a^2 + w^2), T = T0 + EA (sqrt(a^2 + w^2) - a) / a, "
+                         "a = L / 2 (statics of the two halves; solved by bisection)")]
 
 
 def plate_strip_known_answer() -> Record:
@@ -1120,6 +1672,8 @@ PUSH_FORCE = Param("push_force", "N", "outward push at each occupant's hip and s
 HAND_PART = Param("hand_part", None, "the hand control's part id (without it: the first part of a hand control kind)")
 FOOT_PARTS = Param("foot_parts", None, "comma-separated pedal part ids (without it: every part of a pedal kind)")
 TOUCH = Param("touch", "mm", "a part touches what is at most this far from its box", default=TOUCH_MM)
+NET_PRESTRESS = Param("net_prestress", "MPa", "the nets' wire stress as fitted (their pretension; an assumption)",
+                      default=NET_PRESTRESS_MPA)
 SAFETY_FACTOR = Param("safety_factor", "1", "each member's allowable stress is its own material's yield over this "
                       "(max_utilisation) (Q61)", default=1.0)
 
@@ -1133,7 +1687,7 @@ class LoadPath(BuiltinTool):
     formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.free_parts"]
     load_case_params = (LOAD_KIND, HAND_FORCE, FOOT_FORCE, ACCEL_V, ACCEL_LON, ACCEL_LAT, OCC_MASS, OCC_LAT, OCC_LON,
                         PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
-    run_params = (TOUCH,)
+    run_params = (TOUCH, NET_PRESTRESS)
     # Every load kind gives free_parts. grip_deflection (load_kind hand) and pedal_deflection (foot) are predicted
     # by load_path.control_deflection (output delta) with the inputs of hiraku.catalog.builders.load_path.
     # control_inputs; they are not listed here because a load case of the default kind (inertia) has neither.
@@ -1153,10 +1707,13 @@ class LoadPath(BuiltinTool):
         fp = param_text(load_case, "foot_parts")
         values["foot_parts"] = [s.strip() for s in fp.split(",") if s.strip()] if fp else None
         touch = float(run_param(params, TOUCH))
+        values["net_prestress"] = float(run_param(params, NET_PRESTRESS))
         out = analyse_load_path(design, kind, values, touch)
         n_springs = len(out.pop("contacts"))
         free = out.pop("free")
         out["assumptions"] = list(ASSUMPTIONS) + ([f"触れる許し {touch:g} mm (run の params.touch)"] if touch != TOUCH_MM else [])
+        if values["net_prestress"] != NET_PRESTRESS_MPA:
+            out["assumptions"].append(f"網の線の初めの張り {values['net_prestress']:g} MPa (run の params.net_prestress)")
         if free:
             out["assumptions"].append(f"どこにも繋がらない部品 {len(free)} 個の質量は枠に載っていない (応力とたわみは、"
                                       "それらが繋がったときより小さく出る)")

@@ -242,10 +242,17 @@ def _r1_joint(spec: Record, req: Record, design: Record) -> Record:
 Builder = Callable[[Record, Record, Record], Record]
 
 # Builders named by `build:` in data/catalog/tests.yaml (this module's own).
+def _with_modules(build: Builder) -> Builder:
+    # load_case.modules on designs split into modules, as the builders package sets it (builders.modules)
+    from hiraku.catalog.builders.modules import with_modules
+
+    return with_modules(build)
+
+
 BUILDERS: dict[str, Builder] = {
-    "p1_step": _p1_step,
-    "r1_static": _r1_static,
-    "r1_joint": _r1_joint,
+    "p1_step": _with_modules(_p1_step),
+    "r1_static": _with_modules(_r1_static),
+    "r1_joint": _with_modules(_r1_joint),
 }
 
 # Which load case feeds which (P1's wheel force goes into the R1 frame load, beams and shells).
@@ -297,10 +304,16 @@ def product_step(product: str, load_case: Record) -> Record | None:
         return None
 
 
+def recipe_for(plans: dict[str, Record], load_case: Record) -> Record | None:
+    """A builders' step for one load case from PLANS (or PLANS_BEYOND): the load case's own (keyed by its
+    load_case_id, e.g. "R8-stress" when the test's other cases need another step), else its test's."""
+    return plans.get(str(load_case.get("load_case_id", ""))) or plans.get(str(load_case.get("test_id", "")))
+
+
 def plan_steps(product: str, load_case: Record) -> list[Record]:
     """The steps hiraku.catalog.builders has for one load case: the product's own (PRODUCT_STEPS),
     the one past the limit (PLANS_BEYOND, for a load case id ending in -beyond) and the general one
-    (PLANS) of its test, those that exist, in that order. A product step that cannot take the load
+    (PLANS), each the load case's own when there is one, else its test's (recipe_for), those that exist, in that order. A product step that cannot take the load
     case is left out."""
     mod = _builders_module()
     if mod is None:
@@ -309,11 +322,13 @@ def plan_steps(product: str, load_case: Record) -> list[Record]:
     step = product_step(product, load_case)
     if step:
         out.append(step)
-    tid = load_case.get("test_id")
-    if str(load_case.get("load_case_id", "")).endswith("-beyond") and tid in getattr(mod, "PLANS_BEYOND", {}):
-        out.append(mod.PLANS_BEYOND[tid])
-    if tid in getattr(mod, "PLANS", {}):
-        out.append(mod.PLANS[tid])
+    if str(load_case.get("load_case_id", "")).endswith("-beyond"):
+        past = recipe_for(getattr(mod, "PLANS_BEYOND", {}), load_case)
+        if past:
+            out.append(past)
+    general = recipe_for(getattr(mod, "PLANS", {}), load_case)
+    if general:
+        out.append(general)
     return out
 
 

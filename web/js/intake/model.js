@@ -30,6 +30,9 @@ export function emptyModel() {
     docs: new Map(), // doc_id -> {doc, rules}
     checks: new Map(), // rule_id -> rule_check
     knowledgeSeq: 0,
+    domainsDraft: false, // the picks on screen are the code's candidates (from the product's properties), not Claude's choice
+    litAt: new Map(), // domain -> t (s) of the event that lit it, for a glow that follows the playback time
+    finished: false,
   };
 }
 
@@ -70,9 +73,14 @@ export function apply(m, e) {
       break;
     case "domains.picked":
       m.domains = d;
+      m.domainsDraft = !(d.flag_reasons && Object.keys(d.flag_reasons).length); // Claude's choice comes with the reasons for the flags
       m.domainsFromProject = false;
+      if (!m.domainsDraft) for (const p of d.picks || []) if (!m.litAt.has(p.domain)) m.litAt.set(p.domain, e.t);
       m.flags = d.flags;
       m.speedClass = d.speed_class || m.speedClass;
+      break;
+    case "run.finished":
+      m.finished = true;
       break;
     case "hearing.asked":
       {
@@ -105,8 +113,9 @@ export function apply(m, e) {
   if (NOTE_KINDS.has(e.kind) && e.text) m.chat.push({ who: "note", text: e.text, t: e.t, kind: e.kind });
 }
 
-export function buildModel(events) {
+export function buildModel(events, options = {}) {
   const m = emptyModel();
+  m.picksFinal = !!options.picksFinal; // a sample made by the code alone: its picks are the final ones
   for (const e of events) apply(m, e);
   return m;
 }
@@ -120,7 +129,8 @@ export function domainCards(m) {
   return DOMAINS.map(({ name, ja }) => {
     const p = picks.get(name);
     if (p) {
-      return { domain: name, ja, state: "lit", shownName: p.shown_name, renamed: p.shown_name !== ja, reason: p.reason,
+      const draft = m.domainsDraft && !m.finished && !m.picksFinal;
+      return { domain: name, ja, state: draft ? "draft" : "lit", litAt: m.litAt.get(name) ?? null, shownName: p.shown_name, renamed: p.shown_name !== ja, reason: p.reason,
                testIds: p.test_ids, testCount: p.test_ids ? p.test_ids.length : null };
     }
     const o = off.get(name);
@@ -132,7 +142,9 @@ export function domainCards(m) {
 
 // ----------------------------------------------------------------------------- A2
 
-export const SOURCE_JA = { user: "ユーザー", hearing: "ヒアリング", default: "既定値" };
+export const SOURCE_JA = { user: "あなたが指定", hearing: "あなたが答えた", default: "標準の値" };
+/** 確かさ: 1 and 2 differ in where the value was seen. */
+export const TRUST_JA = ["", "出典の本文で確かめた", "ほかの資料で確かめた", "仮の値 (確かめていない)"];
 
 /** The hearing as screen rows: each question with its answer once there is one. */
 export function hearingRows(m) {
@@ -154,7 +166,7 @@ export function ruleRows(m) {
   });
 }
 
-export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "この規則を外す" };
+export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "このルールを使わない" };
 
 /** Requirements that rest on an assumption (trust 3): they stay in the report as "not checked". */
 export function assumptions(m) {

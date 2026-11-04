@@ -282,6 +282,83 @@ class DriverTest(unittest.TestCase):
         self.assertEqual(got, {"a": "claude_code_plugin", "b": "agent_sdk", "c": "scripted", "d": None, "e": None})
 
 
+class EndingTest(unittest.TestCase):
+    """Each row of the run list says when the run started and how it ended (the run.finished
+    event's status / stop_code / stop_reason, the last design version and how its domains were
+    judged), read from project.json, the last version's judgements.json and the tail of
+    events.jsonl only."""
+
+    def setUp(self):
+        self.runs = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.runs)
+
+    def folder(self, run_id, lines, project=None, judgements=None):
+        d = self.runs / run_id
+        d.mkdir()
+        (d / "events.jsonl").write_bytes("".join(lines).encode("utf-8"))
+        if project is not None:
+            (d / "project.json").write_text(json.dumps(project, ensure_ascii=False), encoding="utf-8")
+        for v, js in (judgements or {}).items():
+            (d / f"v{v:03d}").mkdir()
+            (d / f"v{v:03d}" / "judgements.json").write_text(json.dumps(js), encoding="utf-8")
+        return d
+
+    def summary(self, run_id):
+        return next(r for r in list_runs(self.runs) if r["run_id"] == run_id)
+
+    @staticmethod
+    def judged(v, domain, state):
+        return _line(5, "judgement.updated", design_version=v, domain=domain,
+                     data={"design_version": v, "domain": domain, "state": state, "red_count": 0, "verdict_ids": [], "summary": ""})
+
+    def test_all_passed_from_project_and_judgements_file(self):
+        self.folder("20261104-084012-all", [_line(0, "run.started", data={"want": "w"}),
+                                            _line(1, "run.finished", data={"status": "done", "stop_code": "done"})],
+                    project={"want": "w", "created_at": "2026-11-04T08:40:12.000+09:00", "design_versions": [1, 2, 3, 4], "driver": "scripted"},
+                    judgements={4: [{"domain": "strength", "state": "green"}, {"domain": "assembly", "state": "green"}],
+                                3: [{"domain": "strength", "state": "red"}]})
+        r = self.summary("20261104-084012-all")
+        self.assertEqual(r["when"], "11/4 08:40")
+        self.assertEqual((r["end_status"], r["stop_code"], r["last_version"]), ("done", "done", 4))
+        self.assertEqual(r["judged"], {"green": 2, "red": 0, "pending": 0})
+        self.assertTrue(r["finished"])
+
+    def test_stopped_with_its_reason_and_the_judgements_from_the_tail(self):
+        # no project.json: the version and the judgements come from the events at the end
+        lines = [_line(0, "run.started", data={"want": "w"}),
+                 self.judged(1, "strength", "red"), self.judged(2, "strength", "red"), self.judged(2, "strength", "green"),
+                 self.judged(2, "heat", "pending"),
+                 _line(9, "run.finished", data={"status": "stopped", "stop_code": "cost_limit", "stop_reason": "上限の費用 2 USD に達した"})]
+        r = self.summary(self.folder("20261103-223000-stop", lines).name)
+        self.assertEqual(r["when"], "11/3 22:30")  # from the run id
+        self.assertEqual((r["end_status"], r["stop_code"], r["stop_reason"], r["last_version"]),
+                         ("stopped", "cost_limit", "上限の費用 2 USD に達した", 2))
+        self.assertEqual(r["judged"], {"green": 1, "red": 0, "pending": 1})
+
+    def test_going_has_no_ending(self):
+        r = self.summary(self.folder("20261103-230000-going", [_line(0, "run.started", data={"want": "w"}), self.judged(1, "strength", "red")]).name)
+        self.assertFalse(r["finished"])
+        self.assertEqual((r["end_status"], r["stop_code"], r["stop_reason"]), (None, None, ""))
+        self.assertEqual(r["last_version"], 1)
+
+    def test_a_big_record_is_read_at_its_head_and_tail_only(self):
+        # 3 MB of events between the start and the end: the judgement far from the end is not seen,
+        # the one in the tail is
+        filler = _line(1, "agent.said", data={"text": "x" * 900})
+        lines = [_line(0, "run.started", data={"want": "w"}), self.judged(1, "early", "red")] + [filler] * 3300 + [
+            self.judged(1, "strength", "green"), _line(9, "run.finished", data={"status": "done"})]
+        d = self.folder("20261103-231000-big", lines)
+        self.assertGreater((d / "events.jsonl").stat().st_size, 3_000_000)
+        r = self.summary(d.name)
+        self.assertEqual(r["want"], "w")  # the head
+        self.assertTrue(r["finished"])
+        self.assertEqual(r["judged"], {"green": 1, "red": 0, "pending": 0})  # "early" was not read
+
+    def test_when_without_a_clock(self):
+        self.assertEqual(webserver._when("", "bad-id"), "")
+        self.assertEqual(webserver._when("2026-11-02T20:30:00.000+09:00", "x"), "11/2 20:30")
+
+
 class LayoutTest(unittest.TestCase):
     def test_layout_rules_are_served_or_missing_is_said(self):
         tmp = Path(tempfile.mkdtemp())
@@ -861,6 +938,17 @@ class LaunchTest(unittest.TestCase):
                 self.assertIn("estimate_usd", r)
             else:
                 self.assertTrue(r["product"] and r["want"], r["id"])
+
+    def test_the_estimate_from_estimates_usd(self):
+        """Without estimate_usd, a row shows the default mix's usd of its estimates_usd (null: none)."""
+        from hiraku.webserve.launch import demo_run_estimate_of
+
+        self.assertEqual(demo_run_estimate_of({"estimates_usd": {"default": {"usd": 3.52, "upper_usd": 3.52}, "cae-haiku": {"usd": 0.09, "upper_usd": 0.88}}}), 3.52)
+        self.assertIsNone(demo_run_estimate_of({"estimates_usd": None}))
+        self.assertIsNone(demo_run_estimate_of({}))
+        self.assertEqual(demo_run_estimate_of({"estimate_usd": 1.1, "estimates_usd": {"default": {"usd": 9.0}}}), 1.1)
+        with self.assertRaises(ValueError):
+            demo_run_estimate_of({"estimates_usd": {"cae-haiku": {"usd": 0.1}}})
 
     def test_refuses_other_files_and_other_pages(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})

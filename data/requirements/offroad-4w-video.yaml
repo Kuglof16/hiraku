@@ -131,7 +131,7 @@ requirements:
     trust: 1
     basis: request
   - key: Q51
-    name: 0 → 最高速度 (Q50) の時間
+    name: 0 → 最高速度の時間
     value: 6
     unit: s
     source: default
@@ -302,7 +302,7 @@ requirements:
     basis: >-
       the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this
       arc counts too (assumption)
-tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, H1, H3, H5]
+tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, R8, R7, H1, H3, H6, H5]
 # Cases past the limit, for showing the failing side: their verdicts are expected to be red.
 # P1 and R1 at a 250 mm step, and P1 at a step higher than the front wheel (hiraku/catalog/build.py);
 # F1, S4 and S5 from the K2 builders; T1 at an assumed air temperature from the analysis builders.
@@ -310,5 +310,5 @@ tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, H1, H3,
 # friction 0.8 to 1.6 and 50 to 80 km/h).
 beyond: [P1, R1, T1, F1, S4, S5]
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 2  # as offroad-4w.yaml (HK5: the layout first, then the motor)
+round_limit: 4  # as offroad-4w.yaml (HK5: one revision per red stage)
 cost_limit_usd: 2.0

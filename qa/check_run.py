@@ -58,6 +58,18 @@ their basis. What it looks at:
   revisions), has no picked domain still pending: every load case with a
   criterion has a verdict in the last version (a red tile alone does not end a
   domain), and no tile is left pending
+- HK6 (contract d9631a5, designs with modules only): each design.change_proposed comes from
+  designer.<its module> (data.agent_id the same, design_version when given the latest version), not
+  for package, and names only that module's
+  variables and choices of the version it was made on; its module is named in the modules of a red
+  load case of that version (and of each load case it says it answers); from version 2 a version is
+  made by the packager, its module_changes are the round's proposals (since the previous version)
+  in order and unchanged, plus at most one package change from the packager with package variables
+  only; no variable is changed twice in a round, and every variable that moved is in that package
+  change or a variable of a module proposed in the round (a proposal's code may set it, as fit: driver does;
+  a variable the generator marks derived may follow; one no module lists and not derived is a warning);
+  warning (module.envelope) for a part box or member end outside its module's envelope boxes; no
+  proposal in a design without modules
 - agents: each agent.started has its agent.stopped before run.finished (warning:
   an agent still working when the run ended was cut off)
 - run.finished: stop_code done exactly when the status is done (error with
@@ -130,6 +142,9 @@ TOPOLOGY_OF = {"free_edges": "free_edges", "coincident_nodes": "coincident_nodes
 INBOX_FILE_RE = re.compile(r"^[0-9]+-[\w.]+\.json$")
 # a rule_check target (and part_id) standing for the whole design, e.g. a system rule finding a part missing
 WHOLE_DESIGN = "design"
+PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX_FILE", "PLUGIN_LOCK_FILE",
+                                              "PLUGIN_ALIVE_FILE") if hasattr(layout, k)}
+UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
@@ -169,13 +184,16 @@ class RunChecker:
         self.project: dict[str, Any] | None = None
         self.events: list[dict[str, Any]] = []
         self.where_of: list[str] = []  # location of each event, same index as self.events
-        self.load_cases: dict[str, dict] = {}
+        self.load_cases: dict[str, dict] = {}  # project.load_cases: the first version's
+        # load_cases.created (contract 39b6a8c): version -> (event, load case id -> load case)
+        self.version_lcs: dict[int, tuple[int, dict[str, dict]]] = {}
         # record kind -> id -> (event index, data)
         self.recs: dict[str, dict[str, tuple[int, dict]]] = {k: {} for k, _ in RECORD_EVENTS.values()}
         # every appearance of a record (a cause re-sent with resolved true), to read its state at an event
         self.history: dict[str, dict[str, list[tuple[int, dict]]]] = {k: {} for k, _ in RECORD_EVENTS.values()}
         self.designs: dict[int, tuple[int, dict]] = {}
         self.judgements: list[tuple[int, dict]] = []
+        self.proposals: list[tuple[int, dict, str | None]] = []  # design.change_proposed: (event, data, agent)
         self.tool_checks: dict[str, list[tuple[int, dict]]] = {}
         self.started: dict[str, int] = {}
         self.project_updates: list[tuple[int, dict]] = []
@@ -320,6 +338,17 @@ class RunChecker:
                 self.designs[v] = (i, data)
             elif kind == "judgement.updated":
                 self.judgements.append((i, data))
+            elif kind == "design.change_proposed":
+                self.proposals.append((i, data, e.get("agent")))
+            elif kind == "load_cases.created":
+                v = data.get("design_version")
+                if v in self.version_lcs:
+                    self.error("ids.duplicate", w, f"load cases of version {v} created twice")
+                if v not in self.designs:
+                    self.error("load_cases.version", w, f"load cases for version {v}, not created before them")
+                elif v == 1:
+                    self.warn("load_cases.version", w, "load cases for version 1 (project.load_cases holds them)")
+                self.version_lcs[v] = (i, {lc.get("load_case_id"): lc for lc in data.get("load_cases") or []})
             elif kind == "tool.checked":
                 self.tool_checks.setdefault(data.get("name"), []).append((i, data))
             elif kind == "analysis.started":
@@ -398,6 +427,8 @@ class RunChecker:
             name = p.name
             if name in (layout.PROJECT_FILE, layout.EVENTS_FILE, layout.REPORT_FILE):
                 continue
+            if name in PLUGIN_FILES or name == layout.TOOL_ERRORS_FILE:  # plugin runs; a tool's exceptions (layout)
+                continue
             finished = any(e.get("kind") == "run.finished" for e in self.events)
             if name == layout.STOP_REQUEST_FILE:
                 if finished:
@@ -462,12 +493,28 @@ class RunChecker:
                 self._check_design_file(p, version)
             elif p.name == layout.JUDGEMENTS_FILE:
                 self._check_judgements_file(p, version)
+            elif p.name == getattr(layout, "VERSION_LOAD_CASES_FILE", None):
+                self._check_version_lcs_file(p, version)
             elif p.is_dir() and p.name in dirs:
                 rkind = dirs[p.name]
                 for f in sorted(p.iterdir()):
                     self._check_record_file(f, rkind, version, seen)
             else:
                 self.warn("files.unknown", self.rel(p), "not part of the run layout")
+        if version in self.version_lcs and not (vdir / layout.VERSION_LOAD_CASES_FILE).is_file():
+            self.error("files.missing", self.rel(vdir), f"no {layout.VERSION_LOAD_CASES_FILE} for its load_cases.created")
+
+    def _check_version_lcs_file(self, p: Path, version: int) -> None:
+        d = self._read_json(p)
+        if d is None or not self._schema("version_load_cases", d, self.rel(p)):
+            return
+        if d.get("design_version") != version:
+            self.error("files.version", self.rel(p), f"design_version {d.get('design_version')} in folder v{version:03d}")
+        ev = self.version_lcs.get(version)
+        if ev is None:
+            self.error("files.event_data", self.rel(p), "no load_cases.created event for it")
+        elif self.events[ev[0]].get("data") != d:
+            self.error("files.event_data", self.rel(p), "differs from its load_cases.created event")
 
     def _check_design_file(self, p: Path, version: int) -> None:
         d = self._read_json(p)
@@ -528,11 +575,21 @@ class RunChecker:
             return p[1].get("design_version") if p else None
         if rkind in ("cause", "verdict"):
             c = self.recs["comparison"].get(rec.get("comparison_id"))
+            if c is None and rkind == "verdict" and rec.get("analysis_id"):  # an unsupported_load verdict
+                a = self.recs["analysis"].get(rec.get("analysis_id"))
+                return a[1].get("design_version") if a else None
             return self.version_of("comparison", c[1]) if c else None
         return None
 
+    def lcs(self, v: int | None) -> dict[str, dict]:
+        """The load cases of design version v: its load_cases.created, else project.load_cases."""
+        return self.version_lcs[v][1] if v in self.version_lcs else self.load_cases
+
+    def lc(self, lc_id: str | None, v: int | None) -> dict | None:
+        return self.lcs(v).get(lc_id)
+
     def domain_of_analysis(self, a: dict) -> str | None:
-        lc = self.load_cases.get(a.get("load_case_id"))
+        lc = self.lc(a.get("load_case_id"), a.get("design_version"))
         if lc:
             return lc.get("domain")
         for pid in a.get("prediction_ids", []):
@@ -564,9 +621,10 @@ class RunChecker:
             v = p.get("design_version")
             if v not in self.designs or self.designs[v][0] > i:
                 self.error("prediction.design", w, f"{pid} is for design version {v}, not created before it")
-            lc = self.load_cases.get(p.get("load_case_id"))
+            lc = self.lc(p.get("load_case_id"), v)
             if lc is None:
-                self.error("prediction.load_case", w, f"{pid}: load case {p.get('load_case_id')} not in project.json")
+                self.error("prediction.load_case", w, f"{pid}: load case {p.get('load_case_id')} not among "
+                                                      f"version {v}'s load cases")
             else:
                 for f in ("test_id", "domain"):
                     if lc.get(f) != p.get(f):
@@ -933,7 +991,7 @@ class RunChecker:
             if pq.get("unit") != aq.get("unit"):
                 self.error("comparison.units", w, f"{cid} compares {pq.get('unit')} with {aq.get('unit')}")
             self._check_comparison_math(cid, c, w)
-            lc = self.load_cases.get(p.get("load_case_id"))
+            lc = self.lc(p.get("load_case_id"), p.get("design_version"))
             if lc and c.get("tolerance_rel") != lc.get("tolerance_rel"):
                 self.error("comparison.tolerance", w,
                            f"{cid} tolerance {c.get('tolerance_rel')} but the load case says {lc.get('tolerance_rel')}")
@@ -1002,10 +1060,13 @@ class RunChecker:
     def check_verdicts(self) -> None:
         for vid, (i, v) in self.recs["verdict"].items():
             w = self.where_of[i]
+            if v.get("basis") == UNSUPPORTED:
+                self._check_unsupported_verdict(vid, v, i, w)
+                continue
             c = self._before("comparison", v.get("comparison_id"), i, w, "verdict.from_match", "comparison")
             if c is None:
                 continue
-            crit = (self.load_cases.get(v.get("load_case_id")) or {}).get("criterion")
+            crit = (self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}).get("criterion")
             if v.get("basis", "match") == "explained_safe_side":
                 self._check_safe_side_verdict(vid, v, c, crit, i, w)
             else:
@@ -1028,6 +1089,40 @@ class RunChecker:
                     if v.get(f) != crit.get(f):
                         self.error("verdict.criterion", w, f"{vid} {f} {v.get(f)} but the criterion says {crit.get(f)}")
             self._check_verdict_math(vid, v, w)
+
+    def _check_unsupported_verdict(self, vid: str, v: dict, i: int, w: str) -> None:
+        """basis unsupported_load (contract, 荷重の通り道が無いとき): a failing verdict with no prediction
+        or comparison, made from an ok analysis (analysis_id, recorded before it) of the same load case
+        whose results carry unsupported_load > 0; quantity unsupported_load, op <=, limit 0 (unit 1),
+        value from the analysis, margin_pct null."""
+        rule = "verdict.unsupported_load"
+        if v.get("comparison_id") is not None:
+            self.error(rule, w, f"{vid} is unsupported_load but names comparison {v.get('comparison_id')}")
+        a = self._before("analysis", v.get("analysis_id"), i, w, rule, "analysis")
+        if a is None:
+            return
+        if a.get("status") != "ok":
+            self.error(rule, w, f"{vid} made from {v.get('analysis_id')}, a {a.get('status')} analysis")
+        if a.get("load_case_id") != v.get("load_case_id"):
+            self.error(rule, w, f"{vid} is for {v.get('load_case_id')} but {v.get('analysis_id')} "
+                                f"analyzed {a.get('load_case_id')}")
+        got = [r for r in a.get("results") or [] if r.get("quantity") == UNSUPPORTED]
+        value = v.get("value")
+        value = value.get("value") if isinstance(value, dict) else value
+        if not got or not isinstance(got[0].get("value"), (int, float)) or got[0]["value"] <= 0:
+            self.error(rule, w, f"{vid}: {v.get('analysis_id')} has no unsupported_load result above 0")
+        elif value != got[0]["value"]:
+            self.error(rule, w, f"{vid} value {value} is not the analysis' unsupported_load {got[0]['value']}")
+        limit = v.get("limit")
+        limit = limit.get("value") if isinstance(limit, dict) else limit
+        if (v.get("quantity"), v.get("op"), limit, v.get("pass"), v.get("value_from", "analysis"), v.get("margin_pct")) \
+                != (UNSUPPORTED, "<=", 0, False, "analysis", None):
+            self.error(rule, w, f"{vid} must be quantity unsupported_load, op <=, limit 0, pass false, "
+                                f"value_from analysis, margin_pct null")
+        lc = self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}
+        for f in ("test_id", "domain"):
+            if lc and lc.get(f) is not None and v.get(f) != lc.get(f):
+                self.error(rule, w, f"{vid} {f} {v.get(f)} but the load case says {lc.get(f)}")
 
     def _check_safe_side_verdict(self, vid: str, v: dict, c: dict, crit: dict | None, i: int, w: str) -> None:
         """basis explained_safe_side (contract, record_cause): a mismatch whose own cause,
@@ -1102,7 +1197,7 @@ class RunChecker:
         tool's newest ok analysis has its judged result beyond the criterion, which also voids a
         safe-side verdict."""
         out: dict[str, list[str]] = {}
-        for lc_id, lc in self.load_cases.items():
+        for lc_id, lc in self.lcs(v).items():
             crit = lc.get("criterion")
             if lc.get("domain") != domain or not isinstance(crit, dict):
                 continue
@@ -1186,7 +1281,7 @@ class RunChecker:
                 self.error("judgement.state", w, f"state {state} with {fails} failing verdicts")
             if state == "green" and not j.get("verdict_ids"):
                 self.error("judgement.state", w, "green without any verdict")
-            missing = [lc_id for lc_id, lc in self.load_cases.items()
+            missing = [lc_id for lc_id, lc in self.lcs(j.get("design_version")).items()
                        if lc.get("domain") == j.get("domain") and "criterion" in lc and lc_id not in judged]
             if state == "green" and missing:
                 self.error("judgement.state", w, f"green while {', '.join(missing)} have no verdict (pending)")
@@ -1275,7 +1370,7 @@ class RunChecker:
                     self.error("report.differences", w, f"{cid} cause {cause} is not a cause of it recorded before the report")
         for cid, (k, c) in self.recs["comparison"].items():
             p = (self.recs["prediction"].get(c.get("prediction_id")) or (None, {}))[1]
-            lc = self.load_cases.get(p.get("load_case_id")) or {}
+            lc = self.lc(p.get("load_case_id"), p.get("design_version")) or {}
             if (k < i and c.get("status") == "mismatch" and cid not in listed and lc.get("domain") == dom
                     and "criterion" in lc and self.version_of("comparison", c) == v):
                 self.warn("report.differences", w, f"{dom} leaves out the mismatch {cid} ({lc.get('load_case_id')})")
@@ -1324,7 +1419,7 @@ class RunChecker:
                         and self._stage(b.get("tool")) < n):
                     lower.setdefault(b.get("load_case_id"), (bid, b.get("tool")))
             for lc_id, (bid, tool) in lower.items():
-                if (not isinstance((self.load_cases.get(lc_id) or {}).get("criterion"), dict)
+                if (not isinstance((self.lc(lc_id, v) or {}).get("criterion"), dict)
                         or str(lc_id).endswith(BEYOND_SUFFIX)):
                     continue
                 verdicts = [r for j, r in self.recs["verdict"].values()
@@ -1332,10 +1427,42 @@ class RunChecker:
                 state = "not judged" if not verdicts else ("red" if not verdicts[-1].get("pass") else None)
                 if lc_id == a.get("load_case_id") and (state != "red" or self._stage(self._verdict_tool(verdicts[-1])) >= n):
                     continue
+                if state == "not judged" and self._cannot_judge(lc_id, v, at):
+                    continue
                 if state:
                     self.error("HK5_light_first", self.where_of[at],
                                f"{aid} ({a.get('tool')}, stage {n}) started while {lc_id}, checked by {bid} "
                                f"({tool}, stage {self._stage(tool)}), is {state}")
+
+    def _cannot_judge(self, lc_id: str, v: int, i: int) -> str | None:
+        """Why a load case without a verdict cannot be judged at event i in version v, as the records show
+        it (contract, HK5: it does not hold the heavier tools and stays not judged on its tile); else None.
+        - no K0 formula predicts it: none of its predictions so far is of its criterion's quantity (the
+          analysis was allowed on predictions of other quantities)
+        - its mismatch was ended (contract 08cf4d6; a plan's expected_mismatch with end): the latest
+          comparison of the judged quantity is a mismatch whose latest cause says ends_case true and is not
+          resolved (a cause without it, waiting for a fix, still holds the heavier tools)"""
+        crit = (self.lc(lc_id, v) or {}).get("criterion") or {}
+        q = crit.get("quantity")
+        preds = [p for j, p in self.recs["prediction"].values()
+                 if j < i and p.get("load_case_id") == lc_id and p.get("design_version") == v]
+        if preds and not any(p.get("quantity") == q for p in preds):
+            return f"no prediction of {q}"
+        latest = None
+        for cid, (j, c) in self.recs["comparison"].items():
+            p = self.recs["prediction"].get(c.get("prediction_id"))
+            a = self.recs["analysis"].get(c.get("analysis_id"))
+            if j > i or p is None or p[1].get("load_case_id") != lc_id or p[1].get("design_version") != v:
+                continue
+            if c.get("quantity") == JUDGED_AS.get(((a[1] if a else {}).get("tool"), q), q):
+                latest = (cid, c)
+        if latest is None or latest[1].get("status") != "mismatch":
+            return None
+        causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == latest[0]]
+        cause = self._state_at("cause", causes[-1], i) if causes else None
+        if cause is not None and cause.get("ends_case") is True and not cause.get("resolved"):
+            return f"{latest[0]} ended with {causes[-1]}"
+        return None
 
     def _verdict_tool(self, ver: dict) -> str | None:
         """The tool of the analysis a verdict came from (through its comparison, or its analysis_id)."""
@@ -1394,7 +1521,7 @@ class RunChecker:
             if self._not_looked_at(p):
                 continue
             dom = p.get("domain")
-            missing = [lc_id for lc_id, lc in self.load_cases.items()
+            missing = [lc_id for lc_id, lc in self.lcs(last).items()
                        if lc.get("domain") == dom and "criterion" in lc and lc_id not in judged]
             if missing:
                 out[dom] = missing
@@ -1422,6 +1549,177 @@ class RunChecker:
             limit = self.project.get("cost_limit_usd")
             if costs and isinstance(costs[-1], (int, float)) and isinstance(limit, (int, float)) and costs[-1] < limit:
                 self.warn("run.stop_code", w, f"stop_code cost_limit but the last cost is {costs[-1]} of {limit} USD")
+
+    def _design_before(self, i: int) -> tuple[int, dict] | None:
+        """The latest design version created before event i: (version, design)."""
+        made = [(j, v, d) for v, (j, d) in self.designs.items() if j < i and isinstance(v, int)]
+        return max(made, key=lambda x: x[0])[1:] if made else None
+
+    def _red_cases(self, v: int, i: int) -> set[str]:
+        """Load cases whose latest verdict in version v before event i fails."""
+        last: dict[str, dict] = {}
+        for j, ver in sorted(self.recs["verdict"].values(), key=lambda x: x[0]):
+            if j < i and self.version_of("verdict", ver) == v:
+                last[ver.get("load_case_id")] = ver
+        return {lc for lc, ver in last.items() if ver.get("pass") is False}
+
+    def check_modules(self) -> None:
+        """HK6_module_scope (contract d9631a5): the module designers propose, the packager builds."""
+        rule = "HK6_module_scope"
+        if not any(d.get("modules") for _, d in self.designs.values()):
+            for i, p, _ in self.proposals:
+                self.error(rule, self.where_of[i], f"{p.get('change_id')}: a module change for a design without modules")
+            return
+        seen: set = set()
+        for i, p, agent in self.proposals:
+            w, cid, m = self.where_of[i], p.get("change_id"), p.get("module_id")
+            if cid in seen:
+                self.error("ids.duplicate", w, f"{cid} proposed twice")
+            seen.add(cid)
+            cur = self._design_before(i)
+            if cur is None:
+                self.error(rule, w, f"{cid} proposed before any design version")
+                continue
+            v, d = cur
+            if p.get("design_version") not in (None, v):
+                self.error(rule, w, f"{cid} says design_version {p['design_version']}, but v{v} is the latest version")
+            mods = {x.get("module_id"): x for x in d.get("modules") or []}
+            if m == "package":
+                self.error(rule, w, f"{cid}: the package is the packager's (build_version input), not a proposal")
+            elif m not in mods:
+                self.error(rule, w, f"{cid}: v{v} has no module {m}")
+            if agent != f"designer.{m}" or p.get("agent_id") != agent:
+                self.error(rule, w, f"{cid} for {m} from {agent} (agent_id {p.get('agent_id')}); "
+                                    f"only designer.{m} proposes for it")
+            mod = mods.get(m) or {}
+            for what, allowed in (("changes", "variables"), ("choices", "choices")):
+                out = sorted(set(p.get(what) or {}) - set(mod.get(allowed) or []))
+                if out:
+                    self.error(rule, w, f"{cid} {what} {', '.join(out)}, not among {m}'s {allowed} in v{v}")
+            reds = self._red_cases(v, i)
+            named = {x for lc in reds for x in (self.lc(lc, v) or {}).get("modules") or []}
+            for lc in p.get("load_case_ids") or []:
+                if lc not in reds:
+                    self.error(rule, w, f"{cid} answers {lc}, which is not red in v{v}")
+                elif m not in ((self.lc(lc, v) or {}).get("modules") or []):
+                    self.error(rule, w, f"{cid} from {m} answers {lc}, whose modules do not name {m}")
+            if not reds:
+                self.error(rule, w, f"{cid} proposed while nothing in v{v} is red")
+            elif not named:
+                self.warn(rule, w, f"{cid}: no red load case of v{v} names its modules")
+            elif m not in named:
+                self.error(rule, w, f"{cid} from {m}, which no red load case of v{v} names "
+                                    f"({', '.join(sorted(named))})")
+        versions = sorted(v for v in self.designs if isinstance(v, int))
+        for k, v in enumerate(versions):
+            i, d = self.designs[v]
+            w = self.where_of[i]
+            self._check_envelopes(v, d, w)
+            if k == 0:
+                if d.get("module_changes"):
+                    self.error(rule, w, f"v{v} is the first version but lists module_changes")
+                continue
+            pi, prev = self.designs[versions[k - 1]]
+            if not (prev.get("modules") or d.get("modules")):
+                continue
+            agent = self.events[i].get("agent")
+            if agent != "packager":
+                self.error(rule, w, f"v{v} made by {agent}; with modules only the packager's build_version "
+                                    f"makes a version")
+            mods = {x.get("module_id"): x for x in prev.get("modules") or []}
+            pvars = set((mods.get("package") or {}).get("variables") or [])
+            rnd = [p for j, p, _ in self.proposals if pi < j < i]
+            listed = d.get("module_changes") or []
+            pkg = [x for x in listed if x.get("module_id") == "package"]
+            listed = [x for x in listed if x.get("module_id") != "package"]
+            if len(pkg) > 1:
+                self.error(rule, w, f"v{v} lists {len(pkg)} package changes (one at most)")
+            for x in pkg:
+                if x.get("design_version") not in (None, versions[k - 1]):
+                    self.error(rule, w, f"v{v} package change {x.get('change_id')} says design_version "
+                                        f"{x['design_version']}, not v{versions[k - 1]}")
+                if x.get("agent_id") != "packager":
+                    self.error(rule, w, f"v{v} package change {x.get('change_id')} by {x.get('agent_id')}, not the packager")
+                out = sorted(set(x.get("changes") or {}) - pvars)
+                if out or x.get("choices"):
+                    self.error(rule, w, f"v{v} package change {x.get('change_id')} sets "
+                                        f"{', '.join(out + sorted(x.get('choices') or {}))}, not package variables")
+            if [x.get("change_id") for x in listed] != [p.get("change_id") for p in rnd]:
+                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round "
+                                    f"proposed {[p.get('change_id') for p in rnd]}")
+            else:
+                for x, p in zip(listed, rnd):
+                    if x != p:
+                        self.error(rule, w, f"v{v} lists {x.get('change_id')} unlike its proposal")
+            twice: dict[str, list] = {}
+            for p in rnd + pkg:
+                for var in p.get("changes") or {}:
+                    twice.setdefault(var, []).append(p.get("change_id"))
+            for var, cids in sorted(twice.items()):
+                if len(cids) > 1:
+                    self.error(rule, w, f"v{v} built while {', '.join(map(str, cids))} all change {var}")
+            allowed = {x for c in pkg for x in c.get("changes") or {}}  # the packager's change, as listed
+            for p in rnd:
+                allowed |= set((mods.get(p.get("module_id")) or {}).get("variables") or [])
+            a, b = prev.get("variables") or {}, d.get("variables") or {}
+            moved = sorted(x for x in set(a) | set(b) if a.get(x) != b.get(x))
+            owned = {x for m in mods.values() for x in m.get("variables") or []}
+            bad = [x for x in moved if x not in allowed and x in owned]
+            if bad:
+                self.error(rule, w, f"v{v} moved {', '.join(bad)}: neither in the packager's package change nor a "
+                                    f"variable of a module proposed in the round")
+            unowned = [x for x in moved if x not in allowed and x not in owned and x not in self._derived(prev)]
+            if unowned:
+                self.warn(rule, w, f"v{v} moved {', '.join(unowned)}, which no module lists and the generator does "
+                                   f"not mark derived")
+            for p in rnd + pkg:
+                for var, q in (p.get("changes") or {}).items():
+                    if b.get(var) != q:
+                        self.warn(rule, w, f"v{v} has {var} = {b.get(var)}, not {q} as {p.get('change_id')} set it")
+
+    @staticmethod
+    def _derived(design: dict) -> set[str]:
+        """Variables the design's generator works out itself (spec derived: True, hiraku.designgen.variables)."""
+        try:
+            from hiraku import designgen
+            return {x["name"] for x in designgen.variables(design) if x.get("derived")}
+        except Exception:  # no generator for this design, or designgen not available: nothing is derived
+            return set()
+
+    def _check_envelopes(self, v: int, d: dict, w: str, tol_mm: float = 0.5) -> None:
+        """Parts (all 8 corners of the box) and members (both end nodes) inside one of their module's
+        envelope boxes, within tol_mm (warning module.envelope; H1-envelope's own margin is the
+        analysis dept's)."""
+        mods = {x.get("module_id"): x for x in d.get("modules") or []}
+        if not mods:
+            return
+        try:
+            import numpy as np
+            from hiraku.solvers.k4_geometry.obb import from_box
+        except ModuleNotFoundError:
+            self.warn("module.envelope", w, "numpy or hiraku.solvers not available; envelopes not checked")
+            return
+
+        def inside(points, boxes) -> bool:
+            for bx in boxes:
+                o = from_box(bx["center_mm"], bx["size_mm"], bx.get("rpy_deg"))
+                local = (np.asarray(points, float) - o.center) @ o.axes.T
+                if np.all(np.abs(local) <= o.half + tol_mm):
+                    return True
+            return False
+
+        nodes = {n.get("id"): n.get("xyz_mm") for n in d.get("nodes") or []}
+        things = [(f"part {x.get('id')}", x.get("module"),
+                   from_box(x["box"]["center_mm"], x["box"]["size_mm"], x["box"].get("rpy_deg")).corners())
+                  for x in d.get("parts") or [] if x.get("module") and x.get("box")]
+        things += [(f"member {x.get('id')}", x.get("module"), [nodes[x["node_a"]], nodes[x["node_b"]]])
+                   for x in d.get("members") or []
+                   if x.get("module") and nodes.get(x.get("node_a")) and nodes.get(x.get("node_b"))]
+        for name, m, pts in things:
+            if m not in mods:
+                self.error("HK6_module_scope", w, f"v{v} {name} is in module {m}, which the design does not have")
+            elif (mods[m].get("envelope") or []) and not inside(pts, mods[m]["envelope"]):
+                self.warn("module.envelope", w, f"v{v} {name} leaves the envelope of {m}")
 
     def check_finish(self) -> None:
         fin = [(i, e) for i, e in enumerate(self.events) if e.get("kind") == "run.finished"]
@@ -1606,6 +1904,7 @@ class RunChecker:
         self.check_light_first()
         self.check_hooks()
         self.check_agents()
+        self.check_modules()
         self.check_finish()
         if self.recompute:
             self.check_recompute()

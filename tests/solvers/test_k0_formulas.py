@@ -153,7 +153,9 @@ class FormulaLedgerTest(unittest.TestCase):
         self.assertAlmostEqual(ins["M_oh"], by_hand, places=6)
         self.assertEqual(overhang_moment(design, "LA") > ins["M_oh"], True)  # more lies behind the front axle
         # with no offset and no overhang the formula is the traction bending plus the push
-        base = dict(ji["inputs"], F=q(1000, "N"), W=q(2000, "N"))
+        closed = ("a", "L_e", "b_e", "h_e", "t_e")  # rail_joint_stress_closed's: the rail behind to the end cross member
+        self.assertEqual({k: ins[k] for k in closed}, {"a": 400.0, "L_e": 700.0, "b_e": 40.0, "h_e": 40.0, "t_e": 2.3})
+        base = dict({k: v for k, v in ji["inputs"].items() if k not in closed}, F=q(1000, "N"), W=q(2000, "N"))
         o = self.R.evaluate("frame_static.rail_joint_stress", dict(base, M_oh=q(0, "N*mm"), e=q(0, "mm")))["outputs"]
         I = (40 * 80**3 - 35.4 * 75.4**3) / 12
         A = 40 * 80 - 35.4 * 75.4

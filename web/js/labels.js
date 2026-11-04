@@ -93,6 +93,7 @@ export const RULES = [
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
+  { id: "HK6", key: "HK6_module_scope", ja: "持ち場" }, // modules: contract d9631a5
 ];
 
 export const BASE_JA = {
@@ -212,6 +213,13 @@ const QUANTITY_JA = {
   blocked_parts: "入らない部品の数",
   steps_without_tool_clearance: "工具が入らない手順の数",
   steps_out_of_reach: "手が届かない手順の数",
+  // held: the joints and the modules' spaces (hiraku/solvers/shelf/assembly.py at 7fc0ffc)
+  joint_gap_count: "つながりの不足の数",
+  joint_gaps: "離れたつながりの数",
+  unjoined_parts: "つながりの無い部品の数",
+  worst_joint_gap: "いちばん離れたつながり",
+  envelope_outside_count: "モジュールの空間からはみ出した部品の数",
+  worst_envelope_outside: "いちばん大きいはみ出し",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
   // the shell solver (frame_shell): the judged hot-spot stress
@@ -324,7 +332,27 @@ const VARIABLE_JA = {
   battery_x: "電池の前後の位置",
   wheelbase: "ホイールベース",
   track: "トレッド",
+  // modules: the variables a module designer changes in the sample records
+  front_spring_rate: "前のばねの固さ",
+  rear_spring_rate: "後ろのばねの固さ",
+  cargo_height: "荷の高さ",
+  rail_t: "レールの板厚",
+  seat_x: "座席の前後の位置",
+  max_steer_angle: "最大の舵角",
 };
+
+// A design variable's name for viewers: design.variable_names (written by the generator,
+// contract b615e2c) when it names it, else VARIABLE_JA; null when neither does.
+export function variableName(name, design = null) {
+  const own = design?.variable_names?.[name];
+  if (typeof own === "string" && own.trim()) return own;
+  return VARIABLE_JA[name] ?? null;
+}
+
+// modules: module id -> name (filled from the server's /api/modules, the contract's MODULE_NAMES_JA;
+// empty when the server has no such route: the id is shown as written)
+export const MODULE_JA = {};
+export const moduleName = (m) => MODULE_JA[m] ?? m ?? "";
 const DIM_JA = { t: "板厚", h: "高さ", b: "幅", d: "直径" };
 const PART_FIELD_JA = { mass_kg: "重さ" };
 const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
@@ -334,7 +362,8 @@ const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
 // design, before any bracket); null when it has no name here.
 export function designNumberName(path, design = null) {
   const p = String(path ?? "").split(".");
-  if (p[0] === "variables") return VARIABLE_JA[p[1]] ?? null;
+  // a variable: the design's own name for it (design.variable_names, contract b615e2c), else this table
+  if (p[0] === "variables") return variableName(p[1], design);
   if (p[0] === "sections" && p.at(-2) === "dims_mm") return DIM_JA[p.at(-1)] ? `フレームの管の${DIM_JA[p.at(-1)]}` : null;
   if (p[0] === "parts" && PART_FIELD_JA[p.at(-1)]) {
     const part = (design?.parts ?? []).find((x) => x.id === p[1]);
@@ -369,6 +398,7 @@ export function agentName(id) {
   if (!id) return "";
   if (ROLE_JA[id]) return ROLE_JA[id];
   if (id.startsWith("cae.")) return DOMAIN_JA[id.slice(4)] ?? id;
+  if (id.startsWith("designer.")) return `${moduleName(id.slice(9))}の設計役`; // modules: designer.<module>
   return id;
 }
 
@@ -431,9 +461,71 @@ export function fmtVU(value, unit, sig) {
   return fmtQ({ value, unit }, sig);
 }
 
-// project.driver: what drove the run (台本 = scripted, no Claude; API キー = HIRAKU's agent loop with
-// the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
-export const DRIVER_JA = { scripted: "台本", agent_sdk: "API キー", claude_code_plugin: "Claude Code" };
+// project.driver: what drove the run (決まった手順 = scripted, no Claude; API キー = HIRAKU's agent loop
+// with the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
+export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (API キー)", claude_code_plugin: "Claude Code" };
+
+// How a run was driven, in the run list's words: 決まった手順で再現 (scripted) or Claude で実行.
+export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
+
+// run.finished stop_code, said short in the run list: 途中で止まった (…) (the words of STOP_CODE_JA, shorter).
+export const STOP_SHORT_JA = {
+  not_judged: "判定の無い分野を残した",
+  round_limit: "繰り返しの上限に達した",
+  red_left: "赤の分野を残した",
+  cost_limit: "上限の費用に達した",
+  turn_limit: "ターン数の上限に達した",
+  user_stop: "人が止めた",
+};
+const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
+
+// A stop_reason said short: the code's words, else (records older than stop_code) the reason's
+// known opening, else its first sentence up to 18 characters.
+export function stopShort(code, reason) {
+  if (STOP_SHORT_JA[code]) return STOP_SHORT_JA[code];
+  const s = (reason || "").trim();
+  if (/^まだ判定の無い分野/.test(s)) return STOP_SHORT_JA.not_judged;
+  if (!s) return "";
+  const first = s.split(/[。(（]/)[0].trim() || s;
+  return [...first].length > 18 ? [...first].slice(0, 18).join("") + "…" : first;
+}
+
+// How a run ended, one phrase for its row in the run list, from /api/runs' summary
+// (hiraku/webserve/server.py _run_summary): finished, end_status, stop_code, stop_reason,
+// stop_after, last_version, judged {green, red, pending}.
+export function endingJa(r) {
+  if (!r.finished) return "実行中";
+  const v = Number.isInteger(r.last_version) ? `・版 ${r.last_version}` : "";
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return "分野を選ぶところまで";
+  const j = r.judged;
+  if (r.end_status === "stopped") {
+    const why = stopShort(r.stop_code, r.stop_reason);
+    return `途中で止まった${why ? ` (${why})` : ""}${v}`;
+  }
+  if (r.end_status === "failed") return `エラーで止まった${v}`;
+  if (j && j.green > 0 && !j.red && !j.pending) return `全部合格${v}`;
+  if (j) {
+    const parts = [j.green ? `合格 ${j.green}` : "", j.red ? `赤 ${j.red}` : "", j.pending ? `判定なし ${j.pending}` : ""].filter(Boolean);
+    return `完了${v}・${parts.join("・")}`;
+  }
+  return `完了${v}・判定なし`;
+}
+
+// The run list for people (no ?dev=1): one line per demo run of data/catalog/demo_runs.yaml, by its id,
+// saying what it lets you do. The yaml's title and shows are written for the developers; an id not here
+// shows its title.
+export const DEMO_LINE_JA = {
+  "n09-electric-guitar": "ギターを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
+  "n09-care-bed": "介護ベッドを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
+  "n09-serving-robot": "料理を運ぶロボットを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
+  "n11-n12": "要件の書き間違いを見つける — 手計算と解析の食い違いから、cm と mm の取り違えを見つけて直します",
+  n13: "手元に無い計算を作る — 横転したときの計算のツールを Claude がその場で書き、確かめてから使います",
+  n14: "メモを渡して決まりにする — 途中で渡した設計のメモが決まりになり、当てはまる部品について聞き返します",
+  video: "小さなオフロード車を試験して直す — 不合格の所を直してもう一度確かめます。限界を超える試験も入っています",
+  demo: "小さなオフロード車の 6 つの試験 — 不合格の所を直して、2 回目で全部合格します",
+};
+// The demo run recommended at the top of the run list when no saved run is there (its scripted run).
+export const PICK_DEMO_ID = "video";
 
 // A verdict's margin: margin_pct (% of the limit), or, when the record gives none (the
 // limit is 0, so margin_pct is null), the margin in its own unit.

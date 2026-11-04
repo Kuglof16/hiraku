@@ -185,6 +185,29 @@ class Rules(unittest.TestCase):
         self.assertLess(last + t["card_in_s"], s2b)
         self.assertLess(last + t["card_count_s"][1], s2b)
 
+    def test_n17b_tilt_is_small(self):
+        # the subjects face the camera (the depth shows in the rows, not in the turn of the faces),
+        # the corridor hardly rolls, and the figure and the cards turn only a little
+        r = kd.RULES["n17b_kt"]
+        self.assertLessEqual(r["corridor"]["face_deg"], 20)
+        cam, num, cards = r["camera"], r["num"], r["depth"]["cards"]
+        for k in ("roll_from_deg", "roll_to_deg"):
+            self.assertLessEqual(abs(cam[k]), 1.0, k)
+        for k in ("yaw_from_deg", "yaw_to_deg"):
+            self.assertLessEqual(abs(cam[k]), 3.0, k)
+        for k in ("ry_from_deg", "ry_to_deg", "rx_from_deg", "rx_to_deg"):
+            self.assertLessEqual(abs(num[k]), 12, k)
+        for k in ("from_rx_deg", "from_ry_deg", "ry_deg"):
+            self.assertLessEqual(abs(cards[k]), 10, k)
+
+    def test_n17b_eases_start_and_end_at_rest(self):
+        # cubic-bezier (x1, y1, x2, y2): the slope is 0 at the start when y1 = 0 < x1, at the end when y2 = 1 > x2
+        for name, e in kd.RULES["n17b_kt"]["eases"].items():
+            if name.startswith("_"):
+                continue
+            x1, y1, x2, y2 = e
+            self.assertTrue(y1 == 0 < x1 <= 1 and 0 <= x2 < 1 == y2, name)
+
     def test_pages_are_driven_by_t_only(self):
         for cut, page in PAGES.items():
             text = page.read_text(encoding="utf-8")
@@ -268,6 +291,28 @@ class Pages(unittest.TestCase):
             self.assertEqual(list(cap.errors), [])
         finally:
             cap.close()
+
+    def test_n17b_camera_moves_smoothly(self):
+        # sampled at 30 frames a second: no frame moves far, and the speed changes little from frame to frame
+        from promo import export
+        cap = export.Capture(PAGES["n17b_kt"], scale=1.0)
+        try:
+            dt = 1 / 30
+            rows = cap.page.evaluate(f"() => Array.from({{length: {int(5.8 / dt) + 1}}}, "
+                                     f"(_, i) => window.N17B_KT.camera(i * {dt}))")
+            self.assertEqual(list(cap.errors), [])
+        finally:
+            cap.close()
+        limits = {"z_px": (80, 2.0), "roll_deg": (0.02, 0.001), "yaw_deg": (0.05, 0.002),
+                  "fig_rx_deg": (0.05, 0.002), "fig_ry_deg": (0.1, 0.004)}
+        for k, (d1_max, d2_max) in limits.items():
+            x = [r[k] for r in rows]
+            d1 = [b - a for a, b in zip(x, x[1:])]
+            d2 = [b - a for a, b in zip(d1, d1[1:])]
+            self.assertLessEqual(max(map(abs, d1)), d1_max, k)
+            self.assertLessEqual(max(map(abs, d2)), d2_max, k)
+            self.assertAlmostEqual(d1[0], 0, delta=d1_max / 20, msg=k)   # starts at rest
+            self.assertAlmostEqual(d1[-1], 0, delta=d1_max / 20, msg=k)  # ends at rest
 
     def test_same_t_same_pixels(self):
         for cut, t in (("n08b_kt", 7.8), ("n17b_kt", 1.2), ("n17b_kt", 3.6), ("n17b_kt", 5.7)):

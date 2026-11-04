@@ -20,6 +20,8 @@ const HOOK_WORDS = {
   HK2: { what: "照合がすんでいないツールを使おうとしたので、止めました", next: "照合ずみのツールで解析します" },
   HK3: { what: "予測と解析が食い違ったまま進もうとしたので、止めました", next: "食い違いの原因を書いてから進みます" },
   HK4: { what: "判定がそろう前に終わろうとしたので、止めました", next: "残りの判定を出してから終わります" },
+  // modules: HK6 (docs/contract.md: a designer changes only its own module; build_version is refused on a clash or a part outside its space)
+  HK6: { what: "モジュールの持ち場の外を変えようとしたので、止めました", next: "自分のモジュールの中で直すか、パッケージ役に渡します" },
 };
 
 export function hookWords(rule) {

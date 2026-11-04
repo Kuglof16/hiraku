@@ -10,7 +10,8 @@
 <style>
   /* N17b, kinetic type sample. The camera goes forward through a corridor
      whose two walls carry the subjects of real commits (oldest at the
-     entrance), while the lines of code written count up as a large extruded
+     entrance; each faces the camera, turned only a little, so the depth shows
+     in the rows going into the distance), while the lines of code written count up as a large extruded
      figure held in front of the camera (sentence 1 of the voice). With
      sentence 2 the walls move apart (the way opens) and the commits and the
      days come in under the figure; then the figure, the caption and that line
@@ -141,10 +142,10 @@
         return at(y1, y2, (lo + hi) / 2);
       };
     }
-    const camEase = bezier(...R.cam_ease);
-    const easeOut = bezier(0.2, 0.7, 0.2, 1);
-    const easeInOut = bezier(0.45, 0, 0.25, 1);
-    const countEase = bezier(0.12, 0.6, 0.2, 1);
+    // every ease is in the rules (eases): each starts and ends at rest
+    const E = R.eases;
+    const camEase = bezier(...E.cam), easeOut = bezier(...E.enter), easeInOut = bezier(...E.move);
+    const countEase = bezier(...E.count);
     const mix = (a, b, f) => {
       const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
       const A = p(a), B = p(b);
@@ -157,7 +158,16 @@
       return j >= n ? v : Math.floor(v * countEase(j / n));
     }
 
-    const T = R.times, C = R.corridor, N = R.num, P = R.view.perspective_px, EYE = R.view.eye_y;
+    const T = R.times, C = R.corridor, N = R.num, CAM = R.camera, P = R.view.perspective_px, EYE = R.view.eye_y;
+    const FACE = C.face_deg * Math.PI / 180;
+    // the camera at t: how far it has gone, its roll and turn (the corridor's), the figure's turn
+    function camera(t) {
+      const q = camEase(lin(t, T.cam_s[0], T.cam_s[1]));
+      const at = (a, b) => a + (b - a) * q;
+      return { z_px: q * C.travel_px, roll_deg: at(CAM.roll_from_deg, CAM.roll_to_deg),
+               yaw_deg: at(CAM.yaw_from_deg, CAM.yaw_to_deg),
+               fig_rx_deg: at(N.rx_from_deg, N.rx_to_deg), fig_ry_deg: at(N.ry_from_deg, N.ry_to_deg) };
+    }
     const view = document.querySelector(".view"), world = document.querySelector(".world"), hud = document.querySelector(".hud");
     view.style.perspective = px(P);
     view.style.perspectiveOrigin = `50% ${px(EYE)}`;
@@ -303,26 +313,22 @@
       el.style.opacity = String(q);
       el.style.transform = `translateY(${px(rise * (1 - q))})`;
     }
-    function figTurn(t) {
-      const q = easeOut(lin(t, T.cam_s[0], T.cam_s[1]));
-      return `rotateX(${N.rx_from_deg + (N.rx_to_deg - N.rx_from_deg) * q}deg) ` +
-        `rotateY(${N.ry_from_deg + (N.ry_to_deg - N.ry_from_deg) * q}deg)`;
-    }
     function draw(t) {
       size();
       const u = unit();
-      const go = camEase(lin(t, T.cam_s[0], T.cam_s[1])) * C.travel_px;
+      const cam = camera(t), go = cam.z_px;
       const open = easeInOut(lin(t, T.open_s[0], T.open_s[1]));
       const half = C.half_w_px + (C.open_w_px - C.half_w_px) * open;
-      world.style.transform = `translateZ(${px(go)})`;
+      world.style.transform = `rotateZ(${cam.roll_deg}deg) rotateY(${cam.yaw_deg}deg) translateZ(${px(go)})`;
       // place every subject, then fade it by where it falls on the screen
       for (const m of MSGS) {
-        const w = m.el.offsetWidth / u;  // design px along the wall
-        // left wall reads into the distance (+x to -z), right wall towards the camera
-        const near = m.side < 0 ? m.z + go : m.z + w + go;   // nearest end, relative to the camera plane
-        const mid = m.z + go + (m.side < 0 ? -w / 2 : w / 2);
-        m.el.style.transform = `translate3d(${px(m.side * half)}, ${px(m.y - C.size_px * 0.75)}, ${px(m.z)}) ` +
-          `rotateY(${m.side < 0 ? 90 : -90}deg)`;
+        const w = m.el.offsetWidth / u;  // design px of the subject
+        // the inner end on the wall line, the face turned FACE about it: the outer end comes nearer
+        const near = m.z + go + w * Math.sin(FACE);   // nearest end, relative to the camera plane
+        const mid = m.z + go + w * Math.sin(FACE) / 2;
+        m.el.style.transformOrigin = m.side < 0 ? "100% 50%" : "0 50%";
+        m.el.style.transform = `translate3d(${px(m.side < 0 ? -half - w : half)}, ${px(m.y - C.size_px * 0.75)}, ` +
+          `${px(m.z)}) rotateY(${m.side < 0 ? C.face_deg : -C.face_deg}deg)`;
         m.gone = near > P - C.near_px;   // too close (or behind): not drawn
         m.depth = clamp01((C.far_px + mid) / (C.far_px * 0.45));
       }
@@ -332,7 +338,7 @@
         const z = r.side < 0 ? r.z : r.z - C.rail_seg_px;
         r.el.style.transform = `translate3d(${px(r.side * half)}, ${px(r.y)}, ${px(z)}) rotateY(${r.side < 0 ? 90 : -90}deg)`;
         const near = r.z + go, mid = r.z - C.rail_seg_px / 2 + go;
-        const a = near > P - C.near_px ? 0 : dim * C.rail_alpha * clamp01((C.far_px + mid) / (C.far_px * 0.45));
+        const a = near > P - C.near_px ? 0 : dim * C.rail_alpha * clamp01((C.rail_far_px + mid) / (C.rail_far_px * 0.45));
         r.el.style.opacity = a.toFixed(3);
         r.el.style.visibility = a < 0.01 ? "hidden" : "visible";
       }
@@ -348,7 +354,8 @@
       // with sentence 2 the amount moves up to leave room for the depth
       const up = easeInOut(lin(t, T.lift_s[0], T.lift_s[1]));
       const LF = R.lift;
-      fig.style.transform = `translateY(${px(LF.fig_dy_px * up)}) scale(${1 + (LF.fig_scale - 1) * up}) ` + figTurn(t);
+      fig.style.transform = `translateY(${px(LF.fig_dy_px * up)}) scale(${1 + (LF.fig_scale - 1) * up}) ` +
+        `rotateX(${cam.fig_rx_deg}deg) rotateY(${cam.fig_ry_deg}deg)`;
       fadeIn(cap, t, T.cap_s, 0.5, 12);
       fadeIn(sub, t, T.sub_s, 0.5, 16);
       cap.style.transform += ` translateY(${px(LF.cap_dy_px * up)})`;
@@ -376,19 +383,25 @@
         // the figure turns a little toward the camera as it lands
         c.el.querySelector(".fig").style.transform = `rotateY(${CD.ry_deg + (CD.from_ry_deg - CD.ry_deg) * (1 - q)}deg)`;
       }
-      const keep = [box(fig), box(cap.firstChild), box(sub.firstChild)];
-      if (hq > 0) keep.push(box(head.firstChild));
+      // the figure by its glyphs (its line box is 1.5 em tall, the digits about 0.75 em), the lines once shown
+      const fb = box(fig), fi = (fb.y1 - fb.y0) * C.fig_inset;
+      const keep = [{ ...fb, y0: fb.y0 + fi, y1: fb.y1 - fi }];
+      for (const [el, s0] of [[cap, T.cap_s], [sub, T.sub_s], [head, T.head_s]]) if (t > s0) keep.push(box(el.firstChild));
       for (const c of CARDS) if (c.el.style.visibility === "visible") keep.push(box(c.el));
-      const apart = (a, b) => {
-        const cx = (a.x0 + a.x1) / 2, cy = (a.y0 + a.y1) / 2;
-        return Math.max(b.x0 - cx, cx - b.x1, b.y0 - cy, cy - b.y1);
-      };
-      for (const m of MSGS) {
+      // the gap between the two boxes (a subject is long and flat: all of it keeps clear)
+      const apart = (a, b) => Math.max(b.x0 - a.x1, a.x0 - b.x1, b.y0 - a.y1, a.y0 - b.y1);
+      // nearest first: a subject also keeps clear of the nearer subjects shown
+      const shown = [];
+      for (const m of [...MSGS].sort((p, q) => q.z - p.z)) {
         let a = 0;
         if (!m.gone && m.depth > 0) {
           const b = box(m.el);
           const room = Math.min(b.x0, b.y0, W - b.x1, BAND - b.y1, ...keep.map((k) => apart(b, k))) - C.edge_px;
-          a = C.alpha * m.depth * clamp01(room / C.fade_px);
+          // too small on the screen to read: faded (the box is one line of 1.5 em)
+          const seen = clamp01(((b.y1 - b.y0) / 1.5 - C.min_seen_px) / C.min_seen_fade_px);
+          a = C.alpha * m.depth * seen * clamp01(room / C.fade_px);
+          for (const s of shown) a = Math.min(a, C.alpha * clamp01(apart(b, s) / C.fade_px));
+          if (a >= 0.05) shown.push(b);
         }
         m.el.style.opacity = a < 0.05 ? "0" : a.toFixed(3);
         m.el.style.visibility = a < 0.05 ? "hidden" : "visible";
@@ -400,7 +413,7 @@
       for (const s of digits) s.textContent = fmt(v);
       fadeIn(stamp, t, T.stamp_s, 0.4, 0);
     }
-    window.N17B_KT = { draw, MSGS, counted, cards: CARDS.map((c) => [c.key, c.v]) };
+    window.N17B_KT = { draw, camera, MSGS, counted, cards: CARDS.map((c) => [c.key, c.v]) };
     window.__ktDraw = draw;
   })();
 </script>
