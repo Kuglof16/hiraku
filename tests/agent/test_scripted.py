@@ -7,6 +7,13 @@ from hiraku.agent.scripted import ScriptError, _reader, has_plan, load_plan, res
 from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
+from tests.tools.helpers import stand_in_plan
+
+
+def setUpModule():
+    # this module's helpers call load_plan directly: the stand-in plan as RunCase's runs have it
+    globals()["load_plan"] = stand_in_plan
+
 
 def denied_rules(ctx):
     return [e["data"]["rule"] for e in ctx.store.events() if e["kind"] == "hook.denied"]
@@ -161,6 +168,29 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         before = len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"])
         scripted._run_step(self.ctx, lc, "cae.strength", "frame_static", {"predictions": [bad]})
         self.assertEqual(len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"]), before)
+
+    def test_a_load_case_the_analysis_judged_is_not_compared(self):
+        """A load with no path: the analysis's unsupported_load makes the verdict (judge); the scripted step says so and
+        compares nothing (run 20261104-091550: R8-stress on version 2 with parts not yet mounted)."""
+        from hiraku.agent import scripted
+
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def floating(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": 3.0, "unit": "1", "where": "seat_L"}]
+            return out
+
+        tool.run = floating
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        lc = self.ctx.load_case("R1-step100")
+        before = len(self.ctx.store.records("comparison"))
+        self.assertIsNone(scripted._analyze_and_compare(self.ctx, lc, "cae.strength", "frame_static", [r1["prediction_id"]]))
+        self.assertEqual(len(self.ctx.store.records("comparison")), before)
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("荷重の通り道が無いので不合格" in t for t in said))
 
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))

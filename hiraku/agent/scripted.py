@@ -181,6 +181,11 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     if ana["status"] != "ok":
         _say(ctx, agent, lc, f"解析が失敗しました: {ana.get('error', '')}")
         raise Stop(f"analysis {ana['analysis_id']} failed")
+    decided = [v for v in ctx.store.records("verdict", ctx.version) if v.get("analysis_id") == ana["analysis_id"]]
+    if decided:  # the analysis judged the load case itself (unsupported_load: a load with no path): nothing to compare
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、荷重の通り道が無いので不合格です ({decided[-1]['verdict_id']})。"
+                             f"予測との照合はしません")
+        return None
     names = {r["quantity"] for r in ana["results"]}
     hit = None
     for pid in pred_ids:
