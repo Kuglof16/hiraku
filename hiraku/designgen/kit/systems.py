@@ -47,6 +47,8 @@ SYSTEM_OF_KIND = {
     "body": "body", "frame": "frame", "gusset": "frame", "bracket": "frame",
     "headlamp": "lighting", "taillamp": "lighting", "stoplamp": "lighting", "turn_signal": "lighting",
     "side_net": "restraint", "net_clip": "restraint", "fender": "body",
+    # kit/joints.py's parts: the brake pedal's pushrod, a strut through a sheet, the steering shaft's bearing
+    "pushrod": "brake", "anchor": "frame", "bearing": "steering",
 }
 WELDED_KINDS = ("frame", "gusset", "rollbar", "bracket")  # joined to their nodes by welds
 # the suspension's hard points on the body (K2's mounts): the arms and the damper are joined there
