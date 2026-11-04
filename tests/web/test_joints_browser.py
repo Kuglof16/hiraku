@@ -86,6 +86,17 @@ def node_pieces(d, node):
     return ms, through
 
 
+def node_beads(d, node):
+    """The beads at a welded frame node: one per member ending there (not going through), less the
+    carrier (web/js/tubes.js frameEnds: where no tube goes through, the one the others butt on);
+    every member when all go through. All members of the frozen designs are tubes with dims_mm."""
+    ms, through = node_pieces(d, node)
+    ending = len(ms) - len(through)
+    if not ending:
+        return len(ms)
+    return ending - (0 if through else 1)
+
+
 def frame_joints(d):
     """The frame nodes that are joints: two or more pieces meet (a tube through counted once), or node.joint."""
     out = []
@@ -241,6 +252,8 @@ LEGEND = """() => {
 }"""
 BUTTON = "() => document.querySelector('#toggles button[data-toggle=joints]')?.className ?? null"
 LEG_MM = 5.0  # web/js/joints.js WELD_BEAD.leg_mm
+# each tube member's ends on the bench (web/js/tubes.js frameEnds): {id: {a: {kind, trim, onto}, b: ...}}
+TUBE_ENDS = "() => Object.fromEntries(Object.entries(window.hiraku.bench.members).filter(([, i]) => i.ends).map(([k, i]) => [k, i.ends]))"
 # every weld mark's drawn bead: the bar's vertices through each of its pieces' instance matrices
 BEAD_VERTICES = """() => {
   const j = window.hiraku.bench.joints; const mesh = j.meshes.bead; const pos = mesh.geometry.getAttribute('position');
@@ -347,11 +360,9 @@ class JointsBrowserTest(unittest.TestCase):
             per_part = Counter(m["kind"] for m in marks if m["source"] == "part")
             pairs = {(c["via"], tuple(sorted((p["id"], c["to"])))) for p in design()["parts"] for c in p.get("connects_to", [])}
             self.assertEqual(dict(per_part), dict(Counter(v for v, _ in pairs)), look)
-            # a bead round each member ending at a welded frame node (a tube going through has none)
-            beads = 0
-            for n in frame_joints(design()):
-                ms, through = node_pieces(design(), n["id"])
-                beads += len(ms) - len(through)
+            # a bead round each member ending at a welded frame node (a tube going through has none,
+            # nor the carrier the others butt on where no tube goes through: web/js/tubes.js)
+            beads = sum(node_beads(design(), n["id"]) for n in frame_joints(design()))
             self.assertEqual(sum(1 for m in marks if m["source"] == "node"), beads, look)
             # one instance per mark, but a weld's bead: one per piece of its seam
             self.assertEqual(sum(n for k, n in got["instances"].items() if k != "bead"), sum(1 for m in marks if m["shape"] != "bead"), look)
@@ -369,6 +380,7 @@ class JointsBrowserTest(unittest.TestCase):
         side = lambda m: max(d["sections"][m["section"]]["dims_mm"].values())
         page = self.bench("zu")
         marks = page.evaluate(SUMMARY)["marks"]
+        ends = page.evaluate(TUBE_ENDS)
         page.close()
         checked = 0
         for m in marks:
@@ -379,8 +391,20 @@ class JointsBrowserTest(unittest.TestCase):
                 self.assertLessEqual(db, m["gap"] / 2 + TOL_MM, m)
                 self.assertGreaterEqual(da + db + TOL_MM, m["gap"] - TOL_MM, m)
             else:
-                widest = max(side(x) for x in at[m["to"]])
-                self.assertLessEqual(float(np.linalg.norm(np.asarray(m["at"]) - np.asarray(nodes[m["to"]]))), widest, m)
+                # a weld's bead where its tube is cut (the end's trim from the node, along the member);
+                # other marks within the widest member's side of the node
+                off = float(np.linalg.norm(np.asarray(m["at"]) - np.asarray(nodes[m["to"]])))
+                cut = None
+                for x in at[m["to"]]:
+                    far = nodes[x["node_b"] if x["node_a"] == m["to"] else x["node_a"]]
+                    d = np.asarray(far, dtype=float) - np.asarray(nodes[m["to"]])
+                    if m["shape"] == "bead" and float(d @ np.asarray(m["axis"])) / np.linalg.norm(d) > 0.999:
+                        cut = ends[x["id"]]["a" if x["node_a"] == m["to"] else "b"]
+                if cut is not None and cut["kind"] in ("cut", "butt"):
+                    self.assertAlmostEqual(off, cut["trim"], places=3, msg=m)
+                else:
+                    widest = max(side(x) for x in at[m["to"]])
+                    self.assertLessEqual(off, widest, m)
             checked += 1
         self.assertEqual(checked, len(marks))
         # the parts with rpy_deg are among them (the boxes are turned)
@@ -483,7 +507,7 @@ class JointsBrowserTest(unittest.TestCase):
             self.assertEqual({m["shape"] for m in mine}, {shape}, kind)
             self.assertEqual({m["rule"] for m in mine}, {False}, kind)  # written in the data, not the rule
             ms, through = node_pieces(d, node)
-            self.assertEqual(len(mine), len(ms) - len(through) if kind == "weld" else 1, kind)
+            self.assertEqual(len(mine), node_beads(d, node) if kind == "weld" else 1, kind)
 
     def test_place_and_axis_from_the_data(self):
         # connects_to with at_mm: the mark at that point; with axis: along it (contract 070d49c); the
@@ -628,7 +652,10 @@ class JointsBrowserTest(unittest.TestCase):
                 shots.append(page.locator("#viewport").screenshot())
                 page.close()
             if look == "zu":
-                self.assertEqual(shots[0], shots[1], look)
+                # not bit for bit either: with swiftshader a page now and then draws a few pixels
+                # otherwise (the code before the hollow tubes, a0c2b23, too: 1 pixel in 1 of 8 loads;
+                # with them 4 pixels in 1 of 5); at most 1 in 10000 pixels
+                self.assertLess(differing(shots[0], shots[1]), 1e-4, look)
             else:
                 # the real look's post (ambient occlusion, antialiasing) is not bit for bit the same
                 # from one page to the next: nearly every pixel the same

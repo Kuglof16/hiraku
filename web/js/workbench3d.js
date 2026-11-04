@@ -47,6 +47,7 @@ import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
 import { mergePieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
 import { JointMarks } from "./joints.js"; // joints: the joint marks (toggle 接合)
+import { frameEnds, tubeGeometry, tubeSection } from "./tubes.js"; // the frame's hollow tubes
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
@@ -151,12 +152,33 @@ function sectionSize(section) {
   return { round: false, width: d.b ?? d.w ?? d.h ?? 30, height: d.h ?? d.b ?? 30 };
 }
 
-function memberGeometry(design, m, nodes) {
+// A member with a tube section (tubes.js tubeSection): hollow, its ends by frameEnds (ends), the
+// unit tube of its section and ends shared by every such member (cache), stretched by `local`
+// (x from x0 to x1 in the member's frame, x = 0 at the middle of its nodes); else as before.
+function memberGeometry(design, m, nodes, ends = null, cache = null) {
   const a = nodes[m.node_a];
   const b = nodes[m.node_b];
   if (!a || !b) return null;
   const length = a.distanceTo(b);
   if (length < 1e-6) return null;
+  const tube = ends?.[m.id] ? tubeSection(design, m) : null;
+  if (tube) {
+    const e = ends[m.id];
+    const x0 = -length / 2 + e.a.trim;
+    const x1 = length / 2 - e.b.trim;
+    const [capA, capB] = [e.a.kind !== "through", e.b.kind !== "through"];
+    const key = `${tube.kind}|${tube.w}|${tube.h}|${tube.t}|${capA}|${capB}`;
+    let unit = cache?.get(key);
+    if (!unit) {
+      unit = tubeGeometry(tube, capA, capB);
+      unit.geo.userData.shared = true;
+      cache?.set(key, unit);
+    }
+    const local = new THREE.Matrix4().makeTranslation(x0, 0, 0).multiply(new THREE.Matrix4().makeScale(x1 - x0, 1, 1));
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const matrix = memberBasis(a, b).setPosition(mid).multiply(local);
+    return { geo: unit.geo, edges: unit.edges, matrix, local, localInv: local.clone().invert(), x0, x1, ends: e, tube, length, mid, width: tube.w, height: tube.h, round: tube.kind === "round" };
+  }
   const { round, width, height } = sectionSize(design.sections?.[m.section]);
   const geo = round ? new THREE.CylinderGeometry(width / 2, width / 2, length, 20).rotateZ(-Math.PI / 2) : new THREE.BoxGeometry(length, width, height);
   const mid = a.clone().add(b).multiplyScalar(0.5);
@@ -500,8 +522,10 @@ export class Workbench3D {
     const ink = [];
     const box = new THREE.Box3();
 
+    const tubeEnds = frameEnds(design);
+    const tubeCache = new Map();
     for (const m of design.members ?? []) {
-      const g = memberGeometry(design, m, nodes);
+      const g = memberGeometry(design, m, nodes, tubeEnds, tubeCache);
       if (!g) continue;
       const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material] ?? null, m.part ?? null));
       mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
@@ -512,8 +536,18 @@ export class Workbench3D {
       this.model.add(mesh);
       // Edges in the member's own frame, so a mode shape can move them with it.
       const localEdges = [];
-      pushEdges(localEdges, g.geo, null, g.round ? 40 : 20);
-      pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
+      if (g.edges) {
+        // a tube's own ink lines (its rounded corners would give none by the crease angle)
+        const p = new THREE.Vector3();
+        localEdges.push(...g.edges);
+        for (let i = 0; i < g.edges.length; i += 3) {
+          p.set(g.edges[i], g.edges[i + 1], g.edges[i + 2]).applyMatrix4(mesh.matrix);
+          ink.push(p.x, p.y, p.z);
+        }
+      } else {
+        pushEdges(localEdges, g.geo, null, g.round ? 40 : 20);
+        pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
+      }
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
       if (this.labelRenderer) {
@@ -1095,7 +1129,7 @@ export class Workbench3D {
     }
     for (const [id, info] of Object.entries(this.members)) {
       const mat = info.mesh.material;
-      const geo = info.mesh.geometry;
+      let geo = info.mesh.geometry;
       mat.vertexColors = false;
       const plain = mat.userData.baseColor ?? GRAY;
       if (!contour) {
@@ -1111,11 +1145,17 @@ export class Workbench3D {
         mat.color.set(colorOf(v, contour.max, contour.min));
         paintTwin(info.mesh, colorOf(v, contour.max, contour.min));
       } else if (typeof va === "number" && typeof vb === "number") {
+        if (geo.userData.shared) {
+          // a tube's shape is shared by the members of its section: this one gets its own copy to paint
+          geo = info.mesh.geometry = geo.clone();
+          geo.userData.shared = false;
+        }
         const pos = geo.getAttribute("position");
         const cols = new Float32Array(pos.count * 3);
         const c = new THREE.Color();
         for (let i = 0; i < pos.count; i += 1) {
-          const u = pos.getX(i) / info.length + 0.5;
+          const x = info.local ? info.x0 + pos.getX(i) * (info.x1 - info.x0) : pos.getX(i);
+          const u = x / info.length + 0.5;
           c.set(colorOf(va + (vb - va) * u, contour.max, contour.min));
           cols.set([c.r, c.g, c.b], i * 3);
         }
@@ -1137,6 +1177,7 @@ export class Workbench3D {
         );
         ghost.matrixAutoUpdate = false;
         ghost.matrix.copy(info.mesh.matrix);
+        if (info.localInv) ghost.matrix.multiply(info.localInv); // back to node to node
         this.overGhosts.add(ghost);
       }
     }
@@ -1392,6 +1433,7 @@ export class Workbench3D {
         m = memberBasis(a, b)
           .scale(new THREE.Vector3(a.distanceTo(b) / info.length, 1, 1))
           .setPosition(a.clone().add(b).multiplyScalar(0.5));
+        if (info.local) m.multiply(info.local); // a tube: its unit shape stretched between its ends
       }
       info.mesh.matrix.copy(m);
       info.mesh.matrixWorldNeedsUpdate = true;
