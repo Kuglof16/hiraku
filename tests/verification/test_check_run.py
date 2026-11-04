@@ -807,15 +807,25 @@ class CheckRun(unittest.TestCase):
         ev = sample_events()
         by_kind(ev, "prediction.recorded")["data"]["quantity"] = "max_deflection"
         self.assertNotIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "analysis.finished")))
-        # R1's mismatch ended with its cause (a plan's expected_mismatch with end): no verdict comes
-        ev = [e for e in sample_events() if e["kind"] != "verdict.recorded"]
-        by_kind(ev, "comparison.recorded")["data"]["status"] = "mismatch"
+        # R1's mismatch ended with its cause (contract 08cf4d6: ends_case; a plan's expected_mismatch with end)
+        base = [e for e in sample_events() if e["kind"] != "verdict.recorded"]
+        by_kind(base, "comparison.recorded")["data"]["status"] = "mismatch"
         cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "parts not mounted",
                  "fix": "none in this run", "resolved": False}
-        ev = self._insert(ev, "comparison.recorded", "cause.recorded", cause)
+        ev = self._insert(base, "comparison.recorded", "cause.recorded", dict(cause, ends_case=True))
         self.assertNotIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "cause.recorded")))
         # before the cause is written, R1 still waits
         self.assertIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "comparison.recorded")))
+        # a cause without ends_case (or with it false) waits for its fix: R1 still holds the heavier tools
+        for mark in ({}, {"ends_case": False}):
+            with self.subTest(mark=mark):
+                ev = self._insert(base, "comparison.recorded", "cause.recorded", dict(cause, **mark))
+                self.assertIn("HK5_light_first",
+                              self.rules(self._shell_on_r2_while_r1_waits(ev, "cause.recorded")))
+        # ends_case goes without safe_side (the schema's rule)
+        ev = self._insert(base, "comparison.recorded", "cause.recorded",
+                          dict(cause, ends_case=True, safe_side=True, safe_side_reason="the beam model bounds it"))
+        self.assertIn("schema", self.rules(ev))
 
     @staticmethod
     def _compare_again(ev, n, analyzed, cause=None):

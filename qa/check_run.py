@@ -1386,8 +1386,9 @@ class RunChecker:
         it (contract, HK5: it does not hold the heavier tools and stays not judged on its tile); else None.
         - no K0 formula predicts it: none of its predictions so far is of its criterion's quantity (the
           analysis was allowed on predictions of other quantities)
-        - its mismatch was ended (a plan's expected_mismatch with end): the latest comparison of the
-          judged quantity is a mismatch whose cause is written, neither resolved nor safe-side"""
+        - its mismatch was ended (contract 08cf4d6; a plan's expected_mismatch with end): the latest
+          comparison of the judged quantity is a mismatch whose latest cause says ends_case true and is not
+          resolved (a cause without it, waiting for a fix, still holds the heavier tools)"""
         crit = (self.load_cases.get(lc_id) or {}).get("criterion") or {}
         q = crit.get("quantity")
         preds = [p for j, p in self.recs["prediction"].values()
@@ -1406,7 +1407,7 @@ class RunChecker:
             return None
         causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == latest[0]]
         cause = self._state_at("cause", causes[-1], i) if causes else None
-        if cause is not None and not cause.get("resolved") and not cause.get("safe_side"):
+        if cause is not None and cause.get("ends_case") is True and not cause.get("resolved"):
             return f"{latest[0]} ended with {causes[-1]}"
         return None
 
