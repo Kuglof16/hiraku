@@ -10,9 +10,6 @@ last are written below; when a tool, a builder or the demo design changes them, 
 
 import json
 import os
-import subprocess
-import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -31,15 +28,13 @@ class SceneN15Test(unittest.TestCase):
     """The N15 scripted run with the real solvers."""
 
     def test_the_run_ends_not_judged_with_assembly_red(self):
+        from qa import shared_runs  # the N15 run made once per code version, shared with QA's run checks
+
         root = Path(__file__).resolve().parents[2]
-        with tempfile.TemporaryDirectory() as tmp:
-            env = dict(os.environ, PYTHONUTF8="1")
-            env.pop("ANTHROPIC_API_KEY", None)
-            subprocess.run([sys.executable, "-m", "hiraku", "run", str(root / "data/requirements/offroad-4w-n15.yaml"),
-                            "--scripted", "--runs", tmp], cwd=root, env=env, capture_output=True, timeout=5400)
-            (run,) = [p for p in Path(tmp).iterdir() if p.is_dir()]
-            events = [json.loads(line) for line in (run / "events.jsonl").read_text(encoding="utf-8").splitlines()
-                      if line.strip()]
+        shared = shared_runs.scripted_run(root / "data/requirements/offroad-4w-n15.yaml")
+        self.assertIsNotNone(shared.run_dir, shared.stderr[-2000:])
+        events = [json.loads(line) for line in (shared.run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                  if line.strip()]
 
         finished = [e for e in events if e["kind"] == "run.finished"]
         self.assertEqual(len(finished), 1)

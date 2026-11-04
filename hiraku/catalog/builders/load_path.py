@@ -764,7 +764,8 @@ R7_PLAN = {
     # Before, one chain of contacts turning in series gave 0.659 mm, and version 3's 0.768 against 0.704 was that
     # error cancelling the frame's. The frame with its plates has no hand calculation here; the members without the
     # plates (K1 beam frame) move the grip 7.3-7.9 mm, over the 5 mm limit on every version, so no bound either.
-    "expected_mismatch": {
+    # One entry by quantity (tools.plan.expected_entries): the grip's, and the pedal's on a rail strut.
+    "expected_mismatch": [{
         "quantity": "grip_deflection",
         "source": ("the analysis department's split of the tool's grip movement on the design department's runs "
                    "(demo versions 2-4, N15 version 5) and a K1 beam frame of the members alone, 2026-11-04"),
@@ -777,9 +778,20 @@ R7_PLAN = {
                   "0.768 mm) が版 3 で合った (0.704 mm) のは、多すぎる回りと足りない枠の打ち消しによる偶然だった"),
         "fix": "手計算で予測し直す式は無い。原因を記録して、この荷重条件は判定なしで次へ進む",
         "end": True,
-    },
+    }, {
+        "quantity": "pedal_deflection",
+        "source": ("the analysis department's split of the tool's pedal movement on the design department's run r8 "
+                   "(demo version 3: the pedal on a strut to rail_R_RAp2_RSO, no pedal stand), 2026-11-05"),
+        "cause": ("ペダルが棒の金具でレールに付く形 (ペダルの台なし)。ツールの 0.187 mm のうち 0.182 mm は、レールの付く点が枠と"
+                  "一緒に動く分 (レールが梯子の枠と長さ全体でねじれる)。金具と触れている所は 0.006 mm。手計算 "
+                  "(load_path.control_deflection) はレールのねじれを付く点から根元の節まで (9 mm) しか数えず、節が回る分 "
+                  "(0.037 mm) を足しても梯子全体のねじれを持たないので届かない。値はどちらも限界 5 mm よりずっと小さい"),
+        "fix": ("手計算で予測し直す式はまだ無い (梯子のねじれを足す直しは解析部の次の仕事)。原因を記録して、この荷重条件は"
+                "判定なしで次へ進む。ペダルの柱 (pedal_mount post) の形では、ペダルが柱の台に載り、手計算とツールが合う"),
+        "end": True,
+    }],
 }
-_PUSH = {k: f"from.{k}" for k in ("F", "a", "b", "E", "I", "h_A", "E_A", "I_A", "h_B", "E_B", "I_B")}
+_PUSH ={k: f"from.{k}" for k in ("F", "a", "b", "E", "I", "h_A", "E_A", "I_A", "h_B", "E_B", "I_B")}
 PUSH_PREDICTION = {
     "quantity": "occupant_push_deflection", "formula_id": "load_path.bar_on_posts", "output": "delta",
     "assumptions": ["点 R から外へ、いちばん先に当たる部材 (横の棒) を押す。点 R が 2 つ以上あれば、手計算でいちばん動くもの",

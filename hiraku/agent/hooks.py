@@ -44,7 +44,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from hiraku import contract
-from hiraku.agent.roles import agent_id_from_sdk
+from hiraku.agent.roles import agent_id_from_sdk, routing_text
 from hiraku.tools import Attribution, RunContext, rules
 
 PREFIX = f"mcp__{contract.MCP_SERVER}__"
@@ -80,10 +80,15 @@ class Hooks:
         self.told_roles: list[str] = []  # roles told to return for the messages in for_lead (SDK agent ids)
         self.models: dict[str, dict[str, Any]] = {}  # contract agent id -> {"model", "effort"} for agent.started
         self.on_end: Callable[[], None] | None = None  # the lead's stop was let through (the plugin ends the run)
+        # the plugin: the lead hears the routing of a version's reds (roles.routing_text, designs with modules) from
+        # the hooks; the SDK run's runner sends it as a message of its own (runner.new_routing)
+        self.tell_routing = False
+        self.routed: dict[str, str] = {}  # design version (str) -> the routing told for it
 
     # ------------------------------------------------------------------ state kept between calls
 
-    STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead", "told_roles")
+    STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead", "told_roles",
+                    "routed")
 
     def state(self) -> dict[str, Any]:
         return {k: getattr(self, k) for k in self.STATE_FIELDS}
@@ -191,6 +196,23 @@ class Hooks:
                     f"やり直すよう各役に頼んでください")
         return None
 
+    def routing_for_lead(self) -> str | None:
+        """The routing of the latest version's reds, once per version and text, when tell_routing is set, no role
+        is at work and revisions are left; else None. A failure behind it gives None (it helps the lead only)."""
+        if not self.tell_routing or self.running or not self.ctx.version:
+            return None
+        try:
+            if rules.revisions_used_up(self.ctx):
+                return None
+            text = routing_text(self.ctx)
+        except Exception:
+            return None
+        key = str(self.ctx.version)
+        if not text or self.routed.get(key) == text:
+            return None
+        self.routed[key] = text
+        return text
+
     def take_for_lead(self) -> str | None:
         """What the screen sent for the lead (inbox), as one text, once."""
         if not self.for_lead:
@@ -211,8 +233,10 @@ class Hooks:
                 hint = None
         # after any tool of the lead's, what the person sent; a role is not told (the person's words are for the
         # lead, who reads them at its next tool call or stop, and asks the roles for what follows from them)
-        told = self.take_for_lead() if self.caller(input_data) == "lead" else None
-        text = "\n\n".join(x for x in (hint, told) if x)
+        lead = self.caller(input_data) == "lead"
+        told = self.take_for_lead() if lead else None
+        routing = self.routing_for_lead() if lead else None
+        text = "\n\n".join(x for x in (hint, told, routing) if x)
         if not text:
             return {}
         return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}}
@@ -243,6 +267,9 @@ class Hooks:
         # revisions used up, its mismatch has a cause): blocking again would only call the roles for nothing
         if rules.excused_pending(self.ctx) is not None:
             return self._end()
+        routing = self.routing_for_lead()
+        if routing:  # the lead has not heard who answers this version's reds: go on with it (not counted)
+            return {"decision": "block", "reason": routing}
         # HK4: a pending domain, or (red_left) a red tile while design revisions are left
         reason = rules.stop_reason(self.ctx) or rules.red_left_reason(self.ctx)
         if reason is None or self.stop_blocks >= self.max_stop_blocks:
