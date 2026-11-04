@@ -477,9 +477,21 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **NO_MODEL})
             started.append(agent)
 
-    def revise(text: str) -> None:
+    def next_revision(ended: set[str] | None = None) -> int | None:
+        """The index of the plan's next revision: for the version's reds (ended None) the first entry that is
+        not for ended cases; for load cases that ended without a verdict (rules.ended_cases) the first entry
+        whose answers_ended names one of them. None when there is none or the round limit is used up."""
+        if ctx.version - 1 >= ctx.project["round_limit"]:
+            return None
+        for i, rev in enumerate(revisions):
+            answers = set(rev.get("answers_ended") or [])
+            if (ended is None and not answers) or (ended is not None and answers & ended):
+                return i
+        return None
+
+    def revise(text: str, index: int | None = None) -> None:
         _check_stop(ctx)
-        rev = revisions.pop(0)
+        rev = revisions.pop(next_revision() if index is None else index)
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
         changes, reason = dict(rev.get("changes") or {}), rev["reason"]
@@ -513,6 +525,11 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             raise Stop(f"the plan changes {', '.join(stray)}, which no module of the design owns")
         reasons = rev.get("reasons") or {}  # module (or packager) -> the plan's own words for that part
         routed = route_reds(ctx, ctx.version)
+        if rev.get("answers_ended"):
+            # no red: the entry answers load cases that ended without a verdict (their cause's fix names a change of
+            # these modules), so it goes to the designers of its own modules; load_case_ids are for reds only, the
+            # ended cases are in the reason
+            routed = {**{f"designer.{m}": [] for m in by}, **({"packager": []} if package else {})}
         # only the parts of the plan's revision whose module the version's reds go to (HK6: a red goes to the
         # designers of the modules its load case names); the rest of the entry answers no red of this version
         skipped = [m for m in by if f"designer.{m}" not in routed] + (["package"] if package and "packager" not in routed else [])
@@ -561,7 +578,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             raise Stop(f"build_version refused: {e}") from None
 
     def can_revise() -> bool:
-        return bool(revisions) and ctx.version - 1 < ctx.project["round_limit"]
+        return next_revision() is not None
 
     held_back: tuple[int, list[Record]] | None = None
     try:
@@ -618,7 +635,20 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             if held_back is not None:
                 break
             reds = _red_tiles(ctx)
-            if not reds or not can_revise():
+            if not reds:
+                # no red tile: a load case that ended without a verdict may still be answered by a design change its
+                # cause's fix names (answers_ended), so that the hand calculation reaches the tool on the next version
+                ended = rules.ended_cases(ctx)
+                at = next_revision(ended)
+                if at is None:
+                    break
+                names = "、".join(sorted(set(revisions[at]["answers_ended"]) & ended))
+                s.emit("agent.said", agent="lead",
+                       text=f"版 {ctx.version} に赤はありません。{names} は判定なしで終わりました (食い違いの原因の記録)。"
+                            "原因の直し方にある設計の変更を、設計役に頼みます")
+                revise(f"{names} を判定できるようにするため、設計を直します", at)
+                continue
+            if not can_revise():
                 break
             revise(f"{'、'.join(contract.DOMAIN_NAMES_JA[j['domain']] for j in reds)}が赤なので、設計を直します")
     except StopRequested:
