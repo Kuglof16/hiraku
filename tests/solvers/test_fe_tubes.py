@@ -419,6 +419,47 @@ class RearLinkRevisionTest(unittest.TestCase):
             self.assertLess(abs(r["cases"][case]["hot_spot_max"]["value"]), yield_mpa, case)
 
 
+BLAS_THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LEVEL_CHILD = "HIRAKU_TUBE_LEVEL_CHILD"  # set in a level's process: it never starts more of them
+
+
+class ConvergenceLevelsGuardTest(unittest.TestCase):
+    """The parallel levels cannot nest: inside a level's process, starting levels is refused at once."""
+
+    def test_no_levels_inside_a_level(self):
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {LEVEL_CHILD: "1"}):
+            with self.assertRaisesRegex(RuntimeError, "inside a tube_level process"):
+                convergence_levels((40.0,), 1)
+
+
+def convergence_levels(sizes, jobs: int) -> list[dict]:
+    """tests.solvers.tube_level for each size, `jobs` processes at a time (each a program of its own with one BLAS
+    thread, so nothing imports this test run again), in the order of `sizes`."""
+    import json
+    import subprocess
+    import sys
+    from concurrent.futures import ThreadPoolExecutor
+
+    if os.environ.get(LEVEL_CHILD):  # a level's own process never starts more of them
+        raise RuntimeError("convergence_levels called inside a tube_level process")
+    env = dict(os.environ, **{k: "1" for k in BLAS_THREADS}, **{LEVEL_CHILD: "1"})
+
+    def one(size):
+        p = subprocess.run([sys.executable, "-m", "tests.solvers.tube_level", repr(float(size))], cwd=ROOT, env=env,
+                           capture_output=True, text=True)
+        if p.returncode != 0:
+            raise RuntimeError(f"tube_level {size:g} mm: exit {p.returncode}\n{p.stderr[-2000:]}")
+        return json.loads(p.stdout.strip().splitlines()[-1])
+
+    finest_first = sorted(sizes)  # the heaviest levels start first, the light ones fill in after them
+    with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(sizes)))) as ex:
+        got = dict(zip(finest_first, ex.map(one, finest_first)))
+    return [got[s] for s in sizes]
+
+
 @SLOW
 class SpaceFrameConvergenceTest(unittest.TestCase):
     """Match 4: the hot spot at D0 (the dash bar's middle, where the front upper links land) and the largest
@@ -427,16 +468,14 @@ class SpaceFrameConvergenceTest(unittest.TestCase):
     def test_hot_spot_settles(self):
         # 40 / 30 / 20 / 14 mm (10 mm, about 250,000 elements, is beyond the development PC's memory). Measured:
         # standing still D0 129.40 / 129.80 / 130.18 / 130.34, largest (RQ1) 132.17 / 132.46 / 132.64 / 132.74;
-        # lift-off D0 97.62 / 97.87 / 98.08 / 98.11, largest (RQ3) 231.24 / 232.27 / 233.17 / 233.65 MPa
-        d = sf.build()
-        st = tubes.k2_states(d)
-        series = {k: [] for k in ("D0 static", "max static", "D0 lift", "max lift")}
-        for size in (40.0, 30.0, 20.0, 14.0):
-            r = tubes.analyse(d, size, states=st)
-            for case in ("static", "lift"):
-                c = r["cases"][case]
-                series[f"D0 {case}"].append(max(abs(h["value"]) for h in c["hot_spots"] if h["joint"] == "D0"))
-                series[f"max {case}"].append(abs(c["hot_spot_max"]["value"]))
+        # lift-off D0 97.62 / 97.87 / 98.08 / 98.11, largest (RQ3) 231.24 / 232.27 / 233.17 / 233.65 MPa.
+        # The levels are solved side by side, each in a process of its own (tests/solvers/tube_level.py, one BLAS
+        # thread each), the finest first: HIRAKU_CONVERGENCE_JOBS at a time, 2 by default (all four at once took
+        # about 25 GB within two minutes, 2026-11-04); 1 solves them one after another.
+        jobs = int(os.environ.get("HIRAKU_CONVERGENCE_JOBS", "2"))
+        levels = convergence_levels((40.0, 30.0, 20.0, 14.0), jobs)
+        series = {k: [lv["series"][k] for lv in levels] for k in ("D0 static", "max static", "D0 lift", "max lift")}
+        print("  " + "; ".join(f"{lv['size']:g} mm {lv['seconds']:.0f} s, peak {lv['peak_mb']:.0f} MB" for lv in levels))
         print("  " + "; ".join(f"{k} {[round(v, 2) for v in vals]}" for k, vals in series.items()))
         for k, v in series.items():
             steps = [abs(v[i + 1] - v[i]) / v[i + 1] for i in range(len(v) - 1)]
