@@ -528,12 +528,13 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         start("packager")
         merged = {**changes, **choices}
         args = {"reason": reasons.get("packager") or reason, **({"changes": package} if package else {})}
-        room = room_for(design, merged)
-        if room:
-            args["envelopes"] = room
-            s.emit("agent.said", agent="packager",
-                   text="提案の部品が空間からはみ出すので、" + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in room)
-                   + " に新しい版の形から空間を配り直します (designgen.modules.envelopes)")
+        room = list(room_for(design, merged))
+        if room:  # build_version regrow (contract 6f56356): the packager names each module and says why
+            args["regrow"] = room
+            why = ("提案の部品がいまの空間からはみ出すので、" + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in room)
+                   + " の空間を新しい版の部品の形から作り直す (モジュールどうしの重なりは H1-interference で確かめる)")
+            args["reason"] = f"{args['reason']}。{why}"
+            s.emit("agent.said", agent="packager", text=why)
         try:
             return build_version(ctx, args, "packager")
         except ToolError as e:

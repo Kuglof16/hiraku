@@ -1509,7 +1509,10 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     own = args.get("changes") or {}
     envelopes = args.get("envelopes") or {}
     interfaces = list(args.get("interfaces") or [])
-    problems = [f"モジュール {m} はこの設計にありません ({', '.join(mods)})" for m in envelopes if m not in mods]
+    regrow = list(args.get("regrow") or [])  # contract 6f56356: spaces the code makes again around the parts
+    problems = [f"モジュール {m} はこの設計にありません ({', '.join(mods)})" for m in [*envelopes, *regrow] if m not in mods]
+    problems += [f"{m} は envelopes と regrow の両方にあります (どちらか 1 つにしてください)" for m in regrow if m in envelopes]
+    problems += ["package には空間がありません (regrow に入れられません)" for m in regrow if m == "package"]
     problems += [f"取付点 {i['id']} のモジュール {m} はこの設計にありません" for i in interfaces for m in i["between"] if m not in mods]
     if problems:
         raise ToolError("空間・取付点の指定が合いません: " + "; ".join(problems))
@@ -1535,6 +1538,8 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     spec, revisable, changes = _checked_changes(ctx, design, merged_changes, merged_choices)
     new = _regenerate(ctx, design, {**changes, **merged_choices}, "build_version")
     fresh = copy.deepcopy(new.get("modules") or design["modules"])
+    grown = {m["module_id"]: copy.deepcopy(m.get("envelope") or []) for m in fresh}  # made around the new parts
+    envelopes = {**{m: grown.get(m, []) for m in regrow}, **envelopes}
     if not own:  # no layout change: every module keeps the previous version's space and mounts (designgen.modules)
         before = {m["module_id"]: m for m in design["modules"]}
         for m in fresh:
@@ -1561,15 +1566,17 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
         lines = [f"{contract.MODULE_NAMES_JA.get(m, m)} ({m}) の {pid} が空間から {far:.1f} mm はみ出す"
                  + (f" (提案 {', '.join(by_module[m])})" if m in by_module else "") for m, pid, far in breaches]
         raise ToolError("部品がモジュールの空間 (envelope) からはみ出すので、版を作れません: " + "; ".join(lines)
-                        + "。その設計役に収まる値で出し直してもらうか、envelopes で空間を配り直してください")
+                        + "。その設計役に収まる値で出し直してもらうか、regrow (モジュールの並び) か envelopes で空間を配り直してください")
     used = [copy.deepcopy(c) for c in pending]
     if own_moved:
         used.append({"change_id": ctx.store.next_id("module_change"), "module_id": "package", "agent_id": "packager",
                      "reason": reason, "design_version": v, "changes": own_moved})
     ids = [c["change_id"] for c in pending]
     parts = [f"その回の提案をまとめた ({', '.join(ids) if ids else 'なし'})", reason]
-    if envelopes:
-        parts.append("空間を配り直した: " + "、".join(envelopes))
+    if regrow:
+        parts.append("空間を部品の形から作り直した: " + "、".join(regrow))
+    if [m for m in envelopes if m not in regrow]:
+        parts.append("空間を配り直した: " + "、".join(m for m in envelopes if m not in regrow))
     if interfaces:
         parts.append("取付点を変えた: " + "、".join(i["id"] for i in interfaces))
     change_reason = "。".join(parts)

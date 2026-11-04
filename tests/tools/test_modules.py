@@ -176,6 +176,17 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
         self.assertEqual(d["modules"][3]["envelope"], [wider])
         self.assertIn("空間を配り直した: powertrain", d["change_reason"])
 
+    def test_regrow_makes_the_named_modules_space_again(self):
+        self.propose("powertrain", changes={"battery_x": self.mm(-700)})
+        with self.assertRaisesRegex(ToolError, "は envelopes と regrow の両方"):
+            build_version(self.ctx, {"reason": "x", "regrow": ["powertrain"], "envelopes": {"powertrain": []}}, "packager")
+        with self.assertRaisesRegex(ToolError, "package には空間がありません"):
+            build_version(self.ctx, {"reason": "x", "regrow": ["package"]}, "packager")
+        out = build_version(self.ctx, {"reason": "電池を前へ出す提案に合わせる", "regrow": ["powertrain"]}, "packager")
+        d = self.ctx.store.design(out["design_version"])
+        self.assertIn("空間を部品の形から作り直した: powertrain", d["change_reason"])
+        self.assertEqual(self.ctx.version, 2)
+
     def test_packager_only_and_package_variables_only(self):
         self.propose("occupant", changes={"seat_x": self.mm(-1000)})
         for agent in ("designer.occupant", "lead", "designer"):
