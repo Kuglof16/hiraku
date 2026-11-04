@@ -117,10 +117,20 @@ ZU_DESIGNS = Path(__file__).resolve().parent / "zu_designs"
 # Taken again for two changes together: the zu is drawn from the frozen design copies in
 # ZU_DESIGNS (claude/screen-body-fix), and shapes the design does not list are no longer
 # drawn (shapes.js from claude/screen-cut-real, in claude/dept-screen-812e37 at 26cc6d9).
+# Taken again when occupant segments got their own shapes (tests/web/test_occupant_browser.py).
+# The frozen copies are not one box per occupant: each has the torso box (head included) and
+# 8 segments per person (thigh, shank, arm, foot, left and right), with rpy_deg. Before, every
+# segment was drawn as an upright capsule with a ball and was counted as a seat of its own, so
+# under two_cargo the segments were off board (opacity 0.07). Now each segment is one capsule
+# or rounded box turned with its box, on board with its person. With the code before the change
+# (5708693) the copies still give the old hashes (v1 9ed7fc65..., nodriveshaft c94992b4...,
+# tallcargo acf1eb37...); comparing the two fingerprints part by part, only the 16
+# "part:occupant_?.<segment>" entries differ in each design: the torsos (no head part, so
+# still the capsule and ball), the other parts and the members are the same.
 ZU_PRINT = {
-    "offroad-4w-v1": "9ed7fc656bee0247954a35c3ff226f6bc81b6baf0edb2755d1ef4568e075c3d8",
-    "offroad-4w-nodriveshaft": "c94992b46e1bc28d1f58bf184089af165f3a792580103f78654f7125b03f63b4",
-    "offroad-4w-tallcargo": "acf1eb37defd590e490e4cec88470c6056f666028204dd203b52dff6e49c0558",
+    "offroad-4w-v1": "fcef1c24d229703a0fdec3d0476834e305d7feae5a2c198ba7903a6943631f52",
+    "offroad-4w-nodriveshaft": "b1936a80f7a81cf5e89eb27887fbe442edb1c2d75b8cd3dc1f7bf68d254f74a3",
+    "offroad-4w-tallcargo": "7daf4c4afa262adc78bf28fc147486bd794e994d272116a50d8afa5d16b61411",
 }
 
 

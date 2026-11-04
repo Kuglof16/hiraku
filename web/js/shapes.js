@@ -247,6 +247,58 @@ export function partPieces(part, { round = false, design = null } = {}) {
   return (make ? make(size, part.box.center_mm, part, design) : null) ?? [{ geo: boxGeometry(size, round), sub: null }];
 }
 
+// An occupant given in body segments (designgen: "<person>" the torso, "<person>.<segment>"
+// the head, neck, arms, hands, legs and feet; contract/loading.py person_of): the person of a
+// part is its id up to the first ".".
+export function personOf(part) {
+  return String(part.id ?? "").split(".", 1)[0];
+}
+
+// The segment of an occupant part: its id after the first "." (null for the torso, or for an
+// occupant drawn as one box).
+export function segmentOf(part) {
+  const id = String(part.id ?? "");
+  const dot = id.indexOf(".");
+  return dot < 0 ? null : id.slice(dot + 1);
+}
+
+// One segment of an occupant as one rounded shape inside its box, in the part's local frame
+// (box centre at 0, the box's rpy_deg applied by the caller, as for every part):
+// - the head ("<person>.head"): a ball, its diameter the box's smallest side;
+// - a segment whose two short sides are about equal (within OCCUPANT_ROUND_SECTION: the
+//   arms, forearms, thighs, shanks): a capsule along the box's longest side, its diameter the
+//   smaller short side;
+// - any other (the torso, the neck, a hand, a foot): the box with its edges rounded,
+//   OCCUPANT_ROUND_SHARE of its smallest side.
+// The shapes never reach outside the box. The share and the section ratio are values for the
+// picture, not from the design.
+export const OCCUPANT_ROUND_SECTION = 0.8;
+export const OCCUPANT_ROUND_SHARE = 0.45;
+export function occupantSegmentPieces(part) {
+  const size = part.box.size_mm.map(Number);
+  if (segmentOf(part) === "head") {
+    const g = new THREE.SphereGeometry(Math.min(...size) / 2, 20, 14);
+    g.userData.occupant = "ball";
+    return [{ geo: g, sub: null }];
+  }
+  const axis = size.indexOf(Math.max(...size)); // 0 x, 1 y, 2 z of the box
+  const [a, b] = size.filter((_, i) => i !== axis);
+  if (Math.min(a, b) / Math.max(a, b) >= OCCUPANT_ROUND_SECTION) {
+    const r = Math.min(a, b) / 2;
+    const g = new THREE.CapsuleGeometry(r, Math.max(0, size[axis] - 2 * r), 6, 16); // axis: local y
+    if (axis === 0) g.rotateZ(-Math.PI / 2);
+    else if (axis === 2) g.rotateX(Math.PI / 2);
+    g.userData.occupant = "capsule";
+    g.userData.axis = axis;
+    return [{ geo: g, sub: null }];
+  }
+  const r = OCCUPANT_ROUND_SHARE * Math.min(...size);
+  // RoundedBoxGeometry needs the radius under half of every side
+  const g = new RoundedBoxGeometry(size[0], size[1], size[2], 4, Math.min(r, Math.min(...size) / 2 - 1e-3));
+  g.userData.occupant = "rounded_box";
+  return [{ geo: g, sub: null }];
+}
+
 // The pieces of one part (or wheel) that take the same material (sub) as one geometry each:
 // one draw call per material instead of one per piece (a view through a shared renderer is
 // drawn many times a frame). The pieces' geometries are used up (disposed).

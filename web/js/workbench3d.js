@@ -45,7 +45,7 @@ import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { mergePieces, partPieces, wheelPieces } from "./shapes.js";
+import { mergePieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
@@ -572,7 +572,16 @@ export class Workbench3D {
 
     // Wheels listed as parts are drawn from the supports instead.
     const wheelAt = (c) => (design.supports ?? []).some((sp) => v3(sp.position_mm).distanceTo(c) < 50);
-    let seat = 0;
+    // A seat per person, not per occupant part: an occupant may be given in body segments
+    // ("<person>" the torso, "<person>.<segment>"), and a person's parts board together, in
+    // the order the persons first come in design.parts (hiraku/contract/loading.py).
+    const occupants = (design.parts ?? []).filter((p) => p.kind === "occupant");
+    const seatOf = new Map();
+    for (const p of occupants) if (!seatOf.has(personOf(p))) seatOf.set(personOf(p), seatOf.size);
+    // A person with a head part is drawn segment by segment; a person without one (an occupant
+    // given as one box, or a torso box that still holds the head) keeps the torso drawn as a
+    // capsule with a ball for the head, as before.
+    const headed = new Set(occupants.filter((p) => segmentOf(p) === "head").map(personOf));
     for (const p of design.parts ?? []) {
       const c = v3(p.box.center_mm);
       const sz = p.box.size_mm;
@@ -580,7 +589,20 @@ export class Workbench3D {
       if (p.kind === "wheel" && wheelAt(c)) continue;
       const g = new THREE.Group();
       let edges = null;
-      if (p.kind === "occupant") {
+      if (p.kind === "occupant" && (segmentOf(p) !== null || headed.has(personOf(p)))) {
+        // one rounded shape inside the segment's box, turned with it (rpy_deg as for any part)
+        const holder = new THREE.Group();
+        holder.position.copy(c);
+        const rpy = p.box.rpy_deg ?? [0, 0, 0];
+        holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
+        const mat = this.look.partMaterial("occupant");
+        for (const pc of occupantSegmentPieces(p)) {
+          const mesh = new THREE.Mesh(pc.geo, mat);
+          mesh.castShadow = this.look.real;
+          holder.add(mesh);
+        }
+        g.add(holder);
+      } else if (p.kind === "occupant") {
         const mat = this.look.partMaterial("occupant");
         const r = Math.min(sz[0], sz[1]) * 0.26;
         const head = Math.min(sz[0], sz[1]) * 0.2;
@@ -626,7 +648,7 @@ export class Workbench3D {
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
-      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
+      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seatOf.get(personOf(p)) : null, onBoard: true, center: c, size: sz, short };
     }
 
     this.bboxIso = box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1000, -1000, 0), new THREE.Vector3(1000, 1000, 1000)) : box;
@@ -771,7 +793,8 @@ export class Workbench3D {
 
   // Who is on board for a load case's params.loading (empty / driver / two /
   // two_cargo; none means two_cargo). Occupants board in the order they are
-  // listed and cargo rides only with two_cargo, as the solvers do. Parts that
+  // listed (a person's segments with the person, o.seat) and cargo rides only
+  // with two_cargo, as the solvers do. Parts that
   // stay off are drawn faint and left out of the centre of gravity.
   setLoading(loading) {
     if (loading === this.loading) return;
