@@ -100,5 +100,7 @@ tests:
   - {id: H4, domain: assembly, title: 挟み込み, applies_if: pinch, requirement_keys: [Q63]}
   - {id: H5, domain: assembly, title: 組み立ての順番, applies_if: assembly, requirement_keys: [Q82]}
   - {id: H6, domain: assembly, title: 泥のはね (車輪が巻き上げた物が乗員に届かない), applies_if: ride and outdoor and self_propelled, requirement_keys: [Q31, Q50, Q87, Q88]}
+  # H7: the entry_opening tool (stage 0) and the builder hiraku.catalog.builders.entry; Q44 to Q46 are not judged
+  - {id: H7, domain: assembly, title: 乗り降り (座席の横の開口・最初の足場・手がかり), applies_if: ride, requirement_keys: [Q93, Q94, Q95, Q96, Q97, Q47, Q48, Q49, Q89]}
   - {id: G1, domain: assembly, title: 区分・寸法 (法令), applies_if: public_road, requirement_keys: [Q70, Q71]}
   - {id: G2, domain: assembly, title: 規格の項目に当てる, applies_if: always, requirement_keys: [Q72]}

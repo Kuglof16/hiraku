@@ -420,8 +420,8 @@ requirements:
     basis: 'ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition
       of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard
       for a small open off-road vehicle could be read)'
-tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, R8, R7, H1, H3, H6, H5]
+tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, R8, R7, H1, H3, H6, H7, H5]
 # No cases past the limit: every tile of the last version is meant to be green.
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 4  # HK5: one revision per red stage (layout, load path, motor, joints)
+round_limit: 5  # HK5: one revision per red stage (layout, the opening, load path, motor, joints)
 cost_limit_usd: 2.0
