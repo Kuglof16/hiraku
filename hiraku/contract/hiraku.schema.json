@@ -5034,7 +5034,7 @@
         "agent_id",
         "reason"
       ],
-      "description": "One module designer's proposal for the next version (revise_design with module). build_version builds every pending proposal of the round into one version.",
+      "description": "One module designer's proposal for the next version (revise_design with module). build_version builds every pending proposal of the round into one version. The packager's own change of a round may be one more entry with module_id package and agent_id packager.",
       "properties": {
         "change_id": {
           "type": "string",
@@ -5075,6 +5075,11 @@
               "boolean"
             ]
           }
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The version this proposal was made on (the red it answers is on that version)."
         }
       }
     },
