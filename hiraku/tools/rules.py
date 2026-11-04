@@ -70,6 +70,41 @@ def _verdict_tool(ctx: RunContext, ver: Record) -> str | None:
     return (ctx.store.get("analysis", ana_id) or {}).get("tool") if ana_id else None
 
 
+def ended_cases(ctx: RunContext, version: int | None = None) -> set[str]:
+    """Load cases of the version without a verdict whose mismatches all have a cause recorded as ending them
+    (a scripted plan's expected_mismatch end: an agent.said with data.ended_cause). They cannot be judged
+    (contract 110b991): no heavier stage waits for them (HK5) and HK4 does not hold a stop for them; their
+    tiles keep them not judged."""
+    v = version or ctx.version
+    if not v:
+        return set()
+    ended: dict[str, set[str]] = {}
+    for e in ctx.store.events():
+        d = e.get("data") or {}
+        if e["kind"] == "agent.said" and d.get("ended_cause") and d.get("load_case_id"):
+            hit = ctx.store.find("cause", d["ended_cause"])
+            if hit is not None and hit[0] == v:
+                ended.setdefault(d["load_case_id"], set()).add(d["ended_cause"])
+    if not ended:
+        return set()
+    verdicts = latest_verdicts(ctx, v)
+    out = set()
+    for lc_id, causes in ended.items():
+        if lc_id in verdicts:
+            continue
+        lc = ctx.load_case(lc_id) if ctx.has_load_case(lc_id) else None
+        open_causes = {cause["cause_id"] for _, cause in _mismatches(ctx, lc, v) if cause} if lc else set()
+        if open_causes <= causes:
+            out.add(lc_id)
+    return out
+
+
+def _mismatches(ctx: RunContext, lc: Record, v: int) -> list:
+    from hiraku.tools.judge import unresolved_mismatches
+
+    return unresolved_mismatches(ctx, lc, v)
+
+
 def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> list[tuple[int, Record, str]]:
     """HK5: the load cases of the current version, of a stage below `stage` (shelf.load_case_stage),
     in the picked domains and assembly, that are red (a failing verdict), not judged, or held back
@@ -108,9 +143,9 @@ def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> li
             out.append((n, lc, "合格にできない: " + "、".join(held[lc["domain"]][lc_id])))
         elif ver is None:
             out.append((n, lc, "未判定"))
-    if out:
-        cannot = unpredictable_cases(ctx)
-        out = [x for x in out if x[2] != "未判定" or x[1]["load_case_id"] not in cannot]
+    if out:  # cases that cannot be judged hold no heavier stage (contract 110b991): no K0 formula, or ended by a cause
+        cannot = set(unpredictable_cases(ctx)) | ended_cases(ctx, v)
+        out = [x for x in out if x[1]["load_case_id"] not in cannot]
     return sorted(out, key=lambda x: x[0])
 
 
@@ -331,12 +366,13 @@ def red_left_reason(ctx: RunContext) -> str | None:
 def holding(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
     """pending() without the load cases this run cannot judge (unpredictable_cases): those HK4 holds the stop for."""
     cannot = unpredictable_cases(ctx)
+    ended = ended_cases(ctx, version)
     out = []
     for d, lcs in pending(ctx, version):
         held = held_cases(ctx, d, version or ctx.version) if (version or ctx.version) else {}
         # a case no K0 formula can predict is not held even with a result beyond the criterion (run N13: R8-stress
         # held the strength role's stop twice): no prediction, so no comparison can settle it; it ends not judged
-        left = [lc for lc in lcs if lc not in cannot]
+        left = [lc for lc in lcs if lc not in cannot and lc not in ended]
         if left:
             out.append((d, left))
     return out
@@ -390,11 +426,15 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
 def cannot_judge_text(ctx: RunContext) -> str | None:
     """The load cases this run cannot judge (unpredictable_cases), in a sentence; None when there are none."""
     cannot = unpredictable_cases(ctx)
-    if not cannot:
-        return None
-    named = "、".join(f"{lc_id} ({q})" for lc_id, q in cannot.items())
-    return (f"{named} は、判定の量を予測する手計算 (K0) の式が式の台帳に無いので、この実行では判定できません "
-            f"(予測が無いと解析も照合もできない)")
+    ended = sorted(ended_cases(ctx) - set(cannot))
+    parts = []
+    if cannot:
+        named = "、".join(f"{lc_id} ({q})" for lc_id, q in cannot.items())
+        parts.append(f"{named} は、判定の量を予測する手計算 (K0) の式が式の台帳に無いので、この実行では判定できません "
+                     f"(予測が無いと解析も照合もできない)")
+    if ended:  # contract 110b991: the mismatch's cause was recorded as ending the step without a verdict
+        parts.append(f"{'、'.join(ended)} は、食い違いの原因を記録して判定なしで終えたので、この実行では判定していません")
+    return " ".join(parts) or None
 
 
 def design_refusal(ctx: RunContext) -> str | None:

@@ -280,6 +280,13 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertNotIn("no next prediction", self.ctx.project["stop_reason"])
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any("判定の無いまま次へ進みます" in t for t in said))
+        # contract 110b991: a load case ended by its cause cannot be judged; no heavier stage waits for it (HK5)
+        from hiraku.tools import rules
+
+        self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})
+        self.assertNotIn("R1-step100", [lc["load_case_id"] for _, lc, _ in rules.lower_stage_left(self.ctx, 9)])
+        self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        self.assert_events_fit()
 
     def test_end_and_retry_together_are_a_plan_error(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
