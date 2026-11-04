@@ -348,15 +348,27 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
     describe(); [] when it has none), "how"}."""
     args = args or {}
     out = ctx.formulas.list_formulas()
-    tool = args.get("tool")
+    tool, ids = args.get("tool"), args.get("formula_ids")
+    if ids:  # the whole entries of the formulas named
+        missing = [i for i in ids if i not in {f["formula_id"] for f in out}]
+        if missing:
+            raise ToolError(f"式 {', '.join(missing)} はありません (list_formulas の formula_id)")
+        return [f for f in out if f["formula_id"] in ids]
     if tool:
         named = (ctx.specs.get(tool) or {}).get("formulas") or []
         out = [f for f in out if f["formula_id"] in named or f["formula_id"].split(".", 1)[0] == tool]
     if args.get("domain"):
         out = [f for f in out if f["domain"] == args["domain"]]
-    if not tool:
-        return out
+    if not tool:  # the short list (run N13: the whole strength list did not fit an answer); formula_ids gives the rest
+        return [formula_line(f) for f in out]
     return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
+
+
+def formula_line(f: Record) -> Record:
+    """One formula in short: id, title, domain, and the names and units of its inputs and outputs."""
+    names = lambda d: {k: v.get("unit") for k, v in (d or {}).items()} if isinstance(d, dict) else d  # noqa: E731
+    return {"formula_id": f["formula_id"], "title": f.get("title"), "domain": f.get("domain"),
+            "inputs": names(f.get("inputs")), "outputs": names(f.get("outputs"))}
 
 
 # A tool's notes may name the Python function that reads a formula's inputs off the design; a role
@@ -903,7 +915,8 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     With safe_side true (and safe_side_reason), the CAE role says the cause explains
     the gap and the prediction bounds the true value from the safe side. The numbers
     are checked first; then a verdict is made from the prediction (the unfavourable
-    value), and the domain's judgement is updated.
+    value), and the domain's judgement is updated. With ends_case true, no prediction checkable
+    in this run reaches the quantity: the load case ends not judged (not with safe_side).
     """
     _check_input("record_cause", args)
     hit = ctx.store.find("comparison", args["comparison_id"])
@@ -920,6 +933,9 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     pred = ctx.prediction(cmp["prediction_id"])
     lc = ctx.load_case(pred["load_case_id"]) if pred else None
     safe = bool(args.get("safe_side"))
+    ends = bool(args.get("ends_case"))
+    if safe and ends:
+        raise ToolError("safe_side と ends_case は一緒に付けられません (safe_side は予測で合否を出し、ends_case は合否を出さずに終えます)")
     if safe:
         if not (args.get("safe_side_reason") or "").strip():
             raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
@@ -936,6 +952,8 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     }
     if safe:
         cause.update(safe_side=True, safe_side_reason=args["safe_side_reason"].strip())
+    if ends:
+        cause["ends_case"] = True  # the load case ends not judged (rules.ended_cases: HK4 and HK5 do not wait for it)
     ctx.store.add_record("cause", cause, design_version=v, agent=agent, domain=domain)
     ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]), design_version=v, agent=agent,
                          domain=domain)

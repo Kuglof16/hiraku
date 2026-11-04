@@ -91,6 +91,10 @@ def _collect() -> None:
         for test_id in mod.BUILDERS:
             general = BUILDERS.get(test_id)
             BUILDERS[test_id] = _by_product(test_id, getattr(general, "general", general))
+    from hiraku.catalog.builders.modules import with_modules  # load_case.modules on designs split into modules
+
+    for test_id, fn in list(BUILDERS.items()):
+        BUILDERS[test_id] = with_modules(fn)
 
 
 _collect()

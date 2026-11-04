@@ -283,7 +283,8 @@ class SeatedBodyTest(unittest.TestCase):
         for who in ("occupant_R", "occupant_L"):
             out = [p for p in V1["parts"] if p["kind"] == "occupant" and body.person_of(p["id"]) == who]
             self.assertAlmostEqual(sum(p["mass_kg"] for p in out), BEFORE["occupant"], places=9)
-            self.assertEqual(len(out), 1 + 2 * 4)  # trunk, and thigh, shank, arm, foot on each side
+            # trunk, neck, head, and thigh, shank, upper arm, forearm, hand, foot on each side (the body in segments)
+            self.assertEqual(len(out), 3 + 2 * len(body.SEGMENTS))
             self.assertEqual(out[0]["id"], who)  # the trunk keeps the occupant's id
         # the driver's arms reach the steering wheel's grips
         grips = people.grip_points(PARTS["steering_wheel"])

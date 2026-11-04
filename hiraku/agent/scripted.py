@@ -31,7 +31,7 @@ from hiraku.tools import RunContext, ToolError, rules
 from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
                                     revise_design, rule_check, write_report)
 from hiraku.tools.judge import latest_verdicts, verdict_line
-from hiraku.tools.plan import (READERS, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
+from hiraku.tools.plan import (READERS, ReaderError, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
                                load_plan, plan_of, resolve)
 from hiraku.tools.report import scripted_next
 from hiraku.tools.shelf import STAGE_NAMES_JA, tool_stage
@@ -40,22 +40,46 @@ Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
-FIT_TIME_S = 120.0  # the driver fit's time limit when the plan gives none
+FIT_TIME_S = 900.0  # the driver fit's time limit when the plan gives none (a guard; fit_evals ends it first)
+FIT_EVALS = 150  # designs the driver fit measures when the plan gives no fit_evals
 
 
-def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None) -> tuple[dict, str]:
+def range_ends(design: Record, changes: dict[str, Record]) -> list[str]:
+    """The changes that sit on the lower or upper bound of their variable's range (designgen.variables),
+    as 'name value unit (下限|上限)'."""
+    from hiraku import designgen
+
+    spec = {s["name"]: s for s in designgen.variables(design)}
+    out = []
+    for k, q in changes.items():
+        s = spec.get(k) or {}
+        for bound, word in (("min", "下限"), ("max", "上限")):
+            if bound in s and abs(q["value"] - s[bound]) < 1e-9:
+                out.append(f"{k} {q['value']:g} {q['unit']} ({word})")
+    return out
+
+
+def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None,
+               evals: Any = None) -> tuple[dict, str]:
     """A revision with `fit: driver`: the plan's own changes, then the driver's place found by code on the design
     with them (hiraku.designgen.driver_fit.best_driver_place: the smallest of the H3 margins made the largest).
     Returns the changes with the fit's added (the fit's win for its variables) and the reason with the margins."""
     from hiraku import designgen
     from hiraku.designgen import driver_fit
 
+    # measured on the design with the entry's variable changes (its choices, the mounts, do not move the driver;
+    # with them every design takes longer to build). A fixed number of evaluations (`fit_evals`) makes the answer
+    # the same on every machine; the time limit only guards against a fit that does not end.
     base = designgen.regenerate(ctx.store.design(), changes) if changes else ctx.store.design()
-    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S))
+    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S),
+                                       max_evals=int(evals or FIT_EVALS))
     small = got["smallest"]
     found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
     text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
             f"いちばん小さい余裕は {small['name']} {small['value']:.1f} {small['unit']} ({small.get('where') or '-'})")
+    ends = range_ends(base, got["changes"])
+    if ends:  # the answer sits on a bound of the variable's range, and those bounds are not checked
+        text += f"。範囲の端 (確かめていない値) で決まった: {'、'.join(ends)}"
     return {**changes, **got["changes"]}, text
 
 
@@ -114,7 +138,15 @@ def _check_stop(ctx: RunContext) -> None:
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
-        given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
+        try:
+            given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
+        except ReaderError as e:  # the formula does not apply to this design (e.g. nothing outside point R for R8-push)
+            ctx.store.emit("agent.said", agent="system", domain=lc["domain"],
+                           text=f"{lc['load_case_id']} の {p['quantity']} は、この設計では式 {p['formula_id']} の入力が作れないので"
+                                f"予測しません ({e})",
+                           data={"skipped_prediction": p["formula_id"], "load_case_id": lc["load_case_id"],
+                                 "quantity": p["quantity"], "reason": str(e)})
+            continue
         args = {
             "load_case_id": lc["load_case_id"],
             "quantity": p["quantity"],
@@ -149,6 +181,11 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     if ana["status"] != "ok":
         _say(ctx, agent, lc, f"解析が失敗しました: {ana.get('error', '')}")
         raise Stop(f"analysis {ana['analysis_id']} failed")
+    decided = [v for v in ctx.store.records("verdict", ctx.version) if v.get("analysis_id") == ana["analysis_id"]]
+    if decided:  # the analysis judged the load case itself (unsupported_load: a load with no path): nothing to compare
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、荷重の通り道が無いので不合格です ({decided[-1]['verdict_id']})。"
+                             f"予測との照合はしません")
+        return None
     names = {r["quantity"] for r in ana["results"]}
     hit = None
     for pid in pred_ids:
@@ -163,13 +200,26 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         cmp = compare(ctx, cargs, agent)["comparison"]
         if cmp["status"] == "match":
             continue
-        if expected and hit is None and cmp["quantity"] == expected["quantity"]:
+        if hit is None and expected_for(expected, cmp) is not None:
             hit = cmp
             continue
         _say(ctx, agent, lc, f"{cmp['quantity']} が食い違いました (差 {cmp['diff_rel'] * 100:.1f} %)。"
                              f"台本にこの食い違いの原因は書かれていないので、ここで止めます")
         raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (the plan has none for it)")
     return hit
+
+
+def expected_for(expected: Any, cmp: Record) -> Record | None:
+    """The plan's expected_mismatch entry for a comparison: one entry, or a list of them, each for a quantity
+    and optionally a side (`when`: "high" when the prediction is above the analysis, "low" when below), so
+    one step can say why the hand calculation is off either way (e.g. R7-hand: low on a version whose
+    parts are not mounted, end; high on a stiffer frame, safe side)."""
+    entries = expected if isinstance(expected, list) else [expected] if expected else []
+    side = "high" if cmp["predicted"]["value"] > cmp["analyzed"]["value"] else "low"
+    for e in entries:
+        if e["quantity"] == cmp["quantity"] and e.get("when", side) == side:
+            return e
+    return None
 
 
 def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) -> None:
@@ -181,15 +231,23 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if step.get("say"):
         _say(ctx, agent, lc, step["say"])
     expected = step.get("expected_mismatch")
-    hit = _analyze_and_compare(ctx, lc, agent, tool, _predict(ctx, lc, agent, step["predictions"]), expected)
+    pred_ids = _predict(ctx, lc, agent, step["predictions"])
+    if not pred_ids:  # every formula of the step was skipped: no prediction, so no analysis (HK1)
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、この設計で使える予測の式が無いので、解析しません")
+        return
+    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected)
     if hit is None:
         return  # matched; the plan's retry is not needed
+    expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)
     _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録します")
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
         args.update(safe_side=True, safe_side_reason=expected["safe_side_reason"])
-    ver = record_cause(ctx, args, agent)["verdict"]
+    if expected.get("end"):
+        args["ends_case"] = True  # rules.ended_cases reads it: the load case holds no heavier stage nor the stop
+    recorded = record_cause(ctx, args, agent)
+    ver = recorded["verdict"]
     retry = expected.get("retry")
     if ver is not None:
         if retry is not None:
@@ -378,10 +436,16 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
         changes, reason = dict(rev.get("changes") or {}), rev["reason"]
+        choices = dict(rev.get("choices") or {})  # the generator's short ways (revise_design choices)
         if rev.get("fit") == "driver":  # the seat, steering and pedals searched by code (designgen.driver_fit)
-            changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"))
+            try:
+                changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"), rev.get("fit_evals"))
+            except ValueError as e:  # the generator refuses the entry's own changes (designgen.DesignGenError)
+                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+                raise Stop(f"revise_design refused: {e}") from None
         try:
-            out = revise_design(ctx, {"changes": changes, "reason": reason}, "designer")
+            out = revise_design(ctx, {**({"changes": changes} if changes else {}),
+                                      **({"choices": choices} if choices else {}), "reason": reason}, "designer")
         except ToolError as e:
             s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
             raise Stop(f"revise_design refused: {e}") from None

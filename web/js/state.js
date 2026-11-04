@@ -188,7 +188,12 @@ export function applyEvent(s, ev) {
       s.intake.questions = qs;
       if (agent) agent.status = "答え待ち";
       const must = qs.filter((q) => q.ask === "must").length;
-      const txt = `足りない要件を ${qs.length} 個聞いた (値がまだ無い ${must}・既定値を確かめる ${qs.length - must})`;
+      // rule hits that need a person (contract: rule_questions), in the same ask or on their own
+      const rqs = d.rule_questions ?? [];
+      const said = [];
+      if (qs.length || !rqs.length) said.push(`足りない要件を ${qs.length} 個${rqs.length ? "" : "聞いた"} (値がまだ無い ${must}・既定値を確かめる ${qs.length - must})`);
+      if (rqs.length) said.push(`規則の当たりを ${rqs.length} 個聞いた${qs.length ? "" : " (設計を直すか、規則を外すか)"}`);
+      const txt = said.join("・");
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -199,7 +204,14 @@ export function applyEvent(s, ev) {
       s.intake.note = d.note ?? null;
       if (agent) agent.status = "見守り";
       const byDefault = ans.filter((a) => a.source === "default").length;
-      const txt = `答えがそろった: ${ans.length} 個 (既定値のまま ${byDefault})`;
+      const ras = d.rule_answers ?? [];
+      const said = [];
+      if (ans.length || !ras.length) said.push(`答えがそろった: ${ans.length} 個 (既定値のまま ${byDefault})`);
+      if (ras.length) {
+        const n = (c) => ras.filter((a) => a.choice === c).length;
+        said.push(`規則の当たりの答え: 設計を直す ${n("revise_design")}・規則を外す ${n("drop_rule")}`);
+      }
+      const txt = said.join("・");
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;

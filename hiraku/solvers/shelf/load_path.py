@@ -34,7 +34,9 @@ Load case params.load_kind picks the loads:
   section corners).
 - push: push_force outward (away from the vehicle's middle) at each on-board occupant's hip and shoulder
   (point R), on the first thing outboard of that point (a member or a part); occupant_push_deflection
-  along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open.
+  along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open. Nets on
+  quick-release clips and doors (k4_geometry.entry.openable_parts) are taken as open: not pushed on, and left
+  out of the model, so they do not stiffen the frame either.
 
 Every load kind that solves gives, next to max_stress (the largest von Mises stress, whatever the member's
 material), max_utilisation: the largest over the members of stress / (that member's own material yield /
@@ -60,6 +62,7 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, member_props
 from ..k4_geometry import model as k4
 from ..k4_geometry import people
+from ..k4_geometry.entry import openable_parts
 from ..k4_geometry.obb import OBB, from_member
 from .base import LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_text, param_value, \
     result, run_param
@@ -1068,6 +1071,16 @@ def occupant_trunks(design: Record) -> list[Record]:
     return [p for p in design.get("parts", []) if p["kind"] == "occupant" and "." not in p["id"]]
 
 
+def occupant_cg(design: Record, trunk: Record) -> np.ndarray:
+    """The occupant's centre of gravity: the mass-weighted centre of its trunk and its segments (parts
+    <trunk id>.<segment>); the trunk's centre when the parts carry no mass."""
+    own = [p for p in design.get("parts", []) if p["id"] == trunk["id"] or p["id"].startswith(trunk["id"] + ".")]
+    m = sum(float(p.get("mass_kg") or 0.0) for p in own)
+    if m <= 0.0:
+        return np.asarray(trunk["box"]["center_mm"], float)
+    return sum(float(p.get("mass_kg") or 0.0) * np.asarray(p["box"]["center_mm"], float) for p in own) / m
+
+
 def point_r(trunk: Record) -> list[tuple[str, np.ndarray, np.ndarray]]:
     """(name, point, outward unit) of the hip and the shoulder on the outer side of an occupant's trunk box: heights
     over the box's bottom (the seat top) from k4_geometry.people (young male 95th percentile, AIST: trochanter
@@ -1104,9 +1117,14 @@ def _ray_box(p: np.ndarray, d: np.ndarray, obb: OBB) -> float | None:
 
 
 def first_outboard(design: Record, point: np.ndarray, out: np.ndarray, skip: set[str]) -> tuple[str, float] | None:
-    """The first member or modelled part a ray from `point` along `out` meets: (body id, distance)."""
+    """The first member or modelled part a ray from `point` along `out` meets: (body id, distance). Nets held by
+    quick-release clips and doors with a hinge and a latch (k4_geometry.entry.openable_parts) and their fittings are
+    passed over: a guard the occupant has to put in place does not count as the side guard (the US CPSC's proposed
+    rule for ROVs, 79 FR 68964, sec. 1422.5(c)(4), read by the intake department: such barriers are taken off
+    before the shoulder and hip tests)."""
     bs = k4.bodies(design)
     allowed = {f"part:{p['id']}" for p in modelled_parts(design)} | {k for k in bs if k.startswith("member:")}
+    allowed -= {f"part:{pid}" for pid in openable_parts(design)}
     best = None
     for k in allowed - skip:
         s = _ray_box(point, out, bs[k].obb)
@@ -1125,10 +1143,13 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
     contacts = find_contacts(design, touch)
     points = _push_plate_points(design) if kind == "push" else {}
     pre = float(values.get("net_prestress") or NET_PRESTRESS_MPA)
-    full = build(design, contacts, holds=holds, plate_points=points, net_prestress=pre)
+    # The push takes openable nets and doors as open (CPSC proposed rule sec. 1422.5(c)(4), see first_outboard):
+    # they are pushed on by nobody and do not stiffen the frame either (the unfavourable side).
+    opened = frozenset(openable_parts(design)) if kind == "push" else frozenset()
+    full = build(design, contacts, exclude=opened, holds=holds, plate_points=points, net_prestress=pre)
     free = free_parts(full)
-    lp = (build(design, contacts, exclude=frozenset(free), holds=holds, plate_points=points, net_prestress=pre)
-          if free else full)
+    lp = (build(design, contacts, exclude=opened | frozenset(free), holds=holds, plate_points=points,
+                net_prestress=pre) if free else full)
     parts = {p["id"]: p for p in design.get("parts", [])}
     effects: list[Record] = []
     assumed = assumed_material_effect(full.plates)  # the free plates too
@@ -1231,14 +1252,21 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
         raise DesignError(f"load_kind must be one of {', '.join(LOAD_KINDS)}, got {kind!r}")
     if lp.nets:
         effects.append(net_effect(lp, pre))
-    # the contract's unsupported_load: the load points with no path to the frame (a floating control, or a point R
-    # with nothing outboard to take the push); the judge makes it a failing verdict
+    # the contract's unsupported_load: the load points with no path to the frame (a floating control, a point R
+    # with nothing outboard to take the push, or a free part's own weight under the inertia loads); the judge makes
+    # it a failing verdict
     if kind in ("hand", "foot"):
         unsupported = list(dict.fromkeys(lost))
     elif kind == "push":
         opened = next(r for r in results if r["quantity"] == "occupant_push_open")
         unsupported = [w.strip() for w in (opened.get("where") or "").split(",") if w.strip()] if opened["value"] else []
         unsupported = unsupported if len(unsupported) == int(opened["value"]) else [opened.get("where")] * int(opened["value"])
+    elif kind == "inertia":
+        # the weight and the accelerations of a free part with mass reach no member: a load with no path
+        unsupported = [pid for pid in free if float((parts.get(pid) or {}).get("mass_kg") or 0.0) > 0.0]
+        if unsupported:
+            effects.append({"name": "浮いた部品の荷重は載っていない (応力は、枠まで繋がった部品の荷重だけで出した): "
+                                    + ", ".join(unsupported), "value": float(len(unsupported)), "unit": "1"})
     else:
         unsupported = []
     if unsupported:
@@ -1304,7 +1332,7 @@ def _inertia_loads(design: Record, lp: LoadPathModel, values: dict, on_part, vec
     for t in occupant_trunks(design):
         seat = _rests_on(design, t, ("seat",))
         if seat:
-            rests.append((seat, np.asarray(t["box"]["center_mm"], float), occ_m, np.array([f_lon, f_lat, 0.0])))
+            rests.append((seat, occupant_cg(design, t), occ_m, np.array([f_lon, f_lat, 0.0])))
     for c in (p for p in design.get("parts", []) if p["kind"] == "cargo"):
         on = _rests_on(design, c, None)
         if on:

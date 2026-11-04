@@ -49,7 +49,8 @@ def write_run(root: Path, events: list[dict]) -> Path:
         elif e["kind"] in FILE_KINDS:
             kind = FILE_KINDS[e["kind"]]
             rid = d[f"{kind}_id"]
-            v = d.get("design_version") or version.get(d.get("prediction_id")) or version.get(d.get("comparison_id"))
+            v = (d.get("design_version") or version.get(d.get("prediction_id")) or version.get(d.get("comparison_id"))
+                 or version.get(d.get("analysis_id")) or 1)  # an unsupported_load verdict names its analysis
             version[rid] = v
             p = layout.record_path(run, v, kind, rid)
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -219,6 +220,13 @@ class CheckRun(unittest.TestCase):
             ("files.request", "warn", f"{layout.INBOX_DIR}/0001-user.said.json"),  # the run has finished
             ("files.unknown", "warn", f"{layout.INBOX_DIR}/note.txt"),
             ("files.unknown", "warn", f"{layout.KNOWLEDGE_DIR}/other.md")])
+
+    def test_plugin_files_and_the_tool_error_log_are_part_of_the_layout(self):
+        run = write_run(self.root / "p", sample_events())
+        for name in (layout.PLUGIN_HOOKS_FILE, layout.PLUGIN_OUTBOX_FILE, layout.TOOL_ERRORS_FILE):
+            (run / name).write_text("", encoding="utf-8")
+        (run / "other.log").write_text("", encoding="utf-8")
+        self.assertEqual([f.where for f in cr.check_run(run) if f.rule == "files.unknown"], ["other.log"])
 
     # --- the report (report.json and report.written) ---------------------------------
     @staticmethod
@@ -658,6 +666,49 @@ class CheckRun(unittest.TestCase):
         self.assertEqual(self.rules(self._zero_limit(sample_events())), set())
         self.assertFlags(self._zero_limit(sample_events(), margin_pct=0.0), "verdict.math")
         self.assertIn("verdict.margin", self.rules(self._zero_limit(sample_events(), margin=False), "warn"))
+
+    @staticmethod
+    def _unsupported(ev, result=4.0, **change):
+        """The sample's verdict as an unsupported_load one (contract, 荷重の通り道が無いとき): ana-0001 reports
+        unsupported_load `result` (None: not at all), the verdict names the analysis instead of a comparison."""
+        if result is not None:
+            by_kind(ev, "analysis.finished")["data"]["results"].append(
+                {"quantity": "unsupported_load", "value": result, "unit": "1", "where": "occupant.hip"})
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v.pop("comparison_id")
+        v.update(analysis_id="ana-0001", quantity="unsupported_load", value={"value": 4.0, "unit": "1"}, op="<=",
+                 limit={"value": 0.0, "unit": "1"}, pass_=None, margin={"value": -4.0, "unit": "1"}, margin_pct=None,
+                 basis="unsupported_load", value_from="analysis")
+        v["pass"] = v.pop("pass_") or False
+        v.update(change)
+        return ev
+
+    @staticmethod
+    def _past_limit_without_formula(state="pending", status="stopped", code="not_judged"):
+        """HK4 (contract, 67c3e74): a case no K0 formula predicts, with an analysis result past its criterion
+        (R1 at 200 MPa against 156.7) and no comparison or verdict, does not hold the stop: the run ends
+        not judged and the tile stays off green."""
+        ev = [e for e in sample_events() if e["kind"] not in ("comparison.recorded", "verdict.recorded")]
+        by_kind(ev, "analysis.finished")["data"]["results"][0]["value"] = 200.0
+        by_kind(ev, "judgement.updated")["data"].update(state=state, verdict_ids=[], red_count=0)
+        by_kind(ev, "run.finished")["data"].update(
+            status=status, stop_code=code,
+            stop_reason="R1-step100: 基準を超えた結果があるが、手計算 (K0) の式が無いので判定していない")
+        return renumber(ev)
+
+    def test_h4_a_past_limit_case_without_a_formula_ends_not_judged(self):
+        self.assertEqual(self.rules(self._past_limit_without_formula()), set())
+        self.assertFlags(self._past_limit_without_formula(state="green"), "judgement.state")  # never green
+        self.assertFlags(self._past_limit_without_formula(status="done", code="done"), "HK4_no_stop_before_judged")
+
+    def test_unsupported_load_verdict_comes_from_the_analysis(self):
+        verdict_rules = lambda ev: {r for r in self.rules(ev) if r.startswith("verdict.")}
+        self.assertEqual(verdict_rules(self._unsupported(sample_events())), set())
+        self.assertFlags(self._unsupported(sample_events(), result=None), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), result=2.0), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), comparison_id="cmp-0001"), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), analysis_id="ana-0009"), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), **{"pass": True}), "verdict.unsupported_load")
 
     def test_verdict_limit_comes_from_the_criterion(self):
         ev = sample_events()

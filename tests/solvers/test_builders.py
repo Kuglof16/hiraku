@@ -79,6 +79,11 @@ def spec(tid):
     return dict(s, params={**s.get("params", {}), **LOOP}) if tid in ("P4", "T1", "T2") else s
 
 
+def plan_for(lc):
+    """A load case's own step before its test's (as hiraku.catalog.build.recipe_for)."""
+    return PLANS.get(lc["load_case_id"]) or PLANS.get(lc["test_id"])
+
+
 class BuildersTest(unittest.TestCase):
     runs: dict = {}
 
@@ -125,18 +130,18 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(self.cases["T2-40C-motor"]["criterion"]["limit"], {"value": 155.0, "unit": "degC"})
         self.assertEqual(self.cases["R3"]["params"]["road_class"], "C")
         self.assertEqual(self.cases["T1"]["params"]["ambient_temperature"], {"value": 40.0, "unit": "degC"})
-        self.assertEqual(self.cases["H1"]["criterion"]["limit"], DESIGN["variables"]["max_steer_angle"])
+        self.assertEqual(self.cases["H1-steer"]["criterion"]["limit"], DESIGN["variables"]["max_steer_angle"])
 
     def test_known_defects_fail_their_criteria(self):
-        r = {x["quantity"]: x["value"] for x in self.runs["H1"]["results"]}
-        self.assertLess(r["free_steer_angle"], self.cases["H1"]["criterion"]["limit"]["value"])
+        r = {x["quantity"]: x["value"] for x in self.runs["H1-steer"]["results"]}
+        self.assertLess(r["free_steer_angle"], self.cases["H1-steer"]["criterion"]["limit"]["value"])
         r = {x["quantity"]: x["value"] for x in self.runs["H3-body-size"]["results"]}
         self.assertLess(r["knee_room"], 0.0)
 
     def test_plans_predict_within_the_tolerance(self):
         for key, lc in self.cases.items():
             tid = lc["test_id"]
-            plan = PLANS[tid]
+            plan = plan_for(lc)
             self.assertEqual(plan["tool"], tool_for(tid).name)
             got = {r["quantity"]: r for r in self.runs[key]["results"]}
             preds = {}
@@ -156,7 +161,9 @@ class BuildersTest(unittest.TestCase):
                     continue
                 ana = got[p["quantity"]]
                 self.assertEqual(out["unit"], ana["unit"], f"{tid} {p['quantity']}")
-                rel = (ana["value"] - out["value"]) / abs(out["value"])
+                # as compare: a prediction of 0 divides by |analysed| (0 when both are 0)
+                rel = ((ana["value"] - out["value"]) / abs(out["value"]) if out["value"] else
+                       (0.0 if not ana["value"] else (ana["value"] - out["value"]) / abs(ana["value"])))
                 if p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
                     self.assertGreater(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
                 else:
@@ -198,8 +205,8 @@ class BuildersTest(unittest.TestCase):
         for key, lc in self.cases.items():
             if "criterion" not in lc:
                 continue
-            self.assertIn(lc["test_id"], PLANS)
-            self.assertIn(lc["criterion"]["quantity"], [p["quantity"] for p in PLANS[lc["test_id"]]["predictions"]], key)
+            self.assertIsNotNone(plan_for(lc), key)
+            self.assertIn(lc["criterion"]["quantity"], [p["quantity"] for p in plan_for(lc)["predictions"]], key)
 
     def test_missing_requirement_is_named(self):
         req = copy.deepcopy(REQ)

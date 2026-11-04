@@ -170,6 +170,17 @@ def _member_facts(design: Record, members: list[Record]) -> dict[str, float]:
     return out
 
 
+def _named_members(design: Record, part: Record, members_by_part: dict[str, list[Record]]) -> list[Record]:
+    """The members a part without members of its own names in connects_to (a member id, or a part that has members)."""
+    by_id = {m["id"]: m for m in design.get("members", [])}
+    out: list[Record] = []
+    for link in part.get("connects_to") or []:
+        to = link.get("to")
+        found = [by_id[to]] if to in by_id else members_by_part.get(to, [])
+        out.extend(m for m in found if m not in out)
+    return out
+
+
 def targets(design: Record, requirements: list[Record] | None = None) -> list[Record]:
     """Everything a rule can hit in a design: [{id, type, kind, name, facts}], parts first."""
     shared = design_facts(design, requirements)
@@ -183,6 +194,15 @@ def targets(design: Record, requirements: list[Record] | None = None) -> list[Re
         facts = {**shared, **_box_facts(p)}
         if p["id"] in members_by_part:
             facts.update(_member_facts(design, members_by_part[p["id"]]))
+        else:  # no member of its own: the section of the members it is connected to (connects_to names them)
+            named = _named_members(design, p, members_by_part)
+            if named:
+                borrowed = _member_facts(design, named)
+                borrowed.pop("member_count", None)  # these are not the part's own members
+                facts.update(borrowed)
+            mat = design.get("materials", {}).get(p.get("material"), {}).get("yield_MPa")
+            if "yield_MPa" not in facts and _num(mat):
+                facts["yield_MPa"] = mat
         out.append({"id": p["id"], "type": "part", "kind": p["kind"], "name": p["name"], "facts": facts})
     for pid, members in members_by_part.items():
         if pid not in part_ids:

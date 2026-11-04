@@ -266,20 +266,14 @@ class ServerTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("急いで", out["reason"])
 
-    def test_a_message_tells_a_role_at_work_to_return_and_stays_for_the_lead(self):
-        from hiraku.agent.hooks import ROLE_RETURN_FOR_MESSAGE
-
+    def test_a_message_goes_to_the_lead_only(self):
         self.hook("SubagentStart", {"agent_id": "a1", "agent_type": "hiraku:cae-strength"})
         folder = self.ctx.store.path / "inbox"
         folder.mkdir()
         (folder / "1-message.json").write_text(json.dumps({"kind": "message", "text": "R1 を先に"}), encoding="utf-8")
         self.server.poll_once()
         role = {"tool_name": TOOL("get_context"), "tool_input": {}, "agent_type": "hiraku:cae-strength", "agent_id": "a1"}
-        out = self.hook("PostToolUse", role)
-        self.assertEqual(out["hookSpecificOutput"]["additionalContext"], ROLE_RETURN_FOR_MESSAGE)
-        self.assertEqual(self.hook("PostToolUse", role), {})  # told once
-        out = self.hook("SubagentStop", {"agent_id": "a1", "agent_type": "hiraku:cae-strength", "stop_hook_active": False})
-        self.assertEqual(out, {})  # R1 is pending, but the role returns for the message (not held)
+        self.assertEqual(self.hook("PostToolUse", role), {})  # run 15: the role is not told, it goes on
         lead = self.hook("PostToolUse", {"tool_name": "Agent", "tool_input": {}})  # the lead's Agent call has ended
         self.assertIn("R1 を先に", lead["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(plugin.read_state(self.ctx.store.path)["for_lead"], [])
@@ -415,6 +409,26 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.assertEqual([e for e in store.events() if e["kind"] == "agent.stopped"][-1]["agent"], "lead")
         self.assertFalse(alive.exists())
         self.assertEqual([e["seq"] for e in store.events()], list(range(len(store.events()))))
+
+    def test_the_hook_ends_the_run_even_while_the_server_is_alive(self):
+        """Run 15: the server went without its shutdown after the Stop hook left the end to it. Now the hook
+        writes run.finished itself; the server finds the run finished on disk and writes nothing more."""
+        self._stop_to_the_cap()
+        self.assertTrue(plugin.server_alive(self.ctx.store.path))
+        self.assertEqual(self.hook("Stop", {"stop_hook_active": True}), {})
+        from hiraku.store import RunStore
+
+        store = RunStore.open(self.ctx.store.path)
+        self.assertEqual(store.project["status"], "stopped")
+        n = len(store.events())
+        self.server.drain()
+        self.assertTrue(asyncio.run(self.server.call_tool("get_context", {})).get("is_error"))
+        self.server.shutdown()  # no user_stop over the run's own end
+        events = RunStore.open(self.ctx.store.path).events()
+        self.assertEqual(len(events), n)
+        (fin,) = [e for e in events if e["kind"] == "run.finished"]
+        self.assertEqual(fin["data"]["stop_code"], "not_judged")
+        self.assertEqual([e["seq"] for e in events], list(range(len(events))))
 
     def test_a_server_shutting_down_ends_a_run_whose_stop_was_let_through(self):
         self._stop_to_the_cap()

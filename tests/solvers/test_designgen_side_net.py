@@ -1,5 +1,5 @@
 """designgen.ladder_4w: side_guard = net, a net on the roll bar's posts without side bars (build_side_net), and the
-R8 push on it through load_path."""
+R8 push through load_path (the net on clips taken as open)."""
 
 from __future__ import annotations
 
@@ -75,16 +75,17 @@ class NetOptionTest(unittest.TestCase):
                 self.assertGreater(_inside_by(hull, m.net.local(x)), ladder_4w.SIDE_NET_COVER_MM - ladder_4w.SIDE_NET_CLIP_MM,
                                    f"{t['id']} {name}")
 
-    def test_push_meets_the_net(self):
+    def test_push_finds_the_net_open(self):
+        """The net is held by quick-release clips, so the push takes it as open (CPSC's proposed rule for ROVs,
+        sec. 1422.5(c)(4): a barrier the occupant puts in place does not count): with no side bars every point R is
+        open."""
         out = LP.analyse_load_path(self.d, "push", {"push_force": 725.0, "safety_factor": 1.0})
         self.assertEqual(out["free"], [])
         r = {x["quantity"]: x for x in out["results"]}
-        self.assertEqual(r["occupant_push_open"]["value"], 0.0)
+        self.assertEqual(r["occupant_push_open"]["value"], 4.0)
+        self.assertNotIn("occupant_push_deflection", r)
         names = [e["name"] for e in out["effects"]]
-        self.assertTrue(any("part:side_net_L を押す" in n for n in names))
-        self.assertTrue(any("part:side_net_R を押す" in n for n in names))
-        # the default net (3 mm wire, 50 mm pitch, 20 MPa pretension) sags more than R8's 25 mm
-        self.assertGreater(r["occupant_push_deflection"]["value"], 25.0)
+        self.assertFalse(any("part:side_net_" in n and "を押す" in n for n in names), names)
 
     def test_v1_unchanged(self):
         self.assertEqual(GEN.choices_of(V1)["side_guard"], "none")
