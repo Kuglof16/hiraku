@@ -15,7 +15,7 @@
     "N00"
    ],
    "video": {
-    "1080": "${WORK}/clips/n00_everywhere_1080p.mp4",
+    "1080": "${WORK}/clips/n00_aroundname_1080p.mp4",
     "2160": "${WORK}/clips/n00_2160p.mp4"
    },
    "join": {
