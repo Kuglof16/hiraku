@@ -1166,7 +1166,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     _check_tubes_through(design)
     from .kit import joints
 
-    joints.join(design)  # the steering, the pedals, the master cylinder and the fenders joined in shape
+    joints.join(design)  # every part's joints touch, with where (at_mm) and the axis of the turning ones
+    design["archetype"] = "ladder_4w"  # designgen.ARCHETYPES
     from .ladder_4w_modules import split
 
     return split(design)  # module on every part and member, joint on the nodes, design.modules

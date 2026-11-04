@@ -349,6 +349,52 @@ def mounts(design: dict) -> int:
     return n
 
 
+AXIS_VIA = ("pin", "bushing", "ball_joint", "hinge")
+
+
+def _axis(body, via: str) -> list[float]:
+    """The joint's axis (HIRAKU's reading, no source): a ball joint's along its link (a slender part's long side),
+    a pin's, a bushing's and a hinge's across the vehicle (y: the knees, elbows, pedals and pushrods turn about it)
+    unless the part is a slender link, whose pin is across it in the horizontal plane."""
+    if via == "ball_joint" and body is not None:
+        v = body.capsule.b - body.capsule.a if body.capsule is not None else body.obb.axes[0]
+        n = float(np.linalg.norm(v))
+        return [float(x) for x in v / n] if n > 1e-9 else [1.0, 0.0, 0.0]
+    return [0.0, 1.0, 0.0]
+
+
+def annotate(design: dict) -> int:
+    """at_mm on every mechanical joint (not wire or hose) that has none: the middle of the nearest points of the two
+    shapes (a node's or a support's own point), which lies on both within the joint's gap; axis on the pins,
+    bushings, ball joints and hinges (_axis). Returns the joints written."""
+    bs = _bodies(design)
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    sups = {s["id"]: np.asarray(s["position_mm"], float) for s in design.get("supports", [])}
+    n = 0
+    for p in design["parts"]:
+        me = bs.get(f"part:{p['id']}")
+        for c in p.get("connects_to") or []:
+            if c.get("via") in NOT_TOUCHING_VIA or me is None:
+                continue
+            if "at_mm" not in c:
+                to = c["to"]
+                pt = nodes.get(to, sups.get(to))
+                if pt is not None:
+                    a = closest(me, pt)
+                    at = (a + pt) / 2.0
+                else:
+                    other = bs.get(f"part:{to}") or bs.get(f"member:{to}")
+                    if other is None:
+                        continue
+                    a, b = nearest_points(me, other)
+                    at = (a + b) / 2.0
+                c["at_mm"] = [round(float(x), 3) for x in at]
+                n += 1
+            if c.get("via") in AXIS_VIA and "axis" not in c:
+                c["axis"] = _axis(me, c["via"])
+    return n
+
+
 PUSHROD_D_MM = 10.0  # the brake pedal's pushrod (HIRAKU's choice, no source)
 
 
@@ -388,4 +434,5 @@ def join(design: dict) -> dict:
     brg = bearing(design)
     fen = fenders(design)
     done = retarget_and_bridge(design, {p["id"] for p in design["parts"] if p["kind"] not in ("occupant",)})
+    done["at_mm"] = annotate(design)
     return {"added": [x for x in (brg, rod) if x], "fenders": fen, "occupants": occ, "mounts": mnt, **done}
