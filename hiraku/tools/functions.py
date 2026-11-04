@@ -1316,7 +1316,7 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     """revise_design on a design with modules (HK6): a proposal of one module's designer (designer.<module>)
     that changes only that module's variables and choices (design.modules[].variables and choices), checked
     like a revision (revisable, unit, range, the generator's choices). It is recorded as a module_change
-    (design.change_proposed, the event's design_version the version it was based on) and makes no version;
+    (design.change_proposed; the event's design_version and the record's are the version it was based on) and makes no version;
     build_version (the packager) builds the round's proposals into the next one. The round limit and the
     cost limit apply as to a revision, since a proposal is only of use if a version can still be built.
 
@@ -1324,6 +1324,7 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     into `changes`, so a fit that moves a variable outside the module is refused here like any other."""
     module = args.get("module")
     agent = agent or (f"designer.{module}" if module else None)
+    v = ctx.version
     _gate(ctx, "revise_design", args, agent)
     if not module or agent != f"designer.{module}":  # _gate's HK6 denies these; kept so a skipped check cannot pass
         raise ToolError("この設計はモジュールに分かれているので、revise_design は module を付けて、そのモジュールの設計役が呼びます")
@@ -1334,9 +1335,8 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     design = ctx.store.design()
     choices = dict(args.get("choices") or {})
     _, _, changes = _checked_changes(ctx, design, args.get("changes") or {}, choices)
-    v = ctx.version
     change: Record = {"change_id": ctx.store.next_id("module_change"), "module_id": module, "agent_id": agent,
-                      "reason": reason}
+                      "reason": reason, "design_version": v}  # the version it was made on (contract 18c2679)
     if args.get("load_case_ids"):
         change["load_case_ids"] = list(args["load_case_ids"])
     if changes:
@@ -1516,7 +1516,7 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     used = [copy.deepcopy(c) for c in pending]
     if own_moved:
         used.append({"change_id": ctx.store.next_id("module_change"), "module_id": "package", "agent_id": "packager",
-                     "reason": reason, "changes": own_moved})
+                     "reason": reason, "design_version": v, "changes": own_moved})
     ids = [c["change_id"] for c in pending]
     parts = [f"その回の提案をまとめた ({', '.join(ids) if ids else 'なし'})", reason]
     if envelopes:

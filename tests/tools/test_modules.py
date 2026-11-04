@@ -32,7 +32,8 @@ class ProposalTest(ModuleCase, unittest.TestCase):
         self.assertNotIn("domain", e)
         self.assertEqual(contract.errors("module_change", e["data"]), [])
         self.assertEqual(set(e["data"]), {"change_id", "module_id", "agent_id", "reason", "load_case_ids", "changes",
-                                          "choices"})
+                                          "choices", "design_version"})
+        self.assertEqual(e["data"]["design_version"], 1)
         self.assertEqual(e["data"]["changes"], {"seat_x": {"value": -1000.0, "unit": "mm"}})
         self.assertEqual([c["change_id"] for c in self.ctx.store.pending_proposals()], ["chg-0001"])
         self.assertEqual(self.propose("powertrain", changes={"battery_x": self.mm(-950)})["change_id"], "chg-0002")

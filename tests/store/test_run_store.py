@@ -179,5 +179,49 @@ class RunStoreTest(unittest.TestCase):
         self.assertGreaterEqual(ev[-1]["t"], ev[-2]["t"])
 
 
+class ModuleChangeTest(unittest.TestCase):
+    """Proposals of module designers (design.change_proposed): run-wide ids chg-NNNN, pending until a version
+    lists them in module_changes, kept in the events (layout has no folder for them)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        clock = FakeClock()
+        self.store = RunStore.create(project_fields(), root=Path(self.tmp.name), wall=clock.wall, mono=clock.mono)
+        self.store.write_design(example("design.json"))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def change(self, module="frame"):
+        return {"change_id": self.store.next_id("module_change"), "module_id": module, "agent_id": f"designer.{module}",
+                "reason": "R1", "changes": {"rail_t": {"value": 3.0, "unit": "mm"}}}
+
+    def test_ids_pending_and_built(self):
+        a = self.store.propose_change(self.change(), design_version=1, agent="designer.frame")
+        b = self.store.propose_change(self.change("body"), design_version=1, agent="designer.body")
+        self.assertEqual((a["change_id"], b["change_id"]), ("chg-0001", "chg-0002"))
+        ev = self.store.events()[-1]
+        self.assertEqual((ev["kind"], ev["design_version"], ev["agent"]), ("design.change_proposed", 1, "designer.body"))
+        self.assertEqual(ev["data"], b)
+        self.assertEqual([c["change_id"] for c in self.store.pending_proposals()], ["chg-0001", "chg-0002"])
+        d2 = example("design.json")
+        d2.update(design_version=2, parent_version=1, change_reason="その回の提案をまとめた (chg-0001)", module_changes=[a])
+        self.store.write_design(d2)
+        self.assertEqual(self.store.built_change_ids(), {"chg-0001"})
+        self.assertEqual(self.store.pending_proposals(), [])  # none based on version 2
+        self.assertEqual([c["change_id"] for c in self.store.pending_proposals(1)], ["chg-0002"])
+        self.assertEqual([c["change_id"] for c in self.store.proposals()], ["chg-0001", "chg-0002"])
+        self.assertEqual(RunStore.open(self.store.path).next_id("module_change"), "chg-0003")
+
+    def test_a_bad_proposal_never_reaches_the_events(self):
+        bad = dict(self.change(), based_on=1)  # not a module_change field
+        n = len(self.store.events())
+        with self.assertRaises(ValueError):
+            self.store.propose_change(bad, design_version=1, agent="designer.frame")
+        with self.assertRaises(StoreError):
+            self.store.propose_change(self.change(), design_version=5, agent="designer.frame")
+        self.assertEqual(len(self.store.events()), n)
+
+
 if __name__ == "__main__":
     unittest.main()
