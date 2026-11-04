@@ -795,6 +795,10 @@
         },
         "module": {
           "$ref": "#/$defs/module_id"
+        },
+        "name": {
+          "type": "string",
+          "description": "The member's name for a person (Japanese), e.g. 左のレール (前の車軸から足元まで); written by the generator, shown by the screen."
         }
       }
     },
