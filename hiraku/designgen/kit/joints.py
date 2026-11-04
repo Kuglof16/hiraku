@@ -166,7 +166,8 @@ HOLDER_ID = {"steering_column": "bracket_column", "pedal_brake": "stand_pedal_br
 # links that move (a pin or a spline between two parts) are not bridged by a fixed strut: a gap there is the layout's
 MOVING_VIA = ("pin", "spline", "ball_joint")
 # parts carried at their two ends by moving joints (SY-10's shaft rule): the rest need a fixed joint to the frame
-ENDS_HELD_KINDS = ("steering", "steering_shaft", "driveshaft", "pushrod", "tie_rod", "link")
+ENDS_HELD_KINDS = ("steering", "steering_shaft", "driveshaft", "pushrod", "tie_rod", "link",
+                   "door")  # a door hangs on its hinges (pins) and its latch
 
 
 def closest(body, x: np.ndarray) -> np.ndarray:
@@ -247,6 +248,13 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             continue
         links = list(p.get("connects_to") or [])
         holders = HOLDER_ID.get(p["id"], HOLDER.get(p["kind"]))
+        if p["kind"] == "door" and holders is None:
+            # a door hangs on its hinges and its latch (designgen's side_opening: side_door_hinge_<side><n>, _latch_)
+            side = p["id"].rsplit("_", 1)[-1]
+            holders = [q for q in parts if q.startswith((f"side_door_hinge_{side}", f"side_door_latch_{side}"))]
+        if p["kind"] == "seat_belt" and holders is None:
+            # a belt goes with its seat (the driver's slides with the seat): held by the seat of its side
+            holders = f"seat_{p['id'].rsplit('_', 1)[-1]}"
         holders = [h for h in ((holders,) if isinstance(holders, str) else holders or ()) if h in parts]
         if holders:
             links = [c for c in links if c["to"] not in nodes and c["to"] not in holders] + [
@@ -278,7 +286,8 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
         dropped_here = False
         for g, c in far:
             # a far fixed joint is dropped when the part touches its holder, or (to a node) anything else
-            if touching and c.get("via") not in MOVING_VIA:
+            # a sheet of the body is held at each of its fastenings (one strut alone would let it swing about it)
+            if touching and c.get("via") not in MOVING_VIA and not (p["kind"] == "body" and not held):
                 n_drop += 1
                 dropped_here = True
                 continue
