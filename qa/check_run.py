@@ -1764,7 +1764,11 @@ class RunChecker:
         for name, m, pts in things:
             if m not in mods:
                 self.error("HK6_module_scope", w, f"v{v} {name} is in module {m}, which the design does not have")
-            elif (mods[m].get("envelope") or []) and not inside(pts, mods[m]["envelope"]):
+            elif m == "package":  # the package module has no room of its own (contract: its envelope is empty)
+                continue
+            elif not (mods[m].get("envelope") or []):  # a module given no room: none of its things has a place
+                self.warn("module.envelope", w, f"v{v} {name} is in module {m}, which has no envelope box")
+            elif not inside(pts, mods[m]["envelope"]):
                 self.warn("module.envelope", w, f"v{v} {name} leaves the envelope of {m}")
 
     def check_finish(self) -> None:
