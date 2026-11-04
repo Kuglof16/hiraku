@@ -44,6 +44,9 @@ REQUIREMENTS = [r for r in sorted((ROOT / "data" / "requirements").glob("*.yaml"
 CLAUDE_ONLY = ".claude.yaml"  # requirements only Claude can run (no scripted way to predict a load case)
 NO_SCRIPT = "台本の予測のしかたが無いので回せない荷重条件"  # what the scripted run says for them
 VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice and compared
+# load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
+# so the run stops not_judged with every other tile of the last version green
+ENDED = {"offroad-4w.yaml": {"R7-hand-300N"}}
 # Subprocess timeout of one scripted run. The video run alone takes about 680 s (600 s
 # erred with TimeoutExpired); this stays below qa.run_tests' 1800 s per-class timeout.
 RUN_TIMEOUT_S = 1200
@@ -137,6 +140,7 @@ class _ScriptedRunTests:
 
     def test_mvp_scripted_run_goes_through(self):
         # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done.
+        # Requirements in ENDED stop not_judged with only their ended load cases left (ends_case).
         # A run with load cases past the limit (load_case_id ending -beyond, whose verdicts are meant to
         # fail) does not end done: it stops at round_limit, or not_judged while a load case is left
         # without a verdict. A *.claude.yaml file is a scene only Claude can run (no tool or scripted
@@ -154,11 +158,40 @@ class _ScriptedRunTests:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
                 self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
+            elif name in ENDED:
+                self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
+                self._only_ended_left(run, project, ENDED[name])
             elif any(lc["load_case_id"].endswith("-beyond") for lc in project["load_cases"]):
                 self.assertEqual(project["status"], "stopped", why)
                 self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
             else:
                 self.assertEqual(project["status"], "done", why)
+
+    def _only_ended_left(self, run, project, ended):
+        """In the last version: the load cases without a verdict (not -beyond) are just `ended`, each with a
+        mismatch whose cause says ends_case; their domains' tiles are pending, every other tile green."""
+        last = max(int(d.name[1:]) for d in run.glob("v[0-9][0-9][0-9]") if d.is_dir())
+        vdir = layout.version_dir(run, last)
+
+        def records(kind):
+            d = vdir / layout.RECORD_DIRS[kind]
+            return [json.loads(f.read_text(encoding="utf-8")) for f in sorted(d.glob("*.json"))] if d.is_dir() else []
+
+        judged = {v.get("load_case_id") for v in records("verdict")}
+        lcs = {lc["load_case_id"]: lc for lc in project["load_cases"]}
+        left = {k for k, lc in lcs.items() if "criterion" in lc and not k.endswith("-beyond") and k not in judged}
+        self.assertEqual(left, ended, f"load cases without a verdict in v{last:03d}")
+        preds = {r.get("prediction_id"): r for r in records("prediction")}
+        cmps = {r.get("comparison_id"): r for r in records("comparison")}
+        ends = {preds.get(cmps.get(k.get("comparison_id"), {}).get("prediction_id"), {}).get("load_case_id")
+                for k in records("cause") if k.get("ends_case") is True}
+        self.assertEqual(ended - ends, set(), f"no cause with ends_case in v{last:03d}")
+        tiles = {j.get("domain"): j.get("state")
+                 for j in json.loads((vdir / layout.JUDGEMENTS_FILE).read_text(encoding="utf-8"))
+                 if j.get("design_version") == last}
+        held = {lcs[k].get("domain") for k in ended}
+        self.assertEqual({d: s for d, s in tiles.items() if d in held}, {d: "pending" for d in held}, str(tiles))
+        self.assertEqual({d: s for d, s in tiles.items() if d not in held and s != "green"}, {}, str(tiles))
 
     def test_each_denial_is_followed_as_the_hook_asks(self):
         name, run, proc = self.REQ.name, self.run_dir, self.proc
