@@ -8,15 +8,17 @@ occupants and cargo on board) decides: an occupant's body part (kind occupant) m
 occupant; anything else (the fender, the body, the frame) covers it. The wheel's own part and any body the line
 starts inside are skipped.
 
-Results: spray_reaching_occupant (lines that reach an occupant, all wheels), spray_uncovered_arc (deg, the largest
-over the wheels: the bins of the arc with a line that nothing covers, times the bin's width).
+Results: spray_reaching_occupant (lines that reach an occupant, all wheels, cast from the whole tread above the
+axle: reach_front ahead of the top to reach_rear behind it, 90 deg each by default), spray_uncovered_arc (deg, the
+largest over the wheels: the bins of the borrowed rule's arc, arc_front to arc_rear, with a line that nothing covers,
+times the bin's width).
 """
 
 from __future__ import annotations
 
 import math
 
-from ..k0_handcalc.spray_inputs import ARC_STEP_DEG, LINE_LENGTH_MM, LINES_ACROSS, arc_bins, tread_lines
+from ..k0_handcalc.spray_inputs import ARC_STEP_DEG, LINE_LENGTH_MM, LINES_ACROSS, REACH_DEG, arc_bins, tread_lines
 from ..k4_geometry.model import bodies
 from ..k4_geometry.obb import from_box, ray_box
 from .base import LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_value, result
@@ -24,6 +26,10 @@ from .base import LOADING, BuiltinTool, Param, Predicts, Record, check_record, o
 ARC_FRONT = Param("arc_front", "deg", "tread arc ahead of the top (straight above the axle) that throws spray "
                   "(requirement Q87)", required=True)
 ARC_REAR = Param("arc_rear", "deg", "tread arc behind the top that throws spray (requirement Q88)", required=True)
+REACH_FRONT = Param("reach_front", "deg", "tread ahead of the top whose lines are counted for spray_reaching_occupant "
+                    "(default: all of it above the axle)", default=REACH_DEG)
+REACH_REAR = Param("reach_rear", "deg", "tread behind the top whose lines are counted for spray_reaching_occupant "
+                   "(default: all of it above the axle)", default=REACH_DEG)
 ARC_STEP = Param("arc_step", "deg", "largest spacing of the tread points along the arc (assumption, not checked)",
                  default=ARC_STEP_DEG)
 LINES = Param("lines_across", "1", "tread points across the tyre's width (assumption, not checked)",
@@ -36,7 +42,9 @@ ASSUMPTIONS = [
     "仮定 (確かめていない): 車輪はまっすぐ前を向き、サスペンションは止まっているときの位置",
     "仮定 (確かめていない): 部品と部材は箱 (細い部品も箱のまま)。地面は、いちばん低いタイヤの下の面を通る水平な面",
     "弧 (車軸の真上から前 arc_front・後ろ arc_rear) は要件 Q87・Q88: 公道のほかの交通のための規則 (告示 第178条 第2項 "
-    "第1号) を借りたもの。乗員に当てはめるのは仮定",
+    "第1号) を借りたもの。覆われない弧 (spray_uncovered_arc) だけに使う",
+    "乗員に届く線 (spray_reaching_occupant) は、車軸より上の踏面ぜんぶ (真上から前 reach_front・後ろ reach_rear、既定 90 度) "
+    "から数える (要件は「泥が乗員に届かない」)",
 ]
 
 
@@ -113,7 +121,7 @@ class SprayReach(BuiltinTool):
     base = "K4"
     tests = ["H6"]
     formulas = ["spray.uncovered_arc", "spray.reaching_lines"]
-    load_case_params = (LOADING, ARC_FRONT, ARC_REAR, ARC_STEP, LINES, LENGTH)
+    load_case_params = (LOADING, ARC_FRONT, ARC_REAR, REACH_FRONT, REACH_REAR, ARC_STEP, LINES, LENGTH)
     predicts = (
         Predicts("spray_uncovered_arc", "spray.uncovered_arc", "arc",
                  "a_f, a_r = the load case's arc_front, arc_rear; f, r, g = the design's fender_front_deg, "
@@ -171,9 +179,13 @@ class SprayReach(BuiltinTool):
         step = param_value(load_case, "arc_step", "deg")
         across = int(round(param_value(load_case, "lines_across", "1")))
         length = param_value(load_case, "line_length", "mm")
-        fates = cast(design, a_f, a_r, step, across, length)
-        s = summary(fates)
-        per = s["per_wheel"]
+        fates = cast(design, a_f, a_r, step, across, length)  # the borrowed rule's arc: the uncovered arc
+        reach = cast(design, param_value(load_case, "reach_front", "deg"), param_value(load_case, "reach_rear", "deg"),
+                     step, across, length)  # the whole tread above the axle: what reaches the occupants
+        s, r_s = summary(fates), summary(reach)
+        per = {sid: {**w, "reach": r_s["per_wheel"][sid]["reach"], "where": r_s["per_wheel"][sid]["where"]}
+               for sid, w in s["per_wheel"].items()}
+        s = {**s, "reach": r_s["reach"]}
         worst_reach = max(per, key=lambda k: per[k]["reach"])
         worst_arc = max(per, key=lambda k: per[k]["uncovered_arc"])
         where = (f"{worst_reach} → {per[worst_reach]['where']}" if per[worst_reach]["reach"] else None)

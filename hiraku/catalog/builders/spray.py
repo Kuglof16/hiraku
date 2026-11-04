@@ -27,7 +27,7 @@ BORROWED = ("Q87 and Q88 are 道路運送車両の保安基準の細目を定め
 
 
 def h6_spray(spec: Record, req: Record, design: Record) -> Record:
-    from hiraku.solvers.k0_handcalc.spray_inputs import ARC_STEP_DEG, LINE_LENGTH_MM, LINES_ACROSS
+    from hiraku.solvers.k0_handcalc.spray_inputs import ARC_STEP_DEG, LINE_LENGTH_MM, LINES_ACROSS, REACH_DEG
 
     miss = [k for k in ("Q87", "Q88") if entry(req, k) is None]
     if miss:
@@ -42,14 +42,17 @@ def h6_spray(spec: Record, req: Record, design: Record) -> Record:
         "domain": spec["domain"],
         "title": (f"車輪が巻き上げた物 (踏面の、車軸の真上から前 {a_f:g} 度・後ろ {a_r:g} 度) が乗員に届かないか "
                   f"({LOADING_JA[load]})"),
-        "params": {"arc_front": q(a_f, "deg"), "arc_rear": q(a_r, "deg"), "arc_step": q(ARC_STEP_DEG, "deg"),
+        "params": {"arc_front": q(a_f, "deg"), "arc_rear": q(a_r, "deg"), "reach_front": q(REACH_DEG, "deg"),
+                   "reach_rear": q(REACH_DEG, "deg"), "arc_step": q(ARC_STEP_DEG, "deg"),
                    "lines_across": q(float(LINES_ACROSS), "1"), "line_length": q(LINE_LENGTH_MM, "mm"),
                    "loading": load},
         "requirement_keys": ["Q87", "Q88"] + (["Q31"] if entry(req, "Q31") else []) + keys,
         "criterion": {"quantity": "spray_reaching_occupant", "op": "<=", "limit": q(0.0, "1"),
-                      "basis": (f"H6: no line thrown off the tread from {a_f:g} deg ahead of to {a_r:g} deg behind "
-                                f"straight above the axle (Q87, Q88) reaches an occupant's body part before another "
-                                f"part or member. {BORROWED}. The lines are straight along the tangent the way the "
+                      "basis": (f"H6: no line thrown off the tread above the axle ({REACH_DEG:g} deg ahead of to "
+                                f"{REACH_DEG:g} deg behind straight above it: the requirement is that mud reaches no "
+                                f"occupant) reaches an occupant's body part before another part or member. The arc "
+                                f"{a_f:g} deg ahead to {a_r:g} deg behind (Q87, Q88) gives spray_uncovered_arc only: "
+                                f"{BORROWED}. The lines are straight along the tangent the way the "
                                 f"tread moves going forward (no gravity, no air, not in reverse), {ARC_STEP_DEG:g} deg "
                                 f"apart along the arc, {LINES_ACROSS} across the tyre, up to {LINE_LENGTH_MM:g} mm: "
                                 "assumptions, not checked"),
@@ -98,7 +101,8 @@ H6_PLAN = {
                     "g": "from.g"},
          "inputs_from": h6_arc_calc},
         {"quantity": "spray_reaching_occupant", "formula_id": "spray.reaching_lines", "output": "n",
-         "assumptions": _LINES + ["乗員の体の部分の箱とフェンダー (円の弧) だけを置く。ほかの部品・部材・地面は置かない "
+         "assumptions": _LINES + ["線は車軸より上の踏面ぜんぶ (真上から前後 90 度) から出す (要件は「泥が乗員に届かない」)",
+                                  "乗員の体の部分の箱とフェンダー (円の弧) だけを置く。ほかの部品・部材・地面は置かない "
                                   "(届く線はツールより少なくならない)"],
          "inputs": {"n_aim": "from.n_aim", "n_cover": "from.n_cover"}, "inputs_from": h6_reach_calc},
     ],

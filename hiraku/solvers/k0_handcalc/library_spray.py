@@ -55,7 +55,11 @@ def all_formulas() -> list[Formula]:
                          "the fender is a circular arc of radius R + g from f ahead of the top to r behind, at least as "
                          "wide as the tyre; nothing else covers the tread",
                          "a tangent line from the point theta meets that circle at theta - alpha (it leaves toward the "
-                         "front), so the fender covers the points from -f + alpha to r + alpha"],
+                         "front), so the fender covers the points from -f + alpha to r + alpha",
+                         "arc_radial (max(0, a_f - f) + max(0, a_r - r)) reads the fender as seen from the axle, but "
+                         "what flies along the tangent from the points between -f and -f + alpha passes the fender's "
+                         "front end; it is kept as an output only (with the default fender, 30 and 50 deg and a 40 mm "
+                         "gap, it gives 0 deg where the lines leave 28 deg of the arc uncovered)"],
             source="plane geometry of a tangent to a circle (a line tangent at radius R meets the circle R + g at "
                    "the angle acos(R / (R + g)))",
             requires=[(lambda v: v["R"] > 0, "R must be positive")],

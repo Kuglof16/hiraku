@@ -116,10 +116,17 @@ def _param(load_case: dict, name: str, unit: str, default: float | None) -> floa
     return default
 
 
+REACH_DEG = 90.0  # the whole tread above the axle: what reaches the occupants is counted from all of it
+
+
 def sampling(load_case: dict) -> dict:
-    """The load case's arc and sampling: arc_front, arc_rear, arc_step (deg), lines_across, line_length (mm)."""
+    """The load case's arcs and sampling: arc_front, arc_rear (the borrowed rule's arc, for the uncovered arc),
+    reach_front, reach_rear (the tread counted for lines that reach an occupant, default REACH_DEG: all of it above
+    the axle), arc_step (deg), lines_across, line_length (mm)."""
     return {"arc_front": _param(load_case, "arc_front", "deg", None),
             "arc_rear": _param(load_case, "arc_rear", "deg", None),
+            "reach_front": _param(load_case, "reach_front", "deg", REACH_DEG),
+            "reach_rear": _param(load_case, "reach_rear", "deg", REACH_DEG),
             "arc_step": _param(load_case, "arc_step", "deg", ARC_STEP_DEG),
             "lines_across": int(round(_param(load_case, "lines_across", "1", float(LINES_ACROSS)))),
             "line_length": _param(load_case, "line_length", "mm", LINE_LENGTH_MM)}
@@ -178,7 +185,7 @@ def spray_reach_inputs(design: dict, load_case: dict) -> dict:
     f = fender(design)
     centre = {w["support"]: w for w in wheels(design)}
     n_aim = n_cover = 0
-    for line in tread_lines(design, s["arc_front"], s["arc_rear"], s["arc_step"], s["lines_across"]):
+    for line in tread_lines(design, s["reach_front"], s["reach_rear"], s["arc_step"], s["lines_across"]):
         hits = [h[0] for h in (ray_box(line.origin, line.direction, b) for b in occ)
                 if h is not None and 0.0 <= h[0] <= s["line_length"]]
         if not hits:
