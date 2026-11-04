@@ -16,7 +16,7 @@
 // shows more than its limits (checkStory).
 
 import * as THREE from "three";
-import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
+import { BAND_COLORS } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
 import { CutN04, CutN15 } from "./cut_grid.js";
@@ -436,19 +436,17 @@ class CutN01 {
     Object.assign(pane.style, { left: `${P.x}px`, top: `${P.y}px`, width: `${P.w}px`, height: `${P.h}px` });
     const ct = this.contour;
     const px = Math.max(sp.card.text_px, this.story.bodyPx);
-    const small = this.layout.min_text_px;
-    // the band says whose stress it colours, and what its top is (the allowable or the maximum)
+    // the band says whose stress it colours, and what its top is (the allowable or the maximum);
+    // no explaining notes under it (the review of the cut: the picture and the cards say it)
     const top = ct?.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct?.max, 3);
     const legend = ct
       ? `<div class="n01-legend" data-box="n01.legend" data-kind="legend" style="font-size:${px}px"><span>フレームの応力 [MPa]</span>` +
-        `<i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${top}</span></div>` +
-        (ct.limitKnown ? `<p class="n01-note" style="font-size:${small}px;margin-bottom:${sp.card.gap}px"><i style="display:inline-block;width:14px;height:14px;background:${OVER_COLOR};vertical-align:-2px"></i> 許容を超えた部材</p>` : "")
+        `<i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${top}</span></div>`
       : "";
     pane.innerHTML =
       this.card(this.ok, "ok") +
       (this.over && this.over !== this.ok ? this.card(this.over, "over") : "") +
-      legend +
-      `<p class="n01-note" data-box="n01.note" style="font-size:${small}px">半透明の赤: 高い方の段差での動き</p>`;
+      legend;
     this.stage.append(pane);
     const room = sp.pane.w - 2 * sp.card.pad - 2 * sp.card.border_px;
     for (const v of pane.querySelectorAll(".verdict")) fitWidth(v, room, this.story.bodyPx);

@@ -1373,6 +1373,7 @@ class BrowserReplayTest(unittest.TestCase):
                 """() => ({ duration: window.hiraku.player.duration, err: document.querySelector(".err")?.textContent ?? null,
                            cards: [...document.querySelectorAll(".n01-card")].map((c) => [c.dataset.box, c.querySelector("h3").textContent]),
                            tables: document.querySelectorAll(".n01-card table").length,
+                           pane: document.querySelector('[data-box="n01.pane"]').innerText,
                            ghost: !!window.hiraku.cut.ghost, tinted: window.hiraku.cut.ghost?.view.tinted ?? false,
                            contour: window.hiraku.cut.contour?.kind ?? null,
                            view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom,
@@ -1390,6 +1391,9 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(got["cards"][0][1], "段差 100 mm")
             self.assertEqual(got["cards"][1][1], "段差 250 mm")
             self.assertEqual(got["tables"], 0)
+            # no explaining notes in the pane (許容を超えた部材, 半透明の赤 ...): the cards and the colour bar only
+            for w in ("許容を超えた部材", "半透明"):
+                self.assertNotIn(w, got["pane"])
             self.assertTrue(got["ghost"] and got["tinted"])
             self.assertEqual(got["contour"], "stress")  # the K1 static analysis of the same load case
             self.assertLessEqual(got["view"], 910)
