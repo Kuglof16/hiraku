@@ -9,6 +9,7 @@ is missing and what to call next, because Claude reads it and acts on it.
 from __future__ import annotations
 
 import re
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
@@ -300,10 +301,17 @@ def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | Non
 def check_call(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | None = None) -> Denial | None:
     """HK1-HK3, HK5 and HK6 for one tool call. tool is the short name (analyze, compare, ...); agent is the
     caller's contract agent id (HK6 reads it; None skips HK6's who-checks)."""
-    if tool in ("revise_design", "build_version"):
-        return check_hk6(ctx, tool, args, agent)
-    check = CHECKS.get(tool)
-    return check(ctx, args) if check else None
+    with reading(ctx):  # the checks read the same records again and again (one per load case): read each once
+        if tool in ("revise_design", "build_version"):
+            return check_hk6(ctx, tool, args, agent)
+        check = CHECKS.get(tool)
+        return check(ctx, args) if check else None
+
+
+def reading(ctx: RunContext) -> Any:
+    """The store's reading() (each record file read once, the records not to be changed), if it has one."""
+    got = getattr(ctx.store, "reading", None)
+    return got() if got is not None else nullcontext()
 
 
 def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:

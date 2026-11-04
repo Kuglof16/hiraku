@@ -145,16 +145,17 @@ class Hooks:
 
     def decide(self, event: str, input_data: dict[str, Any]) -> dict:
         """The answer to one hook event (PreToolUse, PostToolUse, Stop, SubagentStart, SubagentStop)."""
-        return {
-            "PreToolUse": self.decide_pre_tool_use,
-            "PostToolUse": self.decide_post_tool_use,
-            "Stop": self.decide_stop,
-            "SubagentStart": self.decide_subagent_start,
-            "SubagentStop": self.decide_subagent_stop,
-        }[event](input_data)
+        with rules.reading(self.ctx):  # the decisions only read the records: each file once
+            return {
+                "PreToolUse": self.decide_pre_tool_use,
+                "PostToolUse": self.decide_post_tool_use,
+                "Stop": self.decide_stop,
+                "SubagentStart": self.decide_subagent_start,
+                "SubagentStop": self.decide_subagent_stop,
+            }[event](input_data)
 
     async def pre_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_pre_tool_use(input_data)
+        return self.decide("PreToolUse", input_data)
 
     def decide_pre_tool_use(self, input_data: dict[str, Any]) -> dict:
         name = input_data.get("tool_name", "")
@@ -245,7 +246,7 @@ class Hooks:
         return "\n".join(texts)
 
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_post_tool_use(input_data)
+        return self.decide("PostToolUse", input_data)
 
     def decide_post_tool_use(self, input_data: dict[str, Any]) -> dict:
         short = self._short(input_data.get("tool_name", ""))
@@ -268,7 +269,7 @@ class Hooks:
     # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_stop(input_data)
+        return self.decide("Stop", input_data)
 
     def _end(self) -> dict:
         if self.on_end is not None:
@@ -323,7 +324,7 @@ class Hooks:
         return {}
 
     async def subagent_stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_subagent_stop(input_data)
+        return self.decide("SubagentStop", input_data)
 
     def decide_subagent_stop(self, input_data: dict[str, Any]) -> dict:
         agent = agent_id_from_sdk(input_data.get("agent_type"))
