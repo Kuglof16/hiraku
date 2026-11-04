@@ -494,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m qa.run_tests", description=__doc__.split("\n\n")[0])
     ap.add_argument("--jobs", "-j", type=int, default=None,
                     help="processes at a time (default: CPUs - 4, at least 8; 8 with --no-wait)")
-    ap.add_argument("--timeout", type=float, default=1800.0, help="seconds one class may take (default 1800)")
+    ap.add_argument("--timeout", type=float, default=3600.0, help="seconds one class may take (default 3600)")
     ap.add_argument("--only", action="append", default=[], metavar="PREFIX",
                     help="run only the classes whose name starts with PREFIX (e.g. tests.web); may be repeated")
     ap.add_argument("--no-split", action="store_true",

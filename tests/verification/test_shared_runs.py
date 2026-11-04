@@ -88,6 +88,33 @@ class SharedRuns(unittest.TestCase):
         self.run_one()
         self.assertEqual(len([p for p in self.cache.iterdir() if p.is_dir()]), shared_runs.KEEP_KEYS)
 
+    def test_the_runs_of_many_requirements_files_stay_together(self):
+        # a slow suite runs every requirements file of one code version: none prunes another's run
+        reqs = []
+        for n in range(shared_runs.KEEP_KEYS + 2):
+            r = self.tmp / f"req{n}.yaml"
+            r.write_text(f"tests: [P{n}]\n", encoding="utf-8")
+            reqs.append(r)
+        with mock.patch.object(shared_runs, "_make", self.fake_make):
+            first = [shared_runs.scripted_run(r, cache=self.cache) for r in reqs]
+            again = [shared_runs.scripted_run(r, cache=self.cache) for r in reqs]
+        self.assertEqual(len(self.calls), len(reqs))
+        self.assertTrue(all(s.reused for s in again))
+        self.assertTrue(all(s.run_dir.is_dir() for s in first))
+        self.assertEqual(len([p for p in self.cache.iterdir() if p.is_dir()]), 1)
+
+    def test_a_code_version_with_a_run_going_is_not_pruned(self):
+        busy = self.cache / "busy"
+        (busy / "req-0123").mkdir(parents=True)
+        for k in range(shared_runs.KEEP_KEYS + 1):
+            (self.cache / f"new{k}").mkdir(parents=True)
+        os.utime(busy / "req-0123", (1, 1))
+        os.utime(busy, (1, 1))
+        shared_runs._prune(self.cache, "new0", now=1 + shared_runs.STALE_S - 1)  # touched lately: a run may go
+        self.assertTrue(busy.is_dir())
+        shared_runs._prune(self.cache, "new0", now=1 + shared_runs.STALE_S + 1)
+        self.assertFalse(busy.is_dir())
+
     def test_copy_run(self):
         s = self.run_one()
         c = shared_runs.copy_run(s, self.tmp / "copy")

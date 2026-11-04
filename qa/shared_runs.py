@@ -7,12 +7,14 @@
 Several slow test classes made the same `python -m hiraku run REQ --scripted` each on their
 own (the N15 run in tests/verification/test_real_runs.py and tests/agent/test_scene_n15.py,
 the demo run there and in tests/tools/test_export.py). scripted_run() makes it once and keeps
-it under runs/.test-cache/<key>/<requirements stem>/ (runs/ is local, never committed):
+it under runs/.test-cache/<code key>/<requirements stem>-<key>/ (runs/ is local, never
+committed):
 
-- the key is a sha256 of the source the run reads (every file under hiraku/, data/ and
-  plugins/ outside __pycache__, by path and bytes, so uncommitted edits count), the
-  requirements file's bytes, the Python, numpy and scipy versions, whether pypardiso can be
-  imported and HIRAKU_SOLVER. Another key never reads this run.
+- the code key is a sha256 of the source the run reads (every file under hiraku/, data/ and
+  plugins/ outside __pycache__, by path and bytes, so uncommitted edits count), the Python,
+  numpy and scipy versions, whether pypardiso can be imported and HIRAKU_SOLVER; the key of
+  a run adds the requirements file's bytes. Another key never reads this run. The runs of
+  every requirements file for one code version sit in one code-key folder.
 - the run is made as tests/verification/test_real_runs.py made its own: one BLAS thread,
   no ANTHROPIC_API_KEY, HIRAKU_TOOL_CHECK_REUSE=0 (every tool check computed in the run),
   PYTHONUTF8=1, the tests' environment otherwise (HIRAKU_CHECK_CACHE as tests/__init__ sets it).
@@ -25,7 +27,9 @@ it under runs/.test-cache/<key>/<requirements stem>/ (runs/ is local, never comm
   crash, 2 "cannot start the run") is returned to its caller and the next caller makes the
   run again, so a run stopped for lack of memory is not passed on.
 - the run folder is for reading: a test that writes into a run copies it first (copy_run).
-- the folders of keys other than the newest KEEP_KEYS are removed when a run is kept.
+- when a run is kept, the code-key folders other than the newest KEEP_KEYS are removed, but
+  only those untouched for longer than a run may take (STALE_S): a run of another code
+  version may still be going in one (a suite's workers can see the code change midway).
 - HIRAKU_SHARED_RUNS=0 makes every call run on its own, in a fresh temporary folder
   (removed when the process ends).
 
@@ -56,9 +60,10 @@ CACHE = ROOT / "runs" / ".test-cache"
 SOURCES = ("hiraku", "data", "plugins")  # what a scripted run reads, besides the requirements file
 RESULT = "result.json"
 KEEP_KEYS = 3
-TIMEOUT_S = 1200  # tests/verification/test_real_runs.py's RUN_TIMEOUT_S
+TIMEOUT_S = 3000  # tests/verification/test_real_runs.py's RUN_TIMEOUT_S
 ENV_SWITCH = "HIRAKU_SHARED_RUNS"
 POLL_S = 2.0
+STALE_S = TIMEOUT_S + 600  # a code-key folder untouched this long has no run going in it
 
 
 @dataclass
@@ -84,9 +89,9 @@ def _versions() -> dict:
     return out
 
 
-def key(requirements: Path, root: Path = ROOT) -> str:
-    """sha256 (hex) of what the run of requirements depends on: the source folders, the
-    requirements file and the interpreter and packages that compute it."""
+def code_key(root: Path = ROOT) -> str:
+    """sha256 (hex) of the code every scripted run reads: the source folders and the
+    interpreter and packages that compute it."""
     h = hashlib.sha256()
     for top in SOURCES:
         base = root / top
@@ -96,8 +101,15 @@ def key(requirements: Path, root: Path = ROOT) -> str:
             if p.is_file() and "__pycache__" not in p.parts:
                 h.update(p.relative_to(root).as_posix().encode("utf-8") + b"\0")
                 h.update(p.read_bytes() + b"\0")
-    h.update(b"requirements\0" + Path(requirements).read_bytes() + b"\0")
     h.update(json.dumps(_versions(), sort_keys=True).encode("utf-8"))
+    return h.hexdigest()
+
+
+def key(requirements: Path, root: Path = ROOT, code: str | None = None) -> str:
+    """sha256 (hex) of what the run of requirements depends on: the code (code_key) and the
+    requirements file's bytes."""
+    h = hashlib.sha256((code or code_key(root)).encode("ascii") + b"\0requirements\0")
+    h.update(Path(requirements).read_bytes())
     return h.hexdigest()
 
 
@@ -190,15 +202,25 @@ def _read(folder: Path, k: str) -> Shared | None:
                   k, True)
 
 
-def _prune(cache: Path, keep: str) -> None:
-    """Remove the folders of keys other than the newest KEEP_KEYS (keep among them)."""
+def _touched(p: Path) -> float:
+    """The latest mtime of a code-key folder and of what is right in it."""
     try:
-        dirs = sorted((p for p in cache.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
+        return max([p.stat().st_mtime] + [c.stat().st_mtime for c in p.iterdir()])
+    except OSError:
+        return time.time()
+
+
+def _prune(cache: Path, keep: str, now: float | None = None) -> None:
+    """Remove the code-key folders other than the newest KEEP_KEYS (keep among them) that
+    nothing touched for STALE_S."""
+    now = time.time() if now is None else now
+    try:
+        dirs = sorted((p for p in cache.iterdir() if p.is_dir()), key=_touched, reverse=True)
     except OSError:
         return
     kept = [p for p in dirs if p.name == keep] + [p for p in dirs if p.name != keep][:KEEP_KEYS - 1]
     for p in dirs:
-        if p not in kept:
+        if p not in kept and now - _touched(p) > STALE_S:
             shutil.rmtree(p, ignore_errors=True)
 
 
@@ -206,15 +228,17 @@ def scripted_run(requirements: Path, timeout: float = TIMEOUT_S, cache: Path | N
     """The scripted run of requirements for the code as it is now: made here, or read from the
     caller that made it (waiting for it while it runs)."""
     requirements = Path(requirements).resolve()
-    k = key(requirements)
+    ck = code_key()
+    k = key(requirements, code=ck)
     if os.environ.get(ENV_SWITCH) == "0":
         tmp = tempfile.TemporaryDirectory()
         atexit.register(tmp.cleanup)
         run, code, so, se, s = _make(requirements, Path(tmp.name) / requirements.stem, timeout)
         return Shared(run, code, so, se, s, k, False)
     cache = CACHE if cache is None else cache
-    folder = cache / k[:16] / requirements.stem
-    with _Lock(cache / k[:16] / f"{requirements.stem}.lock"):
+    name = f"{requirements.stem}-{k[:12]}"  # an edited requirements file gets a folder of its own
+    folder = cache / ck[:16] / name
+    with _Lock(cache / ck[:16] / f"{name}.lock"):
         got = _read(folder, k)
         if got is not None:
             return got
@@ -227,7 +251,7 @@ def scripted_run(requirements: Path, timeout: float = TIMEOUT_S, cache: Path | N
                 "key": k, "requirements": str(requirements), "run_dir": run.relative_to(folder).as_posix(),
                 "returncode": code, "stdout": so, "stderr": se, "seconds": round(s, 2),
                 "made": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False), encoding="utf-8")
-            _prune(cache, k[:16])
+            _prune(cache, ck[:16])
         return shared
 
 

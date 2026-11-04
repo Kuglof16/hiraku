@@ -51,9 +51,10 @@ ENDED = {"offroad-4w.yaml": {"R7-hand-300N"}}
 # the red's modules, so the run stops not_judged and says the lower stage's red is left
 BEHIND_RED = {"offroad-4w-n15.yaml"}
 LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
-# Subprocess timeout of one scripted run. The video run alone takes about 680 s (600 s
-# erred with TimeoutExpired); this stays below qa.run_tests' 1800 s per-class timeout.
-RUN_TIMEOUT_S = 1200
+# Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
+# has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
+# qa.run_tests' 3600 s per-class timeout.
+RUN_TIMEOUT_S = 3000
 DEMO_DESIGN = ROOT / "data" / "designs" / "offroad-4w-v1.json"
 
 
