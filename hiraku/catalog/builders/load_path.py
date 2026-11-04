@@ -214,7 +214,10 @@ def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
             "criterion": {"quantity": "occupant_push_deflection", "op": "<=", "limit": q(lim, "mm"),
                           "basis": (f"Q78: what stands outboard of point R moves less than {lim:g} mm under Q77 "
                                     f"{F:g} N (the elastic movement taken as the bound of the permanent one); a point "
-                                    "with nothing outboard counts in occupant_push_open. Tolerance "
+                                    "with nothing outboard counts in occupant_push_open. Nets on quick-release clips "
+                                    "and doors are not counted (a barrier the occupant puts in place is taken off "
+                                    "before the shoulder and hip tests: the US CPSC's proposed rule for ROVs, 79 FR "
+                                    "68964, sec. 1422.5(c)(4), read by the intake department). Tolerance "
                                     f"{R8_K0_TOL:g}: as R7, HIRAKU's choice for the gap between a hand calculation and "
                                     "the frame's analysis (no source)"),
                           "requirement_keys": ["Q78"]},

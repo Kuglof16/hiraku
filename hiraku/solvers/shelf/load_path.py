@@ -34,7 +34,9 @@ Load case params.load_kind picks the loads:
   section corners).
 - push: push_force outward (away from the vehicle's middle) at each on-board occupant's hip and shoulder
   (point R), on the first thing outboard of that point (a member or a part); occupant_push_deflection
-  along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open.
+  along the push. A point with nothing outboard, or only a free part, counts in occupant_push_open. Nets on
+  quick-release clips and doors (k4_geometry.entry.openable_parts) are taken as open: not pushed on, and left
+  out of the model, so they do not stiffen the frame either.
 
 Every load kind that solves gives, next to max_stress (the largest von Mises stress, whatever the member's
 material), max_utilisation: the largest over the members of stress / (that member's own material yield /
@@ -60,6 +62,7 @@ from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import DesignError, member_props
 from ..k4_geometry import model as k4
 from ..k4_geometry import people
+from ..k4_geometry.entry import openable_parts
 from ..k4_geometry.obb import OBB, from_member
 from .base import LOADING, BuiltinTool, Param, Predicts, Record, check_record, on_board, param_text, param_value, \
     result, run_param
@@ -1114,9 +1117,14 @@ def _ray_box(p: np.ndarray, d: np.ndarray, obb: OBB) -> float | None:
 
 
 def first_outboard(design: Record, point: np.ndarray, out: np.ndarray, skip: set[str]) -> tuple[str, float] | None:
-    """The first member or modelled part a ray from `point` along `out` meets: (body id, distance)."""
+    """The first member or modelled part a ray from `point` along `out` meets: (body id, distance). Nets held by
+    quick-release clips and doors with a hinge and a latch (k4_geometry.entry.openable_parts) and their fittings are
+    passed over: a guard the occupant has to put in place does not count as the side guard (the US CPSC's proposed
+    rule for ROVs, 79 FR 68964, sec. 1422.5(c)(4), read by the intake department: such barriers are taken off
+    before the shoulder and hip tests)."""
     bs = k4.bodies(design)
     allowed = {f"part:{p['id']}" for p in modelled_parts(design)} | {k for k in bs if k.startswith("member:")}
+    allowed -= {f"part:{pid}" for pid in openable_parts(design)}
     best = None
     for k in allowed - skip:
         s = _ray_box(point, out, bs[k].obb)
@@ -1135,10 +1143,13 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
     contacts = find_contacts(design, touch)
     points = _push_plate_points(design) if kind == "push" else {}
     pre = float(values.get("net_prestress") or NET_PRESTRESS_MPA)
-    full = build(design, contacts, holds=holds, plate_points=points, net_prestress=pre)
+    # The push takes openable nets and doors as open (CPSC proposed rule sec. 1422.5(c)(4), see first_outboard):
+    # they are pushed on by nobody and do not stiffen the frame either (the unfavourable side).
+    opened = frozenset(openable_parts(design)) if kind == "push" else frozenset()
+    full = build(design, contacts, exclude=opened, holds=holds, plate_points=points, net_prestress=pre)
     free = free_parts(full)
-    lp = (build(design, contacts, exclude=frozenset(free), holds=holds, plate_points=points, net_prestress=pre)
-          if free else full)
+    lp = (build(design, contacts, exclude=opened | frozenset(free), holds=holds, plate_points=points,
+                net_prestress=pre) if free else full)
     parts = {p["id"]: p for p in design.get("parts", [])}
     effects: list[Record] = []
     assumed = assumed_material_effect(full.plates)  # the free plates too

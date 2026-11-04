@@ -695,8 +695,11 @@ OPTIONAL.update({
 #   grab bar on the side frame's front post. The guard keeps point R behind fixed bars (a net a person fastens does
 #   not count as the guard at point R: the program management's decision after CPSC's proposed 16 CFR 1422.5(c)(4),
 #   as the intake department read it); the opening is where the person passes.
-SIDE_OPENING_REACH_MM = 100.0  # the side frame's front post this far ahead of point R (assumption, as SIDE_NET_COVER_MM)
-DOOR_T_MM = 2.3  # the door's sheet: the thinnest NFP-400 thickness whose unit mass was read (PLATE_KG_M2)
+SIDE_OPENING_REACH_MM = 100.0  # the side frame's front post this far ahead of point R (HIRAKU's choice, no source)
+DOOR_T_MM = 2.3  # the door's sheet (HIRAKU's choice, no source for a door's thickness): the thinnest NFP-400
+#   thickness whose unit mass was read (PLATE_KG_M2)
+# The door's hinges and latch take a clip's size and mass (SIDE_NET_CLIP_MM, SIDE_NET_CLIP_KG 0.05 kg): HIRAKU's
+#   choice, no source for a hinge's or a latch's mass
 GRAB_BAR_D_MM, GRAB_BAR_T_MM = 27.2, 2.3  # a JIS G 3444 standard size (data/sections/standard_tubes.json)
 GRAB_BAR_GAP_MM = 75.0  # the hand's room between the grip and the post
 _OPTION_VARS_ENTRY = {
@@ -711,7 +714,7 @@ _OPTION_VARS_ENTRY = {
                         "and not rollbar_front_posts (their post at S1 would stand in the opening)"),
     "side_bar_reach": Var("mm", SIDE_OPENING_REACH_MM, 40.0, 300.0,
                           "with side_opening: how far ahead of the most forward point R the side frame's front post "
-                          "stands (its centre line); the default is an assumption (as SIDE_NET_COVER_MM, no source)"),
+                          "stands (its centre line); the default 100 mm is HIRAKU's choice (no source)"),
     "grab_bar": Var("1", 0.0, 0.0, 1.0,
                     "1: a grab bar each side on the side frame's front post (side_bars = 1): two stand-offs out from the "
                     "post at the lowest and the highest side bar, and the grip up between them, grab_bar_gap clear of "
@@ -1624,7 +1627,8 @@ def build_side_opening(frame: Frame, lay: Layout, v: dict[str, float], guard: di
     (1) is a triangle: clips (net_clip) up the front post every at most SIDE_NET_CLIP_PITCH_MM and one on the
     outrigger's end (a taut net spans the hull of its fastenings, as build_side_net). The door (2) is a rectangle of
     DOOR_T_MM sheet: two hinges (door_hinge) on the post's face at its bottom and top, one latch (door_latch) on the
-    outrigger's end under its front edge. Returns {side: {"kind", "box", "fittings": [(pid, kind, lo, hi, nodes)],
+    outrigger's end under its front edge; the hinges and the latch are SIDE_NET_CLIP_MM cubes of SIDE_NET_CLIP_KG
+    (HIRAKU's choice, no source). Returns {side: {"kind", "box", "fittings": [(pid, kind, lo, hi, nodes)],
     "carried_by", "area"}}."""
     x_g, half, rail_y, rail_z = guard["x"][1], guard["y"], v["rail_spacing"] / 2.0, v["rail_height"]
     c = SIDE_NET_CLIP_MM

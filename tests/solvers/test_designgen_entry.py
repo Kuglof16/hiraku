@@ -106,7 +106,7 @@ class ClipNetTest(unittest.TestCase):
 
 
 class LoadPathTest(unittest.TestCase):
-    """R7 and R8 on the door set; R8's push on the fixed bars, also without the door."""
+    """R7 and R8 on the door set; R8's push on the fixed bars, the door taken as open (not pushed on, not stiffening)."""
 
     @classmethod
     def setUpClass(cls):
@@ -140,6 +140,13 @@ class LoadPathTest(unittest.TestCase):
             self.assertEqual(len(pushed), 4)
             self.assertTrue(all("member:side_bar_" in n for n in pushed), pushed)
         self.assertTrue(judged(self.cases["R8-push-725N"], self.bare))
+
+    def test_door_does_not_stiffen_the_push(self):
+        """The door is taken as open for the push: left out of the model, the same movement as without it."""
+        from tests.solvers.test_builders_load_path import results
+
+        q = "occupant_push_deflection"
+        self.assertAlmostEqual(results(self.runs["R8-push-725N"])[q]["value"], results(self.bare)[q]["value"], places=6)
 
 
 if __name__ == "__main__":
