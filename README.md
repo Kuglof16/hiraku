@@ -313,6 +313,8 @@ MIT ([LICENSE](LICENSE))
 | claude-agent-sdk | 0.2.173 | MIT |
 | mcp | 2.3.0 | MIT |
 | pillow | 13.0.0 | MIT-CMU |
+| numba (重い繰り返しの計算を機械語に直す) | 0.68.1 | BSD |
+| llvmlite (numba が使う) | 0.50.0 | BSD-2-Clause AND Apache-2.0 WITH LLVM-exception |
 | pypardiso (任意) | 0.4.7 | BSD-3-Clause (中で使う Intel MKL は Intel のライセンス、確かめていない) |
 | three.js (画面、jsDelivr から読む) | 0.170.0 | MIT |
 | Playwright (ブラウザの試験だけ、requirements に入れていない) | — | Apache-2.0 (確かめていない) |
