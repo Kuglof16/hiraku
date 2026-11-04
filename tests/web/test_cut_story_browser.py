@@ -172,7 +172,7 @@ SIZES = """() => {
     others: [...document.querySelectorAll("#stage *")].filter((el) => own(el) && shown(el) && !el.closest(big) && !el.closest(".n06-big") && !el.classList.contains("story-over")).map(px),
     grid: q(".grid-tile").map((el) => ({ featured: el.dataset.featured === "1", area: area(el) })),
     n06: { big: q(".n06-big").map(area), small: q(".n06-tile").map(area) },
-    label: document.querySelector(".n07-label")?.textContent ?? null,
+    label: [...document.querySelectorAll(".n07-label")].map((el) => [...el.querySelectorAll(".name, .fixed")].map((x) => x.textContent).join(" ")).join(" / ") || null,
     fixed: q(".n07-label .fixed").map((el) => [el.textContent, getComputedStyle(el).color]),
   };
 }"""
@@ -505,8 +505,8 @@ class CutStoryTest(unittest.TestCase):
         for got in seen.values():
             self.assertEqual(got["counts"].get("legend"), 1)
             self.assertNotIn("number", got["counts"])  # the legend is the stress and the allowable only
-            self.assertEqual(got["counts"].get("label"), 1)
-            self.assert_larger(got, 1)
+            self.assertEqual(got["counts"].get("label"), 2)  # 補強の前 and 補強の後, side by side
+            self.assert_larger(got, 2)
             self.assertEqual(got["sizes"]["fixed"], [])  # no verdict in this run: nothing added
 
     def test_n02_legend_at_one_and_a_half_times_the_small_text(self):
@@ -539,7 +539,7 @@ class CutStoryTest(unittest.TestCase):
                 sz = got["sizes"]
                 if t >= swap_to and passed:
                     self.assertEqual(sz["fixed"], [["✓ OK", "rgb(47, 125, 79)"]], (key, t))
-                    self.assertIn("補強の後 ✓ OK", sz["label"])
+                    self.assertEqual(sz["label"], "補強の前 / 補強の後 ✓ OK")
                 else:
                     self.assertEqual(sz["fixed"], [], (key, t))
                     self.assertNotIn("OK", sz["label"], (key, t))

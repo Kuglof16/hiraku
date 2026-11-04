@@ -253,10 +253,15 @@ class ShellBrowserTest(unittest.TestCase):
           return { now: c.now, dist, yaw: Math.atan2(off.x, off.z) * 180 / Math.PI,
                    // the share of the view's height the largest element's neighbourhood (2 x radius) takes
                    fill: (c.focus.radius * 0.001) / (dist * Math.tan((cam.fov * Math.PI) / 360)),
-                   before: Number(b.el.style.opacity), after: Number(a.el.style.opacity), version: document.documentElement.dataset.n07Version,
-                   label: document.querySelector('[data-box="n07.label"]').textContent,
+                   sides: [...document.querySelectorAll(".n07-side")].map((el) => { const r = el.getBoundingClientRect(); return [el.dataset.box, Math.round(r.left), Math.round(r.width)]; }),
+                   version: document.documentElement.dataset.n07Version,
+                   names: [...document.querySelectorAll(".n07-label .name")].map((el) => el.textContent),
+                   diff: [...document.querySelectorAll(".n07-label .diff")].map((el) => el.textContent),
+                   fixed: document.querySelectorAll(".n07-label .fixed").length,
                    text: document.getElementById("stage").innerText,
                    mark: Number(c.mark.style.opacity), markW: parseFloat(c.mark.style.width), tone: c.mark.dataset.tone,
+                   marks: c.cases.map((x) => [x.mark.style.left, x.mark.style.top, x.mark.dataset.tone]),
+                   cams: c.cases.map((x) => x.view.camera.position.toArray().map((v) => Math.round(v * 1e6))),
                    wheels: b.view.wheels.visible }; }"""
         times = (0, T["lead_s"], (T["lead_s"] + T["turn_to_s"]) / 2, T["turn_to_s"], T["zoom_to_s"], T["swap_s"], (T["swap_s"] + T["swap_to_s"]) / 2, T["swap_to_s"], sp["duration_s"])
         at = {t: page.evaluate(js, t) for t in times}
@@ -267,31 +272,39 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertAlmostEqual(turned(0, T["lead_s"]), 0, places=6)
         self.assertAlmostEqual(abs(turned(0, T["turn_to_s"])), sp["turn_deg"], delta=0.5)
         self.assertAlmostEqual(abs(turned(0, (T["lead_s"] + T["turn_to_s"]) / 2)), sp["turn_deg"] / 2, delta=0.5)
-        # in the colours of the version before all along the turn
-        for t in times[:4]:
-            self.assertEqual((at[t]["before"], at[t]["after"], at[t]["label"]), (1, 0, "補強の前"), t)
+        # the two versions side by side all the time, through one camera, the ring at the same
+        # place on both; the version after says what it added (the fixture's two gusset plates)
+        V = sp["view"]
+        w = (V["w"] - 16) // 2
+        for t in times:
+            self.assertEqual(at[t]["sides"], [["n07.view.before", V["x"], w], ["n07.view.after", V["x"] + w + 16, w]], t)
+            self.assertEqual(at[t]["names"], ["補強の前", "補強の後"], t)
+            self.assertEqual(at[t]["diff"], ["足した部品 2"], t)
+            self.assertEqual(at[t]["version"], "1 2", t)
+            self.assertEqual(at[t]["cams"][0], at[t]["cams"][1], t)
+            self.assertEqual(at[t]["marks"][0][:2], at[t]["marks"][1][:2], t)
+            self.assertEqual(at[t]["fixed"], 0, t)  # no verdict on the version after in this run
         # the zoom: from turn_to_s to zoom_to_s; there the neighbourhood takes zoom.fill of the height
         self.assertLess(at[T["zoom_to_s"]]["dist"], at[T["turn_to_s"]]["dist"] / 3)
         self.assertAlmostEqual(at[T["zoom_to_s"]]["fill"], sp["zoom"]["fill"], places=6)
         # the ring round the largest element: hidden before lead_s, small while the vehicle
         # turns (it shows where the weak spot is), as wide as zoom.fill of the view's height
         # once zoomed in; the wheels are left out close in (the near tyre would hide the joint)
-        inner_h = sp["view"]["h"] - 4
+        inner_h = V["h"] - 4
         self.assertEqual(at[0]["mark"], 0)
         self.assertEqual(at[T["turn_to_s"]]["mark"], 1)
         self.assertAlmostEqual(at[T["turn_to_s"]]["markW"], sp["ring"]["of_view_h"] * inner_h, places=3)  # far: ring.of_view_h
         self.assertAlmostEqual(at[T["zoom_to_s"]]["markW"], sp["zoom"]["fill"] * inner_h, places=3)
         self.assertTrue(at[T["turn_to_s"]]["wheels"])
         self.assertFalse(at[T["zoom_to_s"]]["wheels"])
-        # red on the version before; this run has no verdict on the version after, so it stays red
-        self.assertEqual({at[t]["tone"] for t in times if t >= T["lead_s"]}, {"red"})
-        # the swap: the version after fades in between swap_s and swap_to_s, same camera, and stays
-        self.assertEqual((at[T["swap_s"]]["after"], at[T["swap_s"]]["label"]), (0, "補強の前"))
-        mid = at[(T["swap_s"] + T["swap_to_s"]) / 2]
-        self.assertAlmostEqual(mid["after"], 0.5, places=6)
+        # red on both; this run has no verdict on the version after, so it stays red
+        self.assertEqual({x[2] for t in times if t >= T["lead_s"] for x in at[t]["marks"]}, {"red"})
+        # after the zoom the camera stays
         for t in (T["swap_to_s"], sp["duration_s"]):
-            self.assertEqual((at[t]["after"], at[t]["before"], at[t]["label"], at[t]["version"]), (1, 0, "補強の後", "2"), t)
             self.assertAlmostEqual(at[t]["dist"], at[T["zoom_to_s"]]["dist"], places=6)
+        # the highlight boxes on the version after: one outline and one fill per gusset plate
+        self.assertEqual(page.evaluate("() => window.hiraku.cut.cases[1].marks.children.length"), 4)
+        self.assertIsNone(page.evaluate("() => window.hiraku.cut.cases[0].marks ?? null"))
         # no word names the kind of analysis
         for t in times:
             for word in ("梁", "シェル"):
@@ -321,17 +334,21 @@ class ShellBrowserTest(unittest.TestCase):
                                                .map((el) => parseFloat(getComputedStyle(el).fontSize))) }; }"""
         )
         self.assertEqual(errors, [])
-        self.assertEqual(sorted(got["boxes"]), ["n07.label", "n07.legend", "n07.view"])
+        self.assertEqual(sorted(got["boxes"]), ["n07.label.after", "n07.label.before", "n07.legend", "n07.view", "n07.view.after", "n07.view.before"])
         self.assertEqual(got["outside"], [])
         self.assertLessEqual(got["lowest"], layout["subtitle_band"]["y"])
         self.assertGreaterEqual(got["minText"], layout["min_text_px"])
         for key in ("view", "legend"):
             B = layout["n07"][key]
             self.assertEqual([round(v) for v in got["boxes"][f"n07.{key}"]], [B["x"], B["y"], B["x"] + B["w"], B["y"] + B["h"]])
-        # the label sits inside the view at its place; the legend does not touch the view
-        L, V, lb = layout["n07"]["label"], got["boxes"]["n07.view"], got["boxes"]["n07.label"]
-        self.assertEqual([round(lb[0]), round(lb[1])], [L["x"], L["y"]])
-        self.assertTrue(V[0] <= lb[0] and lb[2] <= V[2] and V[1] <= lb[1] and lb[3] <= V[3])
+        # each label sits inside its side, at label.x / label.y from the side's top left (as
+        # from the view's); the legend does not touch the view
+        L, VB = layout["n07"]["label"], layout["n07"]["view"]
+        for side in ("before", "after"):
+            S, lb = got["boxes"][f"n07.view.{side}"], got["boxes"][f"n07.label.{side}"]
+            self.assertEqual([round(lb[0] - S[0]), round(lb[1] - S[1])], [L["x"] - VB["x"], L["y"] - VB["y"]], side)
+            self.assertTrue(S[0] <= lb[0] and lb[2] <= S[2] and S[1] <= lb[1] and lb[3] <= S[3], side)
+        self.assertLessEqual(got["boxes"]["n07.view.before"][2], got["boxes"]["n07.view.after"][0])
         self.assertLessEqual(got["boxes"]["n07.view"][2], got["boxes"]["n07.legend"][0])
         page.close()
 

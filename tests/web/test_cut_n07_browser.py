@@ -78,9 +78,10 @@ STATE = """() => {
   const c = window.hiraku.cut;
   const lg = document.querySelector('[data-box="n07.legend"]');
   const tick = lg.querySelector(".ticks .allowable");
-  const m = c.mark;
+  const m = c.cases.at(-1).mark;
   const r = m.getBoundingClientRect();
-  const v = document.querySelector('[data-box="n07.view"]').getBoundingClientRect();
+  const v = document.querySelector('[data-box="n07.view.after"]').getBoundingClientRect();
+  const after = document.querySelector('[data-box="n07.label.after"]');
   // the element with the largest recorded value of the version before (its field, from the record)
   const vals = c.cases[0].field.per_element;
   let top = 0;
@@ -89,7 +90,8 @@ STATE = """() => {
     legend: lg.innerText.split("\\n").map((s) => s.trim()).filter(Boolean),
     tickTop: tick ? tick.style.top : null,
     text: document.getElementById("stage").innerText,
-    label: document.querySelector('[data-box="n07.label"]').textContent,
+    label: [...after.querySelectorAll(".name, .fixed")].map((x) => x.textContent).join(" "),
+    before: c.cases[0].mark.dataset.tone ?? null,
     cases: c.cases.map((x) => ({ version: x.version, max: x.ct.max, limitKnown: x.ct.limitKnown, colors: !!x.ct.mesh.colors })),
     mark: { opacity: Number(m.style.opacity), w: r.width, tone: m.dataset.tone ?? null, text: m.textContent, kind: m.dataset.kind ?? null,
             inside: r.left + r.width / 2 >= v.left && r.left + r.width / 2 <= v.right && r.top + r.height / 2 >= v.top && r.top + r.height / 2 <= v.bottom },
@@ -186,13 +188,17 @@ class CutN07Test(unittest.TestCase):
         for t in (T["zoom_to_s"], (T["zoom_to_s"] + T["swap_s"]) / 2, T["swap_s"], T["swap_to_s"] + 0.5):
             self.assertAlmostEqual(seen[t]["n07"]["mark"]["w"], fill * inner, delta=1.0)
         self.assertLess(seen[T["zoom_s"]]["n07"]["mark"]["w"], seen[T["zoom_to_s"]]["n07"]["mark"]["w"])
-        # red on the version before; after the swap the fixed version: the ring green, "✓ OK"
+        # red on both until the swap; after it the fixed version's ring is green with "✓ OK"
+        # (the version before's stays red)
         self.assertEqual(seen[T["swap_s"]]["n07"]["mark"]["tone"], "red")
+        self.assertEqual(seen[T["swap_s"]]["n07"]["label"], "補強の後")
         late = seen[T["swap_to_s"] + 0.5]["n07"]
-        self.assertEqual(late["mark"]["tone"], "green")
+        self.assertEqual((late["mark"]["tone"], late["before"]), ("green", "red"))
         self.assertEqual(late["label"], "補強の後 ✓ OK")
-        # after the swap the page says nothing more than the label and the legend
-        self.assertEqual(sorted(s for s in late["text"].split("\n") if s.strip()), sorted(["補強の後 ✓ OK", "応力 [MPa]", self.allowable()]))
+        # after the swap the page says nothing more than the two labels (with what the version
+        # after added) and the legend
+        self.assertEqual(sorted(s.strip() for s in late["text"].split("\n") if s.strip()),
+                         sorted(["補強の前", "補強の後 ✓ OK", "足した部品 2", "応力 [MPa]", self.allowable()]))
 
     def test_paint_in_the_url_is_not_read(self):
         """The colours are the element stress whatever the URL says (paint=member is gone)."""
