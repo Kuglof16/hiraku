@@ -4134,8 +4134,11 @@
                   "bolt",
                   "weld",
                   "rest",
-                  "pin"
-                ]
+                  "pin",
+                  "bushing",
+                  "ball_joint"
+                ],
+                "description": "How it is fixed at that step: bushing and ball_joint are fixed with their own through-bolt or castle nut, so they need the same tool clearance as a bolt."
               },
               "at_mm": {
                 "$ref": "#/$defs/vec3"
