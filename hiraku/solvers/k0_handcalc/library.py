@@ -375,6 +375,7 @@ def _frame_static() -> list[Formula]:
     ))
     out.append(_rail_step_bending())
     out.append(_rail_joint_stress())
+    out.append(_rail_joint_stress_closed())
     out.append(_end_cross_member_stress())
     return out
 
@@ -413,6 +414,78 @@ def _rail_joint(v: dict) -> dict:
     sigma = s_ax + s_v + s_l
     return {"sigma": (sigma**2 + 3.0 * tau**2) ** 0.5, "sigma_vertical": s_v, "sigma_sideways": s_l,
             "sigma_axial": s_ax, "tau_torsion": tau, "M_vertical": M_v, "M_sideways": M_l, "T_rail": T}
+
+
+def _rail_joint_closed(v: dict) -> dict:
+    """frame_static.rail_joint_stress with the ladder closed behind the joint: the rail behind runs a to the end
+    cross member (length L_e), which holds its far end. The twist W e and the sideways moment F e at the joint are
+    shared, by one step of moment distribution, between the rail ahead (far end held: G J / L1, 4 E I / L1), the
+    cross member at the joint (2 E I / L_c) and the rail behind: in twist, the rail (a / (G J)) in series with the
+    end cross member bent by mirror-image moments (L_e / (2 E I)); sideways, a beam whose far end turns against the
+    end cross member (2 E I / L_e): 4 c (3 c + k_e) / (4 c + k_e), c = E I / a. The rail's stress at the joint is
+    the larger of its two sides (ahead and behind), each with the vertical moment M_oh + F z."""
+    r, c, e_ = _tube(v["b"], v["h"], v["t"]), _tube(v["b_c"], v["h_c"], v["t_c"]), _tube(v["b_e"], v["h_e"], v["t_e"])
+    E, G = v["E"], v["E"] / (2.0 * (1.0 + v["nu"]))
+    F, W, a = v["F"], v["W"], v["a"]
+    M_v = v["M_oh"] + F * v["z"]
+    k_t, k_cv = G * r["J"] / v["L1"], 2.0 * E * c["I_v"] / v["L_c"]
+    k_bt = 1.0 / (a / (G * r["J"]) + v["L_e"] / (2.0 * E * e_["I_v"]))
+    k_l, k_cl = 4.0 * E * r["I_l"] / v["L1"], 2.0 * E * c["I_l"] / v["L_c"]
+    ca, k_e = E * r["I_l"] / a, 2.0 * E * e_["I_l"] / v["L_e"]
+    k_bl = 4.0 * ca * (3.0 * ca + k_e) / (4.0 * ca + k_e)
+    s_ax = F / r["A"]
+    s_v = abs(M_v) * (v["h"] / 2.0) / r["I_v"]
+    sides = {}
+    for name, kt_, kl_ in (("ahead", k_t, k_l), ("behind", k_bt, k_bl)):
+        T = W * v["e"] * kt_ / (k_t + k_cv + k_bt)
+        M_l = F * v["e"] * kl_ / (k_l + k_cl + k_bl)
+        s_l = abs(M_l) * (v["b"] / 2.0) / r["I_l"]
+        tau = abs(T) / (2.0 * r["Am"] * v["t"])
+        sides[name] = ((s_ax + s_v + s_l) ** 2 + 3.0 * tau**2) ** 0.5, s_l, tau, M_l, T
+    worst = max(sides, key=lambda k: sides[k][0])
+    sig, s_l, tau, M_l, T = sides[worst]
+    return {"sigma": sig, "sigma_vertical": s_v, "sigma_sideways": s_l, "sigma_axial": s_ax, "tau_torsion": tau,
+            "M_vertical": M_v, "M_sideways": M_l, "T_rail": T, "sigma_ahead": sides["ahead"][0],
+            "sigma_behind": sides["behind"][0]}
+
+
+def _rail_joint_stress_closed() -> Formula:
+    mm = lambda d: {"unit": "mm", "description": d, "min": 0}  # noqa: E731
+    base = _rail_joint_stress()
+    return Formula(
+        formula_id="frame_static.rail_joint_stress_closed",
+        title="段差を押して登るときの後ろの車軸の所のレールの応力 (後ろの張り出しを端の横の部材が閉じる)",
+        domain="strength",
+        expression="as frame_static.rail_joint_stress, the twist W e and the sideways moment F e shared also with the "
+                   "rail behind: k_bt = 1/(a/(G J) + L_e/(2 E I_e,v)), k_bl = 4c(3c + k_e)/(4c + k_e), c = E I_l/a, "
+                   "k_e = 2 E I_e,l/L_e; sigma = the larger of the rail's two sides at the joint",
+        inputs={**base.inputs,
+                "a": mm("length of the rail behind the joint to the end cross member"),
+                "L_e": mm("length of the end cross member"),
+                "b_e": mm("end cross member width"), "h_e": mm("end cross member height"), "t_e": mm("end cross member wall")},
+        outputs={**base.outputs,
+                 "sigma_ahead": ("MPa", "von Mises in the rail just ahead of the joint", None),
+                 "sigma_behind": ("MPa", "von Mises in the rail just behind the joint", None)},
+        assumptions=[
+            "both front wheels on the step, each rear wheel pushes with F; quasi-static",
+            "left and right loaded alike (mirror images)",
+            "the wheel's loads reach the rail at the joint through the suspension, with the moments of the offset e",
+            "one step of moment distribution at the joint between three members: the rail ahead (its far end held), the "
+            "cross member at the joint, and the rail behind, whose far end the end cross member holds (a ladder closed "
+            "at the rear). frame_static.rail_joint_stress takes the rail behind as free: it leaves out that share",
+            "the end cross member bent by mirror-image moments from both rails (2 E I / L_e)",
+            "loads behind the axle enter at their carried_by nodes, shared equally (no transfer moments)",
+            "thin-walled rectangular tubes (Bredt torsion); shear from transverse forces left out",
+        ],
+        source="beam statics, moment distribution at one joint (Hardy Cross), a beam with a rotational spring at its far "
+               "end, and Bredt's torsion formula (textbook structures)",
+        requires=[(lambda v: all(2 * v[t] < min(v[b], v[h]) for b, h, t in (("b", "h", "t"), ("b_c", "h_c", "t_c"),
+                                                                              ("b_e", "h_e", "t_e"))),
+                   "wall thickness must be less than half of the tube width and height"),
+                  (lambda v: v["L1"] > 0 and v["L_c"] > 0 and v["a"] > 0 and v["L_e"] > 0,
+                   "L1, L_c, a and L_e must be positive")],
+        fn=_rail_joint_closed,
+    )
 
 
 def _rail_joint_stress() -> Formula:
