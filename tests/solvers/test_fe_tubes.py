@@ -470,9 +470,10 @@ class SpaceFrameConvergenceTest(unittest.TestCase):
         # standing still D0 129.40 / 129.80 / 130.18 / 130.34, largest (RQ1) 132.17 / 132.46 / 132.64 / 132.74;
         # lift-off D0 97.62 / 97.87 / 98.08 / 98.11, largest (RQ3) 231.24 / 232.27 / 233.17 / 233.65 MPa.
         # The levels are solved side by side, each in a process of its own (tests/solvers/tube_level.py, one BLAS
-        # thread each), the finest first: HIRAKU_CONVERGENCE_JOBS at a time, 2 by default (all four at once took
-        # about 25 GB within two minutes, 2026-11-04); 1 solves them one after another.
-        jobs = int(os.environ.get("HIRAKU_CONVERGENCE_JOBS", "2"))
+        # thread each), the finest first: HIRAKU_CONVERGENCE_JOBS at a time, 1 by default (one after another, the
+        # memory of one level) until the levels' peaks are measured; all four at once took about 25 GB within
+        # two minutes, and 2 beside a suite's other workers went under 15 GB free (2026-11-04).
+        jobs = int(os.environ.get("HIRAKU_CONVERGENCE_JOBS", "1"))
         levels = convergence_levels((40.0, 30.0, 20.0, 14.0), jobs)
         series = {k: [lv["series"][k] for lv in levels] for k in ("D0 static", "max static", "D0 lift", "max lift")}
         print("  " + "; ".join(f"{lv['size']:g} mm {lv['seconds']:.0f} s, peak {lv['peak_mb']:.0f} MB" for lv in levels))
