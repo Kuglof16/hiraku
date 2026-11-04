@@ -614,7 +614,9 @@ class SafeSideTest(RunCase, unittest.TestCase):
         out = record_cause(self.ctx, self.args(cmp, ends_case=True))
         self.assertIsNone(out["verdict"])
         self.assertIs(self.ctx.store.get("cause", out["cause"]["cause_id"])["ends_case"], True)
-        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")  # never green
+        tile = self.ctx.store.judgements()[0]
+        self.assertEqual(tile["state"], "pending")  # never green
+        self.assertIn(f"原因 {out['cause']['cause_id']} が、この実行の手計算では届かないとして、判定なしで終えた", tile["summary"])
         self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})  # HK4 and HK5 do not wait for it
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()

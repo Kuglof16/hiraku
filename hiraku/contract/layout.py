@@ -12,6 +12,7 @@ runs/<run_id>/
     v001/rule_checks/rchk-0001.json   RULE_CHECK (a knowledge rule checked on this version's parts)
     v001/meshes/mesh-0001.json        MESH (shell mesh of this version's frame; fields name it by mesh_id)
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
+    v001/load_cases.json              the load cases built for this version (load_cases.created; from version 2 on)
     report.json                       REPORT (later)
     stop.request                      present only while someone asks the run to stop
     tools/<name>-<n>.py               a tool Claude wrote during the run (attempt n)
@@ -53,6 +54,7 @@ PROJECT_FILE = "project.json"
 EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
 JUDGEMENTS_FILE = "judgements.json"
+VERSION_LOAD_CASES_FILE = "load_cases.json"  # v00N/: the load cases built for that version (load_cases.created)
 REPORT_FILE = "report.json"
 TOOLS_DIR = "tools"  # tools written during the run and their checks
 STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to stop (stop_code user_stop)
