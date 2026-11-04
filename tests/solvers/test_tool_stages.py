@@ -7,9 +7,10 @@ from hiraku import contract, solvers
 
 STAGES = {"assembly": 0, "frame_static": 1, "step_climb": 1, "modal": 1, "drive_energy": 1, "thermal": 1, "crash": 1,
           "bed_static": 1, "actuator_linkage": 1, "use_fatigue": 1, "actuator_duty": 1, "frame_shell": 3, "frame_tubes": 3,
-          "fatigue": 3, "spray_reach": 0}
+          "fatigue": 3, "spray_reach": 0, "entry_opening": 0}
 APPLIES_TO = {"frame_shell": ["ladder_4w"], "frame_tubes": ["space_frame_utv"], "bed_static": ["care_bed"],
-              "actuator_linkage": ["care_bed"], "use_fatigue": ["care_bed"], "actuator_duty": ["care_bed"]}  # others: any
+              "actuator_linkage": ["care_bed"], "use_fatigue": ["care_bed"], "actuator_duty": ["care_bed"],
+              "entry_opening": ["ladder_4w", "space_frame_utv"]}  # others: any
 
 
 class ToolStagesTest(unittest.TestCase):
