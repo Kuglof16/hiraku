@@ -4,7 +4,7 @@ import { fill, h } from "./dom.js";
 import { ITEM_CHOICES, ITEM_HELP } from "./data.js";
 import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, TRUST_JA } from "./model.js";
 
-const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました" };
+const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました", ended: "実行が終わりました" };
 
 function choiceLabel(q, value) {
   const c = (q.choices || []).find((x) => String(x.value) === String(value));
@@ -38,7 +38,8 @@ function question(q, api, ui) {
     choiceButtons.length ? h("div", { class: "in-choices" }, choiceButtons) : null,
     other,
     def ? h("p", { class: "in-default" }, `答えなければ ${showValue(def.value, def.unit)} を使います`, h("small", {}, def.trust === 3 ? " (仮の値です)" : ` (${TRUST_JA[def.trust]})`)) : null,
-    q.ask === "must" && !q.answer ? h("p", { class: "in-default must" }, "この質問に答えるまで先へ進めません") : null,
+    q.ask === "must" && !q.answer && q.state !== "ended" ? h("p", { class: "in-default must" }, "この質問に答えるまで先へ進めません") : null,
+    q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この質問への答えは使われません") : null,
     q.answer
       ? h("p", { class: "in-answer" }, h("b", {}, q.answer.source === "hearing" ? "答え" : "標準の値"), " ",
           choiceLabel(q, q.answer.value) || showValue(q.answer.value, q.answer.unit))
@@ -72,7 +73,8 @@ function ruleQuestion(q, api, ui) {
       ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", RULE_CHOICE_JA[q.answer.choice] || q.answer.choice,
           q.answer.note ? h("small", {}, ` (${q.answer.note})`) : null)
       : null,
-    q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null);
+    q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null,
+    q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この判断は使われません") : null);
 }
 
 function requirementRow(r) {
@@ -104,7 +106,7 @@ export function renderA2(el, m, api, ui) {
   const asking = [...rows, ...rules].some((r) => r.state === "asking");
   const answersBody = () => ({ answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true });
   const canSend = asking && !!api.answerHearing && !ui.sending;
-  const must = rows.filter((r) => r.ask === "must" && !r.answer);
+  const must = rows.filter((r) => r.ask === "must" && !r.answer && r.state !== "ended");
   const bySource = (s) => m.requirements.filter((r) => r.source === s).length;
   fill(el,
     h("section", { class: "in-left" },

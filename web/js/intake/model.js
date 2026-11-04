@@ -33,6 +33,7 @@ export function emptyModel() {
     domainsDraft: false, // the picks on screen are the code's candidates (from the product's properties), not Claude's choice
     litAt: new Map(), // domain -> t (s) of the event that lit it, for a glow that follows the playback time
     finished: false,
+    runEnd: null,
   };
 }
 
@@ -81,6 +82,7 @@ export function apply(m, e) {
       break;
     case "run.finished":
       m.finished = true;
+      m.runEnd = { status: d.status || "", stop_code: d.stop_code || "", stop_reason: d.stop_reason || "" }; // questions still open now will never be read
       break;
     case "hearing.asked":
       {
@@ -152,7 +154,7 @@ export function hearingRows(m) {
   const answers = new Map((m.hearing.answered?.answers || []).map((a) => [a.key, a]));
   return asked.map((q) => {
     const a = answers.get(q.req_key);
-    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : "asking" };
+    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
 }
 
@@ -162,7 +164,7 @@ export function ruleRows(m) {
   const answers = new Map((m.hearing.answered?.rule_answers || []).map((a) => [a.rule_id, a]));
   return asked.map((q) => {
     const a = answers.get(q.rule_id) || null;
-    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : "asking" };
+    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
 }
 
