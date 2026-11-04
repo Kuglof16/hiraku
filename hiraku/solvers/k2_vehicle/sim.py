@@ -39,6 +39,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .jit import ENABLED as JIT, njit
 from .model import Vehicle
 from .road import Road
 from .tyre import tyre_of
@@ -96,6 +97,27 @@ def _to_body(rot, x, y, z):
             r02 * x + r12 * y + r22 * z)
 
 
+@njit
+def _solve_pairs(mm, rhs, pairs):
+    """Sim._solve_sym_py: M x = b on the mirror pairs' sums and differences (mm and rhs are changed)."""
+    for k in range(pairs.shape[0]):
+        i, j = pairs[k, 0], pairs[k, 1]
+        ci, cj = mm[:, i].copy(), mm[:, j].copy()
+        mm[:, i], mm[:, j] = ci + cj, ci - cj
+    for k in range(pairs.shape[0]):
+        i, j = pairs[k, 0], pairs[k, 1]
+        ri, rj = mm[i, :].copy(), mm[j, :].copy()
+        mm[i, :], mm[j, :] = ri + rj, ri - rj
+        bi, bj = rhs[i], rhs[j]
+        rhs[i], rhs[j] = bi + bj, bi - bj
+    y = np.linalg.solve(mm, rhs)
+    x = y.copy()
+    for k in range(pairs.shape[0]):
+        i, j = pairs[k, 0], pairs[k, 1]
+        x[i], x[j] = y[i] + y[j], y[i] - y[j]
+    return x
+
+
 @dataclass
 class Controls:
     steer: list   # per corner (rad)
@@ -148,6 +170,7 @@ class Sim:
             j = c.mirror
             if j > i and c.dof and cs[j].dof:
                 self.pairs.append((6 + pos[i], 6 + pos[j]))
+        self._pairs = np.array(self.pairs, dtype=np.int64).reshape(-1, 2)  # for the compiled _solve_pairs
         self.groups = []
         seen = set()
         for i, c in enumerate(cs):
@@ -705,6 +728,12 @@ class Sim:
         """Solve M x = b on mirror-pair sums/differences (exact zeros stay zero)."""
         if not self.pairs:
             return np.linalg.solve(mm, rhs)
+        if JIT:
+            return _solve_pairs(mm, rhs, self._pairs)
+        return self._solve_sym_py(mm, rhs)
+
+    def _solve_sym_py(self, mm: np.ndarray, rhs: np.ndarray) -> np.ndarray:
+        """_solve_sym in numpy from Python: the reference the compiled _solve_pairs is tested against."""
         m2 = mm
         b2 = rhs
         for i, j in self.pairs:
