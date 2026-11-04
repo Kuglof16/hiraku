@@ -58,7 +58,8 @@ def _gap(design: dict, bs, pid: str, to: str) -> float | None:
 
 
 # parts fixed to the frame that others may be fastened to (a bracket: a mount or a fitting welded to the frame)
-FIXED_KINDS = ("body", "frame", "gusset", "rollbar", "bracket")
+LAMP_KINDS = ("headlamp", "stoplamp", "taillamp", "turn_signal")  # a cluster of lamps: each may hold the next
+FIXED_KINDS = ("body", "frame", "gusset", "rollbar", "bracket") + LAMP_KINDS
 
 
 def _anchored(design: dict) -> set[str]:
@@ -203,6 +204,39 @@ def strut_box(p: np.ndarray, q: np.ndarray, d: float = STRUT_D_MM) -> dict:
     return {"center_mm": [float(x) for x in (p + q) / 2.0], "size_mm": [max(L, 1.0), d, d], "rpy_deg": [0.0, pitch, yaw]}
 
 
+CLEAR_TRIES = 8  # frame members tried, nearest first, for a strut that passes through nothing
+
+
+def _clear_member(bs, me, first, pid: str):
+    """The frame member to strut to: `first` if the strut from the part to it passes through no other body (a sheet
+    of the body excepted: an anchor goes through it; the members welded at the target's nodes excepted), else the
+    nearest member whose strut does; `first` when none is clear (the overlap is then H1-interference's)."""
+    from hiraku.solvers.k4_geometry.obb import from_box, overlap
+
+    # candidates by the distance of their centres (cheap); the strut itself by the nearest points of the shapes
+    members = sorted((b for b in bs.values() if b.kind == "member"),
+                     key=lambda b: float(np.linalg.norm(b.obb.center - me.obb.center)))
+    for cand in [first] + [m for m in members if m is not first][:CLEAR_TRIES]:
+        a, b = nearest_points(me, cand)
+        box = strut_box(a, b)
+        sb = from_box(box["center_mm"], box["size_mm"], box["rpy_deg"])
+        r_sb = float(np.linalg.norm(sb.half))
+        hit = False
+        for k, o in bs.items():
+            if o is me or o is cand or o.kind == "body" or k == f"part:{pid}":
+                continue
+            if o.kind == "member" and o.nodes & cand.nodes:
+                continue
+            if float(np.linalg.norm(o.obb.center - sb.center)) > r_sb + float(np.linalg.norm(o.obb.half)):
+                continue  # their spheres apart: no overlap
+            if overlap(sb, o.obb) > 1.0:
+                hit = True
+                break
+        if not hit:
+            return cand
+    return first
+
+
 def _fit(design: dict, parts: dict, p: dict, me, other) -> str:
     to_id = other.id.split(":", 1)[1]
     fid = f"fit_{p['id']}_{to_id}"
@@ -240,7 +274,9 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     n_re = n_br = n_drop = 0
     # the fixed parts first (brackets, sheets, frame pieces), so that the parts resting on them find them anchored
-    for p in sorted(list(design["parts"]), key=lambda x: x["kind"] not in FIXED_KINDS):
+    # (the lamps after the other fixed parts, in a fixed order, so that one fastened to the frame holds the next)
+    for p in sorted(list(design["parts"]), key=lambda x: (x["kind"] not in FIXED_KINDS, x["kind"] in LAMP_KINDS,
+                                                           x["id"] if x["kind"] in LAMP_KINDS else "")):
         if only is not None and p["id"] not in only:
             continue
         me = bs.get(f"part:{p['id']}")
@@ -284,6 +320,7 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
                        and (ends_held or x.get("via") not in MOVING_VIA) for x in kept)
         held = bool(holders) and any(x["to"] in holders for x in kept)
         dropped_here = False
+        far.sort(key=lambda gc: gc[1]["to"] not in holders)  # the holders' joints first: the others may then drop
         for g, c in far:
             # a far fixed joint is dropped when the part touches its holder, or (to a node) anything else
             # a sheet of the body is held at each of its fastenings (one strut alone would let it swing about it)
@@ -301,6 +338,8 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             if other is None or g > BRIDGE_MAX_MM or (other.kind != "member" and c.get("via") in MOVING_VIA):
                 kept.append(c)
                 continue
+            if other.kind == "member":
+                other = _clear_member(bs, me, other, p["id"])
             fid = _fit(design, parts, p, me, other)
             n_br += 1
             if all(x["to"] != fid for x in kept):
