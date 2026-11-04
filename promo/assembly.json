@@ -1,5 +1,5 @@
 {
- "script": "${WORK}/script/narration.tsv",
+ "script": "${WORK}/script/narration_v7.tsv",
  "fps": 30,
  "band": {
   "top": 910,
@@ -138,6 +138,12 @@
   },
   {
    "cuts": [
+    "N14"
+   ],
+   "video": "${WORK}/clips/n14_app_1080p.mp4"
+  },
+  {
+   "cuts": [
     "N10"
    ],
    "video": "${WORK}/clips/n10_1080p.mp4"
@@ -156,15 +162,21 @@
   },
   {
    "cuts": [
-    "N13"
+    "N13a"
    ],
-   "video": "${WORK}/clips/n13_app_1080p.mp4"
+   "video": "${WORK}/clips/v7/n13a_draft_1080p.mp4"
   },
   {
    "cuts": [
-    "N14"
+    "N13b"
    ],
-   "video": "${WORK}/clips/n14_app_1080p.mp4"
+   "video": "${WORK}/clips/v7/n13b_draft_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N13c"
+   ],
+   "video": "${WORK}/clips/v7/n13c_draft_1080p.mp4"
   },
   {
    "cuts": [
@@ -176,7 +188,7 @@
    "cuts": [
     "N16"
    ],
-   "video": "${WORK}/clips/n16_app_1080p.mp4"
+   "video": "${WORK}/clips/v7/n16_short_1080p.mp4"
   },
   {
    "cuts": [
