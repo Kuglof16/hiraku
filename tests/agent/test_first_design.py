@@ -134,12 +134,9 @@ class ReviseWithChoicesTest(FirstDesignCase, unittest.TestCase):
         self.assertEqual(self.ctx.version, 1)  # a proposal, not a version
         with self.assertRaisesRegex(ToolError, "stand_pedal_accel"):  # the post leaves the steering module's space
             build_version(self.ctx, {"reason": "R7 の提案をまとめる"}, "packager")
-        from hiraku import designgen
-        from hiraku.designgen import modules
-
-        room = modules.envelopes(designgen.regenerate(self.ctx.store.design(), {"pedal_mount": "bulkhead"}))["steering"]
-        out = build_version(self.ctx, {"reason": "R7 の提案をまとめ、操作系に場所を配る", "envelopes": {"steering": room}},
+        out = build_version(self.ctx, {"reason": "R7 の提案をまとめ、操作系の空間を柱の形から作り直す", "regrow": ["steering"]},
                             "packager")
+        self.assertIn("空間を部品の形から作り直した: steering", self.ctx.store.design()["change_reason"])
         moved = {c["variable"]: c for c in out["changes"]}
         self.assertEqual(moved["pedal_mount"]["to"]["value"], 2)  # the variable the choice stands for
         self.assertEqual(out["choices"], {"pedal_mount": "bulkhead"})

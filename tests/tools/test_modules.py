@@ -176,16 +176,15 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
         self.assertEqual(d["modules"][3]["envelope"], [wider])
         self.assertIn("空間を配り直した: powertrain", d["change_reason"])
 
-    def test_regrow_makes_the_named_modules_space_again(self):
+    def test_regrow_names_modules_of_the_design(self):
         self.propose("powertrain", changes={"battery_x": self.mm(-700)})
         with self.assertRaisesRegex(ToolError, "は envelopes と regrow の両方"):
             build_version(self.ctx, {"reason": "x", "regrow": ["powertrain"], "envelopes": {"powertrain": []}}, "packager")
         with self.assertRaisesRegex(ToolError, "package には空間がありません"):
             build_version(self.ctx, {"reason": "x", "regrow": ["package"]}, "packager")
-        out = build_version(self.ctx, {"reason": "電池を前へ出す提案に合わせる", "regrow": ["powertrain"]}, "packager")
-        d = self.ctx.store.design(out["design_version"])
-        self.assertIn("空間を部品の形から作り直した: powertrain", d["change_reason"])
-        self.assertEqual(self.ctx.version, 2)
+        with self.assertRaisesRegex(ToolError, "roof"):  # not a module id (the input schema)
+            build_version(self.ctx, {"reason": "x", "regrow": ["roof"]}, "packager")
+        self.assertEqual(self.ctx.version, 1)  # (the space made again around the parts: tests.agent.test_first_design)
 
     def test_packager_only_and_package_variables_only(self):
         self.propose("occupant", changes={"seat_x": self.mm(-1000)})
