@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from hiraku import contract
 from hiraku.contract import layout
@@ -1444,6 +1445,33 @@ class Modules(unittest.TestCase):
                               "rpy_deg": [0.0, 0.0, 90.0]}), set())
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [480.0, 420.0, 220.0]})), 2)
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0]})), 2)
+
+    def test_a_module_given_no_room_has_no_place_for_its_parts(self):
+        # as the assembly tool (H1-envelope): a module other than the package with no envelope box
+        ev = modular()
+        for e in ev:
+            if e["kind"] == "design.created":
+                e["data"]["parts"][0]["module"] = "powertrain"
+        said = {f.message for f in self.findings(ev) if f.rule == "module.envelope"}
+        self.assertTrue(said)
+        self.assertTrue(all("which has no envelope box" in m for m in said), said)
+        self.assertTrue(any("part battery is in module powertrain" in m for m in said), said)
+
+    def test_a_member_is_its_tube_not_its_line(self):
+        # the N15 plan's last design with node LS2 raised 60 mm: the assembly tool finds four members out of
+        # their module's room (cross_S2, side_foot_LS2 and two rail pieces whose line stays inside but whose
+        # 80 mm tube does not)
+        from qa.check_run import RunChecker
+
+        d = json.loads((Path(__file__).resolve().parent / "fixtures" / "n15-v005-design.json")
+                       .read_text(encoding="utf-8"))
+        next(n for n in d["nodes"] if n["id"] == "LS2")["xyz_mm"][2] += 60.0
+        said = []
+        probe = mock.Mock(warn=lambda rule, w, text: said.append(text), error=lambda *a: said.append(a))
+        RunChecker._check_envelopes(probe, 5, d, "v005/design.json")
+        self.assertEqual(sorted(said), sorted(f"v5 member {m} leaves the envelope of {mod}" for m, mod in (
+            ("cross_S2", "frame"), ("rail_L_LSG_LS2", "frame"), ("rail_L_S2H", "frame"),
+            ("side_foot_LS2", "occupant"))))
 
 
 

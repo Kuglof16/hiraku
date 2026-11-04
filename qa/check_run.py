@@ -1726,9 +1726,10 @@ class RunChecker:
             return set()
 
     def _check_envelopes(self, v: int, d: dict, w: str, tol_mm: float = 0.5) -> None:
-        """Parts (all 8 corners of the box) and members (both end nodes) inside one of their module's
-        envelope boxes, within tol_mm (warning module.envelope; H1-envelope's own margin is the
-        analysis dept's)."""
+        """Parts (all 8 corners of the box) and members (the 8 corners of the tube's box, its section's
+        width and height about the line between its nodes, as the assembly tool's bodies; both end nodes
+        when the design does not give the tube) inside one of their module's envelope boxes, within tol_mm
+        (warning module.envelope; H1-envelope's own margin is the analysis dept's)."""
         mods = {x.get("module_id"): x for x in d.get("modules") or []}
         if not mods:
             return
@@ -1751,13 +1752,23 @@ class RunChecker:
         things = [(f"part {x.get('id')}", x.get("module"),
                    from_box(x["box"]["center_mm"], x["box"]["size_mm"], x["box"].get("rpy_deg")).corners())
                   for x in d.get("parts") or [] if x.get("module") and x.get("box")]
-        things += [(f"member {x.get('id')}", x.get("module"), [nodes[x["node_a"]], nodes[x["node_b"]]])
+        try:  # the tubes as the assembly tool sees them (k4_geometry bodies: member:<id>)
+            from hiraku.solvers.k4_geometry import bodies
+            tubes = {k.split(":", 1)[1]: b.obb.corners() for k, b in bodies(d).items() if k.startswith("member:")}
+        except Exception:  # noqa: BLE001 - a design without sections or materials: the end nodes only
+            tubes = {}
+        things += [(f"member {x.get('id')}", x.get("module"),
+                    tubes[x["id"]] if x.get("id") in tubes else [nodes[x["node_a"]], nodes[x["node_b"]]])
                    for x in d.get("members") or []
                    if x.get("module") and nodes.get(x.get("node_a")) and nodes.get(x.get("node_b"))]
         for name, m, pts in things:
             if m not in mods:
                 self.error("HK6_module_scope", w, f"v{v} {name} is in module {m}, which the design does not have")
-            elif (mods[m].get("envelope") or []) and not inside(pts, mods[m]["envelope"]):
+            elif m == "package":  # the package module has no room of its own (contract: its envelope is empty)
+                continue
+            elif not (mods[m].get("envelope") or []):  # a module given no room: none of its things has a place
+                self.warn("module.envelope", w, f"v{v} {name} is in module {m}, which has no envelope box")
+            elif not inside(pts, mods[m]["envelope"]):
                 self.warn("module.envelope", w, f"v{v} {name} leaves the envelope of {m}")
 
     def check_finish(self) -> None:
