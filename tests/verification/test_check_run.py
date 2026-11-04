@@ -57,6 +57,10 @@ def write_run(root: Path, events: list[dict]) -> Path:
             p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         elif e["kind"] == "judgement.updated":
             judgements.setdefault(d["design_version"], {})[d["domain"]] = d
+        elif e["kind"] == "load_cases.created":
+            p = layout.version_dir(run, d["design_version"]) / layout.VERSION_LOAD_CASES_FILE
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         elif e["kind"] == "report.written":
             (run / layout.REPORT_FILE).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     for v, js in judgements.items():
@@ -1380,6 +1384,43 @@ class Modules(unittest.TestCase):
                               "rpy_deg": [0.0, 0.0, 90.0]}), set())
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [480.0, 420.0, 220.0]})), 2)
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0]})), 2)
+
+
+
+class VersionLoadCases(unittest.TestCase):
+    """Load cases built per version (contract 39b6a8c): load_cases.created and v00N/load_cases.json."""
+
+    setUp, tearDown, findings = CheckRun.setUp, CheckRun.tearDown, CheckRun.findings
+
+    @staticmethod
+    def with_v2_cases(load_cases):
+        ev = modular()
+        v2 = [k for k, e in enumerate(ev) if e["kind"] == "design.created"][-1]
+        ev.insert(v2 + 1, dict(copy.deepcopy(ev[v2]), kind="load_cases.created", agent="system",
+                               data={"design_version": 2, "load_cases": load_cases}))
+        return renumber(ev)
+
+    def test_the_last_version_is_judged_by_its_own_load_cases(self):
+        r1 = copy.deepcopy(sample_events()[0]["data"]["load_cases"])
+        hk4 = [f.message for f in self.findings(self.with_v2_cases(r1)) if f.rule == "HK4_no_stop_before_judged"]
+        self.assertTrue(any("no verdict for R1-step100 in version 2" in m for m in hk4), hk4)
+        # version 2 builds no load case with a criterion: nothing of it is left to judge
+        for lc in r1:
+            lc.pop("criterion", None)
+        found = self.findings(self.with_v2_cases(r1))
+        self.assertEqual([f.message for f in found if "no verdict for" in f.message], [])  # (v2 has no tile yet)
+        self.assertEqual([str(f) for f in found if f.rule.startswith(("files.", "load_cases."))], [])
+
+    def test_the_file_is_the_event(self):
+        ev = self.with_v2_cases(copy.deepcopy(sample_events()[0]["data"]["load_cases"]))
+        run = write_run(self.root / "r", ev)
+        f = layout.version_dir(run, 2) / layout.VERSION_LOAD_CASES_FILE
+        d = json.loads(f.read_text(encoding="utf-8"))
+        d["load_cases"][0]["tolerance_rel"] = 0.5
+        f.write_text(json.dumps(d), encoding="utf-8")
+        self.assertIn("files.event_data", {x.rule for x in cr.check_run(run) if x.level == "error"})
+        f.unlink()
+        self.assertIn("files.missing", {x.rule for x in cr.check_run(run) if x.level == "error"})
 
 
 if __name__ == "__main__":

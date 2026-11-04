@@ -183,7 +183,9 @@ class RunChecker:
         self.project: dict[str, Any] | None = None
         self.events: list[dict[str, Any]] = []
         self.where_of: list[str] = []  # location of each event, same index as self.events
-        self.load_cases: dict[str, dict] = {}
+        self.load_cases: dict[str, dict] = {}  # project.load_cases: the first version's
+        # load_cases.created (contract 39b6a8c): version -> (event, load case id -> load case)
+        self.version_lcs: dict[int, tuple[int, dict[str, dict]]] = {}
         # record kind -> id -> (event index, data)
         self.recs: dict[str, dict[str, tuple[int, dict]]] = {k: {} for k, _ in RECORD_EVENTS.values()}
         # every appearance of a record (a cause re-sent with resolved true), to read its state at an event
@@ -337,6 +339,15 @@ class RunChecker:
                 self.judgements.append((i, data))
             elif kind == "design.change_proposed":
                 self.proposals.append((i, data, e.get("agent")))
+            elif kind == "load_cases.created":
+                v = data.get("design_version")
+                if v in self.version_lcs:
+                    self.error("ids.duplicate", w, f"load cases of version {v} created twice")
+                if v not in self.designs:
+                    self.error("load_cases.version", w, f"load cases for version {v}, not created before them")
+                elif v == 1:
+                    self.warn("load_cases.version", w, "load cases for version 1 (project.load_cases holds them)")
+                self.version_lcs[v] = (i, {lc.get("load_case_id"): lc for lc in data.get("load_cases") or []})
             elif kind == "tool.checked":
                 self.tool_checks.setdefault(data.get("name"), []).append((i, data))
             elif kind == "analysis.started":
@@ -481,12 +492,28 @@ class RunChecker:
                 self._check_design_file(p, version)
             elif p.name == layout.JUDGEMENTS_FILE:
                 self._check_judgements_file(p, version)
+            elif p.name == getattr(layout, "VERSION_LOAD_CASES_FILE", None):
+                self._check_version_lcs_file(p, version)
             elif p.is_dir() and p.name in dirs:
                 rkind = dirs[p.name]
                 for f in sorted(p.iterdir()):
                     self._check_record_file(f, rkind, version, seen)
             else:
                 self.warn("files.unknown", self.rel(p), "not part of the run layout")
+        if version in self.version_lcs and not (vdir / layout.VERSION_LOAD_CASES_FILE).is_file():
+            self.error("files.missing", self.rel(vdir), f"no {layout.VERSION_LOAD_CASES_FILE} for its load_cases.created")
+
+    def _check_version_lcs_file(self, p: Path, version: int) -> None:
+        d = self._read_json(p)
+        if d is None or not self._schema("version_load_cases", d, self.rel(p)):
+            return
+        if d.get("design_version") != version:
+            self.error("files.version", self.rel(p), f"design_version {d.get('design_version')} in folder v{version:03d}")
+        ev = self.version_lcs.get(version)
+        if ev is None:
+            self.error("files.event_data", self.rel(p), "no load_cases.created event for it")
+        elif self.events[ev[0]].get("data") != d:
+            self.error("files.event_data", self.rel(p), "differs from its load_cases.created event")
 
     def _check_design_file(self, p: Path, version: int) -> None:
         d = self._read_json(p)
@@ -550,8 +577,15 @@ class RunChecker:
             return self.version_of("comparison", c[1]) if c else None
         return None
 
+    def lcs(self, v: int | None) -> dict[str, dict]:
+        """The load cases of design version v: its load_cases.created, else project.load_cases."""
+        return self.version_lcs[v][1] if v in self.version_lcs else self.load_cases
+
+    def lc(self, lc_id: str | None, v: int | None) -> dict | None:
+        return self.lcs(v).get(lc_id)
+
     def domain_of_analysis(self, a: dict) -> str | None:
-        lc = self.load_cases.get(a.get("load_case_id"))
+        lc = self.lc(a.get("load_case_id"), a.get("design_version"))
         if lc:
             return lc.get("domain")
         for pid in a.get("prediction_ids", []):
@@ -583,9 +617,10 @@ class RunChecker:
             v = p.get("design_version")
             if v not in self.designs or self.designs[v][0] > i:
                 self.error("prediction.design", w, f"{pid} is for design version {v}, not created before it")
-            lc = self.load_cases.get(p.get("load_case_id"))
+            lc = self.lc(p.get("load_case_id"), v)
             if lc is None:
-                self.error("prediction.load_case", w, f"{pid}: load case {p.get('load_case_id')} not in project.json")
+                self.error("prediction.load_case", w, f"{pid}: load case {p.get('load_case_id')} not among "
+                                                      f"version {v}'s load cases")
             else:
                 for f in ("test_id", "domain"):
                     if lc.get(f) != p.get(f):
@@ -952,7 +987,7 @@ class RunChecker:
             if pq.get("unit") != aq.get("unit"):
                 self.error("comparison.units", w, f"{cid} compares {pq.get('unit')} with {aq.get('unit')}")
             self._check_comparison_math(cid, c, w)
-            lc = self.load_cases.get(p.get("load_case_id"))
+            lc = self.lc(p.get("load_case_id"), p.get("design_version"))
             if lc and c.get("tolerance_rel") != lc.get("tolerance_rel"):
                 self.error("comparison.tolerance", w,
                            f"{cid} tolerance {c.get('tolerance_rel')} but the load case says {lc.get('tolerance_rel')}")
@@ -1027,7 +1062,7 @@ class RunChecker:
             c = self._before("comparison", v.get("comparison_id"), i, w, "verdict.from_match", "comparison")
             if c is None:
                 continue
-            crit = (self.load_cases.get(v.get("load_case_id")) or {}).get("criterion")
+            crit = (self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}).get("criterion")
             if v.get("basis", "match") == "explained_safe_side":
                 self._check_safe_side_verdict(vid, v, c, crit, i, w)
             else:
@@ -1080,7 +1115,7 @@ class RunChecker:
                 != (UNSUPPORTED, "<=", 0, False, "analysis", None):
             self.error(rule, w, f"{vid} must be quantity unsupported_load, op <=, limit 0, pass false, "
                                 f"value_from analysis, margin_pct null")
-        lc = self.load_cases.get(v.get("load_case_id")) or {}
+        lc = self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}
         for f in ("test_id", "domain"):
             if lc and lc.get(f) is not None and v.get(f) != lc.get(f):
                 self.error(rule, w, f"{vid} {f} {v.get(f)} but the load case says {lc.get(f)}")
@@ -1158,7 +1193,7 @@ class RunChecker:
         tool's newest ok analysis has its judged result beyond the criterion, which also voids a
         safe-side verdict."""
         out: dict[str, list[str]] = {}
-        for lc_id, lc in self.load_cases.items():
+        for lc_id, lc in self.lcs(v).items():
             crit = lc.get("criterion")
             if lc.get("domain") != domain or not isinstance(crit, dict):
                 continue
@@ -1242,7 +1277,7 @@ class RunChecker:
                 self.error("judgement.state", w, f"state {state} with {fails} failing verdicts")
             if state == "green" and not j.get("verdict_ids"):
                 self.error("judgement.state", w, "green without any verdict")
-            missing = [lc_id for lc_id, lc in self.load_cases.items()
+            missing = [lc_id for lc_id, lc in self.lcs(j.get("design_version")).items()
                        if lc.get("domain") == j.get("domain") and "criterion" in lc and lc_id not in judged]
             if state == "green" and missing:
                 self.error("judgement.state", w, f"green while {', '.join(missing)} have no verdict (pending)")
@@ -1331,7 +1366,7 @@ class RunChecker:
                     self.error("report.differences", w, f"{cid} cause {cause} is not a cause of it recorded before the report")
         for cid, (k, c) in self.recs["comparison"].items():
             p = (self.recs["prediction"].get(c.get("prediction_id")) or (None, {}))[1]
-            lc = self.load_cases.get(p.get("load_case_id")) or {}
+            lc = self.lc(p.get("load_case_id"), p.get("design_version")) or {}
             if (k < i and c.get("status") == "mismatch" and cid not in listed and lc.get("domain") == dom
                     and "criterion" in lc and self.version_of("comparison", c) == v):
                 self.warn("report.differences", w, f"{dom} leaves out the mismatch {cid} ({lc.get('load_case_id')})")
@@ -1380,7 +1415,7 @@ class RunChecker:
                         and self._stage(b.get("tool")) < n):
                     lower.setdefault(b.get("load_case_id"), (bid, b.get("tool")))
             for lc_id, (bid, tool) in lower.items():
-                if (not isinstance((self.load_cases.get(lc_id) or {}).get("criterion"), dict)
+                if (not isinstance((self.lc(lc_id, v) or {}).get("criterion"), dict)
                         or str(lc_id).endswith(BEYOND_SUFFIX)):
                     continue
                 verdicts = [r for j, r in self.recs["verdict"].values()
@@ -1403,7 +1438,7 @@ class RunChecker:
         - its mismatch was ended (contract 08cf4d6; a plan's expected_mismatch with end): the latest
           comparison of the judged quantity is a mismatch whose latest cause says ends_case true and is not
           resolved (a cause without it, waiting for a fix, still holds the heavier tools)"""
-        crit = (self.load_cases.get(lc_id) or {}).get("criterion") or {}
+        crit = (self.lc(lc_id, v) or {}).get("criterion") or {}
         q = crit.get("quantity")
         preds = [p for j, p in self.recs["prediction"].values()
                  if j < i and p.get("load_case_id") == lc_id and p.get("design_version") == v]
@@ -1482,7 +1517,7 @@ class RunChecker:
             if self._not_looked_at(p):
                 continue
             dom = p.get("domain")
-            missing = [lc_id for lc_id, lc in self.load_cases.items()
+            missing = [lc_id for lc_id, lc in self.lcs(last).items()
                        if lc.get("domain") == dom and "criterion" in lc and lc_id not in judged]
             if missing:
                 out[dom] = missing
@@ -1558,11 +1593,11 @@ class RunChecker:
                 if out:
                     self.error(rule, w, f"{cid} {what} {', '.join(out)}, not among {m}'s {allowed} in v{v}")
             reds = self._red_cases(v, i)
-            named = {x for lc in reds for x in (self.load_cases.get(lc) or {}).get("modules") or []}
+            named = {x for lc in reds for x in (self.lc(lc, v) or {}).get("modules") or []}
             for lc in p.get("load_case_ids") or []:
                 if lc not in reds:
                     self.error(rule, w, f"{cid} answers {lc}, which is not red in v{v}")
-                elif m not in ((self.load_cases.get(lc) or {}).get("modules") or []):
+                elif m not in ((self.lc(lc, v) or {}).get("modules") or []):
                     self.error(rule, w, f"{cid} from {m} answers {lc}, whose modules do not name {m}")
             if not reds:
                 self.error(rule, w, f"{cid} proposed while nothing in v{v} is red")
