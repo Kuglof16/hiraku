@@ -20,6 +20,31 @@ from .model import Body
 
 Record = dict[str, Any]
 NOT_FASTENED = ("occupant", "cargo")
+# A corner built of its arms (designgen kit/arms.py): its parts are held as their connects_to say (the legs in
+# the frame's brackets, the ball joints on the legs, the knuckle on the ball joints, the wheel on the knuckle)
+ARM_KINDS = ("link", "ball_joint")
+FASTENING_VIAS = ("bolt", "weld", "bushing", "pin", "ball_joint")
+
+
+def _linked(design: Record, p: Record, bs: dict[str, Body], nodes: dict) -> list[Record]:
+    """A corner part's fastenings from its connects_to: to the parts and nodes it names (a support id, the
+    ground, is left out), at the link's at_mm or else the other's centre."""
+    out = []
+    for c in p.get("connects_to") or []:
+        to = c.get("to")
+        if c.get("via") not in FASTENING_VIAS:  # friction, spline, rest, wire: not what holds the part
+            continue
+        if f"part:{to}" in bs:
+            at = c.get("at_mm") or [float(v) for v in bs[f"part:{to}"].obb.center]
+            out.append({"to": f"part {to}", "kind": c.get("via", "bolt"), "at_mm": [float(v) for v in at]})
+        elif to in nodes:
+            out.append({"to": f"node {to}", "kind": c.get("via", "bolt"), "at_mm": c.get("at_mm") or nodes[to]})
+    if p["kind"] == "wheel":  # onto the hub after the brake on it: the wheel goes on last
+        sid = bs[f"part:{p['id']}"].support
+        for k, b in sorted(bs.items()):
+            if b.support == sid and b.kind == "brake_caliper" and f"part {k.split(':', 1)[1]}" not in {f['to'] for f in out}:
+                out.append({"to": f"part {k.split(':', 1)[1]}", "kind": "rest", "at_mm": [float(v) for v in b.obb.center]})
+    return out
 
 
 def _support_of(design: Record, sid: str) -> Record | None:
@@ -39,6 +64,8 @@ def part_fastenings(design: Record, part_id: str, bs: dict[str, Body]) -> list[R
     s = _support_of(design, sid) if sid else None
     if s is None:
         return []
+    if any(b.support == sid and b.kind in ARM_KINDS for b in bs.values()):
+        return _linked(design, p, bs, nodes)
     if p["kind"] == "suspension":
         fn = s.get("frame_node")
         return [{"to": f"node {fn}", "kind": "bolt", "at_mm": nodes[fn]}] if fn in nodes else []

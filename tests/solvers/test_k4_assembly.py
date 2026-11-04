@@ -10,6 +10,12 @@ from hiraku.solvers.k4_geometry.assembly import STAGES, blocker, hand_way, is_at
 from hiraku.solvers.k4_geometry.capsule import (_box_sdf, capsule_box_overlap, capsule_overlap, from_obb, from_points,
                                                 seg_box, seg_seg, swept_distance)
 
+def arm_ids(sid):
+    from hiraku.designgen.kit.arms import part_ids
+
+    return list(part_ids(sid).values())
+
+
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 
@@ -136,13 +142,15 @@ class CornersTest(unittest.TestCase):
 
     def test_groups_from_the_supports(self):
         g = corners(bodies(DESIGN))
-        # the parts riding with each wheel: arms, knuckle, caliper, and the tie rod (front) or the toe link and
-        # the driveshaft (rear, driven)
+        # the parts riding with each wheel: the arms' legs, the ball joints and the damper (kit/arms.py), knuckle,
+        # caliper, and the tie rod (front) or the toe link and the driveshaft (rear, driven)
         own = {"FL": ("tie_rod",), "FR": ("tie_rod",), "RL": ("toe_link", "driveshaft"), "RR": ("toe_link", "driveshaft")}
-        self.assertEqual(g, {s: sorted(f"part:{k}_{s}" for k in ("caliper", "knuckle", "susp", "wheel", *extra))
+        self.assertEqual(g, {s: sorted([f"part:{k}_{s}" for k in ("caliper", "knuckle", "wheel", *extra)]
+                                       + [f"part:{pid}" for pid in arm_ids(s)])
                              for s, extra in own.items()})
         lone = corners(bodies(dict(DESIGN, parts=[p for p in DESIGN["parts"]
-                                                  if not p["id"].endswith("_FL") or p["id"] == "wheel_FL"])))
+                                                  if not (p["id"].endswith("_FL") or p["id"] in arm_ids("FL"))
+                                                  or p["id"] == "wheel_FL"])))
         self.assertNotIn("FL", lone)  # one part is not a group
 
     def test_corners_first_then_drive_battery_electrics_body(self):
@@ -163,13 +171,16 @@ class CornersTest(unittest.TestCase):
             g = self.asm["groups"][f"corner:{s}"]
             ks = [k for k, _ in g["order"]]
             self.assertEqual(ks[-1], f"part:wheel_{s}")  # the wheel last, onto the hub
-            self.assertLess(ks.index(f"part:susp_{s}"), ks.index(f"part:wheel_{s}"))
+            # the arms into their brackets, the ball joints on them, then the knuckle on the ball joints
+            self.assertLess(ks.index(f"part:lca_{s}_f"), ks.index(f"part:bj_lower_{s}"))
+            self.assertLess(ks.index(f"part:bj_upper_{s}"), ks.index(f"part:knuckle_{s}"))
+            self.assertLess(ks.index(f"part:knuckle_{s}"), ks.index(f"part:wheel_{s}"))
             self.assertEqual(g["order"][-1][1], "-y" if side > 0 else "+y")  # the wheel goes inward onto the hub
             # the corner inward; a rear corner's driveshaft runs in under the rail, so it may go in from below
             ways = {"-y" if side > 0 else "+y"} | ({"+z"} if s.startswith("R") else set())
             self.assertIn(dict(self.asm["units"])[f"corner:{s}"], ways)
         order = [k for k, _ in self.asm["order"]]
-        self.assertLess(order.index("part:susp_FL"), order.index("part:wheel_FL"))
+        self.assertLess(order.index("part:lca_FL_f"), order.index("part:wheel_FL"))
         self.assertEqual(self.asm["blocked"], {})
 
     def test_steps_carry_both(self):
@@ -180,17 +191,20 @@ class CornersTest(unittest.TestCase):
         attach = [s for s in seq if is_attach(s)]
         self.assertEqual(len(attach), 4)
         # the H5 count: the parts less the occupants' bodies, the cargo, the roll bar's part and the brackets
-        # (welded, in place with the frame): 43 of the first v1 and the bulkhead
-        self.assertEqual(len(seq) - len(attach), 44)
+        # (welded, in place with the frame): 43 of the first v1 and the bulkhead, and each corner's suspension
+        # box now 8 parts (two legs and a cross tube of the lower arm, two legs of the upper arm, the damper and
+        # two ball joints; kit/arms.py): 44 + 4 x 7
+        self.assertEqual(len(seq) - len(attach), 72)
         fl = ids.index("corner:FL")
-        group = ["caliper_FL", "knuckle_FL", "susp_FL", "tie_rod_FL", "wheel_FL"]
-        self.assertEqual(sorted(ids[fl - 5:fl]), group)
+        group = sorted(["caliper_FL", "knuckle_FL", "tie_rod_FL", "wheel_FL", *arm_ids("FL")])
+        self.assertEqual(sorted(ids[fl - len(group):fl]), group)
         self.assertEqual(ids[fl - 1], "wheel_FL")
         self.assertIn("built off the vehicle", seq[fl - 1]["note"])
         self.assertEqual(seq[fl]["depends_on"], group)
         self.assertEqual(seq[fl]["group_parts"], group)
         self.assertNotIn("group_parts", seq[fl - 1])  # a step of the group's own build
-        self.assertIn("node LA", seq[fl]["note"])
+        # held at the frame by its arms' brackets (the lower arm's on the legs' ends at node LA's posts)
+        self.assertIn("bracket_lca_FL1", seq[fl]["note"])
         self.assertTrue(all(s["no_interference"] for s in seq))
 
 
