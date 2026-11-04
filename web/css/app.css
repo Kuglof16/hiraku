@@ -175,8 +175,39 @@ body.video .hint { display: none; }
 .agents ul.many li .st { font-size: 13px; }
 .agents ul.many .pet { width: 22px; height: 22px; }
 
+/* the agents as their 3D pets (js/agent_pets.js): a slot holds the agent's box, the box its canvas */
+.petslot { display: block; position: relative; flex: none; }
+.petbox { position: absolute; inset: 0; display: block; }
+.petbox canvas.pet3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* motions pet3d.js has not got (agent_pets.js MOTIONS near): the nearest pose and a mark */
+.petbox[data-pet-state="blocked"]::after,
+.petbox[data-pet-state="waiting"]::after {
+  position: absolute; right: 0; top: 0; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700; line-height: 1;
+}
+.petbox[data-pet-state="blocked"]::after { content: "止"; background: var(--red); color: #fff; }
+.petbox[data-pet-state="waiting"]::after { content: "…"; background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
+.petrow { display: grid; grid-template-columns: 52px auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; align-items: center; }
+.petrow .petslot { grid-row: 1 / span 2; width: 52px; height: 52px; }
+.petrow .nm { font-size: 17px; white-space: nowrap; align-self: end; }
+.petrow .st { justify-self: end; align-self: end; font-size: 15px; color: var(--muted); white-space: nowrap; }
+/* the bubble: the agent's newest log line, cut short (it fades in and out with the replay) */
+.say {
+  position: relative; display: block; min-width: 0; min-height: 1.45em; font-size: 14px; line-height: 1.35;
+  background: var(--card); border: 1.2px solid var(--ink); border-radius: 8px; padding: 0 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none;
+}
+.petrow .say { grid-column: 2 / span 2; align-self: start; margin-top: 2px; }
+.agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
+.agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
+.agents ul.pets.many .petrow .petslot { width: 42px; height: 42px; }
+.agents ul.pets.many .petrow .nm { font-size: 15px; }
+.agents ul.pets.many .petrow .st { font-size: 13px; }
+.agents ul.pets.many .petrow .say { font-size: 12.5px; }
+
 .logpanel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.logpanel ol { list-style: none; margin: 0; padding: 0 4px 0 0; overflow-y: auto; flex: 1; scrollbar-width: thin; }
+.logpanel .nw { white-space: nowrap; }
+.logpanel ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; scrollbar-width: thin; }
 .logpanel li {
   position: relative;
   padding: 4px 0 4px 24px;
@@ -626,7 +657,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .grid-head .vbox { border: 2px solid var(--line); border-radius: 8px; padding: 3px 18px; font-size: 18px; white-space: nowrap; background: var(--panel); }
 .grid-head .vbox.red { border-color: var(--red); }
 .grid-head .vbox.green { border-color: var(--green); }
-.grid-head .vbox.now { font-weight: 700; }
+.grid-head .vbox.cur { font-weight: 700; }
 .grid-head .varrow { font-size: 20px; }
 .grid-head .change { color: var(--muted); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tiles { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px; min-height: 0; }
@@ -655,6 +686,17 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .tile .tb { border-radius: 999px; padding: 1px 12px; font-weight: 700; border: 2px solid; }
 .tile .tb.ok { color: var(--green); border-color: var(--green); }
 .tile .tb.fix { color: var(--red); border-color: var(--red); }
+/* a domain's pet in its tile's bottom right corner; its bubble takes the summary's place while it shows */
+.tile .tf { position: relative; }
+.tile .tilepet { width: 60px; height: 60px; margin: -8px 0 -6px 0; }
+.tile .tf .tilesay { position: absolute; left: 0; right: 64px; top: 50%; transform: translateY(-50%); font-size: 14px; }
+.tile .tf.saying .sum, .tile .tf.saying .tb { visibility: hidden; }
+.grid-head .headpets { margin-left: auto; display: flex; gap: 14px; flex: none; }
+.grid-head .headpets .petrow { width: 240px; grid-template-columns: 44px auto minmax(0, 1fr); column-gap: 6px; }
+.grid-head .headpets .petslot { width: 44px; height: 44px; }
+.grid-head .headpets .nm { font-size: 15px; }
+.grid-head .headpets .st { font-size: 13px; }
+.grid-head .headpets .say { font-size: 12.5px; }
 .tile .tb.safe { color: var(--blue); border-color: var(--blue); font-size: 13px; padding: 1px 8px; white-space: nowrap; }
 .grid-banner { display: flex; flex-direction: column; gap: 2px; border: 1.5px solid #e9b872; background: var(--orange-pale); border-radius: 12px; padding: 8px 16px; font-size: 16px; }
 .grid-banner span { color: var(--muted); font-size: 14px; }

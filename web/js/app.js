@@ -29,6 +29,7 @@ import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
+import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 
 const $ = (id) => document.getElementById(id);
@@ -83,6 +84,7 @@ function fitStage() {
   const left = (window.innerWidth - STAGE_W * stageScale) / 2;
   const top = (window.innerHeight - STAGE_H * stageScale) / 2;
   stage.style.transform = `translate(${left}px, ${top}px) scale(${stageScale})`;
+  agentPets?.setPixel((window.devicePixelRatio || 1) * stageScale);
   resize3d();
 }
 
@@ -103,6 +105,16 @@ function resize3d() {
 }
 new ResizeObserver(resize3d).observe(viewport);
 window.addEventListener("resize", fitStage);
+
+// ---- the agents' pets (js/agent_pets.js) ------------------------------------
+// promo/pets/pet3d.js and layout.json's n00 camera; ?pets=0, or either missing: circles and names.
+let agentPets = null;
+const petsReady = (params.get("pets") === "0" ? Promise.resolve(null) : AgentPets.load().catch(() => null)).then((p) => {
+  agentPets = p;
+  document.documentElement.dataset.agentPets = p ? "on" : "none";
+  if (p) p.setPixel((window.devicePixelRatio || 1) * stageScale);
+  drawn.rev = -1;
+});
 
 // ---- player ---------------------------------------------------------------
 const player = new Player();
@@ -481,16 +493,24 @@ function renderChips(s, lcId) {
   }).join("");
 }
 
+const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
+
+// The agents: with pets (js/agent_pets.js), each its 3D pet, name, status and bubble; without
+// (no /pets/pet3d.js), or for an agent whose role has no pet, a circle and the name.
 function renderAgents(s) {
-  const order = [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
-  $("agents").classList.toggle("many", order.length > 6);
-  $("agents").innerHTML = order
+  const order = agentOrder(s);
+  const ul = $("agents");
+  ul.classList.toggle("many", order.length > 6);
+  ul.classList.toggle("pets", !!agentPets);
+  ul.innerHTML = order
     .map((id) => {
       const a = s.agents[id];
       const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
+      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls });
       return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
     })
     .join("");
+  agentPets?.mount(ul, "bench");
 }
 
 function rank(id) {
@@ -511,13 +531,17 @@ function hookLogItem(e, hook, resolved) {
   );
 }
 
+// Escaped text with each short aside in brackets (up to 24 characters) kept on one line (.nw).
+const keepAsides = (s) => esc(s).replace(/\(([^()]{1,24})\)/g, '<span class="nw">($1)</span>');
+
 function logItem(e, ctx = null) {
   if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
   // What an agent said can run long: the line shows its first lines, the record keeps all of it.
-  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${esc(e.text)}</span>` : esc(e.text);
+  // A short aside in brackets stays on one line: not "(形の見 / 本)".
+  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${keepAsides(e.text)}</span>` : keepAsides(e.text);
   return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
@@ -1018,7 +1042,8 @@ const board = new TileBoard($("grid-head"), $("tiles"));
 
 // A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
-  const { reds, atLimit } = board.render(s);
+  const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
+  agentPets?.mount($("view-grid"), "grid");
   const banner = $("grid-banner");
   banner.hidden = !(atLimit && reds.length);
   if (!banner.hidden) {
@@ -1220,6 +1245,9 @@ function draw() {
     }
   }
   else if (tab === "grid") board.tick(player.playhead);
+  // the pets of the list (the workbench; hidden in the present mode) or of the grid
+  // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
+  if (agentPets && (tab === "bench" || tab === "grid")) agentPets.tick(s, player.events, player.playhead, tab, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
@@ -1266,6 +1294,7 @@ window.hiraku = {
   seek: seekAndDraw,
   state: () => player.state,
   bench,
+  pets: () => agentPets,
   // Replace what is shown with these events (parsed objects) and stop at t.
   load: (events, t = 0) => {
     feed?.stop();
@@ -1402,6 +1431,10 @@ function resetPlayer() {
 }
 
 function startPlayback() {
+  // the pets first (a page opened at ?t= draws them in its first frame)
+  petsReady.then(play);
+}
+function play() {
   if (params.has("t")) {
     seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
     return;

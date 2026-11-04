@@ -62,8 +62,11 @@ SCREENS = (
     Screen("一覧", "?list=1", wait="document.querySelector('#launch .lreq')", root="#runlist"),
     Screen("一覧 (保存なし)", "?list=1", wait="document.querySelector('#launch .pick')", root="#runlist", server="unsaved"),
     Screen("一覧 (dev)", "?list=1&dev=1", wait="document.querySelector('#launch .lreq') && document.querySelector('#runlist table')", root="#runlist"),
-    Screen("作業台", f"?run={DOMAINS}&pace=0&t=1e6"),
+    Screen("作業台", f"?run={DOMAINS}&tab=bench&pace=0&t=1e6"),
     Screen("全分野", f"?run={DOMAINS}&tab=grid&pace=0&t=1e6"),
+    # the agents' pets with their bubbles out (js/agent_pets.js): 空力's judgement at 17.0 s, the lead's line at 17.5 s
+    Screen("作業台 (吹き出し)", f"?run={DOMAINS}&tab=bench&pace=0&t=17.6"),
+    Screen("全分野 (吹き出し)", f"?run={DOMAINS}&tab=grid&pace=0&t=17.6"),
     Screen("A1", "?new=1", wait="document.querySelector('#view-intake textarea')"),
     Screen("A2", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6"),
     Screen("A5", f"?run={HEARING}&tab=A5&live=0&pace=0&t=1e6"),
@@ -164,6 +167,9 @@ def describe(p: dict) -> str:
 
 
 PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
+<div style="position: relative; height: 30px"><span class="wordmark" id="name">HIRAKU</span>
+  <span class="vbox" id="over" style="position: absolute; left: 10px; top: 0">版 2 赤 2</span>
+  <span class="wordmark" id="clear" style="position: absolute; left: 300px; top: 0">HIRAKU</span></div>
 <div style="position: relative; height: 40px">
   <button id="b1" style="position: absolute; left: 0; top: 0; width: 120px">再生</button>
   <button id="b2" style="position: absolute; left: 60px; top: 10px; width: 120px">動画の配置で</button>
@@ -210,6 +216,9 @@ class LayoutLintBrowserTest(unittest.TestCase):
         lonely = next(p for p in got if p["rule"] == "lonely" and p["sel"] == "#lonely")
         self.assertEqual(lonely["line"], "た")
         self.assertIn(("paren", "#aside"), found)
+        # a label drawn over another text (the grid's version box over the HIRAKU name)
+        self.assertIn(("cover", "#over"), found)
+        self.assertNotIn("#clear", {p["sel"] for p in got if p["rule"] == "cover"})
         for quiet in ("#cut", "#allowed"):
             self.assertNotIn(quiet, {p["sel"] for p in got})
         self.assertFalse([p for p in got if p["text"] == "まだ長い札"])

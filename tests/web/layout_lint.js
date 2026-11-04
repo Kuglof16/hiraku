@@ -17,13 +17,17 @@
 //             into lines by their boxes (one Range per character).
 //   paren     (with lonely, the same lines) a short aside in brackets, up to 30 characters a side,
 //             broken across lines: (無料・ / Claude なし), 形の見本 (数値は計算結果 / ではない).
+//   cover     a heading or label (LABEL below: h1-h4, .pill .chip .badge .tag .vb .vbox .tb .state
+//             .wordmark) or an agent's pet or bubble (.petbox .say) crosses the text of another
+//             element, or a pressable thing, by more than SLACK px on both axes (a badge drawn
+//             over the HIRAKU name). Text boxes are cut to the box that clips them.
 //
 // One line by kind or class (ONE_LINE): buttons, select, summary, tabs, table heads, headings, and the
 // screen's labels/states: .pill .chip .badge .tag .vb .cut .drv .def .tb .state, and an <a> drawn as
 // a button (with a border or a background).
 //
 // Exceptions, on the element or an ancestor: data-lint="wrap" (may take more lines; no lonely/paren check),
-// "overlap", "overflow", "lonely", or "off" (nothing), space separated. opts.skip: selectors whose
+// "overlap", "overflow", "lonely", "cover", or "off" (nothing), space separated. opts.skip: selectors whose
 // subtrees are not looked at (another department's, already reported; the test says which).
 (opts = {}) => {
   const SLACK = opts.slack ?? 3;
@@ -38,6 +42,8 @@
     ".pill", ".chip", ".badge", ".tag", ".vb", ".cut", ".drv", ".def", ".tb", ".state",
   ].join(",");
   const PRESSABLE = "button, a[href], input:not([type=hidden]), select, textarea, summary";
+  // headings and labels, and the agents' pets and bubbles (js/agent_pets.js), for the cover rule
+  const LABEL = "h1, h2, h3, h4, .pill, .chip, .badge, .tag, .vb, .vbox, .tb, .state, .wordmark, .petbox, .say";
 
   const exempt = (el, what) => {
     for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
@@ -233,6 +239,41 @@
     // a short aside in brackets broken across lines: (無料・ / Claude なし)
     const m = split.match(/[(（「][^()（）「」]{0,30}? \/ [^()（）「」]{0,30}?[)）」]/);
     if (m && !exempt(b, "lonely")) add("paren", b, { line: m[0], split: split.slice(0, 160) });
+  }
+  // (e) cover: a heading, a label or a pet / bubble crosses another element's text or a
+  // pressable thing (not inside it, not holding it). Shown is enough here (not the hit test:
+  // what is covered fails the hit test); a text's boxes are cut to the box that clips it (its own too).
+  const shown = (el) => (el.checkVisibility ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : true);
+  const clipOf = (el) => {
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") return e.getBoundingClientRect();
+    }
+    return null;
+  };
+  const cut = (r, c) => (c ? { left: Math.max(r.left, c.left), right: Math.min(r.right, c.right), top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) } : r);
+  const labels = all.filter((e) => e.matches(LABEL) && !exempt(e, "cover") && shown(e));
+  const texts = [];
+  for (const n of textNodes(root)) {
+    const p = n.parentElement;
+    if (!p || exempt(p, "cover") || !shown(p)) continue;
+    const c = clipOf(p);
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) {
+      const k = cut(r, c);
+      if (k.right - k.left > 0.5 && k.bottom - k.top > 0.5 && inView(r)) texts.push({ el: p, r: k });
+    }
+  }
+  for (const e of all) if (e.matches(PRESSABLE) && !exempt(e, "cover") && shown(e)) for (const r of e.getClientRects()) if (inView(r)) texts.push({ el: e, r });
+  for (const l of labels) {
+    const lr = cut(l.getBoundingClientRect(), clipOf(l));
+    if (!(lr.right > lr.left && lr.bottom > lr.top)) continue;
+    for (const { el, r } of texts) {
+      if (l.contains(el) || el.contains(l)) continue;
+      const w = px(Math.min(lr.right, r.right) - Math.max(lr.left, r.left));
+      const h = px(Math.min(lr.bottom, r.bottom) - Math.max(lr.top, r.top));
+      if (w > SLACK && h > SLACK) add("cover", l, { with: sel(el), withText: words(el), by: `${w.toFixed(0)}x${h.toFixed(0)}px` });
+    }
   }
   }; // pass
 
