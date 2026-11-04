@@ -35,7 +35,10 @@ def inline_refs(node: Any, defs: dict[str, Any]) -> Any:
         ref = node.get("$ref")
         if isinstance(ref, str) and ref.startswith("#/$defs/"):
             rest = {k: v for k, v in node.items() if k != "$ref"}
-            return {**inline_refs(defs[ref.removeprefix("#/$defs/")], defs), **inline_refs(rest, defs)}
+            target: Any = defs  # a pointer into a def as well (#/$defs/part/properties/box)
+            for key in ref.removeprefix("#/$defs/").split("/"):
+                target = target[key]
+            return {**inline_refs(target, defs), **inline_refs(rest, defs)}
         return {k: inline_refs(v, defs) for k, v in node.items()}
     if isinstance(node, list):
         return [inline_refs(v, defs) for v in node]
