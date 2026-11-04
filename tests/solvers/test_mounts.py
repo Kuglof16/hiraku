@@ -110,7 +110,8 @@ class MountMembersTest(unittest.TestCase):
     def test_brackets(self):
         n = nodes(V1)
         rail_nodes = {k for k, q in n.items() if abs(abs(q[1]) - 350.0) < 1e-6 and abs(q[2] - 380.0) < 1e-6}
-        brackets = [p for p in V1["parts"] if p["kind"] == "bracket"]
+        # (the joints' struts, kit/joints.py, are brackets too, named fit_*: not these mounts)
+        brackets = [p for p in V1["parts"] if p["kind"] == "bracket" and not p["id"].startswith("fit_")]
         # two upper arm pivots and a tie rod end per wheel, the rear lower arms' two pivots, the column; and the
         # clevises kit/arms.pivot_brackets welds on bare nodes: the front lower arms' pivots (the lower legs'
         # ends) and every damper's top (the tower arm's tip)
@@ -151,13 +152,17 @@ class MountMembersTest(unittest.TestCase):
 class FootwellAndDashTest(unittest.TestCase):
     def test_column_held_by_the_dash_cross_member(self):
         col = part(V1, "steering_column")
-        self.assertIn({"to": "dash_cross", "via": "bolt", "carries": "steer"}, col["connects_to"])
+        # the column is bolted to its bracket, the bracket welded to the dash cross member (kit/joints.py: the joint
+        # is where the two touch)
+        self.assertIn(("bracket_column", "bolt"), {(c["to"], c["via"]) for c in col["connects_to"]})
+        self.assertIn(("dash_cross", "weld"), {(c["to"], c["via"]) for c in part(V1, "bracket_column")["connects_to"]})
         dash = next(m for m in V1["members"] if m["id"] == "dash_cross")
         self.assertEqual(sorted(col["carried_by"]), sorted([dash["node_a"], dash["node_b"]]))
         self.assertEqual(part(V1, "bulkhead")["kind"], "body")
         bh = part(V1, "bulkhead")["box"]
-        self.assertAlmostEqual(part(V1, "brake_master")["box"]["center_mm"][0] + 60.0,
-                               bh["center_mm"][0] - bh["size_mm"][0] / 2.0, places=6)  # on its back face
+        # on its front face, ahead of the brake pedal, pushed through the sheet by its pushrod (kit/joints.py)
+        self.assertAlmostEqual(part(V1, "brake_master")["box"]["center_mm"][0] - 60.0,
+                               bh["center_mm"][0] + bh["size_mm"][0] / 2.0, places=6)
 
     def test_the_three_layout_errors_are_gone(self):
         """The right leg was 5 mm into the front wheel, the feet 146 mm off the footwell floor, and the rear

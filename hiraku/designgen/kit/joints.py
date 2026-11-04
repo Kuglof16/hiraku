@@ -128,6 +128,11 @@ def _touching_member(bs, pid: str, near) -> str | None:
 
 
 def _add(design: dict, part: dict) -> dict:
+    # the system its kind belongs to, as systems.write gives the others (it ran before the joints)
+    from .systems import SYSTEM_OF_KIND, contract_has_fields
+
+    if contract_has_fields() and "system" not in part and part["kind"] in SYSTEM_OF_KIND:
+        part["system"] = SYSTEM_OF_KIND[part["kind"]]
     design["parts"].append(part)
     return part
 

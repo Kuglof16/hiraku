@@ -6392,6 +6392,7 @@
         "RAp2",
         "RS1"
       ],
+      "system": "brake",
       "module": "steering"
     },
     {
@@ -6432,6 +6433,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6472,6 +6474,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6512,6 +6515,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6552,6 +6556,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6592,6 +6597,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6632,6 +6638,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6672,6 +6679,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6712,6 +6720,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6752,6 +6761,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6792,6 +6802,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6832,6 +6843,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6872,6 +6884,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6912,6 +6925,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6952,6 +6966,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -6992,6 +7007,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -7032,6 +7048,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     },
     {
@@ -7072,6 +7089,7 @@
           ]
         }
       ],
+      "system": "frame",
       "module": "frame"
     }
   ],

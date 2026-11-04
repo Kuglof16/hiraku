@@ -107,7 +107,9 @@ class PlacementTest(unittest.TestCase):
         self.assertEqual(sorted(p["id"] for p in V1["parts"] if p["kind"] == "brake_caliper"),
                          sorted(f"caliper_{s}" for s in braked))
         self.assertEqual(PARTS["brake_master"]["kind"], "brake_master_cylinder")
-        self.assertAlmostEqual(box_lo_hi(PARTS["brake_master"])[1][0], box_lo_hi(PARTS["bulkhead"])[0][0], places=6)
+        # on the bulkhead's front face, in line with the brake pedal (its pushrod through the sheet: kit/joints.py)
+        self.assertAlmostEqual(box_lo_hi(PARTS["brake_master"])[0][0], box_lo_hi(PARTS["bulkhead"])[1][0], places=6)
+        self.assertAlmostEqual(PARTS["brake_master"]["box"]["center_mm"][1], PARTS["pedal_brake"]["box"]["center_mm"][1])
         for seat in ("seat_R", "seat_L"):
             belt = PARTS[safety.belt_of(seat)]
             self.assertEqual(belt["kind"], "seat_belt")
@@ -176,10 +178,13 @@ class MassTest(unittest.TestCase):
                  + panel_kg(V1, "floor") + panel_kg(V1, "deck") + BEFORE["front_body"] + BEFORE["steering"]
                  + 2 * BEFORE["seat"] + 2 * BEFORE["occupant"] + BEFORE["cargo"] + 4 * BEFORE["wheel"]
                  + 4 * BEFORE["suspension"] + panel_kg(V1, "bulkhead")
-                 + mass(V1, "pedal_accel", "pedal_brake", "brake_master"))  # on the plates, no longer out of them
-        brackets = sum(p["mass_kg"] for p in V1["parts"] if p["kind"] == "bracket")  # plates (kit/mounts.py)
-        self.assertGreater(brackets, 0.0)
+                 + mass(V1, "pedal_accel", "pedal_brake", "brake_master")  # on the plates, no longer out of them
+                 + mass(V1, "pushrod_brake"))  # the pedal's pushrod to the master cylinder (kit/joints.py)
+        # plates (kit/mounts.py) and the joints' struts, an anchor one through a sheet (kit/joints.py)
+        self.assertGreater(sum(p["mass_kg"] for p in V1["parts"] if p["kind"] in ("bracket", "anchor")), 0.0)
         for d in (V1, NODS, ladder_4w.build({"rollbar": q(0, "1")})):  # the lamps: test_lamps_on_public_roads
+            # each design's own: the struts go where its parts are
+            brackets = sum(p["mass_kg"] for p in d["parts"] if p["kind"] in ("bracket", "anchor"))
             self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), total + brackets, places=9)
 
     def test_wider_track_keeps_the_motor(self):
