@@ -1408,6 +1408,11 @@
           "to": "steering_column",
           "via": "spline",
           "carries": "steer"
+        },
+        {
+          "to": "steering_column",
+          "via": "spline",
+          "carries": "load"
         }
       ],
       "module": "steering"
@@ -1485,6 +1490,11 @@
           "to": "steering_rack",
           "via": "spline",
           "carries": "steer"
+        },
+        {
+          "to": "steering_rack",
+          "via": "spline",
+          "carries": "load"
         }
       ],
       "module": "steering"
@@ -4082,6 +4092,10 @@
       "id": "fit_pedal_accel_tower_post_RA2",
       "name": "アクセルのペダル の金具",
       "kind": "bracket",
+      "carried_by": [
+        "RAp2",
+        "RAt2"
+      ],
       "box": {
         "center_mm": [
           -319.68199399802495,
@@ -4113,6 +4127,12 @@
       "id": "fit_pedal_accel_floor_front",
       "name": "アクセルのペダル の金具",
       "kind": "bracket",
+      "carried_by": [
+        "LAp2",
+        "RAp2",
+        "LS1",
+        "RS1"
+      ],
       "box": {
         "center_mm": [
           -433.333250074641,
@@ -4144,6 +4164,10 @@
       "id": "fit_pedal_brake_tower_post_RA2",
       "name": "ブレーキのペダル の金具",
       "kind": "bracket",
+      "carried_by": [
+        "RAp2",
+        "RAt2"
+      ],
       "box": {
         "center_mm": [
           -319.68199399802495,
@@ -4175,6 +4199,12 @@
       "id": "fit_pedal_brake_floor_front",
       "name": "ブレーキのペダル の金具",
       "kind": "bracket",
+      "carried_by": [
+        "LAp2",
+        "RAp2",
+        "LS1",
+        "RS1"
+      ],
       "box": {
         "center_mm": [
           -433.333250074641,

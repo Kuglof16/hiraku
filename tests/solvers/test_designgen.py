@@ -238,7 +238,8 @@ class JointReinforcementTest(unittest.TestCase):
         contract.validate("design", d)
         g = [p for p in d["parts"] if p["kind"] == "gusset"]
         self.assertEqual(len(g), 4 * 2 * 4)  # four T stations (A, S1, S2, B), both sides, four plates each
-        self.assertEqual(d["parts"][:len(V1["parts"])], V1["parts"])
+        # every part of version 1 unchanged (by id: the joints' fittings, kit/joints.py, come after the gussets)
+        self.assertEqual([p for p in d["parts"] if p["id"] in {q["id"] for q in V1["parts"]}], V1["parts"])
         self.assertEqual({k: d["variables"][k]["value"] for k in ("gusset_leg", "gusset_thickness")},
                          {"gusset_leg": 60.0, "gusset_thickness": 2.3})
         self.assertNotIn("gussets", d["variables"])
@@ -258,13 +259,14 @@ class JointReinforcementTest(unittest.TestCase):
     def test_through(self):
         d = self.through
         contract.validate("design", d)
-        n = len(V1["parts"])
-        self.assertEqual(d["parts"][:n], V1["parts"])
+        v1_ids = {q["id"] for q in V1["parts"]}
+        # every part of version 1 unchanged (by id: the joints' fittings, kit/joints.py, come after the through pieces)
+        self.assertEqual([p for p in d["parts"] if p["id"] in v1_ids], V1["parts"])
         self.assertEqual(d["members"], V1["members"])  # the beam model is unchanged
         self.assertEqual(d["variables"]["cross_members_through"], one(1.0))
         self.assertNotIn("gusset_leg", d["variables"])
         self.assertEqual(GEN.choices_of(d)["joints"], "through")
-        extra = d["parts"][n:]
+        extra = [p for p in d["parts"] if p["id"] not in v1_ids]
         self.assertEqual({p["id"] for p in extra},
                          {f"through_cross_{st}_{s}{st}" for st in ("A", "S1", "S2", "B") for s in "LR"})
         rho = V1["materials"]["stkr400"]["density_kg_m3"] * 1e-9
