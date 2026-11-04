@@ -4,6 +4,8 @@
 overlap(a, b) gives, over the candidate axes, the smallest overlap when the
 boxes intersect (an estimate of the penetration depth) and the largest gap
 when they do not (a lower bound of the true distance).
+
+ray_box(origin, direction, box) gives where a straight line enters and leaves a box.
 """
 
 from __future__ import annotations
@@ -53,6 +55,25 @@ def from_member(a, b, width: float, height: float, name: str = "") -> OBB:
     z /= np.linalg.norm(z)
     y = np.cross(z, x)
     return OBB((a + b) / 2.0, np.array([x, y, z]), np.array([L / 2.0, height / 2.0, width / 2.0]), name)
+
+
+def ray_box(origin, direction, box: OBB) -> tuple[float, float] | None:
+    """Where the line origin + t direction enters and leaves the box (slabs in the box's own axes):
+    (t_in, t_out) with t_in <= t_out, in the units of t (mm for a unit direction). Either may be negative
+    (t_in < 0 < t_out: the origin is inside). None when the line misses the box."""
+    o = box.axes @ (np.asarray(origin, float) - box.center)
+    d = box.axes @ np.asarray(direction, float)
+    t_in, t_out = -np.inf, np.inf
+    for i in range(3):
+        if abs(d[i]) < 1e-12:
+            if abs(o[i]) > box.half[i]:
+                return None
+            continue
+        t1, t2 = (-box.half[i] - o[i]) / d[i], (box.half[i] - o[i]) / d[i]
+        t_in, t_out = max(t_in, min(t1, t2)), min(t_out, max(t1, t2))
+        if t_in > t_out:
+            return None
+    return float(t_in), float(t_out)
 
 
 def overlap(a: OBB, b: OBB) -> float:

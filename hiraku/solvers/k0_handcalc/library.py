@@ -691,7 +691,7 @@ def _rail_step_bending() -> Formula:
 def all_formulas() -> list[Formula]:
     from . import (library_bed, library_crash, library_dynamics, library_energy, library_fatigue, library_geometry,
                    library_joint, library_kc, library_mount, library_nvh, library_portal)
-    from . import library_loadpath, library_powertrain, library_rops
+    from . import library_loadpath, library_powertrain, library_rops, library_spray
 
     return (_step_climb() + _mass_props() + _frame_static() + library_joint.all_formulas() + library_dynamics.all_formulas()
             + library_energy.all_formulas() + library_crash.all_formulas() + library_nvh.all_formulas()
@@ -699,4 +699,4 @@ def all_formulas() -> list[Formula]:
             + library_portal.all_formulas() + library_bed.all_formulas()
             + library_rops.all_formulas() + library_mount.all_formulas()
             + library_powertrain.all_formulas()
-            + library_loadpath.all_formulas())
+            + library_loadpath.all_formulas() + library_spray.all_formulas())
