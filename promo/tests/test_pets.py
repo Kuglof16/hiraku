@@ -115,10 +115,35 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v8(self):
+    def test_version_mark_is_v9(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v8</div>', viewer)
-        self.assertIn("版は v8", (PETS / "README.md").read_text(encoding="utf-8"))
+        self.assertIn('<div id="ver">v9</div>', viewer)
+        self.assertIn("版は v9", (PETS / "README.md").read_text(encoding="utf-8"))
+        self.assertIn("// v9:", PET3D)
+
+    def test_v9_states_lite_and_cost_in_the_source(self):
+        # the two states, their marks, o.since / o.mark, lite and cost
+        for name in ("function waitPose(t)", "function blockPose(u)", "function blockedU(t, o)",
+                     "function buildWait(THREE, M, hulls)", "function buildStop(THREE, M, hulls)",
+                     "function liteThree(T)", "function prunePet(THREE, root, hulls, dots)", "function cost()"):
+            self.assertIn(name, PET3D)
+        self.assertIn("o.since", PET3D)
+        self.assertIn("ex.mark === false", PET3D)
+        self.assertIn("if (opts.lite) THREE = liteThree(THREE);", PET3D)
+        self.assertIn("if (opts.lite) prunePet(THREE, root, hulls, ctx.dots);", PET3D)
+        self.assertIn("const BLOCK = { react: 3.0,", PET3D)
+        # the stop sign is red (C.miss) like the question mark
+        stop = PET3D[PET3D.index("function buildStop("):]
+        self.assertIn("color: C.miss", stop[: stop.index("return g;")])
+        self.assertRegex(PET3D, r"window\.HirakuPets = \{[^}]*\bWAIT\b[^}]*\bBLOCK\b[^}]*\bLITE\b")
+        viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
+        self.assertIn('<button data-v="waiting">待ち</button><button data-v="blocked">止められた</button>', viewer)
+        self.assertIn('data-key="lite"', viewer)
+        self.assertIn('p.set("lite", "1")', viewer)
+        self.assertIn("lite: S.lite", viewer)
+        readme = (PETS / "README.md").read_text(encoding="utf-8")
+        for word in ("`waiting`", "`blocked`", "o.since", "`{ mark: false }`", "`lite`", "`pet.cost()`", "poseTime"):
+            self.assertIn(word, readme)
 
     def test_packager_style_switch(self):
         # v8: the box is the default; opts.packagerStyle = "burr" / "rings"
@@ -141,7 +166,7 @@ class Roles(unittest.TestCase):
 
     def test_states_and_buttons(self):
         states = re.search(r"const STATES = \[([^\]]+)\]", PET3D).group(1)
-        self.assertEqual(re.findall(r'"(\w+)"', states), ["idle", "report", "pass", "mismatch", "working", "run"])
+        self.assertEqual(re.findall(r'"(\w+)"', states), ["idle", "report", "pass", "mismatch", "working", "run", "waiting", "blocked"])
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
         # the working state is called 作業中 (the internal name stays "working")
         self.assertIn('<button data-v="working">作業中</button>', viewer)
@@ -1036,6 +1061,144 @@ class Viewer(unittest.TestCase):
         w0, w1 = res["wheels"]
         self.assertEqual(len(w0), 2)
         self.assertNotEqual(w0, w1, "the wheels turn when running")
+
+    def test_v9_waiting_blocked_lite(self):
+        # waiting / blocked: last in STATES, poses from t (and o) only, their
+        # marks, o.mark = false; lite: fewer triangles, calls and shadow
+        # casters; without lite the drawn meshes are the v8 ones
+        from playwright.sync_api import sync_playwright
+
+        page_url = (PETS / "viewer.html").as_uri() + "?view=grid&t=0"
+        js = """async () => {
+          const THREE = await import('three');
+          const HP = window.HirakuPets;
+          const V = (o) => o.getWorldPosition(new THREE.Vector3()).toArray();
+          const pose = (p) => {
+            const a = [];
+            p.group.updateMatrixWorld(true);
+            p.group.traverseVisible((o) => { if (o.isMesh) a.push(...o.matrixWorld.elements.map((x) => Math.round(x * 1e6))); });
+            return a.join(',');
+          };
+          const tip = (p) => {
+            let v = null;
+            p.group.updateMatrixWorld(true);
+            p.group.traverse((o) => { if (o.isMesh && o.geometry.type === 'IcosahedronGeometry' && o.geometry.parameters.radius === 0.15) v = V(o); });
+            return v;
+          };
+          const marks = (p) => {
+            const r = { stop: 0, dots: 0, lit: 0, checks: 0 };
+            p.group.traverseVisible((o) => {
+              if (!o.isMesh || !o.material || !o.material.color) return;
+              const g = o.geometry, hex = o.material.color.getHex();
+              if (g.type === 'CylinderGeometry' && g.parameters.radiusTop === 0.27) {
+                if (hex === 0xe0472a) r.stop++; else r.checks++;
+              }
+              if (g.type === 'SphereGeometry' && g.parameters.radius === 0.048) { r.dots++; if (hex === 0x1b1a17) r.lit++; }
+            });
+            return r;
+          };
+          const hopZ = (p) => p.group.children[0].children[0].position.z;
+          const out = { states: HP.STATES, roles: {} };
+          for (const r of HP.ROLES) {
+            const a = HP.create(THREE, { role: r.id }), b = HP.create(THREE, { role: r.id });
+            const o = {};
+            for (const s of ['waiting', 'blocked']) {
+              // the same t gives the same pose, whatever came before
+              a.update(0.7, 'pass'); a.update(9.1, s); a.update(2.35, s);
+              b.update(2.35, s);
+              o[s + 'Same'] = pose(a) === pose(b);
+            }
+            // waiting: no sudden move of the antenna tip over 16 s at 30 frames/s
+            // (compared with the same pet's idle; handling's body rolls by itself)
+            const maxStep = (s) => {
+              let prev = null, step = 0;
+              for (let k = 0; k <= 480; k++) {
+                a.update(k / 30, s);
+                const v = tip(a);
+                if (prev) step = Math.max(step, Math.hypot(v[0] - prev[0], v[1] - prev[1], v[2] - prev[2]));
+                prev = v;
+              }
+              return step;
+            };
+            o.waitStep = maxStep('waiting');
+            o.idleStep = maxStep('idle');
+            // blocked: flinch at u = BLOCK.jolt, frozen later (with o.since and with t mod 3)
+            a.update(10 + HP.BLOCK.jolt, 'blocked', null, { since: 10 }); o.backSince = hopZ(a);
+            a.update(3 + HP.BLOCK.jolt, 'blocked'); o.backMod = hopZ(a);
+            a.update(11.0, 'blocked', null, { since: 10 }); const f1 = pose(a);
+            a.update(12.5, 'blocked', null, { since: 10 }); const f2 = pose(a);
+            o.frozen = f1 === f2;
+            a.update(10.0, 'blocked', null, { since: 10 }); const tip0 = tip(a);
+            a.update(10.1, 'blocked', null, { since: 10 }); const tip1 = tip(a);
+            o.flinch = Math.hypot(tip1[0] - tip0[0], tip1[1] - tip0[1], tip1[2] - tip0[2]);
+            a.update(10.0, 'idle'); o.idleBack = hopZ(a);
+            // marks
+            a.update(0.45 * 2 + 0.01, 'waiting'); o.wait2 = marks(a);
+            a.update(0.45 * 3 + 0.01, 'waiting'); o.wait3 = marks(a);
+            a.update(0.45 * 4 + 0.01, 'waiting'); o.wait4 = marks(a);
+            a.update(1.0, 'blocked'); o.stop = marks(a);
+            a.update(1.0, 'blocked', null, { mark: false }); o.stopHidden = marks(a);
+            a.update(1.0, 'waiting', null, { mark: false }); o.waitHidden = marks(a);
+            a.update(0.3, 'pass', null, { mark: false }); o.passHidden = marks(a);
+            a.update(0.3, 'pass'); o.pass = marks(a);
+            a.update(1.0, 'idle'); o.idle = marks(a);
+            // cost: full (v8 fingerprint), lite, and lite switched on and off
+            for (const p of [a, b]) { p.setPixelScale(13.6); p.update(1.0, 'idle'); }
+            o.full = a.cost();
+            const l = HP.create(THREE, { role: r.id, lite: true });
+            l.setPixelScale(13.6); l.update(1.0, 'idle');
+            o.lite = l.cost();
+            b.setOptions({ lite: true }); b.update(1.0, 'idle'); o.switched = b.cost();
+            b.setOptions({ lite: false }); b.update(1.0, 'idle'); o.back = b.cost();
+            o.sameGroup = b.group.children.length === 1;
+            for (const p of [a, b, l]) p.dispose();
+            out.roles[r.id] = o;
+          }
+          return out;
+        }"""
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            try:
+                page = browser.new_page(viewport={"width": 400, "height": 300})
+                self.open(page, page_url)
+                res = page.evaluate(js)
+            finally:
+                browser.close()
+        self.assertEqual(res["states"][-2:], ["waiting", "blocked"])
+        # v8: drawn meshes (calls) and triangles at idle t = 1.0 (13.6 px a unit)
+        v8 = {"lead": (31, 7886), "designer": (31, 11426), "packager": (56, 16168), "cae.handling": (108, 23558),
+              "cae.powertrain": (47, 11546), "cae.aero": (35, 25162), "cae.crash": (36, 12886),
+              "cae.strength": (32, 11146), "cae.nvh": (34, 9818), "cae.thermal": (34, 13650)}
+        for rid, o in res["roles"].items():
+            self.assertTrue(o["waitingSame"], rid)
+            self.assertTrue(o["blockedSame"], rid)
+            self.assertLess(o["waitStep"], o["idleStep"] + 0.012, (rid, o["waitStep"], o["idleStep"]))
+            self.assertAlmostEqual(o["backSince"], -0.13, places=6, msg=rid)
+            self.assertAlmostEqual(o["backMod"], -0.13, places=6, msg=rid)
+            self.assertEqual(o["idleBack"], 0, rid)
+            self.assertTrue(o["frozen"], rid)
+            self.assertGreater(o["flinch"], 4 * o["waitStep"], rid)
+            self.assertEqual((o["wait2"]["dots"], o["wait2"]["lit"]), (3, 2), rid)
+            self.assertEqual((o["wait3"]["dots"], o["wait3"]["lit"]), (3, 3), rid)
+            self.assertEqual((o["wait4"]["dots"], o["wait4"]["lit"]), (3, 0), rid)
+            self.assertEqual(o["wait3"]["stop"], 0, rid)
+            self.assertEqual((o["stop"]["stop"], o["stop"]["dots"]), (1, 0), rid)
+            for k in ("stopHidden", "waitHidden", "passHidden", "idle"):
+                self.assertEqual(o[k], {"stop": 0, "dots": 0, "lit": 0, "checks": 0}, (rid, k))
+            self.assertEqual(o["pass"]["checks"], 1, rid)
+            full, lite = o["full"], o["lite"]
+            self.assertEqual((full["calls"], full["triangles"]), v8[rid], rid)
+            self.assertFalse(full["lite"])
+            self.assertTrue(lite["lite"])
+            self.assertLess(lite["triangles"], 0.7 * full["triangles"], rid)
+            self.assertLess(lite["calls"], full["calls"], rid)
+            self.assertLess(lite["shadowCalls"], full["shadowCalls"], rid)
+            self.assertLess(lite["shadowTriangles"], full["shadowTriangles"], rid)
+            self.assertEqual(o["switched"], lite, rid)
+            self.assertEqual(o["back"], full, rid)
+            self.assertTrue(o["sameGroup"], rid)
+        tot = lambda k, f: sum(o[k][f] for o in res["roles"].values())
+        self.assertLess(tot("lite", "triangles"), 0.5 * tot("full", "triangles"))
 
     def test_anim_hop(self):
         # anim.hop: still before it starts; a crouch (squashed, on the ground);

@@ -33,6 +33,16 @@
 // opts.packagerStyle = "box"); the v7 burr is kept as "burr" and the rings
 // as "rings". The box body is light (shared block geometry, instanced edge
 // rods; about a twentieth of the triangles of the burr).
+// v9: two more states at the end of STATES. "waiting" (a long wait for an
+// answer: weight from foot to foot, looks up and around now and then, the
+// antenna droops; "..." with the dots lit in turn) and "blocked" (stopped by
+// a hook: a flinch back, then frozen with the antenna bent back and the free
+// hand held out; a red stop sign). blocked takes u = t - o.since, or
+// t mod 3 s without o.since. o.mark = false hides every mark above the head.
+// opts.lite (or setOptions({ lite })) builds a light pet for small sizes
+// (fewer segments, no thin outlines, no node dots, fewer shadow casters);
+// pet.cost() gives the draw calls and triangles. Without lite the picture
+// is the v8 one, pixel for pixel.
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -88,7 +98,22 @@
     "cae.thermal": { kind: "heat", quantity: "温度 (相対)", analysis: "下から温まる温度のコンターと等温線、立ちのぼる熱の線" },
   };
 
-  const STATES = ["idle", "report", "pass", "mismatch", "working", "run"];
+  const STATES = ["idle", "report", "pass", "mismatch", "working", "run", "waiting", "blocked"];
+  // waiting: a long calm wait. The weight goes from foot to foot every
+  // WAIT.sway seconds; in each WAIT.period cycle the pet looks up (from
+  // WAIT.up[0] to WAIT.up[1] s) and looks around, left then right (WAIT.look);
+  // the antenna droops and sways; "..." above the head, one more dot lit
+  // every WAIT.dot seconds (0, 1, 2, 3 dots).
+  const WAIT = { period: 8.0, sway: 5.2, up: [2.2, 4.4], look: [4.8, 7.6], dot: 0.45 };
+  // blocked: stopped by a hook. u = seconds since it was stopped (o.since, or
+  // t mod BLOCK.react). A flinch back (peak at BLOCK.jolt s), then the pet
+  // freezes with the antenna bent back and the free hand held out; a red stop
+  // sign pops up above the head.
+  const BLOCK = { react: 3.0, jolt: 0.1, back: 0.13, freeze: 0.3 };
+  // lite: hull outlines narrower than LITE.hull and shadow casters smaller
+  // than LITE.shadow (bounding radius, pet units) are left out; liteThree
+  // takes the segment counts down by LITE.seg (with the floors in liteThree)
+  const LITE = { hull: 0.02, shadow: 0.22, seg: 0.45 };
   // run: one stride (each leg forward and back once) in RUN.period seconds;
   // "across" crosses RUN.span pet units to the right in RUN.cross seconds
   const RUN = { period: 0.6, swing: 0.8, bob: 0.09, lean: 0.17, span: 7.2, cross: 3.0, yaw: 0.75 };
@@ -2929,6 +2954,184 @@
     return g;
   }
 
+  // "..." for waiting: three dots on a paper badge (lit in turn in update).
+  function buildWait(THREE, M, hulls) {
+    const g = new THREE.Group();
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 40), M.paper);
+    badge.rotation.x = Math.PI / 2;
+    g.add(badge);
+    addHull(THREE, badge, 0.03, hulls);
+    g.userData.dots = [-1, 0, 1].map((k) => {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.048, 14, 10), new THREE.MeshStandardMaterial({ color: C.ink, roughness: 0.5 }));
+      d.position.set(k * 0.13, -0.01, 0.05);
+      g.add(d);
+      return d;
+    });
+    return g;
+  }
+
+  // Stop sign for blocked: a red disc (C.miss) with a white bar across.
+  function buildStop(THREE, M, hulls) {
+    const g = new THREE.Group();
+    const red = new THREE.MeshStandardMaterial({ color: C.miss, roughness: 0.45 });
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 40), red);
+    badge.rotation.x = Math.PI / 2;
+    g.add(badge);
+    addHull(THREE, badge, 0.03, hulls);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.085, 0.03), M.paper);
+    bar.position.z = 0.035;
+    g.add(bar);
+    return g;
+  }
+
+  // Smooth bump: 0 outside (a, b), sin^2 inside, 1 in the middle.
+  function bump(x, a, b) {
+    if (x <= a || x >= b) return 0;
+    return Math.sin((Math.PI * (x - a)) / (b - a)) ** 2;
+  }
+  const smooth01 = (x) => {
+    x = clamp(x, 0, 1);
+    return x * x * (3 - 2 * x);
+  };
+
+  // waiting pose terms at t (t only)
+  function waitPose(t) {
+    const c = ((t % WAIT.period) + WAIT.period) % WAIT.period;
+    const up = bump(c, WAIT.up[0], WAIT.up[1]);
+    const look = Math.sin((TAU * (c - WAIT.look[0])) / (WAIT.look[1] - WAIT.look[0])) * bump(c, WAIT.look[0], WAIT.look[1]);
+    const sway = Math.sin((TAU * t) / WAIT.sway);
+    const dots = Math.floor((((t / WAIT.dot) % 4) + 4) % 4);
+    return {
+      tilt: 0.075 * sway,             // weight from foot to foot
+      shift: 0.035 * sway,            // the torso over the loaded foot
+      lean: -0.07 * up,               // leans back a little looking up
+      turn: 0.22 * look,              // looks around
+      lookX: 0.04 * look - 0.01 * sway,
+      lookY: 0.05 * up,
+      antZ: -0.3 + 0.09 * Math.sin((TAU * t) / 3.4),   // droops to the side, sways
+      antX: 0.14 + 0.04 * Math.sin((TAU * t) / 4.1),   // and forward
+      dots,
+    };
+  }
+
+  // u for blocked: seconds since o.since, else t mod BLOCK.react
+  function blockedU(t, o) {
+    if (o && o.since !== undefined && o.since !== null) return Math.max(0, t - o.since);
+    return ((t % BLOCK.react) + BLOCK.react) % BLOCK.react;
+  }
+
+  // blocked pose terms at u: flinch (a) up to 1 in BLOCK.jolt s, eases back
+  // to 0.6 by BLOCK.jolt + 0.5 s and holds; a short shake after the jolt
+  // (gone by 0.8 s); from then on the pose does not change.
+  function blockPose(u) {
+    const J = BLOCK.jolt;
+    const a = u < J ? Math.sin((Math.PI / 2) * (u / J)) : 0.6 + 0.4 * (1 - smooth01((u - J) / 0.5));
+    const shake = u > 0.08 && u < 0.8 ? Math.sin(TAU * 11 * (u - 0.08)) * Math.exp(-(u - 0.08) / 0.15) * (1 - smooth01((u - 0.5) / 0.3)) : 0;
+    const hold = smooth01((u - 0.05) / 0.35);
+    const pop = u < 0.3 ? 0.35 + 0.65 * Math.sin((Math.PI / 2) * (u / 0.3)) + 0.2 * Math.sin((Math.PI * u) / 0.3) : 1;
+    return {
+      back: BLOCK.back * a,           // pulled back (away from the camera)
+      lean: -0.16 * a,
+      squash: 0.04 * a,
+      shrink: 0.06 * a,               // the body draws in
+      tilt: 0.035 * shake,
+      live: 1 - smooth01(u / 0.3),    // the idle bob and breathing stop
+      armL: 1.3 * hold,               // the free hand held out in front
+      armR: 0.45 * hold,
+      antX: -0.6 * smooth01(u / J),   // antenna bent back
+      antZ: 0.07 * shake,
+      eye: 1 + 0.16 * a,              // eyes wide
+      mark: pop,
+      markRoll: 0.12 * shake,
+    };
+  }
+
+  // A copy of the THREE namespace whose round geometries have fewer
+  // segments (lite pets). Counts at or under the floor are kept as they are
+  // (hexagons, square bars, the 5-sided streamline tubes stay the same).
+  const liteCache = new WeakMap();
+  function liteThree(T) {
+    if (liteCache.has(T)) return liteCache.get(T);
+    const k = LITE.seg;
+    const cut = (n, floor) => (n > floor ? Math.max(floor, Math.round(n * k)) : n);
+    // (an ES module namespace cannot be written to, so the new classes are
+    // own properties of an object that inherits the rest)
+    const own = {
+      SphereGeometry: class extends T.SphereGeometry {
+        constructor(r, w = 32, h = 16, ...a) { super(r, cut(w, 8), cut(h, 6), ...a); }
+      },
+      CylinderGeometry: class extends T.CylinderGeometry {
+        constructor(rt, rb, h, rad = 32, ...a) { super(rt, rb, h, cut(rad, 8), ...a); }
+      },
+      ConeGeometry: class extends T.ConeGeometry {
+        constructor(r, h, rad = 32, ...a) { super(r, h, cut(rad, 8), ...a); }
+      },
+      CapsuleGeometry: class extends T.CapsuleGeometry {
+        constructor(r, len, cap = 4, rad = 8) { super(r, len, cut(cap, 2), cut(rad, 6)); }
+      },
+      TorusGeometry: class extends T.TorusGeometry {
+        constructor(r, tube, rad = 12, tub = 48, ...a) { super(r, tube, cut(rad, 4), cut(tub, 12), ...a); }
+      },
+      TubeGeometry: class extends T.TubeGeometry {
+        constructor(path, tub = 64, r = 1, rad = 8, closed = false) { super(path, cut(tub, 8), r, cut(rad, 4), closed); }
+      },
+      liteSegments: true,
+    };
+    const desc = {};
+    for (const k of Object.keys(own)) desc[k] = { value: own[k], enumerable: true };
+    const L = Object.create(T, desc);
+    liteCache.set(T, L);
+    return L;
+  }
+
+  // lite: merge mesh b into mesh a (same parent, same material, neither moves
+  // on its own), so the pair is one draw call. Positions and normals only.
+  function mergeInto(THREE, a, b) {
+    a.updateMatrix();
+    b.updateMatrix();
+    const m = a.matrix.clone().invert().multiply(b.matrix);
+    const parts = [a.geometry, b.geometry.clone().applyMatrix4(m)].map((g) => (g.index ? g.toNonIndexed() : g));
+    const out = new THREE.BufferGeometry();
+    for (const k of ["position", "normal"]) {
+      const arr = new Float32Array(parts.reduce((n, g) => n + g.attributes[k].array.length, 0));
+      let at = 0;
+      for (const g of parts) {
+        arr.set(g.attributes[k].array, at);
+        at += g.attributes[k].array.length;
+      }
+      out.setAttribute(k, new THREE.BufferAttribute(arr, 3));
+    }
+    a.geometry.dispose();
+    b.geometry.dispose();
+    a.geometry = out;
+    b.parent.remove(b);
+  }
+
+  // lite: leave out thin hulls, node dots and small shadow casters.
+  function prunePet(THREE, root, hulls, dots) {
+    for (let i = hulls.length - 1; i >= 0; i--) {
+      const h = hulls[i];
+      if ((h.userData.hullWidth ?? 0.022) < LITE.hull) {
+        h.parent.remove(h);
+        h.geometry.dispose();
+        hulls.splice(i, 1);
+      }
+    }
+    for (const d of dots) {
+      d.parent.remove(d);
+      d.geometry.dispose();
+    }
+    dots.length = 0;
+    root.updateMatrixWorld(true);
+    const s = new THREE.Vector3();
+    root.traverse((o) => {
+      if (!o.isMesh || !o.castShadow) return;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.getWorldScale(s);
+      if (o.geometry.boundingSphere.radius * Math.max(s.x, s.y, s.z) < LITE.shadow) o.castShadow = false;
+    });
+  }
+
   // Contact shadow: radial falloff drawn into a small data texture.
   function blobTexture(THREE) {
     const N = 64;
@@ -2952,8 +3155,46 @@
 
   // ---- create -------------------------------------------------------------
 
+  // create(THREE, opts): the pet in pet.group. opts.lite builds the light
+  // version for small pets (liteThree + prunePet); setOptions({ lite })
+  // rebuilds the pet inside the same group, keeping theme, edges, nodes and
+  // the pixel scale.
   function create(THREE, opts) {
+    opts = Object.assign({}, opts || {});
+    const root = new THREE.Group();
+    root.name = "pet:" + ((ROLES.find((r) => r.id === opts.role) || ROLES[0]).id);
+    const keep = { px: null };
+    let P = null;
+    const api = { group: root };
+    function make() {
+      P = build(THREE, opts, root);
+      Object.assign(api, { role: P.role, body: P.body, counts: P.counts, field: P.field, arrows: P.arrows, lite: !!opts.lite });
+      if (keep.px !== null) P.setPixelScale(keep.px);
+    }
+    make();
+    api.update = (t, state, camera, o) => P.update(t, state, camera, o);
+    api.contour = (t, state) => P.contour(t, state);
+    api.cost = () => P.cost();
+    api.setPixelScale = (px) => {
+      keep.px = px;
+      P.setPixelScale(px);
+    };
+    api.setOptions = (o) => {
+      for (const k of ["edges", "nodes", "theme"]) if (o[k] !== undefined) opts[k] = o[k];
+      if (o.lite !== undefined && !!o.lite !== !!opts.lite) {
+        opts.lite = !!o.lite;
+        P.dispose();
+        root.clear();
+        make();
+      } else P.setOptions(o);
+    };
+    api.dispose = () => P.dispose();
+    return api;
+  }
+
+  function build(THREE, opts, root) {
     opts = Object.assign({ role: "lead", mesh: "coarse", edges: true, nodes: true, theme: "paper" }, opts || {});
+    if (opts.lite) THREE = liteThree(THREE);
     const role = ROLES.find((r) => r.id === opts.role) || ROLES[0];
     const spec = BODIES[role.id];
     const seed = hashString(role.id);
@@ -2979,8 +3220,6 @@
     const hulls = [];
     const live = {};
 
-    const root = new THREE.Group();
-    root.name = "pet:" + role.id;
     // mover carries the whole pet with its shadow and marks across the
     // ground when it runs across (root itself is left to the caller)
     const mover = new THREE.Group();
@@ -3054,6 +3293,7 @@
       foot.position.set(sx * 0.37, 0.075, 0.1).sub(top);
       foot.castShadow = true;
       hip.add(foot);
+      if (opts.lite) mergeInto(THREE, leg, foot);
     }
 
     // eyes, sitting on the body surface (re-placed each frame on bodies that
@@ -3123,9 +3363,10 @@
       const arm = capsuleBetween(THREE, new THREE.Vector3(), hand.clone().sub(sh), 0.06, M.limb, 2, 6);
       arm.castShadow = true;
       pivot.add(arm);
-      const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, 1), M.limb);
+      const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.088, opts.lite ? 0 : 1), M.limb);
       h.position.copy(hand).sub(sh);
       pivot.add(h);
+      if (opts.lite) mergeInto(THREE, arm, h);
       shoulders[k] = pivot;
     }
     const prop = buildProp(THREE, role, M, hulls, live);
@@ -3145,6 +3386,13 @@
     check.scale.setScalar(0.9);
     question.scale.setScalar(0.9);
     marks.add(check, question);
+    // v9: "..." (waiting) and the stop sign (blocked)
+    const waitMark = buildWait(THREE, M, hulls);
+    const stopMark = buildStop(THREE, M, hulls);
+    waitMark.scale.setScalar(0.9);
+    stopMark.scale.setScalar(0.9);
+    waitMark.visible = stopMark.visible = false;
+    marks.add(waitMark, stopMark);
 
     // contact shadow
     const blob = new THREE.Mesh(
@@ -3174,6 +3422,7 @@
       blob.material.opacity = night ? 0.55 : 0.3;
       blob.material.color.setHex(night ? 0x000000 : C.ink);
     }
+    if (opts.lite) prunePet(THREE, root, hulls, ctx.dots);
     applyTheme(opts.theme);
 
     const qTmp = new THREE.Quaternion();
@@ -3216,8 +3465,12 @@
       state = STATES.includes(state) ? state : "idle";
       const ex = o || {};
       const across = o && o.across !== undefined ? !!o.across : opts.run === "across";
-      U.uT.value = t;
-      B.update(t, state);
+      // blocked: the body's own motion (contour, flow, mechanism) stops
+      // BLOCK.freeze s after the block; tb = t in every other state
+      const uB = state === "blocked" ? blockedU(t, o) : 0;
+      const tb = state === "blocked" ? t - Math.max(0, uB - BLOCK.freeze) : t;
+      U.uT.value = tb;
+      B.update(tb, state);
       if (B.deforms || B.anchor) placeFace();
 
       // idle base motion: bob, breathe, antenna sway, blink
@@ -3225,8 +3478,14 @@
       const breathe = Math.sin((TAU * t) / 2.6 + 0.6);
       let hopY = 0, lean = 0, tilt = 0, squash = 0;
       const run = state === "run" ? runPose(t, across) : null;
+      // v9 states (null in the others, which then take exactly the v8 path)
+      const W = state === "waiting" ? waitPose(t) : null;
+      const K = state === "blocked" ? blockPose(uB) : null;
       mover.position.x = run ? run.x : 0;
       hop.rotation.y = (run ? run.yaw : 0) + (ex.turn || 0);
+      if (W) hop.rotation.y += W.turn;
+      hop.position.z = K ? -K.back : 0;
+      torso.position.x = W ? W.shift : 0;
       // walk and sit pose terms (zero when not given): legs swings the right
       // foot forward by that angle and the left back; sit (0..1) swings both
       // forward by LEG.sit_legs and lowers the body so the feet stay on the ground
@@ -3234,6 +3493,10 @@
       for (const h of hips) h.hip.rotation.x = run ? h.sx * run.swing : -h.sx * (ex.legs || 0) - legSit;
       shoulders.L.rotation.x = (run ? 0.75 * run.swing : 0) + (ex.arms || 0);
       shoulders.R.rotation.x = (run ? -0.3 * run.swing : 0) + (ex.arm || 0) - 0.4 * (ex.arms || 0);
+      if (K) {
+        shoulders.L.rotation.x -= K.armL;
+        shoulders.R.rotation.x -= K.armR;
+      }
       if (run) {
         hopY = run.hopY;
         lean = run.lean;
@@ -3245,6 +3508,13 @@
         lean = 0.2 + 0.025 * Math.sin((TAU * t) / 1.8);
       } else if (state === "mismatch") {
         tilt = 0.24 + 0.03 * Math.sin((TAU * t) / 2.2);
+      } else if (W) {
+        tilt = W.tilt;
+        lean = W.lean;
+      } else if (K) {
+        lean = K.lean;
+        tilt = K.tilt;
+        squash = K.squash;
       }
       if (ex.report !== undefined && state !== "report") lean += ex.report * (0.2 + 0.025 * Math.sin((TAU * t) / 1.8));
       lean += ex.lean || 0;
@@ -3254,20 +3524,39 @@
       hop.position.y = hopY - (ex.drop || 0) - LEG.hip_y * (1 - Math.cos(legSit));
       torso.position.y = PIVOT_Y + (state === "pass" || run ? 0 : bob);
       // bodies that lean by themselves (handling rolls in the corner)
-      torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(t, state) : 0));
+      torso.rotation.set(lean, 0, tilt + (B.roll ? B.roll(tb, state) : 0));
       const sy = 1 + 0.018 * breathe - squash;
       const sxz = 1 - 0.012 * breathe + squash * 0.6;
       torso.scale.set(sxz, sy, sxz);
+      if (K) {
+        // frozen: the bob and the breathing fade out; the body draws in
+        torso.position.y = PIVOT_Y + bob * K.live;
+        const br = breathe * K.live, f = 1 - K.shrink;
+        torso.scale.set((1 - 0.012 * br + squash * 0.6) * f, (1 + 0.018 * br - squash) * f, (1 - 0.012 * br + squash * 0.6) * f);
+      }
 
       antenna.rotation.z = 0.07 * Math.sin((TAU * t) / 1.9 + 0.4) - tilt * 0.3 - (state === "pass" ? 0.12 * Math.sin(Math.PI * ((t / 0.9) % 1)) : 0) + (ex.antenna || 0);
       antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) - lean * 0.4 - (run ? 0.5 * run.hopY : 0);
+      if (W) {
+        antenna.rotation.z += W.antZ;
+        antenna.rotation.x += W.antX;
+      } else if (K) {
+        // still and bent back (the idle sway stops with the body)
+        antenna.rotation.z = (antenna.rotation.z + tilt * 0.3) * K.live - tilt * 0.3 + K.antZ;
+        antenna.rotation.x = 0.04 * Math.sin((TAU * t) / 2.7) * K.live - lean * 0.4 + K.antX;
+      }
 
       const bp = t % 4.3;
       const blink = bp < 0.16 ? 1 - 0.9 * Math.sin((Math.PI * bp) / 0.16) : 1;
-      const lookX = (state === "working" ? 0.035 : state === "mismatch" ? 0.02 : 0) + (ex.lookX || 0);
-      const lookY = (state === "working" ? -0.04 : state === "report" ? -0.005 : 0.005) + (ex.lookY || 0);
+      let lookX = (state === "working" ? 0.035 : state === "mismatch" ? 0.02 : 0) + (ex.lookX || 0);
+      let lookY = (state === "working" ? -0.04 : state === "report" ? -0.005 : 0.005) + (ex.lookY || 0);
+      if (W) {
+        lookX += W.lookX;
+        lookY += W.lookY;
+      } else if (K) lookY += 0.03;
       for (const e of eyes) {
-        e.lid.scale.y = blink;
+        e.lid.scale.y = K ? K.eye : blink;
+        e.lid.scale.x = K ? K.eye : 1;
         e.pupil.position.set(lookX - e.side * 0.008, lookY, 0);
       }
 
@@ -3275,13 +3564,31 @@
 
       check.visible = ex.check !== undefined ? !!ex.check : state === "pass";
       question.visible = state === "mismatch";
+      waitMark.visible = !!W;
+      stopMark.visible = !!K;
+      if (ex.mark === false) check.visible = question.visible = waitMark.visible = stopMark.visible = false;
+      if (W) {
+        waitMark.userData.dots.forEach((d, i) => {
+          const on = i < W.dots;
+          d.material.color.setHex(on ? C.ink : C.inkFaint);
+          d.scale.setScalar(on ? 1.12 : 0.8);
+          d.position.y = on ? 0.0 : -0.01;
+        });
+      }
+      if (K) stopMark.scale.setScalar(0.9 * K.mark);
       marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * t) / 1.4) + hopY;
       marks.rotation.z = state === "mismatch" ? 0.12 * Math.sin((TAU * t) / 2.2) : 0;
+      if (K) {
+        // the sign holds still with the pet
+        marks.position.y = MARK_Y + 0.035 * Math.sin((TAU * tb) / 1.4) + hopY;
+        marks.rotation.z = K.markRoll;
+      }
       if (camera) {
         root.updateWorldMatrix(true, true);
         marks.parent.getWorldQuaternion(qTmp).invert();
         marks.quaternion.copy(qTmp.multiply(camera.quaternion));
         if (state === "mismatch") marks.rotateZ(0.12 * Math.sin((TAU * t) / 2.2));
+        if (K) marks.rotateZ(K.markRoll);
       }
 
       const s = 1.55 * (1 - hopY * 1.1) * (ex.shadow ?? 1);
@@ -3294,11 +3601,11 @@
       }
 
       if (live.sock) {
-        live.sock.rotation.y = 0.18 * Math.sin((TAU * t) / 1.3);
-        live.sock.rotation.z = -0.06 + 0.05 * Math.sin((TAU * t) / 0.7);
+        live.sock.rotation.y = 0.18 * Math.sin((TAU * tb) / 1.3);
+        live.sock.rotation.z = -0.06 + 0.05 * Math.sin((TAU * tb) / 0.7);
       }
       if (live.arcs) {
-        const k = 1 + 0.08 * Math.sin(TAU * t * 1.5);
+        const k = 1 + 0.08 * Math.sin(TAU * tb * 1.5);
         live.arcs.scale.set(k, k, 1);
       }
       if (live.liquid) {
@@ -3346,9 +3653,35 @@
       return Object.assign({ quantity: spec.quantity }, B.contour(t, state));
     }
 
+    // What the renderer draws for the pet as it is now (after update): draw
+    // calls and triangles of the visible meshes (hulls included; instanced
+    // meshes count once per call, triangles times the instances), and of the
+    // shadow casters (the shadow map pass of a light that casts shadows).
+    function cost() {
+      const out = { calls: 0, triangles: 0, shadowCalls: 0, shadowTriangles: 0, hulls: 0, meshes: 0, lite: !!opts.lite };
+      mover.traverse((o) => { if (o.isMesh) out.meshes++; });
+      mover.traverseVisible((o) => {
+        if (!o.isMesh || !o.material) return;
+        const g = o.geometry;
+        const n = Math.min(g.index ? g.index.count : g.attributes.position.count, g.drawRange.count) / 3;
+        const tris = n * (o.isInstancedMesh ? o.count : 1);
+        out.calls++;
+        out.triangles += tris;
+        if (o.castShadow) {
+          out.shadowCalls++;
+          out.shadowTriangles += tris;
+        }
+        if (o.userData.hullWidth !== undefined) out.hulls++;
+      });
+      out.triangles = Math.round(out.triangles);
+      out.shadowTriangles = Math.round(out.shadowTriangles);
+      return out;
+    }
+
     applyScale();
     update(0, "idle");
     return {
+      cost,
       group: root, role, body: { kind: spec.kind, quantity: spec.quantity, analysis: spec.analysis, caption: B.caption, parts: B.parts || null, style: B.style || null },
       counts: B.counts, field: B.field || null,
       // strength: the tension arrows in body coordinates (frame = the body group)
@@ -3677,5 +4010,5 @@
   const anim = { smooth: easeIo, out: easeOut, back: easeBack, hump, jumpY, hop, HOP, walkLegs, travel, outBack, route,
                  routeEnd, beatDur, BEAT_KINDS };
 
-  window.HirakuPets = { ROLES, BODIES, STATES, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, LEG, loadFactor, create, anim };
+  window.HirakuPets = { ROLES, BODIES, STATES, WAIT, BLOCK, LITE, FRAME, BANDS, STOPS, BAND_COLORS, LOAD, PROP_MASS, LEG, loadFactor, create, anim };
 })();

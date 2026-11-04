@@ -95,6 +95,7 @@
   <div class="grp"><div class="lab">状態</div><div class="seg" data-key="state">
     <button data-v="idle">待機</button><button data-v="report">報告</button><button data-v="pass">合格</button>
     <button data-v="mismatch">食い違い</button><button data-v="working">作業中</button><button data-v="run">走る</button>
+    <button data-v="waiting">待ち</button><button data-v="blocked">止められた</button>
   </div>
     <label class="chk"><input type="checkbox" data-key="across"> 走るとき横に走り抜ける</label>
   </div>
@@ -104,6 +105,7 @@
   <div class="grp"><div class="lab">メッシュ</div>
     <label class="chk"><input type="checkbox" data-key="edges"> 要素の辺の線</label>
     <label class="chk"><input type="checkbox" data-key="nodes"> 節点</label>
+    <label class="chk"><input type="checkbox" data-key="lite"> 軽い描き方 (小さく出す用)</label>
     <div class="seg" data-key="mesh" style="margin-top:4px">
       <button data-v="coarse">粗い</button><button data-v="fine">細かい</button>
     </div>
@@ -128,7 +130,7 @@
   <div id="caption"></div>
   <div id="legend"><div class="ttl">相対の応力</div><div class="bar"></div><div class="info"></div></div>
 </div>
-<div id="ver">v8</div>
+<div id="ver">v9</div>
 <div id="err"></div>
 
 <script src="pet3d.js"></script>
@@ -142,14 +144,15 @@ const ROLES = HP.ROLES;
 const STATES = HP.STATES;
 
 // ---- state <-> URL ------------------------------------------------------
-const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false, across: false, pkg: "box" };
+const DEFAULTS = { view: "grid", role: "lead", state: "idle", bg: "paper", edges: true, nodes: true, mesh: "coarse", cam: "three", spin: false, across: false, lite: false, pkg: "box" };
 // pkg: the packager's body, box (blocks packed in a clear box, default), burr (six-piece burr) or rings
 const CHOICES = { view: ["grid", "one", "sizes"], state: STATES, bg: ["paper", "night"], mesh: ["coarse", "fine"], cam: ["front", "three", "side"], pkg: ["box", "burr", "rings"] };
 const q = new URLSearchParams(location.search);
 const S = { ...DEFAULTS };
 for (const k of Object.keys(CHOICES)) if (CHOICES[k].includes(q.get(k))) S[k] = q.get(k);
 if (ROLES.some((r) => r.id === q.get("role"))) S.role = q.get("role");
-for (const k of ["edges", "nodes", "spin"]) if (q.has(k)) S[k] = q.get(k) === "1";
+// lite=1: the light build for small pets (pet3d create opts.lite)
+for (const k of ["edges", "nodes", "spin", "lite"]) if (q.has(k)) S[k] = q.get(k) === "1";
 // run=across: the run state crosses the view instead of running in place
 S.across = q.get("run") === "across";
 S.t = q.has("t") && isFinite(parseFloat(q.get("t"))) ? parseFloat(q.get("t")) : null;
@@ -184,6 +187,7 @@ function urlNow() {
   p.set("cam", S.cam);
   if (S.spin) p.set("spin", "1");
   if (S.across) p.set("run", "across");
+  if (S.lite) p.set("lite", "1");
   if (S.orbit && S.view !== "sizes") p.set("orbit", S.orbit.map((v) => v.toFixed(4)).join(","));
   if (S.pan && S.view !== "sizes") p.set("pan", S.pan.map((v) => v.toFixed(4)).join(","));
   if (frozen !== null) p.set("t", (+frozen.toFixed(3)).toString());
@@ -253,7 +257,7 @@ let pets = [];
 function buildPets() {
   for (const p of pets) { scene.remove(p.group); p.dispose(); }
   pets = ROLES.map((r) => {
-    const p = HP.create(THREE, { role: r.id, mesh: S.mesh, edges: S.edges, nodes: S.nodes, theme: S.bg, packagerStyle: S.pkg });
+    const p = HP.create(THREE, { role: r.id, mesh: S.mesh, edges: S.edges, nodes: S.nodes, theme: S.bg, packagerStyle: S.pkg, lite: S.lite });
     p.group.visible = false;
     scene.add(p.group);
     return p;
@@ -504,7 +508,7 @@ function syncPanel() {
 function changed(k) {
   if (k === "mesh" || k === "pkg") buildPets();
   if (k === "bg") applyBg();
-  if (k === "edges" || k === "nodes") for (const p of pets) p.setOptions({ [k]: S[k] });
+  if (k === "edges" || k === "nodes" || k === "lite") for (const p of pets) p.setOptions({ [k]: S[k] });
   if (k === "cam") { S.orbit = null; S.pan = null; }
   if (["view", "role", "cam", "mesh", "pkg"].includes(k)) layout();
   syncPanel();
