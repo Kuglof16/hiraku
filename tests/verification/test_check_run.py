@@ -1256,5 +1256,126 @@ class CheckRun(unittest.TestCase):
                                       "x": {"quantity": "wheel_travel", "unit": "mm", "values": [0.0]}}), "analysis.series")
 
 
+
+def modular(red=True, case_modules=("suspension",), proposals=None, build=None, modules=True):
+    """The sample run split into modules (contract d9631a5): R1 red in v1 (when red), the suspension
+    designer proposes wheel_radius 320 mm, the packager builds v2 from it. proposals: the
+    module_change data to propose instead; build: changes to v2's design data."""
+    ev = sample_events()
+    d1 = by_kind(ev, "design.created")["data"]
+    if modules:
+        d1["modules"] = [
+            {"module_id": "package", "owner": "packager", "envelope": [], "variables": ["wheelbase", "track"]},
+            {"module_id": "frame", "owner": "designer.frame", "envelope": [], "variables": []},
+            {"module_id": "suspension", "owner": "designer.suspension", "envelope": [],
+             "variables": ["wheel_radius"], "choices": ["tyre"]},
+            {"module_id": "powertrain", "owner": "designer.powertrain", "envelope": [], "variables": []}]
+    for e in ev:
+        if e["kind"] in ("run.started", "project.updated"):
+            for lc in e["data"]["load_cases"]:
+                lc["modules"] = list(case_modules)
+    if red:
+        by_kind(ev, "verdict.recorded")["data"]["pass"] = False
+    if proposals is None:
+        proposals = [{"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                      "reason": "a larger wheel takes the step", "load_case_ids": ["R1-step100"],
+                      "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}]
+    at = next(k for k, e in enumerate(ev) if e["kind"] == "agent.stopped")
+    stamp = {"seq": 0, "ts": ev[at]["ts"], "t": ev[at]["t"], "run_id": RUN_ID}
+    new = [dict(stamp, kind="design.change_proposed", agent=x.get("agent_id"), data=x) for x in proposals]
+    d2 = copy.deepcopy(d1)
+    d2.update(design_version=2, parent_version=1, change_reason="the round's proposals: chg-0001",
+              module_changes=copy.deepcopy(proposals) if modules else [])
+    for x in proposals:
+        d2["variables"].update(x.get("changes") or {})
+    d2.update(build or {})
+    new.append(dict(stamp, kind="design.created", agent="packager", data=d2))
+    ev[at + 1:at + 1] = new
+    return renumber(ev)
+
+
+class Modules(unittest.TestCase):
+    """HK6_module_scope (contract d9631a5): module designers propose, the packager builds."""
+
+    setUp, tearDown, findings = CheckRun.setUp, CheckRun.tearDown, CheckRun.findings
+
+    def hk6(self, ev, level="error"):
+        return {f.message for f in self.findings(ev) if f.rule == "HK6_module_scope" and f.level == level}
+
+    def test_a_round_by_the_rules(self):
+        ev = modular()
+        self.assertEqual(self.hk6(ev), set())
+        self.assertEqual(self.hk6(ev, "warn"), set())
+        # the packager's own change of a package variable, listed once in module_changes
+        pkg = {"change_id": "chg-0002", "module_id": "package", "agent_id": "packager", "reason": "longer",
+               "changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}
+        ev = modular()
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"].append(pkg)
+        d2["variables"]["wheelbase"] = pkg["changes"]["wheelbase"]
+        self.assertEqual(self.hk6(ev), set())
+
+    def test_a_proposal_stays_in_its_module(self):
+        base = modular(proposals=None)
+        good = [e for e in base if e["kind"] == "design.change_proposed"][0]["data"]
+        for why, change in (("another designer", {"agent_id": "designer.frame"}),
+                            ("a package variable", {"changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}),
+                            ("a choice not its own", {"choices": {"frame_type": "spaceframe"}}),
+                            ("the package itself", {"module_id": "package", "agent_id": "packager"})):
+            with self.subTest(why):
+                self.assertTrue(self.hk6(modular(proposals=[dict(good, **change)])), why)
+        self.assertEqual(self.hk6(modular(proposals=[dict(good, choices={"tyre": "wide"})])), set())
+
+    def test_a_red_goes_to_the_modules_its_load_case_names(self):
+        self.assertTrue(self.hk6(modular(case_modules=("frame",))))
+        self.assertTrue(self.hk6(modular(red=False)))
+
+    def test_only_the_packager_builds_the_round(self):
+        for why, build in (("a designer made it", None),
+                           ("module_changes missing", {"module_changes": []}),
+                           ("module_changes unlike the proposal", "unlike"),
+                           ("a package variable moved without a package change",
+                            {"variables": {"wheelbase": {"value": 1900.0, "unit": "mm"},
+                                           "track": {"value": 1300.0, "unit": "mm"},
+                                           "wheel_radius": {"value": 320.0, "unit": "mm"}}})):
+            with self.subTest(why):
+                ev = modular(build=build if isinstance(build, dict) else None)
+                v2 = [e for e in ev if e["kind"] == "design.created"][-1]
+                if build is None:
+                    v2["agent"] = "designer"
+                elif build == "unlike":
+                    v2["data"]["module_changes"][0]["reason"] = "another reason"
+                self.assertTrue(self.hk6(ev), why)
+
+    def test_one_variable_is_changed_once_a_round(self):
+        one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+               "reason": "r", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
+        two = dict(one, change_id="chg-0002", changes={"wheel_radius": {"value": 330.0, "unit": "mm"}})
+        self.assertTrue(any("all change wheel_radius" in m for m in self.hk6(modular(proposals=[one, two]))))
+
+    def test_no_proposal_without_modules(self):
+        ev = modular(modules=False)
+        for e in ev:
+            if e["kind"] == "design.created":
+                e["agent"] = "designer"
+        self.assertTrue(any("without modules" in m for m in self.hk6(ev)))
+
+    def test_parts_stay_in_their_envelope(self):
+        def run(box):
+            ev = modular()
+            for e in ev:
+                if e["kind"] == "design.created":
+                    d = e["data"]
+                    d["parts"][0]["module"] = "powertrain"  # the battery: centre (-900, 0, 300), 500 x 400 x 200
+                    next(m for m in d["modules"] if m["module_id"] == "powertrain")["envelope"] = [box]
+            return {f.message for f in self.findings(ev) if f.rule == "module.envelope"}
+        self.assertEqual(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [520.0, 420.0, 220.0]}), set())
+        # the same space turned 90 degrees about z holds it only with x and y swapped
+        self.assertEqual(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0],
+                              "rpy_deg": [0.0, 0.0, 90.0]}), set())
+        self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [480.0, 420.0, 220.0]})), 2)
+        self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0]})), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
