@@ -125,7 +125,7 @@ def band_colors_from_colormap_js():
     return out
 
 
-def app_role_ids():
+def app_role_ids(groups=False):
     schema = json.loads((ROOT / "hiraku" / "contract" / "hiraku.schema.json").read_text(encoding="utf-8"))
     pattern = None
 
@@ -142,9 +142,33 @@ def app_role_ids():
                 walk(v)
 
     walk(schema)
-    m = re.match(r"\^\((.*)\|cae\\\.\((.*)\)\)\$", pattern)
-    plain = [x for x in m.group(1).split("|") if x not in ("system", "user")]
-    return plain + ["cae." + d for d in m.group(2).split("|")]
+    return schema_ids(pattern, groups)
+
+
+def schema_ids(pattern, groups=False):
+    """Agent ids of the contract's pattern "^(a|b|prefix\\.(x|y)|...)$". The ten pets' ids are the plain
+    ones (without system and user) and the cae.* ones; groups=True gives {prefix: [ids]} for every prefixed group
+    (the contract may add groups, e.g. designer.<module>)."""
+    body = re.match(r"\^\((.*)\)\$", pattern).group(1)
+    alts, depth, cur = [], 0, ""
+    for ch in body:  # split on "|" at the top level only
+        if ch == "|" and depth == 0:
+            alts.append(cur)
+            cur = ""
+            continue
+        depth += (ch == "(") - (ch == ")")
+        cur += ch
+    alts.append(cur)
+    plain, grouped = [], {}
+    for a in alts:
+        m = re.match(r"([a-z]+)\\\.\((.*)\)$", a)
+        if m:
+            grouped[m.group(1)] = [m.group(1) + "." + x for x in m.group(2).split("|")]
+        else:
+            plain.append(a)
+    if groups:
+        return grouped
+    return [x for x in plain if x not in ("system", "user")] + grouped["cae"]
 
 
 class Roles(unittest.TestCase):
@@ -155,6 +179,10 @@ class Roles(unittest.TestCase):
         self.assertEqual([r[0] for r in roles[:10]], app_role_ids())
         self.assertEqual([r[0] for r in roles[:10]], [r[0] for r in app_roles()])
         self.assertEqual(roles[10:], [m[:5] for m in module_roles()])
+        # when the contract names the module designers, the six pets carry the same ids
+        designers = app_role_ids(groups=True).get("designer")
+        if designers is not None:
+            self.assertEqual(sorted(r[0] for r in roles[10:]), sorted(designers))
         # the cast checks of the cuts read the rows starting with `{ id:` (the ten)
         self.assertEqual(re.findall(r'\{ id: "([a-z.]+)", name:', PET3D), app_role_ids())
 
