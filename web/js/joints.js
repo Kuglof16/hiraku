@@ -46,8 +46,11 @@ const OTHER = { mark: "dot", color: "#8a8577" };
 // the seam is one instance of a unit bar (MARK_SHAPES.bead) stretched along its length only, so
 // the section stays leg_mm; a piece runs on past its ends by end_ext x leg_mm to close the
 // corners. The colour (JOINT_KINDS.weld) is a dark grey-brown (steel darkened by the heat),
-// apart from the bushing's black ring.
-export const WELD_BEAD = { leg_mm: 5, round_segments: 16, end_ext: 1, round_end_ext: 0.3 };
+// apart from the bushing's black ring. The bar stands lift_mm off both faces it lies on (and its
+// material is drawn with a negative polygonOffset, BEAD_POLYGON_OFFSET): its two legs would
+// otherwise share the faces' planes and the depth test would pick between them pixel by pixel.
+export const WELD_BEAD = { leg_mm: 5, round_segments: 16, end_ext: 1, round_end_ext: 0.3, lift_mm: 0.2 };
+const BEAD_POLYGON_OFFSET = { factor: -1, units: -4 };
 export const BEAD_NOTE = `溶接のビードは脚 ${WELD_BEAD.leg_mm} mm の三角の断面で継ぎ目に沿う。寸法と色は画面の決め (出典なし)`;
 export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: String(via) };
 
@@ -91,7 +94,7 @@ const SIZE_OF_SIDE = 0.25;
 
 // Each shape, made once with its axis on +z and its size 1 (scaled by s per mark).
 const MARK_SHAPES = {
-  bead: () => beadBarGeometry(WELD_BEAD.leg_mm), // one piece of a seam (x: 0..1, stretched per piece)
+  bead: () => beadBarGeometry(WELD_BEAD.leg_mm, WELD_BEAD.lift_mm), // one piece of a seam (x: 0..1, stretched per piece)
   hex: () => new THREE.CylinderGeometry(0.5, 0.5, 0.45, 6).rotateX(Math.PI / 2),
   ring: () => new THREE.TorusGeometry(0.42, 0.16, 10, 24),
   ball: () => new THREE.SphereGeometry(0.42, 18, 12),
@@ -330,9 +333,10 @@ export function readJoints(design) {
 
 // ---- the weld beads: the seam of each weld mark (WELD_BEAD) ------------------------------------
 // A unit bar of a seam: x along the seam 0..1; the triangle's right angle on the seam line, one leg
-// along +y (out, on the face welded to) and one along +z (n, up the welded piece's side).
-function beadBarGeometry(leg) {
-  const P = [[0, 0, 0], [0, leg, 0], [0, 0, leg], [1, 0, 0], [1, leg, 0], [1, 0, leg]];
+// along +y (out, on the face welded to) and one along +z (n, up the welded piece's side); the
+// whole section moved by lift off both faces (+y and +z).
+function beadBarGeometry(leg, lift) {
+  const P = [[0, 0, 0], [0, leg, 0], [0, 0, leg], [1, 0, 0], [1, leg, 0], [1, 0, leg]].map(([x, y, z]) => [x, y + lift, z + lift]);
   const T = [[0, 2, 1], [3, 4, 5], [0, 1, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 2, 5], [1, 5, 4]];
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(T.flat().flatMap((i) => P[i]), 3));
@@ -535,7 +539,12 @@ export class JointMarks {
       const mat = real
         ? new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: bead ? 0.9 : 0.45, metalness: bead ? 0 : 0.15 })
         : new THREE.MeshLambertMaterial({ color: "#ffffff" });
-      if (bead) mat.side = THREE.DoubleSide; // the bar's pieces are mirrored on some seams
+      if (bead) {
+        mat.side = THREE.DoubleSide; // the bar's pieces are mirrored on some seams
+        mat.polygonOffset = true; // drawn a little toward the eye (WELD_BEAD: off the faces' planes)
+        mat.polygonOffsetFactor = BEAD_POLYGON_OFFSET.factor;
+        mat.polygonOffsetUnits = BEAD_POLYGON_OFFSET.units;
+      }
       const mesh = new THREE.InstancedMesh(MARK_SHAPES[shape](), mat, n);
       mesh.frustumCulled = false; // the instances spread over the vehicle
       mesh.renderOrder = 3; // after the see-through parts (renderOrder 2)
