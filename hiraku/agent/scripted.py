@@ -28,8 +28,8 @@ from hiraku.contract import layout
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import REPO_ROOT, is_beyond
 from hiraku.tools import RunContext, ToolError, rules
-from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
-                                    revise_design, rule_check, write_report)
+from hiraku.tools.functions import (analyze, archetypes, build_version, compare, propose_design, record_cause,
+                                    record_prediction, revise_design, rule_check, write_report)
 from hiraku.tools.judge import latest_verdicts, verdict_line
 from hiraku.tools.plan import (READERS, ReaderError, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
                                load_plan, plan_of, resolve)
@@ -81,6 +81,51 @@ def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s:
     if ends:  # the answer sits on a bound of the variable's range, and those bounds are not checked
         text += f"。範囲の端 (確かめていない値) で決まった: {'、'.join(ends)}"
     return {**changes, **got["changes"]}, text
+
+
+def split_by_module(design: Record, changes: Record, choices: Record) -> tuple[dict[str, Record], Record, list[str]]:
+    """A revision's changes and choices on a design with modules (contract d9631a5): ({module: {changes, choices}}
+    for each module designer, the package variables for the packager, names no module owns). The owner of a
+    variable or choice is the module that lists it (design.modules variables and choices)."""
+    var_of, choice_of = {}, {}
+    for m in design.get("modules") or []:
+        for k in m.get("variables") or []:
+            var_of[k] = m["module_id"]
+        for k in m.get("choices") or []:
+            choice_of[k] = m["module_id"]
+    by: dict[str, Record] = {}
+    package: Record = {}
+    stray = []
+    for k, q in changes.items():
+        m = var_of.get(k)
+        if m == "package":
+            package[k] = q
+        elif m:
+            by.setdefault(m, {}).setdefault("changes", {})[k] = q
+        else:
+            stray.append(k)
+    for k, v in choices.items():
+        m = choice_of.get(k)
+        if m and m != "package":
+            by.setdefault(m, {}).setdefault("choices", {})[k] = v
+        else:
+            stray.append(k)
+    order = [m for m in contract.MODULES if m in by]
+    return {m: by[m] for m in order}, package, stray
+
+
+def room_for(previous: Record, merged: Record) -> dict[str, list[Record]]:
+    """The packager's room for a round: for each module whose parts or members would leave its envelope on the
+    design with the round's changes, that module's envelope made again from the new design
+    (hiraku.designgen.modules.envelopes); computed by code, never guessed."""
+    from hiraku import designgen
+    from hiraku.designgen import modules
+
+    new = designgen.regenerate(previous, merged) if merged else previous
+    envs = {m["module_id"]: m.get("envelope") or [] for m in previous.get("modules") or []}
+    out_mods = {m for _, m, _ in modules.outside(new, envs)}
+    fresh = modules.envelopes(new)
+    return {m: fresh[m] for m in contract.MODULES if m in out_mods and m in fresh}
 
 
 REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
@@ -443,13 +488,57 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             except ValueError as e:  # the generator refuses the entry's own changes (designgen.DesignGenError)
                 s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
                 raise Stop(f"revise_design refused: {e}") from None
-        try:
-            out = revise_design(ctx, {**({"changes": changes} if changes else {}),
-                                      **({"choices": choices} if choices else {}), "reason": reason}, "designer")
-        except ToolError as e:
-            s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
-            raise Stop(f"revise_design refused: {e}") from None
+        if ctx.store.design().get("modules"):
+            out = revise_modules(rev, changes, choices, reason)
+        else:
+            try:
+                out = revise_design(ctx, {**({"changes": changes} if changes else {}),
+                                          **({"choices": choices} if choices else {}), "reason": reason}, "designer")
+            except ToolError as e:
+                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+                raise Stop(f"revise_design refused: {e}") from None
         s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、段 0 から全部の荷重条件をやり直します")
+
+    def revise_modules(rev: Record, changes: Record, choices: Record, reason: str) -> Record:
+        """One round on a design with modules (HK6): each module designer proposes its own variables and choices
+        (revise_design with module), then the packager builds the version (build_version) with the package
+        variables, giving room to a module whose parts would leave its space."""
+        from hiraku.agent.roles import route_reds
+
+        design = ctx.store.design()
+        by, package, stray = split_by_module(design, changes, choices)
+        if stray:
+            raise Stop(f"the plan changes {', '.join(stray)}, which no module of the design owns")
+        reasons = rev.get("reasons") or {}  # module (or packager) -> the plan's own words for that part
+        routed = route_reds(ctx, ctx.version)
+        ids = []
+        s.emit("agent.said", agent="lead", text="赤の荷重条件を、直せるモジュールの設計役に渡します: "
+               + "、".join(f"{contract.MODULE_NAMES_JA.get(m, m)}" for m in by) + "。版はパッケージ役がまとめます")
+        for m, part in by.items():
+            agent = f"designer.{m}"
+            start(agent)
+            args = {"module": m, **part, "reason": reasons.get(m) or reason}
+            if routed.get(agent):
+                args["load_case_ids"] = routed[agent]
+            try:
+                ids.append(revise_design(ctx, args, agent)["change_id"])
+            except ToolError as e:
+                s.emit("agent.said", agent=agent, text=f"提案できませんでした: {e}")
+                raise Stop(f"revise_design ({m}) refused: {e}") from None
+        start("packager")
+        merged = {**changes, **choices}
+        args = {"reason": reasons.get("packager") or reason, **({"changes": package} if package else {})}
+        room = room_for(design, merged)
+        if room:
+            args["envelopes"] = room
+            s.emit("agent.said", agent="packager",
+                   text="提案の部品が空間からはみ出すので、" + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in room)
+                   + " に新しい版の形から空間を配り直します (designgen.modules.envelopes)")
+        try:
+            return build_version(ctx, args, "packager")
+        except ToolError as e:
+            s.emit("agent.said", agent="packager", text=f"版を作れませんでした: {e}")
+            raise Stop(f"build_version refused: {e}") from None
 
     def can_revise() -> bool:
         return bool(revisions) and ctx.version - 1 < ctx.project["round_limit"]
