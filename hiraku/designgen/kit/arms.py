@@ -76,6 +76,14 @@ def _on_leg(a: np.ndarray, b: np.ndarray, y: float) -> np.ndarray:
     return a + t * (b - a)
 
 
+def cross_ends(hp: Record) -> tuple[np.ndarray, np.ndarray]:
+    """The lower arm's cross tube ends, on its front and rear legs at the damper's lower mount's side
+    position (hard points in mm)."""
+    p = {k: np.asarray(hp[k], float) for k in ("lca_front", "lca_rear", "lca_outer", "damper_lower")}
+    return (_on_leg(p["lca_front"], p["lca_outer"], p["damper_lower"][1]),
+            _on_leg(p["lca_rear"], p["lca_outer"], p["damper_lower"][1]))
+
+
 def place(lay: Layout, rho: float, suspension_prefix: str = "susp_") -> Record:
     """Replace every corner's suspension box by its arms, damper and ball joints. Returns {part id: kg}.
     Raises ValueError when a hard point is missing or the box is lighter than the tubes and ball joints."""
@@ -93,8 +101,7 @@ def place(lay: Layout, rho: float, suspension_prefix: str = "susp_") -> Record:
         box = lay.part(f"{suspension_prefix}{sid}")
         r = ARM_D_MM / 2.0
         mine = {}
-        cross = (_on_leg(p["lca_front"], p["lca_outer"], p["damper_lower"][1]),
-                 _on_leg(p["lca_rear"], p["lca_outer"], p["damper_lower"][1]))
+        cross = cross_ends(p)
         for role, a, b, label in (("lca_f", p["lca_front"], p["lca_outer"], "下の腕 (前の脚)"),
                                   ("lca_r", p["lca_rear"], p["lca_outer"], "下の腕 (後の脚)"),
                                   ("lca_x", cross[0], cross[1], "下の腕の横の管 (ダンパーの下の取付)"),

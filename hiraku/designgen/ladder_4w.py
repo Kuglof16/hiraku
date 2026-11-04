@@ -64,7 +64,7 @@ from typing import Any
 import numpy as np
 
 from hiraku.designgen.kit import arms, body, drivetrain, mounts, safety, steering, systems
-from hiraku.designgen.kit.frame import Frame
+from hiraku.designgen.kit.frame import Frame, gusset_spans
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
 from hiraku.designgen.kit.sections import rect_tube, round_tube
@@ -678,6 +678,8 @@ _OPTION_VARS.update({
 })
 INTEGERS = ("side_bar_count", "pedal_mount")
 ZERO_OR_AT_LEAST = {"rollbar_foot_b": 30.0, "rollbar_foot_h": 30.0, "rollbar_foot_t": 1.6}
+# part kinds of the frame itself, which a joint's gussets may meet (kit/frame.Frame.gussets avoids the others)
+GUSSET_NEIGHBOURS = ("frame", "gusset", "bracket", "rollbar")
 SWITCHES = SWITCHES + tuple(MOUNT_GROUPS) + ("side_bars", "side_net", "rollbar_stays", "rollbar_front_posts", "fenders")
 VARIABLES.update(_OPTION_VARS)
 OPTIONAL.update({
@@ -1090,9 +1092,11 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     # joint reinforcement last, so that a design's other parts come first as in the design without it
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
+        others = [p for p in lay.parts if p["kind"] not in GUSSET_NEIGHBOURS]  # the gussets keep out of these
         for st in tee:
             for side in "LR":
-                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho))
+                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho,
+                                               avoid=others))
     if v["cross_members_through"] == 1:
         if v["cross_h"] - v["cross_t"] >= v["rail_h"] - v["rail_t"]:
             raise DesignGenError("cross_members_through = 1 needs cross members lower than the rails "
@@ -1160,6 +1164,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
     arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
+    gusset_spans(design)  # the gussets welded over the rail nodes their legs reach
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
         _check_rear_legs(design)

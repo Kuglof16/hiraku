@@ -3026,12 +3026,32 @@
         {
           "to": "bj_lower_FL",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            490.00000000000006,
+            180.0
+          ],
+          "axis": [
+            0.0,
+            -0.09540940422425438,
+            0.9954381174063874
+          ]
         },
         {
           "to": "bj_upper_FL",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            460.00000000000006,
+            493.0
+          ],
+          "axis": [
+            0.0,
+            -0.09540940422425438,
+            0.9954381174063874
+          ]
         },
         {
           "to": "wheel_FL",
@@ -3063,12 +3083,32 @@
         {
           "to": "bj_lower_FR",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -490.00000000000006,
+            180.0
+          ],
+          "axis": [
+            0.0,
+            0.09540940422425438,
+            0.9954381174063874
+          ]
         },
         {
           "to": "bj_upper_FR",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -460.00000000000006,
+            493.0
+          ],
+          "axis": [
+            0.0,
+            0.09540940422425438,
+            0.9954381174063874
+          ]
         },
         {
           "to": "wheel_FR",
@@ -3100,12 +3140,32 @@
         {
           "to": "bj_lower_RL",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            490.00000000000006,
+            180.0
+          ],
+          "axis": [
+            0.0,
+            -0.09540940422425438,
+            0.9954381174063874
+          ]
         },
         {
           "to": "bj_upper_RL",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            460.00000000000006,
+            493.0
+          ],
+          "axis": [
+            0.0,
+            -0.09540940422425438,
+            0.9954381174063874
+          ]
         }
       ],
       "module": "suspension"
@@ -3169,12 +3229,32 @@
         {
           "to": "bj_lower_RR",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -490.00000000000006,
+            180.0
+          ],
+          "axis": [
+            0.0,
+            0.09540940422425438,
+            0.9954381174063874
+          ]
         },
         {
           "to": "bj_upper_RR",
           "via": "ball_joint",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -460.00000000000006,
+            493.0
+          ],
+          "axis": [
+            0.0,
+            0.09540940422425438,
+            0.9954381174063874
+          ]
         }
       ],
       "module": "suspension"
@@ -3371,7 +3451,17 @@
         {
           "to": "bracket_lca_FL1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            120.0,
+            196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3403,7 +3493,17 @@
         {
           "to": "bracket_lca_FL2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -120.0,
+            196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3430,12 +3530,22 @@
         {
           "to": "lca_FL_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            35.999999999999986,
+            401.80000000000007,
+            180.0
+          ]
         },
         {
           "to": "lca_FL_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -35.999999999999986,
+            401.80000000000007,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3467,7 +3577,17 @@
         {
           "to": "bracket_uca_FL1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            100.0,
+            266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3499,7 +3619,17 @@
         {
           "to": "bracket_uca_FL2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -100.0,
+            266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3526,12 +3656,22 @@
         {
           "to": "lca_FL_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            490.00000000000006,
+            180.0
+          ]
         },
         {
           "to": "lca_FL_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            490.00000000000006,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3558,12 +3698,22 @@
         {
           "to": "uca_FL_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            460.00000000000006,
+            493.0
+          ]
         },
         {
           "to": "uca_FL_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            460.00000000000006,
+            493.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3595,12 +3745,32 @@
         {
           "to": "bracket_damper_FL",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            428.8,
+            603.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         },
         {
           "to": "lca_FL_x",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            401.80000000000007,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3632,7 +3802,17 @@
         {
           "to": "bracket_lca_FR1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            120.0,
+            -196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3664,7 +3844,17 @@
         {
           "to": "bracket_lca_FR2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -120.0,
+            -196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3691,12 +3881,22 @@
         {
           "to": "lca_FR_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            35.999999999999986,
+            -401.80000000000007,
+            180.0
+          ]
         },
         {
           "to": "lca_FR_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -35.999999999999986,
+            -401.80000000000007,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3728,7 +3928,17 @@
         {
           "to": "bracket_uca_FR1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            100.0,
+            -266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3760,7 +3970,17 @@
         {
           "to": "bracket_uca_FR2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -100.0,
+            -266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3787,12 +4007,22 @@
         {
           "to": "lca_FR_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -490.00000000000006,
+            180.0
+          ]
         },
         {
           "to": "lca_FR_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -490.00000000000006,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3819,12 +4049,22 @@
         {
           "to": "uca_FR_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -460.00000000000006,
+            493.0
+          ]
         },
         {
           "to": "uca_FR_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -460.00000000000006,
+            493.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3856,12 +4096,32 @@
         {
           "to": "bracket_damper_FR",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -428.8,
+            603.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         },
         {
           "to": "lca_FR_x",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            0.0,
+            -401.80000000000007,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3893,7 +4153,17 @@
         {
           "to": "bracket_lca_RL1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -1900.0,
+            196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3925,7 +4195,17 @@
         {
           "to": "bracket_lca_RL2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2140.0,
+            196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3952,12 +4232,22 @@
         {
           "to": "lca_RL_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -1984.0,
+            401.80000000000007,
+            180.0
+          ]
         },
         {
           "to": "lca_RL_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2056.0,
+            401.80000000000007,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -3989,7 +4279,17 @@
         {
           "to": "bracket_uca_RL1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -1920.0,
+            266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4021,7 +4321,17 @@
         {
           "to": "bracket_uca_RL2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2120.0,
+            266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4048,12 +4358,22 @@
         {
           "to": "lca_RL_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            490.00000000000006,
+            180.0
+          ]
         },
         {
           "to": "lca_RL_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            490.00000000000006,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4080,12 +4400,22 @@
         {
           "to": "uca_RL_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            460.00000000000006,
+            493.0
+          ]
         },
         {
           "to": "uca_RL_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            460.00000000000006,
+            493.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4117,12 +4447,32 @@
         {
           "to": "bracket_damper_RL",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            428.8,
+            603.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         },
         {
           "to": "lca_RL_x",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            401.80000000000007,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4154,7 +4504,17 @@
         {
           "to": "bracket_lca_RR1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -1900.0,
+            -196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4186,7 +4546,17 @@
         {
           "to": "bracket_lca_RR2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2140.0,
+            -196.0,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4213,12 +4583,22 @@
         {
           "to": "lca_RR_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -1984.0,
+            -401.80000000000007,
+            180.0
+          ]
         },
         {
           "to": "lca_RR_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2056.0,
+            -401.80000000000007,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4250,7 +4630,17 @@
         {
           "to": "bracket_uca_RR1",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -1920.0,
+            -266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4282,7 +4672,17 @@
         {
           "to": "bracket_uca_RR2",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2120.0,
+            -266.8,
+            478.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4309,12 +4709,22 @@
         {
           "to": "lca_RR_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -490.00000000000006,
+            180.0
+          ]
         },
         {
           "to": "lca_RR_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -490.00000000000006,
+            180.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4341,12 +4751,22 @@
         {
           "to": "uca_RR_f",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -460.00000000000006,
+            493.0
+          ]
         },
         {
           "to": "uca_RR_r",
           "via": "weld",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -460.00000000000006,
+            493.0
+          ]
         }
       ],
       "module": "suspension"
@@ -4378,12 +4798,32 @@
         {
           "to": "bracket_damper_RR",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -428.8,
+            603.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         },
         {
           "to": "lca_RR_x",
           "via": "bushing",
-          "carries": "load"
+          "carries": "load",
+          "at_mm": [
+            -2020.0,
+            -401.80000000000007,
+            180.0
+          ],
+          "axis": [
+            1.0,
+            0.0,
+            0.0
+          ]
         }
       ],
       "module": "suspension"
