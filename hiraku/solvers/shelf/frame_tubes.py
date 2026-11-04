@@ -212,7 +212,7 @@ class FrameTubes(BuiltinTool):
         if why:
             raise LoadCaseError(why)
         try:
-            p = tubes.prepare(design, tubes.ELEMENT_SIZE_MM)
+            p = _prepared_for(design, tubes.ELEMENT_SIZE_MM)
         except (tubes.TubeMeshError, ValueError) as e:
             raise LoadCaseError(str(e)) from None
         rec = tubes.mesh_record(p["fs"], design, self.name)
@@ -234,7 +234,7 @@ class FrameTubes(BuiltinTool):
                                 f"for {size:g} mm: solved on a mesh of that size, not drawn on {mesh.get('mesh_id')}")
         p = _PREPARED.get(_digest(mesh))
         if p is None:
-            p = tubes.prepare(design, size)
+            p = _prepared_for(design, size)
             again = tubes.mesh_record(p["fs"], design, self.name)
             if _digest(again) != _digest(mesh):
                 return None, p, (f"mesh {mesh.get('mesh_id')} is not the tube-by-tube mesh of this design at {size:g} mm; "
@@ -278,7 +278,7 @@ class FrameTubes(BuiltinTool):
                 assumptions.append(K0_ASSUMPTION)
                 t_s = None
             mesh, prepared, why = self._mesh_to_solve_on(design, params, size)
-            r = tubes.analyse_loads(design, {"case": loads}, size, prepared=prepared)
+            r = tubes.analyse_loads(design, {"case": loads}, size, prepared=prepared or _prepared_for(design, size))
         except (tubes.TubeMeshError, ValueError) as e:
             raise LoadCaseError(str(e)) from None
         c = r["cases"]["case"]
@@ -311,6 +311,23 @@ def _digest(mesh: Record) -> str:
     h.update("|".join(mesh["element_member"]).encode())
     h.update(repr(float(mesh.get("element_size_mm", 0.0))).encode())
     return h.hexdigest()
+
+
+_BY_DESIGN: "OrderedDict[str, dict]" = OrderedDict()  # design content + element size -> tubes.prepare() record
+
+
+def _prepared_for(design: Record, size: float) -> dict:
+    """tubes.prepare(design, size), kept in this process by the design's content and the size (CACHE_SIZE of
+    them): a version's load cases, and a run without the version's mesh, do not mesh the frame again."""
+    key = tubes._content_key(design, float(size))
+    p = _BY_DESIGN.get(key)
+    if p is None:
+        p = tubes.prepare(design, size)
+        _BY_DESIGN[key] = p
+    _BY_DESIGN.move_to_end(key)
+    while len(_BY_DESIGN) > CACHE_SIZE:
+        _BY_DESIGN.popitem(last=False)
+    return p
 
 
 def _remember(mesh: Record, prepared: dict) -> None:
