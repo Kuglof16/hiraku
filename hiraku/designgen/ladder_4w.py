@@ -896,6 +896,8 @@ def _floors_clear_of_brackets(design: Record) -> None:
             blo, bhi = bc - bs / 2.0, bc + bs / 2.0
             if bhi[2] <= hi[2] or not all(blo[i] < hi[i] and bhi[i] > lo[i] for i in (0, 1)):
                 continue  # not above the floor's top, or not over it
+            if blo[2] <= hi[2] + FLOOR_BRACKET_GAP_MM:
+                continue  # standing on the floor (a pedal stand on it): put on after the floor, not in its way
             if axis == 1:  # narrower, about the floor's centre line
                 inner = (blo[1] - c[1]) if bc[1] > c[1] else (c[1] - bhi[1])
                 half = min(hi[1] - c[1], inner - FLOOR_BRACKET_GAP_MM)
