@@ -267,6 +267,18 @@ else:
 
 class ScriptedRunWithFakes(unittest.TestCase):
     CASES = {"done": (1.03, 1.03, True), "mismatch": (1.03, 1.4, True), "unusable": (1.03, 1.03, False)}
+    # the tests the fakes are made for: the demo file's own list now adds R8, R7 and H6, whose builders need
+    # parts (controls, nets, fenders) the fake design does not have
+    FAKE_TESTS = ["P1", "R1", "N1", "H1", "H3", "P3"]
+
+    def _requirements(self, tmp: Path) -> Path:
+        """offroad-4w.yaml with the fakes' tests, beside the run (the demo file names more)."""
+        import yaml
+        req = yaml.safe_load((ROOT / "data" / "requirements" / "offroad-4w.yaml").read_text(encoding="utf-8"))
+        req["tests"] = [t for t in req["tests"] if t in self.FAKE_TESTS]
+        out = tmp / "offroad-4w.yaml"
+        out.write_text(yaml.safe_dump(req, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return out
 
     def test_store_output_follows_the_contract(self):
         try:
@@ -275,9 +287,9 @@ class ScriptedRunWithFakes(unittest.TestCase):
             from tests.tools import fakes
         except ImportError as e:
             self.skipTest(f"needs hiraku.agent and tests/tools/fakes.py (design dept): {e}")
-        req = ROOT / "data" / "requirements" / "offroad-4w.yaml"
         for name, (step, frame, checks_pass) in self.CASES.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
+                req = self._requirements(Path(tmp))
                 design = contract.EXAMPLES_DIR / "design.json"
                 if callable(getattr(fakes, "loaded_design", None)):  # the design the fakes are made for
                     design = Path(tmp) / "design.json"
