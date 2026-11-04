@@ -25,6 +25,8 @@ Standard library only. Routes:
                                         the K0 formulas ({"ready": false} while computed, shelf.py)
     GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
                                         (tools/<name>-<n>.check.json)
+    GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
+                                        module designers (web/js/modules.js)
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
@@ -284,6 +286,13 @@ class _NullWriter:
         self._raw.flush()
 
 
+def modules_info() -> dict:
+    """GET /api/modules: the contract's module ids, their names and the module designers' agent ids."""
+    from hiraku import contract
+
+    return {"modules": list(contract.MODULES), "names": dict(contract.MODULE_NAMES_JA), "designers": list(contract.MODULE_DESIGNERS)}
+
+
 ASSET_DIR = "assets/polyhaven"  # web/js/look.js ASSET_DIR: Poly Haven files the user put there
 ASSET_SUFFIXES = {".hdr", ".exr", ".jpg", ".jpeg", ".png"}
 
@@ -345,6 +354,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/assets":
             self._send_json({"files": list_assets(self.web_dir) if self.assets else []})
+            return
+        if path == "/api/modules":
+            self._send_json(modules_info())
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:

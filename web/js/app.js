@@ -32,6 +32,8 @@ import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLege
 import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
+import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
+import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -44,7 +46,7 @@ const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
 const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of replay
 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
-const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : "#c9c3b6");
+const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : id?.startsWith("designer.") ? moduleColor(id.slice(9)) : "#c9c3b6"); // modules: designer.<module>
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
 const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
@@ -53,7 +55,7 @@ let asmPanel = null; // mounted on first show
 const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true },
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, modules: false, spaces: false }, // modules: modules, spaces (modules.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -73,6 +75,9 @@ const ui = {
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+// modules: ?on=modules,spaces turns those on at load (they take the contour's place)
+for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
+if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
 
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
@@ -95,6 +100,7 @@ const look = lookFromParams(params); // ?look=real: the photograph-like look (de
 document.body.classList.add(`look-${look}`);
 const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 const bench = new Workbench3D(viewport, look, { quality });
+const modLayer = new ModuleLayer(bench); // modules:
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -514,6 +520,7 @@ function renderAgents(s) {
   const order = agentOrder(s);
   const ul = $("agents");
   ul.classList.toggle("many", order.length > 6);
+  ul.classList.toggle("lots", order.length > 8); // modules: the six module designers come on top of the others
   ul.classList.toggle("pets", !!agentPets);
   ul.innerHTML = order
     .map((id) => {
@@ -529,6 +536,7 @@ function renderAgents(s) {
 function rank(id) {
   const fixed = ["lead", "designer", "packager"];
   if (fixed.includes(id)) return fixed.indexOf(id);
+  if (id.startsWith("designer.")) return 1.5; // modules: the module designers after the designer, in the record's order
   if (id.startsWith("cae.")) return 3 + DOMAINS.indexOf(id.slice(4));
   return 20;
 }
@@ -942,10 +950,12 @@ const LEGEND_GAP_PX = 12;
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
 
 // graphs: the analysis has series to chart without a motion (series against x).
-function renderToggles(motion, lc, graphs = false) {
+function renderToggles(motion, lc, graphs = false, design = null) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
+    // modules: the two switches only for a design split into modules
+    (hasModules(design) ? btn("modules", "モジュール", t.modules) + btn("spaces", "モジュールの空間", t.spaces) : "") +
     btn("shape", "形状", !t.contour) +
     btn("contour", "コンター", t.contour) +
     btn("arrows", "力の矢印", t.arrows) +
@@ -1203,7 +1213,7 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0);
+    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null);
     const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
@@ -1235,6 +1245,9 @@ function draw() {
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
+    // modules: the module colours and spaces on the 3D, and their legend
+    modLayer.set({ colors: ui.toggles.modules, spaces: ui.toggles.spaces });
+    renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces });
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
     $("now").textContent = now;
@@ -1245,6 +1258,9 @@ function draw() {
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
+  // modules: the round's proposals (or the version built from them) at the replay's time, under the now line
+  const rc = renderRoundCard(viewport, tab === "bench" ? roundCardHtml(s, player.playhead) : "");
+  if (!rc.hidden) rc.style.top = `${$("now").hidden ? 10 : $("now").offsetTop + $("now").offsetHeight + 8}px`;
   if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
   renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
@@ -1307,6 +1323,7 @@ window.hiraku = {
   seek: seekAndDraw,
   state: () => player.state,
   bench,
+  modules: modLayer, // modules: what the module layer draws (for the tests)
   pets: () => agentPets,
   // Replace what is shown with these events (parsed objects) and stop at t.
   load: (events, t = 0) => {
@@ -1375,6 +1392,9 @@ $("toggles").addEventListener("click", (ev) => {
   const k = b.dataset.toggle;
   if (k === "shape") ui.toggles.contour = false;
   else ui.toggles[k] = !ui.toggles[k];
+  // modules: the module colours or spaces and the contour take turns (one legend in its place)
+  if ((k === "modules" || k === "spaces") && ui.toggles[k]) ui.toggles.contour = false;
+  if (k === "contour" && ui.toggles.contour) ui.toggles.modules = ui.toggles.spaces = false;
 });
 $("viewswitch").addEventListener("click", (ev) => {
   const b = ev.target.closest("button");
@@ -1445,7 +1465,7 @@ function resetPlayer() {
 
 function startPlayback() {
   // the pets first (a page opened at ?t= draws them in its first frame)
-  petsReady.then(play);
+  Promise.all([petsReady, loadModuleNames()]).then(play); // modules: the module names before the first frame
 }
 function play() {
   if (params.has("t")) {

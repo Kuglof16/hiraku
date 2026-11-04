@@ -12,6 +12,7 @@ import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from 
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
 import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
 import { heldBandHtml, heldCases } from "./held.js";
+import { builtLine } from "./proposals.js"; // modules:
 
 const W = 300;
 const H = 150;
@@ -224,11 +225,18 @@ export class TileBoard {
       })
       .join(`<span class="varrow">→</span>`);
     const design = v != null ? s.designs[v] : null;
-    const change = design && design.parent_version != null && design.change_reason ? `<span class="change">版 ${design.parent_version} → ${v} で変えたこと: ${esc(design.change_reason)}</span>` : "";
+    // modules: a version built from module designers' proposals names each module's change (proposals.js)
+    const built = design ? builtLine(s, v) : "";
+    const change = built
+      ? `<span class="change" data-built="${v}">${built}</span>`
+      : design && design.parent_version != null && design.change_reason ? `<span class="change">版 ${design.parent_version} → ${v} で変えたこと: ${esc(design.change_reason)}</span>` : "";
+    const headIds = pets ? pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)) : [];
+    const headN = headIds.length;
     this.head.innerHTML =
       `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
       `<span class="flow">${flow}</span>${change}` +
-      (pets ? `<div class="headpets">${pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)).map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div" })).join("")}</div>` : "");
+      (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div" })).join("")}</div>` : "");
+    this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
 
     const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
     this.modeViews = [];
