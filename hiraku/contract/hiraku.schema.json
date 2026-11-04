@@ -704,6 +704,14 @@
               "carries": {
                 "type": "string",
                 "description": "What goes through the link: torque, steer, brake, load, power, signal."
+              },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "Where the two are joined: a point on both shapes (the generator computes it; H1-joints checks it lies on both within 2 mm)."
+              },
+              "axis": {
+                "$ref": "#/$defs/vec3",
+                "description": "For a pin, bushing, hinge or ball joint: the direction of its axis (unit vector), so the joint can be drawn and turned about it."
               }
             }
           },
@@ -879,6 +887,10 @@
             "$ref": "#/$defs/module_change"
           },
           "description": "The proposals this version was built from (empty or absent for version 1 and for designs without modules)."
+        },
+        "archetype": {
+          "type": "string",
+          "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a hand-made design."
         }
       }
     },
@@ -3281,7 +3293,8 @@
         "knowledge.imported",
         "rule_check.recorded",
         "mesh.created",
-        "design.change_proposed"
+        "design.change_proposed",
+        "load_cases.created"
       ]
     },
     "event": {
@@ -3899,6 +3912,25 @@
             "properties": {
               "data": {
                 "$ref": "#/$defs/module_change"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "load_cases.created"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/version_load_cases"
               }
             }
           }
@@ -5116,6 +5148,35 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/interface"
+          }
+        },
+        "regrow": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "uniqueItems": true,
+          "description": "Modules whose envelopes the code re-grows around their parts in the new version (designgen.modules.envelopes), instead of boxes written in envelopes. The packager names each module on purpose and says why in reason; overlaps between modules are still judged by H1-interference."
+        }
+      }
+    },
+    "version_load_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_version",
+        "load_cases"
+      ],
+      "description": "The load cases built for one design version (a builder's criterion may read the version's own design, e.g. how many parts to assemble). Written to v00N/load_cases.json; project.load_cases stays the first version's.",
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "load_cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/load_case"
           }
         }
       }
