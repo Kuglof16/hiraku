@@ -9,7 +9,8 @@ from typing import Any
 from hiraku import contract
 from hiraku.agent import inbox, prompts
 from hiraku.agent.hooks import Hooks
-from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, all_plugin_skills, has_modules, routing_text, subagents
+from hiraku.agent.roles import (PLUGIN_DIR, agent_id_from_sdk, all_plugin_skills, has_modules, plugin_skills, routing_text,
+                                subagents)
 from hiraku.catalog.mixes import Mix, get_mix
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
@@ -85,7 +86,8 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str | No
         tools=[AGENT_TOOL, SKILL_TOOL],
         setting_sources=[],  # never read this machine's CLAUDE.md, settings or hooks
         plugins=[{"type": "local", "path": str(PLUGIN_DIR)}],
-        skills=all_plugin_skills(),  # only HIRAKU's skills, not the ones bundled with the CLI
+        # only HIRAKU's skills, not the ones bundled with the CLI; the module designers' only with modules
+        skills=all_plugin_skills() if modules else plugin_skills(),
         mcp_servers={contract.MCP_SERVER: server},
         strict_mcp_config=True,  # no MCP servers but hiraku (no connectors of a logged-in account)
         # Exact names, not a wildcard: under dontAsk anything not listed is denied.
