@@ -63,7 +63,7 @@ from typing import Any
 
 import numpy as np
 
-from hiraku.designgen.kit import body, drivetrain, mounts, safety, steering, systems
+from hiraku.designgen.kit import arms, body, drivetrain, mounts, safety, steering, systems
 from hiraku.designgen.kit.frame import Frame
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
@@ -1039,6 +1039,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
+    _kit(arms.place, lay, rho)  # the arms, dampers and ball joints in place of the suspension boxes
     plate_masses(lay)
     lay.reorder(PART_ORDER)
     materials = {"stkr400": material, PLATE_STEEL: steel}
@@ -1158,6 +1159,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     add_options(design, v, guard, rho, net, closure)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
+    arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
         _check_rear_legs(design)

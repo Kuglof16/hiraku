@@ -2879,58 +2879,6 @@
       "module": "suspension"
     },
     {
-      "id": "susp_FL",
-      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-        "center_mm": [
-          0.0,
-          355.5,
-          180.0
-        ],
-        "size_mm": [
-          190.0,
-          269.00000000000006,
-          60.0
-        ]
-      },
-      "mass_kg": 4.0,
-      "system": "suspension",
-      "connects_to": [
-        {
-          "to": "LAl1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "LAl2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FL1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FL2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "LAd",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "FL",
-          "via": "bushing",
-          "carries": "load"
-        }
-      ],
-      "module": "suspension"
-    },
-    {
       "id": "wheel_FR",
       "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
@@ -2973,58 +2921,6 @@
       "module": "suspension"
     },
     {
-      "id": "susp_FR",
-      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-        "center_mm": [
-          0.0,
-          -355.5,
-          180.0
-        ],
-        "size_mm": [
-          190.0,
-          269.00000000000006,
-          60.0
-        ]
-      },
-      "mass_kg": 4.0,
-      "system": "suspension",
-      "connects_to": [
-        {
-          "to": "RAl1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "RAl2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FR1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_FR2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "RAd",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "FR",
-          "via": "bushing",
-          "carries": "load"
-        }
-      ],
-      "module": "suspension"
-    },
-    {
       "id": "wheel_RL",
       "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
@@ -3057,58 +2953,6 @@
           "to": "RL",
           "via": "rest",
           "carries": "brake"
-        }
-      ],
-      "module": "suspension"
-    },
-    {
-      "id": "susp_RL",
-      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-        "center_mm": [
-          -2020.0,
-          355.5,
-          180.0
-        ],
-        "size_mm": [
-          190.0,
-          269.00000000000006,
-          60.0
-        ]
-      },
-      "mass_kg": 3.1074002113230854,
-      "system": "suspension",
-      "connects_to": [
-        {
-          "to": "bracket_lca_RL1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_lca_RL2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_RL1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_RL2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "LBd",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "RL",
-          "via": "bushing",
-          "carries": "load"
         }
       ],
       "module": "suspension"
@@ -3151,58 +2995,6 @@
       "module": "suspension"
     },
     {
-      "id": "susp_RR",
-      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-        "center_mm": [
-          -2020.0,
-          -355.5,
-          180.0
-        ],
-        "size_mm": [
-          190.0,
-          269.00000000000006,
-          60.0
-        ]
-      },
-      "mass_kg": 3.1074002113230854,
-      "system": "suspension",
-      "connects_to": [
-        {
-          "to": "bracket_lca_RR1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_lca_RR2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_RR1",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "bracket_uca_RR2",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "RBd",
-          "via": "bushing",
-          "carries": "load"
-        },
-        {
-          "to": "RR",
-          "via": "bushing",
-          "carries": "load"
-        }
-      ],
-      "module": "suspension"
-    },
-    {
       "id": "knuckle_FL",
       "name": "前左のナックル (ハブの軸受けを含む)",
       "kind": "knuckle",
@@ -3222,7 +3014,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_FL",
+          "to": "bj_lower_FL",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_FL",
           "via": "ball_joint",
           "carries": "load"
         },
@@ -3254,7 +3051,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_FR",
+          "to": "bj_lower_FR",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_FR",
           "via": "ball_joint",
           "carries": "load"
         },
@@ -3286,7 +3088,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_RL",
+          "to": "bj_lower_RL",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_RL",
           "via": "ball_joint",
           "carries": "load"
         }
@@ -3350,7 +3157,12 @@
       "system": "suspension",
       "connects_to": [
         {
-          "to": "susp_RR",
+          "to": "bj_lower_RR",
+          "via": "ball_joint",
+          "carries": "load"
+        },
+        {
+          "to": "bj_upper_RR",
           "via": "ball_joint",
           "carries": "load"
         }
@@ -3518,6 +3330,1050 @@
           "to": "wheel_RR",
           "via": "friction",
           "carries": "brake"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_FL_f",
+      "name": "前左の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          60.0,
+          343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          112.20347853205739
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_FL1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_FL_r",
+      "name": "前左の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -60.0,
+          343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          67.79652146794261
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_FL2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_FL_x",
+      "name": "前左の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          0.0,
+          401.80000000000007,
+          180.0
+        ],
+        "size_mm": [
+          97.39999999999998,
+          25.4,
+          25.4
+        ]
+      },
+      "mass_kg": 0.08309939825345888,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_FL_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_FL_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_FL_f",
+      "name": "前左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          50.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FL1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_FL_r",
+      "name": "前左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -50.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FL2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_lower_FL",
+      "name": "前左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_FL_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_FL_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_upper_FL",
+      "name": "前左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_FL_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "uca_FL_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "damper_FL",
+      "name": "前左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          0.0,
+          415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          90.0
+        ]
+      },
+      "mass_kg": 2.2805447189759964,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_damper_FL",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "lca_FL_x",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_FR_f",
+      "name": "前右の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          60.0,
+          -343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          -112.20347853205739
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_FR1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_FR_r",
+      "name": "前右の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -60.0,
+          -343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          -67.79652146794261
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_FR2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_FR_x",
+      "name": "前右の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          0.0,
+          -401.80000000000007,
+          180.0
+        ],
+        "size_mm": [
+          97.39999999999998,
+          25.4,
+          25.4
+        ]
+      },
+      "mass_kg": 0.08309939825345888,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_FR_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_FR_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_FR_f",
+      "name": "前右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          50.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FR1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_FR_r",
+      "name": "前右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -50.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_FR2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_lower_FR",
+      "name": "前右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          -490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_FR_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_FR_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_upper_FR",
+      "name": "前右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          0.0,
+          -460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_FR_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "uca_FR_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "damper_FR",
+      "name": "前右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          0.0,
+          -415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          -90.0
+        ]
+      },
+      "mass_kg": 2.2805447189759964,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_damper_FR",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "lca_FR_x",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_RL_f",
+      "name": "後左の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -1960.0,
+          343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          112.20347853205739
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_RL1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_RL_r",
+      "name": "後左の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2080.0,
+          343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          67.79652146794261
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_RL2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_RL_x",
+      "name": "後左の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          401.80000000000007,
+          180.0
+        ],
+        "size_mm": [
+          97.4,
+          25.4,
+          25.4
+        ]
+      },
+      "mass_kg": 0.08309939825345891,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_RL_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_RL_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_RL_f",
+      "name": "後左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -1970.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RL1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_RL_r",
+      "name": "後左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2070.0,
+          363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RL2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_lower_RL",
+      "name": "後左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_RL_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_RL_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_upper_RL",
+      "name": "後左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_RL_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "uca_RL_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "damper_RL",
+      "name": "後左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          90.0
+        ]
+      },
+      "mass_kg": 1.3879449302990818,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_damper_RL",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "lca_RL_x",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_RR_f",
+      "name": "後右の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -1960.0,
+          -343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          -112.20347853205739
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_RR1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_RR_r",
+      "name": "後右の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2080.0,
+          -343.0,
+          180.0
+        ],
+        "size_mm": [
+          342.9468469375818,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          -67.79652146794261
+        ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_lca_RR2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "lca_RR_x",
+      "name": "後右の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -401.80000000000007,
+          180.0
+        ],
+        "size_mm": [
+          97.4,
+          25.4,
+          25.4
+        ]
+      },
+      "mass_kg": 0.08309939825345891,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_RR_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_RR_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_RR_f",
+      "name": "後右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -1970.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -117.36600907341865
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RR1",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "uca_RR_r",
+      "name": "後右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+        "center_mm": [
+          -2070.0,
+          -363.40000000000003,
+          485.5
+        ],
+        "size_mm": [
+          243.46246811407053,
+          25.4,
+          25.4
+        ],
+        "rpy_deg": [
+          0.0,
+          -3.944355573403167,
+          -62.63399092658136
+        ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_uca_RR2",
+          "via": "bushing",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_lower_RR",
+      "name": "後右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -490.00000000000006,
+          180.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "lca_RR_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "lca_RR_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "bj_upper_RR",
+      "name": "後右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -460.00000000000006,
+          493.0
+        ],
+        "size_mm": [
+          40.0,
+          40.0,
+          40.0
+        ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "uca_RR_f",
+          "via": "weld",
+          "carries": "load"
+        },
+        {
+          "to": "uca_RR_r",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "suspension"
+    },
+    {
+      "id": "damper_RR",
+      "name": "後右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -415.30000000000007,
+          391.5
+        ],
+        "size_mm": [
+          473.8608262153982,
+          50.0,
+          50.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -86.34777721969367,
+          -90.0
+        ]
+      },
+      "mass_kg": 1.3879449302990818,
+      "system": "suspension",
+      "connects_to": [
+        {
+          "to": "bracket_damper_RR",
+          "via": "bushing",
+          "carries": "load"
+        },
+        {
+          "to": "lca_RR_x",
+          "via": "bushing",
+          "carries": "load"
         }
       ],
       "module": "suspension"
@@ -4077,6 +4933,246 @@
         }
       ],
       "module": "occupant"
+    },
+    {
+      "id": "bracket_lca_FL1",
+      "name": "前左の下の腕の付け根の金具 (前) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          95.5,
+          196.0,
+          165.5
+        ],
+        "size_mm": [
+          51.0,
+          30.0,
+          31.0
+        ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+        "LAl1"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "LAl1",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_lca_FL2",
+      "name": "前左の下の腕の付け根の金具 (後) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -95.5,
+          196.0,
+          165.5
+        ],
+        "size_mm": [
+          51.0,
+          30.0,
+          31.0
+        ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+        "LAl2"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "LAl2",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_damper_FL",
+      "name": "前左のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          0.0,
+          428.8,
+          603.0
+        ],
+        "size_mm": [
+          50.0,
+          30.0,
+          30.0
+        ]
+      },
+      "mass_kg": 0.045216000000000006,
+      "carried_by": [
+        "LAd"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "LAd",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_lca_FR1",
+      "name": "前右の下の腕の付け根の金具 (前) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          95.5,
+          -196.0,
+          165.5
+        ],
+        "size_mm": [
+          51.0,
+          30.0,
+          31.0
+        ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+        "RAl1"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "RAl1",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_lca_FR2",
+      "name": "前右の下の腕の付け根の金具 (後) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -95.5,
+          -196.0,
+          165.5
+        ],
+        "size_mm": [
+          51.0,
+          30.0,
+          31.0
+        ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+        "RAl2"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "RAl2",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_damper_FR",
+      "name": "前右のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          0.0,
+          -428.8,
+          603.0
+        ],
+        "size_mm": [
+          50.0,
+          30.0,
+          30.0
+        ]
+      },
+      "mass_kg": 0.045216000000000006,
+      "carried_by": [
+        "RAd"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "RAd",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_damper_RL",
+      "name": "後左のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          428.8,
+          603.0
+        ],
+        "size_mm": [
+          50.0,
+          30.0,
+          30.0
+        ]
+      },
+      "mass_kg": 0.045216000000000006,
+      "carried_by": [
+        "LBd"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "LBd",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "bracket_damper_RR",
+      "name": "後右のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -2020.0,
+          -428.8,
+          603.0
+        ],
+        "size_mm": [
+          50.0,
+          30.0,
+          30.0
+        ]
+      },
+      "mass_kg": 0.045216000000000006,
+      "carried_by": [
+        "RBd"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "RBd",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
     },
     {
       "id": "fit_pedal_accel_tower_post_RA2",
@@ -5979,162 +7075,6 @@
             "frame",
             "suspension"
           ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-077",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-078",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-079",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-080",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-081",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2080.0,
-            310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-082",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1970.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-083",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2070.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-084",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            -310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-085",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2080.0,
-            -310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-086",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1970.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-087",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2070.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-088",
-          "between": [
-            "frame",
-            "suspension"
-          ],
           "via": "ball_joint",
           "point_mm": [
             -2140.0,
@@ -6143,7 +7083,7 @@
           ]
         },
         {
-          "id": "if-089",
+          "id": "if-077",
           "between": [
             "frame",
             "suspension"
@@ -6156,7 +7096,267 @@
           ]
         },
         {
+          "id": "if-078",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            77.75,
+            269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-079",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -77.75,
+            269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-080",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            75.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-081",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -75.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-082",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            0.0,
+            422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-083",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            77.75,
+            -269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-084",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -77.75,
+            -269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-085",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            75.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-086",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -75.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-087",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            0.0,
+            -422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-088",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1930.0,
+            304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-089",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2110.0,
+            304.25,
+            216.25
+          ]
+        },
+        {
           "id": "if-090",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1945.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-091",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2095.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2020.0,
+            422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1930.0,
+            -304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-094",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2110.0,
+            -304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-095",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1945.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-096",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2095.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-097",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2020.0,
+            -422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-098",
           "between": [
             "body",
             "frame"
@@ -6169,7 +7369,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-099",
           "between": [
             "body",
             "frame"
@@ -6997,6 +8197,102 @@
         },
         {
           "center_mm": [
+            95.5,
+            196.0,
+            165.5
+          ],
+          "size_mm": [
+            101.0,
+            80.0,
+            81.0
+          ]
+        },
+        {
+          "center_mm": [
+            -95.5,
+            196.0,
+            165.5
+          ],
+          "size_mm": [
+            101.0,
+            80.0,
+            81.0
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            428.8,
+            603.0
+          ],
+          "size_mm": [
+            100.0,
+            80.0,
+            80.0
+          ]
+        },
+        {
+          "center_mm": [
+            95.5,
+            -196.0,
+            165.5
+          ],
+          "size_mm": [
+            101.0,
+            80.0,
+            81.0
+          ]
+        },
+        {
+          "center_mm": [
+            -95.5,
+            -196.0,
+            165.5
+          ],
+          "size_mm": [
+            101.0,
+            80.0,
+            81.0
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            -428.8,
+            603.0
+          ],
+          "size_mm": [
+            100.0,
+            80.0,
+            80.0
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            428.8,
+            603.0
+          ],
+          "size_mm": [
+            100.0,
+            80.0,
+            80.0
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            -428.8,
+            603.0
+          ],
+          "size_mm": [
+            100.0,
+            80.0,
+            80.0
+          ]
+        },
+        {
+          "center_mm": [
             -319.68199399802495,
             -350.0,
             499.74017334403584
@@ -7762,162 +9058,6 @@
             "frame",
             "suspension"
           ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-077",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-078",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-079",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-080",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-081",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2080.0,
-            310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-082",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1970.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-083",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2070.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-084",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            -310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-085",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2080.0,
-            -310.5,
-            216.25
-          ]
-        },
-        {
-          "id": "if-086",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1970.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-087",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -2070.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-088",
-          "between": [
-            "frame",
-            "suspension"
-          ],
           "via": "ball_joint",
           "point_mm": [
             -2140.0,
@@ -7926,7 +9066,7 @@
           ]
         },
         {
-          "id": "if-089",
+          "id": "if-077",
           "between": [
             "frame",
             "suspension"
@@ -7939,7 +9079,267 @@
           ]
         },
         {
+          "id": "if-078",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            77.75,
+            269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-079",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -77.75,
+            269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-080",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            75.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-081",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -75.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-082",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            0.0,
+            422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-083",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            77.75,
+            -269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-084",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -77.75,
+            -269.5,
+            172.75
+          ]
+        },
+        {
+          "id": "if-085",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            75.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-086",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -75.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-087",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            0.0,
+            -422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-088",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1930.0,
+            304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-089",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2110.0,
+            304.25,
+            216.25
+          ]
+        },
+        {
           "id": "if-090",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1945.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-091",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2095.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2020.0,
+            422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1930.0,
+            -304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-094",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2110.0,
+            -304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-095",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1945.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-096",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2095.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-097",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2020.0,
+            -422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-098",
           "between": [
             "body",
             "frame"
@@ -7952,7 +9352,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-099",
           "between": [
             "body",
             "frame"
@@ -8006,18 +9406,6 @@
         {
           "center_mm": [
             0.0,
-            355.5,
-            180.0
-          ],
-          "size_mm": [
-            240.0,
-            319.0,
-            110.0
-          ]
-        },
-        {
-          "center_mm": [
-            0.0,
             -550.0,
             300.0
           ],
@@ -8025,18 +9413,6 @@
             650.0,
             250.0,
             650.0
-          ]
-        },
-        {
-          "center_mm": [
-            0.0,
-            -355.5,
-            180.0
-          ],
-          "size_mm": [
-            240.0,
-            319.0,
-            110.0
           ]
         },
         {
@@ -8054,18 +9430,6 @@
         {
           "center_mm": [
             -2020.0,
-            355.5,
-            180.0
-          ],
-          "size_mm": [
-            240.0,
-            319.0,
-            110.0
-          ]
-        },
-        {
-          "center_mm": [
-            -2020.0,
             -550.0,
             300.0
           ],
@@ -8073,18 +9437,6 @@
             650.0,
             250.0,
             650.0
-          ]
-        },
-        {
-          "center_mm": [
-            -2020.0,
-            -355.5,
-            180.0
-          ],
-          "size_mm": [
-            240.0,
-            319.0,
-            110.0
           ]
         },
         {
@@ -8205,6 +9557,390 @@
             110.0,
             100.0,
             140.0
+          ]
+        },
+        {
+          "center_mm": [
+            60.0,
+            343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.11511388449395,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -60.00000000000001,
+            343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.115113884494,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            401.80000000000007,
+            180.0
+          ],
+          "size_mm": [
+            147.39999999999998,
+            75.39999999999998,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            49.99999999999999,
+            363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896423,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            -50.0,
+            363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896423,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            490.0,
+            180.0
+          ],
+          "size_mm": [
+            90.0,
+            89.99999999999994,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            460.00000000000006,
+            493.0
+          ],
+          "size_mm": [
+            90.0,
+            90.0,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            415.30000000000007,
+            391.5
+          ],
+          "size_mm": [
+            100.0,
+            130.08346185444816,
+            526.0834618544482
+          ]
+        },
+        {
+          "center_mm": [
+            60.0,
+            -343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.11511388449395,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -60.00000000000001,
+            -343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.115113884494,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            -401.80000000000007,
+            180.0
+          ],
+          "size_mm": [
+            147.39999999999998,
+            75.39999999999998,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            49.99999999999999,
+            -363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896423,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            -50.0,
+            -363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896423,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            -490.0,
+            180.0
+          ],
+          "size_mm": [
+            90.0,
+            89.99999999999994,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            -460.00000000000006,
+            493.0
+          ],
+          "size_mm": [
+            90.0,
+            90.0,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            0.0,
+            -415.30000000000007,
+            391.5
+          ],
+          "size_mm": [
+            100.0,
+            130.08346185444816,
+            526.0834618544482
+          ]
+        },
+        {
+          "center_mm": [
+            -1960.0,
+            343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.11511388449412,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -2080.0,
+            343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.11511388449412,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            401.80000000000007,
+            180.0
+          ],
+          "size_mm": [
+            147.39999999999986,
+            75.39999999999998,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -1970.0,
+            363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896446,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            -2070.0,
+            363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896446,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            490.0,
+            180.0
+          ],
+          "size_mm": [
+            90.0,
+            89.99999999999994,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            460.00000000000006,
+            493.0
+          ],
+          "size_mm": [
+            90.0,
+            90.0,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            415.30000000000007,
+            391.5
+          ],
+          "size_mm": [
+            100.0,
+            130.08346185444816,
+            526.0834618544482
+          ]
+        },
+        {
+          "center_mm": [
+            -1960.0,
+            -343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.11511388449412,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -2080.0,
+            -343.0,
+            180.0
+          ],
+          "size_mm": [
+            203.11511388449412,
+            377.1151138844941,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            -401.80000000000007,
+            180.0
+          ],
+          "size_mm": [
+            147.39999999999986,
+            75.39999999999998,
+            75.39999999999998
+          ]
+        },
+        {
+          "center_mm": [
+            -1970.0,
+            -363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896446,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            -2070.0,
+            -363.40000000000003,
+            485.5
+          ],
+          "size_mm": [
+            185.00862310896446,
+            278.9313773694072,
+            92.08704143352185
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            -490.0,
+            180.0
+          ],
+          "size_mm": [
+            90.0,
+            89.99999999999994,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            -460.00000000000006,
+            493.0
+          ],
+          "size_mm": [
+            90.0,
+            90.0,
+            90.0
+          ]
+        },
+        {
+          "center_mm": [
+            -2020.0,
+            -415.30000000000007,
+            391.5
+          ],
+          "size_mm": [
+            100.0,
+            130.08346185444816,
+            526.0834618544482
           ]
         }
       ],
@@ -8553,11 +10289,11 @@
             "frame",
             "suspension"
           ],
-          "via": "bushing",
+          "via": "ball_joint",
           "point_mm": [
-            50.0,
-            328.2,
-            318.25
+            -2140.0,
+            308.0866577448127,
+            267.0824073268455
           ]
         },
         {
@@ -8566,11 +10302,11 @@
             "frame",
             "suspension"
           ],
-          "via": "bushing",
+          "via": "ball_joint",
           "point_mm": [
-            -50.0,
-            328.2,
-            318.25
+            -2140.0,
+            -308.0866577448127,
+            267.0824073268455
           ]
         },
         {
@@ -8581,9 +10317,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            50.0,
-            -328.2,
-            318.25
+            77.75,
+            269.5,
+            172.75
           ]
         },
         {
@@ -8594,9 +10330,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -50.0,
-            -328.2,
-            318.25
+            -77.75,
+            269.5,
+            172.75
           ]
         },
         {
@@ -8607,9 +10343,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1960.0,
-            310.5,
-            216.25
+            75.0,
+            332.15,
+            471.0
           ]
         },
         {
@@ -8620,9 +10356,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2080.0,
-            310.5,
-            216.25
+            -75.0,
+            332.15,
+            471.0
           ]
         },
         {
@@ -8633,9 +10369,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1970.0,
-            328.2,
-            318.25
+            0.0,
+            422.05000000000007,
+            497.25
           ]
         },
         {
@@ -8646,9 +10382,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2070.0,
-            328.2,
-            318.25
+            77.75,
+            -269.5,
+            172.75
           ]
         },
         {
@@ -8659,9 +10395,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1960.0,
-            -310.5,
-            216.25
+            -77.75,
+            -269.5,
+            172.75
           ]
         },
         {
@@ -8672,9 +10408,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2080.0,
-            -310.5,
-            216.25
+            75.0,
+            -332.15,
+            471.0
           ]
         },
         {
@@ -8685,9 +10421,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1970.0,
-            -328.2,
-            318.25
+            -75.0,
+            -332.15,
+            471.0
           ]
         },
         {
@@ -8698,9 +10434,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2070.0,
-            -328.2,
-            318.25
+            0.0,
+            -422.05000000000007,
+            497.25
           ]
         },
         {
@@ -8709,11 +10445,11 @@
             "frame",
             "suspension"
           ],
-          "via": "ball_joint",
+          "via": "bushing",
           "point_mm": [
-            -2140.0,
-            308.0866577448127,
-            267.0824073268455
+            -1930.0,
+            304.25,
+            216.25
           ]
         },
         {
@@ -8722,11 +10458,115 @@
             "frame",
             "suspension"
           ],
-          "via": "ball_joint",
+          "via": "bushing",
           "point_mm": [
-            -2140.0,
-            -308.0866577448127,
-            267.0824073268455
+            -2110.0,
+            304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-090",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1945.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-091",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2095.0,
+            332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2020.0,
+            422.05000000000007,
+            497.25
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1930.0,
+            -304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-094",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2110.0,
+            -304.25,
+            216.25
+          ]
+        },
+        {
+          "id": "if-095",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1945.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-096",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2095.0,
+            -332.15,
+            471.0
+          ]
+        },
+        {
+          "id": "if-097",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2020.0,
+            -422.05000000000007,
+            497.25
           ]
         }
       ],
@@ -10150,7 +11990,7 @@
           ]
         },
         {
-          "id": "if-090",
+          "id": "if-098",
           "between": [
             "body",
             "frame"
@@ -10163,7 +12003,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-099",
           "between": [
             "body",
             "frame"

@@ -14,7 +14,7 @@ KIND_MODULE = {
     # suspension: the corners (the wheel, its upright, the arms and damper, the brake on the upright)
     "wheel": "suspension", "knuckle": "suspension", "suspension": "suspension", "brake_caliper": "suspension",
     "upper_arm": "suspension", "lower_arm": "suspension", "damper": "suspension", "spring": "suspension",
-    "link": "suspension", "ball_joint": "suspension",
+    "link": "suspension", "ball_joint": "suspension",  # kit/arms.py: the arms' legs and the ball joints
     # steering and the pedals
     "steering": "steering", "steering_column": "steering", "steering_shaft": "steering", "steering_rack": "steering",
     "tie_rod": "steering", "accelerator_pedal": "steering", "brake_pedal": "steering",
