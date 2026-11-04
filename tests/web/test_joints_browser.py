@@ -265,6 +265,7 @@ LEGEND = """() => {
 BUTTON = "() => document.querySelector('#toggles button[data-toggle=joints]')?.className ?? null"
 LEG_MM = 5.0  # web/js/joints.js WELD_BEAD.leg_mm
 LIFT_MM = 0.2  # web/js/joints.js WELD_BEAD.lift_mm (the bead off the faces' planes)
+CUT_GAP_MM = 0.3  # web/js/tubes.js TUBE.cut_gap_mm (a cut tube end off the receiver's face)
 # each tube member's ends on the bench (web/js/tubes.js frameEnds): {id: {a: {kind, trim, onto}, b: ...}}
 TUBE_ENDS = "() => Object.fromEntries(Object.entries(window.hiraku.bench.members).filter(([, i]) => i.ends).map(([k, i]) => [k, i.ends]))"
 # every weld mark's drawn bead: the bar's vertices through each of its pieces' instance matrices
@@ -414,7 +415,8 @@ class JointsBrowserTest(unittest.TestCase):
                     if m["shape"] == "bead" and float(d @ np.asarray(m["axis"])) / np.linalg.norm(d) > 0.999:
                         cut = ends[x["id"]]["a" if x["node_a"] == m["to"] else "b"]
                 if cut is not None and cut["kind"] in ("cut", "butt"):
-                    self.assertAlmostEqual(off, cut["trim"], places=3, msg=m)
+                    # a cut end stands CUT_GAP_MM off the receiver's face; its bead sits on the face
+                    self.assertAlmostEqual(off, cut["trim"] - (CUT_GAP_MM if cut["kind"] == "cut" else 0.0), places=3, msg=m)
                 else:
                     widest = max(side(x) for x in at[m["to"]])
                     self.assertLessEqual(off, widest, m)

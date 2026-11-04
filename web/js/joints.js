@@ -17,7 +17,7 @@
 
 import * as THREE from "three";
 import { esc } from "./labels.js";
-import { frameEnds, TUBE_NOTE } from "./tubes.js"; // where each tube's end is cut (the bead goes there)
+import { frameEnds, TUBE, TUBE_NOTE } from "./tubes.js"; // where each tube's end is cut (the bead goes there)
 
 // ---- the table: what each kind is drawn as -------------------------------------------
 // mark: the shape (MARK_SHAPES); color: its colour (the same in both looks); ja: its name
@@ -323,7 +323,9 @@ export function readJoints(design) {
       for (const i of ending.length ? ending : ms.map((_, k) => k)) {
         const [w, h] = sides[i];
         const cut = endOf(i);
-        const off = cut && (cut.kind === "cut" || cut.kind === "butt") ? cut.trim : Math.max(...sides.filter((_, j) => j !== i).flat()) / 2;
+        // a cut end stands TUBE.cut_gap_mm off the receiver's face: the bead sits on the face itself
+        // (lifted by WELD_BEAD.lift_mm only), its leg over that gap, not cut_gap + lift away from it
+        const off = cut && (cut.kind === "cut" || cut.kind === "butt") ? cut.trim - (cut.kind === "cut" ? TUBE.cut_gap_mm : 0) : Math.max(...sides.filter((_, j) => j !== i).flat()) / 2;
         const r = 0.5 * Math.max(w, h) * 1.06 + 2; // round the tube's corners
         joint.marks.push({ shape: "bead", at: c.clone().addScaledVector(dirs[i], off).toArray(), axis: dirs[i].toArray(), scale: r, gap: 0 });
       }
