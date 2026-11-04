@@ -1027,7 +1027,6 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         lay.put(Item(f"susp_{s['id']}", f"{corner}のサスペンション (アームとダンパー。箱は下の腕のまわり)", "suspension",
                      (hi_x - lo_x - 2 * SUSP_PIVOT_GAP_MM, ys[1] - ys[0], 2 * SUSP_HALF_HEIGHT_MM), 8.0),
                 x=(lo_x + hi_x) / 2.0, y=(ys[0] + ys[1]) / 2.0, z=hp["lca_outer"][2], carried_by=None)
-    _kit(arms.place, lay, rho)  # upper arms, dampers and ball joints, out of the suspension parts
     _kit(steering.place_corners, lay, rho)  # knuckles and the rear toe links, out of the suspension parts
     # the front bulkhead (a panel between the rails' outer faces, from the rails up to the dash cross member
     # under the steering column) and the brakes' master cylinder on its back face
@@ -1040,6 +1039,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     lay.put(Item("bulkhead", "前の隔壁 (足元と前の区画の仕切りの板)", "body", bh_size, plate_mass(bh_size)),
             x=front_at(bulkhead_front), y=0.0, z=bottom_at(on_rails), carried_by=None)
     _kit(safety.place_brakes, lay, "pedal_brake", "bulkhead", "floor_front", feet["pose"])
+    _kit(arms.place, lay, rho)  # the arms, dampers and ball joints in place of the suspension boxes
     plate_masses(lay)
     lay.reorder(PART_ORDER)
     materials = {"stkr400": material, PLATE_STEEL: steel}
@@ -1159,6 +1159,7 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     add_options(design, v, guard, rho, net, closure)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
+    arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:
         _check_rear_legs(design)

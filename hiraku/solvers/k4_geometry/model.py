@@ -151,8 +151,8 @@ def allowance(a: Body, b: Body, design: dict) -> float:
             return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM
-        if part.capsule is not None and joined(part, mem):  # a link or damper with its end at the mount
-            return float("inf")
+        if part.capsule is not None and _ends_in_bracket_on(part, mem, design):
+            return float("inf")  # a link or damper pinned in a bracket welded on this member's end
         if part.support and part.kind == "suspension":  # arms are bolted to the frame at the mount
             fn = next((s.get("frame_node") for s in design["supports"] if s["id"] == part.support), None)
             return MOUNT_MM if fn in mem.nodes else TOUCH_MM
@@ -175,6 +175,19 @@ def allowance(a: Body, b: Body, design: dict) -> float:
 def _person(body_id: str) -> str:
     """The person of a body "part:<id>": the id up to the first "." (hiraku.contract.loading.person_of)."""
     return body_id.split(":", 1)[-1].split(".", 1)[0]
+
+
+def _ends_in_bracket_on(part: Body, mem: Body, design: dict) -> bool:
+    """Whether an end of a long thin part's capsule lies in a bracket part welded (carried_by) at a node of
+    the member: the link is pinned in that clevis, which sits on the member's end."""
+    for p in design.get("parts", []):
+        if p.get("kind") != "bracket" or not set(p.get("carried_by") or []) & mem.nodes:
+            continue
+        o = from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"), p["id"])
+        br = Body(f"part:{p['id']}", o, "bracket", None, set(p.get("carried_by") or []))
+        if _inside(part.capsule.a, br) or _inside(part.capsule.b, br):
+            return True
+    return False
 
 
 def _inside(point: np.ndarray, b: Body) -> bool:

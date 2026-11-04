@@ -138,28 +138,32 @@ def links(design: Record) -> dict[str, Record]:
         sid = s["id"]
         susp, knuckle, wheel = f"susp_{sid}", f"knuckle_{sid}", f"wheel_{sid}"
         held = body_mounts(design, s)
-        arm = arm_parts(sid, ids)  # kit/arms.py: upper arm legs, damper, ball joints (when placed)
-        owner = {"lca_front": susp, "lca_rear": susp, "uca_front": arm.get("uca_f", susp),
-                 "uca_rear": arm.get("uca_r", susp), "damper_upper": arm.get("damper", susp)}
-        if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
+        arm = arm_parts(sid, ids)  # kit/arms.py: the arms' legs, damper, ball joints (in place of the box)
+        if len(arm) == len(ARM_ROLES):
+            # each pivot and the damper's top: a bushing at the bracket (or node) that holds it
+            owner = {"lca_front": arm["lca_f"], "lca_rear": arm["lca_r"], "uca_front": arm["uca_f"],
+                     "uca_rear": arm["uca_r"], "damper_upper": arm["damper"]}
             for mount in BODY_MOUNTS:
                 if mount in held:
                     add(owner[mount], _c(held[mount], "bushing", "load"))
-        elif s.get("frame_node"):
-            add(susp, _c(s["frame_node"], "bushing", "load"))
-        add(susp, _c(sid, "bushing", "load"))
-        if "damper" in arm:
-            add(arm["damper"], _c(susp, "bushing", "load"))  # damper_lower is on the lower arm
-        if "bj_lower" in arm and "bj_upper" in arm:
-            add(arm["bj_lower"], _c(susp, "bolt", "load"))
-            for leg in ("uca_f", "uca_r"):
-                if leg in arm:
-                    add(arm["bj_upper"], _c(arm[leg], "bolt", "load"))
+            add(arm["lca_x"], _c(arm["lca_f"], "weld", "load"), _c(arm["lca_r"], "weld", "load"))
+            add(arm["damper"], _c(arm["lca_x"], "bushing", "load"))  # damper_lower on the lower arm's cross tube
+            add(arm["bj_lower"], _c(arm["lca_f"], "weld", "load"), _c(arm["lca_r"], "weld", "load"))
+            add(arm["bj_upper"], _c(arm["uca_f"], "weld", "load"), _c(arm["uca_r"], "weld", "load"))
             add(knuckle, _c(arm["bj_lower"], "ball_joint", "load"), _c(arm["bj_upper"], "ball_joint", "load"))
+            hub = knuckle
         else:
+            if held:  # the arms' pivots and the damper's top: frame nodes (towers, legs) or brackets
+                for mount in BODY_MOUNTS:
+                    if mount in held:
+                        add(susp, _c(held[mount], "bushing", "load"))
+            elif s.get("frame_node"):
+                add(susp, _c(s["frame_node"], "bushing", "load"))
+            add(susp, _c(sid, "bushing", "load"))
             add(knuckle, _c(susp, "ball_joint", "load"))
-        add(wheel, _c(knuckle if knuckle in ids else susp, "bolt", "load"), _c(sid, "rest", "load"))
-        add(f"caliper_{sid}", _c(knuckle if knuckle in ids else susp, "bolt", "load"))
+            hub = knuckle if knuckle in ids else susp
+        add(wheel, _c(hub, "bolt", "load"), _c(sid, "rest", "load"))
+        add(f"caliper_{sid}", _c(hub, "bolt", "load"))
         toe = f"toe_link_{sid}"
         if toe in ids:
             add(toe, _c(knuckle, "ball_joint", "load"))
@@ -249,6 +253,9 @@ def links(design: Record) -> dict[str, Record]:
     return out
 
 
+ARM_ROLES = ("lca_f", "lca_r", "lca_x", "uca_f", "uca_r", "damper", "bj_lower", "bj_upper")  # kit/arms.part_ids
+
+
 def arm_parts(sid: str, ids) -> dict[str, str]:
     """{role: part id} of the arms, damper and ball joints kit/arms.py placed for support sid."""
     from hiraku.designgen.kit.arms import part_ids
@@ -270,11 +277,12 @@ def body_mounts(design: Record, support: Record) -> dict[str, str]:
         if k not in hp:
             continue
         q = np.asarray(hp[k], float)
-        at = next((n for n, x in nodes.items() if float(np.linalg.norm(x - q)) <= MOUNT_TOL_MM), None)
+        # the bracket whose box holds the point (a clevis welded on, kit/mounts, kit/arms), else the node at it
+        at = next((p["id"] for p in brackets
+                   if np.all(np.abs(q - np.asarray(p["box"]["center_mm"], float))
+                             <= np.asarray(p["box"]["size_mm"], float) / 2.0 + MOUNT_TOL_MM)), None)
         if at is None:
-            at = next((p["id"] for p in brackets
-                       if np.all(np.abs(q - np.asarray(p["box"]["center_mm"], float))
-                                 <= np.asarray(p["box"]["size_mm"], float) / 2.0 + MOUNT_TOL_MM)), None)
+            at = next((n for n, x in nodes.items() if float(np.linalg.norm(x - q)) <= MOUNT_TOL_MM), None)
         if at is not None:
             out[k] = at
     return out
