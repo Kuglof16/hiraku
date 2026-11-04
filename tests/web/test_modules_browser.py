@@ -19,7 +19,7 @@ from pathlib import Path
 
 from hiraku import contract
 from hiraku.webserve.server import make_server
-from tests.web.modules_fixture import RUN_ID, module_events, outside_parts
+from tests.web.modules_fixture import RUN_ID, module_design, module_events, outside_parts
 
 try:
     from playwright.sync_api import sync_playwright
@@ -61,6 +61,16 @@ def plain_events() -> list[dict]:
 
 NAMED = "20261104-210200-named"  # the module record with design.variable_names on every version
 NAMES = {"front_spring_rate": "前輪側コイルばねのレート", "rail_t": "縦レールの肉厚"}
+
+
+def shown_name(page, var: str) -> str:
+    """The name the screen gives a variable of the module record: the base design's own name
+    (design.variable_names, written by the generator), else the screen's table (labels.js
+    variableName), so the expected words follow the design data when its names change."""
+    own = (module_design().get("variable_names") or {}).get(var)
+    if isinstance(own, str) and own.strip():
+        return own
+    return page.evaluate("async (v) => (await import('/js/labels.js')).variableName(v)", var)
 
 
 def named_events() -> list[dict]:
@@ -173,7 +183,7 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual([items.nth(i).get_attribute("data-change") for i in range(items.count())], ["chg-0001", "chg-0002", "chg-0003"])
         text = card.inner_text()
         self.assertIn("足まわりの設計役", text)
-        self.assertIn("前のばねの硬さ", text)
+        self.assertIn(shown_name(page, "front_spring_rate"), text)
         self.assertIn("パッケージ役が 1 つの版にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
@@ -181,12 +191,12 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual(card.locator(".rc-list li").count(), 3)
         log = page.locator("#log").inner_text()
         self.assertIn("パッケージ役が 3 つの提案を版 2 にまとめた", log)
-        self.assertIn("車体の設計役: 荷の高さ", log)
+        self.assertIn(f"車体の設計役: {shown_name(page, 'cargo_height')}", log)
         # the grid's head names each module's change
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&pets=0&t=1e6")
         head = page.locator("#grid-head [data-built]").inner_text()
         self.assertIn("2 つの提案", head)
-        self.assertIn("枠 レールの板厚 2.3 → 3.2 mm", head)
+        self.assertIn(f"枠 {shown_name(page, 'rail_t')} 2.3 → 3.2 mm", head)
 
     def test_variable_names_from_the_design(self):
         # design.variable_names (contract b615e2c) first, then the screen's table (labels.js
