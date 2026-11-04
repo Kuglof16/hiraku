@@ -53,7 +53,9 @@ class SeatDepthTest(unittest.TestCase):
                 GEN.build({"seat_depth": bad})
 
     def test_default_builds_version_1(self):
-        self.assertEqual(GEN.build({"seat_depth": GEN.SEAT_LENGTH_MM}), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build({"seat_depth": GEN.SEAT_LENGTH_MM}), V1)
 
     def test_the_cushion_front_moves_the_back_stays(self):
         d, v1 = _parts(self.short), _parts(V1)

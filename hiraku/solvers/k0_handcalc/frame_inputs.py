@@ -471,6 +471,59 @@ def beam_stiffness(p0, p1, sec: dict, E: float, G: float) -> np.ndarray:
     return T.T @ k @ T
 
 
+AXIS = {"x": 0, "y": 1, "z": 2}
+
+
+def members_flexibility(design: dict, member: str, t: float, holds: dict[str, str]) -> tuple[np.ndarray, np.ndarray]:
+    """(C, x): the 6 x 6 flexibility (mm/N, rad/N; mm/(N*mm), rad/(N*mm)) at the point x a fraction t along `member`,
+    of the frame's members alone (every member a slender 3D beam, beam_stiffness; no plates, no parts), held at the
+    design nodes `holds` names (node -> the components held, "x", "y", "z" or "all"). Rows and columns: u_x, u_y,
+    u_z, rot_x, rot_y, rot_z. A frame the holds leave free to move raises DesignError."""
+    props = member_props(design)
+    if member not in props:
+        raise DesignError(f"no member {member!r}")
+    nodes = node_table(design)
+    used = sorted({mp["member"][k] for mp in props.values() for k in ("node_a", "node_b")})
+    idx = {n: i for i, n in enumerate(used)}
+    na, nb = props[member]["member"]["node_a"], props[member]["member"]["node_b"]
+    x = nodes[na] + t * (nodes[nb] - nodes[na])
+    inner = 1e-9 < t < 1.0 - 1e-9  # else the point is that end node
+    land = len(used) if inner else idx[na if t <= 0.5 else nb]
+    n_nodes = len(used) + (1 if inner else 0)
+    K = np.zeros((6 * n_nodes, 6 * n_nodes))
+    for mid, mp in props.items():
+        a, b = mp["member"]["node_a"], mp["member"]["node_b"]
+        E = float(mp["material"]["E_MPa"])
+        G = E / (2.0 * (1.0 + float(mp["material"].get("nu", 0.3))))
+        pieces = [(idx[a], idx[b], nodes[a], nodes[b])]
+        if mid == member and inner:
+            pieces = [(idx[a], land, nodes[a], x), (land, idx[b], x, nodes[b])]
+        for i, j, pa, pb in pieces:
+            dofs = [6 * i + k for k in range(6)] + [6 * j + k for k in range(6)]
+            K[np.ix_(dofs, dofs)] += beam_stiffness(pa, pb, mp["section"], E, G)
+    held = set()
+    for n, comps in holds.items():
+        if n not in idx:
+            raise DesignError(f"support node {n!r} is not on any member")
+        held |= {6 * idx[n] + k for k in (range(6) if comps == "all" else (AXIS[c] for c in comps))}
+    free = [d for d in range(len(K)) if d not in held]
+    Kff = K[np.ix_(free, free)]
+    pos = {d: i for i, d in enumerate(free)}
+    if any(6 * land + k not in pos for k in range(6)):
+        raise DesignError("the landing point is held; its movement is zero")
+    rhs = np.zeros((len(free), 6))
+    for k in range(6):
+        rhs[pos[6 * land + k], k] = 1.0
+    try:
+        U = np.linalg.solve(Kff, rhs)
+    except np.linalg.LinAlgError:
+        raise DesignError("the members alone are free to move on the supports (a mechanism)") from None
+    C = np.array([[U[pos[6 * land + r], k] for k in range(6)] for r in range(6)])
+    if not np.all(np.isfinite(C)) or np.linalg.norm(Kff @ U - rhs) > 1e-6 * max(1.0, float(np.abs(rhs).max())):
+        raise DesignError("the members alone are free to move on the supports (a mechanism)")
+    return (C + C.T) / 2.0, x
+
+
 def mount_roll_stiffness(design: dict) -> dict:
     """The mounts' stiffness against the rails' roll in mirror (the left rail turning about its axis, the right one
     the other way), condensed to the left rail's nodes where they stand: {"nodes": [...], "K": matrix N*mm/rad,
@@ -678,11 +731,13 @@ def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str
     to_rail: dict[str, str] = {}
 
     def rail_node(node: str) -> str:
-        """The rail node an off-rail node is joined to: the fewest members away, then the nearest."""
+        """The rail node an off-rail node is joined to: the fewest members away, then the nearest, then by name (the
+        ring is a set, whose order changes with the process's string hashing)."""
         if node not in to_rail:
             seen, ring = {node}, {node}
             while ring:
-                hit = sorted((n for n in ring if n in where), key=lambda n: float(np.linalg.norm(nodes[n] - nodes[node])))
+                hit = sorted((n for n in ring if n in where),
+                             key=lambda n: (float(np.linalg.norm(nodes[n] - nodes[node])), n))
                 if hit:
                     to_rail[node] = hit[0]
                     break

@@ -47,7 +47,9 @@ class PedalBeamTest(unittest.TestCase):
     def test_choice(self):
         self.assertEqual(GEN.choice_values({"pedal_mount": "post"}), {"pedal_mount": {"value": 3.0, "unit": "1"}})
         self.assertEqual(GEN.choices_of(self.d)["pedal_mount"], "post")
-        self.assertEqual(GEN.build(), V1)  # off by default
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build(), V1)  # off by default
         contract.validate("design", self.d)
 
     def test_beam_from_the_post_at_the_pedals(self):

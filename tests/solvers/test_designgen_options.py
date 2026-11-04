@@ -65,7 +65,9 @@ class SpanTest(unittest.TestCase):
 
 class DefaultsTest(unittest.TestCase):
     def test_off_by_default(self):
-        self.assertEqual(GEN.build(), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build(), V1)
         self.assertEqual(GEN.choices_of(V1), {"joints": "butt", "part_mounts": "none", "pedal_mount": "none",
                                               "side_guard": "none", "rops": "hoop", "fenders": "none",
                                               "side_opening": "none", "grab_bar": "none"})
