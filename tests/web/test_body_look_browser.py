@@ -127,10 +127,15 @@ ZU_DESIGNS = Path(__file__).resolve().parent / "zu_designs"
 # tallcargo acf1eb37...); comparing the two fingerprints part by part, only the 16
 # "part:occupant_?.<segment>" entries differ in each design: the torsos (no head part, so
 # still the capsule and ball), the other parts and the members are the same.
+# Taken again when the frame's members became hollow tubes (web/js/tubes.js): with the code before
+# (a0c2b23) the copies still give the hashes above (v1 fcef1c24..., nodriveshaft b1936a80...,
+# tallcargo 7daf4c4a...); part by part, only the 54 "member:" entries of each design differ (a solid
+# BoxGeometry of 24 points from node to node -> the shared unit tube, a BufferGeometry along x 0..1
+# stretched by the member's matrix, 120 points for a rect tube with both ends, ...); the parts are the same.
 ZU_PRINT = {
-    "offroad-4w-v1": "fcef1c24d229703a0fdec3d0476834e305d7feae5a2c198ba7903a6943631f52",
-    "offroad-4w-nodriveshaft": "b1936a80f7a81cf5e89eb27887fbe442edb1c2d75b8cd3dc1f7bf68d254f74a3",
-    "offroad-4w-tallcargo": "7daf4c4afa262adc78bf28fc147486bd794e994d272116a50d8afa5d16b61411",
+    "offroad-4w-v1": "fca41bda2f3f5fe6220e1b69aaf3b683500dbbe06353e9efad14f45cbfc4ba29",
+    "offroad-4w-nodriveshaft": "795890128ddecbabcb78ab48c4972204f0b47e12478f2e4828b70b7b059e008c",
+    "offroad-4w-tallcargo": "ea452149c5d1219ce8dff62ae336e093622ecda6d9aed085ecaffd3a940bcc75",
 }
 
 

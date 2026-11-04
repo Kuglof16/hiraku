@@ -20,7 +20,7 @@ import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js
 import { esc, fmt } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { mountAssemblySwitch } from "./modules.js"; // modules:
-import { assemblyJointControls } from "./joints.js"; // joints:
+import { assemblyJointControls, JOINT_KINDS } from "./joints.js"; // joints:
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -28,13 +28,16 @@ export const CHECKS = [
   { key: "hand_reach", ja: "手", title: "人の手が届く" },
 ];
 
-export const FASTEN_JA = { bolt: "ボルト", weld: "溶接", rest: "載せる", pin: "ピン" };
+// bushing and ball_joint: the contract's fastening kinds since dcb3a90 (fixed with their own
+// through-bolt or castle nut)
+export const FASTEN_JA = { bolt: "ボルト", weld: "溶接", rest: "載せる", pin: "ピン", bushing: "ブッシュ", ball_joint: "ボールジョイント" };
 
 const CURRENT = "#e9893a";
 const NG = "#c8402a";
 const PATH = "#2b59c3";
-// pin: joints.js's pin colour, not #8e6bbf (the packager's module colour on A7's 3D, proposals.js)
-const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#1d1d9e" };
+// pin: joints.js's pin colour, not #8e6bbf (the packager's module colour on A7's 3D, proposals.js);
+// bushing and ball_joint: joints.js's colours of the same kinds
+export const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#1d1d9e", bushing: JOINT_KINDS.bushing.color, ball_joint: JOINT_KINDS.ball_joint.color };
 // Parts that are not built into the vehicle (people and their load): not drawn on the bench.
 const NOT_BUILT = new Set(["occupant", "cargo"]);
 

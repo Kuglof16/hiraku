@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 import { esc } from "./labels.js";
+import { frameEnds, TUBE_NOTE } from "./tubes.js"; // where each tube's end is cut (the bead goes there)
 
 // ---- the table: what each kind is drawn as -------------------------------------------
 // mark: the shape (MARK_SHAPES); color: its colour (the same in both looks); ja: its name
@@ -276,6 +277,8 @@ export function readJoints(design) {
     }
   }
 
+  const tubeEnds = frameEnds(design);
+  out.tubes = Object.keys(tubeEnds).length; // members drawn as hollow tubes (the legend's TUBE_NOTE)
   // the frame's nodes where members meet (THROUGH_COS: two members of one section in one line are
   // one tube going through the node, not a joint; a node is a joint when, so counted, two or more
   // pieces meet there, or when node.joint says how)
@@ -313,10 +316,14 @@ export function readJoints(design) {
     if (kindOf(via).mark === "bead") {
       // a bead round each member that ends at the node (not a tube going through), where it meets
       // the widest of the others; all of them when every member goes through (a butt joint written in the data)
-      const ending = ms.map((_, i) => i).filter((i) => !through.has(i));
+      // (tubes.js frameEnds: a tube cut on the receiver's face has its bead at that cut, trim from
+      // the node; the carrier, which the others butt on, has none)
+      const endOf = (i) => tubeEnds[ms[i].id]?.[ms[i].node_a === n.id ? "a" : "b"] ?? null;
+      const ending = ms.map((_, i) => i).filter((i) => !through.has(i) && endOf(i)?.kind !== "carrier");
       for (const i of ending.length ? ending : ms.map((_, k) => k)) {
         const [w, h] = sides[i];
-        const off = Math.max(...sides.filter((_, j) => j !== i).flat()) / 2;
+        const cut = endOf(i);
+        const off = cut && (cut.kind === "cut" || cut.kind === "butt") ? cut.trim : Math.max(...sides.filter((_, j) => j !== i).flat()) / 2;
         const r = 0.5 * Math.max(w, h) * 1.06 + 2; // round the tube's corners
         joint.marks.push({ shape: "bead", at: c.clone().addScaledVector(dirs[i], off).toArray(), axis: dirs[i].toArray(), scale: r, gap: 0 });
       }
@@ -675,6 +682,7 @@ export function jointLegendHtml(info) {
   if (info.unplaced) notes.push(`<div class="jl-note">相手の見つからない接合 ${info.unplaced} は印なし</div>`);
   if (info.byPart) notes.push(`<div class="jl-note">ボールジョイントのうち ${info.byPart} は部品の球がそのまま印</div>`);
   if (info.counts.weld) notes.push(`<div class="jl-note" data-note="bead">${esc(BEAD_NOTE)}</div>`);
+  if (info.tubes) notes.push(`<div class="jl-note" data-note="tube">${esc(TUBE_NOTE)}</div>`);
   if (info.beadSeams?.as_is) notes.push(`<div class="jl-note" data-note="bead-as-is">溶接の印のうち ${info.beadSeams.as_is} は触れる面が出せず、印の場所に輪で描いている</div>`);
   return `<div class="jl-ttl">接合 <small>${total} 所</small></div><div class="jl-rows">${rows}</div>${notes.join("")}`;
 }
