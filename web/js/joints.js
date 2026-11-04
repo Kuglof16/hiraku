@@ -21,7 +21,7 @@ import { esc } from "./labels.js";
 // mark: the shape (MARK_SHAPES); color: its colour (the same in both looks); ja: its name
 // on the screen. A via not listed here is drawn as OTHER (its own name, the common dot).
 export const JOINT_KINDS = {
-  weld: { ja: "溶接", mark: "bead", color: "#ff6a13" }, // a bead round the joint, bright orange
+  weld: { ja: "溶接 (すみ肉)", mark: "bead", color: "#5e4c3e" }, // a fillet bead along the seam (WELD_BEAD)
   bolt: { ja: "ボルト", mark: "hex", color: "#2d3a4a" }, // a small hexagon (a bolt's head)
   bushing: { ja: "ブッシュ", mark: "ring", color: "#151515" }, // a rubber ring
   ball_joint: { ja: "ボールジョイント", mark: "ball", color: "#2f7fd0" }, // a ball
@@ -33,6 +33,17 @@ export const JOINT_KINDS = {
   hose: { ja: "ホース", mark: "dot", color: "#3fa7c9" },
 };
 const OTHER = { mark: "dot", color: "#8a8577" };
+
+// The weld's bead (screen choices, no source): a fillet weld's triangle section, legs leg_mm
+// (one on the face welded to, one up the welded piece's side), laid along the seam: round the
+// ending member's section outline (rect: its 4 sides, round: round_segments chords) or along
+// the edges of a bracket's face that lie on the member's face (weldBeadGeometry). Each piece of
+// the seam is one instance of a unit bar (MARK_SHAPES.bead) stretched along its length only, so
+// the section stays leg_mm; a piece runs on past its ends by end_ext x leg_mm to close the
+// corners. The colour (JOINT_KINDS.weld) is a dark grey-brown (steel darkened by the heat),
+// apart from the bushing's black ring.
+export const WELD_BEAD = { leg_mm: 5, round_segments: 16, end_ext: 1, round_end_ext: 0.3 };
+export const BEAD_NOTE = `溶接のビードは脚 ${WELD_BEAD.leg_mm} mm の三角の断面で継ぎ目に沿う。寸法と色は画面の決め (出典なし)`;
 export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: String(via) };
 
 // The rule for a frame node that does not say how it is joined (node.joint absent): drawn as
@@ -67,7 +78,7 @@ const SIZE_OF_SIDE = 0.25;
 
 // Each shape, made once with its axis on +z and its size 1 (scaled by s per mark).
 const MARK_SHAPES = {
-  bead: () => new THREE.TorusGeometry(1, 0.2, 8, 28), // scaled by the ring's radius
+  bead: () => beadBarGeometry(WELD_BEAD.leg_mm), // one piece of a seam (x: 0..1, stretched per piece)
   hex: () => new THREE.CylinderGeometry(0.5, 0.5, 0.45, 6).rotateX(Math.PI / 2),
   ring: () => new THREE.TorusGeometry(0.42, 0.16, 10, 24),
   ball: () => new THREE.SphereGeometry(0.42, 18, 12),
@@ -269,7 +280,181 @@ export function readJoints(design) {
       joint.marks.push({ shape: kindOf(via).mark, at: c.toArray(), axis: axis.normalize().toArray(), scale: big * 1.2, gap: 0 });
     }
   }
+  weldBeadGeometry(design, out);
   return out;
+}
+
+// ---- the weld beads: the seam of each weld mark (WELD_BEAD) ------------------------------------
+// A unit bar of a seam: x along the seam 0..1; the triangle's right angle on the seam line, one leg
+// along +y (out, on the face welded to) and one along +z (n, up the welded piece's side).
+function beadBarGeometry(leg) {
+  const P = [[0, 0, 0], [0, leg, 0], [0, 0, leg], [1, 0, 0], [1, leg, 0], [1, 0, leg]];
+  const T = [[0, 2, 1], [3, 4, 5], [0, 1, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2], [1, 2, 5], [1, 5, 4]];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(T.flat().flatMap((i) => P[i]), 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+// A frame member as a box, as workbench3d.js draws it (memberBasis: x along node_a -> node_b, z
+// toward ISO up (ISO x when the member is near upright), the section's b along y and h along z).
+function memberFrame(design, m, nodes) {
+  const a = nodes[m.node_a];
+  const b = nodes[m.node_b];
+  if (!a || !b) return null;
+  const A = v3(a.xyz_mm);
+  const x = v3(b.xyz_mm).sub(A);
+  const len = x.length();
+  if (len < 1e-6) return null;
+  x.normalize();
+  const up = Math.abs(x.dot(Z)) > 0.95 ? new THREE.Vector3(1, 0, 0) : Z.clone();
+  const z = up.sub(x.clone().multiplyScalar(up.dot(x))).normalize();
+  const y = z.clone().cross(x);
+  const sec = design.sections?.[m.section];
+  const [w, h] = sectionSides(design, m);
+  return { c: A.addScaledVector(x, len / 2), axes: [x, y, z], h: [len / 2, w / 2, h / 2], sw: w, sh: h, round: sec?.shape === "round_tube" || sec?.shape === "round_solid" };
+}
+
+// A part's box (boxOf) in the same form.
+function frameOfBox(box) {
+  return { c: box.c, axes: [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), Z.clone()].map((a) => a.applyQuaternion(box.q)), h: [box.h.x, box.h.y, box.h.z] };
+}
+
+// A seam piece: { a, b (the ends on the seam line), out (the leg on the face), n (the leg up the
+// piece), ext (how far it runs on past each end, mm) }.
+const seam = (a, b, out, n, ext) => ({ a, b, out, n, ext });
+
+// Round a circle of radius r about P across n (a round tube's end, or a mark not placed on a face).
+function circleSeam(P, n, r) {
+  const u = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  u.addScaledVector(n, -u.dot(n)).normalize();
+  const v = n.clone().cross(u);
+  const k = WELD_BEAD.round_segments;
+  const pt = (i) => P.clone().addScaledVector(u, r * Math.cos((2 * Math.PI * i) / k)).addScaledVector(v, r * Math.sin((2 * Math.PI * i) / k));
+  const out = [];
+  for (let i = 0; i < k; i += 1) {
+    const a = pt(i);
+    const b = pt(i + 1);
+    out.push(seam(a, b, a.clone().add(b).multiplyScalar(0.5).sub(P).normalize(), n.clone(), WELD_BEAD.leg_mm * WELD_BEAD.round_end_ext));
+  }
+  return out;
+}
+
+// Round the ending member's section outline (f: memberFrame) in the plane through P across n.
+function sectionSeam(P, f, n) {
+  if (f.round) return circleSeam(P, n, f.sw / 2);
+  const [, y, z] = f.axes;
+  const c = (sy, sz) => P.clone().addScaledVector(y, (sy * f.sw) / 2).addScaledVector(z, (sz * f.sh) / 2);
+  const ext = WELD_BEAD.leg_mm * WELD_BEAD.end_ext;
+  return [
+    seam(c(-1, 1), c(1, 1), z.clone(), n.clone(), ext),
+    seam(c(1, -1), c(-1, -1), z.clone().negate(), n.clone(), ext),
+    seam(c(1, 1), c(1, -1), y.clone(), n.clone(), ext),
+    seam(c(-1, -1), c(-1, 1), y.clone().negate(), n.clone(), ext),
+  ];
+}
+
+// Where a box (a bracket, a gusset) sits on another box (a member, a part): a face of each, facing
+// each other and within CONTACT_MM of one plane, with the box's sides along the other face's sides.
+// The seam: the box face's edges that lie on the other face (within EDGE_MM of it), clipped to the
+// part of the face they share. A box touching several members gets the edges on each.
+const CONTACT_MM = 1;
+const EDGE_MM = 0.5;
+function contactSeams(box, other) {
+  const out = [];
+  const ext = WELD_BEAD.leg_mm * WELD_BEAD.end_ext;
+  for (let i = 0; i < 3; i += 1) {
+    for (const s of [-1, 1]) {
+      const nb = box.axes[i].clone().multiplyScalar(s);
+      const cb = box.c.clone().addScaledVector(nb, box.h[i]);
+      const [i1, i2] = [0, 1, 2].filter((k) => k !== i);
+      for (let j = 0; j < 3; j += 1) {
+        for (const t of [-1, 1]) {
+          const no = other.axes[j].clone().multiplyScalar(t);
+          if (nb.dot(no) > -0.999) continue;
+          const co = other.c.clone().addScaledVector(no, other.h[j]);
+          const d = cb.clone().sub(co);
+          if (Math.abs(d.dot(no)) > CONTACT_MM) continue;
+          const [j1, j2] = [0, 1, 2].filter((k) => k !== j);
+          const u = other.axes[j1];
+          const v = other.axes[j2];
+          const par = (p, q) => Math.abs(p.dot(q)) > 0.999;
+          let hu;
+          let hv;
+          if (par(box.axes[i1], u) && par(box.axes[i2], v)) [hu, hv] = [box.h[i1], box.h[i2]];
+          else if (par(box.axes[i2], u) && par(box.axes[i1], v)) [hu, hv] = [box.h[i2], box.h[i1]];
+          else continue; // turned on the face: no seam worked out
+          const [A, B, cu, cv] = [other.h[j1], other.h[j2], d.dot(u), d.dot(v)];
+          const U = [Math.max(cu - hu, -A), Math.min(cu + hu, A)];
+          const V = [Math.max(cv - hv, -B), Math.min(cv + hv, B)];
+          if (U[1] - U[0] < 1 || V[1] - V[0] < 1) continue;
+          const pt = (x, y) => co.clone().addScaledVector(u, x).addScaledVector(v, y);
+          for (const sg of [-1, 1]) {
+            const eu = cu + sg * hu;
+            if (Math.abs(eu) <= A + EDGE_MM) out.push(seam(pt(eu, V[0]), pt(eu, V[1]), u.clone().multiplyScalar(sg), no.clone(), ext));
+            const ev = cv + sg * hv;
+            if (Math.abs(ev) <= B + EDGE_MM) out.push(seam(pt(U[0], ev), pt(U[1], ev), v.clone().multiplyScalar(sg), no.clone(), ext));
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// The seam of every weld mark (mk.bead = { how, seams }): how is "section" (a frame node: round
+// the ending member's section outline, on the plane of the mark), "contact" (a part: along its
+// box's edges on the faces it touches) or "as_is" (no face worked out: a ring of the mark's size
+// where the mark is). out.beadSeams counts the marks by how.
+export function weldBeadGeometry(design, out) {
+  out.beadSeams = { section: 0, contact: 0, as_is: 0 };
+  if (!design) return out;
+  const parts = Object.fromEntries((design.parts ?? []).map((p) => [p.id, p]));
+  const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, n]));
+  const members = Object.fromEntries((design.members ?? []).map((m) => [m.id, m]));
+  const atNode = {};
+  for (const m of design.members ?? []) for (const end of [m.node_a, m.node_b]) (atNode[end] ??= []).push(m);
+  for (const j of out.joints) {
+    for (const mk of j.marks) {
+      if (mk.shape !== "bead") continue;
+      const at = v3(mk.at);
+      const axis = v3(mk.axis).normalize();
+      let seams = [];
+      let how = "as_is";
+      if (j.source === "node" && nodes[j.to]) {
+        const c = v3(nodes[j.to].xyz_mm);
+        const m = (atNode[j.to] ?? []).find((x) => {
+          const o = nodes[x.node_a === j.to ? x.node_b : x.node_a];
+          return o && v3(o.xyz_mm).sub(c).normalize().dot(axis) > 0.999;
+        });
+        const f = m ? memberFrame(design, m, nodes) : null;
+        if (f) [seams, how] = [sectionSeam(at, f, axis), "section"];
+      } else if (j.source === "part" && parts[j.owner]?.box) {
+        const others = parts[j.to]?.box
+          ? [frameOfBox(boxOf(parts[j.to]))]
+          : (members[j.to] ? [members[j.to]] : atNode[j.to] ?? []).map((m) => memberFrame(design, m, nodes)).filter(Boolean);
+        const box = frameOfBox(boxOf(parts[j.owner]));
+        for (const o of others) seams.push(...contactSeams(box, o));
+        if (seams.length) how = "contact";
+      }
+      if (!seams.length) seams = circleSeam(at, axis, mk.scale);
+      mk.bead = { how, seams: seams.map((s) => ({ a: s.a.toArray(), b: s.b.toArray(), out: s.out.toArray(), n: s.n.toArray(), ext: s.ext })) };
+      out.beadSeams[how] += 1;
+    }
+  }
+  return out;
+}
+
+// The instance matrix of a seam piece: the unit bar stretched along a -> b (and ext past each end).
+function seamMatrix(s) {
+  const a = v3(s.a);
+  const t = v3(s.b).sub(a);
+  const len = t.length();
+  t.normalize();
+  const out = v3(s.out).addScaledVector(t, -v3(s.out).dot(t)).normalize();
+  const n = v3(s.n);
+  n.addScaledVector(t, -n.dot(t)).addScaledVector(out, -n.dot(out)).normalize();
+  return new THREE.Matrix4().makeBasis(t.clone().multiplyScalar(len + 2 * s.ext), out, n).setPosition(a.addScaledVector(t, -s.ext));
 }
 
 // ---- the marks in a Workbench3D ---------------------------------------------------------
@@ -300,20 +485,28 @@ export class JointMarks {
     const real = this.bench.look.real;
     const color = new THREE.Color();
     for (const [shape, list] of Object.entries(byShape)) {
+      // a weld mark is one instance per piece of its seam (mk.bead.seams); every other mark is one instance
+      const bead = shape === "bead";
+      const n = bead ? list.reduce((a, { mk }) => a + mk.bead.seams.length, 0) : list.length;
       const mat = real
-        ? new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.45, metalness: 0.15 })
+        ? new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: bead ? 0.9 : 0.45, metalness: bead ? 0 : 0.15 })
         : new THREE.MeshLambertMaterial({ color: "#ffffff" });
-      const mesh = new THREE.InstancedMesh(MARK_SHAPES[shape](), mat, list.length);
+      if (bead) mat.side = THREE.DoubleSide; // the bar's pieces are mirrored on some seams
+      const mesh = new THREE.InstancedMesh(MARK_SHAPES[shape](), mat, n);
       mesh.frustumCulled = false; // the instances spread over the vehicle
       mesh.renderOrder = 3; // after the see-through parts (renderOrder 2)
       mesh.userData.shape = shape;
       const q = new THREE.Quaternion();
-      list.forEach(({ j, mk }, i) => {
+      let k = 0;
+      list.forEach(({ j, mk }) => {
         q.setFromUnitVectors(Z, v3(mk.axis).normalize());
         const matrix = new THREE.Matrix4().compose(v3(mk.at), q, new THREE.Vector3(mk.scale, mk.scale, mk.scale));
-        mesh.setMatrixAt(i, matrix);
-        mesh.setColorAt(i, color.set(kindOf(j.kind).color));
-        this.slots.push({ shape, i, joint: j, mark: mk, matrix, shown: true });
+        const subs = bead ? mk.bead.seams.map((s) => ({ i: k++, matrix: seamMatrix(s) })) : [{ i: k++, matrix }];
+        for (const s of subs) {
+          mesh.setMatrixAt(s.i, s.matrix);
+          mesh.setColorAt(s.i, color.set(kindOf(j.kind).color));
+        }
+        this.slots.push({ shape, i: subs[0]?.i ?? -1, subs, joint: j, mark: mk, matrix, shown: true });
       });
       this.meshes[shape] = mesh;
       this.group.add(mesh);
@@ -376,10 +569,11 @@ export class JointMarks {
         shown = b.parts.visible && po.group.visible;
         if (withOffset && po.group.position.lengthSq() > 0) off = po.group.position;
       } else shown = b.wheels.visible; // a wheel listed as a part, drawn from its support
-      const m = !shown ? zero : off ? tmp.copy(s.matrix).premultiply(new THREE.Matrix4().makeTranslation(off.x, off.y, off.z)) : s.matrix;
+      const place = (mx) => (!shown ? zero : off ? tmp.copy(mx).premultiply(new THREE.Matrix4().makeTranslation(off.x, off.y, off.z)) : mx);
+      for (const sub of s.subs) this.meshes[s.shape].setMatrixAt(sub.i, place(sub.matrix));
+      const m = place(s.matrix);
       s.shown = shown;
       s.now = shown ? [m.elements[12], m.elements[13], m.elements[14]] : null;
-      this.meshes[s.shape].setMatrixAt(s.i, m);
       dirty.add(s.shape);
     }
     for (const k of dirty) this.meshes[k].instanceMatrix.needsUpdate = true;
@@ -393,6 +587,7 @@ export class JointMarks {
       frameRule: this.info.frameRule,
       unplaced: this.info.unplaced,
       byPart: this.info.byPart,
+      beadSeams: { ...this.info.beadSeams },
       instances: Object.fromEntries(Object.entries(this.meshes).map(([k, m]) => [k, m.count])),
       marks: this.slots.map((s) => ({ kind: s.joint.kind, source: s.joint.source, owner: s.joint.owner, to: s.joint.to, toKind: s.joint.toKind, rule: s.joint.rule, shape: s.shape, shown: s.shown, now: s.now ?? null, ...s.mark })),
     };
@@ -416,6 +611,8 @@ export function jointLegendHtml(info) {
   const notes = [info.frameRule ? `<div class="jl-note">※ ${esc(NODE_RULE_NOTE)}</div>` : "", total - info.frameRule > 0 ? `<div class="jl-note">${esc(PLACE_NOTE)}</div>` : ""];
   if (info.unplaced) notes.push(`<div class="jl-note">相手の見つからない接合 ${info.unplaced} は印なし</div>`);
   if (info.byPart) notes.push(`<div class="jl-note">ボールジョイントのうち ${info.byPart} は部品の球がそのまま印</div>`);
+  if (info.counts.weld) notes.push(`<div class="jl-note" data-note="bead">${esc(BEAD_NOTE)}</div>`);
+  if (info.beadSeams?.as_is) notes.push(`<div class="jl-note" data-note="bead-as-is">溶接の印のうち ${info.beadSeams.as_is} は触れる面が出せず、印の場所に輪で描いている</div>`);
   return `<div class="jl-ttl">接合 <small>${total} 所</small></div><div class="jl-rows">${rows}</div>${notes.join("")}`;
 }
 
