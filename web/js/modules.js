@@ -18,8 +18,12 @@
 import * as THREE from "three";
 import { MODULE_JA, esc, fmt, moduleName } from "./labels.js";
 import { OUTSIDE_COLOR, moduleColor } from "./proposals.js";
+import { keepLegendsApart } from "./joints.js";
 
 export const ENVELOPE_TOL_MM = 0.5; // as k4_geometry.joints.ENVELOPE_TOL_MM
+// The spaces' see-through (screen choices): all alike, the module pointed at, the others then.
+const SPACE_FILL = { faint: 0.05, lit: 0.22, dim: 0.02 };
+const SPACE_EDGE = { faint: 0.45, lit: 1, dim: 0.15 };
 
 // The module names from the server (the contract's), once. Without the route: the ids as written.
 let namesLoaded = null;
@@ -126,12 +130,17 @@ export function moduleLegendHtml(design, { colors, spaces }) {
   let out = "";
   if (spaces) {
     const outs = outsideOf(design);
-    const names = outs.slice(0, 3).map((o) => `${o.kind === "part" ? partName(design, o.id) : o.id}${o.by_mm != null ? ` ${fmt(o.by_mm, 3)} mm` : ""}`);
+    // which module's space each one is out of, and by how much
+    const names = outs.slice(0, 3).map((o) => `${o.kind === "part" ? partName(design, o.id) : `部材 ${o.id}`} (${moduleName(o.module)}の空間から${o.by_mm != null ? ` ${fmt(o.by_mm, 3)} mm` : ""})`);
     out = outs.length
-      ? `<div class="mout" data-outside="${outs.length}"><span class="mdot" style="--mod:${OUTSIDE_COLOR}"></span>はみ出し ${outs.length} 個: ${esc(names.join("・"))}${outs.length > 3 ? " ほか" : ""}</div>`
+      ? `<div class="mout" data-outside="${outs.length}"><span class="mdot" style="--mod:${OUTSIDE_COLOR}"></span>はみ出し ${outs.length} 個: ${names.map((n) => `<span class="mo1">${esc(n)}</span>`).join("・")}${outs.length > 3 ? " ほか" : ""}` +
+        // docs/contract.md HK6: a part outside its module's space makes build_version refuse
+        `<div class="mbad">部品がはみ出していると、次の版を作るときに断られる (HK6)</div></div>`
       : `<div class="mout none" data-outside="0">はみ出し 0 個 (どれも自分のモジュールの空間に収まっている)</div>`;
   }
-  return `<div class="ttl">${colors ? "モジュールの色" : "モジュールの空間"}</div><ul class="mlist">${rows}</ul>${out}`;
+  // what the numbers in the rows count
+  const what = `<div class="mwhat">数: そのモジュールの部品・部材${spaces ? "・空間の箱" : ""}の数</div>`;
+  return `<div class="ttl">${colors ? "モジュールの色" : "モジュールの空間"}</div><ul class="mlist">${rows}</ul>${what}${out}`;
 }
 
 // The colours and spaces on a Workbench3D (bench: its design, partObjs, members, wheelObjs, body).
@@ -157,7 +166,9 @@ export class ModuleLayer {
     for (const o of [...this.spaces.children]) {
       this.spaces.remove(o);
       o.geometry?.dispose();
+      o.material?.dispose(); // each space box has its own (its opacity follows highlight)
     }
+    this.lit = null;
     this.spaces.parent?.remove(this.spaces);
   }
 
@@ -219,17 +230,29 @@ export class ModuleLayer {
       for (const mod of d.modules) {
         for (const box of mod.envelope ?? []) {
           const geo = new THREE.BoxGeometry(...box.size_mm);
-          const fill = new THREE.Mesh(geo, this.mat(moduleColor(mod.module_id), { transparent: true, opacity: 0.1, depthWrite: false, polygonOffset: false, side: THREE.DoubleSide }));
+          // faint, so many boxes over each other stay readable; the module pointed at in the legend
+          // is drawn strong (highlight)
+          const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: moduleColor(mod.module_id), toneMapped: false, fog: false, transparent: true, opacity: SPACE_FILL.faint, depthWrite: false, side: THREE.DoubleSide }));
           fill.position.set(...box.center_mm);
           fill.renderOrder = 4;
           fill.userData.module = mod.module_id;
-          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: moduleColor(mod.module_id), transparent: true, opacity: 0.8, toneMapped: false }));
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: moduleColor(mod.module_id), transparent: true, opacity: SPACE_EDGE.faint, toneMapped: false }));
           edges.position.copy(fill.position);
           edges.userData.module = mod.module_id;
           this.spaces.add(fill, edges);
         }
       }
       b.body.add(this.spaces);
+    }
+  }
+
+  // The spaces of one module strong and the others fainter still (null: all faint).
+  highlight(mod) {
+    if (mod === (this.lit ?? null)) return;
+    this.lit = mod ?? null;
+    for (const o of this.spaces.children) {
+      const k = mod == null ? "faint" : o.userData.module === mod ? "lit" : "dim";
+      o.material.opacity = o.isMesh ? SPACE_FILL[k] : SPACE_EDGE[k];
     }
   }
 
@@ -253,6 +276,10 @@ const STYLE = `
 .modlegend .mc { color: var(--muted, #6b665c); font-size: 13px; text-align: right; }
 .modlegend .mout { margin-top: 6px; color: #b3170f; font-weight: 700; font-size: 13.5px; line-height: 1.35; }
 .modlegend .mout.none { color: var(--muted, #6b665c); font-weight: 400; }
+.modlegend .mout .mo1 { display: inline-block; max-width: 100%; }
+.modlegend .mout .mbad { font-weight: 400; color: var(--ink, #1d1d1f); font-size: 13px; }
+.modlegend .mwhat { color: var(--muted, #6b665c); font-size: 12.5px; margin-top: 2px; }
+.modlegend .mlist li[data-module] { cursor: default; }
 .mdot { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--mod); flex: none; vertical-align: -1px; margin-right: 4px; }
 .roundcard { position: absolute; left: 16px; top: 64px; z-index: 6; max-width: min(560px, calc(100% - 400px)); background: rgba(251, 249, 244, 0.95); border: 2px solid #8e6bbf; border-radius: 12px; padding: 8px 12px; font-size: 14.5px; line-height: 1.4; }
 .roundcard .rc-head { font-weight: 700; font-size: 15.5px; margin-bottom: 4px; }
@@ -263,6 +290,7 @@ const STYLE = `
 .roundcard .rc-foot { margin-top: 4px; color: var(--muted, #6b665c); font-size: 13px; }
 .asm-3d .modtoggles { top: 60px; }
 .asm-3d .modlegend { bottom: 80px; }
+.viewport.has-anim > .modlegend { bottom: 120px; } /* over the load case's animation bar, as .legend */
 .petbox .modmark { position: absolute; left: 0; bottom: 0; width: 13px; height: 13px; border-radius: 3px; background: var(--mod); border: 1.5px solid #fff; z-index: 1; }
 .pet.modpet { box-shadow: 0 0 0 3px var(--mod) inset; }
 `;
@@ -277,7 +305,8 @@ export function moduleStyle() {
 }
 
 // The legend element in a host (made once), filled for the design and switches; hidden when empty.
-export function renderModuleLegend(host, design, on) {
+// layer (a ModuleLayer): pointing at a row draws that module's spaces strong, the others faint.
+export function renderModuleLegend(host, design, on, layer = null) {
   moduleStyle();
   let el = host.querySelector(":scope > .modlegend");
   if (!el) {
@@ -285,10 +314,21 @@ export function renderModuleLegend(host, design, on) {
     el.className = "modlegend";
     el.dataset.kind = "legend";
     host.append(el);
+    el.addEventListener("mouseover", (ev) => {
+      const li = ev.target.closest("li[data-module]");
+      el.layer?.highlight(li ? li.dataset.module : null);
+      el.dataset.lit = li ? li.dataset.module : "";
+    });
+    el.addEventListener("mouseleave", () => {
+      el.layer?.highlight(null);
+      el.dataset.lit = "";
+    });
   }
+  el.layer = layer;
   const html = moduleLegendHtml(design, on);
   el.hidden = !html;
   if (el.innerHTML !== html) el.innerHTML = html;
+  keepLegendsApart(host); // the joints' legend in the same host goes beside this one
   return el;
 }
 
@@ -321,7 +361,7 @@ export function mountAssemblySwitch(panel) {
       if (html !== drawn) bar.innerHTML = drawn = html;
       bar.hidden = !show;
       layer.set(show ? on : { colors: false, spaces: false });
-      renderModuleLegend(host, d, show ? on : {});
+      renderModuleLegend(host, d, show ? on : {}, layer);
     },
   };
 }

@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 
 from hiraku.webserve.server import make_server
-from tests.web.held_fixture import HELD_LC, held_events
+from tests.web.held_fixture import HELD_LC, REFERENCE_CASES, REFERENCE_KINDS, REFERENCE_TITLES, held_events
 
 try:
     from playwright.sync_api import sync_playwright
@@ -83,6 +83,41 @@ class HeldBandBrowserTest(unittest.TestCase):
             self.assertLess(band.bounding_box()["y"], tile.locator(".draw").bounding_box()["y"])
             # no other tile has one
             self.assertEqual(page.locator(".tile.held").count(), 1)
+        finally:
+            page.close()
+
+    def test_reference_rows_not_coloured(self):
+        """A quantity without a criterion that is not a count: a 参考 (判定しない) row on its tile, with
+        its kind's word (渡すだけ・比べるだけ・参考), not the 保留 band; the tile keeps its own colour."""
+        page = self.open(HELD, "grid")
+        try:
+            words = {"compare": "比べるだけ", "relay": "渡すだけ", "reference": "参考"}
+            for lc_id, _tid, domain, quantity, value, _unit, _extra in REFERENCE_CASES:
+                tile = page.locator(f'.tile[data-domain="{domain}"]')
+                self.assertNotIn("held", tile.get_attribute("class"), domain)
+                self.assertEqual(tile.locator(".heldband").count(), 0, domain)
+                row = tile.locator(f'.refrows li[data-ref="{lc_id}"]')
+                self.assertEqual(row.count(), 1, lc_id)
+                self.assertEqual(row.get_attribute("data-kind"), REFERENCE_KINDS[lc_id])
+                self.assertEqual(row.get_attribute("data-quantity"), quantity)
+                self.assertEqual(float(row.get_attribute("data-value")), value)
+                self.assertIn(words[REFERENCE_KINDS[lc_id]], row.inner_text())
+                self.assertIn(REFERENCE_TITLES[lc_id], row.inner_text())  # the load case's title, not its id
+                self.assertIn("参考 (判定しない)", tile.locator(".refrows").inner_text())
+                # not coloured: no orange, green or red background
+                bg = row.evaluate("e => getComputedStyle(e.closest('.refrows')).backgroundColor")
+                self.assertIn(bg, ("rgba(0, 0, 0, 0)", "transparent"))
+            # handling stays green, powertrain keeps its own state (the record's)
+            self.assertIn("green", page.locator('.tile[data-domain="handling"]').get_attribute("class"))
+        finally:
+            page.close()
+        # the workbench's band and chips keep to the held count
+        page = self.open(HELD, "bench")
+        try:
+            text = page.locator("#heldband").inner_text()
+            for lc_id, *_ in REFERENCE_CASES:
+                self.assertNotIn(lc_id, text)
+            self.assertEqual(page.locator("#chips .chip.held").count(), 1)
         finally:
             page.close()
 

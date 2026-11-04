@@ -25,6 +25,7 @@ Standard library only. Routes:
                                         the K0 formulas ({"ready": false} while computed, shelf.py)
     GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
                                         (tools/<name>-<n>.check.json)
+    GET /api/formulas                   the K0 formulas' ids and Japanese titles (formula_titles)
     GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
                                         module designers (web/js/modules.js)
 
@@ -377,6 +378,23 @@ def modules_info() -> dict:
     return {"modules": list(contract.MODULES), "names": dict(contract.MODULE_NAMES_JA), "designers": list(contract.MODULE_DESIGNERS)}
 
 
+_FORMULA_TITLES: dict | None = None
+
+
+def formula_titles() -> dict:
+    """GET /api/formulas: each K0 formula's id and Japanese title (the solvers' registry; listed
+    once, without the shelf's known-answer checks). On an error: none, with the reason."""
+    global _FORMULA_TITLES
+    if _FORMULA_TITLES is None:
+        try:
+            from hiraku import solvers
+
+            _FORMULA_TITLES = {"formulas": [{"formula_id": f["formula_id"], "title": f["title"]} for f in solvers.formula_registry().list_formulas()]}
+        except Exception as e:  # noqa: BLE001 - the screen then shows the formula as written
+            _FORMULA_TITLES = {"formulas": [], "error": f"{type(e).__name__}: {e}"}
+    return _FORMULA_TITLES
+
+
 ASSET_DIR = "assets/polyhaven"  # web/js/look.js ASSET_DIR: Poly Haven files the user put there
 ASSET_SUFFIXES = {".hdr", ".exr", ".jpg", ".jpeg", ".png"}
 
@@ -441,6 +459,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/modules":
             self._send_json(modules_info())
+            return
+        if path == "/api/formulas":
+            self._send_json(formula_titles())
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:

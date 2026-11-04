@@ -17,10 +17,10 @@ import * as THREE from "three";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
-import { esc, fmt } from "./labels.js";
+import { esc, fmt, keepAsides } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { mountAssemblySwitch } from "./modules.js"; // modules:
-import { assemblyJointControls } from "./joints.js"; // joints:
+import { assemblyJointControls, JOINT_KINDS } from "./joints.js"; // joints:
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -28,13 +28,16 @@ export const CHECKS = [
   { key: "hand_reach", ja: "手", title: "人の手が届く" },
 ];
 
-export const FASTEN_JA = { bolt: "ボルト", weld: "溶接", rest: "載せる", pin: "ピン" };
+// bushing and ball_joint: the contract's fastening kinds since dcb3a90 (fixed with their own
+// through-bolt or castle nut)
+export const FASTEN_JA = { bolt: "ボルト", weld: "溶接", rest: "載せる", pin: "ピン", bushing: "ブッシュ", ball_joint: "ボールジョイント" };
 
 const CURRENT = "#e9893a";
 const NG = "#c8402a";
 const PATH = "#2b59c3";
-// pin: joints.js's pin colour, not #8e6bbf (the packager's module colour on A7's 3D, proposals.js)
-const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#1d1d9e" };
+// pin: joints.js's pin colour, not #8e6bbf (the packager's module colour on A7's 3D, proposals.js);
+// bushing and ball_joint: joints.js's colours of the same kinds
+export const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#1d1d9e", bushing: JOINT_KINDS.bushing.color, ball_joint: JOINT_KINDS.ball_joint.color };
 // Parts that are not built into the vehicle (people and their load): not drawn on the bench.
 const NOT_BUILT = new Set(["occupant", "cargo"]);
 
@@ -83,16 +86,36 @@ export function fastenTarget(to, names, memberNames = {}) {
 export function fastenText(step, names, memberNames = {}) {
   const fs = step.fastenings ?? [];
   if (!fs.length) return "";
+  // each target once, with how many fastenings go there (a corner bolted 9 times at node RB:
+  // "節点 RB (9 か所)")
   const byKind = new Map();
   for (const f of fs) {
-    if (!byKind.has(f.kind)) byKind.set(f.kind, []);
+    if (!byKind.has(f.kind)) byKind.set(f.kind, new Map());
     const t = fastenTarget(f.to, names, memberNames);
-    if (!byKind.get(f.kind).includes(t)) byKind.get(f.kind).push(t);
+    const m = byKind.get(f.kind);
+    m.set(t, (m.get(t) ?? 0) + 1);
   }
-  return [...byKind].map(([k, ts]) => `${FASTEN_JA[k] ?? k}: ${ts.join("・")}`).join(" / ");
+  return [...byKind].map(([k, ts]) => `${FASTEN_JA[k] ?? k}: ${[...ts].map(([t, n]) => (n > 1 ? `${t} (${n} か所)` : t)).join("・")}`).join(" / ");
 }
 
 export const stepOk = (step) => CHECKS.every((c) => step[c.key] === true);
+
+// One interference of the record in words: each side by its name in the design ("member x" as a
+// fastening's target, a part by its name, else the id as written), how deep, and when. The
+// condition is shown only when it says more than the state ("at rest" / "in motion" do not).
+const SAME_AS_STATE = /^(at rest|rest|in motion|motion)$/i;
+export function interferenceRow(x, design) {
+  const names = partNames(design);
+  const memberNames = Object.fromEntries((design?.members ?? []).filter((m) => m.name).map((m) => [m.id, m.name]));
+  const side = (id) => {
+    const s = String(id);
+    if (/^(member|part|node) /.test(s)) return fastenTarget(s, names, memberNames);
+    return names[s] ? shortName(names[s]) : s;
+  };
+  const when = x.state === "motion" ? "動きの中" : "止まった状態";
+  const cond = x.condition && !SAME_AS_STATE.test(String(x.condition).trim()) ? ` (${esc(x.condition)})` : "";
+  return `<li title="${esc(`${x.a} × ${x.b}`)}">${esc(side(x.a))} × ${esc(side(x.b))}・${esc(fmt(x.depth_mm, 3))} mm・${when}${cond}</li>`;
+}
 
 // The step being shown at progress u (1-based) and how far it has gone in (0..1).
 export function stepAt(u, n) {
@@ -323,6 +346,7 @@ export class AssemblyStage {
 }
 
 // ---- the list of steps -----------------------------------------------------------
+// (the step's sentence: each aside in brackets one piece, labels.js keepAsides)
 const mark = (ok) => (ok ? `<span class="ok">✓</span>` : `<span class="ng">✕</span>`);
 
 // opts.compact: one line per step (the video's list); otherwise the step's sentence,
@@ -330,11 +354,14 @@ const mark = (ok) => (ok ? `<span class="ok">✓</span>` : `<span class="ng">✕
 export function stepRowsHtml(rec, current, opts = {}) {
   const names = partNames(rec.design);
   const memberNames = Object.fromEntries((rec.design?.members ?? []).filter((m) => m.name).map((m) => [m.id, m.name]));
+  const memberIds = new Set((rec.design?.members ?? []).map((m) => m.id));
   return rec.steps
     .map((s) => {
       const name = shortName(nameOf(names, s.part));
       const checks = CHECKS.map((c) => `<span class="ck ck-${c.key} ${s[c.key] ? "is-ok" : "is-ng"}" title="${esc(c.title)}">${esc(c.ja)}${mark(s[c.key] === true)}</span>`).join("");
-      const blocked = !stepOk(s) && (s.blocked_by ?? []).length ? `<div class="blk">止めているもの: ${esc(s.blocked_by.map((b) => shortName(names[b] ?? b)).join("・"))}</div>` : "";
+      // what blocks it: a part by its name, a member by its name (else "部材 <id>"), else as written
+      const blockName = (b) => (names[b] ? shortName(names[b]) : memberIds.has(b) ? fastenTarget(`member ${b}`, names, memberNames) : b);
+      const blocked = !stepOk(s) && (s.blocked_by ?? []).length ? `<div class="blk">止めているもの: ${esc(s.blocked_by.map(blockName).join("・"))}</div>` : "";
       const cls = `${s.order === current ? "cur" : ""} ${stepOk(s) ? "" : "has-ng"} ${s.order < current ? "done" : ""}`;
       const box = opts.box ? ` data-box="${opts.box}.${s.order}"` : "";
       if (opts.compact) {
@@ -344,7 +371,7 @@ export function stepRowsHtml(rec, current, opts = {}) {
       return (
         `<li class="${cls}" data-order="${s.order}"${box}>` +
         `<div class="row1"><span class="no">${s.order}</span><span class="nm" title="${esc(names[s.part] ?? s.part)}">${esc(name)}</span><span class="cks">${checks}</span></div>` +
-        (s.text ? `<div class="tx">${esc(s.text)}</div>` : "") +
+        (s.text ? `<div class="tx">${keepAsides(s.text)}</div>` : "") +
         (fasten ? `<div class="fz">留め方 ${esc(fasten)}</div>` : "") +
         blocked +
         `</li>`
@@ -516,9 +543,7 @@ export class AssemblyPanel {
     this.sized = null;
     this.resize();
     this.q(".asm-intf").innerHTML = rec.interferences.length
-      ? `<h3>干渉の記録</h3><ul>${rec.interferences
-          .map((x) => `<li>${esc(x.a)} × ${esc(x.b)}・${esc(fmt(x.depth_mm, 3))} mm・${x.state === "motion" ? "動きの中" : "止まった状態"}${x.condition ? ` (${esc(x.condition)})` : ""}</li>`)
-          .join("")}</ul>`
+      ? `<h3>干渉の記録</h3><ul>${rec.interferences.map((x) => interferenceRow(x, rec.design)).join("")}</ul>`
       : "";
   }
 

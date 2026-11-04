@@ -29,7 +29,8 @@ except ImportError:  # pragma: no cover
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 
 PLAIN = "20261104-210100-plain"  # the same run without modules
-FALLBACK = {"frame": "#2b6e40", "suspension": "#8db33a", "steering": "#e2759f", "occupant": "#917430", "powertrain": "#7d2240", "body": "#57b8a0"}
+FALLBACK = {"frame": "#2b6e40", "suspension": "#8db33a", "steering": "#e2759f", "occupant": "#917430", "powertrain": "#8f415b", "body": "#57b8a0"}
+# (powertrain: the pets' #7d2240, made lighter for the 3D by proposals.js readable)
 OUTSIDE = "#e0201a"
 T_PENDING = 4.6  # the three proposals of round 1 are in, version 2 not built yet
 T_BUILT = 6.5  # version 2 built from them
@@ -247,15 +248,21 @@ class ModulesBrowserTest(unittest.TestCase):
                  if (!had) pets.roles.delete('designer.frame');
                  const m = await import('/js/proposals.js');
                  const keep = window.HirakuPets;
-                 window.HirakuPets = { ROLES: [{ module: 'frame', id: 'designer.frame', color: '#123456' }, { id: 'packager', color: '#654321' }] };
-                 const colours = [m.moduleColor('frame'), m.moduleColor('package'), m.moduleColor('body')];
+                 window.HirakuPets = { ROLES: [{ module: 'frame', id: 'designer.frame', color: '#3a7bd5' }, { id: 'packager', color: '#d5873a' },
+                                               { module: 'steering', id: 'designer.steering', color: '#123456' }] };
+                 const colours = [m.moduleColor('frame'), m.moduleColor('package'), m.moduleColor('body'), m.moduleColor('steering')];
+                 const dark = [m.luminance('#123456'), m.luminance(m.moduleColor('steering'))];
                  window.HirakuPets = keep;
-                 return { role, without: pets.roleOf('designer.steering') === 'designer' || pets.roles.has('designer.steering'), colours };
+                 return { role, without: pets.roleOf('designer.steering') === 'designer' || pets.roles.has('designer.steering'), colours, dark };
                }"""
         )
         self.assertEqual(got["role"], "designer.frame")
         self.assertTrue(got["without"])
-        self.assertEqual(got["colours"], ["#123456", "#654321", FALLBACK["body"]])
+        self.assertEqual(got["colours"][:3], ["#3a7bd5", "#d5873a", FALLBACK["body"]])
+        # a pet colour too dark for the 3D is drawn lighter (proposals.js readable): at least MIN_LUMINANCE 0.1
+        self.assertLess(got["dark"][0], 0.1)
+        self.assertGreaterEqual(got["dark"][1], 0.1)
+        self.assertNotEqual(got["colours"][3], "#123456")
 
     def test_grid_keeps_the_tile_pets(self):
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&t=1e6")

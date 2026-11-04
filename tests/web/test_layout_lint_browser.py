@@ -44,6 +44,7 @@ ASSEMBLY = "20261102-206000-assembly"  # the sample with an assembly order (test
 HELD = "20261104-200000-held"  # held: a load case without a criterion counting 206 (tests.web.held_fixture)
 MODULES = "20261104-210000-modules"  # modules: tests.web.modules_fixture.RUN_ID
 JOINTS = "20261102-207000-joints"  # joints: the frozen offroad-4w v1 alone (test_joints_browser.joints_events)
+FIRSTTIME = "20261105-200000-firsttime"  # many load cases sharing ids, long log ids, a long change (tests.web.firsttime_fixture)
 
 READY = "window.hiraku && window.hiraku.ready"
 
@@ -88,6 +89,9 @@ SCREENS = (
     Screen("全分野 (モジュール)", f"?run={MODULES}&tab=grid&pace=0&t=1e6"),
     # joints and modules: both toggles on the same bench (the two legends side by side)
     Screen("作業台 (接合・モジュール)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=joints,modules,spaces"),
+    # the shapes of a real record a first-time viewer opened: the chips' row, the log, the change line
+    Screen("作業台 (試験が多い)", f"?run={FIRSTTIME}&tab=bench&pace=0&t=1e6&on=names"),
+    Screen("全分野 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
 )
 
 
@@ -133,6 +137,9 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     from tests.web.modules_fixture import module_events  # modules:
     _write_run(runs, MODULES, module_events())
     _write_run(runs, JOINTS, joints_events())  # joints:
+    from tests.web.firsttime_fixture import firsttime_events
+
+    _write_run(runs, FIRSTTIME, firsttime_events())
     return runs, saved
 
 

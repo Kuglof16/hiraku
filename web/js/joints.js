@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 import { esc } from "./labels.js";
+import { frameEnds, TUBE, TUBE_NOTE } from "./tubes.js"; // where each tube's end is cut (the bead goes there)
 
 // ---- the table: what each kind is drawn as -------------------------------------------
 // mark: the shape (MARK_SHAPES); color: its colour (the same in both looks); ja: its name
@@ -70,7 +71,8 @@ export const THROUGH_NOTE = "一直線に続く同じ断面の 2 本は 1 本の
 // connects_to with at_mm (and axis) is drawn at that point (and along that axis); one without
 // at_mm is placed from the boxes (PLACE below): the legend counts those (guessNote).
 export const PLACE_NOTE = "場所がデータに無い部品の印は、2 つの相手の箱のいちばん近い所の中ほどに置いた";
-export const guessNote = (n) => `推し量りで置いた ${n} 所 (${PLACE_NOTE})`;
+// short on the legend; how they were placed (PLACE_NOTE) is its tooltip
+export const guessNote = (n) => `場所はおおよそ ${n} 所 (データに場所が無いもの)`;
 
 // How the place of a joint is found, by what `to` is (the owner is the part with connects_to):
 //   node        the point on the owner's box nearest the node, and the node: halfway
@@ -276,6 +278,8 @@ export function readJoints(design) {
     }
   }
 
+  const tubeEnds = frameEnds(design);
+  out.tubes = Object.keys(tubeEnds).length; // members drawn as hollow tubes (the legend's TUBE_NOTE)
   // the frame's nodes where members meet (THROUGH_COS: two members of one section in one line are
   // one tube going through the node, not a joint; a node is a joint when, so counted, two or more
   // pieces meet there, or when node.joint says how)
@@ -313,10 +317,16 @@ export function readJoints(design) {
     if (kindOf(via).mark === "bead") {
       // a bead round each member that ends at the node (not a tube going through), where it meets
       // the widest of the others; all of them when every member goes through (a butt joint written in the data)
-      const ending = ms.map((_, i) => i).filter((i) => !through.has(i));
+      // (tubes.js frameEnds: a tube cut on the receiver's face has its bead at that cut, trim from
+      // the node; the carrier, which the others butt on, has none)
+      const endOf = (i) => tubeEnds[ms[i].id]?.[ms[i].node_a === n.id ? "a" : "b"] ?? null;
+      const ending = ms.map((_, i) => i).filter((i) => !through.has(i) && endOf(i)?.kind !== "carrier");
       for (const i of ending.length ? ending : ms.map((_, k) => k)) {
         const [w, h] = sides[i];
-        const off = Math.max(...sides.filter((_, j) => j !== i).flat()) / 2;
+        const cut = endOf(i);
+        // a cut end stands TUBE.cut_gap_mm off the receiver's face: the bead sits on the face itself
+        // (lifted by WELD_BEAD.lift_mm only), its leg over that gap, not cut_gap + lift away from it
+        const off = cut && (cut.kind === "cut" || cut.kind === "butt") ? cut.trim - (cut.kind === "cut" ? TUBE.cut_gap_mm : 0) : Math.max(...sides.filter((_, j) => j !== i).flat()) / 2;
         const r = 0.5 * Math.max(w, h) * 1.06 + 2; // round the tube's corners
         joint.marks.push({ shape: "bead", at: c.clone().addScaledVector(dirs[i], off).toArray(), axis: dirs[i].toArray(), scale: r, gap: 0 });
       }
@@ -506,6 +516,8 @@ function seamMatrix(s) {
 }
 
 // ---- the marks in a Workbench3D ---------------------------------------------------------
+const PICK_PX = 12; // how near the pointer a mark is picked (screen choice)
+
 export class JointMarks {
   constructor(bench) {
     this.bench = bench;
@@ -517,6 +529,63 @@ export class JointMarks {
     this.info = readJoints(null);
     this.meshes = {}; // shape -> InstancedMesh
     this.slots = []; // per instance: { shape, i, joint, mark, matrix }
+    this.hoverTag();
+  }
+
+  // Pointing at a mark: a tag saying what kind of joint it is and which two things it joins.
+  hoverTag() {
+    const canvas = this.bench.renderer?.domElement;
+    const host = canvas?.parentElement;
+    if (!canvas || !host) return;
+    const tag = document.createElement("div");
+    tag.className = "joint-tag";
+    tag.hidden = true;
+    host.append(tag);
+    let queued = null;
+    canvas.addEventListener("pointermove", (ev) => {
+      if (queued) return;
+      queued = requestAnimationFrame(() => {
+        queued = null;
+        const hit = this.on ? this.pick(ev.clientX, ev.clientY) : null;
+        tag.hidden = !hit;
+        if (!hit) return;
+        const r = host.getBoundingClientRect();
+        tag.textContent = this.describe(hit.joint);
+        tag.dataset.owner = hit.joint.owner;
+        tag.dataset.to = hit.joint.to;
+        tag.style.left = `${ev.clientX - r.left + 14}px`;
+        tag.style.top = `${ev.clientY - r.top + 10}px`;
+      });
+    });
+    canvas.addEventListener("pointerleave", () => (tag.hidden = true));
+  }
+
+  // The shown mark nearest to a point of the window (within PICK_PX), or null.
+  pick(x, y) {
+    const cam = this.bench.camera;
+    const rect = this.bench.renderer.domElement.getBoundingClientRect();
+    this.group.updateWorldMatrix(true, false);
+    let best = null;
+    const p = new THREE.Vector3();
+    for (const s of this.slots) {
+      if (!s.shown) continue;
+      p.copy(v3(s.mark.at)).applyMatrix4(this.group.matrixWorld).project(cam);
+      if (p.z > 1) continue;
+      const d = Math.hypot(rect.left + ((p.x + 1) / 2) * rect.width - x, rect.top + ((1 - p.y) / 2) * rect.height - y);
+      if (d < PICK_PX && (!best || d < best.d)) best = { d, slot: s };
+    }
+    return best ? best.slot : null;
+  }
+
+  // "溶接: 前の隔壁 と 部材 rail_L_FA": the kind, then the owner and what it is joined to by name.
+  describe(j) {
+    const parts = Object.fromEntries((this.bench.design?.parts ?? []).map((p) => [p.id, String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id]));
+    const members = Object.fromEntries((this.bench.design?.members ?? []).filter((m) => m.name).map((m) => [m.id, m.name]));
+    const name = (id, kind) =>
+      parts[id] ? parts[id] : kind === PLACE.member || members[id] ? members[id] ?? `部材 ${id}` : kind === PLACE.node || kind === "frame_node" ? `節点 ${id}` : String(id);
+    // a frame node's joint: the members that meet there, at that node
+    if (j.source === "node") return `${kindOf(j.kind).ja}: 枠の節点 ${j.to} (そこで会う部材どうし)`;
+    return `${kindOf(j.kind).ja}: ${name(j.owner, PLACE.part)} と ${name(j.to, j.toKind)}`;
   }
 
   setDesign(design) {
@@ -671,12 +740,31 @@ export function jointLegendHtml(info) {
   const notes = [info.frameRule ? `<div class="jl-note" data-note="rule">※ ${esc(ruleNote)}</div>` : ""];
   if (info.unstated) notes.push(`<div class="jl-note" data-note="unstated">枠の節 ${info.unstated} 所はつなぎ方がデータに無いので印なし (型 ${esc(RULE_ARCHETYPE)} でない)</div>`);
   if (info.through || nodeJoints) notes.push(`<div class="jl-note" data-note="through">${esc(THROUGH_NOTE)}</div>`);
-  if (info.guessed) notes.push(`<div class="jl-note" data-note="guess" data-n="${info.guessed}">${esc(guessNote(info.guessed))}</div>`);
+  if (info.guessed) notes.push(`<div class="jl-note" data-note="guess" data-n="${info.guessed}" title="${esc(PLACE_NOTE)}">${esc(guessNote(info.guessed))}</div>`);
   if (info.unplaced) notes.push(`<div class="jl-note">相手の見つからない接合 ${info.unplaced} は印なし</div>`);
   if (info.byPart) notes.push(`<div class="jl-note">ボールジョイントのうち ${info.byPart} は部品の球がそのまま印</div>`);
   if (info.counts.weld) notes.push(`<div class="jl-note" data-note="bead">${esc(BEAD_NOTE)}</div>`);
+  if (info.tubes) notes.push(`<div class="jl-note" data-note="tube">${esc(TUBE_NOTE)}</div>`);
   if (info.beadSeams?.as_is) notes.push(`<div class="jl-note" data-note="bead-as-is">溶接の印のうち ${info.beadSeams.as_is} は触れる面が出せず、印の場所に輪で描いている</div>`);
-  return `<div class="jl-ttl">接合 <small>${total} 所</small></div><div class="jl-rows">${rows}</div>${notes.join("")}`;
+  // the notes folded (the legend stays small over the 3D); open to read them
+  const shown = notes.filter(Boolean);
+  const more = shown.length ? `<details class="jl-more"><summary>注 ${shown.length}</summary>${shown.join("")}</details>` : "";
+  return `<div class="jl-ttl">接合 <small>${total} 所</small></div><div class="jl-rows">${rows}</div>${more}`;
+}
+
+// The joints' legend and the modules' legend (modules.js .modlegend) in one host: when their
+// boxes would cross, the joints' moves left of the modules' (side by side, not one over the other).
+export function keepLegendsApart(host) {
+  const jl = host.querySelector(":scope > .joint-legend");
+  const ml = host.querySelector(":scope > .modlegend");
+  if (!jl) return;
+  jl.style.right = "";
+  if (jl.hidden || !ml || ml.hidden) return;
+  const a = jl.getBoundingClientRect();
+  const b = ml.getBoundingClientRect();
+  if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) {
+    jl.style.right = `${host.clientWidth - ml.offsetLeft + 10}px`;
+  }
 }
 
 // The legend's box in a host (the bench's viewport, the A7 3D), shown while the joints are on.
@@ -698,6 +786,7 @@ export function renderJointLegend(host, marks, on) {
       el.dataset.key = key;
     }
   }
+  keepLegendsApart(host);
   return el;
 }
 
