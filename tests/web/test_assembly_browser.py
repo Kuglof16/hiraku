@@ -158,6 +158,27 @@ class AssemblyBrowserTest(unittest.TestCase):
       };
     }"""
 
+    def test_bushing_and_ball_joint_fastenings(self):
+        # the contract's kinds since dcb3a90: named in the step's text, their balls in joints.js's colours
+        page, errors = self.open("?run=sample&pace=0&t=0")
+        events = assembly_events()
+        ana = next(e for e in events if e["kind"] == "analysis.finished" and e["data"].get("assembly"))
+        ana["data"]["assembly"][2]["fastenings"] = [{"to": "node N1", "kind": "bushing", "at_mm": [0.0, 600.0, 300.0]},
+                                                    {"to": "node N1", "kind": "ball_joint", "at_mm": [0.0, 700.0, 300.0]}]
+        self.assertEqual(contract.errors("event", ana), [])
+        page.evaluate("async (ev) => { await window.hiraku.load(ev, ev.at(-1).t); }", events)
+        page.click("button[data-tab=A7]")
+        page.wait_for_function("window.hiraku.asm && document.querySelectorAll('#view-asm .asm-steps li').length === 3")
+        page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+        text = page.evaluate("() => document.querySelectorAll('#view-asm .asm-steps li')[2].textContent")
+        balls = page.evaluate("() => window.hiraku.asm.stage.fastens.children.map((o) => '#' + o.material.color.getHexString())")
+        colors = page.evaluate("async () => { const j = await import('/js/joints.js'); return [j.JOINT_KINDS.bushing.color, j.JOINT_KINDS.ball_joint.color]; }")
+        self.assertEqual(errors, [])
+        page.close()
+        self.assertIn("ブッシュ: 節点 N1", text)
+        self.assertIn("ボールジョイント: 節点 N1", text)
+        self.assertEqual(balls, colors)
+
     def test_a7_tab_shows_the_steps_and_the_3d(self):
         page, errors = self.open("?run=sample&pace=0&t=0")
         events = assembly_events()
