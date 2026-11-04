@@ -57,7 +57,7 @@ export function readable(hex) {
   return mix(t);
 }
 
-// "前のばねの固さ 25 → 30 N/mm" for each changed variable (before: the base design's value),
+// "前のばねの硬さ 25 → 30 N/mm" for each changed variable (before: the base design's value),
 // "part_mounts を brackets に" for each choice.
 export function changeWords(chg, base) {
   const out = [];
@@ -123,7 +123,7 @@ export function roundCardHtml(s, playhead) {
   );
 }
 
-// The grid head's line for a version built from proposals: "版 1 → 2: 足まわり 前のばねの固さ 25 → 30・…".
+// The grid head's line for a version built from proposals: "版 1 → 2: 足まわり 前のばねの硬さ 25 → 30・…".
 export function builtLine(s, v) {
   const d = s.designs[v];
   const list = d?.module_changes ?? [];
