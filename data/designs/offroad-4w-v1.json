@@ -1112,22 +1112,17 @@
       "system": "control",
       "connects_to": [
         {
-          "to": "RAp2",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RS1",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
           "to": "controller",
           "via": "wire",
           "carries": "signal"
         },
         {
-          "to": "floor_front",
+          "to": "fit_pedal_accel_tower_post_RA2",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "fit_pedal_accel_floor_front",
           "via": "bolt",
           "carries": "load"
         }
@@ -1163,12 +1158,7 @@
       "system": "brake",
       "connects_to": [
         {
-          "to": "RAp2",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RS1",
+          "to": "fit_pedal_brake_tower_post_RA2",
           "via": "bolt",
           "carries": "load"
         },
@@ -1178,7 +1168,7 @@
           "carries": "brake"
         },
         {
-          "to": "floor_front",
+          "to": "fit_pedal_brake_floor_front",
           "via": "bolt",
           "carries": "load"
         }
@@ -1208,16 +1198,6 @@
       ],
       "system": "brake",
       "connects_to": [
-        {
-          "to": "RAp2",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RS1",
-          "via": "bolt",
-          "carries": "load"
-        },
         {
           "to": "caliper_FL",
           "via": "hose",
@@ -1499,16 +1479,6 @@
       "system": "steering",
       "connects_to": [
         {
-          "to": "LDT",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RDT",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
           "to": "steering_column",
           "via": "spline",
           "carries": "steer"
@@ -1545,24 +1515,14 @@
       "system": "steering",
       "connects_to": [
         {
-          "to": "LDT",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RDT",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
           "to": "steering_shaft",
           "via": "pin",
           "carries": "steer"
         },
         {
-          "to": "dash_cross",
+          "to": "bracket_column",
           "via": "bolt",
-          "carries": "steer"
+          "carries": "load"
         }
       ],
       "module": "steering"
@@ -1596,16 +1556,6 @@
       "system": "steering",
       "connects_to": [
         {
-          "to": "LDT",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RDT",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
           "to": "steering_rack",
           "via": "spline",
           "carries": "steer"
@@ -1637,16 +1587,6 @@
       "system": "steering",
       "connects_to": [
         {
-          "to": "LAu2",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
-          "to": "RAu2",
-          "via": "bolt",
-          "carries": "load"
-        },
-        {
           "to": "tie_rod_FL",
           "via": "ball_joint",
           "carries": "steer"
@@ -1655,6 +1595,16 @@
           "to": "tie_rod_FR",
           "via": "ball_joint",
           "carries": "steer"
+        },
+        {
+          "to": "bracket_tie_FL",
+          "via": "bolt",
+          "carries": "load"
+        },
+        {
+          "to": "bracket_tie_FR",
+          "via": "bolt",
+          "carries": "load"
         }
       ],
       "module": "steering"
@@ -4160,12 +4110,12 @@
       "system": "frame",
       "connects_to": [
         {
-          "to": "LDT",
+          "to": "dash_cross",
           "via": "weld",
           "carries": "load"
         },
         {
-          "to": "RDT",
+          "to": "dash_post_R",
           "via": "weld",
           "carries": "load"
         }
@@ -4211,6 +4161,130 @@
         }
       ],
       "module": "occupant"
+    },
+    {
+      "id": "fit_pedal_accel_tower_post_RA2",
+      "name": "アクセルのペダル の金具",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -319.68199399802495,
+          -350.0,
+          499.74017334403584
+        ],
+        "size_mm": [
+          39.36398799604984,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ]
+      },
+      "mass_kg": 0.034947902941539766,
+      "connects_to": [
+        {
+          "to": "tower_post_RA2",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_pedal_accel_floor_front",
+      "name": "アクセルのペダル の金具",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -433.333250074641,
+          -290.0,
+          449.3690795057349
+        ],
+        "size_mm": [
+          32.338159011469656,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "mass_kg": 0.028710273017925197,
+      "connects_to": [
+        {
+          "to": "floor_front",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_pedal_brake_tower_post_RA2",
+      "name": "ブレーキのペダル の金具",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -319.68199399802495,
+          -297.5,
+          499.74017334403584
+        ],
+        "size_mm": [
+          84.70255929399747,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          -0.0,
+          -62.30712243716878
+        ]
+      },
+      "mass_kg": 0.07520012508396488,
+      "connects_to": [
+        {
+          "to": "tower_post_RA2",
+          "via": "weld",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
+    },
+    {
+      "id": "fit_pedal_brake_floor_front",
+      "name": "ブレーキのペダル の金具",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -433.333250074641,
+          -180.0,
+          449.3690795057349
+        ],
+        "size_mm": [
+          32.338159011469656,
+          20.0,
+          20.0
+        ],
+        "rpy_deg": [
+          0.0,
+          90.0,
+          0.0
+        ]
+      },
+      "mass_kg": 0.028710273017925197,
+      "connects_to": [
+        {
+          "to": "floor_front",
+          "via": "bolt",
+          "carries": "load"
+        }
+      ],
+      "module": "frame"
     }
   ],
   "nodes": [
@@ -5830,53 +5904,53 @@
         {
           "id": "if-064",
           "between": [
-            "body",
+            "frame",
             "steering"
           ],
           "via": "bolt",
           "point_mm": [
-            -465.32882271793034,
-            -165.0,
-            461.8180461928059
+            -354.7254072333135,
+            -340.0,
+            495.8881328648239
           ]
         },
         {
           "id": "if-065",
           "between": [
-            "body",
+            "frame",
             "steering"
           ],
           "via": "bolt",
           "point_mm": [
-            -465.32882271793034,
-            -110.0,
-            461.8180461928059
+            -411.5510352716215,
+            -310.0,
+            470.7025859456734
           ]
         },
         {
           "id": "if-066",
           "between": [
-            "steering",
-            "suspension"
+            "frame",
+            "steering"
           ],
-          "via": "hose",
+          "via": "bolt",
           "point_mm": [
-            -221.14999999999998,
-            135.0,
-            498.85918437832714
+            -354.7254072333135,
+            -258.75,
+            495.8881328648239
           ]
         },
         {
           "id": "if-067",
           "between": [
-            "steering",
-            "suspension"
+            "frame",
+            "steering"
           ],
-          "via": "hose",
+          "via": "bolt",
           "point_mm": [
-            -221.14999999999998,
-            -355.0,
-            498.85918437832714
+            -411.5510352716215,
+            -200.0,
+            470.7025859456734
           ]
         },
         {
@@ -5887,7 +5961,7 @@
           ],
           "via": "hose",
           "point_mm": [
-            -1231.15,
+            -221.14999999999998,
             135.0,
             498.85918437832714
           ]
@@ -5900,13 +5974,39 @@
           ],
           "via": "hose",
           "point_mm": [
-            -1231.15,
+            -221.14999999999998,
             -355.0,
             498.85918437832714
           ]
         },
         {
           "id": "if-070",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1231.15,
+            135.0,
+            498.85918437832714
+          ]
+        },
+        {
+          "id": "if-071",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1231.15,
+            -355.0,
+            498.85918437832714
+          ]
+        },
+        {
+          "id": "if-072",
           "between": [
             "body",
             "steering"
@@ -5919,7 +6019,46 @@
           ]
         },
         {
-          "id": "if-071",
+          "id": "if-073",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -352.5,
+            -300.0,
+            906.8213380819781
+          ]
+        },
+        {
+          "id": "if-074",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -120.0,
+            140.33665774481273,
+            287.49722198053644
+          ]
+        },
+        {
+          "id": "if-075",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -120.0,
+            -140.33665774481273,
+            287.49722198053644
+          ]
+        },
+        {
+          "id": "if-076",
           "between": [
             "steering",
             "suspension"
@@ -5932,7 +6071,7 @@
           ]
         },
         {
-          "id": "if-072",
+          "id": "if-077",
           "between": [
             "steering",
             "suspension"
@@ -5945,71 +6084,6 @@
           ]
         },
         {
-          "id": "if-073",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-074",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-075",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-076",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-077",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            310.5,
-            216.25
-          ]
-        },
-        {
           "id": "if-078",
           "between": [
             "frame",
@@ -6017,9 +6091,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2080.0,
-            310.5,
-            216.25
+            50.0,
+            328.2,
+            318.25
           ]
         },
         {
@@ -6030,7 +6104,7 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1970.0,
+            -50.0,
             328.2,
             318.25
           ]
@@ -6043,13 +6117,78 @@
           ],
           "via": "bushing",
           "point_mm": [
+            50.0,
+            -328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-081",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -50.0,
+            -328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-082",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1960.0,
+            310.5,
+            216.25
+          ]
+        },
+        {
+          "id": "if-083",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2080.0,
+            310.5,
+            216.25
+          ]
+        },
+        {
+          "id": "if-084",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1970.0,
+            328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-085",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
             -2070.0,
             328.2,
             318.25
           ]
         },
         {
-          "id": "if-081",
+          "id": "if-086",
           "between": [
             "frame",
             "suspension"
@@ -6062,7 +6201,7 @@
           ]
         },
         {
-          "id": "if-082",
+          "id": "if-087",
           "between": [
             "frame",
             "suspension"
@@ -6075,7 +6214,7 @@
           ]
         },
         {
-          "id": "if-083",
+          "id": "if-088",
           "between": [
             "frame",
             "suspension"
@@ -6088,7 +6227,7 @@
           ]
         },
         {
-          "id": "if-084",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -6101,7 +6240,7 @@
           ]
         },
         {
-          "id": "if-085",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -6114,7 +6253,7 @@
           ]
         },
         {
-          "id": "if-086",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -6124,6 +6263,32 @@
             -2140.0,
             -308.0866577448127,
             267.0824073268455
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -487.1110375209498,
+            -145.0,
+            440.4845397528675
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -487.1110375209498,
+            -90.0,
+            440.4845397528675
           ]
         }
       ],
@@ -6939,6 +7104,54 @@
             120.0,
             62.014176263793615
           ]
+        },
+        {
+          "center_mm": [
+            -319.68199399802495,
+            -350.0,
+            499.74017334403584
+          ],
+          "size_mm": [
+            89.3639879960499,
+            70.0,
+            70.0
+          ]
+        },
+        {
+          "center_mm": [
+            -433.333250074641,
+            -290.0,
+            449.3690795057349
+          ],
+          "size_mm": [
+            70.0,
+            70.0,
+            82.33815901146966
+          ]
+        },
+        {
+          "center_mm": [
+            -319.68199399802495,
+            -297.5,
+            499.74017334403584
+          ],
+          "size_mm": [
+            107.07301606441774,
+            134.29463957739927,
+            70.0
+          ]
+        },
+        {
+          "center_mm": [
+            -433.333250074641,
+            -180.0,
+            449.3690795057349
+          ],
+          "size_mm": [
+            70.0,
+            70.0,
+            82.33815901146966
+          ]
         }
       ],
       "interfaces": [
@@ -7563,68 +7776,94 @@
           ]
         },
         {
+          "id": "if-064",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -354.7254072333135,
+            -340.0,
+            495.8881328648239
+          ]
+        },
+        {
+          "id": "if-065",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -411.5510352716215,
+            -310.0,
+            470.7025859456734
+          ]
+        },
+        {
+          "id": "if-066",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -354.7254072333135,
+            -258.75,
+            495.8881328648239
+          ]
+        },
+        {
+          "id": "if-067",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -411.5510352716215,
+            -200.0,
+            470.7025859456734
+          ]
+        },
+        {
           "id": "if-073",
           "between": [
             "frame",
-            "suspension"
+            "steering"
           ],
-          "via": "bushing",
+          "via": "bolt",
           "point_mm": [
-            50.0,
-            328.2,
-            318.25
+            -352.5,
+            -300.0,
+            906.8213380819781
           ]
         },
         {
           "id": "if-074",
           "between": [
             "frame",
-            "suspension"
+            "steering"
           ],
-          "via": "bushing",
+          "via": "bolt",
           "point_mm": [
-            -50.0,
-            328.2,
-            318.25
+            -120.0,
+            140.33665774481273,
+            287.49722198053644
           ]
         },
         {
           "id": "if-075",
           "between": [
             "frame",
-            "suspension"
+            "steering"
           ],
-          "via": "bushing",
+          "via": "bolt",
           "point_mm": [
-            50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-076",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-077",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            310.5,
-            216.25
+            -120.0,
+            -140.33665774481273,
+            287.49722198053644
           ]
         },
         {
@@ -7635,9 +7874,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2080.0,
-            310.5,
-            216.25
+            50.0,
+            328.2,
+            318.25
           ]
         },
         {
@@ -7648,7 +7887,7 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1970.0,
+            -50.0,
             328.2,
             318.25
           ]
@@ -7661,13 +7900,78 @@
           ],
           "via": "bushing",
           "point_mm": [
+            50.0,
+            -328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-081",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -50.0,
+            -328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-082",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1960.0,
+            310.5,
+            216.25
+          ]
+        },
+        {
+          "id": "if-083",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2080.0,
+            310.5,
+            216.25
+          ]
+        },
+        {
+          "id": "if-084",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1970.0,
+            328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-085",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
             -2070.0,
             328.2,
             318.25
           ]
         },
         {
-          "id": "if-081",
+          "id": "if-086",
           "between": [
             "frame",
             "suspension"
@@ -7680,7 +7984,7 @@
           ]
         },
         {
-          "id": "if-082",
+          "id": "if-087",
           "between": [
             "frame",
             "suspension"
@@ -7693,7 +7997,7 @@
           ]
         },
         {
-          "id": "if-083",
+          "id": "if-088",
           "between": [
             "frame",
             "suspension"
@@ -7706,7 +8010,7 @@
           ]
         },
         {
-          "id": "if-084",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -7719,7 +8023,7 @@
           ]
         },
         {
-          "id": "if-085",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -7732,7 +8036,7 @@
           ]
         },
         {
-          "id": "if-086",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -7742,6 +8046,32 @@
             -2140.0,
             -308.0866577448127,
             267.0824073268455
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -487.1110375209498,
+            -145.0,
+            440.4845397528675
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -487.1110375209498,
+            -90.0,
+            440.4845397528675
           ]
         }
       ],
@@ -8276,32 +8606,6 @@
           ]
         },
         {
-          "id": "if-066",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -221.14999999999998,
-            135.0,
-            498.85918437832714
-          ]
-        },
-        {
-          "id": "if-067",
-          "between": [
-            "steering",
-            "suspension"
-          ],
-          "via": "hose",
-          "point_mm": [
-            -221.14999999999998,
-            -355.0,
-            498.85918437832714
-          ]
-        },
-        {
           "id": "if-068",
           "between": [
             "steering",
@@ -8309,7 +8613,7 @@
           ],
           "via": "hose",
           "point_mm": [
-            -1231.15,
+            -221.14999999999998,
             135.0,
             498.85918437832714
           ]
@@ -8322,13 +8626,39 @@
           ],
           "via": "hose",
           "point_mm": [
+            -221.14999999999998,
+            -355.0,
+            498.85918437832714
+          ]
+        },
+        {
+          "id": "if-070",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1231.15,
+            135.0,
+            498.85918437832714
+          ]
+        },
+        {
+          "id": "if-071",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
             -1231.15,
             -355.0,
             498.85918437832714
           ]
         },
         {
-          "id": "if-071",
+          "id": "if-076",
           "between": [
             "steering",
             "suspension"
@@ -8341,7 +8671,7 @@
           ]
         },
         {
-          "id": "if-072",
+          "id": "if-077",
           "between": [
             "steering",
             "suspension"
@@ -8354,71 +8684,6 @@
           ]
         },
         {
-          "id": "if-073",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-074",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-075",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-076",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -50.0,
-            -328.2,
-            318.25
-          ]
-        },
-        {
-          "id": "if-077",
-          "between": [
-            "frame",
-            "suspension"
-          ],
-          "via": "bushing",
-          "point_mm": [
-            -1960.0,
-            310.5,
-            216.25
-          ]
-        },
-        {
           "id": "if-078",
           "between": [
             "frame",
@@ -8426,9 +8691,9 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -2080.0,
-            310.5,
-            216.25
+            50.0,
+            328.2,
+            318.25
           ]
         },
         {
@@ -8439,7 +8704,7 @@
           ],
           "via": "bushing",
           "point_mm": [
-            -1970.0,
+            -50.0,
             328.2,
             318.25
           ]
@@ -8452,13 +8717,78 @@
           ],
           "via": "bushing",
           "point_mm": [
+            50.0,
+            -328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-081",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -50.0,
+            -328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-082",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1960.0,
+            310.5,
+            216.25
+          ]
+        },
+        {
+          "id": "if-083",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -2080.0,
+            310.5,
+            216.25
+          ]
+        },
+        {
+          "id": "if-084",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
+            -1970.0,
+            328.2,
+            318.25
+          ]
+        },
+        {
+          "id": "if-085",
+          "between": [
+            "frame",
+            "suspension"
+          ],
+          "via": "bushing",
+          "point_mm": [
             -2070.0,
             328.2,
             318.25
           ]
         },
         {
-          "id": "if-081",
+          "id": "if-086",
           "between": [
             "frame",
             "suspension"
@@ -8471,7 +8801,7 @@
           ]
         },
         {
-          "id": "if-082",
+          "id": "if-087",
           "between": [
             "frame",
             "suspension"
@@ -8484,7 +8814,7 @@
           ]
         },
         {
-          "id": "if-083",
+          "id": "if-088",
           "between": [
             "frame",
             "suspension"
@@ -8497,7 +8827,7 @@
           ]
         },
         {
-          "id": "if-084",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -8510,7 +8840,7 @@
           ]
         },
         {
-          "id": "if-085",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -8523,7 +8853,7 @@
           ]
         },
         {
-          "id": "if-086",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -8730,53 +9060,53 @@
         {
           "id": "if-064",
           "between": [
-            "body",
+            "frame",
             "steering"
           ],
           "via": "bolt",
           "point_mm": [
-            -465.32882271793034,
-            -165.0,
-            461.8180461928059
+            -354.7254072333135,
+            -340.0,
+            495.8881328648239
           ]
         },
         {
           "id": "if-065",
           "between": [
-            "body",
+            "frame",
             "steering"
           ],
           "via": "bolt",
           "point_mm": [
-            -465.32882271793034,
-            -110.0,
-            461.8180461928059
+            -411.5510352716215,
+            -310.0,
+            470.7025859456734
           ]
         },
         {
           "id": "if-066",
           "between": [
-            "steering",
-            "suspension"
+            "frame",
+            "steering"
           ],
-          "via": "hose",
+          "via": "bolt",
           "point_mm": [
-            -221.14999999999998,
-            135.0,
-            498.85918437832714
+            -354.7254072333135,
+            -258.75,
+            495.8881328648239
           ]
         },
         {
           "id": "if-067",
           "between": [
-            "steering",
-            "suspension"
+            "frame",
+            "steering"
           ],
-          "via": "hose",
+          "via": "bolt",
           "point_mm": [
-            -221.14999999999998,
-            -355.0,
-            498.85918437832714
+            -411.5510352716215,
+            -200.0,
+            470.7025859456734
           ]
         },
         {
@@ -8787,7 +9117,7 @@
           ],
           "via": "hose",
           "point_mm": [
-            -1231.15,
+            -221.14999999999998,
             135.0,
             498.85918437832714
           ]
@@ -8800,13 +9130,39 @@
           ],
           "via": "hose",
           "point_mm": [
-            -1231.15,
+            -221.14999999999998,
             -355.0,
             498.85918437832714
           ]
         },
         {
           "id": "if-070",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1231.15,
+            135.0,
+            498.85918437832714
+          ]
+        },
+        {
+          "id": "if-071",
+          "between": [
+            "steering",
+            "suspension"
+          ],
+          "via": "hose",
+          "point_mm": [
+            -1231.15,
+            -355.0,
+            498.85918437832714
+          ]
+        },
+        {
+          "id": "if-072",
           "between": [
             "body",
             "steering"
@@ -8819,7 +9175,46 @@
           ]
         },
         {
-          "id": "if-071",
+          "id": "if-073",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -352.5,
+            -300.0,
+            906.8213380819781
+          ]
+        },
+        {
+          "id": "if-074",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -120.0,
+            140.33665774481273,
+            287.49722198053644
+          ]
+        },
+        {
+          "id": "if-075",
+          "between": [
+            "frame",
+            "steering"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -120.0,
+            -140.33665774481273,
+            287.49722198053644
+          ]
+        },
+        {
+          "id": "if-076",
           "between": [
             "steering",
             "suspension"
@@ -8832,7 +9227,7 @@
           ]
         },
         {
-          "id": "if-072",
+          "id": "if-077",
           "between": [
             "steering",
             "suspension"
@@ -9928,33 +10323,7 @@
           "node": "RDT"
         },
         {
-          "id": "if-064",
-          "between": [
-            "body",
-            "steering"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -465.32882271793034,
-            -165.0,
-            461.8180461928059
-          ]
-        },
-        {
-          "id": "if-065",
-          "between": [
-            "body",
-            "steering"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -465.32882271793034,
-            -110.0,
-            461.8180461928059
-          ]
-        },
-        {
-          "id": "if-070",
+          "id": "if-072",
           "between": [
             "body",
             "steering"
@@ -9964,6 +10333,32 @@
             -301.72499999999997,
             -110.0,
             659.8807736132626
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -487.1110375209498,
+            -145.0,
+            440.4845397528675
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
+            "body",
+            "frame"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -487.1110375209498,
+            -90.0,
+            440.4845397528675
           ]
         }
       ],

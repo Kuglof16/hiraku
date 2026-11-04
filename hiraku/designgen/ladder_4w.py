@@ -1162,6 +1162,9 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     _check_tubes_through(design)
+    from .kit import joints
+
+    joints.join(design)  # the steering, the pedals, the master cylinder and the fenders joined in shape
     from .ladder_4w_modules import split
 
     return split(design)  # module on every part and member, joint on the nodes, design.modules
