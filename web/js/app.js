@@ -670,7 +670,7 @@ function renderChain(s, chain) {
     p.innerHTML =
       `<h3>1. 予測<small>手計算の段 (K0)・${esc(agentLongName(pred.agent))}</small></h3>` +
       (title
-        ? `<div class="sub">${esc(quantityName(pred.quantity))}</div><div class="fl-title" data-formula="${esc(pred.formula_id)}">${esc(title)}</div>` +
+        ? `<div class="sub">${esc(quantityName(pred.quantity))}</div><div class="fl-title" data-formula="${esc(pred.formula_id)}">${keepAsides(title)}</div>` +
           `<details class="more" data-keep="pred-formula"><summary>くわしく (式と入力)</summary><div class="sub">${esc(pred.formula_id)}</div>${formula}</details>`
         : `<div class="sub">${esc(quantityName(pred.quantity))}・${esc(pred.formula_id)}</div>${formula}`) +
       `<div class="big">= ${esc(fmtVU(pred.value, pred.unit))}</div>` +

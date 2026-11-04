@@ -451,8 +451,8 @@ const VARIABLE_JA = {
   wheelbase: "ホイールベース",
   track: "トレッド",
   // modules: the variables a module designer changes in the sample records
-  front_spring_rate: "前のばねの固さ",
-  rear_spring_rate: "後ろのばねの固さ",
+  front_spring_rate: "前のばねの硬さ",
+  rear_spring_rate: "後ろのばねの硬さ",
   cargo_height: "荷の高さ",
   rail_t: "レールの板厚",
   seat_x: "座席の前後の位置",

@@ -173,7 +173,7 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual([items.nth(i).get_attribute("data-change") for i in range(items.count())], ["chg-0001", "chg-0002", "chg-0003"])
         text = card.inner_text()
         self.assertIn("足まわりの設計役", text)
-        self.assertIn("前のばねの固さ", text)
+        self.assertIn("前のばねの硬さ", text)
         self.assertIn("パッケージ役が 1 つの版にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
@@ -194,7 +194,7 @@ class ModulesBrowserTest(unittest.TestCase):
         page = self.open(f"run={NAMED}&tab=bench&pace=0&pets=0&t={T_PENDING}")
         text = page.locator("#roundcard").inner_text()
         self.assertIn(NAMES["front_spring_rate"], text)
-        self.assertNotIn("前のばねの固さ", text)
+        self.assertNotIn("前のばねの硬さ", text)
         page = self.open(f"run={NAMED}&tab=grid&pace=0&pets=0&t=1e6")
         self.assertIn(f"枠 {NAMES['rail_t']} 2.3 → 3.2 mm", page.locator("#grid-head [data-built]").inner_text())
         got = page.evaluate("""async () => {
