@@ -65,7 +65,11 @@ class SplitTest(unittest.TestCase):
         mod = {p["id"]: p["module"] for p in d["parts"]}
         self.assertEqual((mod["battery"], mod["seat_R"], mod["floor"], mod["wheel_FL"], mod["tie_rod_FL"],
                           mod["toe_link_RL"], mod["bracket_column"]),
-                         ("powertrain", "occupant", "body", "suspension", "steering", "suspension", "frame"))
+                         ("powertrain", "occupant", "body", "suspension", "steering", "suspension", "steering"))
+        # placed by the steering's variables (the column's angle and the wheel's height): steering's
+        self.assertEqual(mod["bulkhead"], "steering")
+        mm = {m["id"]: m.get("module") for m in d["members"]}
+        self.assertEqual({mm[k] for k in mm if k.startswith("dash_")}, {"steering"})
 
     def test_unknown_kind_is_refused(self):
         d = GEN.build()
