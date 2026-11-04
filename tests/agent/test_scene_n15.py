@@ -1,9 +1,13 @@
 """Video scene N15: the scripted run of data/requirements/offroad-4w-n15.yaml revises the demo
-vehicle round by round (data/catalog/scripted.yaml, plan offroad-4w-n15). It ends stopped,
-not_judged: on the last version every tile is green but strength, which stays pending because
-one load case, R7-hand-300N, has a mismatch whose cause ends it (ends_case: no hand calculation
-of this run reaches it). The red domains of each version are written below; when a tool, a
-builder or the demo design changes them, this test says so."""
+vehicle round by round (data/catalog/scripted.yaml, plan offroad-4w-n15). The vehicle is split into
+modules: each round the module designers propose and the packager builds the version (contract
+d9631a5). With the load cases built per version (H5-order counts the parts shut in on that
+version's design), the plan's revisions do not fix assembly: from version 3 two parts cannot go
+in (H5-order), and on version 5 the joints' reinforcement overlaps other parts (H1-interference).
+The run uses its four revisions and stops at round_limit with assembly red; the heavier stages
+stay unchecked on the last version (HK5). The red domains of each version and the red load cases
+of the last are written below; when a tool, a builder or the demo design changes them, this test
+says so."""
 
 import json
 import os
@@ -13,25 +17,23 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# design version -> the domains whose tile is red on it (the last version has none). HK5, light first:
-# each version stops at its first red stage and the designer revises before the heavier stages.
+# design version -> the domains whose tile is red on it. HK5, light first: each version stops at its
+# first red stage and the designers revise before the heavier stages.
 EXPECTED_REDS = {
-    1: {"assembly"},    # stage 0: H1, H3 and H6 (the layout)
-    2: {"strength"},    # stage 1: R8 and R7-foot (the load path and the controls)
-    3: {"powertrain"},  # stage 2: P3 (vehicle dynamics)
-    4: {"strength"},    # stage 3: R1s (the joint wall's hot spot on the shells)
-    5: set(),
+    1: {"assembly"},  # stage 0: H1-motion, H1-steer, H3 and H6 (the layout)
+    2: {"strength"},  # stage 1: R8 and R7-foot (no load path)
+    3: {"assembly"},  # stage 0: H5-order, two parts shut in
+    4: {"assembly"},  # the same
+    5: {"assembly"},  # H5-order, and H1-interference (the joints' reinforcement)
 }
-# the load cases of the last version left without a verdict, each ended by its cause (ends_case)
-ENDED = {"R7-hand-300N"}
-NOT_JUDGED_DOMAIN = "strength"  # their tile: pending, never green
+LAST_RED_CASES = {"H1-interference", "H5-order"}  # the failing verdicts of the last version
 
 
 @unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "the N15 scripted run takes about half an hour (HIRAKU_SLOW_TESTS=1)")
 class SceneN15Test(unittest.TestCase):
     """The N15 scripted run with the real solvers."""
 
-    def test_the_run_ends_green_but_the_ended_load_case(self):
+    def test_the_run_ends_at_the_round_limit_with_assembly_red(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as tmp:
             env = dict(os.environ, PYTHONUTF8="1")
@@ -41,11 +43,11 @@ class SceneN15Test(unittest.TestCase):
             (run,) = [p for p in Path(tmp).iterdir() if p.is_dir()]
             events = [json.loads(line) for line in (run / "events.jsonl").read_text(encoding="utf-8").splitlines()
                       if line.strip()]
-            project = json.loads((run / "project.json").read_text(encoding="utf-8"))
 
         finished = [e for e in events if e["kind"] == "run.finished"]
         self.assertEqual(len(finished), 1)
-        self.assertEqual((finished[0]["data"]["status"], finished[0]["data"]["stop_code"]), ("stopped", "not_judged"))
+        self.assertEqual((finished[0]["data"]["status"], finished[0]["data"]["stop_code"]), ("stopped", "round_limit"))
+        self.assertIn("HK5", finished[0]["data"]["stop_reason"])
 
         tiles: dict[tuple[int, str], str] = {}  # the newest state of each tile
         for e in events:
@@ -56,26 +58,15 @@ class SceneN15Test(unittest.TestCase):
         self.assertEqual(reds, EXPECTED_REDS)
 
         last = versions[-1]
-        data = [e["data"] for e in events if e.get("design_version") == last]
-        verdicts = {d["load_case_id"] for d in data if "verdict_id" in d}
-        # load cases with a criterion (P1 has none: it feeds R1), not past the limit
-        cases = {lc["load_case_id"] for lc in project["load_cases"]
-                 if lc.get("criterion") and not lc["load_case_id"].endswith("-beyond")}
-        self.assertEqual(cases - verdicts, ENDED)
-        # each has a cause with ends_case on the last version (through its comparison and prediction)
-        lc_of_pred = {d["prediction_id"]: d["load_case_id"] for d in data if "formula_id" in d and "prediction_id" in d}
-        lc_of_cmp = {d["comparison_id"]: lc_of_pred.get(d.get("prediction_id"))
-                     for d in data if "comparison_id" in d and "status" in d}
-        ended = {lc_of_cmp.get(d["comparison_id"]) for d in data if "cause_id" in d and d.get("ends_case") is True}
-        self.assertEqual(ended & ENDED, ENDED)
-
-        # every picked domain has a green tile on the last version, and so has every other tile of it (assembly),
-        # but the domain of the ended load case, which stays pending
-        picked = {d["domain"] for e in events if e["kind"] == "domains.picked" for d in e["data"]["picks"]}
-        self.assertTrue(picked)
-        shown = picked | {d for v, d in tiles if v == last}
-        want = {d: ("pending" if d == NOT_JUDGED_DOMAIN else "green") for d in shown}
-        self.assertEqual({d: tiles.get((last, d)) for d in shown}, want)
+        failing = {e["data"]["load_case_id"] for e in events if e["kind"] == "verdict.recorded"
+                   and e.get("design_version") == last and not e["data"]["pass"]}
+        self.assertEqual(failing, LAST_RED_CASES)
+        # each round after the first: the module designers proposed and the packager built the version
+        built = [e for e in events if e["kind"] == "design.created" and e["data"]["design_version"] > 1]
+        self.assertEqual(len(built), 4)
+        self.assertTrue(all(e["agent"] == "packager" and e["data"].get("module_changes") for e in built))
+        proposed = {e["agent"] for e in events if e["kind"] == "design.change_proposed"}
+        self.assertTrue(proposed and all(a.startswith("designer.") for a in proposed))
 
 
 if __name__ == "__main__":
