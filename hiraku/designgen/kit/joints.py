@@ -62,9 +62,13 @@ def _touching_member(bs, pid: str, near) -> str | None:
     from hiraku.solvers.k4_geometry.model import shape_overlap
 
     me = bs[f"part:{pid}"]
+    r_me = float(np.linalg.norm(me.obb.half))
     best = None
     for k, b in bs.items():
         if b.kind != "member":
+            continue
+        # spheres round the two boxes apart: they cannot touch (skips the separating-axis test)
+        if float(np.linalg.norm(b.obb.center - me.obb.center)) > r_me + float(np.linalg.norm(b.obb.half)) + JOINT_GAP_MM:
             continue
         if -shape_overlap(me, b) <= JOINT_GAP_MM:
             d = float(np.linalg.norm(b.obb.center - near))
@@ -153,7 +157,14 @@ def _fit(design: dict, parts: dict, p: dict, me, other) -> str:
     if fid not in parts:
         a, b = nearest_points(me, other)
         box = strut_box(a, b)
-        parts[fid] = _add(design, {"id": fid, "name": f"{p.get('name', p['id'])} の金具", "kind": "bracket",
+        # carried as what it is fixed to: a member's nodes (a frame piece), a part's own carried_by; on an unsprung
+        # part (the knuckle) none, so it rides with that corner
+        if other.kind == "member":
+            carried = sorted(other.nodes)
+        else:
+            carried = list(parts.get(to_id, {}).get("carried_by") or [])
+        extra = {"carried_by": carried} if carried else {}
+        parts[fid] = _add(design, {"id": fid, "name": f"{p.get('name', p['id'])} の金具", "kind": "bracket", **extra,
                                    "box": box, "mass_kg": STEEL_KG_M3 * math.pi * (STRUT_D_MM - STRUT_T_MM) * STRUT_T_MM
                                    * box["size_mm"][0] * 1e-9,
                                    "connects_to": [{"to": to_id, "via": "weld" if other.kind == "member" else "bolt",
@@ -201,10 +212,12 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
         # held: a fixed joint, or a shaft's pin or spline at its ends; a ball joint to a moving link does not hold
         touching = any(x.get("via") not in NOT_TOUCHING_VIA + ("ball_joint",) for x in kept)
         held = bool(holders) and any(x["to"] in holders for x in kept)
+        dropped_here = False
         for g, c in far:
             # a far fixed joint is dropped when the part touches its holder, or (to a node) anything else
             if touching and ((c["to"] in nodes) or (held and c.get("via") not in MOVING_VIA)):
                 n_drop += 1
+                dropped_here = True
                 continue
             if c["to"] in nodes and g > BRIDGE_MAX_MM:
                 kept.append(c)
@@ -221,6 +234,12 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             if all(x["to"] != fid for x in kept):
                 kept.append(dict(c, to=fid))
             touching = True
+        if dropped_here and not any(x.get("carries") in (None, "load") for x in kept):
+            # its weight went to the joints dropped: it now goes through the joint that holds it (a wheel on its
+            # column's spline carries the wheel, as a shaft's ends carry the shaft)
+            hold = next((x for x in kept if x.get("via") not in NOT_TOUCHING_VIA + ("ball_joint",)), None)
+            if hold is not None:  # the same joint also carries the load (it still passes the steer or the torque on)
+                kept.append(dict(hold, carries="load"))
         p["connects_to"] = kept
     return {"retargeted": n_re, "brackets": n_br, "dropped": n_drop}
 

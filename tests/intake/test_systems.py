@@ -304,13 +304,16 @@ class WithTheOtherRulesTest(unittest.TestCase):
         self.assertEqual(flagless["SY-01"]["not_evaluable"], [{"part_id": "design", "missing": ["flags"]}])
         self.assertEqual(flagless["SY-01"]["targets"], ["design"])
 
-    COLUMN = ("steering_column", "steering_wheel")  # the parts that are bolted to RA and RS1 on paper
+    # the part that holds the steering column to the frame: welded to dash_cross and dash_post_R (the wheel hangs on
+    # the column, the column on this bracket: designgen kit/joints.py)
+    COLUMN = ("bracket_column",)
 
     def moved(self, design, near):
-        """The design with the steering column and wheel placed on the member RA (near) or far from every member."""
+        """The design with the column's bracket placed on the dash cross member (near: the middle of LDT-RDT) or far
+        from every member."""
         d = copy.deepcopy(design)
         nodes = {n["id"]: n["xyz_mm"] for n in d["nodes"]}
-        at = nodes["RA"]  # a node of the frame that the column and the wheel name
+        at = [(a + b) / 2.0 for a, b in zip(nodes["LDT"], nodes["RDT"])]  # on dash_cross, which the bracket names
         for p in d["parts"]:
             if p["id"] in self.COLUMN:
                 p["box"]["center_mm"] = list(at) if near else [5000.0, 5000.0, 5000.0]
@@ -318,11 +321,16 @@ class WithTheOtherRulesTest(unittest.TestCase):
 
     def test_a_part_drawn_in_the_air_is_found_even_when_it_says_it_is_bolted_on(self):
         far = self.run_all(self.moved(self.design, near=False))["SY-10"]
-        self.assertEqual(sorted(hit_ids(far)), sorted(self.COLUMN))
+        # the bracket is far from the members it names; the column and the wheel that hang on it are then not
+        # held to the frame either
+        self.assertEqual(sorted(hit_ids(far)), sorted(self.COLUMN + ("steering_column", "steering_wheel")))
         self.assertEqual(far["pass"], False)
         for h in far["hits"]:
-            self.assertGreater(h["values"]["gap_mm"], systems.MOUNT_GAP_MM)
-            self.assertIn("mm 離れています", h["message"])
+            if h["part_id"] in self.COLUMN:
+                self.assertGreater(h["values"]["gap_mm"], systems.MOUNT_GAP_MM)
+                self.assertIn("mm 離れています", h["message"])
+            else:
+                self.assertEqual(h["values"], {"attached": 0.0})
         self.assertLessEqual(set(hit_ids(far)), set(far["targets"]))
         near = self.run_all(self.moved(self.design, near=True))["SY-10"]
         self.assertEqual((near["hits"], near["pass"]), ([], True))
