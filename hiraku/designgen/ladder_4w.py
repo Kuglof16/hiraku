@@ -1217,7 +1217,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     design["archetype"] = "ladder_4w"  # designgen.ARCHETYPES
     from .ladder_4w_modules import split
 
-    return split(design)  # module on every part and member, joint on the nodes, design.modules
+    from .ladder_4w_names import write as write_names
+
+    # module on every part and member, joint on the nodes, design.modules; then the members' and variables' names
+    return write_names(split(design))
 
 
 def _check_tubes_through(design: Record) -> None:
