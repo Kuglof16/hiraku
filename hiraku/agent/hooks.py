@@ -22,8 +22,10 @@
   pending cases, counted per design version, and not while a
   message for the lead waits (the role returns so the lead hears it). Load cases no K0
   formula can predict (rules.unpredictable_cases) do not hold a stop. The
-  lead's stop while a role is still running is neither blocked nor counted: the
-  run waits for the role (hiraku.agent.runner.converse). A stop of the lead's
+  lead's stop while a role is still running is not counted: the SDK run waits for the
+  role (hiraku.agent.runner.converse); the plugin blocks it and the lead waits with the
+  plugin's wait tool (wait_tool, plugin.WAIT_TOOL), since claude -p may cut background
+  roles off some minutes after the lead's turn ends. A stop of the lead's
   with a message from the person not yet told is blocked once with that message
   (not counted either).
 - The stop button (stop.request in the run folder): every tool call is denied
@@ -52,6 +54,11 @@ PREFIX = f"mcp__{contract.MCP_SERVER}__"
 PLUGIN_PREFIX = f"mcp__plugin_{contract.MCP_SERVER}_{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
+# The plugin: the lead's stop while roles still run is blocked with WAIT_REASON (it waits with the wait tool), at
+# most this many times; the bound only keeps a run whose role never stops from going on for ever
+MAX_WAIT_BLOCKS = 60
+WAIT_REASON = ("役 ({roles}) がまだ動いています。番を終えると Claude Code が役を打ち切ることがあるので、{tool} を呼んで"
+               "役が終わるのを待ち、役の結果を受け取ってから続けてください")
 STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。ツールを呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 # what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
 
@@ -96,11 +103,16 @@ class Hooks:
         # the hooks; the SDK run's runner sends it as a message of its own (runner.new_routing)
         self.tell_routing = False
         self.routed: dict[str, str] = {}  # design version (str) -> the routing told for it
+        # the plugin: the tool the lead waits for running roles with (plugin.WAIT_TOOL). Claude Code (claude -p) may
+        # end background roles some time after the lead's turn ends, so the lead's stop while roles run is blocked
+        # and the lead waits with this tool. The SDK run leaves it None: its runner waits for the roles itself
+        self.wait_tool: str | None = None
+        self.wait_blocks = 0
 
     # ------------------------------------------------------------------ state kept between calls
 
     STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead", "told_roles",
-                    "routed")
+                    "routed", "wait_blocks")
 
     def state(self) -> dict[str, Any]:
         return {k: getattr(self, k) for k in self.STATE_FIELDS}
@@ -269,7 +281,11 @@ class Hooks:
         told = self.take_for_lead()
         if told:  # the person said something the lead has not heard: go on with it (not HK4, not counted)
             return {"decision": "block", "reason": told}
-        if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
+        if self.running:  # the lead waits for roles still at work: not giving up, so not counted against HK4
+            if self.wait_tool and self.wait_blocks < MAX_WAIT_BLOCKS:
+                self.wait_blocks += 1
+                roles = "、".join(sorted(set(self.running.values())))
+                return {"decision": "block", "reason": WAIT_REASON.format(roles=roles, tool=self.wait_tool)}
             return {}
         # the round limit ends revisions only: the latest version is still judged (HOOK_RULES HK4), so a
         # pending case still holds the stop; red_left_reason already lets a red tile go once no revision is left

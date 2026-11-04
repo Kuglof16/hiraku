@@ -36,7 +36,7 @@ from typing import Any, Iterator
 
 from hiraku import contract
 from hiraku.agent import inbox, prompts
-from hiraku.agent.hooks import Hooks, stopped_data
+from hiraku.agent.hooks import PLUGIN_PREFIX, Hooks, stopped_data
 from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
 from hiraku.store import RunStore
@@ -209,6 +209,7 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
 
         hooks = Hooks(ctx, _NoteAttribution(notes), emit=emit)  # type: ignore[arg-type]
         hooks.tell_routing = True  # no runner here to send the lead the routing of a version's reds
+        hooks.wait_tool = PLUGIN_PREFIX + WAIT_TOOL  # no runner here to wait for roles still running
         hooks.load_state(state)
         ended: list[bool] = []
         hooks.on_end = lambda: (notes.append({"op": "end"}), ended.append(True))
@@ -297,6 +298,19 @@ OWN_TOOLS: dict[str, tuple[str, Record]] = {
         OPEN_RUN_SCHEMA,
     ),
 }
+# The lead waits with this tool for roles still running (the Stop hook tells it to: hooks.WAIT_REASON). It returns
+# when no role runs, the run ends or the stop button is pressed, or after WAIT_S; the lead calls it again if needed.
+WAIT_TOOL = "wait_for_roles"
+WAIT_S = 300.0
+WAIT_POLL_S = 2.0
+OWN_TOOLS[WAIT_TOOL] = (
+    "動いている役 (サブエージェント) が終わるまで待つ (長くて 5 分)。役の結果は、終わった役から届く。まだ動いている役があれば、"
+    "もう一度呼ぶ",
+    {"type": "object", "additionalProperties": False, "properties": {}},
+)
+WAIT_DONE = "動いている役はもうありません。役の結果を受け取って続けてください"
+WAIT_MORE = "役 ({roles}) はまだ動いています。もう一度 " + WAIT_TOOL + " を呼んで待ってください"
+WAIT_ENDED = "実行は終わったか、止めるボタンが押されました。ツールを呼ばずに番を終えてください"
 
 
 def resolve_requirements(name: str) -> Path:
@@ -335,6 +349,8 @@ class PluginServer:
         from hiraku.tools.mcp import HANDLERS, make_handler
 
         await asyncio.to_thread(self.drain)
+        if name == WAIT_TOOL:
+            return {"content": [{"type": "text", "text": await asyncio.to_thread(self.wait_for_roles)}]}
         if name in OWN_TOOLS:
             try:
                 got = await asyncio.to_thread(self.start if name == "start_run" else self.open, args)
@@ -421,6 +437,23 @@ class PluginServer:
             self.touch_alive(ctx)
         self.note_unpredictable(ctx)
         return self._answer(ctx)
+
+    def wait_for_roles(self, wait_s: float | None = None, poll_s: float = WAIT_POLL_S) -> str:
+        """WAIT_TOOL: until the hooks' state has no running role (SubagentStop takes them out), the run ends or
+        the stop button is pressed, or wait_s (WAIT_S) passes."""
+        deadline = time.monotonic() + (WAIT_S if wait_s is None else wait_s)
+        while True:
+            ctx = self.ctx
+            if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk() \
+                    or ctx.store.stop_requested():
+                return WAIT_ENDED
+            with locked(ctx.store.path):
+                running = sorted(set((read_state(ctx.store.path).get("running") or {}).values()))
+            if not running:
+                return WAIT_DONE
+            if time.monotonic() >= deadline:
+                return WAIT_MORE.format(roles="、".join(running))
+            time.sleep(poll_s)
 
     @staticmethod
     def touch_alive(ctx: RunContext | None) -> None:

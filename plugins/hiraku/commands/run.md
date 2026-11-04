@@ -1,7 +1,7 @@
 ---
 description: "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める"
 argument-hint: "<要件のファイル (例 data/requirements/offroad-4w.yaml)>"
-allowed-tools: "mcp__plugin_hiraku_hiraku__start_run, mcp__plugin_hiraku_hiraku__open_run, mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__write_report, mcp__plugin_hiraku_hiraku__pick_domains, mcp__plugin_hiraku_hiraku__ask_user, mcp__plugin_hiraku_hiraku__import_knowledge, mcp__plugin_hiraku_hiraku__rule_check"
+allowed-tools: "mcp__plugin_hiraku_hiraku__start_run, mcp__plugin_hiraku_hiraku__open_run, mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__write_report, mcp__plugin_hiraku_hiraku__pick_domains, mcp__plugin_hiraku_hiraku__ask_user, mcp__plugin_hiraku_hiraku__import_knowledge, mcp__plugin_hiraku_hiraku__rule_check, mcp__plugin_hiraku_hiraku__wait_for_roles"
 ---
 
 <!-- written by python -m hiraku.agent.plugin_files from hiraku/agent/prompts.py; do not edit -->
@@ -13,6 +13,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
    - HIRAKU のツールは mcp__plugin_hiraku_hiraku__<名前> です (決まりの中では <名前> だけで書いています)。
    - 役のサブエージェントは hiraku:designer・hiraku:packager・hiraku:cae-<分野> です。設計がモジュールに分かれているときは、hiraku:designer の代わりに、モジュールの設計役 hiraku:designer-<モジュール> (frame・suspension・steering・occupant・powertrain・body) を使います。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
+   - 役を裏で動かしたまま番を終えません (Claude Code が役を打ち切ることがあります)。役の結果を待つときは mcp__plugin_hiraku_hiraku__wait_for_roles を呼びます。
    - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
 3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
 

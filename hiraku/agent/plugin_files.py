@@ -84,6 +84,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
    - HIRAKU のツールは {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
    - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。設計がモジュールに分かれているときは、{PLUGIN_NAME}:designer の代わりに、モジュールの設計役 {PLUGIN_NAME}:designer-<モジュール> ({"・".join(m.split(".", 1)[1] for m in contract.MODULE_DESIGNERS)}) を使います。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
+   - 役を裏で動かしたまま番を終えません (Claude Code が役を打ち切ることがあります)。役の結果を待つときは {plugin_tool("wait_for_roles")} を呼びます。
    - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
 3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
 
@@ -94,7 +95,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 
 def command_files() -> dict[str, str]:
     tools = [plugin_tool(n) for n in ("start_run", "open_run", "get_context", "write_report", "pick_domains", "ask_user",
-                                      "import_knowledge", "rule_check")]
+                                      "import_knowledge", "rule_check", "wait_for_roles")]
     fields = {"description": "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める",
               "argument-hint": "<要件のファイル (例 data/requirements/offroad-4w.yaml)>",
               "allowed-tools": ", ".join(tools)}
