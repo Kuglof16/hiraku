@@ -15,7 +15,7 @@ from typing import Any
 from hiraku import contract
 from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
-from hiraku.tools.judge import held_cases, latest_verdicts
+from hiraku.tools.judge import beyond_text, held_cases, latest_verdicts
 from hiraku.catalog import is_beyond
 from hiraku.tools.shelf import NOT_CHECKED, STAGE_NAMES_JA, load_case_stage, tool_stage
 
@@ -514,6 +514,11 @@ def cannot_judge_text(ctx: RunContext) -> str | None:
                      f"(予測が無いと解析も照合もできない)")
     if ended:  # contract 110b991: the mismatch's cause was recorded as ending the step without a verdict
         parts.append(f"{'、'.join(ended)} は、食い違いの原因を記録して判定なしで終えたので、この実行では判定していません")
+        by_id = {lc["load_case_id"]: lc for lc in ctx.load_cases}
+        for lc_id in ended:  # the tool's numbers when it found the case beyond its criterion (no red without a prediction)
+            said = beyond_text(ctx, by_id[lc_id], ctx.version) if lc_id in by_id and ctx.version else None
+            if said:
+                parts.append(f"{lc_id}: {said}。手計算の予測がここに届かないので、赤にもしていません。")
     return " ".join(parts) or None
 
 

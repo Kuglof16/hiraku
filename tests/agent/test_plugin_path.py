@@ -250,6 +250,7 @@ class ServerTest(PluginRunCase, unittest.TestCase):
         self.assertFalse((self.ctx.store.path / layout.PLUGIN_ALIVE_FILE).exists())  # the server let go
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "user_stop")
+        self.assertEqual(self.events("agent.stopped")[-1]["data"], {"agent_id": "lead", "stop_code": "user_stop"})
         self.assertTrue(self.call_error("get_context"))
         self.assertEqual(self.hook("Stop", {"stop_hook_active": False}), {})  # the hooks let everything through
 
@@ -370,6 +371,7 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(fin["data"]["stop_code"], "not_judged")
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("agent.stopped")[-1]["agent"], "lead")
+        self.assertEqual(self.events("agent.stopped")[-1]["data"]["stop_code"], "done")
         self.assert_events_fit()
 
     def _stop_to_the_cap(self):

@@ -8,7 +8,7 @@ from typing import Any
 
 from hiraku import contract
 from hiraku.agent import inbox, prompts
-from hiraku.agent.hooks import Hooks
+from hiraku.agent.hooks import Hooks, stopped_data
 from hiraku.agent.roles import (PLUGIN_DIR, agent_id_from_sdk, all_plugin_skills, has_modules, plugin_skills, routing_text,
                                 subagents)
 from hiraku.catalog.mixes import Mix, get_mix
@@ -332,9 +332,9 @@ async def run_with_claude(ctx: RunContext, *, model: str | None = None, effort: 
         # roles the CLI never reported stopped (cut off with the run) stop with it, then the lead
         for agent in sorted(set(hooks.running.values())):
             domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-            ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+            ctx.store.emit("agent.stopped", agent=agent, domain=domain, data=stopped_data(agent, code, cut_off=True))
         hooks.running.clear()
-        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        ctx.store.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
         ctx.store.finish(status, stop_reason=reason, stop_code=code)
 
     if ctx.store.stop_requested():  # pressed while the tools were checked: the CLI is not started
