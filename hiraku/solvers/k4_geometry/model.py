@@ -153,6 +153,8 @@ def allowance(a: Body, b: Body, design: dict) -> float:
             return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM
+        if part.kind == "gusset" and _on_the_line_of(part, mem, design):
+            return MOUNT_MM  # welded along a through tube that goes on in another member past the joint's node
         if part.capsule is not None and _ends_in_bracket_on(part, mem, design):
             return float("inf")  # a link or damper pinned in a bracket welded on this member's end
         if part.support and part.kind == "suspension":  # arms are bolted to the frame at the mount
@@ -177,6 +179,26 @@ def allowance(a: Body, b: Body, design: dict) -> float:
 def _person(body_id: str) -> str:
     """The person of a body "part:<id>": the id up to the first "." (hiraku.contract.loading.person_of)."""
     return body_id.split(":", 1)[-1].split(".", 1)[0]
+
+
+def _on_the_line_of(part: Body, mem: Body, design: dict) -> bool:
+    """Whether the member lies on the straight line of a member that ends at one of the part's carried_by
+    nodes (the same tube going on past another node)."""
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    ms = {m["id"]: m for m in design.get("members", [])}
+    me = ms.get(mem.id.split(":", 1)[-1])
+    if me is None:
+        return False
+    a, b = nodes[me["node_a"]], nodes[me["node_b"]]
+    d = (b - a) / max(float(np.linalg.norm(b - a)), 1e-12)
+    for m in ms.values():
+        if m is me or not {m["node_a"], m["node_b"]} & part.nodes:
+            continue
+        p, q = nodes[m["node_a"]], nodes[m["node_b"]]
+        e = (q - p) / max(float(np.linalg.norm(q - p)), 1e-12)
+        if abs(abs(float(d @ e)) - 1.0) < 1e-9 and float(np.linalg.norm(np.cross(p - a, d))) < 1e-6:
+            return True
+    return False
 
 
 def _ends_in_bracket_on(part: Body, mem: Body, design: dict) -> bool:

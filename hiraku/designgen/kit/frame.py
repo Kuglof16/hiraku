@@ -27,22 +27,6 @@ class FrameError(ValueError):
     pass
 
 
-def gusset_spans(design: Record) -> None:
-    """Every gusset (Frame.gussets) is welded along its through tube: add to its carried_by the other nodes
-    of that tube its leg reaches over (where the tube goes on in another member, e.g. a node a later
-    part added on the rail). Run once the design has all its nodes."""
-    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
-    for g in design.get("parts", []):
-        if g.get("kind") != "gusset" or not g.get("carried_by") or g["carried_by"][0] not in nodes:
-            continue
-        p = nodes[g["carried_by"][0]]
-        c, s = np.asarray(g["box"]["center_mm"], float), np.asarray(g["box"]["size_mm"], float)
-        x0, x1 = c[0] - s[0] / 2.0, c[0] + s[0] / 2.0
-        over = sorted(k for k, q in nodes.items() if k not in g["carried_by"] and abs(q[1] - p[1]) <= 1e-9
-                      and abs(q[2] - p[2]) <= 1e-9 and x0 <= q[0] <= x1)
-        g["carried_by"] = [*g["carried_by"], *over]
-
-
 def _overlapping(part: Record, others: list[Record]) -> str | None:
     """The id of the first of `others` whose box overlaps the part's box by more than a touch (K4's
     TOUCH_MM), else None."""
