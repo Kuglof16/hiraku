@@ -1374,10 +1374,41 @@ class RunChecker:
                 state = "not judged" if not verdicts else ("red" if not verdicts[-1].get("pass") else None)
                 if lc_id == a.get("load_case_id") and (state != "red" or self._stage(self._verdict_tool(verdicts[-1])) >= n):
                     continue
+                if state == "not judged" and self._cannot_judge(lc_id, v, at):
+                    continue
                 if state:
                     self.error("HK5_light_first", self.where_of[at],
                                f"{aid} ({a.get('tool')}, stage {n}) started while {lc_id}, checked by {bid} "
                                f"({tool}, stage {self._stage(tool)}), is {state}")
+
+    def _cannot_judge(self, lc_id: str, v: int, i: int) -> str | None:
+        """Why a load case without a verdict cannot be judged at event i in version v, as the records show
+        it (contract, HK5: it does not hold the heavier tools and stays not judged on its tile); else None.
+        - no K0 formula predicts it: none of its predictions so far is of its criterion's quantity (the
+          analysis was allowed on predictions of other quantities)
+        - its mismatch was ended (a plan's expected_mismatch with end): the latest comparison of the
+          judged quantity is a mismatch whose cause is written, neither resolved nor safe-side"""
+        crit = (self.load_cases.get(lc_id) or {}).get("criterion") or {}
+        q = crit.get("quantity")
+        preds = [p for j, p in self.recs["prediction"].values()
+                 if j < i and p.get("load_case_id") == lc_id and p.get("design_version") == v]
+        if preds and not any(p.get("quantity") == q for p in preds):
+            return f"no prediction of {q}"
+        latest = None
+        for cid, (j, c) in self.recs["comparison"].items():
+            p = self.recs["prediction"].get(c.get("prediction_id"))
+            a = self.recs["analysis"].get(c.get("analysis_id"))
+            if j > i or p is None or p[1].get("load_case_id") != lc_id or p[1].get("design_version") != v:
+                continue
+            if c.get("quantity") == JUDGED_AS.get(((a[1] if a else {}).get("tool"), q), q):
+                latest = (cid, c)
+        if latest is None or latest[1].get("status") != "mismatch":
+            return None
+        causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == latest[0]]
+        cause = self._state_at("cause", causes[-1], i) if causes else None
+        if cause is not None and not cause.get("resolved") and not cause.get("safe_side"):
+            return f"{latest[0]} ended with {causes[-1]}"
+        return None
 
     def _verdict_tool(self, ver: dict) -> str | None:
         """The tool of the analysis a verdict came from (through its comparison, or its analysis_id)."""

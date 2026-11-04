@@ -793,6 +793,30 @@ class CheckRun(unittest.TestCase):
         self.assertNotIn("HK5_light_first", self.rules(self._shell_after_green(sample_events(), 100.0,
                                                                                 after="analysis.finished")))
 
+    def _shell_on_r2_while_r1_waits(self, ev, after):
+        """frame_shell (stage 3) on R2 started right after the first `after` event, while R1 (frame_static,
+        stage 1) has no verdict."""
+        ev = self._stages(self._shell_after_green(ev, 100.0, after=after), frame_static=1, frame_shell=3)
+        for e in ev:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        return ev
+
+    def test_h5_a_case_that_cannot_be_judged_does_not_hold_the_heavier_tools(self):
+        # contract 110b991: no K0 formula predicts R1's max_stress (its prediction is of another quantity)
+        ev = sample_events()
+        by_kind(ev, "prediction.recorded")["data"]["quantity"] = "max_deflection"
+        self.assertNotIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "analysis.finished")))
+        # R1's mismatch ended with its cause (a plan's expected_mismatch with end): no verdict comes
+        ev = [e for e in sample_events() if e["kind"] != "verdict.recorded"]
+        by_kind(ev, "comparison.recorded")["data"]["status"] = "mismatch"
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "parts not mounted",
+                 "fix": "none in this run", "resolved": False}
+        ev = self._insert(ev, "comparison.recorded", "cause.recorded", cause)
+        self.assertNotIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "cause.recorded")))
+        # before the cause is written, R1 still waits
+        self.assertIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "comparison.recorded")))
+
     @staticmethod
     def _compare_again(ev, n, analyzed, cause=None):
         """After the sample's green tile: frame_static again (ana-000n, max_stress = analyzed) and its
