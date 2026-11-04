@@ -242,10 +242,17 @@ def _r1_joint(spec: Record, req: Record, design: Record) -> Record:
 Builder = Callable[[Record, Record, Record], Record]
 
 # Builders named by `build:` in data/catalog/tests.yaml (this module's own).
+def _with_modules(build: Builder) -> Builder:
+    # load_case.modules on designs split into modules, as the builders package sets it (builders.modules)
+    from hiraku.catalog.builders.modules import with_modules
+
+    return with_modules(build)
+
+
 BUILDERS: dict[str, Builder] = {
-    "p1_step": _p1_step,
-    "r1_static": _r1_static,
-    "r1_joint": _r1_joint,
+    "p1_step": _with_modules(_p1_step),
+    "r1_static": _with_modules(_r1_static),
+    "r1_joint": _with_modules(_r1_joint),
 }
 
 # Which load case feeds which (P1's wheel force goes into the R1 frame load, beams and shells).

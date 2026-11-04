@@ -78,7 +78,8 @@ class BuilderTest(unittest.TestCase):
         self.assertEqual(step["criterion"]["limit"], {"value": 550.0, "unit": "mm"})
         self.assertEqual((hand["criterion"]["op"], hand["criterion"]["limit"]["value"]), (">=", 1.0))
         self.assertIn("Q47", opening["requirement_keys"])
-        self.assertIs(ALL_BUILDERS["H7"], BUILDERS["H7"])  # joined to the package as H6 (analysis.py)
+        # joined to the package as H6 (analysis.py); the package wraps it to set load_case.modules
+        self.assertIs(ALL_BUILDERS["H7"].general, BUILDERS["H7"])
 
     def test_not_evaluated_without_the_keys(self):
         with self.assertRaises(BuildError) as e:

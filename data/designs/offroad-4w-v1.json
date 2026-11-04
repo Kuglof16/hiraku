@@ -7755,6 +7755,10 @@
         "lower_b",
         "lower_cross",
         "lower_t",
+        "mount_drive",
+        "mount_electrics",
+        "mount_floor",
+        "mount_seats",
         "rail_b",
         "rail_h",
         "rail_t",
@@ -9438,7 +9442,6 @@
         "grab_bar_d",
         "grab_bar_gap",
         "grab_bar_t",
-        "mount_seats",
         "rollbar",
         "rollbar_b",
         "rollbar_d",
@@ -9680,9 +9683,7 @@
         "gear_ratio",
         "motor_max_speed",
         "motor_peak_power",
-        "motor_peak_torque",
-        "mount_drive",
-        "mount_electrics"
+        "motor_peak_torque"
       ],
       "choices": []
     },
@@ -9978,8 +9979,7 @@
         "fender_width",
         "fenders",
         "floor_t",
-        "lamps",
-        "mount_floor"
+        "lamps"
       ],
       "choices": [
         "fenders"
