@@ -19,6 +19,9 @@ import numpy as np
 from ..k4_geometry import model as k4
 from ..k4_geometry.people import slide_ends
 
+# not assembled: the people and the load ride in, the frame and what is welded to it is there before any part (as
+# catalog.builders.analysis.NOT_ASSEMBLED, which the solvers may not import)
+NOT_ASSEMBLED = ("occupant", "cargo", "frame", "gusset", "rollbar", "bracket")
 AXIS_TOL = 1e-6  # a member runs along an axis when its other two components are below this share of its length
 
 
@@ -227,8 +230,6 @@ def blocked_inputs(design: dict) -> dict:
     cannot leave along any of +-x, +-y, +-z: their box pushed to the far side meets a member or a welded piece of the
     frame (kinds frame, gusset, rollbar, bracket; there before any part) by more than the rule allows. A piece that
     already overlaps the part at rest is not counted as stopping it (that overlap is H1-interference's)."""
-    from hiraku.catalog.builders.analysis import NOT_ASSEMBLED
-
     bs = k4.bodies(design)
     bx = {k: v for k, v in boxes(design).items() if k in bs}
     fixed = {k: v for k, v in bx.items() if k.startswith("member:") or bs[k].kind in NOT_ASSEMBLED}
@@ -255,3 +256,80 @@ def blocked_inputs(design: dict) -> dict:
         if ways == 0:
             blocked.append(p["id"])
     return {"n_blocked": float(len(blocked)), "parts": blocked}
+
+
+def _all_boxes(design: dict) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Every part as the axis-aligned box round its box's corners (turned by rpy_deg as the design defines it,
+    k4_geometry.obb.rpy_matrix), a member along an axis as member_box, a slanted one as the axis-aligned box round
+    its end points widened by half its section's largest side: never smaller than the shapes, so a gap from these
+    boxes is never more than the real one."""
+    from ..k4_geometry.obb import rpy_matrix
+
+    out = {}
+    for p in design.get("parts", []):
+        c = np.asarray(p["box"]["center_mm"], float)
+        half = np.asarray(p["box"]["size_mm"], float) / 2.0
+        if turned(p):
+            half = np.abs(rpy_matrix(p["box"]["rpy_deg"])) @ half
+        out[f"part:{p['id']}"] = (c - half, c + half)
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    for m in design.get("members", []):
+        dims = design["sections"][m["section"]]["dims_mm"]
+        r = max(float(v) for k, v in dims.items() if k in ("h", "b", "d")) / 2.0
+        a, b = nodes[m["node_a"]], nodes[m["node_b"]]
+        out[f"member:{m['id']}"] = member_box(design, m) or (np.minimum(a, b) - r, np.maximum(a, b) + r)
+    return out
+
+
+JOINT_GAP_MM = 2.0
+NOT_TOUCHING_VIA = ("wire", "hose")
+
+
+def joint_inputs(design: dict) -> dict:
+    """assembly.joint_count's inputs: n_gap, the mechanical connects_to (not wire or hose) whose two ends are more
+    than JOINT_GAP_MM apart, measured box to box (or box to the node's or the support's point) with _all_boxes;
+    n_none, the parts with no mechanical connects_to."""
+    bx = _all_boxes(design)
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    supports = {s["id"]: np.asarray(s["position_mm"], float) for s in design.get("supports", [])}
+
+    def gap(a, b) -> float:
+        return float(np.linalg.norm(np.maximum(np.maximum(a[0] - b[1], b[0] - a[1]), 0.0)))
+
+    gaps, none = [], []
+    for p in design.get("parts", []):
+        links = [c for c in p.get("connects_to") or [] if c.get("via") not in NOT_TOUCHING_VIA]
+        if not links:
+            none.append(p["id"])
+            continue
+        me = bx[f"part:{p['id']}"]
+        for c in links:
+            to = c["to"]
+            pt = nodes.get(to, supports.get(to))
+            other = (pt, pt) if pt is not None else bx.get(f"part:{to}") or bx.get(f"member:{to}")
+            if other is None:
+                continue
+            g = gap(me, other)
+            if g > JOINT_GAP_MM:
+                gaps.append((p["id"], to, g))
+    return {"n_gap": float(len(gaps)), "n_none": float(len(none)), "gaps": sorted(gaps, key=lambda t: -t[2]),
+            "none": none}
+
+
+def envelope_inputs(design: dict) -> dict:
+    """assembly.envelope_count's input: the bodies whose _all_boxes box is not inside any one box of their module's
+    envelope (design.modules), more than 0.5 mm out."""
+    envs = {m["module_id"]: m.get("envelope", []) for m in design.get("modules") or []}
+    mods = {f"part:{p['id']}": p.get("module") for p in design.get("parts", [])}
+    mods.update({f"member:{m['id']}": m.get("module") for m in design.get("members", [])})
+    out = []
+    for k, (lo, hi) in _all_boxes(design).items():
+        m = mods.get(k)
+        if m is None or m == "package" or m not in envs:
+            continue
+        best = min((float(max(np.max((np.asarray(e["center_mm"]) - np.asarray(e["size_mm"]) / 2.0) - lo),
+                              np.max(hi - (np.asarray(e["center_mm"]) + np.asarray(e["size_mm"]) / 2.0)), 0.0))
+                    for e in envs[m]), default=np.inf)
+        if best > 0.5:
+            out.append((k, m, best))
+    return {"n_out": float(len(out)), "out": sorted(out, key=lambda t: -t[2])}
