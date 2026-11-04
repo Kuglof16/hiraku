@@ -228,7 +228,7 @@ def _slide_obstacles(design: dict) -> list:
     return out
 
 
-def _clear_member(bs, me, first, pid: str, extra=()):
+def _clear_member(bs, me, first, pid: str, extra=(), fallback=()):
     """The frame member to strut to: `first` if the strut from the part to it passes through no other body (a sheet
     of the body excepted: an anchor goes through it; the members welded at the target's nodes excepted), else the
     nearest member whose strut does; `first` when none is clear (the overlap is then H1-interference's)."""
@@ -237,7 +237,10 @@ def _clear_member(bs, me, first, pid: str, extra=()):
     # candidates by the distance of their centres (cheap); the strut itself by the nearest points of the shapes
     members = sorted((b for b in bs.values() if b.kind == "member"),
                      key=lambda b: float(np.linalg.norm(b.obb.center - me.obb.center)))
-    for cand in [first] + [m for m in members if m is not first][:CLEAR_TRIES]:
+    # then, when no frame member can be reached clear, the nearest fixed parts that are fastened to the frame (a lamp
+    # in a cluster on its neighbour)
+    near_fixed = sorted(fallback, key=lambda b: float(np.linalg.norm(b.obb.center - me.obb.center)))[:4]
+    for cand in [first] + [m for m in members if m is not first][:CLEAR_TRIES] + near_fixed:
         a, b = nearest_points(me, cand)
         box = strut_box(a, b)
         sb = from_box(box["center_mm"], box["size_mm"], box["rpy_deg"])
@@ -368,7 +371,10 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
             if other.kind == "member":
                 if not slide_cache:
                     slide_cache.append(_slide_obstacles(design))
-                other = _clear_member(bs, me, other, p["id"], slide_cache[0])
+                anchored = _anchored(design)
+                fallback = [b for k, b in bs.items() if k.startswith("part:") and k != f"part:{p['id']}"
+                            and b.kind in FIXED_KINDS and k.split(":", 1)[1] in anchored]
+                other = _clear_member(bs, me, other, p["id"], slide_cache[0], fallback)
             fid = _fit(design, parts, p, me, other, bs)
             n_br += 1
             if all(x["to"] != fid for x in kept):
