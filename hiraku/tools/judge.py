@@ -216,6 +216,19 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
     return out
 
 
+NO_FORMULA_NOTE = "手計算 (K0) の式が無いので判定していない"
+
+
+def no_formula_cases(ctx: RunContext) -> dict[str, str]:
+    """rules.unpredictable_cases: the load cases no K0 formula can predict (no verdict can come)."""
+    from hiraku.tools.rules import unpredictable_cases  # rules reads this module
+
+    try:
+        return unpredictable_cases(ctx)
+    except Exception:  # a context without a registry or shelf: nothing said
+        return {}
+
+
 def held_cases(ctx: RunContext, domain: str, version: int) -> dict[str, list[str]]:
     """load case id -> blockers, for the domain's load cases with a criterion that have no failing
     verdict but are held back from passing."""
@@ -298,6 +311,9 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     reds = [x for x in got if not x["pass"]]
     misses = system_misses(ctx, v) if domain == SYSTEM_DOMAIN and v else []
     held = held_cases(ctx, domain, v) if v else {}
+    if held:  # a result past the limit on a case no formula predicts: said, not hidden (it gets no verdict)
+        cannot = no_formula_cases(ctx)
+        held = {k: why + [NO_FORMULA_NOTE] if k in cannot else why for k, why in held.items()}
     held_line = "まだ合格にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
         lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \

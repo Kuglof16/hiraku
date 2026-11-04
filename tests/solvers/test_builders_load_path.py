@@ -68,7 +68,11 @@ def predict(plan, design, lc) -> dict:
     """The plan's predictions as the scripted run makes them (inputs_from, then the K0 formula)."""
     out = {}
     for p in plan["predictions"]:
-        given = p["inputs_from"](design, lc)
+        try:
+            given = p["inputs_from"](design, lc)
+        except ValueError:  # the reader does not apply to this design (tools.plan: ReaderError, the formula refused)
+            out.setdefault("refused", []).append(p["quantity"])
+            continue
         inputs = {k: given[ref.split(".", 1)[1]] for k, ref in p["inputs"].items()}
         out[p["quantity"]] = FORMULAS.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]["value"]
     return out
@@ -88,7 +92,8 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(crit["R7-hand-300N"]["limit"], {"value": 5.0, "unit": "mm"})
         self.assertEqual(crit["R7-foot-500N"]["quantity"], "pedal_deflection")
         self.assertEqual(crit["R8-free"]["quantity"], "free_parts")
-        self.assertEqual(crit["R8-stress"]["quantity"], "max_stress")
+        self.assertEqual(crit["R8-stress"]["quantity"], "max_utilisation")
+        self.assertEqual(crit["R8-stress"]["limit"], {"value": 1.0, "unit": "1"})
         self.assertEqual(crit["R8-push-725N"]["limit"], {"value": 25.0, "unit": "mm"})
         self.assertEqual(r7[0]["tolerance_rel"], R7_TOL)
 
@@ -145,16 +150,22 @@ class DemoV1Test(unittest.TestCase):
         foot = results(self.runs["R7-foot-500N"])
         self.assertIn("pedal_brake", foot["free_parts"]["where"])
         self.assertEqual(results(self.runs["R8-push-725N"])["occupant_push_open"]["value"], 4.0)
+        # nothing outboard of point R on version 1: the push's hand calculation does not apply (its reader refuses)
+        self.assertEqual(predict(PLANS["R8"], V1, self.cases["R8-push-725N"]).get("refused"), ["occupant_push_deflection"])
 
     def test_plans_predict(self):
         for k, lc in self.cases.items():
-            plan = PLANS[lc["test_id"]]
+            plan = PLANS.get(k) or PLANS[lc["test_id"]]  # a load case's own plan first (R8-stress)
             self.assertEqual(plan["tool"], "load_path")
             pred = predict(plan, V1, lc)
             got = results(self.runs[k])
             self.assertEqual(pred["free_parts"], got["free_parts"]["value"], k)  # the same parts float
             q = lc["criterion"]["quantity"]
-            if q in pred and q in got:
+            exp = plan.get("expected_mismatch") or {}
+            if q in pred and q in got and exp.get("quantity") == q and exp.get("safe_side"):
+                # the plan names this mismatch as safe side: the prediction must be the unfavourable value
+                self.assertGreaterEqual(pred[q], got[q]["value"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
+            elif q in pred and q in got:
                 rel = abs(got[q]["value"] - pred[q]) / abs(pred[q])
                 self.assertLessEqual(rel, lc["tolerance_rel"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
 
@@ -181,16 +192,22 @@ class DemoV1Test(unittest.TestCase):
         self.assertTrue({"steering_column", "steering_wheel"} <= free)
         self.assertEqual(predict(PLANS["R7"], d, lc)["free_parts"], r["free_parts"]["value"])
 
-    def test_pedals_moved_to_touch_pass(self):
+    def test_pedals_moved_to_touch_are_held(self):
+        """Both pedals are held once they touch. The accelerator on a tower post passes; the brake pedal on the
+        bulkhead, a 2.3 mm sheet (designgen.ladder_4w.PLATE_T_MM) and not the 20 mm solid box it was, moves more
+        than Q69. The K0 prediction with the plate strip (load_path.plate_strip) against the tool is in
+        test_load_path_plate_k0."""
         d = touch_nearest(V1, "pedal_brake", "part:bulkhead")
         d = touch_nearest(d, "pedal_accel", "member:tower_post_RA2")
         lc = self.cases["R7-foot-500N"]
         rec = LoadPath().run(d, lc, PRED, {})
-        self.assertTrue(judged(lc, rec))
-        self.assertNotIn("pedal_brake", results(rec)["free_parts"]["where"])
-        pred = predict(PLANS["R7"], d, lc)["pedal_deflection"]
-        got = results(rec)["pedal_deflection"]["value"]
-        self.assertLessEqual(abs(got - pred) / pred, lc["tolerance_rel"])
+        r = results(rec)
+        self.assertNotIn("pedal_brake", r["free_parts"]["where"])
+        self.assertNotIn("pedal_accel", r["free_parts"]["where"])
+        lim = lc["criterion"]["limit"]["value"]
+        self.assertLessEqual(r["pedal_deflection.pedal_accel"]["value"], lim)
+        self.assertGreater(r["pedal_deflection.pedal_brake"]["value"], lim)
+        self.assertFalse(judged(lc, rec))
 
 
 if __name__ == "__main__":

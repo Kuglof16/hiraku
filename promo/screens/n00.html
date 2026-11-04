@@ -24,11 +24,15 @@
      --t-tagline, --t-row, --t-light, --t-step from n00.times). Chips are
      placed by the script below from n00.pets; the pets' boxes are placed
      at each t by the module from n00.pets, n00.title_pets and n00.motion.
+     Each jump is pet3d's anim.hop (crouch, parabola, stretch, landing squash,
+     small bounces, settle) with each role's own values (n00.play.jump / cast).
      After the name has been said the pets play with the letters (n00.play):
-     a letter sinks and comes back when a pet lands on it (harder for crash,
-     which tosses the pet already there), NVH shakes K out of line and the
-     two pets on U push it back, and lead does a hop with the tick. The
-     letters move by a transform on their <b>, set at each t by the module. */
+     a letter sinks and comes back when a pet lands on it, by its weight
+     (harder for crash, which tosses the pet already there), NVH shakes K out
+     of line and the two pets on U wind up and push it back, lead does a hop
+     with the tick, and each pet does one small thing once seated (acts).
+     The clocks stop by n00.play.stop.still_s. The letters move by a
+     transform on their <b>, set at each t by the module. */
 
   .name {
     position: absolute;
@@ -105,13 +109,10 @@
     to   { opacity: 1; transform: none; }
   }
   .pet { position: absolute; display: block; }
-  /* the pets seated from the start come in with their letter (the same
-     letter-in, the same delay) */
-  .seats { position: absolute; inset: 0; pointer-events: none; }
-  .seat {
-    animation: letter-in var(--name-in-dur) cubic-bezier(.2, .7, .2, 1) both;
-    animation-delay: calc(var(--t-name) + var(--i) * var(--name-in-step));
-  }
+  /* the pets: one layer behind the name (a pet there peeks out from behind
+     a letter and never covers it) and one in front of everything */
+  .pets { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .pets.front { z-index: 1; }
 
   .chip {
     position: absolute;
@@ -154,11 +155,12 @@
 <body data-duration="8.6">
 <div class="stage paper-grid">
   <div class="safe">
+    <div class="pets behind"></div>
     <h1 class="name" aria-label="HIRAKU" data-box="n00.name"></h1>
     <div class="rule" data-box="n00.rule"></div>
     <p class="tagline" data-box="n00.tagline"></p>
-    <div class="seats"></div>
     <div class="row"></div>
+    <div class="pets front"></div>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -187,11 +189,11 @@
     let k = 0;
     PETS.forEach((p) => {
       p.key = p.id.replace(/^cae\./, "");
-      p.seat = R.title_pets.seats.find((s) => s.role === p.id);
-      if (!p.seat) throw new Error(`n00: no seat for ${p.id} in title_pets`);
+      p.cast = R.cast[p.id];
+      if (!p.cast) throw new Error(`n00: no cast entry for ${p.id}`);
       if (p.chip) {
         p.k = k++;
-        p.x = x0 + p.k * P.pitch_px;   // the row box (top-left, design px)
+        p.x = x0 + p.k * P.pitch_px;   // the row spot (top-left, design px)
         p.cx = p.x + P.w / 2;
       }
     });
@@ -201,18 +203,19 @@
       .map((c, i) => `<span style="--i:${i}"><b>${c}</b></span>`).join("");
     document.querySelector(".tagline").textContent = R.tagline.text;
     // one 2D canvas per pet (the module copies the pet's WebGL frame into it
-    // and places the canvas at each t). data-kind="moving": the layout check
-    // cannot see a canvas moving, and every pet breathes, so each counts
-    const canvas = (p, cls, style) =>
-      `<canvas class="${cls}" data-box="n00.pet.${p.key}" data-kind="moving" data-pet="${p.id}"
-          ${p.tag ? `aria-label="${p.tag}" ` : ""}style="${style}"></canvas>`;
-    document.querySelector(".seats").insertAdjacentHTML("beforeend", PETS.filter((p) => !p.chip)
-      .map((p) => canvas(p, "pet seat", `--i:${p.seat.letter}`)).join(""));
+    // and places the canvas at each t), in the layer of its cast entry.
+    // data-kind="moving": the layout check cannot see a canvas moving, and
+    // every pet breathes until the clocks stop, so each counts
+    const canvas = (p) =>
+      `<canvas class="pet" data-box="n00.pet.${p.key}" data-kind="moving" data-pet="${p.id}"
+          data-layer="${p.cast.layer || "front"}"${p.tag ? ` aria-label="${p.tag}"` : ""}></canvas>`;
+    for (const layer of ["behind", "front"])
+      document.querySelector(`.pets.${layer}`).innerHTML =
+        PETS.filter((p) => (p.cast.layer || "front") === layer).map(canvas).join("");
     const below = P.y + P.h;
-    document.querySelector(".row").insertAdjacentHTML("beforeend", PETS.filter((p) => p.chip).map((p) =>
-      canvas(p, "pet", `left:${px(p.x)};top:${px(P.y)};width:${px(P.w)};height:${px(P.h)}`) +
+    document.querySelector(".row").innerHTML = PETS.filter((p) => p.chip).map((p) =>
       `<div class="chip" style="--i:${p.k};left:${px(p.cx)};top:${px(below + R.chip.gap_above_px)}"
-           data-box="n00.chip.${p.key}" data-kind="label"><i></i>${p.chip}</div>`).join(""));
+           data-box="n00.chip.${p.key}" data-kind="label"><i></i>${p.chip}</div>`).join("");
   })();
 </script>
 <script src="timeline.js"></script>
@@ -237,18 +240,18 @@ const { cutRules: R, rules: L } = window.promoLayout;
 const { list: PETS } = window.N00_PETS;
 const P = R.pets, CAM = R.camera, M = R.motion, T = R.times, TP = R.title_pets;
 
-// ---- one WebGL renderer off the page, the size of one row box; each pet is
-// drawn alone into it and copied into that pet's own 2D canvas. Transparent,
-// so the paper grid shows through.
+// ---- one WebGL renderer off the page; each pet is drawn alone into it and
+// copied into that pet's own 2D canvas. Transparent, so the paper grid shows
+// through.
 for (const p of PETS) p.box = document.querySelector(`canvas[data-pet="${p.id}"]`);
-// layout size in CSS px of a row box (clientWidth ignores the row's rise transform)
-const rowBox = PETS.find((p) => p.chip).box;
-const W = rowBox.clientWidth, H = rowBox.clientHeight;
+const stageW = document.querySelector(".stage").getBoundingClientRect().width;
+const uCss = stageW / L.stage.w;
 const dpr = window.devicePixelRatio || 1;
+const devPx = uCss * dpr;
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 // sizes in device pixels (pixel ratio 1); draw() sets the size of each pet's box
 renderer.setPixelRatio(1);
-renderer.setSize(Math.round(W * dpr), Math.round(H * dpr), false);
+renderer.setSize(Math.round(P.w * devPx), Math.round(P.h * devPx), false);
 renderer.setClearColor(0x000000, 0);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
@@ -281,7 +284,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// ---- one camera for every box (all boxes have the same size) ---------------
+// ---- one camera for every box (all boxes have the aspect of n00.pets) -------
 const F = HP.FRAME;
 const half = Math.tan((CAM.fov_deg * Math.PI) / 360);
 const aspect = P.w / P.h;
@@ -297,7 +300,29 @@ cam.updateMatrixWorld();
 const foot = new THREE.Vector3(0, 0, 0).project(cam);
 const FOOT = { fx: (foot.x + 1) / 2, fy: (1 - foot.y) / 2 };
 
-// ---- the seats on the name (layout.json n00.title_pets) ----------------------
+// The heading on the screen of a pet turned by yaw (its front is +z): the
+// screen px a step of one pet unit along it moves the feet, in a box 1 px
+// high (camera projection of a short step from the feet).
+function headingPx(yaw) {
+  const e = 0.05;
+  const v = new THREE.Vector3(e * Math.sin(yaw), 0, e * Math.cos(yaw)).project(cam);
+  return { x: ((v.x - foot.x) / 2) * aspect / e, y: (-(v.y - foot.y) / 2) / e };
+}
+// the yaw whose heading on the screen points along (dx, dy), to 0.1 degree,
+// and the px per pet unit along it for a box h high (walks: the steps cover
+// the ground the box moves over)
+const HEAD = [];
+for (let i = 0; i < 3600; i++) { const y = ((i / 10 - 180) * Math.PI) / 180; HEAD.push([y, headingPx(y)]); }
+function yawTo(dx, dy, h) {
+  let best = HEAD[0], bc = -2;
+  for (const e of HEAD) {
+    const n = Math.hypot(e[1].x, e[1].y), c = (e[1].x * dx + e[1].y * dy) / n;
+    if (c > bc) { bc = c; best = e; }
+  }
+  return { yaw: best[0], px: Math.hypot(best[1].x, best[1].y) * h };
+}
+
+// ---- the letters (seats on the name: layout.json n00.title_pets) ------------
 // Each letter's ink box is measured in the name's font (canvas measureText);
 // its left edge comes from the letter's own span. All in design px.
 await document.fonts.ready;
@@ -308,23 +333,20 @@ function letterInk() {
   const c2 = document.createElement("canvas").getContext("2d");
   c2.font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
   const stage = document.querySelector(".stage").getBoundingClientRect();
-  const u = stage.width / L.stage.w;
   const mH = c2.measureText("H");
   // line-height 1: the content box (font ascent + descent) is centred on the line
   const baseline = R.name.y + (size - (mH.fontBoundingBoxAscent + mH.fontBoundingBoxDescent)) / 2
                    + mH.fontBoundingBoxAscent;
   return [...name.querySelectorAll("span")].map((s) => {
     const m = c2.measureText(s.textContent);
-    const left = (s.getBoundingClientRect().left - stage.left) / u;   // the glyph's origin
+    const left = (s.getBoundingClientRect().left - stage.left) / uCss;   // the glyph's origin
     // the play's origin for this letter: the bottom centre of its <b> line box
-    // (x: the span only moves up and down in letter-in; y: offsetTop is
-    // layout, relative to the name, and ignores the transform)
     const b = s.firstElementChild;
     const br = b.getBoundingClientRect();
     return { x0: left - m.actualBoundingBoxLeft, x1: left + m.actualBoundingBoxRight,
-             top: baseline - m.actualBoundingBoxAscent, el: b,
-             ox: (br.left + br.width / 2 - stage.left) / u,
-             oy: R.name.y + (b.offsetTop + b.offsetHeight) / u };
+             top: baseline - m.actualBoundingBoxAscent, bottom: baseline + m.actualBoundingBoxDescent, el: b,
+             ox: (br.left + br.width / 2 - stage.left) / uCss,
+             oy: R.name.y + (b.offsetTop + b.offsetHeight) / uCss };
   });
 }
 const INK = letterInk();
@@ -335,8 +357,9 @@ const SEAT = { h: seatH, w: (seatH * P.w) / P.h };
 // Every function here is of t alone. A letter's move is {dx, dy, rot, sx, sy}
 // (design px, radians), applied to its <b> about its bottom centre (ox, oy).
 const PL = R.play;
-const smooth = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
-const hump = (u) => (u <= 0 || u >= 1 ? 0 : Math.sin(Math.PI * u));
+const A = HP.anim;
+const smooth = A.smooth;
+const rad = (d) => (d * Math.PI) / 180;
 // the sink and come back: d(u) = sin(3 pi u) (1 - u)^2, scaled to a peak of 1
 const BOUNCE = (() => {
   let m = 0;
@@ -344,11 +367,19 @@ const BOUNCE = (() => {
   return m;
 })();
 const bounce = (u) => (u <= 0 || u >= 1 ? 0 : (Math.sin(3 * Math.PI * u) * (1 - u) ** 2) / BOUNCE);
-const lead = PETS.find((p) => p.id === PL.cheer.role);
-const CH = PL.cheer, SH = PL.shake, PU = PL.push;
-// [letter, start, dur, sink, squash] for every landing on a letter (filled
-// once the pets' times are known, below)
+const SH = PL.shake, PU = PL.push, ST = PL.stop;
+// [letter, start, dur, sink, squash] for every landing on a letter: each hop
+// in a cast route that ends on a seat (filled below)
 const LANDS = [];
+
+// how far K is out of line (1 = as shaken out, 0 = in line): out with an
+// overshoot while it shakes, back with an overshoot when it is pushed
+function kOut(t) {
+  if (t < SH.start_s) return 0;
+  const k0 = PU.start_s + PU.letter_from * PU.dur_s;
+  if (t < k0) return A.back((t - SH.start_s) / SH.dur_s, SH.over);
+  return 1 - A.back((t - k0) / (PU.start_s + PU.dur_s - k0), PU.letter_over);
+}
 function letterMove(i, t) {
   const m = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
   if (t < PL.from_s || t >= PL.still_s) return m;
@@ -360,12 +391,9 @@ function letterMove(i, t) {
     m.sx += 0.5 * sq * d;
   }
   if (i === SH.letter) {
-    // shake and slide out, hold, then pushed back in line
     const u = (t - SH.start_s) / SH.dur_s;
-    let out = smooth(u);
-    if (t >= PU.start_s) out = 1 - smooth((t - PU.start_s) / PU.dur_s);
-    const tau = t - SH.start_s;
-    const shake = u > 0 && u < 1 ? rad(SH.rot_deg) * Math.sin(2 * Math.PI * SH.hz * tau) * (1 - u) : 0;
+    const out = kOut(t);
+    const shake = u > 0 && u < 1 ? rad(SH.rot_deg) * Math.sin(2 * Math.PI * SH.hz * (t - SH.start_s)) * (1 - u) : 0;
     m.dx += SH.dx_px * out;
     m.rot += rad(SH.tilt_deg) * out + shake;
   }
@@ -379,106 +407,107 @@ function onLetter(i, t, x, y) {
   const c = Math.cos(m.rot), s = Math.sin(m.rot);
   return { x: o.ox + m.dx + c * ax - s * ay, y: o.oy + m.dy + s * ax + c * ay, rot: m.rot };
 }
-// the pet's own part of the play, on top of riding its letter: {x, y} px
-// (up negative) and roll (radians, positive = top to the screen's left)
-function petPlay(p, t) {
-  const r = { x: 0, y: 0, roll: 0 };
-  if (t < PL.from_s || t >= PL.still_s) return r;
-  const toss = PL.crash.toss;
-  if (p.id === toss.role) {
-    const crash = PETS.find((q) => q.id === "cae.crash");
-    const u = (t - (crash.lit + M.pass_dur_s + toss.delay_s)) / toss.dur_s;
-    if (u > 0 && u < 1) r.y -= 4 * toss.up_px * u * (1 - u);
+// a pusher's lean (0..1 of lean_deg; negative: wound back) and step (0..1 of
+// step_px; negative: back to the right) at t: wind up, shove (ease out), hold,
+// and back with an overshoot
+function pushShape(P, k, t) {
+  const t0 = P.start_s + P.lag_s[k];
+  const w = (t - (t0 - P.wind_s)) / P.wind_s;
+  const u = (t - t0) / P.dur_s;
+  const wind = { lean: -P.wind_deg / P.lean_deg, step: -P.wind_px / P.step_px[k] };
+  if (u >= 1 || w <= 0) return { lean: 0, step: 0 };
+  if (u < 0) { const s = smooth(w); return { lean: wind.lean * s, step: wind.step * s }; }
+  if (u < P.push_in) {
+    const s = A.out(u / P.push_in);
+    return { lean: wind.lean + (1 - wind.lean) * s, step: wind.step + (1 - wind.step) * s };
   }
-  const k = PU.roles.indexOf(p.id);
-  if (k >= 0) {
-    const h = hump((t - PU.start_s) / PU.dur_s);
-    r.x -= PU.step_px[k] * h;
-    r.roll += rad(PU.lean_deg) * h;
-  }
-  if (p === lead) {
-    const u = (t - CH.start_s) / CH.dur_s;
-    if (u > 0 && u < 1) r.y -= 4 * CH.up_px * u * (1 - u);
-  }
-  return r;
-}
-function cheering(p, t) {
-  return p === lead && t > CH.start_s && t < CH.start_s + CH.dur_s;
+  if (u < P.hold_to) return { lean: 1, step: 1 };
+  const s = 1 - A.back((u - P.hold_to) / (1 - P.hold_to), P.over);
+  return { lean: s, step: s };
 }
 
-// ---- pets --------------------------------------------------------------------
+// ---- places and routes (layout.json n00.cast) --------------------------------
+// A place is [x, y] (the feet, design px), {row: k} (the feet in row spot k:
+// the domain pets' places over their chips, k may be between two), or
+// {seat: letter, at} (on the top edge of that letter at at across its ink,
+// riding the letter's play).
+function place(at, t) {
+  if (Array.isArray(at)) return { x: at[0], y: at[1] };
+  if (at.row !== undefined) {
+    const x0 = window.N00_PETS.x0;
+    return { x: x0 + at.row * P.pitch_px + FOOT.fx * P.w, y: P.y + FOOT.fy * P.h };
+  }
+  const o = INK[at.seat];
+  return onLetter(at.seat, t, o.x0 + at.at * (o.x1 - o.x0), o.top - TP.lift_px);
+}
+const CTX = { place, yawTo };
+// the row comes in at times.row_s as the chips do (CSS agent-in: 0.5 s,
+// ease-out = cubic-bezier(0, 0, 0.58, 1), from 16 px lower and transparent)
+function bezier(x1, y1, x2, y2, x) {
+  const f = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (f(x1, x2, m) < x) lo = m; else hi = m; }
+  return f(y1, y2, (lo + hi) / 2);
+}
+function rowIn(t) {
+  const u = (t - T.row_s) / 0.5;
+  return u <= 0 ? 0 : u >= 1 ? 1 : bezier(0, 0, 0.58, 1, u);
+}
 PETS.forEach((p, i) => {
   p.pet = HP.create(THREE, { role: p.id, theme: "paper" });
   p.pet.group.visible = false;
-  p.pet.setPixelScale((H * dpr) / (2 * dist * half));
   scene.add(p.pet.group);
   p.ctx = p.box.getContext("2d");
-  const ink = INK[p.seat.letter];
-  // the feet on the seat, and (domain pets) in the row
-  p.seatFoot = { x: ink.x0 + p.seat.at * (ink.x1 - ink.x0), y: ink.top - TP.lift_px };
-  if (p.chip) {
-    p.rowFoot = { x: p.x + FOOT.fx * P.w, y: P.y + FOOT.fy * P.h };
-    p.lit = T.light_s + p.k * T.step_s;
-    // shift the pet's clock so its pass hop starts from the ground at p.lit
-    p.shift = Math.ceil(p.lit / M.hop_period_s + 1) * M.hop_period_s - p.lit;
-  } else {
-    p.shift = M.idle_shift_s * i;
-  }
-  if (p.chip) {
-    const c = p.id === "cae.crash" ? PL.crash : PL.land;
-    LANDS.push([p.seat.letter, p.lit + M.pass_dur_s, c.dur_s, c.sink_px, c.squash]);
-  }
-});
-LANDS.push([lead.seat.letter, CH.start_s + CH.dur_s, CH.land_dur_s, CH.sink_px, CH.squash]);
-
-// The pose at t (timeline.js time): idle until the chip lights, the pass hop
-// while jumping onto the name, then report. Nothing here reads a wall clock
-// or random numbers.
-function stateAt(p, t) {
-  if (cheering(p, t)) return "pass";
-  if (!p.chip || t < p.lit) return "idle";
-  return t < p.lit + M.pass_dur_s ? "pass" : "report";
-}
-
-// Height of the jump at q in [0, 1] for a rise of D px (up is positive):
-// s(q) = b q + c q^2 with s(1) = D and the top at D + over (0 < q_top < 1).
-function jumpY(q, D, over) {
-  const top = D + over;
-  const b = 2 * top + 2 * Math.sqrt(top * over);
-  return b * q - (b - D) * q * q;
-}
-
-// Where the pet's box is at t: {x, y, w, h, yaw} in design px and radians.
-const rad = (d) => (d * Math.PI) / 180;
-function placeAt(p, t) {
-  // the seat rides its letter, and the pet's own play goes on top
-  const on = onLetter(p.seat.letter, t, p.seatFoot.x, p.seatFoot.y);
-  const own = petPlay(p, t);
-  const seat = { foot: { x: on.x + own.x, y: on.y + own.y }, w: SEAT.w, h: SEAT.h,
-                 yaw: rad(p.seat.yaw_deg || 0), roll: own.roll - on.rot };
-  let at = seat;
-  if (p.chip && t < p.lit + M.pass_dur_s) {
-    const row = { foot: p.rowFoot, w: P.w, h: P.h, yaw: 0, roll: 0 };
-    if (t <= p.lit) at = row;
-    else {
-      const q = (t - p.lit) / M.pass_dur_s;
-      const D = row.foot.y - seat.foot.y;
-      at = { foot: { x: row.foot.x + (seat.foot.x - row.foot.x) * q,
-                     y: row.foot.y - jumpY(q, D, M.jump_over_px) },
-             w: row.w + (seat.w - row.w) * q, h: row.h + (seat.h - row.h) * q,
-             yaw: row.yaw + (seat.yaw - row.yaw) * q, roll: seat.roll * q };
+  p.shift = M.idle_shift_s * i;
+  p.start = Object.assign({ h: SEAT.h }, p.cast.start);
+  if (p.start.h === "row") p.start.h = P.h;
+  // hops: n00.play.hop with the beat's own values on top
+  p.beats = p.cast.beats.map((b) => Object.assign({}, b.do === "hop" || b.do === "hops" ? PL.hop : {}, b,
+                                                  b.h === "seat" ? { h: SEAT.h } : {}));
+  p.inRow = !Array.isArray(p.start.at) && p.start.at.row !== undefined;
+  // a landing on a letter sinks it by the pet's weight
+  for (const b of p.beats)
+    if (b.do === "hop" && b.to.seat !== undefined) {
+      const w = b.weight ?? 1;
+      LANDS.push([b.to.seat, b.t + A.hop(0, b).land, PL.land.dur_s, PL.land.sink_px * w, PL.land.squash * w]);
     }
+});
+
+// The box of pet p at t: {x, y, w, h (design px), yaw, roll, alpha, pose}.
+function placeAt(p, t) {
+  const r = A.route(t, p.start, p.beats, CTX);
+  // riding a letter: lean with it
+  if (!Array.isArray(r.at) && r.at.seat !== undefined && !r.air) r.roll -= letterMove(r.at.seat, t).rot;
+  const k = PU.roles.indexOf(p.id);
+  if (k >= 0) {
+    const s = pushShape(PU, k, t);
+    r.x -= PU.step_px[k] * s.step;
+    r.roll += rad(PU.lean_deg) * s.lean;
   }
-  return { x: at.foot.x - FOOT.fx * at.w, y: at.foot.y - FOOT.fy * at.h, w: at.w, h: at.h,
-           yaw: at.yaw, roll: at.roll };
+  let alpha = r.alpha;
+  if (p.inRow && r.at.row !== undefined) {
+    const e = rowIn(t);
+    r.y += 16 * (1 - e);
+    alpha *= e;
+  }
+  const h = r.h, w = (h * P.w) / P.h;
+  r.pose.check = r.check;
+  return { x: r.x - FOOT.fx * w, y: r.y - FOOT.fy * h, w, h, foot: { x: r.x, y: r.y },
+           yaw: r.yaw, roll: r.roll, alpha, pose: r.pose };
+}
+// the pets' clock: t, slowing to a halt from stop.from_s to stop.still_s (so
+// the breathing and blinking stop too)
+function clock(t) {
+  const a = ST.from_s, d = ST.still_s - ST.from_s;
+  if (t <= a) return t;
+  const s = Math.min(t - a, d);
+  return a + s - (s * s) / (2 * d);
 }
 
 // Each canvas is placed on whole device pixels and holds as many pixels as it
 // shows. The renderer is set to that size and the pet drawn at it (lines and
 // node dots for that size), and the frame is copied 1:1, with no scaling by
-// CSS or drawImage.
-const devPx = (document.querySelector(".stage").getBoundingClientRect().width / L.stage.w) * dpr;
-const uCss = document.querySelector(".stage").getBoundingClientRect().width / L.stage.w;
+// CSS or drawImage. In each layer the pet whose feet are lower is in front.
 function draw(t) {
   INK.forEach((o, i) => {
     const m = letterMove(i, t);
@@ -486,6 +515,7 @@ function draw(t) {
     o.el.style.transform = still ? "" : `translate(${(m.dx * uCss).toFixed(3)}px, ${(m.dy * uCss).toFixed(3)}px) ` +
       `rotate(${m.rot.toFixed(5)}rad) scale(${m.sx.toFixed(5)}, ${m.sy.toFixed(5)})`;
   });
+  const c = clock(t);
   for (const p of PETS) {
     const b = placeAt(p, t);
     const x = Math.round(b.x * devPx), y = Math.round(b.y * devPx);
@@ -496,13 +526,16 @@ function draw(t) {
     }
     const st = p.box.style;
     st.left = `${x / dpr}px`; st.top = `${y / dpr}px`; st.width = `${w / dpr}px`; st.height = `${h / dpr}px`;
+    st.opacity = b.alpha >= 1 ? "" : b.alpha.toFixed(4);
+    st.zIndex = String(Math.round(b.foot.y * 10));
+    if (t < ST.still_s) p.box.dataset.kind = "moving"; else delete p.box.dataset.kind;
+    if (b.alpha <= 0) { p.ctx.clearRect(0, 0, w, h); continue; }
     if (gl.width !== w || gl.height !== h) renderer.setSize(w, h, false);
     p.pet.setPixelScale(h / (2 * dist * half));
     // roll about the feet after the yaw (rotation order Z, Y, X)
     p.pet.group.rotation.set(0, b.yaw, b.roll || 0, "ZYX");
     p.pet.group.visible = true;
-    // the cheer's pass hop starts from the ground at cheer.start_s
-    p.pet.update(cheering(p, t) ? t - CH.start_s : t + p.shift, stateAt(p, t), cam);
+    p.pet.update(c + p.shift, "idle", cam, b.pose);
     renderer.render(scene, cam);
     p.pet.group.visible = false;
     p.ctx.clearRect(0, 0, w, h);
@@ -510,7 +543,7 @@ function draw(t) {
   }
 }
 
-window.N00_SEATS = { INK, SEAT, FOOT, placeAt, letterMove };
+window.N00_SEATS = { INK, SEAT, FOOT, placeAt, letterMove, clock, LANDS, place, yawTo };
 window.promo.onSeek(draw);
 draw(window.promo.t);
 window.__n00Built();

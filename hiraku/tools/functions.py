@@ -348,15 +348,27 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
     describe(); [] when it has none), "how"}."""
     args = args or {}
     out = ctx.formulas.list_formulas()
-    tool = args.get("tool")
+    tool, ids = args.get("tool"), args.get("formula_ids")
+    if ids:  # the whole entries of the formulas named
+        missing = [i for i in ids if i not in {f["formula_id"] for f in out}]
+        if missing:
+            raise ToolError(f"式 {', '.join(missing)} はありません (list_formulas の formula_id)")
+        return [f for f in out if f["formula_id"] in ids]
     if tool:
         named = (ctx.specs.get(tool) or {}).get("formulas") or []
         out = [f for f in out if f["formula_id"] in named or f["formula_id"].split(".", 1)[0] == tool]
     if args.get("domain"):
         out = [f for f in out if f["domain"] == args["domain"]]
-    if not tool:
-        return out
+    if not tool:  # the short list (run N13: the whole strength list did not fit an answer); formula_ids gives the rest
+        return [formula_line(f) for f in out]
     return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
+
+
+def formula_line(f: Record) -> Record:
+    """One formula in short: id, title, domain, and the names and units of its inputs and outputs."""
+    names = lambda d: {k: v.get("unit") for k, v in (d or {}).items()} if isinstance(d, dict) else d  # noqa: E731
+    return {"formula_id": f["formula_id"], "title": f.get("title"), "domain": f.get("domain"),
+            "inputs": names(f.get("inputs")), "outputs": names(f.get("outputs"))}
 
 
 # A tool's notes may name the Python function that reads a formula's inputs off the design; a role
