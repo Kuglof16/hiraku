@@ -217,6 +217,21 @@ def asm_events(events):
     return events
 
 
+NAMED_RUN = "20261104-190300-named"  # asm_events with member.name written by hand on rail_L (named_events)
+RAIL_NAME = "左のレール (前の車軸から後ろの車軸まで)"
+
+
+def named_events(events):
+    """The events with member.name (the contract's name for a person, 6f5845e) on rail_L0 only; the
+    assembly sample's pin fastening (to "member rail_L", not a member of its design) turned to rail_L0."""
+    events = json.loads(json.dumps(events).replace('"member rail_L"', '"member rail_L0"'))
+    created = next(e for e in events if e["kind"] == "design.created")
+    for m in created["data"]["members"]:
+        if m["id"] == "rail_L0":
+            m["name"] = RAIL_NAME
+    return events
+
+
 SUMMARY = "() => { const j = window.hiraku.bench.joints; return { ...j.summary(), group: j.group.visible } }"
 LEGEND = """() => {
   const el = document.querySelector('#viewport > .joint-legend');
@@ -225,6 +240,43 @@ LEGEND = """() => {
            text: el.textContent };
 }"""
 BUTTON = "() => document.querySelector('#toggles button[data-toggle=joints]')?.className ?? null"
+LEG_MM = 5.0  # web/js/joints.js WELD_BEAD.leg_mm
+# every weld mark's drawn bead: the bar's vertices through each of its pieces' instance matrices
+BEAD_VERTICES = """() => {
+  const j = window.hiraku.bench.joints; const mesh = j.meshes.bead; const pos = mesh.geometry.getAttribute('position');
+  const M = mesh.matrix.clone(); const V = mesh.position.clone();
+  return j.slots.filter((s) => s.shape === 'bead').map((s) => {
+    const pts = [];
+    for (const sub of s.subs) { mesh.getMatrixAt(sub.i, M); for (let k = 0; k < pos.count; k += 1) pts.push(V.fromBufferAttribute(pos, k).applyMatrix4(M).toArray()); }
+    return { to: s.joint.to, source: s.joint.source, owner: s.joint.owner, at: s.mark.at, axis: s.mark.axis, how: s.mark.bead.how, seams: s.mark.bead.seams, pts };
+  });
+}"""
+# the bead's and the bushing's meshes: geometry type, the bar's size, an instance's colour
+MESHES = """() => Object.fromEntries(Object.entries(window.hiraku.bench.joints.meshes).map(([k, m]) => {
+  m.geometry.computeBoundingBox(); const s = m.geometry.boundingBox.getSize(m.position.clone());
+  return [k, { type: m.geometry.type, size: s.toArray(), color: [m.instanceColor.array[0], m.instanceColor.array[1], m.instanceColor.array[2]] }];
+}))"""
+
+
+def member_yz(a, b):
+    """The y and z of a member's section as workbench3d.js memberBasis lays them (b along y, h along z)."""
+    x = (b - a) / np.linalg.norm(b - a)
+    up = np.array([1.0, 0, 0]) if abs(x[2]) > 0.95 else np.array([0, 0, 1.0])
+    z = up - x * (up @ x)
+    z /= np.linalg.norm(z)
+    return np.cross(z, x), z
+
+
+def on_member_face(xyz, d, m, p, tol=0.5):
+    """p on the surface of member m's box (a face of its section's sides, within its length)."""
+    a, b = xyz[m["node_a"]], xyz[m["node_b"]]
+    x = (b - a) / np.linalg.norm(b - a)
+    y, z = member_yz(a, b)
+    dims = d["sections"][m["section"]]["dims_mm"]
+    r = np.asarray(p) - (a + b) / 2
+    lx, ly, lz = abs(r @ x), abs(r @ y), abs(r @ z)
+    inside = lx <= np.linalg.norm(b - a) / 2 + tol and ly <= dims["b"] / 2 + tol and lz <= dims["h"] / 2 + tol
+    return inside and (abs(ly - dims["b"] / 2) <= tol or abs(lz - dims["h"] / 2) <= tol)
 
 
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
@@ -233,7 +285,8 @@ class JointsBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         runs = cls.tmp / "runs"
-        for run_id, events in ((JOINTS_RUN, joints_events()), (HAND_RUN, joints_events(hand_design())), (ASM_RUN, asm_events(assembly_events()))):
+        for run_id, events in ((JOINTS_RUN, joints_events()), (HAND_RUN, joints_events(hand_design())), (ASM_RUN, asm_events(assembly_events())),
+                               (NAMED_RUN, named_events(asm_events(assembly_events())))):
             (runs / run_id).mkdir(parents=True)
             (runs / run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         from tests.web.modules_fixture import RUN_ID as MODULES_RUN, module_events
@@ -300,7 +353,9 @@ class JointsBrowserTest(unittest.TestCase):
                 ms, through = node_pieces(design(), n["id"])
                 beads += len(ms) - len(through)
             self.assertEqual(sum(1 for m in marks if m["source"] == "node"), beads, look)
-            self.assertEqual(sum(got["instances"].values()), len(marks), look)
+            # one instance per mark, but a weld's bead: one per piece of its seam
+            self.assertEqual(sum(n for k, n in got["instances"].items() if k != "bead"), sum(1 for m in marks if m["shape"] != "bead"), look)
+            self.assertEqual(got["instances"]["bead"], sum(len(m["bead"]["seams"]) for m in marks if m["shape"] == "bead"), look)
             for m in marks:
                 self.assertEqual(m["shape"], SHAPE[m["kind"]], m)
 
@@ -330,6 +385,84 @@ class JointsBrowserTest(unittest.TestCase):
         self.assertEqual(checked, len(marks))
         # the parts with rpy_deg are among them (the boxes are turned)
         self.assertTrue(any("rpy_deg" in parts[m["owner"]]["box"] for m in marks if m["source"] == "part"))
+
+    def test_weld_beads_follow_the_seams(self):
+        # a frame node's bead: round the ending member's section outline (a rect tube: its 4 sides),
+        # on the face's plane (the mark's at, across its axis), every vertex of the drawn bead within
+        # the bead's leg of that outline; a bracket's bead: on the faces of the members it sits on
+        d = design()
+        parts = {p["id"]: p for p in d["parts"]}
+        xyz = {n["id"]: np.asarray(n["xyz_mm"], dtype=float) for n in d["nodes"]}
+        at = members_at(d)
+        page = self.bench("zu")
+        got = page.evaluate(SUMMARY)
+        drawn = page.evaluate(BEAD_VERTICES)
+        legend = page.evaluate(LEGEND)
+        page.close()
+        self.assertEqual(len(drawn), sum(1 for m in got["marks"] if m["shape"] == "bead"))
+        hows = Counter(b["how"] for b in drawn)
+        self.assertEqual(dict(hows), {k: v for k, v in got["beadSeams"].items() if v})
+        rect = 0
+        for b in drawn:
+            pts = np.asarray(b["pts"])
+            if b["how"] == "section":
+                ax = np.asarray(b["axis"])
+                m = next(x for x in at[b["to"]] if self.unit(xyz[x["node_b"] if x["node_a"] == b["to"] else x["node_a"]] - xyz[b["to"]]) @ ax > 0.999)
+                sec = d["sections"][m["section"]]
+                self.assertTrue(len(b["seams"]) == (4 if sec["shape"] == "rect_tube" else 16), b["to"])
+                if sec["shape"] != "rect_tube":
+                    continue
+                rect += 1
+                y, z = member_yz(xyz[m["node_a"]], xyz[m["node_b"]])
+                w, h = sec["dims_mm"]["b"], sec["dims_mm"]["h"]
+                rel = pts - np.asarray(b["at"])
+                plane = rel @ ax
+                cheb = np.maximum(np.abs(rel @ y) - w / 2, np.abs(rel @ z) - h / 2)
+                # on the face's plane, up the member by at most the leg; on the outline, out by at most the leg
+                self.assertGreaterEqual(plane.min(), -0.01, b["to"])
+                self.assertLessEqual(plane.max(), LEG_MM + 0.01, b["to"])
+                self.assertGreaterEqual(cheb.min(), -0.01, b["to"])
+                self.assertLessEqual(cheb.max(), LEG_MM + 0.01, b["to"])
+                # the seam lines themselves: on the plane, on the outline
+                for s in b["seams"]:
+                    for p in (s["a"], s["b"]):
+                        r = np.asarray(p) - np.asarray(b["at"])
+                        self.assertAlmostEqual(float(r @ ax), 0.0, places=3)
+                        self.assertAlmostEqual(max(abs(float(r @ y)) - w / 2, abs(float(r @ z)) - h / 2), 0.0, places=3)
+            elif b["how"] == "contact":
+                # each seam's ends on the owner's box and on a face of a member at the node
+                for s in b["seams"]:
+                    for p in (s["a"], s["b"]):
+                        self.assertLessEqual(dist_to_box(parts[b["owner"]], p), 0.5, b["owner"])
+                        self.assertTrue(any(on_member_face(xyz, d, x, p) for x in at[b["to"]]), (b["owner"], p))
+        self.assertGreater(rect, 20)
+        # 16 of the 18 welded brackets sit on a rail's face; bracket_column (to LDT and RDT) has its box's
+        # bottom at dash_cross's centre line (z 845.9), not on a face, and the rollbar's box is its top bar
+        self.assertEqual(hows["contact"], 16)
+        self.assertEqual(got["beadSeams"]["as_is"], 4)
+        self.assertIn("脚 5 mm", legend["text"])
+        if got["beadSeams"]["as_is"]:
+            self.assertIn(f"溶接の印のうち {got['beadSeams']['as_is']} は", legend["text"])
+
+    def test_weld_bead_apart_from_bushing(self):
+        # the bead: a thin bar of the leg's triangle, in its own colour; the bushing: a ring, black
+        for look in ("zu", "real"):
+            page = self.bench(look)
+            got = page.evaluate(MESHES)
+            page.close()
+            self.assertIn("bead", got)
+            self.assertIn("ring", got)
+            self.assertNotEqual(got["bead"]["type"], got["ring"]["type"])
+            size = got["bead"]["size"]
+            self.assertAlmostEqual(size[1], LEG_MM, places=3)
+            self.assertAlmostEqual(size[2], LEG_MM, places=3)
+            bead, ring = np.asarray(got["bead"]["color"]), np.asarray(got["ring"]["color"])
+            self.assertGreater(float(np.abs(bead - ring).max()), 0.05, look)
+            self.assertGreater(float(bead[0] - bead[2]), 0.0, look)  # brown: more red than blue
+
+    @staticmethod
+    def unit(v):
+        return v / np.linalg.norm(v)
 
     def test_node_joint_kinds(self):
         d = hand_design()
@@ -500,6 +633,31 @@ class JointsBrowserTest(unittest.TestCase):
                 # the real look's post (ambient occlusion, antialiasing) is not bit for bit the same
                 # from one page to the next: nearly every pixel the same
                 self.assertLess(differing(shots[0], shots[1]), 0.01, look)
+
+    def test_member_name(self):
+        # member.name where the design has one (rail_L), the id where not: on the member's name tag
+        # (名前: the short name before the bracket; pointed at: the whole name and the id) and in A7's
+        # fastening text (what the part is joined to)
+        page = self.open(f"?run={NAMED_RUN}&tab=bench&pace=0&t=1e6")
+        tags = page.evaluate("() => window.hiraku.bench.names.children.filter((o) => o.element.dataset.member).map((o) => [o.element.dataset.member, o.element.textContent, o.element.title])")
+        self.assertEqual(page.errors, [])
+        page.close()
+        by = {m: (text, title) for m, text, title in tags}
+        self.assertIn("rail_L0", by, sorted(by))
+        self.assertEqual(by["rail_L0"], ("左のレール", f"{RAIL_NAME} (rail_L0)"))
+        others = [m for m in by if m != "rail_L0"]
+        self.assertTrue(others)
+        for m in others:
+            self.assertEqual(by[m], (m, m))
+        page = self.open(f"?run={NAMED_RUN}&tab=A7&pace=0&t=1e6")
+        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.rec")
+        rows = page.evaluate("() => [...document.querySelectorAll('[data-order]')].map((x) => x.textContent)")
+        self.assertEqual(page.errors, [])
+        page.close()
+        text = "".join(rows)
+        self.assertIn("ピン: 左のレール", text)
+        self.assertNotIn("部材 rail_L0", text)
+        self.assertIn("節点 N1", text)  # a node: as before
 
     def test_assembly(self):
         page = self.open(f"?run={ASM_RUN}&tab=A7&pace=0&t=1e6")

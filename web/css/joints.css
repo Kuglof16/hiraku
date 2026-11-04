@@ -24,7 +24,13 @@
 .joint-legend .jl-note { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 4px; }
 /* the swatches: the shape of each mark (MARK_SHAPES), in its colour */
 .jl-sw { width: 14px; height: 14px; box-sizing: border-box; justify-self: center; }
-.jl-bead { border-radius: 50%; border: 3px solid var(--jc); }
+/* the weld: a fillet's section, the bead's triangle in the corner of two grey plates (the tube's side, the face) */
+.jl-bead {
+  background:
+    linear-gradient(#a7a39a, #a7a39a) left top / 3px 100% no-repeat,
+    linear-gradient(#a7a39a, #a7a39a) left bottom / 100% 3px no-repeat,
+    linear-gradient(to top right, var(--jc) 50%, rgba(0, 0, 0, 0) 50%) 3px calc(100% - 3px) / 9px 9px no-repeat;
+}
 .jl-hex { background: var(--jc); clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%); }
 .jl-ring { border-radius: 50%; border: 4px solid var(--jc); }
 .jl-ball { border-radius: 50%; background: var(--jc); }
