@@ -244,6 +244,8 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
         args.update(safe_side=True, safe_side_reason=expected["safe_side_reason"])
+    if expected.get("end"):
+        args["ends_case"] = True  # rules.ended_cases reads it: the load case holds no heavier stage nor the stop
     recorded = record_cause(ctx, args, agent)
     ver = recorded["verdict"]
     retry = expected.get("retry")
@@ -259,10 +261,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
         judged = (lc.get("criterion") or {}).get("quantity") == hit["quantity"]
         default = ("原因を記録しました。手計算では合否を出せないので、この試験は判定の無いまま次へ進みます" if judged
                    else "原因を記録して、この手順はここで終えます")
-        # rules.ended_cases reads this: a load case its plan ends without a verdict holds no heavier stage (HK5)
-        ctx.store.emit("agent.said", agent=agent, domain=lc["domain"], text=expected.get("end_say") or default,
-                       data={"ended_cause": recorded["cause"]["cause_id"], "load_case_id": lc["load_case_id"],
-                             "comparison_id": hit["comparison_id"]})
+        _say(ctx, agent, lc, expected.get("end_say") or default)
         return
     if retry is None:
         _say(ctx, agent, lc, expected.get("stop") or "この先の予測は台本にありません。ここで止めます")

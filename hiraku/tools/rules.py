@@ -71,20 +71,21 @@ def _verdict_tool(ctx: RunContext, ver: Record) -> str | None:
 
 
 def ended_cases(ctx: RunContext, version: int | None = None) -> set[str]:
-    """Load cases of the version without a verdict whose mismatches all have a cause recorded as ending them
-    (a scripted plan's expected_mismatch end: an agent.said with data.ended_cause). They cannot be judged
-    (contract 110b991): no heavier stage waits for them (HK5) and HK4 does not hold a stop for them; their
-    tiles keep them not judged."""
+    """Load cases of the version without a verdict whose mismatches all have a cause recorded with
+    ends_case (contract 08cf4d6; a scripted plan's expected_mismatch end writes it too). They cannot be
+    judged: no heavier stage waits for them (HK5) and HK4 does not hold a stop for them; their tiles
+    keep them not judged."""
     v = version or ctx.version
     if not v:
         return set()
     ended: dict[str, set[str]] = {}
-    for e in ctx.store.events():
-        d = e.get("data") or {}
-        if e["kind"] == "agent.said" and d.get("ended_cause") and d.get("load_case_id"):
-            hit = ctx.store.find("cause", d["ended_cause"])
-            if hit is not None and hit[0] == v:
-                ended.setdefault(d["load_case_id"], set()).add(d["ended_cause"])
+    for cause in ctx.store.records("cause", v):
+        if not cause.get("ends_case"):
+            continue
+        cmp = ctx.store.get("comparison", cause["comparison_id"]) or {}
+        pred = ctx.prediction(cmp["prediction_id"]) if cmp.get("prediction_id") else None
+        if pred and pred.get("load_case_id"):
+            ended.setdefault(pred["load_case_id"], set()).add(cause["cause_id"])
     if not ended:
         return set()
     verdicts = latest_verdicts(ctx, v)

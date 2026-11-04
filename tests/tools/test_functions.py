@@ -609,6 +609,30 @@ class SafeSideTest(RunCase, unittest.TestCase):
                 self.assertIn("safe_side_reason", str(cm.exception))
         self.assertEqual(self.ctx.store.records("cause"), [])
 
+    def test_ends_case_ends_the_load_case_not_judged(self):
+        cmp = self.r1_mismatch(1.5)  # unsafe side, so no verdict can come from the prediction
+        out = record_cause(self.ctx, self.args(cmp, ends_case=True))
+        self.assertIsNone(out["verdict"])
+        self.assertIs(self.ctx.store.get("cause", out["cause"]["cause_id"])["ends_case"], True)
+        self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")  # never green
+        self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})  # HK4 and HK5 do not wait for it
+        self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        self.assert_events_fit()
+
+    def test_a_cause_without_ends_case_ends_nothing(self):
+        cmp = self.r1_mismatch(1.5)
+        cause = record_cause(self.ctx, self.args(cmp))["cause"]
+        self.assertNotIn("ends_case", cause)
+        self.assertEqual(rules.ended_cases(self.ctx), set())
+
+    def test_ends_case_and_safe_side_together_are_refused(self):
+        cmp = self.r1_mismatch(0.7)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.args(cmp, ends_case=True, safe_side=True,
+                                             safe_side_reason="fixed joints overestimate the twist"))
+        self.assertIn("ends_case", str(cm.exception))
+        self.assertEqual(self.ctx.store.records("cause"), [])
+
     def test_no_criterion_no_safe_side(self):
         load, force = self.predict_p1(formula_id="mass_props.front_wheel_load")
         ana = analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",

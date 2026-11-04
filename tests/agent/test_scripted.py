@@ -284,6 +284,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         from hiraku.tools import rules
 
         self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})
+        self.assertEqual([c.get("ends_case") for c in self.ctx.store.records("cause")][-1:], [True])  # contract 08cf4d6
         self.assertNotIn("R1-step100", [lc["load_case_id"] for _, lc, _ in rules.lower_stage_left(self.ctx, 9)])
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
