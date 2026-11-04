@@ -76,6 +76,10 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 `qa.run_tests` のほかの決まり:
 
 - 前の回に 60 秒以上かかったクラスは、メソッドごとに別のプロセスで回す。ただし、メソッドのあいだで何も共有しないクラスだけ (`setUpClass`・`tearDownClass`・`setUpModule` が無い)。`--no-split` にすると、クラスのまま回す
+- メモリの重いクラスは、同時に `--max-heavy` (既定 2) 個まで。前の回の山が 4 GB 以上のクラスを重いとみる
+  - まだ測っていないときは、11/5 に測った 4 つ (RearLinkRevision・SpaceFrameConvergence・SpaceFrameK2・MeshFlow、7.6〜8.7 GB) を重いとみる
+  - 山はプロセスごとに `runs/test_memory.json` に残る。Windows では、台本の運転の別のプロセスの分は入らない
+  - 重いクラスがほかに走っているときは、空きが「そのクラスの山 + 4 GB」になるまで待つ (`waiting for memory: ...`)。待つ間は、後ろの軽いクラスを先に回す
 - `--only tests.web` のように付けると、名前がその前置きで始まるクラスだけを回す (何度でも付けられる)
 
 ### Linux (Ubuntu 24.04、Python 3.12) で回すとき
