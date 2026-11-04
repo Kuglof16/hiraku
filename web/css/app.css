@@ -706,6 +706,13 @@ body.video .mode .stop-btn { display: none; }
 .runlist .drv { font-family: inherit; font-size: 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; margin-left: 6px; white-space: nowrap; }
 .runlist a { color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 12px; text-decoration: none; white-space: nowrap; margin-right: 6px; }
 .runlist .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
+/* No breaks inside a word (Japanese: only at spaces and punctuation; a run longer than its box
+   still breaks), labels and buttons on one line, and the row's links side by side. */
+.runlist { word-break: keep-all; overflow-wrap: anywhere; }
+.runlist .nw, .runlist button, .runlist .state, .runlist th { white-space: nowrap; }
+.runlist td.acts { width: 1%; }
+.runlist .links { display: flex; gap: 6px; flex-wrap: nowrap; }
+.runlist .links a { margin-right: 0; }
 
 /* the run list for people (no ?dev=1): over a veiled workbench, one line and one verb per row */
 .runlist.plain { top: 110px; max-height: 850px; width: 1200px; box-shadow: 0 0 0 3000px rgba(251, 249, 244, 0.88); }
