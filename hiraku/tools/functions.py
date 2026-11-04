@@ -915,7 +915,8 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     With safe_side true (and safe_side_reason), the CAE role says the cause explains
     the gap and the prediction bounds the true value from the safe side. The numbers
     are checked first; then a verdict is made from the prediction (the unfavourable
-    value), and the domain's judgement is updated.
+    value), and the domain's judgement is updated. With ends_case true, no prediction checkable
+    in this run reaches the quantity: the load case ends not judged (not with safe_side).
     """
     _check_input("record_cause", args)
     hit = ctx.store.find("comparison", args["comparison_id"])
@@ -932,6 +933,9 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     pred = ctx.prediction(cmp["prediction_id"])
     lc = ctx.load_case(pred["load_case_id"]) if pred else None
     safe = bool(args.get("safe_side"))
+    ends = bool(args.get("ends_case"))
+    if safe and ends:
+        raise ToolError("safe_side と ends_case は一緒に付けられません (safe_side は予測で合否を出し、ends_case は合否を出さずに終えます)")
     if safe:
         if not (args.get("safe_side_reason") or "").strip():
             raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
@@ -948,6 +952,8 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     }
     if safe:
         cause.update(safe_side=True, safe_side_reason=args["safe_side_reason"].strip())
+    if ends:
+        cause["ends_case"] = True  # the load case ends not judged (rules.ended_cases: HK4 and HK5 do not wait for it)
     ctx.store.add_record("cause", cause, design_version=v, agent=agent, domain=domain)
     ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]), design_version=v, agent=agent,
                          domain=domain)

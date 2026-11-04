@@ -37,6 +37,11 @@ AIST = {
 SOURCE = ("AIST anthropometric database 1991-92 (Kouchi and Mochimaru 2005, AIST H16PRO 287), young adults; items I1, D2, "
           "J2, J5, J7, J9, I3, I11, I13, C3, C7, C12, C16, D15, D17, M4, M15, M16, M20, M24 read from "
           "https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03")
+# The items for the body's segments (head, neck, forearm, hand, the arms' girths), same database and percentiles,
+# read from the item tables (gif/<ID>.gif) linked from the same list on 2026-11-04.
+BODY_SOURCE = ("AIST anthropometric database 1991-92 (Kouchi and Mochimaru 2005, AIST H16PRO 287), young adults; items A1, "
+               "A2, A36, C8, F1, F25, F26, I4, L1, L10, L16 read from https://www.airc.aist.go.jp/dhrt/91-92/data/list.html "
+               "on 2026-11-04")
 
 # Body sizes for the seated body: young adult male 95th percentile (the large person: room,
 # clearance) and young adult female 5th percentile (the small person: reach). Same source as AIST.
@@ -60,6 +65,18 @@ SIZES: dict[str, dict[str, float]] = {
         "upper_arm": 336.4,  # source: C7 Upper arm length
         "elbow_grip": 358.0,  # source: C12 Elbow-grip length
         "sitting_height": 985.2,  # source: I1 Sitting height
+        # the body's segments (designgen kit/body.py), read 2026-11-04 (BODY_SOURCE)
+        "head_length": 201.0,  # source: A1 Head length
+        "head_breadth": 171.0,  # source: A2 Head breadth
+        "head_height": 251.5,  # source: A36 Total head height (gnathion to vertex)
+        "cervicale_height": 714.0,  # source: I4 Cervicale height, sitting (over the seat)
+        "neck_circumference": 386.2,  # source: F1 Neck circumference
+        "forearm_length": 271.2,  # source: C8 Forearm length (radiale to stylion)
+        "upper_arm_circumference": 324.0,  # source: F25 Upper arm circumference
+        "forearm_circumference": 287.0,  # source: F26 Forearm circumference (maximum)
+        "hand_length": 204.2,  # source: L1 Hand length, tip to wrist crease
+        "hand_breadth": 88.3,  # source: L10 Hand breadth, diagonal (metacarpale radiale to ulnare)
+        "hand_thickness": 32.0,  # source: L16 Hand thickness
     },
     "f5": {
         "buttock_trochanter": 65.9,
@@ -80,6 +97,17 @@ SIZES: dict[str, dict[str, float]] = {
         "upper_arm": 265.0,
         "elbow_grip": 283.0,
         "sitting_height": 824.1,
+        "head_length": 170.0,
+        "head_breadth": 145.0,
+        "head_height": 218.0,
+        "cervicale_height": 586.0,
+        "neck_circumference": 287.0,
+        "forearm_length": 211.0,
+        "upper_arm_circumference": 223.1,
+        "forearm_circumference": 212.0,
+        "hand_length": 163.0,
+        "hand_breadth": 68.0,
+        "hand_thickness": 22.0,
     },
 }
 BIG, SMALL = "m95", "f5"
