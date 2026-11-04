@@ -53,7 +53,7 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 
 重い試験は、main に入れる前に毎回回す `python -m unittest` には入れない。毎回回す `test_real_runs` は、動画用の要件の台本の運転 1 本だけ (記録が契約と hooks に合うか、終わり方)。`HIRAKU_SLOW_TESTS=1` のときだけ、次も回す:
 
-- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 1200 秒で、かかった秒数を標準エラーに 1 行出す
+- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 3000 秒 (動画の要件は 5 つの版で単独約 2060 秒)、1 クラスの時間切れは 3600 秒で、かかった秒数を標準エラーに 1 行出す
 - 動画用の要件をもう 1 回回して、バイトで比べる。2 回目は 1 回目と同時に回す (`ScriptedRun_offroad_4w_video` の中で 2 つのスレッド)。なので、そのクラスも運転 1 本ぶんの時間で終わる
 - `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く。使える設計の型を持つツール (`applies_to`) はその型の設計で解き、自分でメッシュを作るツール (`make_mesh`) にはそのメッシュ (`mesher` はツールの名前) を渡し、field はそのメッシュを名指す。`make_mesh` の無いツールは部材ごとの値だけ。ツールごとに 1 つのクラス (`MeshFieldRecord_<ツール名>`、例 `MeshFieldRecord_frame_shell`) なので、これも並べて回す。`HIRAKU_SLOW_TESTS` が無いときは `MeshFieldRecord` が 1 つだけあって、skip の理由を出す
 
