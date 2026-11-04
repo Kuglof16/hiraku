@@ -170,6 +170,21 @@ def asm_events(events):
     return events
 
 
+NAMED_RUN = "20261104-190300-named"  # asm_events with member.name written by hand on rail_L (named_events)
+RAIL_NAME = "左のレール (前の車軸から後ろの車軸まで)"
+
+
+def named_events(events):
+    """The events with member.name (the contract's name for a person, 6f5845e) on rail_L0 only; the
+    assembly sample's pin fastening (to "member rail_L", not a member of its design) turned to rail_L0."""
+    events = json.loads(json.dumps(events).replace('"member rail_L"', '"member rail_L0"'))
+    created = next(e for e in events if e["kind"] == "design.created")
+    for m in created["data"]["members"]:
+        if m["id"] == "rail_L0":
+            m["name"] = RAIL_NAME
+    return events
+
+
 SUMMARY = "() => { const j = window.hiraku.bench.joints; return { ...j.summary(), group: j.group.visible } }"
 LEGEND = """() => {
   const el = document.querySelector('#viewport > .joint-legend');
@@ -223,7 +238,8 @@ class JointsBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         runs = cls.tmp / "runs"
-        for run_id, events in ((JOINTS_RUN, joints_events()), (HAND_RUN, joints_events(hand_design())), (ASM_RUN, asm_events(assembly_events()))):
+        for run_id, events in ((JOINTS_RUN, joints_events()), (HAND_RUN, joints_events(hand_design())), (ASM_RUN, asm_events(assembly_events())),
+                               (NAMED_RUN, named_events(asm_events(assembly_events())))):
             (runs / run_id).mkdir(parents=True)
             (runs / run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         cls.server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, assets=False)
@@ -474,6 +490,31 @@ class JointsBrowserTest(unittest.TestCase):
                 # the real look's post (ambient occlusion, antialiasing) is not bit for bit the same
                 # from one page to the next: nearly every pixel the same
                 self.assertLess(differing(shots[0], shots[1]), 0.01, look)
+
+    def test_member_name(self):
+        # member.name where the design has one (rail_L), the id where not: on the member's name tag
+        # (名前: the short name before the bracket; pointed at: the whole name and the id) and in A7's
+        # fastening text (what the part is joined to)
+        page = self.open(f"?run={NAMED_RUN}&tab=bench&pace=0&t=1e6")
+        tags = page.evaluate("() => window.hiraku.bench.names.children.filter((o) => o.element.dataset.member).map((o) => [o.element.dataset.member, o.element.textContent, o.element.title])")
+        self.assertEqual(page.errors, [])
+        page.close()
+        by = {m: (text, title) for m, text, title in tags}
+        self.assertIn("rail_L0", by, sorted(by))
+        self.assertEqual(by["rail_L0"], ("左のレール", f"{RAIL_NAME} (rail_L0)"))
+        others = [m for m in by if m != "rail_L0"]
+        self.assertTrue(others)
+        for m in others:
+            self.assertEqual(by[m], (m, m))
+        page = self.open(f"?run={NAMED_RUN}&tab=A7&pace=0&t=1e6")
+        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.rec")
+        rows = page.evaluate("() => [...document.querySelectorAll('[data-order]')].map((x) => x.textContent)")
+        self.assertEqual(page.errors, [])
+        page.close()
+        text = "".join(rows)
+        self.assertIn("ピン: 左のレール", text)
+        self.assertNotIn("部材 rail_L0", text)
+        self.assertIn("節点 N1", text)  # a node: as before
 
     def test_assembly(self):
         page = self.open(f"?run={ASM_RUN}&tab=A7&pace=0&t=1e6")

@@ -517,7 +517,12 @@ export class Workbench3D {
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
       if (this.labelRenderer) {
-        const tag = label(esc(m.id), "lbl-id");
+        // member.name (the contract's name for a person) when there is one: its short form (before a
+        // bracket) on the tag, the whole name and the id as the tooltip; else the id as before
+        const short = m.name ? String(m.name).replace(/\s*[（(].*$/, "") || m.name : m.id;
+        const tag = label(esc(short), "lbl-id");
+        tag.element.title = m.name ? `${m.name} (${m.id})` : m.id;
+        tag.element.dataset.member = m.id;
         tag.position.copy(g.mid);
         this.names.add(tag);
       }

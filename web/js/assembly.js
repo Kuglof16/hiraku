@@ -68,23 +68,24 @@ export function nameOf(names, id) {
   return CORNER_JA[m[1]] ? `${CORNER_JA[m[1]]}の足まわり (先に組んだ組)` : `${m[1]} の角の組`;
 }
 
-// "node LB" -> "節点 LB", "member x" -> "部材 x", "part susp_RR" -> that part's name.
-export function fastenTarget(to, names) {
+// "node LB" -> "節点 LB", "member x" -> its member.name (memberNames), else "部材 x",
+// "part susp_RR" -> that part's name.
+export function fastenTarget(to, names, memberNames = {}) {
   const [head, ...rest] = String(to).split(" ");
   const id = rest.join(" ");
   if (head === "node") return `節点 ${id}`;
-  if (head === "member") return `部材 ${id}`;
+  if (head === "member") return memberNames[id] ? shortName(memberNames[id]) : `部材 ${id}`;
   if (head === "part") return shortName(names[id] ?? id);
   return String(to);
 }
 
-export function fastenText(step, names) {
+export function fastenText(step, names, memberNames = {}) {
   const fs = step.fastenings ?? [];
   if (!fs.length) return "";
   const byKind = new Map();
   for (const f of fs) {
     if (!byKind.has(f.kind)) byKind.set(f.kind, []);
-    const t = fastenTarget(f.to, names);
+    const t = fastenTarget(f.to, names, memberNames);
     if (!byKind.get(f.kind).includes(t)) byKind.get(f.kind).push(t);
   }
   return [...byKind].map(([k, ts]) => `${FASTEN_JA[k] ?? k}: ${ts.join("・")}`).join(" / ");
@@ -327,6 +328,7 @@ const mark = (ok) => (ok ? `<span class="ok">✓</span>` : `<span class="ng">✕
 // its fastenings and what blocks it when a check fails. opts.box: data-box prefix.
 export function stepRowsHtml(rec, current, opts = {}) {
   const names = partNames(rec.design);
+  const memberNames = Object.fromEntries((rec.design?.members ?? []).filter((m) => m.name).map((m) => [m.id, m.name]));
   return rec.steps
     .map((s) => {
       const name = shortName(nameOf(names, s.part));
@@ -337,7 +339,7 @@ export function stepRowsHtml(rec, current, opts = {}) {
       if (opts.compact) {
         return `<li class="${cls}" data-order="${s.order}"${box}><span class="no">${s.order}</span><span class="nm">${esc(name)}</span><span class="cks">${checks}</span></li>`;
       }
-      const fasten = fastenText(s, names);
+      const fasten = fastenText(s, names, memberNames);
       return (
         `<li class="${cls}" data-order="${s.order}"${box}>` +
         `<div class="row1"><span class="no">${s.order}</span><span class="nm" title="${esc(names[s.part] ?? s.part)}">${esc(name)}</span><span class="cks">${checks}</span></div>` +
