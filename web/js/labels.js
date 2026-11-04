@@ -93,6 +93,7 @@ export const RULES = [
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
+  { id: "HK6", key: "HK6_module_scope", ja: "持ち場" }, // modules: contract d9631a5
 ];
 
 export const BASE_JA = {
