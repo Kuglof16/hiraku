@@ -129,8 +129,10 @@ class PlacementTest(unittest.TestCase):
         deck_x = PARTS["deck"]["box"]["center_mm"][0] + PARTS["deck"]["box"]["size_mm"][0] / 2.0
         rear = sum(p["mass_kg"] for p in d["parts"] if p["kind"] in safety_lamps() and p["box"]["center_mm"][0] < deck_x)
         self.assertGreater(rear, 0.0)
-        self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), sum(p["mass_kg"] for p in V1["parts"]) + rear,
-                               places=9)
+        # and each design's own joint struts (kit/joints.py: the lamps get theirs)
+        fits = lambda x: sum(p["mass_kg"] for p in x["parts"] if p["id"].startswith("fit_"))  # noqa: E731
+        self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]),
+                               sum(p["mass_kg"] for p in V1["parts"]) + rear + fits(d) - fits(V1), places=9)
 
 
 class LampsFromTheRequirementsTest(unittest.TestCase):
