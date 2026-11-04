@@ -67,7 +67,8 @@ class DefaultsTest(unittest.TestCase):
     def test_off_by_default(self):
         self.assertEqual(GEN.build(), V1)
         self.assertEqual(GEN.choices_of(V1), {"joints": "butt", "part_mounts": "none", "pedal_mount": "none",
-                                              "side_guard": "none", "rops": "hoop", "fenders": "none"})
+                                              "side_guard": "none", "rops": "hoop", "fenders": "none",
+                                              "side_opening": "none", "grab_bar": "none"})
         for k in ("mount_floor", "pedal_mount", "side_bars", "rollbar_stays", "rollbar_front_posts", "fenders",
                   "rollbar_foot_b"):
             self.assertTrue(GEN.VARIABLES[k].revisable, k)
