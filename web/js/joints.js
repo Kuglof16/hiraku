@@ -2,10 +2,11 @@
 // members are joined and how, read from the design only.
 //
 // Two sources in the design:
-//   - part.connects_to [{to, via}]: the part is joined to `to` (a part, a frame member, a frame
-//     node, a support or "<support>.<hardpoint>") by `via` (bolt, weld, bushing, ...)
+//   - part.connects_to [{to, via, at_mm?, axis?}]: the part is joined to `to` (a part, a frame
+//     member, a frame node, a support or "<support>.<hardpoint>") by `via` (bolt, weld, bushing,
+//     ...); at_mm and axis (contract 070d49c), when written, are where and along what it is drawn
 //   - the frame's nodes where two or more members meet: node.joint (weld / bolt / pin);
-//     without it, FRAME_NODE_RULE (below) draws the node as welded.
+//     without it, FRAME_NODE_RULE (below) draws the node as welded (by design.archetype).
 //
 // One joint is one place: the entries of connects_to with the same two ends and the same via
 // are one joint (a wheel "rests" on its support for load, steer and brake: one place), and a
@@ -25,25 +26,37 @@ export const JOINT_KINDS = {
   bolt: { ja: "ボルト", mark: "hex", color: "#2d3a4a" }, // a small hexagon (a bolt's head)
   bushing: { ja: "ブッシュ", mark: "ring", color: "#151515" }, // a rubber ring
   ball_joint: { ja: "ボールジョイント", mark: "ball", color: "#2f7fd0" }, // a ball
-  pin: { ja: "ピン", mark: "pin", color: "#8e44c8" }, // a thin rod through the joint
-  spline: { ja: "スプライン", mark: "spline", color: "#13a08a" }, // a short toothed shaft
+  // a thin rod through the joint; deep indigo, not the purple it was (#8e44c8 was 30 apart in
+  // CIELAB from the packager's module colour #8e6bbf, proposals.js; this is 44 from its nearest)
+  pin: { ja: "ピン", mark: "pin", color: "#1d1d9e" },
+  // a short toothed shaft; spring green, not #13a08a (11 apart in CIELAB from the body module's #57b8a0; this is 51)
+  spline: { ja: "スプライン", mark: "spline", color: "#00ff80" },
   rest: { ja: "載せる", mark: "dot", color: "#9a8f78" },
   friction: { ja: "摩擦", mark: "dot", color: "#c9a227" },
-  wire: { ja: "電線", mark: "dot", color: "#d23c8a" },
+  // bright magenta, not #d23c8a (22 apart in CIELAB from the steering module's #e2759f; this is 55)
+  wire: { ja: "電線", mark: "dot", color: "#ff1fd2" },
   hose: { ja: "ホース", mark: "dot", color: "#3fa7c9" },
 };
 const OTHER = { mark: "dot", color: "#8a8577" };
 export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: String(via) };
 
 // The rule for a frame node that does not say how it is joined (node.joint absent): drawn as
-// welded. The contract (docs/contract.md, d9631a5) says the ladder_4w generator's frame nodes
-// are welded, but a design does not record which generator made it, so the rule is used for
-// every frame node without node.joint. The legend says so (NODE_RULE_NOTE).
+// welded. The contract (docs/contract.md, d9631a5; node.joint in the schema) says the ladder_4w
+// generator's frame nodes are welded, and design.archetype (070d49c) names the generator:
+//   archetype "ladder_4w"      the rule for its nodes without node.joint
+//   another archetype          no rule: a node without node.joint has no mark (counted, the legend says so)
+//   no archetype (a design     the rule for every frame node without node.joint, as before the
+//   made before 070d49c)       archetype was recorded; the legend says so (NODE_RULE_OLD_NOTE)
 export const FRAME_NODE_RULE = "weld";
-export const NODE_RULE_NOTE = "枠の節の溶接はデータに書いていないので、決まりで溶接として描いている";
-// Where a joint between two boxes is put is worked out from the boxes (PLACE below): the
-// legend says so for the joints placed that way.
-export const PLACE_NOTE = "部品の印はデータに場所が無いので、2 つの相手の箱のいちばん近い所の中ほどに置いている";
+export const RULE_ARCHETYPE = "ladder_4w";
+export const NODE_RULE_NOTE = "ladder_4w の型の枠の節は溶接 (契約) なので、つなぎ方の書いていない節を決まりで溶接として描いている";
+export const NODE_RULE_OLD_NOTE = "型 (archetype) の記録が無い前の設計なので、つなぎ方の書いていない枠の節をすべて決まりで溶接として描いている";
+// Two members of the same section going on in one line through a node (THROUGH_COS) are one tube.
+export const THROUGH_NOTE = "一直線に続く同じ断面の 2 本は 1 本の管として、つなぎ目に数えない";
+// connects_to with at_mm (and axis) is drawn at that point (and along that axis); one without
+// at_mm is placed from the boxes (PLACE below): the legend counts those (guessNote).
+export const PLACE_NOTE = "場所がデータに無い部品の印は、2 つの相手の箱のいちばん近い所の中ほどに置いた";
+export const guessNote = (n) => `推し量りで置いた ${n} 所 (${PLACE_NOTE})`;
 
 // How the place of a joint is found, by what `to` is (the owner is the part with connects_to):
 //   node        the point on the owner's box nearest the node, and the node: halfway
@@ -89,6 +102,8 @@ function boxOf(part) {
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX"));
   return { kind: "box", c: v3(b.center_mm ?? [0, 0, 0]), q, qi: q.clone().invert(), h: v3(b.size_mm ?? [0, 0, 0]).multiplyScalar(0.5) };
 }
+
+const vec3OK = (a) => Array.isArray(a) && a.length === 3 && a.every((x) => Number.isFinite(x));
 
 function closestOnBox(box, p) {
   const l = p.clone().sub(box.c).applyQuaternion(box.qi);
@@ -155,8 +170,12 @@ function sectionSides(design, m) {
 // A joint: { kind (the via or node joint), source ("part" | "node"), owner, to, toKind,
 // rule (true: the frame node rule), marks: [{shape, at [x,y,z], axis [x,y,z], scale, gap}] }.
 export function readJoints(design) {
-  const out = { joints: [], counts: {}, frameRule: 0, unplaced: 0, byPart: 0 };
+  const out = { joints: [], counts: {}, frameRule: 0, unplaced: 0, byPart: 0, guessed: 0, fromData: 0, unstated: 0, ruleBasis: null, through: 0 };
   if (!design) return out;
+  // the frame node rule: by the archetype (ladder_4w), or for every node of a design without one
+  const archetype = typeof design.archetype === "string" && design.archetype ? design.archetype : null;
+  const useRule = archetype == null || archetype === RULE_ARCHETYPE;
+  out.ruleBasis = archetype == null ? "old" : useRule ? "archetype" : null;
   const parts = Object.fromEntries((design.parts ?? []).map((p) => [p.id, p]));
   const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, n]));
   const members = Object.fromEntries((design.members ?? []).map((m) => [m.id, m]));
@@ -203,7 +222,10 @@ export function readJoints(design) {
       const target = shapeOf(c.to);
       const joint = { kind: c.via, source: "part", owner: p.id, to: c.to, toKind: target?.toKind ?? null, rule: false, marks: [] };
       out.joints.push(joint);
-      if (!target || !p.box) {
+      // the place and axis written in the data (contract 070d49c), when they are
+      const dataAt = vec3OK(c.at_mm) ? v3(c.at_mm) : null;
+      const dataAxis = vec3OK(c.axis) && v3(c.axis).lengthSq() > 1e-12 ? v3(c.axis).normalize() : null;
+      if (!dataAt && (!target || !p.box)) {
         out.unplaced += 1;
         continue;
       }
@@ -214,13 +236,29 @@ export function readJoints(design) {
         out.byPart += 1;
         continue;
       }
-      const box = boxOf(p);
-      const { p: a, q: b } = nearest(box, target.shape);
-      const gap = a.distanceTo(b);
-      const axis = gap > 1e-3 ? b.clone().sub(a).normalize() : faceNormal(box, a);
-      const s = clampSize(SIZE_OF_SIDE * Math.min(minSide(box), target.shape.kind === "box" ? minSide(target.shape) : target.shape.side));
-      const at = a.clone().add(b).multiplyScalar(0.5);
-      joint.marks.push({ shape: kind.mark, at: at.toArray(), axis: axis.toArray(), scale: kind.mark === "bead" ? s * 0.6 : s, gap });
+      const box = p.box ? boxOf(p) : null;
+      const sides = [box ? minSide(box) : null, target ? (target.shape.kind === "box" ? minSide(target.shape) : target.shape.side) : null].filter((x) => x != null);
+      const s = sides.length ? clampSize(SIZE_OF_SIDE * Math.min(...sides)) : SIZE_MIN_MM;
+      let at;
+      let axis = dataAxis;
+      let gap = 0;
+      if (dataAt) {
+        at = dataAt;
+        out.fromData += 1;
+        if (!axis && box && target) {
+          const { p: a, q: b } = nearest(box, target.shape);
+          axis = a.distanceTo(b) > 1e-3 ? b.clone().sub(a).normalize() : faceNormal(box, closestOnBox(box, at));
+        }
+      } else {
+        const { p: a, q: b } = nearest(box, target.shape);
+        gap = a.distanceTo(b);
+        at = a.clone().add(b).multiplyScalar(0.5);
+        axis ??= gap > 1e-3 ? b.clone().sub(a).normalize() : faceNormal(box, a);
+        out.guessed += 1;
+      }
+      axis ??= Z.clone();
+      joint.placed = dataAt ? "data" : "guess";
+      joint.marks.push({ shape: kind.mark, at: at.toArray(), axis: axis.toArray(), scale: kind.mark === "bead" ? s * 0.6 : s, gap, placed: joint.placed, axisFrom: dataAxis ? "data" : "guess" });
     }
   }
 
@@ -243,8 +281,14 @@ export function readJoints(design) {
       }
     }
     const pieces = ms.length - through.size / 2;
+    if (through.size) out.through += through.size / 2;
     if (pieces < 2 && !n.joint) continue;
     const rule = !n.joint;
+    if (rule && !useRule) {
+      // another archetype, and the node does not say how it is joined: no mark, counted for the legend
+      out.unstated += 1;
+      continue;
+    }
     const via = n.joint ?? FRAME_NODE_RULE;
     count(via);
     if (rule) out.frameRule += 1;
@@ -393,6 +437,11 @@ export class JointMarks {
       frameRule: this.info.frameRule,
       unplaced: this.info.unplaced,
       byPart: this.info.byPart,
+      guessed: this.info.guessed,
+      fromData: this.info.fromData,
+      unstated: this.info.unstated,
+      ruleBasis: this.info.ruleBasis,
+      through: this.info.through,
       instances: Object.fromEntries(Object.entries(this.meshes).map(([k, m]) => [k, m.count])),
       marks: this.slots.map((s) => ({ kind: s.joint.kind, source: s.joint.source, owner: s.joint.owner, to: s.joint.to, toKind: s.joint.toKind, rule: s.joint.rule, shape: s.shape, shown: s.shown, now: s.now ?? null, ...s.mark })),
     };
@@ -413,7 +462,12 @@ export function jointLegendHtml(info) {
       return `<span class="jl-sw jl-${kd.mark}" style="--jc:${kd.color}"></span><span class="jl-nm" data-kind="${esc(k)}">${esc(kd.ja)}${extra}</span><span class="jl-n" data-count="${esc(k)}">${info.counts[k]}</span>`;
     })
     .join("");
-  const notes = [info.frameRule ? `<div class="jl-note">※ ${esc(NODE_RULE_NOTE)}</div>` : "", total - info.frameRule > 0 ? `<div class="jl-note">${esc(PLACE_NOTE)}</div>` : ""];
+  const ruleNote = info.ruleBasis === "old" ? NODE_RULE_OLD_NOTE : NODE_RULE_NOTE;
+  const nodeJoints = info.joints ? info.joints.filter((j) => j.source === "node").length : 0;
+  const notes = [info.frameRule ? `<div class="jl-note" data-note="rule">※ ${esc(ruleNote)}</div>` : ""];
+  if (info.unstated) notes.push(`<div class="jl-note" data-note="unstated">枠の節 ${info.unstated} 所はつなぎ方がデータに無いので印なし (型 ${esc(RULE_ARCHETYPE)} でない)</div>`);
+  if (info.through || nodeJoints) notes.push(`<div class="jl-note" data-note="through">${esc(THROUGH_NOTE)}</div>`);
+  if (info.guessed) notes.push(`<div class="jl-note" data-note="guess" data-n="${info.guessed}">${esc(guessNote(info.guessed))}</div>`);
   if (info.unplaced) notes.push(`<div class="jl-note">相手の見つからない接合 ${info.unplaced} は印なし</div>`);
   if (info.byPart) notes.push(`<div class="jl-note">ボールジョイントのうち ${info.byPart} は部品の球がそのまま印</div>`);
   return `<div class="jl-ttl">接合 <small>${total} 所</small></div><div class="jl-rows">${rows}</div>${notes.join("")}`;
@@ -431,7 +485,8 @@ export function renderJointLegend(host, marks, on) {
   }
   el.hidden = !on;
   if (on) {
-    const key = JSON.stringify(marks.info.counts) + marks.info.frameRule;
+    const i = marks.info;
+    const key = JSON.stringify([i.counts, i.frameRule, i.guessed, i.unstated, i.ruleBasis, i.through]);
     if (el.dataset.key !== key) {
       el.innerHTML = jointLegendHtml(marks.info);
       el.dataset.key = key;

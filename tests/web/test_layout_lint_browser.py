@@ -86,6 +86,8 @@ SCREENS = (
     Screen("作業台 (モジュール・空間)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=modules,spaces"),
     Screen("作業台 (提案の並び)", f"?run={MODULES}&tab=bench&pace=0&t=4.6"),
     Screen("全分野 (モジュール)", f"?run={MODULES}&tab=grid&pace=0&t=1e6"),
+    # joints and modules: both toggles on the same bench (the two legends side by side)
+    Screen("作業台 (接合・モジュール)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=joints,modules,spaces"),
 )
 
 

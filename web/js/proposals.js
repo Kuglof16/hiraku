@@ -37,7 +37,8 @@ export function moduleColor(m) {
 export function changeWords(chg, base) {
   const out = [];
   for (const [name, q] of Object.entries(chg.changes ?? {})) {
-    const said = designNumberName(`variables.${name}`) ?? name;
+    // the design's variable_names, else the screen's table (labels.js VARIABLE_JA), else the id
+    const said = designNumberName(`variables.${name}`, base) ?? name;
     const was = base?.variables?.[name];
     const u = unitLabel(q.unit ?? was?.unit ?? "");
     const unit = u && u !== "1" ? ` ${u}` : "";

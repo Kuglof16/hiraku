@@ -117,6 +117,53 @@ def hand_design():
     return d
 
 
+EXTRA_RUNS = {"place": "20261104-190300-place", "ladder": "20261104-190400-ladder", "other": "20261104-190500-other"}
+PLACED = {}  # filled by placed_design(): (owner, to) -> {"at": [...], "axis": [...] or None}
+
+
+def placed_design():
+    """The design with at_mm (and on the first, axis too) written by hand on two joints of
+    connects_to whose other end is not a part (so no other entry names the same pair)."""
+    d = design()
+    parts = {p["id"] for p in d["parts"]}
+    chosen = []
+    for p in d["parts"]:
+        if not p.get("box") or p.get("kind") == "ball_joint":
+            continue
+        for c in p.get("connects_to", []):
+            if c["to"] not in parts and c["via"] != "ball_joint" and (p["id"], c["to"]) not in {x[:2] for x in chosen}:
+                chosen.append((p["id"], c["to"], c["via"]))
+                break
+        if len(chosen) == 2:
+            break
+    PLACED.clear()
+    for k, (owner, to, via) in enumerate(chosen):
+        cen = np.asarray(next(p for p in d["parts"] if p["id"] == owner)["box"]["center_mm"], dtype=float)
+        at = [round(float(x), 1) for x in cen + np.array([11.0, -7.0, 23.0])]
+        axis = [0.0, 0.6, 0.8] if k == 0 else None
+        PLACED[(owner, to)] = {"at": at, "axis": axis, "via": via}
+        for p in d["parts"]:
+            if p["id"] == owner:
+                for c in p["connects_to"]:
+                    if c["to"] == to and c["via"] == via:
+                        c["at_mm"] = at
+                        if axis:
+                            c["axis"] = axis
+    return d
+
+
+def lab(hexcol):
+    """CIELAB (D65) of a #rrggbb colour."""
+    rgb = [int(hexcol[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    r, g, b = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+    xyz = ((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047, 0.2126 * r + 0.7152 * g + 0.0722 * b, (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883)
+    f = [c ** (1 / 3) if c > 0.008856 else 7.787 * c + 16 / 116 for c in xyz]
+    return np.array([116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])])
+
+
+COLOUR_APART = 25.0  # CIE76 distance a joint mark's colour keeps from every module colour on the same bench
+
+
 def dist_to_box(part, p):
     b = part["box"]
     R = rpy_matrix(b.get("rpy_deg", [0.0, 0.0, 0.0]))
@@ -189,6 +236,15 @@ class JointsBrowserTest(unittest.TestCase):
         for run_id, events in ((JOINTS_RUN, joints_events()), (HAND_RUN, joints_events(hand_design())), (ASM_RUN, asm_events(assembly_events()))):
             (runs / run_id).mkdir(parents=True)
             (runs / run_id / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
+        from tests.web.modules_fixture import RUN_ID as MODULES_RUN, module_events
+        cls.extra = {"place": placed_design(), "ladder": dict(design(), archetype="ladder_4w"), "other": dict(design(), archetype="care_bed")}
+        for name, d in cls.extra.items():
+            (runs / EXTRA_RUNS[name]).mkdir(parents=True)
+            evs = joints_events(d)
+            (runs / EXTRA_RUNS[name] / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in evs), encoding="utf-8")
+        cls.modules_run = MODULES_RUN
+        (runs / MODULES_RUN).mkdir(parents=True)
+        (runs / MODULES_RUN / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in module_events()), encoding="utf-8")
         cls.server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, assets=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -295,6 +351,93 @@ class JointsBrowserTest(unittest.TestCase):
             self.assertEqual({m["rule"] for m in mine}, {False}, kind)  # written in the data, not the rule
             ms, through = node_pieces(d, node)
             self.assertEqual(len(mine), len(ms) - len(through) if kind == "weld" else 1, kind)
+
+    def test_place_and_axis_from_the_data(self):
+        # connects_to with at_mm: the mark at that point; with axis: along it (contract 070d49c); the
+        # rest placed from the boxes, and the legend counts them (推し量りで置いた N 所)
+        self.assertEqual(len(PLACED), 2)
+        page = self.bench("zu", run=EXTRA_RUNS["place"])
+        got = page.evaluate(SUMMARY)
+        legend = page.evaluate(LEGEND)
+        self.assertEqual(page.errors, [])
+        page.close()
+        for (owner, to), want in PLACED.items():
+            mine = [m for m in got["marks"] if m["source"] == "part" and m["owner"] == owner and m["to"] == to]
+            self.assertEqual(len(mine), 1, owner)
+            m = mine[0]
+            np.testing.assert_allclose(m["at"], want["at"], atol=1e-6)
+            self.assertEqual(m["placed"], "data")
+            if want["axis"]:
+                np.testing.assert_allclose(m["axis"], want["axis"], atol=1e-6)
+                self.assertEqual(m["axisFrom"], "data")
+            else:
+                self.assertEqual(m["axisFrom"], "guess")
+        guessed = sum(1 for m in got["marks"] if m["source"] == "part" and m["placed"] == "guess")
+        self.assertEqual(got["fromData"], 2)
+        self.assertEqual(got["guessed"], guessed)
+        self.assertGreater(guessed, 0)
+        self.assertIn(f"推し量りで置いた {guessed} 所", legend["text"])
+        # the counts do not change with the place
+        self.assertEqual(got["counts"], expected_counts(design())[0])
+
+    def test_frame_rule_by_archetype(self):
+        want, rule = expected_counts(design())
+        self.assertGreater(rule, 0)
+        # ladder_4w: the rule, said as the contract's (ladder_4w の枠の節は溶接)
+        page = self.bench("zu", run=EXTRA_RUNS["ladder"])
+        got, legend = page.evaluate(SUMMARY), page.evaluate(LEGEND)
+        self.assertEqual(page.errors, [])
+        page.close()
+        self.assertEqual((got["frameRule"], got["ruleBasis"], got["unstated"]), (rule, "archetype", 0))
+        self.assertEqual(got["counts"], want)
+        self.assertIn("ladder_4w の型の枠の節は溶接", legend["text"])
+        # another archetype: no rule; the nodes without node.joint have no mark and are counted in a note
+        page = self.bench("zu", run=EXTRA_RUNS["other"])
+        got, legend = page.evaluate(SUMMARY), page.evaluate(LEGEND)
+        self.assertEqual(page.errors, [])
+        page.close()
+        self.assertEqual((got["frameRule"], got["ruleBasis"], got["unstated"]), (0, None, rule))
+        self.assertEqual(sum(1 for m in got["marks"] if m["source"] == "node"), 0)
+        less = dict(want)
+        less["weld"] -= rule
+        self.assertEqual(got["counts"], {k: v for k, v in less.items() if v})
+        self.assertIn(f"枠の節 {rule} 所はつなぎ方がデータに無いので印なし", legend["text"])
+        self.assertNotIn("決まりで溶接", legend["text"])
+        # no archetype (a design made before it was recorded): the rule on every frame node, said so
+        page = self.bench("zu")
+        got, legend = page.evaluate(SUMMARY), page.evaluate(LEGEND)
+        page.close()
+        self.assertEqual((got["frameRule"], got["ruleBasis"]), (rule, "old"))
+        self.assertIn("前の設計なので", legend["text"])
+        # THROUGH_COS in words
+        self.assertIn("一直線に続く同じ断面の 2 本は 1 本の管として、つなぎ目に数えない", legend["text"])
+
+    def test_colours_apart_with_modules(self):
+        # joints and modules on one bench: each drawn joint kind's colour apart from each module colour
+        page = self.open(f"?run={self.modules_run}&tab=bench&pace=0&t=1e6&on=joints,modules")
+        got = page.evaluate("""async () => {
+          const J = await import('/js/joints.js');
+          const P = await import('/js/proposals.js');
+          const s = window.hiraku.bench.joints.summary();
+          // the legend's modules, and package (the layout's: the packager's colour, no parts of its own)
+          const mods = ['package', ...[...document.querySelectorAll('[data-module]')].map((x) => x.dataset.module)];
+          const every = ['package', 'frame', 'suspension', 'steering', 'occupant', 'powertrain', 'body'];
+          return { kinds: Object.fromEntries(Object.keys(s.counts).map((k) => [k, J.kindOf(k).color])),
+                   modules: Object.fromEntries([...new Set(mods)].map((m) => [m, P.moduleColor(m)])),
+                   table: Object.fromEntries(Object.entries(J.JOINT_KINDS).map(([k, v]) => [k, v.color])),
+                   allModules: { ...Object.fromEntries(every.map((m) => [m, P.moduleColor(m)])), outside: P.OUTSIDE_COLOR } };
+        }""")
+        self.assertEqual(page.errors, [])
+        page.close()
+        self.assertIn("pin", got["kinds"])
+        self.assertIn("package", got["modules"])
+        for k, kc in got["kinds"].items():
+            for m, mc in got["modules"].items():
+                self.assertGreaterEqual(float(np.linalg.norm(lab(kc) - lab(mc))), COLOUR_APART, (k, kc, m, mc))
+        # and every kind of the table against every module colour and the red of a part outside its space
+        for k, kc in got["table"].items():
+            for m, mc in got["allModules"].items():
+                self.assertGreaterEqual(float(np.linalg.norm(lab(kc) - lab(mc))), COLOUR_APART, (k, kc, m, mc))
 
     def test_toggle_brings_them_in_and_out(self):
         page = self.bench("zu", on=False)

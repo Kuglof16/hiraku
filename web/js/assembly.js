@@ -33,7 +33,8 @@ export const FASTEN_JA = { bolt: "ボルト", weld: "溶接", rest: "載せる",
 const CURRENT = "#e9893a";
 const NG = "#c8402a";
 const PATH = "#2b59c3";
-const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#8e6bbf" };
+// pin: joints.js's pin colour, not #8e6bbf (the packager's module colour on A7's 3D, proposals.js)
+const FASTEN_COLOR = { bolt: "#1d1d1f", weld: "#c8402a", rest: "#6b665c", pin: "#1d1d9e" };
 // Parts that are not built into the vehicle (people and their load): not drawn on the bench.
 const NOT_BUILT = new Set(["occupant", "cargo"]);
 

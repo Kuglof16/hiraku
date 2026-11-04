@@ -58,6 +58,19 @@ def plain_events() -> list[dict]:
     return out
 
 
+NAMED = "20261104-210200-named"  # the module record with design.variable_names on every version
+NAMES = {"front_spring_rate": "前輪側コイルばねのレート", "rail_t": "縦レールの肉厚"}
+
+
+def named_events() -> list[dict]:
+    """The module record with variable_names (two of the changed variables) on every design."""
+    out = module_events()
+    for e in out:
+        if e["kind"] == "design.created":
+            e["data"]["variable_names"] = dict(NAMES)
+    return out
+
+
 class ModuleRecordTest(unittest.TestCase):
     def test_record_passes_the_schema(self):
         events = module_events()
@@ -81,6 +94,7 @@ class ModulesBrowserTest(unittest.TestCase):
         cls.tmp = Path(tempfile.mkdtemp())
         write_run(cls.tmp / "runs", RUN_ID, module_events())
         write_run(cls.tmp / "runs", PLAIN, plain_events())
+        write_run(cls.tmp / "runs", NAMED, named_events())
         cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -172,6 +186,23 @@ class ModulesBrowserTest(unittest.TestCase):
         head = page.locator("#grid-head [data-built]").inner_text()
         self.assertIn("2 つの提案", head)
         self.assertIn("枠 レールの板厚 2.3 → 3.2 mm", head)
+
+    def test_variable_names_from_the_design(self):
+        # design.variable_names (contract b615e2c) first, then the screen's table (labels.js
+        # VARIABLE_JA), then the variable's id
+        page = self.open(f"run={NAMED}&tab=bench&pace=0&pets=0&t={T_PENDING}")
+        text = page.locator("#roundcard").inner_text()
+        self.assertIn(NAMES["front_spring_rate"], text)
+        self.assertNotIn("前のばねの固さ", text)
+        page = self.open(f"run={NAMED}&tab=grid&pace=0&pets=0&t=1e6")
+        self.assertIn(f"枠 {NAMES['rail_t']} 2.3 → 3.2 mm", page.locator("#grid-head [data-built]").inner_text())
+        got = page.evaluate("""async () => {
+          const P = await import('/js/proposals.js');
+          const chg = { changes: { rail_t: { value: 3, unit: 'mm' }, no_such_variable: { value: 2, unit: 'mm' } } };
+          return [P.changeWords(chg, { variable_names: { rail_t: '型が付けた名前' } }), P.changeWords(chg, {})];
+        }""")
+        self.assertEqual(got[0], ["型が付けた名前を 3 mm に", "no_such_variableを 2 mm に"])
+        self.assertEqual(got[1], ["レールの板厚を 3 mm に", "no_such_variableを 2 mm に"])
 
     def test_same_picture_at_t(self):
         q = f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_PENDING}&on=modules,spaces"

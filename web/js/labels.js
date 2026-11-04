@@ -341,6 +341,14 @@ const VARIABLE_JA = {
   max_steer_angle: "最大の舵角",
 };
 
+// A design variable's name for viewers: design.variable_names (written by the generator,
+// contract b615e2c) when it names it, else VARIABLE_JA; null when neither does.
+export function variableName(name, design = null) {
+  const own = design?.variable_names?.[name];
+  if (typeof own === "string" && own.trim()) return own;
+  return VARIABLE_JA[name] ?? null;
+}
+
 // modules: module id -> name (filled from the server's /api/modules, the contract's MODULE_NAMES_JA;
 // empty when the server has no such route: the id is shown as written)
 export const MODULE_JA = {};
@@ -354,7 +362,8 @@ const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
 // design, before any bracket); null when it has no name here.
 export function designNumberName(path, design = null) {
   const p = String(path ?? "").split(".");
-  if (p[0] === "variables") return VARIABLE_JA[p[1]] ?? null;
+  // a variable: the design's own name for it (design.variable_names, contract b615e2c), else this table
+  if (p[0] === "variables") return variableName(p[1], design);
   if (p[0] === "sections" && p.at(-2) === "dims_mm") return DIM_JA[p.at(-1)] ? `フレームの管の${DIM_JA[p.at(-1)]}` : null;
   if (p[0] === "parts" && PART_FIELD_JA[p.at(-1)]) {
     const part = (design?.parts ?? []).find((x) => x.id === p[1]);
