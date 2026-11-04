@@ -9,8 +9,10 @@
 <script src="layout.data.js"></script>
 <script src="layout.js" data-cut="n05"></script>
 <style>
-  /* N05: the vehicle stands in front of a closed double door that fills the
-     screen, with warm light in the door's seam. The door stays shut a while
+  /* N05: the vehicle gathers from a cloud of small lights (the nodes of its
+     mesh and points on its outline) in front of a closed double door that
+     fills the screen, with warm light in the door's seam; once the points
+     are in, its picture fades in. The door stays shut a while
      (the light grows, the vehicle comes slowly closer and a triangle mesh
      shows over it); a bolt slides back and the leaves jolt, the seam light
      flickers; the leaves part a little, run past and settle like heavy doors,
@@ -33,7 +35,7 @@
      layout.json n05.hero.src, else the line drawing of vehicle.js.
      Placement and times: layout.json n05 (CSS variables from layout.js;
      --t-* from n05.times, --door-* from n05.door, --rays-*, --dust-*,
-     --bloom-*, --hero-mesh-*, --tile-fx-*, --name-wipe-* from the groups of
+     --bloom-*, --hero-mesh-*, --hero-points-*, --tile-fx-*, --name-wipe-* from the groups of
      the same names); the tiles are placed on the cells of
      promoLayout.gridCells(n05.grid). Shafts, motes and the mesh are made by
      the script below from seeded random numbers (the same seed, the same
@@ -48,6 +50,7 @@
     --dolly-scale: 1;
     --rays-peak: 0.5;
     --bloom-peak: 0.4;
+    --points-start: 0.35;
     /* the name's measured extent (design px), refined by the script */
     --wipe-x0: calc(480 * var(--u));
     --wipe-x1: calc(1440 * var(--u));
@@ -543,6 +546,27 @@
     animation-delay: var(--k);
   }
   .wire polygon { animation-name: line-out; }
+  /* the vehicle gathers from a cloud of nodes (n05.hero_points): each point
+     comes in from its seeded place to a mesh node or the outline, then the
+     picture fades in and the points hand over to the mesh lines */
+  .hero .pic {
+    animation: pic-in var(--hero-points-hero-in-dur) ease-out both;
+    animation-delay: var(--t-hero-in);
+  }
+  @keyframes pic-in { from { opacity: 0; } to { opacity: 1; } }
+  .hero svg.pts {
+    animation: pts-out var(--hero-points-fade-dur) ease-in forwards;
+    animation-delay: var(--t-points-out);
+  }
+  @keyframes pts-out { from { opacity: 1; } to { opacity: 0; } }
+  .pts circle {
+    animation: pt-gather var(--hero-points-gather-dur) var(--hero-points-ease) both;
+    animation-delay: var(--pd);
+  }
+  @keyframes pt-gather {
+    from { transform: translate(calc(var(--px) * 1px), calc(var(--py) * 1px)); opacity: var(--points-start); }
+    to   { transform: none; opacity: 1; }
+  }
   @keyframes el-out {
     from { opacity: 1; transform: scale(1); }
     to   { opacity: 0; transform: scale(var(--hero-mesh-end-scale)); }
@@ -565,8 +589,14 @@
     overflow: hidden;
     animation: tile-in var(--t-tile-in) var(--ease-tile) both;
     animation-delay: calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger));
-    /* the test loop inside starts once the tile has landed (tests.css) */
-    --t0: calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger) + var(--t-tile-in));
+    /* the test loop inside starts once the tile has landed (tests.css) and
+       the title has settled: the tag line is in (its 0.7 s fade-up,
+       title.css) and the name has cooled after its wipe (name_wipe). The
+       drawings hold still while the title comes up, so they do not pull the
+       eye from it */
+    --t0: max(calc(var(--t-tiles) + var(--d) * var(--t-tile-stagger) + var(--t-tile-in)),
+              calc(var(--t-tag) + 0.7s),
+              calc(var(--t-name) + var(--name-wipe-wipe-dur) + var(--name-wipe-afterglow-dur)));
   }
   @keyframes tile-in {
     from {
@@ -748,6 +778,22 @@
     75%  { opacity: 1; }
     100% { opacity: 0; }
   }
+
+  /* what CAE is, in small type under the tag line (n05.title.gloss) */
+  .gloss {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--title-gloss-y);
+    margin: 0;
+    text-align: center;
+    font: 400 var(--title-gloss-size-px) / 1.2 var(--font-ja);
+    letter-spacing: 0.04em;
+    color: var(--on-night-soft);
+    white-space: nowrap;
+    animation: fade-up 0.6s ease-out both;
+    animation-delay: var(--t-gloss);
+  }
 </style>
 </head>
 <body data-duration="5">
@@ -787,6 +833,7 @@
     <div class="name-sweep"></div>
     <h1 class="name" aria-label="HIRAKU" data-box="n05.title.name"></h1>
     <p class="tag" data-box="n05.title.tag">CAE を、すべての作り手へ拓く。</p>
+    <p class="gloss" data-box="n05.title.gloss"></p>
   </div>
   <div class="guide-band"></div>
   <div class="clock"></div>
@@ -798,6 +845,7 @@
   // [name, key, svg] from tests.js. Each tile loops a line drawing of how its
   // test is run (tests.js, tests.css); it shows no result.
   const { gridCells, boxStyle, cutRules, rules: LAYOUT } = window.promoLayout;
+  document.querySelector(".gloss").textContent = cutRules.title.gloss.text;
   const R = cutRules;
   const root = document.documentElement.style;
   const TESTS = R.tests.map((key) => {
@@ -825,6 +873,7 @@
   root.setProperty("--dolly-scale", String(P / (P - R.door.dolly_px)));
   root.setProperty("--rays-peak", String(R.rays.peak_alpha));
   root.setProperty("--bloom-peak", String(R.bloom.peak_alpha));
+  root.setProperty("--points-start", String(R.hero_points.start_alpha));
 
   function tileArt([, , art]) {
     return `<svg class="art" viewBox="0 0 400 170" preserveAspectRatio="xMidYMid meet">${art}</svg>`;
@@ -842,7 +891,7 @@
   grid.innerHTML = tiles.map((t) =>
     `<div class="tile t-${t.test[1]}" data-box="n05.tile.${t.test[1]}"
           style="${boxStyle(t.cell)};--dx:${t.dx};--dy:${t.dy};--d:${order.indexOf(t)}">
-       ${tileArt(t.test)}<b data-box="n05.tile.${t.test[1]}.label">${t.test[0]}</b></div>`).join("");
+       ${tileArt(t.test)}<b data-box="n05.tile.${t.test[1]}.label" data-kind="label">${t.test[0]}</b></div>`).join("");
 
   // Trails and landing glows (n05.tile_fx), on the same cells, start times
   // and flight as the tiles. A tile has landed when its eased flight first
@@ -942,8 +991,10 @@
   // painted differently when the same t was shot twice), so they show on the
   // vehicle only; the picture is masked by the triangles, so each element
   // takes its piece with it.
-  function meshedPicture(src) {
-    const M = R.hero_mesh, rnd = seeded(M.seed);
+  // The mesh's nodes, rows of [x, y] in the hero box's design px. rnd is the
+  // mesh's seeded stream; the nodes take its first numbers.
+  function meshNodes(rnd) {
+    const M = R.hero_mesh;
     const W = R.hero.w, H = R.hero.h, s = M.size_px, rowH = s * Math.sqrt(3) / 2;
     const rows = Math.ceil(H / rowH), cols = Math.ceil(W / s) + 1;
     const node = [];
@@ -959,6 +1010,83 @@
       }
       node.push(line);
     }
+    return { node, rows, cols };
+  }
+
+  // Where the picture is (n05.hero_points.mask): set(c, r) for a cell.
+  function heroMask() {
+    const K = R.hero_points.mask;
+    const bits = K.rows_hex.map((h) => [...h].map((d) => parseInt(d, 16).toString(2).padStart(4, "0")).join(""));
+    const set = (c, r) => r >= 0 && r < K.rows && c >= 0 && c < K.cols && bits[r][c] === "1";
+    return { set, cell: K.cell_px, cols: K.cols, rows: K.rows };
+  }
+
+  // The cloud of points the vehicle gathers from (n05.hero_points): mesh
+  // nodes on the picture, and points on its outline; each with a seeded
+  // starting offset and delay.
+  function heroPoints() {
+    const P = R.hero_points, rnd = seeded(P.seed);
+    const mask = heroMask(), cs = mask.cell;
+    const { node } = meshNodes(seeded(R.hero_mesh.seed));
+    const pts = [];
+    for (const line of node) {
+      for (const [x, y] of line) {
+        if (mask.set(Math.floor(x / cs), Math.floor(y / cs))) pts.push({ x, y, r: P.node_dot_px, node: true });
+      }
+    }
+    for (let r = 0; r < mask.rows; r++) {
+      for (let c = 0; c < mask.cols; c++) {
+        if (!mask.set(c, r)) continue;
+        const edge = !mask.set(c - 1, r) || !mask.set(c + 1, r) || !mask.set(c, r - 1) || !mask.set(c, r + 1);
+        if (!edge) continue;
+        const keep = rnd(), jx = rnd(), jy = rnd();
+        if (keep >= P.outline_keep) continue;
+        pts.push({ x: (c + 0.5 + (jx - 0.5) * 2 * P.jitter) * cs,
+                   y: (r + 0.5 + (jy - 0.5) * 2 * P.jitter) * cs, r: P.dot_px, node: false });
+      }
+    }
+    // starting places on the stage and above the subtitle band (stage px =
+    // hero box px + the box's corner; the push scale at 0 s is 1). A place
+    // outside is drawn again (up to 8 times, then the distance is halved
+    // until it fits), so no points pile up along the edges.
+    const S = LAYOUT.stage, band = LAYOUT.subtitle_band.y, m = P.margin_px;
+    const hx = R.hero.x, hy = R.hero.y;
+    const inside = (x, y) => x >= m && x <= S.w - m && y >= m && y <= band - m;
+    for (const p of pts) {
+      const x0 = hx + p.x, y0 = hy + p.y;
+      let dx = 0, dy = 0;
+      for (let k = 0; k < 8; k++) {
+        const ang = rnd() * 2 * Math.PI;
+        let d = lerp(P.scatter_min_px, P.scatter_max_px, Math.sqrt(rnd()));
+        if (k === 7) while (d > 1 && !inside(x0 + Math.cos(ang) * d, y0 + Math.sin(ang) * d)) d /= 2;
+        dx = Math.cos(ang) * d;
+        dy = Math.sin(ang) * d;
+        if (inside(x0 + dx, y0 + dy)) break;
+      }
+      p.dx = dx;
+      p.dy = dy;
+      p.delay = R.times.points_s + rnd() * P.stagger_s;
+    }
+    return pts;
+  }
+
+  function pointsSvg() {
+    const W = R.hero.w, H = R.hero.h;
+    const dots = heroPoints().map((p) =>
+      `<circle cx="${f3(p.x)}" cy="${f3(p.y)}" r="${p.r}" fill="url(#pt-g)"
+               style="--px:${f3(p.dx)};--py:${f3(p.dy)};--pd:${f3(p.delay)}s"/>`).join("");
+    return `<svg class="pts" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+      <defs><radialGradient id="pt-g">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="1"/>
+        <stop offset="0.3" stop-color="#fffaf0" stop-opacity="0.95"/>
+        <stop offset="0.6" stop-color="#f6ead0" stop-opacity="0.45"/>
+        <stop offset="1" stop-color="#f6ead0" stop-opacity="0"/></radialGradient></defs>${dots}</svg>`;
+  }
+
+  function meshedPicture(src) {
+    const M = R.hero_mesh, rnd = seeded(M.seed);
+    const W = R.hero.w, H = R.hero.h;
+    const { node, rows, cols } = meshNodes(rnd);
     // element start: from the light's point outwards, plus a seeded jitter
     const ox = from.x - R.hero.x, oy = from.y - R.hero.y;
     const tris = [];
@@ -989,9 +1117,9 @@
           <feImage ${img} result="veh"/>
           <feComposite in="SourceGraphic" in2="veh" operator="in"/></filter>
       </defs>
-      <image ${img} mask="url(#mesh-cells)"/>
+      <g class="pic"><image ${img} mask="url(#mesh-cells)"/></g>
       <g filter="url(#mesh-veh)"><g class="wire" stroke-width="${M.line_px}" style="--lw:${M.line_px}px">${all}</g></g>
-    </svg>`;
+    </svg>${pointsSvg()}`;
   }
 
   document.querySelector(".name").innerHTML = [..."HIRAKU"]

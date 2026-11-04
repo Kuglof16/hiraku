@@ -37,8 +37,11 @@ class ModalTest(unittest.TestCase):
 
         d = on_board(DESIGN, "two_cargo")
         r = modes(d, 6)
-        i = next(k for k, x in enumerate(r["flexibility"]) if x >= 0.3)
-        u = r["shapes"][i]
+        # the ladder's own bending (the roll bar's sway, on by default, bends the hoop and leaves the ladder as it is)
+        i = next(k for k, x in enumerate(r["ladder_flexibility"]) if x >= 0.3)
+        from hiraku.solvers.k1_frame.modal import ladder_nodes
+
+        u = {n: r["shapes"][i][n] for n in ladder_nodes(d, list(r["shapes"][i]))}  # the ladder's nodes
         self.assertLess(max(abs(v[0]) for v in u.values()), 0.25 * max(abs(v[2]) for v in u.values()))
         self.assertLess(u["LE"][2] * u["RE"][2], 0.0)  # the rear corners move opposite ways
         hand = solvers.formula_registry().evaluate("modal.ladder_twist_mode", ladder_twist_inputs(d)["inputs"])
@@ -50,9 +53,19 @@ class ModalTest(unittest.TestCase):
         s = next(x for x in rec["series"] if x["channel"].startswith("frequency_response."))
         self.assertEqual((s["x"]["quantity"], s["x"]["unit"], len(s["x"]["values"])), ("frequency", "Hz", len(s["values"])))
         self.assertAlmostEqual(s["values"][0], 1.0, places=4)  # over its value at 0 Hz
-        peak = s["x"]["values"][max(range(len(s["values"])), key=s["values"].__getitem__)]
-        body = results(rec)["first_body_mode"]["value"]
-        self.assertLess(abs(peak - body) / body, 0.15)  # the body bouncing on its springs dominates the seat
+        xs, vs = s["x"]["values"], s["values"]
+        peak = xs[max(range(len(vs)), key=vs.__getitem__)]
+        # the peak is at one of the modes. On the demo (wheelbase 2020 mm, suspension towers) the response has two
+        # nearly equal peaks: the body bouncing on its springs (about 1.5 Hz) and the frame's first mode near 9 Hz.
+        # Which one is higher has flipped with small changes (with the plates of their real thickness, 318ea65, the
+        # seat 16.8 mm lower: 1.697 at 1.48 Hz against 1.687 at 8.93 Hz; before it, 1.651 against 1.749), so the
+        # test asks for a local peak at the frame's first mode, not for the highest one
+        r = results(rec)
+        modes_hz = [r[k]["value"] for k in r if k.startswith("mode_")]
+        self.assertLess(min(abs(peak - f) / f for f in modes_hz), 0.15)
+        local = [xs[j] for j in range(1, len(vs) - 1) if vs[j] > vs[j - 1] and vs[j] >= vs[j + 1]]
+        f1 = r["first_frame_mode"]["value"]
+        self.assertLess(min(abs(x - f1) / f1 for x in local), 0.15)
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
 
     def test_ladder_twist_formula(self):

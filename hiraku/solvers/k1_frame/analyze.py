@@ -13,10 +13,21 @@ Two ways to hold the frame:
 
 Ground forces are reported as vectors of kind "reaction" (normal) and "grip"
 (along the ground); the two together are the whole force at a support.
+
+Or mount loads (free): the forces the body receives at the suspension mounts
+(K2's mount series, in the body's axes) take the place of the ground forces,
+each at its hard point, carried into the frame where the design takes it
+(mount_carriers: a frame node at the point, such as a tower's top; the nodes
+a bracket part holding the point is welded to; else the support's wheel node
+as the ground forces), with a moment per support (a drive or brake reacting
+on the body) at the wheel node. The unsprung parts are inside those
+forces, so only the sprung masses are loaded (sprung_items: K2's split of
+the parts by kind), and gravity may come tilted.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import numpy as np
@@ -24,10 +35,70 @@ import numpy as np
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from ..k0_handcalc.vehicle import (DesignError, inertia_tensor, mass_summary, resultant, support_contact,
                                    support_loads)
-from .model import FrameModel, build
+from .model import FrameModel, build, stress_dims
 
 BALANCE_TOL = 0.01  # given ground forces must balance the weight (and given inertia) to this fraction; another
 #                     loading or design version is far outside it, small bookkeeping differences go to inertia relief
+
+
+MOUNT_TOL_MM = 1.0  # a hard point this close to a design node, or to a bracket's box, is on it
+
+
+def mount_carriers(design: dict) -> dict[str, dict[str, list[str]]]:
+    """{support: {mount: frame nodes}} for each support's suspension.hardpoints_mm: the design node at the point
+    (within MOUNT_TOL_MM; a tower's top), else the carried_by nodes of the part of kind bracket whose box holds
+    the point, else [] (the force goes in at the support's wheel mount)."""
+    from ..k0_handcalc.rigid import rpy_matrix
+
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    used = {m[k] for m in design.get("members", []) for k in ("node_a", "node_b")}
+    brackets = []
+    for p in design.get("parts", []):
+        if str(p.get("kind", "")).lower() == "bracket" and p.get("carried_by"):
+            b = p["box"]
+            R = rpy_matrix(b["rpy_deg"]) if b.get("rpy_deg") else np.eye(3)
+            brackets.append((p, np.asarray(b["center_mm"], float), R, np.asarray(b["size_mm"], float) / 2.0))
+    out: dict[str, dict[str, list[str]]] = {}
+    for s in design.get("supports", []):
+        got = {}
+        for mount, xyz in ((s.get("suspension") or {}).get("hardpoints_mm") or {}).items():
+            q = np.asarray(xyz, float)
+            at = [n for n in used if n in nodes and float(np.linalg.norm(nodes[n] - q)) <= MOUNT_TOL_MM]
+            if at:
+                got[mount] = at[:1]
+                continue
+            held = [p for p, c, R, h in brackets if np.all(np.abs(R.T @ (q - c)) <= h + MOUNT_TOL_MM)]
+            got[mount] = list(held[0]["carried_by"]) if held else []
+        out[s["id"]] = got
+    return out
+
+
+def mount_share(force, point, nodes_xyz: list) -> list[tuple[np.ndarray, np.ndarray]]:
+    """(force, moment about the node) for each of the nodes a mount's force (at point) is shared over: equal
+    forces and the moment of the point's offset from their centroid shared equally (as the parts)."""
+    f, p = np.asarray(force, float), np.asarray(point, float)
+    k = len(nodes_xyz)
+    c = sum(np.asarray(x, float) for x in nodes_xyz) / k
+    m = np.cross(p - c, f)
+    return [(f / k, m / k)] * k
+
+
+def sprung_items(design: dict, items: list) -> list:
+    """The mass items the body carries as K2 splits them (k2_vehicle.model): parts of a wheel kind are
+    unsprung, parts of a suspension kind half sprung (half their mass and inertia, where they are)."""
+    from ..k2_vehicle.model import HALF_UNSPRUNG_KINDS, UNSPRUNG_KINDS
+
+    kind = {f"part:{p['id']}": str(p.get("kind", "")).lower() for p in design.get("parts", [])}
+    out = []
+    for it in items:
+        k = kind.get(it.id, "")
+        if k in UNSPRUNG_KINDS:
+            continue
+        if k in HALF_UNSPRUNG_KINDS:
+            it = dataclasses.replace(it, mass_kg=0.5 * it.mass_kg,
+                                     inertia_kg_mm2=None if it.inertia_kg_mm2 is None else 0.5 * it.inertia_kg_mm2)
+        out.append(it)
+    return out
 
 
 def _split(point, force, contact: str) -> list[tuple[str, np.ndarray, np.ndarray]]:
@@ -44,7 +115,8 @@ def _split(point, force, contact: str) -> list[tuple[str, np.ndarray, np.ndarray
 
 def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
             step_supports: list[str] | None = None, ground_forces: dict | None = None,
-            inertia_N: np.ndarray | None = None, node_loads: list | None = None) -> dict:
+            inertia_N: np.ndarray | None = None, node_loads: list | None = None,
+            mount_loads: dict | None = None, gravity_mps2=None) -> dict:
     """Solve the frame.
 
     ground_forces: {support id: [(kind, point_mm, force_N), ...]} from an
@@ -54,17 +126,39 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
     compute the step forces, and without either the frame stands at rest.
     node_loads: [(frame node, point_mm, force_N), ...] other external forces
     (e.g. a wall); they are part of the balance, so give inertia_N with them.
+    mount_loads {support: {"vectors": [(mount, point_mm, force_N)], "moment_Nmm": (3,)}}: the forces
+    the body receives at its suspension mounts (named as in hardpoints_mm, carried in by mount_carriers),
+    in place of the ground forces (only the sprung masses are loaded, sprung_items); gravity_mps2: gravity in the body's axes (default straight down, times g_factor).
     """
     summ = mass_summary(design)
     items = summ["items"]
     fm = build(design)
-    weight = summ["mass_kg"] * STANDARD_GRAVITY * g_factor
-    cg = summ["cg_mm"]
+    gvec = (np.array([0.0, 0.0, -STANDARD_GRAVITY * g_factor]) if gravity_mps2 is None
+            else np.asarray(gravity_mps2, float))
+    if mount_loads is not None:
+        items = sprung_items(design, items)
+        m_body = sum(it.mass_kg for it in items)
+        cg = sum(it.mass_kg * it.cg_mm for it in items) / m_body
+    else:
+        m_body = summ["mass_kg"]
+        cg = summ["cg_mm"]
+    weight = (summ["mass_kg"] * STANDARD_GRAVITY * g_factor if mount_loads is None and gravity_mps2 is None
+              else m_body * float(np.linalg.norm(gvec)))
     ground: dict[str, dict] = {}
     statics = None
     accel = np.zeros(3)
     alpha = np.zeros(3)
-    if ground_forces is not None:
+    moments: dict[str, np.ndarray] = {}
+    if mount_loads is not None:
+        missing = [s["id"] for s in design["supports"] if s["id"] not in mount_loads]
+        if missing:
+            raise DesignError(f"the given mount loads have no entry for support(s) {', '.join(missing)}")
+        for sid, ml in mount_loads.items():
+            vs = [(k, np.asarray(p, float), np.asarray(f, float)) for k, p, f in ml["vectors"]]
+            ground[sid] = {"point_mm": vs[0][1] if vs else np.zeros(3),
+                           "force_N": sum((f for _, _, f in vs), np.zeros(3)), "vectors": vs}
+            moments[sid] = np.asarray(ml.get("moment_Nmm", np.zeros(3)), float)
+    elif ground_forces is not None:
         missing = [s["id"] for s in design["supports"] if s["id"] not in ground_forces]
         if missing:
             raise DesignError(f"the given ground forces have no entry for support(s) {', '.join(missing)}")
@@ -93,8 +187,10 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
             if n not in fm.model.nodes:
                 raise DesignError(f"a load is put on node {n!r}, which is not in the frame")
         pairs = [(p, f) for g in ground.values() for _, p, f in g["vectors"]] + [(p, f) for _, p, f in extra]
-        weights = [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor])) for it in items]
+        weights = [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY * g_factor]) if gravity_mps2 is None
+                    else it.mass_kg * gvec) for it in items]
         F, M = resultant(pairs + weights)
+        M = M + sum(moments.values(), np.zeros(3))
         M_cg = M - np.cross(cg, F)
         span = max(float(np.ptp([s["position_mm"][0] for s in design["supports"]])), 1.0)
         if inertia_N is None:
@@ -107,12 +203,25 @@ def analyze(design: dict, g_factor: float = 1.0, step_mm: float | None = None,
             raise DesignError(
                 f"the ground forces passed in do not balance {what} of this design (off by {off:.1%} of the weight); "
                 f"they were probably computed for another loading or design version, so analyse them with the same loading")
-        accel = F / summ["mass_kg"]  # m/s^2
+        accel = F / m_body  # m/s^2
         alpha = np.linalg.solve(inertia_tensor(items, cg), M_cg) * 1e3  # (N*mm)/(kg*mm^2) -> rad/s^2
-        fm.add_gravity(items, g_factor)
+        if gravity_mps2 is None:
+            fm.add_gravity(items, g_factor)
+        else:
+            fm.add_body_loads(items, gvec)
+        carriers = mount_carriers(design) if mount_loads is not None else {}
         for sid, g in ground.items():
-            for _, p, f in g["vectors"]:
-                fm.add_force_at(fm.wheel_nodes[sid], p, f)
+            for kind, p, f in g["vectors"]:
+                at = carriers.get(sid, {}).get(kind) or []
+                if len(at) == 1:
+                    fm.add_force_at(at[0], p, f)
+                elif at:
+                    for n, (fn, mn) in zip(at, mount_share(f, p, [fm.node_xyz(n) for n in at])):
+                        fm.add_force(n, fn, mn)
+                else:
+                    fm.add_force_at(fm.wheel_nodes[sid], p, f)
+            if np.any(moments.get(sid, 0.0)):
+                fm.add_force(fm.wheel_nodes[sid], np.zeros(3), moments[sid])
         for n, p, f in extra:
             fm.add_force_at(n, p, f)
         if np.any(accel != 0) or np.any(alpha != 0):
@@ -173,6 +282,7 @@ def stress_terms(result: dict) -> list[dict]:
     mid = result["worst_member"]
     st = result["stresses"][mid]
     p = fm.props[mid]["section"]
+    stress_dims(p, mid)
     parts = {"axial": abs(st["N"]) / p["A"]}
     if p["round"]:
         parts["bending"] = math.hypot(st["My"], st["Mz"]) * p["cy"] / p["Iz"]

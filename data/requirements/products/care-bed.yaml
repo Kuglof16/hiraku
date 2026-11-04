@@ -2,13 +2,16 @@
 # (actuators), strength (by count of uses), nvh (noise) and thermal (duty).
 # Shape: hiraku.contract "requirements_file". trust: 1 primary, 2 secondary, 3 assumption.
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository. The required answers (Q30, Q40) are in care-bed.answers.yaml.
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source at the place named, in a source check on that date. "tried 2026-11-03 ... not reachable" =
+# the check could not reach the value. The required answers (Q30, Q40) are in care-bed.answers.yaml.
 # JIS T 9254 here means the copy at https://kikakurui.com/t9/T9254-2009-01.html (the page title says 2009,
 # the body is the 2015 edition); a copy is a secondary source.
 
 want: 在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)
 product: care-bed
 speed_class: static
+default_loading: driver  # one person lies on the bed; no cargo
 flags:
   lean: true       # 預: a person lies and sits on it
   electric: true   # 電: actuators
@@ -31,20 +34,25 @@ requirements:
     trust: 1
     basis: >-
       LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う),
-      https://media.distrelec.com/Web/Downloads/14/22/05451422.pdf (not checked in this repository)
+      LINAK LA31 datasheet, https://media.distrelec.com/Web/Downloads/14/22/05451422.pdf;
+      read 2026-11-03 in a source check
     note: 低い端は +5 degC
   - key: Q20
     name: 水・ほこり
     value: IPX4
     source: default
     trust: 2
-    basis: JIS T 9254 (copy), https://kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)
+    basis: >-
+      JIS T 9254 (copy): IPX4, 6.1 g, https://kikakurui.com/t9/T9254-2009-01.html;
+      read 2026-11-03 in a source check
   - key: Q31
     name: 体格の範囲
     value: 高齢女性 5 % 〜 若年男性 95 %
     source: default
     trust: 1
-    basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+    basis: >-
+      AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
+      (not checked in this repository; tried 2026-11-03: the AIST page is a list only; not reachable)
   - key: Q33
     name: 体重 (強さの不利側)
     value: 1350
@@ -52,8 +60,8 @@ requirements:
     source: default
     trust: 2
     basis: >-
-      JIS T 9254 (copy): 利用者の荷重 1350 N (約 138 kg), https://kikakurui.com/t9/T9254-2009-01.html
-      (not checked in this repository)
+      JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), 9.2.1 a, https://kikakurui.com/t9/T9254-2009-01.html;
+      read 2026-11-03 in a source check
   - key: Q34
     name: 弱い人がいるか
     value: 高齢者
@@ -67,8 +75,8 @@ requirements:
     source: default
     trust: 2
     basis: >-
-      JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, https://kikakurui.com/t9/T9254-2009-01.html
-      (not checked in this repository)
+      JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https://kikakurui.com/t9/T9254-2009-01.html;
+      read 2026-11-03 in a source check
   - key: Q60
     name: 静的に倒れない限界 (側端にかける力)
     value: 1350
@@ -76,8 +84,8 @@ requirements:
     source: default
     trust: 2
     basis: >-
-      JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, https://kikakurui.com/t9/T9254-2009-01.html
-      (not checked in this repository)
+      JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, 9.3 a, https://kikakurui.com/t9/T9254-2009-01.html;
+      read 2026-11-03 in a source check
   - key: Q61
     name: 安全率 (摩耗・疲労する部品)
     value: 4
@@ -85,8 +93,8 @@ requirements:
     source: default
     trust: 2
     basis: >-
-      JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, https://kikakurui.com/t9/T9254-2009-01.html
-      (not checked in this repository)
+      JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, 8.1.1, https://kikakurui.com/t9/T9254-2009-01.html;
+      read 2026-11-03 in a source check
   - key: Q63
     name: 挟み込みの隙間
     value: JIS T 9254 の型と FDA の区分 (Zone 1-4)
@@ -94,14 +102,20 @@ requirements:
     trust: 2
     basis: >-
       JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006),
-      https://www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf
-      (not checked in this repository)
+      https://www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf.
+      The FDA zones: FDA guidance, read 2026-11-03 in a source check (the address above returned HTTP 404 when
+      tried again the same day, so the zones were not re-read from it). JIS T 9254:2015 (the copy at
+      https://kikakurui.com/t9/T9254-2009-01.html), figures 3 and 4: the probes are a neck of 60 mm, a chest of
+      318 mm and a head of 120 mm, applied with the bottom flat and the side rails at their highest; read
+      2026-11-03
   - key: Q72
     name: なぞる規格
     value: JIS T 9254・FDA
     source: default
     trust: 2
-    basis: catalog research (not checked in this repository)
+    basis: >-
+      catalog research (not checked in this repository; tried 2026-11-03: the basis has no URL;
+      not reachable)
   - key: Q80
     name: 材料と接合
     value: 鋼
@@ -127,4 +141,5 @@ requirements:
     trust: 2
     basis: >-
       JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された),
-      https://kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)
+      9.5 c, 9.8 c, 9.7.2 c, 9.4 a 1, https://kikakurui.com/t9/T9254-2009-01.html;
+      read 2026-11-03 in a source check

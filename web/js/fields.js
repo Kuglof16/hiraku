@@ -4,8 +4,10 @@
 // case's criterion limit when it has the field's unit, else the field's own
 // range); nothing here makes a new value to show.
 
-export const FIELD_ORDER = ["stress", "damage", "temperature", "mode_shape", "displacement"];
-export const FIELD_JA = { stress: "応力", damage: "疲労度", temperature: "温度", mode_shape: "モードの形", displacement: "変位" };
+// error_estimate: the estimated discretisation error of the stress per element (%), coloured from 0
+// like a stress, showing where the mesh should be finer.
+export const FIELD_ORDER = ["stress", "damage", "temperature", "mode_shape", "displacement", "error_estimate"];
+export const FIELD_JA = { stress: "応力", damage: "疲労度", temperature: "温度", mode_shape: "モードの形", displacement: "変位", error_estimate: "誤差の目安" };
 // A shell's surfaces. The contract lists mesh elements counter-clockwise seen from the
 // outer side, so the element normal points out and "top" is the outer face.
 export const SURFACE_JA = { top: "外面", mid: "中面", bottom: "内面", max: "外面と内面の大きい方" };
@@ -79,8 +81,10 @@ function upperLimit(field, criterion) {
 export function contourOf(analysis, field, criterion, meshes = null) {
   if (!analysis || !field) return null;
   if (field.mesh_id) return meshContourOf(analysis, field, criterion, meshes?.[field.mesh_id]);
-  const members = numbers(field.per_member);
+  let members = numbers(field.per_member);
   const parts = numbers(field.per_part);
+  const frames = framesOf(field);
+  if (frames && !Object.keys(members).length) members = numbers(frames.list[0]);
   let nodes = numbers(field.per_node);
   let modes = null;
   if (field.kind === "mode_shape" || field.kind === "displacement") {
@@ -92,6 +96,8 @@ export function contourOf(analysis, field, criterion, meshes = null) {
     }
   }
   const all = [...Object.values(members), ...Object.values(nodes), ...Object.values(parts)];
+  // with frames the scale holds every moment, so the colours of two moments compare
+  for (const m of frames?.list ?? []) all.push(...Object.values(numbers(m)));
   if (!all.length) return null;
   const fieldMin = Math.min(...all);
   const fieldMax = Math.max(...all);
@@ -109,7 +115,7 @@ export function contourOf(analysis, field, criterion, meshes = null) {
   const min = field.kind === "temperature" ? fieldMin : Math.min(0, fieldMin);
   let max = limit ?? fieldMax;
   if (!(max > min)) max = min + (Math.abs(min) || 1);
-  const result = (analysis.results ?? []).find((r) => r.where && r.unit === field.unit) ?? null;
+  const result = maxResult(analysis, field, [members, nodes, parts], fieldMax);
   return {
     key: `${analysis.analysis_id}|${field.kind}|${field.label ?? ""}`,
     kind: field.kind,
@@ -129,8 +135,28 @@ export function contourOf(analysis, field, criterion, meshes = null) {
     result,
     analysisId: analysis.analysis_id,
     frequency: field.frequency_Hz ?? null,
+    frames,
   };
 }
+
+// The field's largest value and where it is (the member, node or part holding fieldMax among
+// the values drawn), as the "最大" tag shows it. Null when the drawn values do not hold the
+// field's largest (a field with frames: it is at another moment, see atFrame). A recorded
+// result names it only when it is that value of this field: same unit, same place, same value.
+// A mode shape has none (its values are a shape relative to its largest, not a result).
+function maxResult(analysis, field, groups, fieldMax) {
+  if (field.kind === "mode_shape") return null;
+  let where;
+  for (const g of groups) {
+    where = Object.keys(g).find((k) => g[k] === fieldMax);
+    if (where !== undefined) break;
+  }
+  if (where === undefined) return null;
+  const rec = (analysis.results ?? []).find((r) => r.unit === field.unit && r.where === where && sameValue(r.value, fieldMax));
+  return { quantity: rec?.quantity ?? field.kind, value: fieldMax, unit: field.unit, where };
+}
+
+const sameValue = (a, b) => typeof a === "number" && Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
 
 // Whether a part's value is over its allowable value: its own limit when the contour holds
 // one part to the criterion, else the scale's top when that is the allowable value.
@@ -147,7 +173,8 @@ function meshContourOf(analysis, field, criterion, mesh) {
   if (!mesh) return null; // the mesh record has not come (yet)
   const nEl = mesh.elements.length;
   const nNode = mesh.nodes_mm.length;
-  const elem = Array.isArray(field.per_element) && field.per_element.length === nEl ? field.per_element : null;
+  const frames = framesOf(field, nEl);
+  const elem = Array.isArray(field.per_element) && field.per_element.length === nEl ? field.per_element : frames?.list[0] ?? null;
   let node = null;
   let modes = null;
   const pn = field.per_mesh_node;
@@ -168,6 +195,7 @@ function meshContourOf(analysis, field, criterion, mesh) {
     if (v > fieldMax) [fieldMax, at] = [v, i];
   });
   if (at < 0) return null;
+  for (const list of frames?.list ?? []) for (const v of list) if (Number.isFinite(v)) [fieldMin, fieldMax] = [Math.min(fieldMin, v), Math.max(fieldMax, v)];
   const limit = upperLimit(field, criterion);
   const min = field.kind === "temperature" ? fieldMin : Math.min(0, fieldMin);
   let max = limit ?? fieldMax;
@@ -191,5 +219,73 @@ function meshContourOf(analysis, field, criterion, mesh) {
     result: null,
     analysisId: analysis.analysis_id,
     frequency: field.frequency_Hz ?? null,
+    frames,
   };
+}
+
+// A field's frames (the same field at chosen moments of a time history), checked: one entry per
+// t_s, per_member objects, or per_element lists of `count` (on a mesh). Null when absent or off.
+function framesOf(field, count = null) {
+  const f = field.frames;
+  const n = f?.t_s?.length;
+  if (!n) return null;
+  const list = count !== null ? f.per_element : f.per_member;
+  if (!Array.isArray(list) || list.length !== n) return null;
+  if (count !== null && !list.every((a) => Array.isArray(a) && a.length === count)) return null;
+  return { t_s: f.t_s, list, max: Array.isArray(f.max) && f.max.length === n ? f.max : null, source: f.source_analysis_id ?? null };
+}
+
+// The frame of a contour nearest to time t (the source analysis' own seconds), or, with t null,
+// the one with the largest value (as recorded in max, else counted from its values).
+export function frameIndex(ct, t) {
+  const f = ct?.frames;
+  if (!f) return null;
+  if (t === null || t === undefined) {
+    const peak = (k) => f.max?.[k] ?? Math.max(...(Array.isArray(f.list[k]) ? f.list[k] : Object.values(numbers(f.list[k]))));
+    let best = 0;
+    for (let k = 1; k < f.t_s.length; k += 1) if (peak(k) > peak(best)) best = k;
+    return best;
+  }
+  let best = 0;
+  for (let k = 1; k < f.t_s.length; k += 1) if (Math.abs(f.t_s[k] - t) < Math.abs(f.t_s[best] - t)) best = k;
+  return best;
+}
+
+// The contour at frame k: that moment's values, its largest one and where it is, on the scale of
+// all the moments. Kept per k, so the same frame is the same object (the 3D view skips it).
+export function atFrame(ct, k) {
+  const f = ct?.frames;
+  if (!f || k === null) return ct;
+  ct.atFrames ??= new Map();
+  if (ct.atFrames.has(k)) return ct.atFrames.get(k);
+  const out = { ...ct, key: `${ct.key}|frame${k}`, frameIndex: k, frameT: f.t_s[k] };
+  if (ct.mesh) {
+    const elem = f.list[k];
+    let at = 0;
+    elem.forEach((v, i) => { if (v > elem[at]) at = i; });
+    out.mesh = { ...ct.mesh, elem, maxAt: { elem: at } };
+    out.frameMax = f.max?.[k] ?? elem[at];
+  } else {
+    const values = numbers(f.list[k]);
+    const where = Object.keys(values).reduce((a, b) => (a === null || values[b] > values[a] ? b : a), null);
+    out.values = values;
+    out.frameMax = f.max?.[k] ?? (where !== null ? values[where] : null);
+    out.where = where;
+    out.result = where !== null ? { quantity: ct.kind, value: out.frameMax, unit: ct.field.unit, where } : null;
+  }
+  ct.atFrames.set(k, out);
+  return out;
+}
+
+// analysis.mesh_convergence in one line: the judged value solved again on finer meshes. Singular
+// (it keeps rising as the mesh gets finer) is said so, and that value is not judged.
+export function convergenceLine(mc) {
+  if (!mc?.levels?.length) return "";
+  const sizes = mc.levels.map((l) => `${+l.element_size_mm.toPrecision(3)}`);
+  if (mc.verdict === "singular") return `メッシュ ${sizes.join(" → ")} mm: 細かくするほど上がる (特異点): この値では判定しない`;
+  const change = typeof mc.change_pct === "number" ? `${+mc.change_pct.toPrecision(2)} %` : "—";
+  const limit = typeof mc.limit_pct === "number" ? ` (限度 ${+mc.limit_pct.toPrecision(2)} %)` : "";
+  // with three meshes the record may give the Richardson extrapolated value (the value at zero size)
+  const ext = typeof mc.extrapolated === "number" ? `・外挿 ${+mc.extrapolated.toPrecision(4)}${mc.unit ? ` ${mc.unit}` : ""}` : "";
+  return `メッシュ ${sizes.slice(-2).join(" → ")} mm で ${change}${limit}: ${mc.verdict === "converged" ? "収まった" : "まだ動く"}${ext}`;
 }

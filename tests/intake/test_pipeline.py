@@ -22,7 +22,7 @@ class PipelineTest(unittest.TestCase):
         keys = {r["key"] for r in got.requirements_file["requirements"]}
         self.assertTrue({"Q40", "Q50", "Q54", "Q60", "Q62"} <= keys)  # the answers, and the product's own values as defaults
         kinds = [e["kind"] for e in got.events]
-        self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 9 + [ev.HEARING_ASKED, ev.HEARING_ANSWERED])  # the contract's order
+        self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 10 + [ev.HEARING_ASKED, ev.HEARING_ANSWERED])  # the contract's order
 
     def test_a_run_started_from_a_requirements_file_asks_nothing_when_the_file_has_what_is_required(self):
         req = load_product("serving-robot")
@@ -31,7 +31,7 @@ class PipelineTest(unittest.TestCase):
             {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1}]
         got = intake(req["want"], req["flags"], "walk", product="serving-robot", requirements=file_reqs, from_file=True)
         kinds = [e["kind"] for e in got.events]
-        self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 9 + [ev.HEARING_ANSWERED])  # no hearing.asked
+        self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 10 + [ev.HEARING_ANSWERED])  # no hearing.asked
         answered = got.events[-1]
         self.assertEqual(answered["text"], "要件のファイルのまま進みます (既定値で足した 1 件: Q63)")
         self.assertEqual([a["key"] for a in answered["data"]["answers"]], ["Q63"])
@@ -124,7 +124,7 @@ class AskUserWaitTest(ToolsTestCase):
                     break
                 time.sleep(0.05)
             seen["asked"] = json.loads((Path(ctx.store.path) / hearing.REQUEST_FILE).read_text(encoding="utf-8"))
-            hearing.save_answer(ctx.store.path, {"answers": {"Q30": "利用者 1 人", "Q40": {"value": 1700, "unit": "N"}}, "note": "よろしく"})
+            hearing.save_answer(ctx.store.path, {"answers": {"Q30": "運転者だけ", "Q40": {"value": 1700, "unit": "N"}}, "note": "よろしく"})
 
         t = threading.Thread(target=person)
         t.start()

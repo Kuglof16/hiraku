@@ -1,5 +1,5 @@
 {
- "script": "${WORK}/script/narration.tsv",
+ "script": "${WORK}/script/narration_v7.tsv",
  "fps": 30,
  "band": {
   "top": 910,
@@ -15,7 +15,7 @@
     "N00"
    ],
    "video": {
-    "1080": "${WORK}/clips/n00_1080p.mp4",
+    "1080": "${WORK}/clips/n00_titlepets_1080p.mp4",
     "2160": "${WORK}/clips/n00_2160p.mp4"
    },
    "join": {
@@ -29,6 +29,16 @@
     "N02"
    ],
    "video": "${WORK}/clips/n01_n02_video_1080p.mp4",
+   "overlay": [
+    {
+     "frames": "${WORK}/frames/labels_n01",
+     "cut": "N01"
+    },
+    {
+     "frames": "${WORK}/frames/labels_n02",
+     "cut": "N02"
+    }
+   ],
    "join": {
     "kind": "dissolve",
     "seconds": 0.3
@@ -38,8 +48,13 @@
    "cuts": [
     "N03"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N03.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n03_app_1080p.mp4",
+   "overlay": [
+    {
+     "frames": "${WORK}/frames/labels_n03",
+     "cut": "N03"
+    }
+   ],
    "join": {
     "kind": "dissolve",
     "seconds": 0.3
@@ -49,8 +64,13 @@
    "cuts": [
     "N04"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N04.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n04_app_1080p.mp4",
+   "overlay": [
+    {
+     "frames": "${WORK}/frames/labels_n04",
+     "cut": "N04"
+    }
+   ],
    "join": {
     "kind": "grain",
     "seconds": 0.5
@@ -60,7 +80,7 @@
    "cuts": [
     "N05"
    ],
-   "video": "${WORK}/clips/n05_final_v4_1080p.mp4",
+   "video": "${WORK}/clips/n05_final_v6_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
@@ -74,57 +94,22 @@
    "cuts": [
     "N06"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N06.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n06_app_1080p.mp4"
   },
   {
    "cuts": [
     "N07"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N07.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n07_app_1080p.mp4"
   },
   {
    "cuts": [
     "N08"
    ],
-   "paint_band": true,
-   "card": {
-    "background": "#131311",
-    "lines": [
-     {
-      "text": "N08  CAE のツールの画面 (広報部が作る、絵はまだ)",
-      "x": 160,
-      "y": 300,
-      "size": 64,
-      "font": "C:/Windows/Fonts/YuGothB.ttc",
-      "color": "#f1ece0"
-     },
-     {
-      "text": "HIRAKU ではない、ふつうの CAE のツールの画面。",
-      "x": 160,
-      "y": 430,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     },
-     {
-      "text": "設定の窓 (メッシュ・材料・拘束・荷重・解く設定) が何枚も重なっていく。",
-      "x": 160,
-      "y": 492,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     },
-     {
-      "text": "分厚い手引き書。値段の数字は出さない。",
-      "x": 160,
-      "y": 554,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     }
-    ]
+   "video": "${WORK}/clips/n08_1080p.mp4",
+   "look": {
+    "grain": true,
+    "bloom": 0.25
    },
    "join": {
     "kind": "dissolve",
@@ -149,8 +134,13 @@
    "cuts": [
     "N09"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N09.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n09_app_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N14"
+   ],
+   "video": "${WORK}/clips/n14_app_1080p.mp4"
   },
   {
    "cuts": [
@@ -162,50 +152,49 @@
    "cuts": [
     "N11"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N11.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n11_app_1080p.mp4"
   },
   {
    "cuts": [
     "N12"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N12.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n12_app_1080p.mp4"
   },
   {
    "cuts": [
-    "N13"
+    "N13a"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N13.png",
-   "paint_band": true
+   "video": "${WORK}/clips/v7/n13a_draft_1080p.mp4"
   },
   {
    "cuts": [
-    "N14"
+    "N13b"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N14.png",
-   "paint_band": true
+   "video": "${WORK}/clips/v7/n13b_draft_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N13c"
+   ],
+   "video": "${WORK}/clips/v7/n13c_draft_1080p.mp4"
   },
   {
    "cuts": [
     "N15"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N15.png",
-   "paint_band": true
+   "video": "${WORK}/clips/n15_app_1080p.mp4"
   },
   {
    "cuts": [
     "N16"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N16.png",
-   "paint_band": true
+   "video": "${WORK}/clips/v7/n16_short_1080p.mp4"
   },
   {
    "cuts": [
     "N17"
    ],
-   "still": "${WORK}/storyboard/layouts/_tools/png/N17.png",
-   "paint_band": true,
+   "video": "${WORK}/clips/n17_app_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5
@@ -215,44 +204,7 @@
    "cuts": [
     "N17b"
    ],
-   "paint_band": true,
-   "card": {
-    "background": "#131311",
-    "lines": [
-     {
-      "text": "N17b  HIRAKU の作り方 (絵はまだ)",
-      "x": 160,
-      "y": 300,
-      "size": 64,
-      "font": "C:/Windows/Fonts/YuGothB.ttc",
-      "color": "#f1ece0"
-     },
-     {
-      "text": "統括部と部署のセッションが横に並ぶ帯の上を、",
-      "x": 160,
-      "y": 430,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     },
-     {
-      "text": "コミットが時間に沿って流れ、main に合流していく。",
-      "x": 160,
-      "y": 492,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     },
-     {
-      "text": "数 (日数・コミット・行数・試験) は凍結の時点で git から数える。",
-      "x": 160,
-      "y": 554,
-      "size": 36,
-      "font": "C:/Windows/Fonts/YuGothM.ttc",
-      "color": "#b9b3a5"
-     }
-    ]
-   },
+   "video": "${WORK}/clips/n17b_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
@@ -267,12 +219,8 @@
     "N18"
    ],
    "video": {
-    "1080": "${WORK}/clips/n18_1080p.mp4",
+    "1080": "${WORK}/clips/n18_pets_1080p.mp4",
     "2160": "${WORK}/clips/n18_2160p.mp4"
-   },
-   "look": {
-    "grain": true,
-    "bloom": 0.35
    }
   }
  ]

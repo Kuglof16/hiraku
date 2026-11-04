@@ -247,6 +247,11 @@ def _joint_wall_bending() -> Formula:
             "own stiffness is not counted",
             "through: the moment goes into both side walls as in-plane shear along the cross member's side walls; the "
             "joint is rigid",
+            "against the K1 shell's hot spots (R1 step, 10 mm): butt and gusset ladders -4 to -13 %, but at the rail-end "
+            "L joints by two errors that cancel (the chain gives them too much moment, the closed-end wall too little "
+            "stress per moment); with through cross members the rail-end joint comes out 23 to 41 % low. Not counted: "
+            "the rail's section distortion at its open end (a beam on an elastic foundation in the shell's numbers) and "
+            "how the wheel mount puts its load onto the wall",
         ],
         source="Kirchhoff plate theory, Levy's single-series solution of a strip simply supported on two edges, and "
                "thin-walled beam bending (textbook plates and shells, e.g. Timoshenko and Woinowsky-Krieger, Theory of "

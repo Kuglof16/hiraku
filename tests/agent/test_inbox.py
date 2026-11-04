@@ -9,7 +9,7 @@ from hiraku.agent import inbox
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.scripted import run_scripted
 from hiraku.contract import layout
-from hiraku.tools import Attribution
+from hiraku.tools import Attribution, rules
 from tests.agent.test_conversation import ConversationCase, result
 from tests.tools.helpers import RunCase
 
@@ -100,10 +100,21 @@ class HooksTellTheLeadTest(RunCase, unittest.TestCase):
         return asyncio.run(self.hooks.post_tool_use({"tool_name": "Agent", "tool_input": {}, **who}, "tu", None))
 
     def test_after_a_tool_call_of_the_leads(self):
-        self.assertEqual(self.post(agent_type="cae-strength", agent_id="a1"), {})  # a role's call: not told
+        # a role's call: the role is not told; the message stays for the lead
+        self.assertEqual(self.post(agent_type="cae-strength", agent_id="a1"), {})
+        self.assertEqual(self.hooks.for_lead, ["人からの伝言です: 急いで"])
         out = self.post()
         self.assertEqual(out["hookSpecificOutput"]["additionalContext"], "人からの伝言です: 急いで")
         self.assertEqual(self.post(), {})  # told once
+        self.assertEqual(self.post(agent_type="cae-strength", agent_id="a1"), {})  # nothing waits any more
+
+    def test_a_waiting_message_does_not_let_a_role_stop_early(self):
+        import asyncio
+
+        self.hooks.running["a1"] = "cae.strength"
+        self.assertTrue(rules.holding(self.ctx))  # R1 has no verdict
+        out = asyncio.run(self.hooks.subagent_stop({"agent_id": "a1", "agent_type": "cae-strength"}, None, None))
+        self.assertEqual(out.get("decision"), "block")  # HK4 as without a message: the message is the lead's
 
     def test_the_leads_stop_is_held_once_for_it(self):
         import asyncio

@@ -24,6 +24,7 @@ def requirements_with_tests(folder: Path, tests: list[str] | None, beyond: list[
         req["tests"] = tests
     if beyond is not None:
         req["beyond"] = beyond
+    req["round_limit"] = 1  # the tests' fixture: one revision (the demo file allows more, data/catalog/scripted.yaml)
     path = folder / "requirements.json"
     path.write_text(json.dumps(req, ensure_ascii=False), encoding="utf-8")
     return path

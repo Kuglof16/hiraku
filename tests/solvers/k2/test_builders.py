@@ -59,8 +59,9 @@ class Builders(unittest.TestCase):
     def test_the_nine_tests(self):
         self.assertEqual(sorted(BUILDERS), sorted(TOOL_OF))
         self.assertEqual(set(PLANS), set(BUILDERS))
-        for tid, fn in BUILDERS.items():  # the package collects this module
-            self.assertIs(ALL_BUILDERS[tid], fn)
+        for tid, fn in BUILDERS.items():  # the package collects this module (a product's builder may wrap it)
+            got = ALL_BUILDERS[tid]
+            self.assertIs(getattr(got, "general", got), fn)
         from hiraku.catalog.builders import PLANS_BEYOND as ALL_PLANS_BEYOND
         for tid, step in PLANS_BEYOND.items():
             self.assertIs(ALL_PLANS_BEYOND[tid], step)
@@ -115,7 +116,10 @@ class Builders(unittest.TestCase):
             h[above] = tilt_inputs(self.design, lc)["h"]["value"]
         # the demo design's cargo box stands on its floor with its centre 150 mm up
         self.assertAlmostEqual(h[150.0], h[None], places=6)
-        self.assertAlmostEqual(h[620.0], 712.7, delta=0.5)
+        # 712.7 mm before the roll bar was on by default (its tubes raise the centre of gravity), 718.8 mm before
+        # the suspension towers, the dash and the occupants' bodies as parts, 726.5 mm before the floors and the deck
+        # were steel sheets 3.2 mm thick (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down
+        self.assertAlmostEqual(h[620.0], 710.4, delta=0.5)
 
     def test_cases_past_the_limit(self):
         for tid in BEYOND:
@@ -181,9 +185,13 @@ class Plans(unittest.TestCase):
                 for key in ("source", "cause", "fix"):
                     self.assertTrue(expected[key].strip(), key)
                 self.assertTrue(expected.get("retry") or expected.get("stop"))
+            later = {ref for p in predictions(step) for ref in p["inputs"].values()}
             for p in predictions(step):
                 with self.subTest(test=tid, quantity=p["quantity"]):
-                    self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
+                    if f"pred.{p['quantity']}" in later and p["quantity"] not in {q for q, _, _ in pairs}:
+                        pass  # an intermediate hand value a later prediction takes (pred.<quantity>), not compared
+                    else:
+                        self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
                     self.assertEqual(set(p["inputs"]), set(self.formulas[p["formula_id"]]["inputs"]))
                     self.assertTrue(p["assumptions"])
 

@@ -1,14 +1,15 @@
 """The N04 and N15 cut pages (cut.html?cut=n04 / n15) in a headless browser.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The run is the A6 fixture (tests.web.domains_fixture: seven domains and assembly over two
 versions, with judgement.updated), here also with a third version; with HIRAKU_WEB_DEV_RUNS
 the newest run there is opened too. The layout values are the promo department's for
-n04 / n15 / n16 (layout.json), with n01's colours and overlay.
+n04 / n15 / n16 (layout.json 52d12e9), with n01's colours and overlay.
 """
 
 import copy
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -31,20 +32,38 @@ def grid_layout():
     header = {"x": 96, "y": 96, "w": 1728, "h": 48, "size_px": 30}
     grid = {"x": 96, "y": 160, "cols": 4, "rows": 2, "tile_w": 414, "tile_h": 351, "gap_x": 24, "gap_y": 24}
     tile = {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "mark": {"size_px": 44, "right": 16, "top": 10},
-            "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}, "rate": {"size_px": 18}}
-    common = {"header": header, "grid": grid, "tests": list(TESTS), "tile": tile}
+            "pet": {"w": 84, "h": 84, "right": 12, "bottom": 12, "feature": {"w": 160, "h": 160}}, "rate": {"size_px": 18}}
+    feature = {"x": 96, "y": 160, "w": 852, "h": 726}
+    lst = {"x": 972, "y": 160, "w": 852, "h": 726, "cols": 2, "rows": 4, "gap_x": 24, "gap_y": 24}
+    common = {"header": header, "grid": grid, "feature": feature, "list": lst, "tests": list(TESTS), "tile": tile}
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": BAND_Y, "h": 170},
         "min_text_px": 18,
+        "n00": {"camera": {"fov_deg": 24, "azimuth_deg": 24, "elevation_deg": 12}, "motion": {"pass_dur_s": 0.9, "hop_period_s": 0.9, "idle_shift_s": 1.3}},
         "n01": {"colors": dict(COLORS), "overlay": dict(OVERLAY)},
-        "n04": {"duration_s": 4.0, **copy.deepcopy(common), "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0},
+        "n04": {"duration_s": 4.0, **copy.deepcopy(common), "assembly": {"x": 96, "y": 160, "w": 1728, "h": 726},
+                "times": {"lead_s": 0.3, "crash_s": 0.5, "nvh_s": 1.2, "assembly_s": 2.0},
                 "colors": dict(COLORS), "overlay": dict(OVERLAY)},
         "n15": {"duration_s": 5.1, **copy.deepcopy(common), "times": {"lead_s": 0.3, "rounds_from_s": 0.4, "all_green_s": 4.0}},
-        "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1200, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1152, "h": 48},
-                "steps": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
+        "n16": {"duration_s": 6.3, "view": {"x": 96, "y": 96, "w": 1400, "h": 790}, "seek": {"x": 120, "y": 814, "w": 1352, "h": 48},
+                "steps": {"x": 1520, "y": 96, "w": 304, "h": 790, "title_px": 30, "text_px": 22, "row_gap": 12},
                 "times": {"lead_s": 0.3, "steps_from_s": 0.5, "steps_to_s": 4.2, "scrub_s": 4.4, "scrub_to_s": 5.8}, "colors": dict(COLORS)},
     }
+
+
+def list_rects(L):
+    """The slots [x, y, w, h] of a layout list {x, y, w, h, cols, rows, gap_x, gap_y}, row by
+    row from the left: (w - (cols - 1) gap_x) / cols x (h - (rows - 1) gap_y) / rows each
+    (as cut_n03.js listRects)."""
+    w = (L["w"] - (L["cols"] - 1) * L["gap_x"]) / L["cols"]
+    h = (L["h"] - (L["rows"] - 1) * L["gap_y"]) / L["rows"]
+    return [[math.floor(L["x"] + c * (w + L["gap_x"]) + 0.5), math.floor(L["y"] + r * (h + L["gap_y"]) + 0.5), int(w), int(h)]
+            for r in range(L["rows"]) for c in range(L["cols"])]
+
+
+def box_of(b):
+    return [b["x"], b["y"], b["w"], b["h"]]
 
 
 def renumber(events):
@@ -87,6 +106,64 @@ def without_judgement(events, version, domain):
     return renumber(out)
 
 
+def with_state(events, version, domain, state):
+    """The fixture with the domain's judgements of the version set to state (shape example)."""
+    out = copy.deepcopy(events)
+    for e in out:
+        d = e.get("data") or {}
+        if e["kind"] == "judgement.updated" and d.get("design_version") == version and d.get("domain") == domain:
+            d["state"] = state
+            if "red_count" in d:
+                d["red_count"] = 0 if state == "green" else max(1, d["red_count"])
+    return out
+
+
+def crash_drawn(events):
+    """The fixture with its crash records' channel named as the crash tile charts it
+    (deceleration; the fixture calls it decel, so its crash tile has nothing to draw)."""
+    out = copy.deepcopy(events)
+    for e in out:
+        if e["kind"] == "analysis.finished" and e["data"].get("tool") == "crash_shape_example":
+            for s in e["data"].get("series", []):
+                if s["channel"] == "decel":
+                    s["channel"] = "deceleration"
+    return out
+
+
+def without_assembly(events):
+    """The fixture without the analyses that carry assembly steps or interferences."""
+    out = [e for e in events if not (e["kind"] == "analysis.finished" and ("assembly" in e["data"] or "interferences" in e["data"]))]
+    return renumber(out)
+
+
+def switch_times(events, times):
+    """N15: when each tile takes each version after the first (cut_grid.js switchTimes):
+    {domain: {version: stage time}}. Round k (version index k) has slot k of the time from
+    rounds_from_s to all_green_s shared equally; a tile's time in the slot is as far along
+    as its judgement's event time is between the version's earliest and latest judgement."""
+    last = {}
+    for e in events:
+        if e["kind"] == "judgement.updated":
+            d = e["data"]
+            last[(d["design_version"], d["domain"])] = e["t"]
+    versions = sorted({v for v, _ in last})
+    span = (times["all_green_s"] - times["rounds_from_s"]) / max(1, len(versions) - 1)
+    out = {}
+    for k, v in enumerate(versions[1:], start=1):
+        ts = [t for (vv, _), t in last.items() if vv == v]
+        lo, hi = min(ts), max(ts)
+        a = times["rounds_from_s"] + (k - 1) * span
+        for (vv, dom), t in last.items():
+            if vv == v:
+                f = (t - lo) / (hi - lo) if hi > lo else 1.0
+                out.setdefault(dom, {})[v] = a + f * span
+    return out
+
+
+GREEN_RGB = "rgb(47, 125, 79)"  # the pages' colour of a pass
+RED_RGB = "rgb(200, 64, 42)"  # n04.overlay.color
+
+
 # What the page shows at stage time t, read in the page.
 READ = """async (t) => {
   await window.hiraku.seek(t);
@@ -107,23 +184,30 @@ READ = """async (t) => {
   return {
     duration: window.hiraku.player.duration, version: v, err: document.querySelector(".err")?.textContent ?? null,
     header: { shown: shown(header), text: header.textContent, rect: rect(header) },
-    assembly: asm ? { shown: shown(asm), rect: rect(asm), box: asm.dataset.box } : null,
+    assembly: asm ? { shown: shown(asm), rect: rect(asm), box: asm.dataset.box, lit: asm.dataset.lit ?? "", border: asm.style.borderColor, version: asm.dataset.version ?? null } : null,
     boxes: [...document.querySelectorAll("[data-box]")].filter(shown).map((el) => ({ box: el.dataset.box, rect: rect(el) })),
     tiles: [...document.querySelectorAll(".grid-tile")].map((el) => {
       const layer = [...el.querySelectorAll(".layer")].find((l) => l.style.display !== "none");
       const mark = layer?.querySelector(".mark");
       const label = layer?.querySelector("b");
-      const state = cut.s.judgements[`${v}|${el.dataset.domain}`]?.state ?? null;
-      return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", outside: el.dataset.outside ?? null,
+      // the tile's own version (N15: each tile takes the next version at its own time)
+      const tv = Number(el.dataset.version ?? v);
+      const state = cut.s.judgements[`${tv}|${el.dataset.domain}`]?.state ?? null;
+      return { key: el.dataset.box, rect: rect(el), shown: shown(el), hot: el.dataset.hot === "1", lit: el.dataset.lit ?? "", border: el.style.borderColor, outside: el.dataset.outside ?? null,
+               version: tv, dim: mark ? mark.classList.contains("dim") : null, scale: layer?.dataset.scale ?? null,
+               contour: (() => { const t = cut.tiles.find((x) => x.key === el.dataset.domain); const l = t?.layers.find((x) => x.el === layer);
+                 const ct = l?.view?.keys?.contour; return ct ? { max: ct.max, limitKnown: ct.limitKnown, parts: ct.parts, values: Object.keys(ct.values ?? {}).length } : null; })(),
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
                label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
-               tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]') };
+               tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
+               hits: layer?.dataset.hits ?? null, featured: el.dataset.featured === "1" };
     }),
+    charts: document.querySelectorAll(".grid-tile svg.chart").length,
   };
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class GridCutTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -188,28 +272,41 @@ class GridCutTest(unittest.TestCase):
 
     def check_grid(self, got, layout, name):
         spec = layout[name]
-        g = spec["grid"]
         self.assertIsNone(got["err"])
         self.assertEqual([t["key"] for t in got["tiles"]], [f"{name}.tile.{k}" for k in spec["tests"]])
-        for i, t in enumerate(got["tiles"]):
-            col, row = i % g["cols"], i // g["cols"]
-            x, y = g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"])
-            self.assertEqual([round(v) for v in t["rect"]], [x, y, x + g["tile_w"], y + g["tile_h"]], t["key"])
+        # one tile in the feature box, the others in the list's slots in order
+        featured = [t for t in got["tiles"] if t["featured"]]
+        self.assertEqual(len(featured), 1)
+        big, small = box_of(spec["feature"]), list_rects(spec["list"])
+        rest = iter(small)
+        for t in got["tiles"]:
+            r = big if t["featured"] else next(rest)
+            self.assertEqual([round(v) for v in t["rect"]], [r[0], r[1], r[0] + r[2], r[1] + r[3]], t["key"])
             self.assertLessEqual(t["rect"][3], BAND_Y, t["key"])
             self.assertIsNone(t["outside"], t["key"])
             self.assertTrue(t["shown"], t["key"])
             self.assertTrue(t["pet"], t["key"])
             self.assertEqual(t["mark"], t["want"], t["key"])  # the mark is the run's judgement, and none without one
-            self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
+            if t["minText"] is not None:  # a tile with a record and no judgement holds no text
+                self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
+            # a picture and its mark only: no name, no figure (a tile without its record says so)
+            if "記録が無い" not in t["text"]:
+                self.assertIn(t["text"], ("", "✓", "✕"), t["key"])
+            self.assertIsNone(t["label"], t["key"])
         self.assertTrue(got["header"]["shown"])
-        self.assertEqual(got["header"]["text"], f"版 {got['version']}・繰り返し {got['version'] - 1} 回")
+        # one line with one number: N15 the round in progress, N04 the version and its rounds
+        # (no count of red tiles: the voice says what can be checked)
+        if name == "n15":
+            self.assertEqual(got["header"]["text"], f"繰り返し {got['version'] - 1} 回")
+        else:
+            self.assertEqual(got["header"]["text"], f"設計の版 {got['version']}・直し {got['version'] - 1} 回")
 
     def test_n04_on_a_version_on_the_way(self):
         """?version=1: the grid, the header, marks from version 1's judgements (none on nvh, its
         judgement taken out); crash lit from crash_s while red; from assembly_s the grid gives way
-        to the empty assembly box in n16.view's place."""
+        to the assembly box in n04.assembly (the grid's place)."""
         layout = grid_layout()
-        events = without_judgement(domain_events(), 1, "nvh")
+        events = without_judgement(crash_drawn(domain_events()), 1, "nvh")
         base = self.serve(layout, events={"20261102-120000-grid-v1": events})
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&version=1&t=0")
         before = page.evaluate(READ, 0.4)
@@ -226,52 +323,134 @@ class GridCutTest(unittest.TestCase):
         marks = {t["key"].split(".")[-1]: t["mark"] for t in mid["tiles"]}
         for key in TESTS:
             self.assertEqual(marks[key], None if key == "nvh" else "✕" if key in V1_RED else "✓", key)
+        # the large tile is the one the voice is naming (crash from crash_s, NVH from nvh_s;
+        # before crash_s the first, crash), with its record drawn
+        big = {t: next(x["key"] for x in g["tiles"] if x["featured"]) for t, g in ((0.4, before), (0.5, early), (1.5, mid))}
+        self.assertEqual(big, {0.4: "n04.tile.crash", 0.5: "n04.tile.crash", 1.5: "n04.tile.nvh"})
+        self.assertNotIn("記録が無い", next(x for x in mid["tiles"] if x["featured"])["text"])
+        # the ticks and crosses are pale until their tile is lit (crash from crash_s)
+        dims = {x["key"].split(".")[-1]: x["dim"] for x in mid["tiles"] if x["mark"]}
+        self.assertEqual(dims, {k: k != "crash" for k in TESTS if k != "nvh"})
         hot = lambda got: {t["key"].split(".")[-1] for t in got["tiles"] if t["hot"]}  # noqa: E731
         self.assertEqual(hot(before), set())
-        self.assertEqual(hot(early), {"crash"})  # nvh is red in V1_RED but has no judgement here
+        self.assertEqual(hot(early), {"crash"})  # nvh has no judgement here: not lit
+        self.assertEqual(hot(mid), {"crash"})
         tiles = {t["key"].split(".")[-1]: t for t in mid["tiles"]}
-        self.assertIn("干渉 1 件", tiles["assembly"]["text"])  # the fixture's battery × cross1
-        self.assertIn("23.4 Hz", tiles["nvh"]["text"])  # the mode's recorded frequency
-        self.assertGreater(tiles["thermal"]["tags"], 0)  # part temperatures as text
-        # from assembly_s: no tile, no header, the assembly box where n16.view is
+        # the colours say what the mark says: a field in its criterion's unit has the
+        # allowable at the bands' top (thermal: the battery at 60 degC); a field in another
+        # unit (damage against a stress limit, a mode shape without one) is not coloured
+        self.assertEqual({k: tiles[k]["scale"] for k in ("thermal", "strength", "nvh")}, {"thermal": "allowable", "strength": "shape", "nvh": "shape"})
+        self.assertEqual(tiles["thermal"]["contour"]["max"], 60.0)
+        self.assertEqual(set(tiles["thermal"]["contour"]["parts"]), {"battery"})  # only the part its criterion judges
+        self.assertEqual(tiles["strength"]["contour"]["values"], 0)
+        # no words or figures on the tiles: the interference, the mode's frequency and the
+        # part temperatures are in the pictures only (the story: a picture and a mark)
+        self.assertEqual(tiles["assembly"]["hits"], "1")  # the fixture's battery × cross1, boxed in red
+        self.assertNotIn("Hz", tiles["nvh"]["text"])
+        self.assertEqual(tiles["thermal"]["tags"], 0)
+        self.assertEqual(mid["charts"], 0)
+        # from assembly_s: no tile, no header, the assembly box in n04.assembly
         self.assertTrue(all(not t["shown"] for t in late["tiles"]))
         self.assertFalse(late["header"]["shown"])
-        V = layout["n16"]["view"]
+        V = layout["n04"]["assembly"]
         self.assertEqual(late["assembly"]["box"], "n04.assembly")
         self.assertTrue(late["assembly"]["shown"])
+        self.assertEqual(late["assembly"]["version"], "1")  # the version drawn, not the run's newest
+        self.assertEqual((late["assembly"]["lit"], late["assembly"]["border"]), ("red", RED_RGB))  # assembly red in version 1
         self.assertEqual([round(v) for v in late["assembly"]["rect"]], [V["x"], V["y"], V["x"] + V["w"], V["y"] + V["h"]])
         page.close()
 
-    def test_n04_lights_nvh_when_red(self):
+    def test_n04_lights_the_named_tiles_in_their_recorded_colours(self):
+        """Crash judged green and NVH red in version 1: each lights from its time in its own
+        colour (nothing turned red); from assembly_s the assembly's box is lit in the
+        assembly's colour (red in version 1)."""
         layout = grid_layout()
-        base = self.serve(layout, events={"20261102-120000-grid-v1": domain_events()})
+        events = with_state(crash_drawn(domain_events()), 1, "crash", "green")
+        base = self.serve(layout, events={"20261102-120000-grid-v1": events})
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&version=1&t=0")
-        lit = {t: {x["key"].split(".")[-1] for x in page.evaluate(READ, t)["tiles"] if x["hot"]} for t in (1.1, 1.3)}
+        shots = {t: page.evaluate(READ, t) for t in (0.4, 1.1, 1.3, 3.5)}
         self.assertEqual(errors, [])
-        self.assertEqual(lit, {1.1: {"crash"}, 1.3: {"crash", "nvh"}})
+        lit = {t: {x["key"].split(".")[-1]: (x["lit"], x["border"]) for x in g["tiles"] if x["hot"]} for t, g in shots.items()}
+        self.assertEqual(lit[0.4], {})
+        self.assertEqual(lit[1.1], {"crash": ("green", GREEN_RGB)})
+        self.assertEqual(lit[1.3], {"crash": ("green", GREEN_RGB), "nvh": ("red", RED_RGB)})
+        marks = {x["key"].split(".")[-1]: x["mark"] for x in shots[1.3]["tiles"]}
+        self.assertEqual((marks["crash"], marks["nvh"]), ("✓", "✕"))  # the colour is the record's judgement
+        self.assertEqual(shots[1.3]["header"]["text"], "設計の版 1・直し 0 回")
+        asm = shots[3.5]["assembly"]
+        self.assertTrue(asm["shown"])
+        self.assertEqual((asm["lit"], asm["border"]), ("red", RED_RGB))
+        # the large tile: the one being named, whatever its colour (NVH, red, from nvh_s)
+        self.assertEqual(next(x["key"] for x in shots[1.3]["tiles"] if x["featured"]), "n04.tile.nvh")
+        page.close()
+
+    def test_n04_large_tile_follows_the_voice(self):
+        """The large tile changes as the voice names crash, then NVH: each in turn in the
+        feature box (its views fitted again to it), the others in the list's slots in order;
+        a named tile without a record is passed over (no assembly records here: it never was
+        the large one, as the grid gives way at assembly_s)."""
+        layout = grid_layout()
+        T = layout["n04"]["times"]
+        events = without_assembly(crash_drawn(domain_events()))
+        base = self.serve(layout, events={"20261102-120000-grid-v1": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&version=1&t=0")
+        shots = {t: page.evaluate(READ, t) for t in (0.3, T["crash_s"] + 0.05, T["nvh_s"] - 0.05, T["nvh_s"] + 0.05, T["assembly_s"] - 0.05)}
+        self.assertEqual(errors, [])
+        big = {t: next(x["key"].split(".")[-1] for x in g["tiles"] if x["featured"]) for t, g in shots.items()}
+        self.assertEqual(list(big.values()), ["crash", "crash", "crash", "nvh", "nvh"])
+        for t, got in shots.items():
+            self.check_grid(got, layout, "n04")  # the large box and the slots, in order
+        # the canvas of the large tile's drawing fills its new box
+        canvas = page.evaluate("""() => { const el = document.querySelector('[data-domain="nvh"] .layer canvas'); const r = el.getBoundingClientRect(); return [r.width, r.height]; }""")
+        F = layout["n04"]["feature"]
+        B = layout["n04"]["tile"]["border_px"]
+        self.assertEqual([round(v) for v in canvas], [F["w"] - 2 * B, F["h"] - 2 * B])
+        page.close()
+        # a named tile without a record to draw is passed over: the raw fixture's crash
+        # records chart nothing the tile draws, so NVH is the large tile from the start
+        base = self.serve(layout, events={"20261102-120000-grid-raw": without_assembly(domain_events())})
+        page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-raw&version=1&t=0")
+        got = page.evaluate(READ, 0.3)
+        self.assertEqual(errors, [])
+        self.assertEqual(next(x["key"] for x in got["tiles"] if x["featured"]), "n04.tile.nvh")
         page.close()
 
     def test_n15_steps_through_the_versions_and_stops_on_the_last(self):
-        """Versions 1, 2 between rounds_from_s and all_green_s, version 3 (all green here) from
-        all_green_s to the end; the marks and the header follow the version shown."""
+        """Two rounds share rounds_from_s .. all_green_s (one slot each): in a round's slot the
+        tiles take the next version one by one, in the order the record judged them; from
+        all_green_s every tile is on version 3 (all green here). The marks follow each tile's
+        version, the header the round in progress."""
         layout = grid_layout()
-        base = self.serve(layout, events={"20261102-120000-grid-three": three_versions()})
+        T = layout["n15"]["times"]
+        events = three_versions()
+        base = self.serve(layout, events={"20261102-120000-grid-three": events})
         page, errors = self.open(f"{base}/cut.html?cut=n15&run=20261102-120000-grid-three&t=0")
-        shots = {t: page.evaluate(READ, t) for t in [0.2, *CHECK_TIMES["n15"], 5.1]}
+        sw = switch_times(events, T)
+        mid1 = T["rounds_from_s"] + (T["all_green_s"] - T["rounds_from_s"]) / 4  # the middle of round 1's slot
+        times = [0.2, mid1, *CHECK_TIMES["n15"], 5.1]
+        shots = {t: page.evaluate(READ, t) for t in times}
         self.assertEqual(errors, [])
         self.assertEqual(shots[0.2]["duration"], 5.1)
-        # rounds_from 0.4, all_green 4.0: versions 1 and 2 share 3.6 s, then version 3
-        self.assertEqual({t: g["version"] for t, g in shots.items()}, {0.2: 1, 0.5: 1, 2.5: 2, 4.8: 3, 5.1: 3})
+        # the round in progress: 0 before rounds_from_s, 1 in the first slot, 2 in the second
+        self.assertEqual({t: g["version"] for t, g in shots.items()}, {0.2: 1, mid1: 2, 0.5: 2, 2.5: 3, 4.8: 3, 5.1: 3})
         for t, got in shots.items():
             self.check_grid(got, layout, "n15")
             self.check_boxes(got, "n15")
             self.assertTrue(all(not x["hot"] for x in got["tiles"]))
+            # each tile on the version its time in the slots says (the record's order)
+            want = {k: max([1] + [v for v, at in sw[k].items() if t >= at]) for k in TESTS}
+            self.assertEqual({x["key"].split(".")[-1]: x["version"] for x in got["tiles"]}, want, t)
+        # in the middle of round 1, some tiles are on version 2 and some still on 1
+        self.assertEqual({x["version"] for x in shots[mid1]["tiles"]}, {1, 2})
         marks = lambda got: {t["key"].split(".")[-1]: t["mark"] for t in got["tiles"]}  # noqa: E731
-        self.assertEqual(marks(shots[0.5]), {k: "✕" if k in V1_RED else "✓" for k in TESTS})
-        self.assertEqual(marks(shots[2.5]), {k: "✕" if k in V2_RED else "✓" for k in TESTS})
+        self.assertEqual(marks(shots[0.2]), {k: "✕" if k in V1_RED else "✓" for k in TESTS})
         self.assertEqual(marks(shots[4.8]), {k: "✓" for k in TESTS})
-        self.assertIn("✓ 干渉なし", shots[4.8]["tiles"][TESTS.index("assembly")]["text"])
-        self.assertEqual(shots[4.8]["header"]["text"], "版 3・繰り返し 2 回")
+        self.assertEqual(shots[4.8]["tiles"][TESTS.index("assembly")]["hits"], "0")
+        self.assertEqual(shots[4.8]["header"]["text"], "繰り返し 2 回")
+        # the large tile turned green last: red in version 2, and the latest of those in round 2
+        latest = max(V2_RED, key=lambda k: sw[k][3])
+        big = next(t for t in shots[4.8]["tiles"] if t["featured"])
+        self.assertEqual(big["key"].split(".")[-1], latest)
         page.close()
 
     def test_n15_last_version_not_green_stays_as_recorded(self):
@@ -289,13 +468,12 @@ class GridCutTest(unittest.TestCase):
         del layout["n04"]["tile"]["mark"]["right"]
         del layout["n04"]["tile"]["pet"]
         del layout["n04"]["times"]["crash_s"]
-        del layout["n16"]
+        del layout["n04"]["assembly"]
         del layout["min_text_px"]
         base = self.serve(layout, events={"20261102-120000-grid-v1": domain_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-v1&t=1")
         err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
-        self.assertIn("layout.json の n04 に無い: tile.mark.right, tile.pet.w, tile.pet.h, tile.pet.right, tile.pet.bottom, times.crash_s", err)
-        self.assertIn("layout.json の n16 に無い: view.x, view.y, view.w, view.h", err)
+        self.assertIn("layout.json の n04 に無い: tile.mark.right, tile.pet.w, tile.pet.h, tile.pet.right, tile.pet.bottom, tile.pet.feature.w, tile.pet.feature.h, times.crash_s, assembly.x, assembly.y, assembly.w, assembly.h", err)
         self.assertIn("layout.json に無い: min_text_px", err)
         self.assertEqual(page.evaluate("document.querySelectorAll('.grid-tile').length"), 0)
         page.close()

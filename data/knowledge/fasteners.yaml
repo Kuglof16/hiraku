@@ -1,5 +1,4 @@
 # Built-in rules: fasteners (締結). See sheet-metal.yaml for the shape.
-# "recalled" = written from memory of the standard; the standard was not opened for this repository.
 doc_id: KN-FS
 title: 締結の決まり
 category: fastener
@@ -8,10 +7,16 @@ rules:
     text: ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上
     kinds: [frame, body]
     check: hole_edge_mm >= 1.2 * hole_diameter_mm
-    trust: 2
+    trust: 1
     basis: >-
-      EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this
-      repository)
+      EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 3.5(1) and Table 3.3 (printed
+      p. 23): minimum end distance e1 = 1.2 d0 and minimum edge distance e2 = 1.2 d0; 1.5 Symbols (p. 13):
+      d0 = hole diameter, e1/e2 measured from the centre of the fastener hole to the adjacent end/edge
+      (e1 in the direction of load transfer, e2 at right angles to it). Maximum e1, e2 = 4t + 40 mm for
+      steel exposed to weather, larger of 8t or 125 mm for unprotected EN 10025-5 steel, otherwise
+      unlimited (note 1). Fatigue: see EN 1993-1-9 (3.5(2)). Read 2026-11-03 in the public.resource.org
+      scan of BS EN 1993-1-8:2005 (PDF p. 25 and p. 15), hosted at
+      https://www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf
   - id: FS-02
     text: 鋼どうしのねじのかみ合い長さは呼び径以上
     kinds: [frame, body]

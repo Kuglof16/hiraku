@@ -1,10 +1,13 @@
 import copy
+import re
 import unittest
 
 from hiraku import contract
 from hiraku.intake import IntakeError, load_product, product_files
-from hiraku.intake.hearing import (applicable_items, hearing_text, item, load_answers, load_items, plan_hearing,
-                                   prepare)
+from hiraku.catalog.build import loading_requirement
+from hiraku.contract.protocols import LOADINGS
+from hiraku.intake.hearing import (applicable_items, hearing_text, item, load_answers, load_items, loading_answer, plan_hearing,
+                                   prepare, save_answer)
 from hiraku.intake.products import answers_file
 
 
@@ -31,7 +34,7 @@ class ItemsTest(unittest.TestCase):
                 self.assertIn(d["trust"], (1, 2, 3))
                 self.assertTrue(d["basis"], it["key"])
                 if d["trust"] in (1, 2):
-                    self.assertIn("not checked", d["basis"], it["key"])
+                    self.assertTrue("not checked" in d["basis"] or re.search(r"read 20\d\d-\d\d-\d\d", d["basis"]), it["key"])
 
     def test_catalog_asks_must_for_these(self):
         must = {it["key"] for it in load_items() if it["ask"] == "must"}
@@ -66,7 +69,7 @@ class PlanTest(unittest.TestCase):
         defaulted = {r["key"]: r for r in plan.defaulted}
         self.assertEqual(defaulted["Q60"]["value"], 1350)
         self.assertEqual(defaulted["Q60"]["source"], "default")
-        self.assertIn("not checked", defaulted["Q60"]["basis"])
+        self.assertIn("read 2026-11-03", defaulted["Q60"]["basis"])
 
     def test_a_confirm_question_carries_its_default_with_the_source(self):
         req, own = bare("electric-guitar")
@@ -94,7 +97,7 @@ class PrepareTest(unittest.TestCase):
     def test_answers_become_hearing_requirements_and_the_file_in_is_untouched(self):
         req, own = bare("care-bed")
         before = copy.deepcopy(req)
-        p = prepare(req, {"Q30": "利用者 1 人 + 介助者 1 人", "Q40": {"value": 1700, "unit": "N", "trust": 2, "basis": "JIS"}},
+        p = prepare(req, {"Q30": "driver", "Q40": {"value": 1700, "unit": "N", "trust": 2, "basis": "JIS"}},
                     "ありがとう", product_defaults=own)
         self.assertEqual(req, before)
         self.assertTrue(p.ready)
@@ -123,7 +126,7 @@ class PrepareTest(unittest.TestCase):
 
     def test_an_answer_overrides_the_default_of_a_default_item(self):
         req, own = bare("care-bed")
-        p = prepare(req, {"Q30": "x", "Q40": 1700, "Q60": 1500}, product_defaults=own)
+        p = prepare(req, {"Q30": "two_cargo", "Q40": 1700, "Q60": 1500}, product_defaults=own)
         by = {r["key"]: r for r in p.requirements_file["requirements"]}
         self.assertEqual((by["Q60"]["source"], by["Q60"]["value"]), ("hearing", 1500))
         self.assertEqual(sum(1 for r in p.answered["answers"] if r["key"] == "Q60"), 1)
@@ -141,7 +144,7 @@ class PrepareTest(unittest.TestCase):
 
     def test_hearing_text(self):
         req, own = bare("care-bed")
-        p = prepare(req, {"Q30": "x", "Q40": 1}, product_defaults=own)
+        p = prepare(req, {"Q30": "two_cargo", "Q40": 1}, product_defaults=own)
         self.assertEqual(hearing_text(p).split("、")[0], "質問 10 件")
         self.assertIn("答えが無いまま 1 件", hearing_text(p))  # Q03
 
@@ -170,7 +173,7 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertEqual(p.asked["questions"], [])
         (added,) = p.answered["answers"]
         self.assertEqual((added["key"], added["source"], added["trust"]), ("Q63", "default", 1))
-        self.assertIn("not checked", added["basis"])
+        self.assertIn("read 2026-11-03", added["basis"])
         out = {r["key"]: r for r in p.requirements_file["requirements"]}
         self.assertEqual(out["Q63"], added)  # the same record in the answered list and in the requirements
         self.assertEqual(hearing_text(p), "要件のファイルのまま進みます (既定値で足した 1 件: Q63)")
@@ -194,6 +197,48 @@ class RequirementsFileStandsTest(unittest.TestCase):
         self.assertEqual([q["req_key"] for q in p.asked["questions"]], ["Q20", "Q42", "Q51", "Q74"])
 
 
+class LoadingAnswerTest(unittest.TestCase):
+    """Q30 is the combination to check: the catalog takes only empty, driver, two and two_cargo."""
+
+    def test_the_names_and_their_japanese_words_map_to_a_loading(self):
+        for said, want in [("driver", "driver"), ("two_cargo", "two_cargo"), ("空車", "empty"), ("運転者だけ", "driver"),
+                           ("2 人", "two"), ("2人", "two"), ("2 人 + 荷", "two_cargo"), ("2人+荷", "two_cargo"), ("1 人", "driver"),
+                           ("EMPTY", "empty")]:
+            with self.subTest(said=said):
+                self.assertEqual(loading_answer(said), want)
+        for said in ("利用者 1 人 + 介助者 1 人", "周りの客", "x", "", 3, None):
+            with self.subTest(said=said):
+                self.assertIsNone(loading_answer(said))
+
+    def test_the_question_offers_the_four_and_an_answer_becomes_one_of_them(self):
+        self.assertEqual([c["value"] for c in item("Q30")["choices"]], list(LOADINGS))
+        req, own = bare("care-bed")
+        p = prepare(req, {"Q30": "運転者だけ", "Q40": 1700}, product_defaults=own)
+        by = {r["key"]: r for r in p.requirements_file["requirements"]}
+        self.assertEqual(by["Q30"]["value"], "driver")
+        self.assertEqual(loading_requirement(p.requirements_file), "driver")  # what the catalog takes
+
+    def test_an_answer_that_is_not_a_combination_is_refused_and_says_what_to_say(self):
+        req, own = bare("care-bed")
+        with self.assertRaises(IntakeError) as cm:
+            prepare(req, {"Q30": "利用者 1 人 + 介助者 1 人", "Q40": 1700}, product_defaults=own)
+        for word in ("empty", "driver", "two", "two_cargo", "介助者"):
+            self.assertIn(word, str(cm.exception))
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(IntakeError):  # the screen's answer is checked the same way
+            save_answer(d, {"answers": {"Q30": "周りの客"}})
+
+    def test_the_sample_answers_give_a_loading_the_catalog_takes(self):
+        for slug in product_files():
+            path = answers_file(slug)
+            answers = load_answers(path)[0] if path else {}
+            if "Q30" in answers:
+                with self.subTest(slug=slug):
+                    value = answers["Q30"]["value"] if isinstance(answers["Q30"], dict) else answers["Q30"]
+                    self.assertIn(value, LOADINGS)
+
+
 class SampleAnswersTest(unittest.TestCase):
     def test_each_product_with_its_sample_answers_is_ready_and_valid(self):
         for slug in product_files():
@@ -208,11 +253,14 @@ class SampleAnswersTest(unittest.TestCase):
                     self.assertIn(r["source"], ("hearing", "default"))
                     self.assertEqual(contract.errors("requirement", r), [])
 
-    def test_the_demo_vehicle_keeps_some_questions_open_on_purpose(self):
+    def test_the_demo_vehicle_answers_every_question_of_the_hearing(self):
         req = load_product("offroad-4w")
         answers, note = load_answers(answers_file("offroad-4w"))
         p = prepare(req, answers, note)
-        self.assertEqual(p.unresolved, ["Q03", "Q20", "Q91"])
+        self.assertEqual(p.unresolved, [])
+        by = {a["key"]: a["source"] for a in p.answered["answers"]}
+        for key in ("Q03", "Q20", "Q91"):
+            self.assertEqual(by[key], "hearing", key)
         self.assertEqual(p.answered["note"], note)
 
     def test_answers_file_with_a_stray_key_is_refused(self):
@@ -224,6 +272,33 @@ class SampleAnswersTest(unittest.TestCase):
             path.write_text("answers: {}\nstuff: 1\n", encoding="utf-8")
             with self.assertRaises(IntakeError):
                 load_answers(path)
+
+
+class EntryExitItemsTest(unittest.TestCase):
+    """The items for getting in and out: a rider's vehicle only, borrowed numbers are assumptions that say where they were read."""
+
+    OPENING = ["Q93", "Q94", "Q95", "Q96"]
+    KEYS = OPENING + ["Q97", "Q44", "Q45", "Q46", "Q47", "Q48", "Q49", "Q89"]
+
+    def test_they_apply_to_a_vehicle_people_ride_that_is_rough(self):
+        keys = {i["key"] for i in applicable_items({"ride": True, "rough": True, "self_propelled": True})}
+        self.assertTrue(set(self.KEYS) <= keys)
+        for flags in ({"ride": True}, {"rough": True}, {"lean": True}):
+            self.assertFalse(set(self.KEYS) & {i["key"] for i in applicable_items(flags)}, flags)
+
+    def test_each_has_a_value_a_basis_that_says_what_was_read_and_trust_3(self):
+        for key in self.KEYS:
+            it = item(key)
+            with self.subTest(key=key):
+                self.assertEqual(it["ask"], "default")  # not asked: the default is used and shown
+                self.assertEqual(it["default"]["trust"], 3)
+                basis = it["default"]["basis"]
+                self.assertTrue("not checked" in basis or "read 2026-11-04" in basis, basis)
+                self.assertTrue(it["why"] and it["example"])
+
+    def test_the_opening_items_say_that_a_net_does_not_count_as_the_side_guard(self):
+        for key in self.OPENING + ["Q47"]:
+            self.assertIn("付けて働く網", item(key)["why"], key)
 
 
 if __name__ == "__main__":

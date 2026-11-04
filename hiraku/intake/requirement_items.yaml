@@ -1,4 +1,4 @@
-# The requirement items HIRAKU can ask about (keys Q03..Q92), the same for every product.
+# The requirement items HIRAKU can ask about (keys Q03..Q97), the same for every product.
 # Which item a product needs, and whether the person is asked, follow from the flags:
 #   applies_if  expression over the product flags (hiraku.catalog.expr); an item that does not apply
 #               is neither shown nor asked
@@ -6,11 +6,15 @@
 #               confirm  = asked once with a default, the default is used when there is no answer
 #               default  = not asked; the default is used and shown, the person can change it
 #   question    what the hearing says (must and confirm)
+#   why         one line for a first-time reader: why the question is needed (shown on the screen with the question)
+#   example     an example answer (shown on the screen)
 #   choices     answers offered; the person can always write another (allow_other)
 #   default     {value, unit?, trust, basis}: used when nothing better is known. A product's own
 #               requirements file (data/requirements/products/) wins over it.
 # trust: 1 primary source, 2 secondary source, 3 assumption. "not checked in this repository" = the
 # value is taken from the cited page and that page has not been read again for this repository.
+# "read 2026-11-03 in a source check" = the value was seen in the cited source at the place named, in a
+# source check on that date. "tried 2026-11-03 ... not reachable" = the check could not reach the value.
 # Q01 (what to make) and Q02 (the flags) are not here: they are the sentence and A1's chips.
 
 items:
@@ -18,12 +22,16 @@ items:
     name: 使う頻度・年数
     applies_if: always
     ask: confirm
+    why: 壊れるまでに何回使われるかで、くり返しの力 (疲れ) の確かめ方を決めるためです。
+    example: 週末ごとに 5 年
     question: どのくらいの頻度で、何年くらい使いますか。
 
   - key: Q11
     name: 路面・床と摩擦係数
     applies_if: self_propelled or standing
     ask: confirm
+    why: 滑りやすさで、止まれるか・転ばないかの確かめ方が変わるためです。
+    example: 砂利 / 舗装路
     question: 走る(置く)面は何ですか。摩擦係数が分かれば添えてください。
     choices: [{label: 砂利, value: 砂利}, {label: 舗装路, value: 舗装路}, {label: 土, value: 土}, {label: 屋内の床, value: 床}]
 
@@ -47,6 +55,8 @@ items:
     name: 走りながらの横の傾き
     applies_if: self_propelled and rough
     ask: confirm
+    why: 横転しやすさの確かめに使います。
+    example: 15 度
     question: 走りながら、どのくらい横に傾いた斜面を通りますか。
     choices: [{label: 10°, value: 10, unit: deg}, {label: 15°, value: 15, unit: deg}, {label: 20°, value: 20, unit: deg}]
 
@@ -54,6 +64,8 @@ items:
     name: 段差
     applies_if: self_propelled
     ask: confirm
+    why: 越える段差の高さで、衝撃の大きさが決まるためです。
+    example: 100 mm
     question: 越える段差の高さは。
 
   - key: Q16
@@ -75,13 +87,16 @@ items:
       unit: m/s
       trust: 1
       basis: >-
-        気象庁「風の強さと吹き方」 平均 20 m/s (瞬間は約 1.5 倍), https://www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.pdf
-        (not checked in this repository)
+        気象庁「風の強さと吹き方」 平均 20 m/s (瞬間は約 1.5 倍), https://www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.pdf,
+        and the JMA glossary 非常に強い風 "20m/s以上30m/s未満", https://www.jma.go.jp/jma/kishou/know/yougo_hp/kaze.html;
+        read 2026-11-03 in a source check
 
   - key: Q19
     name: 気温 (範囲の高い端)
     applies_if: battery or electric or outdoor
     ask: confirm
+    why: 電池や樹脂が熱で弱くならないかを確かめるためです。
+    example: 40 度
     question: 使う場所の気温の高い側は何度ですか。
     default: {value: 40, unit: degC, trust: 3, basis: assumption (the hot end of the range of use)}
 
@@ -89,6 +104,8 @@ items:
     name: 水・ほこり (IP)
     applies_if: battery or electric
     ask: confirm
+    why: 雨や泥で電気の部品が壊れないかの確かめに使います。
+    example: 水の飛まつ
     question: 水やほこりへの強さ (IP) はどのくらい要りますか。
     choices: [{label: 対策なし, value: IPX0}, {label: 水の飛まつ, value: IPX4}, {label: 水・ほこりに強い, value: IP54}, {label: 水に浸かっても, value: IP67}]
 
@@ -96,7 +113,10 @@ items:
     name: 人数と荷重の組み合わせ
     applies_if: ride or lean
     ask: must
-    question: "何人が、どんな組み合わせで使いますか (たとえば、空車・運転者だけ・2 人・2 人 + 荷の全部を見る)。"
+    why: 人数と荷の組み合わせで、重さのかかり方が変わるためです。
+    example: 2 人 + 荷
+    question: "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。"
+    choices: [{label: 空車, value: empty}, {label: 運転者だけ, value: driver}, {label: 2 人, value: two}, {label: 2 人 + 荷, value: two_cargo}]
 
   - key: Q31
     name: 体格の範囲
@@ -105,7 +125,9 @@ items:
     default:
       value: 若年女性 5 % 〜 若年男性 95 %
       trust: 1
-      basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+      basis: >-
+        AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
+        (not checked in this repository; tried 2026-11-03: AIST; not reachable)
 
   - key: Q32
     name: 体重 (法令の計算用)
@@ -115,7 +137,9 @@ items:
       value: 55
       unit: kg
       trust: 1
-      basis: 細目告示 第2条 (1 人 55 kg), https://www.mlit.go.jp/jidosha/content/S002.pdf (not checked in this repository)
+      basis: >-
+        細目告示 第2条 第九号 "乗車定員1人の重量は55kg", PDF p.2 (the 2026.1.9 version),
+        https://www.mlit.go.jp/jidosha/content/S002.pdf; read 2026-11-03 in a source check
 
   - key: Q33
     name: 体重 (強さの不利側)
@@ -127,12 +151,15 @@ items:
       trust: 1
       basis: >-
         AIST 人体寸法データベース 1991-92, 体重, 若年男性 95 パーセンタイル,
-        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository;
+        tried 2026-11-03: AIST; not reachable)
 
   - key: Q34
     name: 弱い人がいるか
     applies_if: always
     ask: confirm
+    why: いる場合は、はさまれや倒れかかりをより厳しく見るためです。
+    example: いない / 子ども
     question: 子どもや高齢者など、力の弱い人が使ったり、そばにいたりしますか。
     choices: [{label: いない, value: いない}, {label: 高齢者, value: 高齢者}, {label: 子ども, value: 子ども}, {label: 高齢者と子ども, value: 高齢者と子ども}]
 
@@ -140,6 +167,8 @@ items:
     name: 積載
     applies_if: cargo
     ask: must
+    why: 荷の重さで、骨組みにかかる力が決まるためです。
+    example: 150 kg
     question: 載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。
 
   - key: Q41
@@ -151,6 +180,8 @@ items:
     name: 液体のこぼれまでの余裕角
     applies_if: liquid
     ask: confirm
+    why: 傾いたり揺れたりしたとき、中身がこぼれないかを確かめるためです。
+    example: 30 度
     question: 運ぶ液体がこぼれるまでの傾きの余裕は何度ですか。
 
   - key: Q43
@@ -158,16 +189,105 @@ items:
     applies_if: preload
     ask: default
 
+  - key: Q44
+    name: 足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)
+    applies_if: ride and rough
+    ask: default
+    why: 段を使うとき、一段ずつ無理なく上り下りできるか確かめるためです。
+    example: 300 mm
+    default:
+      value: 300
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994
+        Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
+  - key: Q45
+    name: 足を置く面の幅の下限
+    applies_if: ride and rough
+    ask: default
+    why: 足の裏が乗る広さがあるか確かめるためです。
+    example: 150 mm (実用は 250 mm)
+    default:
+      value: 150
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read
+        2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
+  - key: Q46
+    name: 足を置く面の外の縁から先の、つま先が入る空きの下限
+    applies_if: ride and rough
+    ask: default
+    why: つま先が車体に当たって足が段から外れないか確かめるためです。
+    example: 150 mm
+    default:
+      value: 150
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1
+        F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
+  - key: Q47
+    name: 開口を、乗る人が道具なしに片手・一つの動作で開けられること
+    applies_if: ride and rough
+    ask: default
+    why: 開けられない守り (固定の棒) では乗り降りできず、開けられる守り (開くネットや扉) なら開口と数えるためです。横の守りに付けて働く網は、横から押す試験では外して行うので、押す力を受ける守りには数えません。動かない守りと、この開口の両方が要ります。
+    example: はい
+    default:
+      value: はい
+      trust: 3
+      basis: >-
+        assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts
+        in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準
+        第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found
+
+  - key: Q48
+    name: 乗り降りの手がかりの高さの上限 (足を置く面から上へ)
+    applies_if: ride and rough
+    ask: default
+    why: 乗り降りのときにつかむ所へ手が届くか確かめるためです。
+    example: 1600 mm 以下 (基本 900 mm)
+    default:
+      value: 1600
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the
+        last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at
+        all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)
+
+  - key: Q49
+    name: 手でつかむ所の太さ (直径か平行な面の間) の下限
+    applies_if: ride and rough
+    ask: default
+    why: 細すぎて握りにくい・食い込むことがないか確かめるためです。
+    example: 16 mm (基本 25 mm)
+    default:
+      value: 16
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2
+        A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
   - key: Q50
     name: 最高速度
     applies_if: self_propelled
     ask: must
+    why: 止まるまでの距離と、ぶつかったときの強さを計算するためです。
+    example: 40 km/h
     question: 最高速度は。
 
   - key: Q51
     name: 加速
     applies_if: self_propelled
     ask: confirm
+    why: モーターと電池の大きさを決めるためです。
+    example: 0 から 40 km/h まで 6 秒
     question: 目標の加速 (たとえば 0 から最高速度まで何秒) はありますか。
 
   - key: Q52
@@ -184,6 +304,8 @@ items:
     name: 航続・稼働時間
     applies_if: self_propelled and battery
     ask: confirm
+    why: 電池の容量を決めるためです。
+    example: 2 時間
     question: 充電から次の充電まで、どのくらい動かしますか (距離か時間)。
 
   - key: Q55
@@ -195,6 +317,8 @@ items:
     name: アクチュエータの動く範囲
     applies_if: electric and not self_propelled
     ask: confirm
+    why: 動く部分が当たらない広さを確かめるためです。
+    example: 0 度から 60 度まで
     question: 動かす部分の範囲 (角度か長さ) は。
 
   - key: Q57
@@ -206,8 +330,8 @@ items:
       unit: mm
       trust: 1
       basis: >-
-        EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https://www.legislation.gov.uk/eur/2013/168/annex/I
-        (not checked in this repository)
+        EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) "ground clearance ≥180 mm",
+        https://www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check
 
   - key: Q60
     name: 静的に倒れない限界
@@ -218,6 +342,8 @@ items:
     name: 安全率 (降伏に対して)
     applies_if: always
     ask: confirm
+    why: 設計の余裕の大きさです。大きいほど安全で、重くなります。
+    example: 1.5
     question: 部材の安全率 (降伏に対する余裕) はいくつにしますか。
     default: {value: 1.5, unit: "1", trust: 3, basis: assumption}
 
@@ -234,13 +360,15 @@ items:
       value: ISO 13854 (指 25 mm)
       trust: 1
       basis: >-
-        ISO 13854:1996 の試し読み, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf
-        (not checked in this repository)
+        ISO 13854:1996 の試し読み, Table 1, PDF p.7, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf;
+        read 2026-11-03 in a source check
 
   - key: Q64
     name: 横転したときの保護枠 (ROPS)
     applies_if: ride and rough
     ask: confirm
+    why: 横転したとき乗っている人を守る枠があるかで、必要な強さの確かめ方が変わるためです。
+    example: つける
     question: 横転したときの保護枠 (ROPS) をつけますか。
     choices: [{label: つける, value: あり}, {label: つけない, value: なし}]
 
@@ -249,10 +377,58 @@ items:
     applies_if: ride and self_propelled
     ask: default
 
+  - key: Q66
+    name: 手の操作部に掛かる力
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 300
+      unit: N
+      trust: 3
+      basis: >-
+        assumption: UN Regulation No. 79 (1988 text, UN Treaty Series vol. 1519), table "Steering control effort
+        requirements" (M1, with a failure: 300 N), read 2026-11-03, taken as the largest hand force in use (using it as a
+        design load is the assumption)
+
+  - key: Q67
+    name: 手の操作部の握る点の動きの上限 (上の力をかけたとき)
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 5
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: the range where the feel and the position of the control do not change; no source
+
+  - key: Q68
+    name: 足の操作部に掛かる力
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 500
+      unit: N
+      trust: 1
+      basis: >-
+        UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN); read 2026-11-03 in a source check
+
+  - key: Q69
+    name: 足の操作部の踏む面の支えの動きの上限 (上の力をかけたとき)
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 5
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: small against the control's travel; no source
+
   - key: Q70
     name: 公道を走るか
     applies_if: ride and self_propelled
     ask: must
+    why: 公道なら、道路の決まりの確かめが必要になるためです。
+    example: 私有地だけ
     question: 公道を走りますか (公道なら軽自動車の区分になり、寸法・35°・回転半径が付いてきます)。
     choices: [{label: 公道を走る, value: 公道}, {label: 私有地だけ, value: 私有地だけ}]
 
@@ -275,12 +451,62 @@ items:
     name: 電池の電圧
     applies_if: battery
     ask: confirm
+    why: 60 V を超えると感電の確かめが必要になるためです。
+    example: 51.2 V
     question: 電池の電圧は (60 V を超えると高電圧の扱いが要ります)。
+
+  - key: Q75
+    name: 乗員と部品に掛かる横の加速度
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 0.7
+      unit: g
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964 (2014), proposed § 1422.3(e), "0.70 g or greater", p. 69024 (reasoning p. 68993); read
+        2026-11-03. The vehicle's own peak from its dynamics tests counts instead when it is larger
+
+  - key: Q76
+    name: 乗員と部品に掛かる前後の加速度
+    applies_if: ride and self_propelled
+    ask: default
+    default:
+      value: 0.9
+      unit: g
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964, § 1422.3(b)(1), peak braking coefficient of the test road 0.90, p. 69022; read
+        2026-11-03. The vehicle's own peak counts instead when it is larger
+
+  - key: Q77
+    name: 乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 725
+      unit: N
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964, § 1422.5(c)(5), 725 N (163 lbf), p. 69027; read 2026-11-03
+
+  - key: Q78
+    name: 横の力を除いたあとに残る横の変形の上限
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 25
+      unit: mm
+      trust: 1
+      basis: >-
+        CPSC NPR 79 FR 68964, § 1422.5(c), less than 25 mm of permanent deflection, p. 69027; read 2026-11-03
 
   - key: Q80
     name: 材料と接合
     applies_if: always
     ask: confirm
+    why: 溶接や締め付けの決まりのどれを使うかを選ぶためです。
+    example: 鋼の溶接
     question: 主な材料と、つなぎ方は。
     choices: [{label: 鋼を溶接, value: 鋼の溶接}, {label: アルミ, value: アルミ}, {label: 木, value: 木}, {label: 樹脂, value: 樹脂}]
 
@@ -294,10 +520,61 @@ items:
     applies_if: assembly
     ask: default
 
+  - key: Q86
+    name: 乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)
+    applies_if: ride and rough
+    ask: default
+    default:
+      value: 500
+      unit: kg
+      trust: 3
+      basis: >-
+        assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026),
+        3.5.2.1, 3.5.3.1, 3.6.1, read 2026-11-03, borrowed from tractors of 600 kg and more; they stay in the builder
+
+  - key: Q87
+    name: 泥や石を放す踏面の範囲 (車軸の真上から前へ)
+    applies_if: ride and outdoor and self_propelled
+    ask: default
+    default:
+      value: 30
+      unit: deg
+      trust: 3
+      basis: >-
+        道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号, read 2026-11-03. A public-road rule
+        for other traffic, borrowed: applying it to the occupants is an assumption
+
+  - key: Q88
+    name: 泥や石を放す踏面の範囲 (車軸の真上から後ろへ)
+    applies_if: ride and outdoor and self_propelled
+    ask: default
+    default:
+      value: 50
+      unit: deg
+      trust: 3
+      basis: >-
+        the same 第178条 第2項 第1号, read 2026-11-03 (borrowed, an assumption as Q87). The tread above the axle beyond
+        this arc counts too (assumption)
+
+  - key: Q89
+    name: 手でつかむ所の太さの上限
+    applies_if: ride and rough
+    ask: default
+    why: 太すぎて手が回らないことがないか確かめるためです。
+    example: 38 mm
+    default:
+      value: 38
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
   - key: Q90
     name: 悪路の走行距離
     applies_if: self_propelled and rough
     ask: confirm
+    why: くり返しの力 (疲れ) の確かめの長さを決めるためです。
+    example: 5000 km
     question: 悪路を合わせて何 km 走る前提で壊れないようにしますか。
     default: {value: 5000, unit: km, trust: 3, basis: assumption (no public basis found)}
 
@@ -305,9 +582,84 @@ items:
     name: 運転時間
     applies_if: continuous
     ask: confirm
+    why: 熱と摩耗の確かめの長さを決めるためです。
+    example: 1 日 2 時間、5 年
     question: 1 日に何時間、何年動かしますか。
 
   - key: Q92
     name: 繰り返し回数
     applies_if: (lean or electric or cargo) and not self_propelled
     ask: default
+
+  - key: Q93
+    name: 乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)
+    applies_if: ride and rough
+    ask: default
+    why: 座った人が横から入って出られる通り道を、残しているか確かめるためです。横の守りに付けて働く網は、横から押す試験では外して行うので、押す力を受ける守りには数えません。動かない守りと、この開口の両方が要ります。
+    example: 450 mm (勧めは 680 mm)
+    default:
+      value: 450
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1
+        (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read).
+        The current ISO 4252:2007 and ISO 2867:2011 were not checked
+
+  - key: Q94
+    name: 乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)
+    applies_if: ride and rough
+    ask: default
+    why: 足を床から外へ出し入れするときに、脚が下の守りや車体に当たらないか確かめるためです。横の守りに付けて働く網は、横から押す試験では外して行うので、押す力を受ける守りには数えません。動かない守りと、この開口の両方が要ります。
+    example: 300 mm
+    default:
+      value: 300
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives
+        250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
+  - key: Q95
+    name: 乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)
+    applies_if: ride and rough
+    ask: default
+    why: 座ったまま上体を外へ出し入れするときに、頭が上の枠に当たらないか確かめるためです。横の守りに付けて働く網は、横から押す試験では外して行うので、押す力を受ける守りには数えません。動かない守りと、この開口の両方が要ります。
+    example: 985 mm
+    default:
+      value: 985.2
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile
+        = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface
+
+  - key: Q96
+    name: 乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)
+    applies_if: ride and rough
+    ask: default
+    why: 立ったまま、または身をかがめて出入りするときに、頭と肩が通るか確かめるためです。横の守りに付けて働く網は、横から押す試験では外して行うので、押す力を受ける守りには数えません。動かない守りと、この開口の両方が要ります。
+    example: 1250 mm
+    default:
+      value: 1250
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat
+        is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor
+        in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)
+
+  - key: Q97
+    name: 地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限
+    applies_if: ride and rough
+    ask: default
+    why: 地面から片足で乗り上げられる高さかどうか確かめるためです。
+    example: 550 mm
+    default:
+      value: 550
+      unit: mm
+      trust: 3
+      basis: >-
+        ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read
+        2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are
+        an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)

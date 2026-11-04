@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N17b How HIRAKU was built (kinetic type sample)</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js"></script>
+<script src="n17b_kt.data.js"></script>
+<style>
+  /* N17b, kinetic type sample. The camera goes forward through a corridor
+     whose two walls carry the subjects of real commits (oldest at the
+     entrance; each faces the camera, turned only a little, so the depth shows
+     in the rows going into the distance), while the lines of code written count up as a large extruded
+     figure held in front of the camera (sentence 1 of the voice). With
+     sentence 2 the walls move apart (the way opens) and the commits and the
+     days come in under the figure; then the figure, the caption and that line
+     move up, "1 回の運転で" comes in and four cards (the depth of one run, as
+     N17b's) come forward one after another, each figure extruded and counting
+     up. Every figure and subject comes from git and the run's record through
+     promo/kinetic_data.py (n17b_kt.data.js, rules in the same file).
+     Every frame is drawn from t by the onSeek hook below (no CSS animation,
+     no wall clock, no random numbers).
+     Faces: Noto Sans JP and Noto Serif JP (SIL Open Font License 1.1),
+     the copies installed on the system; nothing is downloaded. */
+  :root {
+    --page-bg: var(--night);
+    --stage-bg: var(--night);
+    --kt-sans: "Noto Sans JP", sans-serif;
+    --kt-serif: "Noto Serif JP", serif;
+  }
+  .clip { position: absolute; inset: 0; overflow: hidden; }
+  .view { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .world, .hud {
+    position: absolute;
+    left: 50%;
+    width: 0;
+    height: 0;
+    transform-style: preserve-3d;
+  }
+  .msg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    white-space: nowrap;
+    font-family: var(--kt-sans);
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--on-night-soft);
+    transform-origin: 0 50%;
+    backface-visibility: hidden;
+  }
+  .msg b { font-weight: 400; color: var(--warm); margin-right: 0.6em; font-variant-numeric: tabular-nums; }
+  .rail { position: absolute; left: 0; top: 0; background: var(--glow); transform-origin: 0 50%; backface-visibility: hidden; }
+  .num3d { position: absolute; left: 0; top: 0; transform-style: preserve-3d; }
+  .ly {
+    position: absolute;
+    left: 0;
+    top: 0;
+    white-space: nowrap;
+    font-family: var(--kt-sans);
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    backface-visibility: hidden;
+  }
+  .ly .d { display: inline-block; text-align: right; }
+  .ly .u { font-family: var(--kt-serif); font-weight: 900; margin-left: 0.12em; }
+  .line {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    white-space: nowrap;
+    font-family: var(--kt-sans);
+  }
+  .cap { font-weight: 300; letter-spacing: 0.2em; color: var(--on-night-soft); }
+  .sub { font-weight: 300; color: var(--on-night); }
+  .sub b { font-weight: 500; color: var(--glow); margin-right: 0.15em; }
+  .sub .sep { color: var(--on-night-soft); margin: 0 0.7em; }
+  .stamp { position: absolute; text-align: right; white-space: nowrap; font-family: var(--kt-sans); color: var(--on-night-soft); }
+  .head { font-weight: 300; letter-spacing: 0.03em; color: var(--on-night); }
+  .head em { font-style: normal; font-family: var(--kt-serif); font-weight: 900; color: var(--warm); margin: 0 0.08em; }
+  .cards { position: absolute; }
+  .card { position: absolute; top: 0; transform-style: preserve-3d; transform-origin: 50% 100%; }
+  .card .rule { position: absolute; left: 0; top: 0; width: 100%; background: var(--glow); }
+  .card .lab { white-space: nowrap; font-family: var(--kt-sans); font-weight: 500; line-height: 1.5; color: var(--on-night); }
+  .card .fig { position: relative; display: inline-block; vertical-align: top; transform-style: preserve-3d; }
+  .card .fl {
+    position: absolute;
+    left: 0;
+    top: -0.175em;  /* a line of 1.5 (room for the glyphs) centred on the 1.15 em of .fig */
+    white-space: nowrap;
+    font-family: var(--kt-sans);
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    backface-visibility: hidden;
+  }
+  .card .fl .d { display: inline-block; text-align: right; }
+  .card .fl .u { font-family: var(--kt-serif); font-weight: 900; margin-left: 0.18em; }
+  .card .cs { white-space: nowrap; font-family: var(--kt-sans); font-weight: 300; line-height: 1.5; color: var(--on-night-soft); }
+  .card .cs b { font-weight: 500; color: var(--on-night); }
+</style>
+</head>
+<body data-duration="5.8">
+<div class="stage">
+  <div class="safe">
+    <div class="clip"><div class="view"><div class="world"></div><div class="hud"></div></div></div>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  (function () {
+    const K = window.KT_DATA, R = K.rules, V = K.values, L = window.PROMO_LAYOUT;
+    const W = L.stage.w, BAND = L.subtitle_band.y;
+    const root = document.documentElement.style;
+    root.setProperty("--u", `min(calc(100vw / ${W}), calc(100vh / ${L.stage.h}))`);
+    for (const [k, v] of Object.entries({ "stage-w": W, "stage-h": L.stage.h, "band-y": BAND,
+                                          "band-h": L.subtitle_band.h }))
+      root.setProperty(`--${k}`, `calc(${v} * var(--u))`);
+    for (const [k, v] of Object.entries(L.colors)) if (!k.startsWith("_")) root.setProperty(`--${k.replace(/_/g, "-")}`, v);
+    const px = (v) => `calc(${v} * var(--u))`;
+    const css = getComputedStyle(document.documentElement);
+    const color = (name) => (L.colors[name.replace(/-/g, "_")] || css.getPropertyValue(`--${name}`)).trim();
+    const stageEl = document.querySelector(".stage");
+    const unit = () => stageEl.getBoundingClientRect().width / W;  // CSS px per design px
+
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    const lin = (t, a, b) => clamp01((t - a) / (b - a));
+    function bezier(x1, y1, x2, y2) {
+      const at = (a, b, u) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3;
+      return (x) => {
+        if (x <= 0) return 0;
+        if (x >= 1) return 1;
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (at(x1, x2, m) < x) lo = m; else hi = m;
+        }
+        return at(y1, y2, (lo + hi) / 2);
+      };
+    }
+    // every ease is in the rules (eases): each starts and ends at rest
+    const E = R.eases;
+    const camEase = bezier(...E.cam), easeOut = bezier(...E.enter), easeInOut = bezier(...E.move);
+    const countEase = bezier(...E.count);
+    const mix = (a, b, f) => {
+      const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const A = p(a), B = p(b);
+      return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * f)).join(",")})`;
+    };
+    const fmt = (v) => v.toLocaleString("en-US");
+    function counted(v, t, s0, s1) {
+      const n = R.count_steps;
+      const j = Math.floor(lin(t, s0, s1) * n);
+      return j >= n ? v : Math.floor(v * countEase(j / n));
+    }
+
+    const T = R.times, C = R.corridor, N = R.num, CAM = R.camera, P = R.view.perspective_px, EYE = R.view.eye_y;
+    const FACE = C.face_deg * Math.PI / 180;
+    // the camera at t: how far it has gone, its roll and turn (the corridor's), the figure's turn
+    function camera(t) {
+      const q = camEase(lin(t, T.cam_s[0], T.cam_s[1]));
+      const at = (a, b) => a + (b - a) * q;
+      return { z_px: q * C.travel_px, roll_deg: at(CAM.roll_from_deg, CAM.roll_to_deg),
+               yaw_deg: at(CAM.yaw_from_deg, CAM.yaw_to_deg),
+               fig_rx_deg: at(N.rx_from_deg, N.rx_to_deg), fig_ry_deg: at(N.ry_from_deg, N.ry_to_deg) };
+    }
+    const view = document.querySelector(".view"), world = document.querySelector(".world"), hud = document.querySelector(".hud");
+    view.style.perspective = px(P);
+    view.style.perspectiveOrigin = `50% ${px(EYE)}`;
+    world.style.top = hud.style.top = px(EYE);
+
+    // --- the corridor: commit subjects on two walls ---------------------------
+    const MSGS = V.messages.map((m, i) => {
+      const el = document.createElement("div");
+      el.className = "msg";
+      el.style.fontSize = px(C.size_px);
+      el.innerHTML = `<b>${m.sha}</b>`;
+      el.appendChild(document.createTextNode(m.text));
+      world.appendChild(el);
+      // alternate walls; rows cycle in pairs so neighbours on one wall differ in height
+      const side = i % 2 === 0 ? -1 : 1;
+      const row = C.rows_y_px[Math.floor(i / 2) % C.rows_y_px.length];
+      return { el, side, y: row, z: C.z0_px - i * C.pitch_px };
+    });
+
+    // thin rails along the walls (no text), in segments so a segment near the
+    // camera can be left out like a subject
+    const RAILS = [];
+    for (const side of [-1, 1]) for (const y of C.rails_y_px) {
+      for (let z = 0; z > -C.rail_len_px; z -= C.rail_seg_px) {
+        const el = document.createElement("div");
+        el.className = "rail";
+        el.style.width = px(C.rail_seg_px);
+        el.style.height = px(C.rail_px);
+        world.appendChild(el);
+        RAILS.push({ el, side, y, z });
+      }
+    }
+
+    // --- the figure: lines written, extruded ------------------------------------
+    const night = color("night"), front = color("glow"), sideC = color("on-night-soft"), warm = color("warm");
+    const fig = document.createElement("div");
+    fig.className = "num3d";
+    fig.dataset.box = "n17b_kt.num";
+    fig.dataset.kind = "number";
+    fig.style.fontSize = px(N.size_px);
+    let html = "";
+    for (let k = N.layers - 1; k >= 0; k--) {
+      const c = k === 0 ? front : mix(sideC, night, 0.25 + 0.6 * (k / (N.layers - 1)));
+      // the unit (a Japanese word) only on the face: extruded Japanese is not drawn
+      html += `<div class="ly" style="color:${c};transform:translateZ(${px(-k * N.depth_px / (N.layers - 1))})">` +
+        `<span class="d"></span><span class="u" style="font-size:${N.unit_em}em;color:${warm};` +
+        `${k === 0 ? "" : "visibility:hidden"}">行</span></div>`;
+    }
+    fig.innerHTML = html;
+    hud.appendChild(fig);
+    const layers = [...fig.querySelectorAll(".ly")], digits = [...fig.querySelectorAll(".d")];
+    const probe = document.createElement("div");
+    probe.className = "ly";
+    probe.style.cssText = `position:absolute;visibility:hidden;font-size:${px(N.size_px)}`;
+    document.body.appendChild(probe);
+    function size() {
+      probe.innerHTML = `<span class="d">${fmt(V.lines_total)}</span><span class="u" style="font-size:${N.unit_em}em">行</span>`;
+      const d = probe.querySelector(".d").getBoundingClientRect().width, all = probe.getBoundingClientRect();
+      for (const s of digits) s.style.width = `${d}px`;
+      Object.assign(fig.style, { width: `${all.width}px`, height: `${all.height}px`,
+                                 left: `${-all.width / 2}px`, top: `${-all.height / 2}px` });
+      // each card's digits keep the width of its final figure, so the unit stays put while counting
+      for (const c of CARDS) {
+        probe.innerHTML = `<span class="d">${fmt(c.v)}</span><span class="u" ` +
+          `style="font-size:${CD.unit_em}em;margin-left:0.18em">${c.unit}</span>`;
+        probe.style.fontSize = px(CD.num_px);
+        const w = probe.querySelector(".d").getBoundingClientRect().width;
+        for (const s of c.digits) s.style.width = `${w}px`;
+        c.el.querySelector(".fig").style.width = `${probe.getBoundingClientRect().width}px`;
+      }
+      probe.style.fontSize = px(N.size_px);
+    }
+
+    // --- flat lines: caption, commits and days, the stamp ------------------------
+    const safe = document.querySelector(".safe");
+    function flat(cls, box, rule, html, kind) {
+      const el = document.createElement("div");
+      el.className = cls;
+      el.dataset.box = box;
+      el.dataset.kind = kind;
+      el.style.cssText = `top:${px(rule.y)};height:${px(rule.h)};font-size:${px(rule.size_px)};line-height:${px(rule.h)}`;
+      el.innerHTML = `<span class="in">${html}</span>`;
+      safe.appendChild(el);
+      return el;
+    }
+    const cap = flat("line cap", "n17b_kt.cap", R.cap, "書いたコード", "label");
+    const sub = flat("line sub", "n17b_kt.sub", R.sub,
+      `<b>${fmt(V.commits)}</b>コミット<span class="sep">·</span><b>${V.days}</b>日目`, "label");
+    const S = R.stamp;
+    const at = K.counted_at ? K.counted_at.replace("T", " ").replace(/\+.*$/, "") : "";
+    const stamp = flat("stamp", "n17b_kt.stamp", S,
+      `数えた日時 ${at}  ·  git の ${V.ref} (${V.head})  ·  壁はコミットの題 ${V.messages.length} 件 (${fmt(V.subjects_from)} 件から等間隔)` +
+      `  ·  運転の記録 ${V.depth.run_id}`, "note");
+    Object.assign(stamp.style, { left: px(S.x), width: px(S.w) });
+
+    // --- the depth (sentence 2): the heading and four cards ----------------------
+    const DP = R.depth, CD = DP.cards, Dv = V.depth;
+    const head = flat("line head", "n17b_kt.head", DP.head, "1 回の<em>運転</em>で", "label");
+    // in the order of a run: what is judged, with what, checked how, and the end
+    const CARDS = [
+      { key: "areas", lab: "見る分野", v: Dv.domains, unit: Dv.assembly ? "分野 + 組み立て" : "分野",
+        sub: "1 台の車を、分野をまたいで判断" },
+      { key: "tools", lab: "解析のツール", v: Dv.tools, unit: "本",
+        sub: `答えの分かっている例 <b>${fmt(Dv.known_cases)}</b> 件で確認` },
+      { key: "comparisons", lab: "手計算と解析の照合", v: Dv.comparisons, unit: "回",
+        sub: Dv.explained === Dv.mismatches ? `食い違い <b>${Dv.mismatches}</b> 件は原因を特定`
+          : `食い違い <b>${Dv.mismatches}</b> 件、原因を特定 <b>${Dv.explained}</b> 件` },
+      { key: "passed", lab: "直して、合格", v: Dv.passed, unit: `/ ${Dv.areas}`,
+        sub: `設計を直した <b>${Dv.versions}</b> 版目で` },
+    ];
+    const deck = document.createElement("div");
+    deck.className = "cards";
+    deck.style.cssText = `left:${px(CD.x)};top:${px(CD.y)};width:${px(CD.w)};height:${px(CD.h)}`;
+    safe.appendChild(deck);
+    const cw = (CD.w - 3 * CD.gap_px) / 4;
+    for (const [i, c] of CARDS.entries()) {
+      const el = document.createElement("div");
+      el.className = "card";
+      el.dataset.box = `n17b_kt.depth.${c.key}`;
+      el.style.cssText = `left:${px(i * (cw + CD.gap_px))};width:${px(cw)};height:${px(CD.h)}`;
+      let ly = "";
+      for (let k = CD.layers - 1; k >= 0; k--) {
+        const col = k === 0 ? front : mix(sideC, night, 0.25 + 0.6 * (k / (CD.layers - 1)));
+        ly += `<div class="fl" style="color:${col};transform:translateZ(${px(-k * CD.depth_px / (CD.layers - 1))})">` +
+          `<span class="d"></span><span class="u" style="font-size:${CD.unit_em}em;color:${warm};` +
+          `${k === 0 ? "" : "visibility:hidden"}">${c.unit}</span></div>`;
+      }
+      el.innerHTML = `<div class="rule" style="height:${px(CD.rule_px)}"></div>` +
+        `<div class="lab" data-kind="label" style="font-size:${px(CD.lab_px)};padding-top:${px(16)}">${c.lab}</div>` +
+        `<div class="fig" data-box="n17b_kt.depth.${c.key}.num" data-kind="number" ` +
+        `style="font-size:${px(CD.num_px)};height:${px(CD.num_px * 1.15)};margin-top:${px(2)}">${ly}</div>` +
+        `<div class="cs" style="font-size:${px(CD.sub_px)};margin-top:${px(10)}">${c.sub}</div>`;
+      deck.appendChild(el);
+      c.el = el;
+      c.layers = [...el.querySelectorAll(".fl")];
+      c.digits = [...el.querySelectorAll(".fl .d")];
+      c.parts = [...el.querySelectorAll(".rule, .lab, .cs, .fl")];
+    }
+
+    // --- the frame at t ----------------------------------------------------------
+    function fadeIn(el, t, at, dur, rise) {
+      const q = easeOut(lin(t, at, at + dur));
+      el.style.opacity = String(q);
+      el.style.transform = `translateY(${px(rise * (1 - q))})`;
+    }
+    function draw(t) {
+      size();
+      const u = unit();
+      const cam = camera(t), go = cam.z_px;
+      const open = easeInOut(lin(t, T.open_s[0], T.open_s[1]));
+      const half = C.half_w_px + (C.open_w_px - C.half_w_px) * open;
+      world.style.transform = `rotateZ(${cam.roll_deg}deg) rotateY(${cam.yaw_deg}deg) translateZ(${px(go)})`;
+      // place every subject, then fade it by where it falls on the screen
+      for (const m of MSGS) {
+        const w = m.el.offsetWidth / u;  // design px of the subject
+        // the inner end on the wall line, the face turned FACE about it: the outer end comes nearer
+        const near = m.z + go + w * Math.sin(FACE);   // nearest end, relative to the camera plane
+        const mid = m.z + go + w * Math.sin(FACE) / 2;
+        m.el.style.transformOrigin = m.side < 0 ? "100% 50%" : "0 50%";
+        m.el.style.transform = `translate3d(${px(m.side < 0 ? -half - w : half)}, ${px(m.y - C.size_px * 0.75)}, ` +
+          `${px(m.z)}) rotateY(${m.side < 0 ? C.face_deg : -C.face_deg}deg)`;
+        m.gone = near > P - C.near_px;   // too close (or behind): not drawn
+        m.depth = clamp01((C.far_px + mid) / (C.far_px * 0.45));
+      }
+      const dim = 1 - R.depth.cards.rail_dim * easeOut(lin(t, T.cards_s, T.cards_s + 0.6));
+      for (const r of RAILS) {
+        // left: from z into the distance; right: from z - seg towards the camera
+        const z = r.side < 0 ? r.z : r.z - C.rail_seg_px;
+        r.el.style.transform = `translate3d(${px(r.side * half)}, ${px(r.y)}, ${px(z)}) rotateY(${r.side < 0 ? 90 : -90}deg)`;
+        const near = r.z + go, mid = r.z - C.rail_seg_px / 2 + go;
+        const a = near > P - C.near_px ? 0 : dim * C.rail_alpha * clamp01((C.rail_far_px + mid) / (C.rail_far_px * 0.45));
+        r.el.style.opacity = a.toFixed(3);
+        r.el.style.visibility = a < 0.01 ? "hidden" : "visible";
+      }
+      const sr = stageEl.getBoundingClientRect();
+      const box = (el) => {
+        const r = el.getBoundingClientRect();
+        return { x0: (r.left - sr.left) / u, y0: (r.top - sr.top) / u, x1: (r.right - sr.left) / u, y1: (r.bottom - sr.top) / u };
+      };
+      // a subject also keeps clear of the figure and the two lines: it fades as
+      // the middle of its box comes within fade_px of them (the far subjects
+      // gather at the vanishing point behind the figure, and would show
+      // through its sides)
+      // with sentence 2 the amount moves up to leave room for the depth
+      const up = easeInOut(lin(t, T.lift_s[0], T.lift_s[1]));
+      const LF = R.lift;
+      fig.style.transform = `translateY(${px(LF.fig_dy_px * up)}) scale(${1 + (LF.fig_scale - 1) * up}) ` +
+        `rotateX(${cam.fig_rx_deg}deg) rotateY(${cam.fig_ry_deg}deg)`;
+      fadeIn(cap, t, T.cap_s, 0.5, 12);
+      fadeIn(sub, t, T.sub_s, 0.5, 16);
+      cap.style.transform += ` translateY(${px(LF.cap_dy_px * up)})`;
+      sub.style.transform += ` translateY(${px(LF.sub_dy_px * up)})`;
+      // the heading, then the cards one after another: each comes forward from the
+      // depth of the corridor, and its figure counts up
+      const hq = easeOut(lin(t, T.head_s, T.head_s + 0.45));
+      head.style.opacity = String(hq);
+      head.style.transform = `translateY(${px(18 * (1 - hq))})`;
+      head.style.letterSpacing = `${0.03 + 0.3 * (1 - hq)}em`;
+      for (const [i, c] of CARDS.entries()) {
+        const s0 = T.cards_s + i * T.card_step_s;
+        const q = easeOut(lin(t, s0, s0 + T.card_in_s));
+        // opacity on the parts, not the card: opacity on the card would flatten the extruded figure
+        const a = q < 0.01 ? "0" : Math.min(1, q * 1.4).toFixed(3);
+        for (const p of c.parts) p.style.opacity = a;
+        c.el.style.visibility = q < 0.01 ? "hidden" : "visible";
+        // each card has its own perspective (about its bottom middle), so a far card
+        // shrinks into its own place and not toward the screen's middle (into its neighbour)
+        c.el.style.transform = `perspective(${px(CD.perspective_px)}) ` +
+          `translate3d(0, ${px(CD.rise_px * (1 - q))}, ${px(CD.from_z_px * (1 - q))}) ` +
+          `rotateX(${CD.from_rx_deg * (1 - q)}deg)`;
+        const n = fmt(counted(c.v, t, s0 + T.card_count_s[0], s0 + T.card_count_s[1]));
+        for (const d of c.digits) d.textContent = n;
+        // the figure turns a little toward the camera as it lands
+        c.el.querySelector(".fig").style.transform = `rotateY(${CD.ry_deg + (CD.from_ry_deg - CD.ry_deg) * (1 - q)}deg)`;
+      }
+      // the figure by its glyphs (its line box is 1.5 em tall, the digits about 0.75 em), the lines once shown
+      const fb = box(fig), fi = (fb.y1 - fb.y0) * C.fig_inset;
+      const keep = [{ ...fb, y0: fb.y0 + fi, y1: fb.y1 - fi }];
+      for (const [el, s0] of [[cap, T.cap_s], [sub, T.sub_s], [head, T.head_s]]) if (t > s0) keep.push(box(el.firstChild));
+      for (const c of CARDS) if (c.el.style.visibility === "visible") keep.push(box(c.el));
+      // the gap between the two boxes (a subject is long and flat: all of it keeps clear)
+      const apart = (a, b) => Math.max(b.x0 - a.x1, a.x0 - b.x1, b.y0 - a.y1, a.y0 - b.y1);
+      // nearest first: a subject also keeps clear of the nearer subjects shown
+      const shown = [];
+      for (const m of [...MSGS].sort((p, q) => q.z - p.z)) {
+        let a = 0;
+        if (!m.gone && m.depth > 0) {
+          const b = box(m.el);
+          const room = Math.min(b.x0, b.y0, W - b.x1, BAND - b.y1, ...keep.map((k) => apart(b, k))) - C.edge_px;
+          // too small on the screen to read: faded (the box is one line of 1.5 em)
+          const seen = clamp01(((b.y1 - b.y0) / 1.5 - C.min_seen_px) / C.min_seen_fade_px);
+          a = C.alpha * m.depth * seen * clamp01(room / C.fade_px);
+          for (const s of shown) a = Math.min(a, C.alpha * clamp01(apart(b, s) / C.fade_px));
+          if (a >= 0.05) shown.push(b);
+        }
+        m.el.style.opacity = a < 0.05 ? "0" : a.toFixed(3);
+        m.el.style.visibility = a < 0.05 ? "hidden" : "visible";
+      }
+      // the figure: comes in, counts up with sentence 1, turns a little as the camera goes
+      const on = easeOut(lin(t, T.num_in_s, T.num_in_s + 0.4));
+      for (const l of layers) l.style.opacity = String(on);
+      const v = counted(V.lines_total, t, T.count_s[0], T.count_s[1]);
+      for (const s of digits) s.textContent = fmt(v);
+      fadeIn(stamp, t, T.stamp_s, 0.4, 0);
+    }
+    window.N17B_KT = { draw, camera, MSGS, counted, cards: CARDS.map((c) => [c.key, c.v]) };
+    window.__ktDraw = draw;
+  })();
+</script>
+<script src="timeline.js"></script>
+<script>
+  window.promo.onSeek(window.__ktDraw);
+  window.__ktDraw(0);
+</script>
+</body>
+</html>

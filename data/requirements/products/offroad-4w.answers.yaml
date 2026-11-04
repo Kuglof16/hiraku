@@ -1,11 +1,20 @@
 # Sample answers to the hearing for the demo vehicle (data/requirements/offroad-4w.yaml, which is not
 # changed). The "answer file" form of N14: key -> {value, unit?, trust?, basis?}. trust defaults to 1
 # (the person's own statement) and basis to "answered in the hearing".
-# Q03 (use), Q20 (IP) and Q91 (hours) are left unanswered on purpose: they stay open in the hearing.
+# Q03 (use), Q20 (IP) and Q91 (hours) are answered too (they were left open before): the N14 scene answers every question.
 # A key the requirements file already has is not asked, so it is not answered here.
 # "not checked in this repository" = the value is taken from the cited page and that page has not
-# been read again for this repository.
+# been read again for this repository. "read 2026-11-03 in a source check" = the value was seen in the
+# cited source in a source check on that date.
 answers:
+  Q03:
+    value: 週末ごと、5 年
+    trust: 3
+    basis: assumption (a sample answer)
+  Q20:
+    value: IP54
+    trust: 3
+    basis: assumption (a sample answer, dust and splashing water on a forest road)
   Q34:
     value: いない
     trust: 3
@@ -13,7 +22,7 @@ answers:
   Q64:
     value: あり
     trust: 1
-    basis: ROHVA 1 has an item for ROPS, https://rohva.org/ansi-standard/ (not checked in this repository)
+    basis: ROHVA 1 has an item for ROPS, https://rohva.org/ansi-standard/; read 2026-11-03 in a source check
   Q74:
     value: 51.2
     unit: V
@@ -23,4 +32,8 @@ answers:
     value: 鋼の溶接
     trust: 3
     basis: assumption (steel tube frame)
+  Q91:
+    value: 1 日 2 時間、5 年
+    trust: 3
+    basis: assumption (a sample answer)
 note: 林道だけで使い、公道は走らない

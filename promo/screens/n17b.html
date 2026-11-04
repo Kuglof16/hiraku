@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N17b How HIRAKU was built</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n17b"></script>
+<script src="n17b.data.js"></script>
+<style>
+  /* N17b: how much and how deep. With sentence 1 of the voice, the amount
+     (lines of code written, the commits and the days, from git); with
+     sentence 2, four cards of what one run goes through (from the run's
+     events.jsonl). Behind them, faint, the commit graph from git: one lane
+     per Claude Code session, commits as dots on a time axis, merges joining
+     main. Every figure comes from n17b.data.js
+     (promo/n17b_data.py); placement and times: layout.json n17b (CSS
+     variables from layout.js). */
+  :root {
+    --page-bg: var(--night);
+    --stage-bg: var(--night);
+    --rule: rgba(246, 234, 208, 0.3);
+    /* lane tints: unbleached to warm light, kept close to one another */
+    --l-lead: #f6ead0;
+    --l-design: #ecd3a2;
+    --l-analysis: #e6c48c;
+    --l-k2: #dcb98a;
+    --l-screen: #f0ddb4;
+    --l-qa: #d8c9a6;
+    --l-intake: #e4d0ac;
+    --l-promo: #e7b36a;
+  }
+
+  /* the commit graph, behind everything else (first in the stage, no box name:
+     it is a backdrop and may lie under the boxes) */
+  .lanes {
+    position: absolute;
+    left: var(--lanes-x);
+    top: var(--lanes-y);
+    width: var(--lanes-w);
+    height: var(--lanes-h);
+    /* the dim fills forwards only, so before dim_s the come-in decides */
+    animation: lanes-in var(--flow-in-dur) ease-out both, lanes-dim var(--lanes-dim-dur) ease-in-out forwards;
+    animation-delay: var(--t-lanes), var(--t-dim);
+  }
+  .lanes .reveal { position: absolute; inset: 0; }
+  .lanes svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .lanes .track { stroke: var(--c); stroke-opacity: 0.45; stroke-linecap: round; }
+  .lanes .track.main { stroke-opacity: 0.8; }
+  .lanes .day { stroke: rgba(246, 234, 208, 0.5); stroke-width: 1; stroke-dasharray: 3 6; }
+  .lanes .dot { fill: var(--c); animation: dot-in var(--flow-dot-dur) ease-out both; }
+  .lanes .merge {
+    fill: none;
+    stroke: var(--c);
+    stroke-opacity: 0.4;
+    stroke-width: 1.4;
+    stroke-dasharray: 1 1;
+    animation: draw var(--flow-merge-dur) ease-in-out both;
+  }
+  .lanes .join { fill: var(--glow); animation: dot-in var(--flow-dot-dur) ease-out both; }
+  /* a halo of the night colour round the text in front, so no line of the
+     graph runs through a letter */
+  .amount, .head, .card, .stamp { text-shadow: 0 0 var(--lanes-halo-px) var(--night), 0 0 calc(0.4 * var(--lanes-halo-px)) var(--night); }
+  @keyframes lanes-in { from { opacity: 0; } to { opacity: var(--lanes-alpha-on); } }
+  @keyframes lanes-dim { from { opacity: var(--lanes-alpha-on); } to { opacity: var(--lanes-alpha-dim); } }
+  @keyframes dot-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+  .amount {
+    position: absolute;
+    left: var(--amount-x);
+    top: var(--amount-y);
+    width: var(--amount-w);
+    height: var(--amount-h);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: dim var(--amount-dim-dur) ease-in-out both;
+    animation-delay: var(--t-dim);
+  }
+  .amount .cap {
+    height: var(--amount-cap-h);
+    font: 500 var(--amount-cap-size-px) / 1.45 var(--font-ja);
+    letter-spacing: 0.2em;
+    color: var(--on-night-soft);
+    animation: fade-in var(--count-in-dur) ease-out both;
+    animation-delay: var(--t-amount);
+  }
+  .amount .num {
+    height: var(--amount-num-h);
+    display: flex;
+    align-items: baseline;
+    font: 300 var(--amount-num-size-px) / 1.12 var(--font-latin);
+    font-variant-numeric: tabular-nums;
+    color: var(--glow);
+    white-space: nowrap;
+    animation: fade-in var(--count-in-dur) ease-out both;
+    animation-delay: var(--t-amount);
+  }
+  .amount .num .unit { font: 400 var(--amount-unit-size-px) / 1.5 var(--font-ja); margin-left: 0.25em; color: var(--on-night); }
+  .amount .sub {
+    height: var(--amount-sub-h);
+    font: 400 var(--amount-sub-size-px) / 1.45 var(--font-ja);
+    color: var(--on-night);
+    white-space: nowrap;
+    animation: fade-in var(--count-in-dur) ease-out both;
+    animation-delay: var(--t-amount-sub);
+  }
+  .amount .sub b { font: 400 1.15em / 1 var(--font-latin); font-variant-numeric: tabular-nums; color: var(--glow); margin-right: 0.2em; }
+  .amount .sub .sep { color: var(--on-night-soft); margin: 0 0.7em; }
+
+  .head {
+    position: absolute;
+    left: var(--head-x);
+    top: var(--head-y);
+    width: var(--head-w);
+    height: var(--head-h);
+    font: 500 var(--head-size-px) / 1.5 var(--font-ja);
+    letter-spacing: 0.12em;
+    color: var(--on-night-soft);
+    animation: fade-in var(--count-in-dur) ease-out both;
+    animation-delay: var(--t-cards);
+  }
+  .depth {
+    position: absolute;
+    left: var(--depth-x);
+    top: var(--depth-y);
+    width: var(--depth-w);
+    height: var(--depth-h);
+    display: flex;
+    gap: var(--depth-gap-px);
+  }
+  .card {
+    position: relative;
+    width: var(--depth-card-w);
+    /* room under the card for the rise of fade-up, so it stays in its box */
+    height: calc(100% - 16 * var(--u));
+    padding-top: var(--depth-pad-top);
+    border-top: var(--depth-rule-px) solid var(--rule);
+    animation: fade-up var(--count-in-dur) ease-out both;
+  }
+  /* a small arrow on the rule in the gap after each card but the last: the
+     cards are the steps of one run, in order */
+  .card:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: calc(-0.5 * var(--depth-arrow-px) - 0.5 * var(--depth-rule-px));
+    right: calc(-0.5 * var(--depth-gap-px) - 0.35 * var(--depth-arrow-px));
+    width: var(--depth-arrow-px);
+    height: var(--depth-arrow-px);
+    border-top: var(--depth-rule-px) solid var(--glow);
+    border-right: var(--depth-rule-px) solid var(--glow);
+    transform: rotate(45deg) scale(0.7);
+    opacity: 0.7;
+  }
+  .card .lab { font: 500 var(--depth-label-size-px) / 1.4 var(--font-ja); color: var(--on-night); white-space: nowrap; }
+  .card .num {
+    display: flex;
+    align-items: baseline;
+    margin-top: calc(4 * var(--u));
+    font: 300 var(--depth-num-size-px) / 1.15 var(--font-latin);
+    font-variant-numeric: tabular-nums;
+    color: var(--glow);
+    white-space: nowrap;
+  }
+  .card .num .unit { font: 400 var(--depth-unit-size-px) / 1.5 var(--font-ja); margin-left: 0.3em; color: var(--on-night); }
+  .card .sub { margin-top: calc(10 * var(--u)); font: 400 var(--depth-sub-size-px) / 1.5 var(--font-ja); color: var(--on-night-soft); }
+  .card .sub div { white-space: nowrap; overflow: hidden; }
+
+  .stamp {
+    position: absolute;
+    left: var(--stamp-x);
+    top: var(--stamp-y);
+    width: var(--stamp-w);
+    height: var(--stamp-h);
+    text-align: right;
+    font: 400 var(--stamp-size-px) / 1.6 var(--font-ja);
+    color: var(--on-night-soft);
+    white-space: nowrap;
+    animation: fade-in var(--count-in-dur) ease-out both;
+    animation-delay: var(--t-stamp);
+  }
+
+  /* the count-up: a window one line high over a column of the values the
+     count passes through (worked out at load); it steps one line at a time,
+     so every frame shows a whole number and the last line is the count */
+  .count { display: inline-block; height: 1.15em; overflow: hidden; text-align: right; }
+  .amount .count { height: 1.12em; }
+  .count .rows { display: block; animation: roll var(--dur) steps(var(--n), end) both; }
+  .count .rows span { display: block; height: var(--lh); line-height: var(--lh); }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(calc(16 * var(--u))); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes dim { from { opacity: 1; } to { opacity: var(--dim-alpha); } }
+  @keyframes roll {
+    from { transform: translateY(0); }
+    to   { transform: translateY(calc(var(--n) * -1 * var(--lh))); }
+  }
+</style>
+</head>
+<body data-duration="5.8">
+<div class="stage">
+  <div class="safe">
+    <div class="lanes" data-kind="note"><div class="reveal"><svg></svg></div></div>
+    <div class="amount" data-box="n17b.amount">
+      <div class="cap" data-kind="label">書いたコード</div>
+      <div class="num" data-box="n17b.amount.num" data-kind="number"></div>
+      <div class="sub" data-box="n17b.amount.sub" data-kind="label"></div>
+    </div>
+    <div class="head" data-box="n17b.head" data-kind="label">1 回の運転で</div>
+    <div class="depth" data-box="n17b.depth"></div>
+    <div class="stamp" data-box="n17b.stamp" data-kind="note"></div>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script>
+  // Everything below is drawn once at load from N17B_DATA (counted by
+  // promo/n17b_data.py from git and one run's record) and the n17b rules;
+  // motion is CSS animation only, so timeline.js decides every frame from t.
+  (function () {
+    const D = window.N17B_DATA, A = D.amount, P = D.depth;
+    const R = window.promoLayout.cutRules;
+    const C = R.count, T = R.times;
+    const root = document.documentElement.style;
+    root.setProperty("--dim-alpha", String(R.amount.dim_alpha));
+    const s = (v) => `${v}s`;
+    const fmt = (v) => v.toLocaleString("en-US");
+
+    function bezier(x1, y1, x2, y2) {
+      const at = (a, b, u) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3;
+      return (x) => {
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 40; i++) {
+          const m = (lo + hi) / 2;
+          if (at(x1, x2, m) < x) lo = m; else hi = m;
+        }
+        return at(y1, y2, (lo + hi) / 2);
+      };
+    }
+    // the values a count passes through: line j of steps shows
+    // v x ease(j / steps), rounded down, so the last line is v itself
+    const ease = bezier(...C.ease);
+    function counter(v, at, dur, lh) {
+      const steps = Math.max(1, Math.min(C.steps, v));
+      const rows = Array.from({ length: steps + 1 }, (_, j) =>
+        `<span>${fmt(j === steps ? v : Math.floor(v * ease(j / steps)))}</span>`).join("");
+      return `<span class="count"><span class="rows" style="--n:${steps};--dur:${s(dur)};--lh:${lh};` +
+        `animation-delay:${s(at)}">${rows}</span></span>`;
+    }
+
+    // --- the commit graph behind (from git) -----------------------------------------
+    // the clip opens from the left between lanes_s and lanes_to_s; open(t) in 0..1
+    const G = D.graph, L = R.lanes, F = R.flow;
+    root.setProperty("--lanes-alpha-on", String(L.alpha));
+    root.setProperty("--lanes-alpha-dim", String(L.dim_alpha));
+    const flowEase = bezier(...F.ease);
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    const open = (t) => flowEase(clamp01((t - T.lanes_s) / (T.lanes_to_s - T.lanes_s)));
+    // first t at which the clip has opened to p
+    function reach(p) {
+      let lo = T.lanes_s, hi = T.lanes_to_s;
+      for (let i = 0; i < 50; i++) {
+        const m = (lo + hi) / 2;
+        if (open(m) < p) lo = m; else hi = m;
+      }
+      return hi;
+    }
+    // keyframes only over the opening, so the graph is not counted as moving
+    // once it is open
+    const span_s = T.lanes_to_s - T.lanes_s;
+    const n = Math.max(1, Math.round(span_s / F.step_s)), frames = [];
+    for (let i = 0; i <= n; i++) {
+      const p = open(T.lanes_s + (i / n) * span_s);
+      frames.push(`${((i / n) * 100).toFixed(3)}% { clip-path: inset(-3% ${((1 - p) * 100).toFixed(3)}% -3% -1%); }`);
+    }
+    const style = document.createElement("style");
+    style.textContent = `@keyframes n17b-reveal { ${frames.join(" ")} }\n` +
+      `.lanes .reveal { animation: n17b-reveal ${s(span_s)} linear ${s(T.lanes_s)} both; }`;
+    document.head.appendChild(style);
+
+    const W = L.w, span = G.t1 - G.t0;
+    const xOf = (ts) => ((ts - G.t0) / span) * W;
+    const yOf = (i) => L.top + (i + 0.5) * L.pitch_px;
+    const svg = [];
+    // a dashed line at each midnight (JST) between the first and the last commit
+    const yEnd = yOf(G.lanes.length - 1) + L.pitch_px / 2;
+    for (let day = Math.floor((G.t0 + 9 * 3600) / 86400) + 1; day * 86400 - 9 * 3600 < G.t1; day++) {
+      const x = xOf(day * 86400 - 9 * 3600).toFixed(1);
+      svg.push(`<line class="day" x1="${x}" x2="${x}" y1="${L.top}" y2="${yEnd}"/>`);
+    }
+    let dots = 0, merges = 0;
+    G.lanes.forEach((ln, i) => {
+      const y = yOf(i), c = `var(--l-${ln.key})`, times = ln.commits.concat(ln.into_main);
+      if (!times.length) return;
+      const x0 = i === 0 ? 0 : xOf(Math.min(...times)), x1 = i === 0 ? W : xOf(Math.max(...times));
+      svg.push(`<line class="track${i === 0 ? " main" : ""}" style="--c:${c}" x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" ` +
+        `y1="${y}" y2="${y}" stroke-width="${i === 0 ? L.main_line_px : L.line_px}"/>`);
+      let g = `<g style="--c:${c}">`;
+      if (i > 0) {
+        const dx = L.curve_dx_px * Math.sqrt(i), ym = yOf(0);
+        for (const tm of ln.into_main) {
+          const xm = xOf(tm), xs = xm - dx;
+          g += `<path class="merge" pathLength="1" style="animation-delay:${s(reach(Math.max(0, xs) / W))}" ` +
+            `d="M${xs.toFixed(1)} ${y} C${(xs + dx * 0.6).toFixed(1)} ${y} ${(xm - dx * 0.6).toFixed(1)} ${ym} ${xm.toFixed(1)} ${ym}"/>`;
+          g += `<circle class="join" cx="${xm.toFixed(1)}" cy="${ym}" r="${L.dot_r_px - 1}" ` +
+            `style="animation-delay:${s(reach(xm / W))}"/>`;
+          merges++;
+        }
+      }
+      for (const tc of ln.commits) {
+        const x = xOf(tc);
+        g += `<circle class="dot" cx="${x.toFixed(1)}" cy="${y}" r="${L.dot_r_px}" style="animation-delay:${s(reach(x / W))}"/>`;
+        dots++;
+      }
+      svg.push(g + `</g>`);
+    });
+    const svgEl = document.querySelector(".lanes svg");
+    svgEl.setAttribute("viewBox", `0 0 ${W} ${L.h}`);
+    svgEl.innerHTML = svg.join("");
+
+    // --- the amount (sentence 1) --------------------------------------------------
+    document.querySelector(".amount .num").innerHTML =
+      counter(A.lines_total, T.amount_count_s, C.amount_dur_s, "1.12em") + `<span class="unit">行</span>`;
+    document.querySelector(".amount .sub").innerHTML =
+      `<b>${fmt(A.commits)}</b>コミット<span class="sep">·</span><b>${A.days}</b>日目` +
+      `<span class="sep">·</span>自動の試験 <b>${fmt(A.tests)}</b>件`;
+
+    // --- the depth (sentence 2) ---------------------------------------------------
+    // in the order of a run: what is judged, with what, checked how, and the end.
+    // sub: two short lines, broken where the meaning breaks
+    const cards = [
+      { key: "areas", lab: "見る分野", v: P.domains, unit: P.assembly ? "分野 + 組み立て" : "分野",
+        sub: ["1 台の車を、", "分野をまたいでまとめて判断"] },
+      { key: "tools", lab: "解析のツール", v: P.tools, unit: "本",
+        sub: [`答えの分かっている例 ${fmt(P.known_cases)} 件で`, "どれも確かめてから使う"] },
+      { key: "comparisons", lab: "手計算と解析の照合", v: P.comparisons, unit: "回",
+        sub: ["先に手計算で予測、解析と比べる",`食い違い ${P.mismatches} 件は原因を特定`] },
+      { key: "passed", lab: "直して、合格", v: P.passed, unit: `/ ${P.areas}`,
+        sub: [`設計を直した ${P.versions} 版目で`, P.assembly ? "全分野と組み立てが合格" : "全分野が合格"] },
+    ];
+    document.querySelector(".depth").innerHTML = cards.map((c, i) => {
+      const at = T.cards_s + i * T.card_step_s;
+      return `<div class="card" style="animation-delay:${s(at)}" data-box="n17b.depth.${c.key}">` +
+        `<div class="lab" data-kind="label">${c.lab}</div>` +
+        `<div class="num" data-box="n17b.depth.${c.key}.num" data-kind="number">` +
+        counter(c.v, at, C.card_dur_s, "1.15em") + `<span class="unit">${c.unit}</span></div>` +
+        `<div class="sub">${c.sub.map((x) => `<div>${x}</div>`).join("")}</div></div>`;
+    }).join("");
+
+    const at = D.counted_at.replace("T", " ").replace(/\+.*$/, "");
+    document.querySelector(".stamp").textContent =
+      `数えた日時 ${at}  ·  git の ${D.ref} (${A.head})  ·  運転の記録 ${P.run_id}`;
+
+    window.n17b = { amount: [A.lines_total, A.commits, A.days], cards: cards.map((c) => [c.key, c.v]),
+                    lanes: { dots, merges, open, reach } };
+  })();
+</script>
+<script src="timeline.js"></script>
+</body>
+</html>

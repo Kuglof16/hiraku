@@ -5,6 +5,7 @@
     f.ladder({"F": 400, "A": 0, "B": -1700, "E": -2100}, half_width=350, z=380, rail=rail, cross=rail)
     f.polyline("hoop", [("H1", p1), ("H2", p2), ("H3", p3)], rail)   # a bent tube as straight pieces
     f.mirror_y(["hoop_H1H2"])                                        # its left-right copy
+    f.split("rail_L_S2B", "LH", [x, y, z], ("rail_L_S2H", "rail_L_HB"))  # a node on a member, the member in two
     f.part()                                                         # {"nodes", "members", "sections"}
 
 Nodes closer than `merge_mm` to an existing node are that node, so members
@@ -52,22 +53,23 @@ class Frame:
         self.nodes[nid] = [float(v) for v in p]
         return nid
 
-    def member(self, mid: str, a: str, b: str, section: str) -> str:
+    def member(self, mid: str, a: str, b: str, section: str, material: str | None = None) -> str:
+        """A member from node a to node b; material: the frame's unless given."""
         if section not in self.sections:
             raise FrameError(f"section {section!r} is not defined; add it with section()")
         if a == b:
             raise FrameError(f"member {mid!r} would join node {a!r} to itself")
         if any(m["id"] == mid for m in self.members):
             raise FrameError(f"member {mid!r} already exists")
-        self.members.append({"id": mid, "node_a": a, "node_b": b, "section": section, "material": self.material,
-                             "part": "frame"})
+        self.members.append({"id": mid, "node_a": a, "node_b": b, "section": section,
+                             "material": material or self.material, "part": "frame"})
         return mid
 
     # ---------------------------------------------------------------- shapes
-    def polyline(self, prefix: str, points: list[tuple[str, Any]], section: str) -> list[str]:
+    def polyline(self, prefix: str, points: list[tuple[str, Any]], section: str, material: str | None = None) -> list[str]:
         """Straight members through the named points in order: <prefix>_<a><b>."""
         ids = [self.node(name, xyz) for name, xyz in points]
-        return [self.member(f"{prefix}_{a}{b}", a, b, section) for a, b in zip(ids, ids[1:])]
+        return [self.member(f"{prefix}_{a}{b}", a, b, section, material) for a, b in zip(ids, ids[1:])]
 
     @staticmethod
     def arc(center, radius: float, start_deg: float, end_deg: float, pieces: int, plane: str = "xz") -> list[list[float]]:
@@ -108,6 +110,28 @@ class Frame:
         for st in order:
             self.cross(st, cross)
 
+    def split(self, member_id: str, nid: str, xyz, ids: tuple[str, str]) -> str:
+        """Put a node on a member and replace the member with its two pieces (ids: the piece from node_a,
+        the piece to node_b), in its place in the member list. xyz must lie on the member, strictly
+        between its ends."""
+        i = next((k for k, m in enumerate(self.members) if m["id"] == member_id), None)
+        if i is None:
+            raise FrameError(f"no member {member_id!r} to split")
+        m = self.members[i]
+        a, b = (np.asarray(self.nodes[m[k]]) for k in ("node_a", "node_b"))
+        p = np.asarray(xyz, float)
+        d = b - a
+        s = float((p - a) @ d / (d @ d))
+        if not 0.0 < s < 1.0 or float(np.linalg.norm(a + s * d - p)) > self.merge_mm:
+            raise FrameError(f"point {list(p)} is not on member {member_id!r} between its ends")
+        n = self.node(nid, p)
+        first = dict(m, id=ids[0], node_b=n)
+        second = dict(m, id=ids[1], node_a=n)
+        if any(x["id"] in ids for x in self.members if x is not m):
+            raise FrameError(f"member {ids[0]!r} or {ids[1]!r} already exists")
+        self.members[i:i + 1] = [first, second]
+        return n
+
     def mirror_y(self, member_ids: list[str]) -> list[str]:
         """Copies of these members on the other side (y -> -y; every L and R in the node and member
         names swapped, so name pieces with L or R in them for their side only)."""
@@ -124,6 +148,18 @@ class Frame:
         return out
 
     # ---------------------------------------------------------------- joint reinforcement
+    def _along_x_at(self, node: str, branch: str) -> list[Record]:
+        """The members other than `branch` that end at `node` and run along x (the tube passing through a T
+        joint; other members there, e.g. a post standing on the rail, are not part of the T)."""
+        out = []
+        for x in self.members:
+            if x["id"] == branch or node not in (x["node_a"], x["node_b"]):
+                continue
+            d = np.asarray(self.nodes[x["node_b"]]) - np.asarray(self.nodes[x["node_a"]])
+            if abs(d[1]) <= 1e-9 and abs(d[2]) <= 1e-9:
+                out.append(x)
+        return out
+
     def gussets(self, node: str, branch: str, leg: float, thickness: float, density_kg_m3: float) -> list[Record]:
         """Four triangular gusset parts at the T joint where member `branch` ends on the side of the
         rect tube that passes through `node` (ahead of and behind the branch, on its upper and lower
@@ -142,7 +178,7 @@ class Frame:
         if abs(u_in[0]) > 1e-9 or abs(u_in[2]) > 1e-9:
             raise FrameError(f"gussets need the branch {branch!r} to run along y from node {node!r}")
         u_in /= np.linalg.norm(u_in)
-        hosts = [x for x in self.members if node in (x["node_a"], x["node_b"]) and x["id"] != branch]
+        hosts = self._along_x_at(node, branch)
         if len(hosts) != 2:
             raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
         host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))
@@ -177,7 +213,7 @@ class Frame:
         d = np.asarray(self.nodes[other]) - p
         if abs(d[0]) > 1e-9 or abs(d[2]) > 1e-9:
             raise FrameError(f"a through joint needs the branch {branch!r} to run along y from node {node!r}")
-        hosts = [x for x in self.members if node in (x["node_a"], x["node_b"]) and x["id"] != branch]
+        hosts = self._along_x_at(node, branch)
         if len(hosts) != 2:
             raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
         host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))
@@ -185,11 +221,16 @@ class Frame:
         area = 2.0 * br["t"] * (br["b"] + br["h"] - 2.0 * br["t"])
         hole = host["t"] * (br["b"] - br["t"]) * (br["h"] - br["t"])
         mass = density_kg_m3 * 1e-9 * (area * run - hole)
+        # the member it continues (welded) and that member's material: the tube's section is the branch's, so a
+        # rule about walls and section ratios can read it there
         return {"id": f"through_{branch}_{node}",
                 "name": f"{node} で {branch} がレールの中を通る分 (手前の壁の穴の分を引いた正味)",
                 "kind": "frame",
                 "box": {"center_mm": [float(x) for x in p], "size_mm": [float(br["b"]), float(run), float(br["h"])]},
-                "mass_kg": float(mass), "carried_by": [node]}
+                "mass_kg": float(mass), "carried_by": [node],
+                "connects_to": [{"to": node, "via": "weld", "carries": "load"},
+                                {"to": branch, "via": "weld", "carries": "load"}],
+                **({"material": m["material"]} if m.get("material") else {})}
 
     # ---------------------------------------------------------------- out
     def part(self) -> Record:

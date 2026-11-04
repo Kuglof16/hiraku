@@ -16,14 +16,19 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any
 
-from hiraku.designgen import ladder_4w
+from hiraku.designgen import care_bed, ladder_4w, space_frame_utv
 from hiraku.designgen.ladder_4w import DesignGenError
 
 Record = dict[str, Any]
-GENERATORS: dict[str, ModuleType] = {"offroad-4w": ladder_4w}  # by product
-ARCHETYPES: dict[str, ModuleType] = {"ladder_4w": ladder_4w}  # by kind of design
-# requirement keys that set variables of the design (key -> (variable, unit))
+GENERATORS: dict[str, ModuleType] = {"offroad-4w": ladder_4w, "care-bed": care_bed}  # by product
+ARCHETYPES: dict[str, ModuleType] = {"ladder_4w": ladder_4w, "care_bed": care_bed,
+                                     "space_frame_utv": space_frame_utv}  # by kind of design
+# requirement keys that set variables of the design (key -> (variable, unit)); a generator with its own
+# requirement_values(requirements) (care_bed: Q33 and Q40 in N) takes its variables from that instead
 FROM_REQUIREMENTS = {"Q33": ("occupant_mass", "kg"), "Q40": ("cargo_mass", "kg"), "Q50": ("max_speed", "km/h")}
+# Product flags that switch a generator variable on in the first version (when the generator has it and
+# the caller does not give it): a vehicle for public roads carries its lamps (ladder_4w.lamps, kit/safety.py).
+FROM_FLAGS = {"public_road": ("lamps", 1.0)}
 
 
 def generator(product: str) -> ModuleType:
@@ -36,7 +41,7 @@ def generator(product: str) -> ModuleType:
 def generator_of(design: Record) -> ModuleType:
     """The generator that made a design: the one whose signature variables the design carries."""
     have = set(design.get("variables", {}))
-    for gen in GENERATORS.values():
+    for gen in list(GENERATORS.values()) + [g for g in ARCHETYPES.values() if g not in GENERATORS.values()]:
         if set(gen.SIGNATURE) <= have:
             return gen
     raise DesignGenError("this design was not built from variables here: its variables match no design generator")
@@ -100,7 +105,13 @@ def propose(archetype: str, choices: dict, values: dict, requirements: Record) -
     vals = dict(values or {})
     if choices:
         vals = gen.apply_choices(choices, vals)
-    for r in requirements.get("requirements", []):
+    from_req = gen.requirement_values(requirements) if hasattr(gen, "requirement_values") else {}
+    for name, q in from_req.items():
+        if name in vals:
+            key = next(k for k, (n, _) in gen.REQUIREMENTS.items() if n == name)
+            raise DesignGenError(f"{name} comes from requirement {key}; do not give it as a value")
+        vals[name] = q
+    for r in ([] if hasattr(gen, "requirement_values") else requirements.get("requirements", [])):
         if r["key"] in FROM_REQUIREMENTS and isinstance(r.get("value"), (int, float)) and not isinstance(r["value"], bool):
             name, unit = FROM_REQUIREMENTS[r["key"]]
             if name in vals:
@@ -109,9 +120,13 @@ def propose(archetype: str, choices: dict, values: dict, requirements: Record) -
                 vals[name] = {"value": units.convert(float(r["value"]), r.get("unit", unit), unit, r["key"]), "unit": unit}
             except ValueError as e:
                 raise DesignGenError(f"requirement {r['key']}: {e}") from None
+    for flag, (name, value) in FROM_FLAGS.items():  # e.g. lamps on a vehicle for public roads
+        if (requirements.get("flags") or {}).get(flag) and name in gen.VARIABLES and name not in vals:
+            vals[name] = {"value": value, "unit": gen.VARIABLES[name].unit}
     product = requirements.get("product", archetype)
     return gen.build(vals, version=1, parent=None, reason="first version", name=f"{product} v1: {gen.DESCRIPTION}")
 
 
-__all__ = ["ARCHETYPES", "GENERATORS", "DesignGenError", "archetypes", "generator", "generator_of", "ladder_4w", "propose",
-           "regenerate", "variables"]
+__all__ = ["ARCHETYPES", "GENERATORS", "DesignGenError", "archetypes", "care_bed", "generator", "generator_of", "ladder_4w",
+           "propose",
+           "regenerate", "space_frame_utv", "variables"]

@@ -102,12 +102,26 @@ class PickDomainsToolTest(ToolsTestCase):
                    flags={"self_propelled": True, "liquid": True, "near_people": True, "standing": True},
                    speed_class="walk", reasons={"aero": "運ぶ飲み物がこぼれるかを見る"}, shown_names={"aero": "液体のこぼれ"})
         by = {p["domain"]: p for p in got["picks"]}
-        self.assertEqual(by["aero"]["reason"], "運ぶ飲み物がこぼれるかを見る")
+        self.assertTrue(by["aero"]["reason"].startswith("運ぶ飲み物がこぼれるかを見る"))  # kept; the code may add what cannot be run yet
         self.assertEqual(by["aero"]["shown_name"], "液体のこぼれ")
         self.assertIn("aero", [p["domain"] for p in got["picks"]])
         self.assertNotIn("aero", got["reasons_missing"])
         self.assertIn("crash", got["reasons_missing"])
         self.assertIn("next", got)
+
+    def test_the_same_pick_is_recorded_once_and_a_change_is_recorded_again(self):
+        if not ev.known(ev.DOMAINS_PICKED):
+            self.skipTest("the contract has no domains.picked")
+        ctx = make_ctx(self.root)
+        args = dict(want="机", flags={"standing": True, "cargo": True}, speed_class="static")
+        first = call("pick_domains", ctx, **args)
+        again = call("pick_domains", ctx, **args)
+        self.assertTrue(first["recorded"] and again["recorded"])
+        self.assertNotIn("unchanged", first)
+        self.assertIn("同じ", again["unchanged"])
+        self.assertEqual(self.kinds(ctx).count(ev.DOMAINS_PICKED), 1)
+        call("pick_domains", ctx, **{**args, "flags": {"standing": True, "cargo": True, "near_people": True}})
+        self.assertEqual(self.kinds(ctx).count(ev.DOMAINS_PICKED), 2)  # the flags changed
 
     def test_it_records_when_the_contract_has_the_kind(self):
         ctx = make_ctx(self.root)
@@ -153,12 +167,150 @@ class AskUserToolTest(ToolsTestCase):
 
     def test_answers_make_it_ready(self):
         ctx = make_ctx(self.root, product="care-bed")
-        got = call("ask_user", ctx, answers={"Q30": "利用者 1 人 + 介助者", "Q40": {"value": 1700, "unit": "N"}},
+        got = call("ask_user", ctx, answers={"Q30": "driver", "Q40": {"value": 1700, "unit": "N"}},
                    answers_file="data/requirements/products/care-bed.answers.yaml")
         self.assertTrue(got["ready"])
         by = {r["key"]: r for r in got["answers"]}
         self.assertEqual(by["Q40"]["value"], 1700)  # the call's answers win over the file's
         self.assertEqual(by["Q03"]["source"], "hearing")  # from the file
+
+    def test_asking_again_records_the_questions_and_the_empty_answers_once(self):
+        if not (ev.known(ev.HEARING_ASKED) and ev.known(ev.HEARING_ANSWERED)):
+            self.skipTest("the contract has no hearing events")
+        ctx = make_ctx(self.root, product="care-bed")
+        count = lambda: (self.kinds(ctx).count(ev.HEARING_ASKED), self.kinds(ctx).count(ev.HEARING_ANSWERED))  # noqa: E731
+        first = call("ask_user", ctx)  # the defaults join the run's requirements: only Q30 and Q40 are still open
+        self.assertNotIn("unchanged", first)
+        self.assertEqual(count(), (1, 1))
+        second = call("ask_user", ctx)  # asks the two that are left: a change
+        self.assertNotIn("unchanged", second)
+        self.assertEqual(count(), (2, 2))
+        third = call("ask_user", ctx)  # the same two questions and the same (empty) answers: nothing new
+        self.assertIn(ev.HEARING_ASKED, third["unchanged"])
+        self.assertIn(ev.HEARING_ANSWERED, third["unchanged"])
+        self.assertEqual(count(), (2, 2))
+        done = call("ask_user", ctx, answers={"Q30": "driver", "Q40": 1700})
+        self.assertNotIn(ev.HEARING_ANSWERED, done.get("unchanged", ""))  # an answer is new
+        self.assertEqual(count()[1], 3)
+
+    HIT = {"rule_id": "U1-01", "parts": ["frame"], "text": "曲げの内側の半径が板厚より小さい。設計を直しますか、この規則を外しますか"}
+
+    def known_rule(self):
+        return {**self.HIT, "rule_id": "SM-01", "parts": ["floor"]}
+
+    def test_rule_hits_are_asked_with_the_requirements_and_recorded_in_the_contracts_shape(self):
+        ctx = make_ctx(self.root, product="care-bed")
+        got = call("ask_user", ctx, rule_hits=[self.known_rule()])
+        self.assertEqual([q["rule_id"] for q in got["rule_questions"]], ["SM-01"])
+        self.assertEqual(got["rule_questions"][0]["choices"], ["revise_design", "drop_rule"])  # missing: both
+        self.assertEqual(got["rules_waiting"], ["SM-01"])
+        asked = next(e for e in ctx.store.events() if e["kind"] == ev.HEARING_ASKED)
+        self.assertEqual(contract.errors("hearing_asked", asked["data"]), [])
+        self.assertTrue(asked["data"]["questions"] and asked["data"]["rule_questions"])  # one asking for both
+        self.assertIn("当たった規則", asked["text"])
+
+    def test_only_rule_hits_leave_out_the_empty_questions(self):
+        event = ev.asked_event({"questions": [], "rule_questions": [self.known_rule()]})
+        self.assertNotIn("questions", event["data"])
+        self.assertEqual(contract.errors("hearing_asked", event["data"]), [])
+        self.assertIn("当たった規則の相談が 1 件", event["text"])
+        self.assertNotIn("足りない要件", event["text"])
+        both = ev.asked_event({"questions": [{"req_key": "Q30"}], "rule_questions": []})
+        self.assertNotIn("rule_questions", both["data"])  # nothing to say about rules: the contract's old shape
+
+    def test_bad_rule_hits_are_refused(self):
+        ctx = make_ctx(self.root, product="care-bed")
+        for bad in ([{"rule_id": "SM-01", "parts": ["floor"]}], [self.HIT], [{**self.known_rule(), "choices": ["wait"]}]):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ToolError):
+                    call("ask_user", ctx, rule_hits=bad)
+
+    def test_the_person_drops_a_rule_and_rule_check_leaves_it_out_with_the_reason(self):
+        import threading
+
+        from hiraku.intake import hearing
+
+        ctx = make_ctx(self.root, product="care-bed")
+        before = call("rule_check", ctx)
+        self.assertGreater(before["summary"]["rules"], 0)
+
+        def person():
+            for _ in range(100):
+                if (ctx.store.path / hearing.REQUEST_FILE).exists():
+                    hearing.save_answer(ctx.store.path, {"answers": {}, "rule_answers": [
+                        {"rule_id": "SM-01", "choice": "drop_rule", "note": "この車に板金の曲げは無い"}]})
+                    return
+                import time
+
+                time.sleep(0.05)
+
+        t = threading.Thread(target=person)
+        t.start()
+        got = call("ask_user", ctx, rule_hits=[self.known_rule()], wait_seconds=5)
+        t.join()
+        self.assertEqual(got["rule_answers"], [{"rule_id": "SM-01", "choice": "drop_rule", "note": "この車に板金の曲げは無い"}])
+        self.assertEqual(got["rules_dropped"], ["SM-01"])
+        self.assertNotIn("rules_waiting", got)
+        answered = [e for e in ctx.store.events() if e["kind"] == ev.HEARING_ANSWERED][-1]
+        self.assertEqual(contract.errors("hearing_answered", answered["data"]), [])
+        after = call("rule_check", ctx)
+        self.assertEqual(after["summary"]["rules"], before["summary"]["rules"] - 1)
+        self.assertEqual(after["dropped_rules"], [{"rule_id": "SM-01", "reason": "この車に板金の曲げは無い"}])
+        checked = [e["data"]["rule_id"] for e in ctx.store.events() if e["kind"] == "rule_check.recorded"]
+        self.assertEqual(checked.count("SM-01"), 1)  # only the first check, before it was dropped
+
+    def test_a_person_who_chooses_to_revise_the_design_keeps_the_rule(self):
+        import threading
+        import time
+
+        from hiraku.intake import hearing
+
+        ctx = make_ctx(self.root, product="care-bed")
+
+        def person():
+            for _ in range(100):
+                if (ctx.store.path / hearing.REQUEST_FILE).exists():
+                    hearing.save_answer(ctx.store.path, {"answers": {}, "rule_answers": [{"rule_id": "SM-01", "choice": "revise_design"}]})
+                    return
+                time.sleep(0.05)
+
+        t = threading.Thread(target=person)
+        t.start()
+        got = call("ask_user", ctx, rule_hits=[self.known_rule()], wait_seconds=5)
+        t.join()
+        self.assertEqual(got["rules_to_revise"], ["SM-01"])
+        self.assertNotIn("dropped_rules", call("rule_check", ctx))
+
+    def test_the_answer_of_the_screen_is_checked_against_the_rules_that_were_asked(self):
+        import tempfile as tf
+
+        from hiraku.intake import hearing
+        from hiraku.intake.domains import IntakeError
+
+        with tf.TemporaryDirectory() as d:
+            hearing.write_request(Path(d), {"rule_questions": [{**self.known_rule(), "choices": ["drop_rule"]}]})
+            for bad in ([{"rule_id": "FS-01", "choice": "drop_rule"}], [{"rule_id": "SM-01", "choice": "revise_design"}],
+                        [{"rule_id": "SM-01", "choice": "x"}], "SM-01", [{"rule_id": "SM-01"}]):
+                with self.subTest(bad=bad), self.assertRaises(IntakeError):
+                    hearing.save_answer(Path(d), {"answers": {}, "rule_answers": bad})
+            path = hearing.save_answer(Path(d), {"answers": {}, "ruleAnswers": [{"rule_id": "SM-01", "choice": "drop_rule", "note": "n"}]})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["rule_answers"], [{"rule_id": "SM-01", "choice": "drop_rule", "note": "n"}])
+
+    def test_the_answers_file_may_be_named_by_its_file_name_or_the_product(self):
+        for i, name in enumerate(("care-bed.answers.yaml", "care-bed", "data/requirements/products/care-bed.answers.yaml")):
+            with self.subTest(name=name):
+                got = call("ask_user", make_ctx(self.root / f"r{i}", product="care-bed"), answers_file=name)
+                self.assertTrue(got["ready"])
+                self.assertEqual({r["key"]: r for r in got["answers"]}["Q30"]["value"], "driver")
+
+    def test_a_refused_or_missing_answers_file_says_what_to_pass(self):
+        ctx = make_ctx(self.root)
+        with self.assertRaises(ToolError) as cm:
+            call("ask_user", ctx, answers_file="README.md")
+        self.assertIn("data/requirements/products/<名前>.answers.yaml", str(cm.exception))
+        with self.assertRaises(ToolError) as cm:
+            call("ask_user", ctx, answers_file="nobody.answers.yaml")
+        self.assertIn("care-bed.answers.yaml", str(cm.exception))  # what there is
 
     def test_the_answers_file_must_be_one_of_the_products(self):
         ctx = make_ctx(self.root)
@@ -169,7 +321,7 @@ class AskUserToolTest(ToolsTestCase):
 
     def test_events_when_the_contract_has_them(self):
         ctx = make_ctx(self.root)
-        got = call("ask_user", ctx, answers={"Q30": "x", "Q40": 1})
+        got = call("ask_user", ctx, answers={"Q30": "two_cargo", "Q40": 1})
         if ev.known(ev.HEARING_ASKED):
             self.assertTrue(got["recorded"], got.get("not_recorded"))
             k = self.kinds(ctx)

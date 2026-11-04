@@ -1,14 +1,18 @@
 import io
 import json
+import os
 import shutil
+import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from hiraku.webserve.launch import Launcher
+from hiraku.webserve.launch import DEMO_RUNS_FILE, PLUGIN_ALIVE_FILE, PLUGIN_ALIVE_S, Launcher, LaunchError
+from hiraku.webserve import server as webserver
 from hiraku.webserve.server import SAMPLE_EVENTS, list_runs, make_server, read_events
 from hiraku.webserve.shelf import Shelf
 from tests.web.fake_launch import fake_command, fake_reader
@@ -69,6 +73,54 @@ class ReadEventsTest(unittest.TestCase):
         self.path.write_bytes(_line(0, "agent.said", text="先にレールを梁とみて応力を見積もります").encode("utf-8"))
         out = read_events(self.path, 0)
         self.assertEqual(out["events"][0]["text"], "先にレールを梁とみて応力を見積もります")
+
+    def _limits(self, read, line, scan=7):
+        """Small read / line limits for one test (the module's are megabytes)."""
+        saved = (webserver.MAX_READ_BYTES, webserver.MAX_LINE_BYTES, webserver._SCAN_BYTES)
+        webserver.MAX_READ_BYTES, webserver.MAX_LINE_BYTES, webserver._SCAN_BYTES = read, line, scan
+        self.addCleanup(lambda: setattr(webserver, "MAX_READ_BYTES", saved[0]) or setattr(webserver, "MAX_LINE_BYTES", saved[1])
+                        or setattr(webserver, "_SCAN_BYTES", saved[2]))
+
+    def test_a_line_longer_than_one_read_is_read_whole(self):
+        first = _line(0, "run.started")
+        long = _line(1, "agent.said", text="x" * 300)
+        self.path.write_bytes((first + long + _line(2, "cost.updated")).encode("utf-8"))
+        self._limits(read=64, line=10_000)
+        offset, seqs = 0, []
+        for _ in range(10):  # every read moves on, so this ends
+            out = read_events(self.path, offset)
+            self.assertGreater(out["next_offset"], offset)
+            seqs += [e["seq"] for e in out["events"]]
+            offset = out["next_offset"]
+            if offset == out["size"]:
+                break
+        self.assertEqual(seqs, [0, 1, 2])
+        self.assertEqual(offset, self.path.stat().st_size)
+
+    def test_a_line_over_the_line_limit_is_skipped_as_bad(self):
+        first = _line(0, "run.started")
+        long = _line(1, "agent.said", text="x" * 300)
+        self.path.write_bytes((first + long + _line(2, "cost.updated")).encode("utf-8"))
+        self._limits(read=64, line=200)
+        a = read_events(self.path, 0)
+        self.assertEqual(([e["seq"] for e in a["events"]], a["next_offset"]), ([0], len(first.encode())))
+        b = read_events(self.path, a["next_offset"])
+        self.assertEqual((b["events"], b["bad_lines"]), ([], 1))
+        self.assertEqual(b["next_offset"], len((first + long).encode()))
+        c = read_events(self.path, b["next_offset"])
+        self.assertEqual([e["seq"] for e in c["events"]], [2])
+
+    def test_a_long_line_still_being_written_is_left_for_later(self):
+        first = _line(0, "run.started")
+        self.path.write_bytes((first + '{"seq": 1, "kind": "agent.said", "text": "' + "x" * 300).encode("utf-8"))
+        self._limits(read=64, line=10_000)
+        a = read_events(self.path, len(first.encode()))
+        self.assertEqual((a["events"], a["bad_lines"], a["next_offset"]), ([], 0, len(first.encode())))
+        with self.path.open("ab") as f:
+            f.write(('"}' + LF).encode("utf-8"))
+        b = read_events(self.path, a["next_offset"])
+        self.assertEqual([e["seq"] for e in b["events"]], [1])
+        self.assertEqual(b["next_offset"], self.path.stat().st_size)
 
 
 class ServerTest(unittest.TestCase):
@@ -205,6 +257,31 @@ class SavedRunsTest(unittest.TestCase):
         self.assertTrue(next(x for x in runs if x["run_id"] == self.NEW)["default"])
 
 
+class DriverTest(unittest.TestCase):
+    """The run list says what drove each run (project.driver), read from project.json or the
+    first event's data; nothing for records without it."""
+
+    def setUp(self):
+        self.runs = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.runs)
+
+    def run_folder(self, run_id, start_data, project=None):
+        d = self.runs / run_id
+        d.mkdir()
+        (d / "events.jsonl").write_bytes(_line(0, "run.started", data=start_data).encode("utf-8"))
+        if project is not None:
+            (d / "project.json").write_text(json.dumps(project), encoding="utf-8")
+
+    def test_driver_from_project_json_or_the_first_event(self):
+        self.run_folder("20261103-100000-a", {"want": "a"}, project={"want": "a", "driver": "claude_code_plugin"})
+        self.run_folder("20261103-100001-b", {"want": "b", "driver": "agent_sdk"})
+        self.run_folder("20261103-100002-c", {"want": "c", "driver": "scripted"})
+        self.run_folder("20261103-100003-d", {"want": "d"})  # older record: no driver
+        self.run_folder("20261103-100004-e", {"want": "e", "driver": "something-else"})  # not a contract value
+        got = {r["run_id"][-1]: r["driver"] for r in list_runs(self.runs) if not r["sample"]}
+        self.assertEqual(got, {"a": "claude_code_plugin", "b": "agent_sdk", "c": "scripted", "d": None, "e": None})
+
+
 class LayoutTest(unittest.TestCase):
     def test_layout_rules_are_served_or_missing_is_said(self):
         tmp = Path(tempfile.mkdtemp())
@@ -224,6 +301,38 @@ class LayoutTest(unittest.TestCase):
                     with self.assertRaises(urllib.error.HTTPError) as cm:
                         urllib.request.urlopen(url, timeout=5)
                     self.assertEqual(cm.exception.code, 404)
+        finally:
+            for s in servers:
+                s.shutdown()
+                s.server_close()
+            shutil.rmtree(tmp)
+
+
+class PetsTest(unittest.TestCase):
+    def test_pets_script_is_served_as_it_is_or_404(self):
+        """GET /pets/pet3d.js passes the given pets file through as JavaScript; without it, 404."""
+        tmp = Path(tempfile.mkdtemp())
+        servers = []
+        try:
+            src = b"(function () { window.HirakuPets = { shape: 'example' }; })();\n"
+            (tmp / "pet3d.js").write_bytes(src)
+            for name in ("pet3d.js", "absent.js"):
+                s = make_server("127.0.0.1", 0, tmp, tmp, quiet=True, saved_dir=None, launcher=False, pets_file=tmp / name)
+                threading.Thread(target=s.serve_forever, daemon=True).start()
+                servers.append(s)
+                url = f"http://127.0.0.1:{s.server_address[1]}/pets/pet3d.js"
+                if name == "pet3d.js":
+                    with urllib.request.urlopen(url, timeout=5) as r:
+                        self.assertEqual(r.read(), src)
+                        self.assertTrue(r.headers["Content-Type"].startswith("text/javascript"))
+                else:
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(url, timeout=5)
+                    self.assertEqual(cm.exception.code, 404)
+            # only that one file: other paths under /pets/ are not served from its folder
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(f"http://127.0.0.1:{servers[0].server_address[1]}/pets/absent.js", timeout=5)
+            self.assertEqual(cm.exception.code, 404)
         finally:
             for s in servers:
                 s.shutdown()
@@ -311,6 +420,14 @@ class ShelfTest(unittest.TestCase):
         self.assertEqual(got["formulas"][0]["formula_id"], "frame_static.rail_bending")
         self.assertEqual(self.calls, 1)
 
+    def test_archetype_titles(self):
+        from types import SimpleNamespace
+
+        from hiraku.webserve.shelf import archetype_titles
+
+        kinds = {"a": SimpleNamespace(TITLE="型 A (説明)"), "b": SimpleNamespace(), "c": SimpleNamespace(TITLE=None)}
+        self.assertEqual(archetype_titles(kinds), {"a": "型 A (説明)"})
+
     def test_a_runs_tool_files(self):
         status, ctype, text = self.get(f"/api/runs/{RUN_ID}/tools/rollbar_load-1.py")
         self.assertEqual((status, ctype.split(";")[0], text), (200, "text/plain", "def run():\n    return 1\n"))
@@ -333,6 +450,7 @@ class LaunchTest(unittest.TestCase):
         req = self.tmp / "requirements"
         req.mkdir()
         (req / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        self.demo_file = self.tmp / "catalog" / "demo_runs.yaml"  # (not there unless a test writes it)
         self.servers = []
 
     def tearDown(self):
@@ -345,9 +463,9 @@ class LaunchTest(unittest.TestCase):
                 lau.proc.wait()
         shutil.rmtree(self.tmp)
 
-    def serve(self, env, hold_s=3.0):
-        lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
-                       reader=fake_reader, wait_s=20)
+    def serve(self, env, hold_s=3.0, command=None, reader=fake_reader):
+        lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=command or fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
+                       reader=reader, wait_s=20, demo_runs_file=self.demo_file)
         self.launchers = [*getattr(self, "launchers", []), lau]
         server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -394,6 +512,34 @@ class LaunchTest(unittest.TestCase):
         with urllib.request.urlopen(req, timeout=10) as r:
             self.assertTrue(json.loads(r.read())["stop_requested"])
         self.assertTrue((self.runs / out["run_id"] / "stop.request").exists())
+
+    def test_the_run_is_the_folder_the_child_prints_not_another_new_one(self):
+        # another run's folder appears first (newer by name), then the child's own
+        decoy = "20991231-235959-other-run"
+        base = self.serve({}, command=fake_command(SAMPLE_EVENTS, self.RUN, 3.0, decoy=decoy))
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertEqual((status, out["run_id"]), (200, self.RUN))
+        self.assertTrue((self.runs / decoy / "events.jsonl").exists())
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": decoy}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(cm.exception.code, 409)
+        req = urllib.request.Request(base + "/api/launch/stop", data=json.dumps({"run_id": self.RUN}).encode(),
+                                     method="POST", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertTrue(json.loads(r.read())["stop_requested"])
+        self.assertTrue((self.runs / self.RUN / "stop.request").exists())
+        self.assertFalse((self.runs / decoy / "stop.request").exists())
+
+    def test_a_child_that_never_prints_its_folder_is_not_taken_for_a_run(self):
+        # makes a run folder but prints nothing and ends: no run_id is guessed from runs/
+        code = ("import pathlib, sys; d = pathlib.Path(sys.argv[1]) / '20261103-120000-silent'; d.mkdir(parents=True); "
+                "(d / 'events.jsonl').write_text('')")
+        base = self.serve({}, command=lambda req, mode, runs: [sys.executable, "-c", code, str(runs)])
+        status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertEqual(status, 500)
+        self.assertIn("ended before it started", out["error"])
 
     def test_hearing_answer_goes_to_the_started_run_only(self):
         base = self.serve({})
@@ -450,6 +596,146 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(drop(None, raw=big)[0], 413)
         self.assertFalse((run / "knowledge" / "big.md").exists())
 
+    def make_run(self, run_id, status="running", driver=None, alive=None):
+        """A run folder as if started elsewhere (not by this server). alive: how many seconds
+        ago its plugin.alive was touched (None: no such file)."""
+        run = self.runs / run_id
+        run.mkdir(parents=True)
+        project = {"run_id": run_id, "status": status, **({"driver": driver} if driver else {})}
+        (run / "project.json").write_text(json.dumps(project), encoding="utf-8")
+        if alive is not None:
+            (run / PLUGIN_ALIVE_FILE).write_bytes(b"")
+            t = time.time() - alive
+            os.utime(run / PLUGIN_ALIVE_FILE, (t, t))
+        return run
+
+    def call(self, base, route, body):
+        req = urllib.request.Request(base + route, data=json.dumps(body).encode(), method="POST",
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_a_going_run_started_elsewhere_takes_the_drop_and_the_answer(self):
+        base = self.serve({})
+        rid = "20261103-130000-elsewhere"
+        run = self.make_run(rid, driver="agent_sdk")
+        status, got = self.call(base, "/api/launch/knowledge", {"run_id": rid, "name": "a.md", "text": "曲げの決まり"})
+        self.assertEqual((status, got["request"]), (200, "inbox/1-knowledge.json"))
+        self.assertEqual((run / "knowledge" / "a.md").read_text(encoding="utf-8"), "曲げの決まり")
+        self.assertEqual(json.loads((run / "inbox" / "1-knowledge.json").read_text(encoding="utf-8")), {"kind": "knowledge", "file": "a.md"})
+        status, got = self.call(base, "/api/launch/hearing", {"run_id": rid, "answer": {"answers": {}, "useDefaults": True}})
+        self.assertEqual((status, got["answered"]), (200, True))
+        self.assertTrue((run / "hearing.answer.json").exists())
+        # stop stays with the run started here
+        self.assertEqual(self.call(base, "/api/launch/stop", {"run_id": rid})[0], 409)
+        self.assertFalse((run / "stop.request").exists())
+
+    def test_a_plugin_run_takes_the_drop_only_while_its_session_keeps_it_alive(self):
+        base = self.serve({})
+        held = self.make_run("20261103-130001-plugin-held", driver="claude_code_plugin", alive=1.0)
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": held.name, "name": "a.md", "text": "x"})[0], 200)
+        self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": held.name, "answer": {"answers": {}, "useDefaults": True}})[0], 200)
+        # no plugin.alive, or one older than PLUGIN_ALIVE_S: no session reads the inbox
+        for name, alive in (("20261103-130002-plugin-loose", None), ("20261103-130003-plugin-stale", PLUGIN_ALIVE_S + 30)):
+            loose = self.make_run(name, driver="claude_code_plugin", alive=alive)
+            status, got = self.call(base, "/api/launch/knowledge", {"run_id": loose.name, "name": "a.md", "text": "x"})
+            self.assertEqual(status, 409)
+            self.assertIn(PLUGIN_ALIVE_FILE, got["error"])
+            self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": loose.name, "answer": {"answers": {}}})[0], 409)
+            self.assertFalse((loose / "knowledge").exists() or (loose / "inbox").exists() or (loose / "hearing.answer.json").exists())
+        # a plugin.lock alone (a short lock around the plugin state) does not count
+        locked = self.make_run("20261103-130004-plugin-locked", driver="claude_code_plugin")
+        (locked / "plugin.lock").write_bytes(b"")
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": locked.name, "name": "a.md", "text": "x"})[0], 409)
+
+    def test_a_finished_run_refuses_the_drop_and_the_answer(self):
+        base = self.serve({})
+        for status_, driver in (("done", None), ("stopped", "agent_sdk"), ("failed", "claude_code_plugin")):
+            run = self.make_run(f"20261103-14000{len(status_)}-{status_}", status=status_, driver=driver, alive=1.0)
+            status, got = self.call(base, "/api/launch/knowledge", {"run_id": run.name, "name": "a.md", "text": "x"})
+            self.assertEqual(status, 409, status_)
+            self.assertIn("not running", got["error"])
+            self.assertEqual(self.call(base, "/api/launch/hearing", {"run_id": run.name, "answer": {"answers": {}}})[0], 409)
+            self.assertFalse((run / "knowledge").exists() or (run / "hearing.answer.json").exists())
+
+    def test_a_bad_id_or_a_folder_outside_the_runs_is_refused(self):
+        base = self.serve({})
+        outside = self.tmp / "20261103-150000-outside"  # a running run, but not in the runs folder
+        outside.mkdir()
+        (outside / "project.json").write_text(json.dumps({"status": "running"}), encoding="utf-8")
+        self.runs.mkdir(exist_ok=True)
+        for rid in ("../20261103-150000-outside", "..", "", 7, None, "20261103-150000-Bad", "x/../20261103-150000-outside"):
+            for route, body in (("/api/launch/knowledge", {"name": "a.md", "text": "x"}), ("/api/launch/hearing", {"answer": {"answers": {}}})):
+                status, _ = self.call(base, route, {"run_id": rid, **body})
+                self.assertIn(status, (400, 409), (rid, route))
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": "20261103-150000-outside", "name": "a.md", "text": "x"})[0], 409)
+        self.assertFalse((outside / "knowledge").exists() or (outside / "hearing.answer.json").exists())
+        # a folder without a readable project.json
+        (self.runs / "20261103-150001-noproject").mkdir()
+        self.assertEqual(self.call(base, "/api/launch/knowledge", {"run_id": "20261103-150001-noproject", "name": "a.md", "text": "x"})[0], 409)
+
+    def test_a_request_from_A1_runs_with_its_intake_events(self):
+        """A1 -> A2 -> 始める without a command: /api/request (the domains and the hearing),
+        /api/request/answer (the request's files under runs/_requests/<id>/), then /api/launch
+        {request} starts hiraku run with --intake-events."""
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, self.RUN, 3.0)
+
+        def command(req, mode, runs, intake_events=None):
+            seen.append((Path(req), intake_events and Path(intake_events)))
+            return fake(req, mode, runs)
+
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=command, reader=fake_reader, wait_s=20,
+                       demo_runs_file=self.demo_file)
+        self.launchers = [*getattr(self, "launchers", []), lau]
+        server = make_server("127.0.0.1", 0, self.runs, self.tmp, quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.servers.append(server)
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+
+        def post(path, body):
+            req = urllib.request.Request(base + path, data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return r.status, json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+
+        status, first = post("/api/request", {"want": "林道を走れる 2 人乗りの小さな車両", "product": "offroad-4w", "claude": True})
+        self.assertEqual(status, 200)
+        self.assertEqual(first["mode"], "code")  # no key here: Claude is not asked
+        self.assertEqual([e["kind"] for e in first["events"]], ["domains.picked", "hearing.asked"])
+        status, half = post("/api/request/answer", {"draft": first["draft"], "answers": {}})
+        self.assertEqual((status, half["ready"]), (200, False))  # required items unanswered
+        self.assertIn("Q30", half["next"])
+        answers = {"Q30": "two_cargo", "Q40": 150, "Q50": 40, "Q70": "私有地だけ"}
+        status, done = post("/api/request/answer", {"draft": first["draft"], "answers": answers})
+        self.assertEqual((status, done["ready"], done["scripted_plan"], done["designable"]), (200, True, True, True))
+        folder = self.runs / "_requests" / done["request_id"]
+        self.assertTrue((folder / "requirements.yaml").is_file() and (folder / "intake.json").is_file())
+        self.assertEqual(post("/api/launch", {"request": "../evil", "mode": "scripted"})[0], 400)
+        status, out = post("/api/launch", {"request": done["request_id"], "mode": "scripted"})
+        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, f"_requests/{done['request_id']}"))
+        self.assertEqual(seen, [(folder / "requirements.yaml", folder / "intake.json")])
+        status, bad = post("/api/request", {"want": 7})
+        self.assertEqual(status, 400)
+        self.assertTrue(bad["error"])
+
+    def test_a_request_with_no_kind_of_design_is_refused(self):
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, self.RUN, 1.0), reader=fake_reader,
+                       demo_runs_file=self.demo_file)
+        folder = lau.requests_dir / "20261103-120000-guitar"
+        folder.mkdir(parents=True)
+        (folder / "requirements.yaml").write_text("product: guitar\nflags: {}\n", encoding="utf-8")
+        (folder / "intake.json").write_text("[]", encoding="utf-8")
+        with self.assertRaises(LaunchError) as cm:
+            lau.start(None, "scripted", "20261103-120000-guitar")
+        self.assertEqual(cm.exception.status, 422)
+        self.assertIn("設計の作り方がまだ無い", str(cm.exception))
+
     def test_claude_needs_the_key_where_the_server_runs(self):
         base = self.serve({})
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})
@@ -458,6 +744,134 @@ class LaunchTest(unittest.TestCase):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "claude"})
         self.assertEqual((status, out["run_id"]), (200, self.RUN + "-claude"))
+
+    DEMO = (
+        "runs:\n"
+        "  - id: n12\n    title: 間違いを見つける\n    shows: 要件の誤りを Claude が見つける\n    file: offroad-4w-n12.yaml\n"
+        "    modes: [claude, scripted]\n    estimate_usd: 1.1\n    cuts: [N11, N12]\n"
+        "  - id: n13\n    title: ツールを作る\n    shows: x\n    file: offroad-4w-n13.claude.yaml\n    modes: [claude]\n    estimate_usd: null\n"
+        "  - id: bed\n    title: 介護ベッド\n    shows: 製品の要件から走る\n    file: products/care-bed.yaml\n    modes: [scripted]\n    estimate_usd: 3.5\n"
+        "  - id: broken\n    title: 読めない\n    shows: x\n    file: products/broken.yaml\n    modes: [scripted]\n"
+        "  - id: n09\n    title: 依頼から\n    shows: A1 で分野を選ぶ\n    request: {product: care-bed}\n    modes: [claude]\n    cuts: [N09]\n"
+        "  - id: up\n    title: 外\n    shows: x\n    file: ../secret.yaml\n    modes: [scripted]\n"
+        "  - id: odd\n    title: 変な modes\n    shows: x\n    file: offroad-4w.yaml\n    modes: [fast]\n"
+    )
+
+    def demo_setup(self):
+        req = self.tmp / "requirements"
+        (req / "offroad-4w-n12.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "offroad-4w-n13.claude.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        (req / "products").mkdir()
+        (req / "products" / "care-bed.yaml").write_text("product: care-bed\nwant: 介護ベッドを作りたい\n", encoding="utf-8")
+        (req / "products" / "broken.yaml").write_text("product: [\n", encoding="utf-8")
+        (req / "products" / "serving-robot.yaml").write_text("product: serving-robot\n", encoding="utf-8")
+        (self.tmp / "secret.yaml").write_text("product: offroad-4w\n", encoding="utf-8")
+        self.demo_file.parent.mkdir()
+        self.demo_file.write_text(self.DEMO, encoding="utf-8")
+
+        def reader(path):
+            if path.name == "broken.yaml":
+                raise ValueError("does not load")
+            return fake_reader(path)
+
+        seen = []
+        fake = fake_command(SAMPLE_EVENTS, self.RUN, 3.0)
+
+        def command(path, mode, runs):
+            seen.append(Path(path))
+            return fake(path, mode, runs)
+
+        return self.serve({"ANTHROPIC_API_KEY": self.SECRET}, command=command, reader=reader), seen
+
+    def launch_info(self, base):
+        with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+            return json.loads(r.read())
+
+    def test_demo_runs_are_listed_in_their_order(self):
+        base, _ = self.demo_setup()
+        info = self.launch_info(base)
+        self.assertIsNone(info["demo_runs_error"])
+        rows = {r["id"]: r for r in info["demo_runs"]}
+        self.assertEqual([r["id"] for r in info["demo_runs"]], ["n12", "n13", "bed", "broken", "n09", "up", "odd"])
+        n12 = rows["n12"]
+        self.assertEqual((n12["title"], n12["shows"], n12["cuts"], n12["file"]), ("間違いを見つける", "要件の誤りを Claude が見つける", ["N11", "N12"], "offroad-4w-n12.yaml"))
+        self.assertEqual((n12["want"], n12["cost_limit_usd"], n12["round_limit"]), ("見本の要件", 2.0, 1))  # read by the launcher's reader
+        self.assertEqual((n12["modes"], n12["estimate_usd"]), (["scripted", "claude"], 1.1))
+        self.assertNotIn("error", n12)
+        self.assertEqual((rows["n13"]["modes"], rows["n13"]["estimate_usd"]), (["claude"], None))
+        self.assertEqual((rows["bed"]["file"], rows["bed"]["cost_limit_usd"], rows["bed"]["estimate_usd"]), ("products/care-bed.yaml", 2.0, 3.5))
+        self.assertIn("does not load", rows["broken"]["error"])  # shown, not hidden
+        self.assertEqual(rows["broken"]["title"], "読めない")
+        n09 = rows["n09"]
+        self.assertEqual((n09["product"], n09["want"], n09["cuts"], n09["modes"]), ("care-bed", "介護ベッドを作りたい", ["N09"], ["claude"]))
+        self.assertNotIn("file", n09)
+        self.assertIn("error", rows["up"])
+        self.assertIn("modes", rows["odd"]["error"])
+        # the files below carry the modes of the demo runs that list them
+        files = {r["file"]: r for r in info["requirements"]}
+        self.assertEqual(files["offroad-4w-n13.claude.yaml"]["modes"], ["claude"])
+        self.assertNotIn("modes", files["offroad-4w.yaml"])  # listed only by a row whose modes are unusable
+
+    def test_demo_runs_missing_or_not_loading(self):
+        base = self.serve({})
+        info = self.launch_info(base)
+        self.assertEqual((info["demo_runs"], info["demo_runs_error"]), ([], None))
+        self.demo_file.parent.mkdir()
+        self.demo_file.write_text("runs: [\n", encoding="utf-8")
+        info = self.launch_info(base)
+        self.assertEqual(info["demo_runs"], [])
+        self.assertIn("demo_runs.yaml", info["demo_runs_error"])
+        self.demo_file.write_text("other: 1\n", encoding="utf-8")
+        self.assertIn("runs", self.launch_info(base)["demo_runs_error"])
+
+    def test_a_listed_demo_file_runs_and_unlisted_paths_do_not(self):
+        base, seen = self.demo_setup()
+        req = self.tmp / "requirements"
+        for bad in ("products/serving-robot.yaml", "../secret.yaml", str(self.tmp / "secret.yaml"),
+                    (self.tmp / "secret.yaml").as_posix(), "products/../offroad-4w.yaml", "products\\care-bed.yaml"):
+            self.assertEqual(self.post(base, {"requirements": bad, "mode": "scripted"})[0], 400, bad)
+        self.assertEqual(seen, [])  # nothing was started
+        status, out = self.post(base, {"requirements": "products/care-bed.yaml", "mode": "scripted"})
+        self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, "products/care-bed.yaml"))
+        self.assertEqual([p.resolve() for p in seen], [(req / "products" / "care-bed.yaml").resolve()])
+
+    def test_a_demo_file_runs_only_in_its_modes(self):
+        base, seen = self.demo_setup()
+        status, out = self.post(base, {"requirements": "products/care-bed.yaml", "mode": "claude"})
+        self.assertEqual(status, 400)  # listed as scripted only
+        self.assertIn("scripted", out["error"])
+        status, out = self.post(base, {"requirements": "offroad-4w-n13.claude.yaml", "mode": "scripted"})
+        self.assertEqual(status, 400)  # claude only, also when named as a file of the folder
+        self.assertEqual(seen, [])
+        status, out = self.post(base, {"requirements": "offroad-4w-n13.claude.yaml", "mode": "claude"})
+        self.assertEqual((status, out["run_id"]), (200, self.RUN + "-claude"))
+
+    @unittest.skipUnless(DEMO_RUNS_FILE.is_file(), "no data/catalog/demo_runs.yaml in this checkout")
+    def test_the_real_demo_runs_all_show(self):
+        """The design department's list with the real requirements files: every row shows, without an error."""
+        lau = Launcher(self.runs, env={}, demo_runs_file=DEMO_RUNS_FILE)
+        rows, error = lau.demo_runs()
+        self.assertIsNone(error)
+        self.assertTrue(rows)
+        for r in rows:
+            self.assertNotIn("error", r, r["id"])
+            self.assertTrue(r["title"] and r["shows"] and r["modes"], r["id"])
+            if "file" in r:
+                self.assertIsInstance(r["cost_limit_usd"], (int, float), r["id"])
+                self.assertIn("estimate_usd", r)
+            else:
+                self.assertTrue(r["product"] and r["want"], r["id"])
+
+    def test_the_estimate_from_estimates_usd(self):
+        """Without estimate_usd, a row shows the default mix's usd of its estimates_usd (null: none)."""
+        from hiraku.webserve.launch import demo_run_estimate_of
+
+        self.assertEqual(demo_run_estimate_of({"estimates_usd": {"default": {"usd": 3.52, "upper_usd": 3.52}, "cae-haiku": {"usd": 0.09, "upper_usd": 0.88}}}), 3.52)
+        self.assertIsNone(demo_run_estimate_of({"estimates_usd": None}))
+        self.assertIsNone(demo_run_estimate_of({}))
+        self.assertEqual(demo_run_estimate_of({"estimate_usd": 1.1, "estimates_usd": {"default": {"usd": 9.0}}}), 1.1)
+        with self.assertRaises(ValueError):
+            demo_run_estimate_of({"estimates_usd": {"cae-haiku": {"usd": 0.1}}})
 
     def test_refuses_other_files_and_other_pages(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})

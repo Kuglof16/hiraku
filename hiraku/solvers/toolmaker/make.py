@@ -17,9 +17,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,25 +48,45 @@ def _child(code: str, action: str, args: Record | None, timeout_s: float) -> Rec
     """Run the tool's code in its own process; {"ok": False, "error": sentence} on any failure."""
     req = json.dumps({"repo": str(REPO), "code": code, "action": action, "args": args or {}}, ensure_ascii=True)
     env = {k: v for k, v in os.environ.items() if k not in SECRET_ENV}
-    with tempfile.TemporaryDirectory(prefix="hiraku-tool-") as cwd:
-        try:
-            p = subprocess.run([sys.executable, "-I", str(RUNNER)], input=req.encode("ascii"), capture_output=True,
-                               timeout=timeout_s, cwd=cwd, env=env)
-        except subprocess.TimeoutExpired:
-            what = "check()" if action == "check" else "run()"
-            return {"ok": False, "error": f"{what} が時間の上限 {timeout_s:g} s のうちに終わりませんでした"}
-    lines = [ln for ln in p.stdout.decode("ascii", "replace").splitlines() if ln.startswith(MARK)]
+    cwd = tempfile.mkdtemp(prefix="hiraku-tool-")
+    try:
+        p = subprocess.run([sys.executable, "-I", str(RUNNER)], input=req.encode("ascii"), capture_output=True,
+                           timeout=timeout_s, cwd=cwd, env=env)
+    except subprocess.TimeoutExpired:
+        what = "check()" if action == "check" else "run()"
+        return {"ok": False, "error": f"{what} が時間の上限 {timeout_s:g} s のうちに終わりませんでした"}
+    finally:
+        _remove(cwd)
+    lines =[ln for ln in p.stdout.decode("ascii", "replace").splitlines() if ln.startswith(MARK)]
     if not lines:
         tail = p.stderr.decode("utf-8", "replace")[-800:]
         return {"ok": False, "error": f"道具のプロセスが答えを返さずに終わりました (終了コード {p.returncode}): {tail}"}
     return json.loads(lines[-1][len(MARK):])
 
 
+def _remove(path: str, tries: int = 10, wait_s: float = 0.2) -> None:
+    """Remove a tool's working folder. On Windows a process just killed for its time limit can hold the folder
+    for a moment (WinError 32), so the removal is tried again for up to tries x wait_s; after that the folder is
+    left to the system's temporary-file cleaning."""
+    for k in range(tries):
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            if k < tries - 1:
+                time.sleep(wait_s)
+
+
 def check_passes(c: Record) -> bool:
-    """A check passes when |got - expected| <= tolerance_rel |expected| (tolerance_rel itself when expected is 0)."""
+    """A check passes when |got - expected| <= tolerance_abs if the check gives one (contract: for expected
+    values of 0), else <= tolerance_rel |expected| (tolerance_rel itself when expected is 0)."""
     got = c.get("got")
     if not isinstance(got, (int, float)) or isinstance(got, bool) or not math.isfinite(got):
         return False
+    if isinstance(c.get("tolerance_abs"), (int, float)):
+        return abs(got - c["expected"]) <= c["tolerance_abs"]
     scale = abs(c["expected"]) if c["expected"] != 0 else 1.0
     return abs(got - c["expected"]) <= c["tolerance_rel"] * scale
 
@@ -118,6 +140,10 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
         made.problems.append(out.get("error", "道具が走りませんでした"))
         return made
     spec, checks = out.get("spec"), out.get("checks")
+    described = out.get("describe")
+    if described is not None and not isinstance(described, dict):
+        made.problems.append("describe() は dict を返してください (load case params と predicts。棚の道具と同じ形)")
+        described = None
     if not isinstance(spec, dict) or not isinstance(checks, list):
         made.problems.append("spec() は tool_spec の dict を、check() は tool_check の list を返してください")
         return made
@@ -149,7 +175,7 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
     made.spec = spec
     made.usable = spec["usable"]
     if made.usable:
-        made.tool = SandboxedTool(code, spec, run_timeout_s)
+        made.tool = SandboxedTool(code, spec, run_timeout_s, described)
     return made
 
 
@@ -157,14 +183,25 @@ class SandboxedTool:
     """A tool made during a run (hiraku.contract.protocols.AnalysisTool): spec() and check()
     give what make_tool found; run() runs the code in its own process."""
 
-    def __init__(self, code: str, spec: Record, run_timeout_s: float = RUN_TIMEOUT_S):
+    def __init__(self, code: str, spec: Record, run_timeout_s: float = RUN_TIMEOUT_S, described: Record | None = None):
         self.code = code
         self._spec = spec
         self.name = spec["name"]
         self.run_timeout_s = run_timeout_s
+        self._described = described
 
     def spec(self) -> Record:
         return json.loads(json.dumps(self._spec))
+
+    def describe(self) -> Record:
+        """What the tool's describe() gave when make_tool checked it (its load case params and predicts), with its
+        name, title, domain, tests and formulas from the spec; predicts [] when the code has no describe()."""
+        out = {k: self._spec.get(k) for k in ("name", "title", "domain", "tests", "formulas") if k in self._spec}
+        out.update({"params": [], "predicts": []})
+        if self._described:
+            out.update(json.loads(json.dumps(self._described)))
+            out["name"] = self.name
+        return out
 
     def check(self) -> list[Record]:
         return self.spec()["checks"]

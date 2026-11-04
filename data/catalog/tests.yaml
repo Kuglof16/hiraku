@@ -51,6 +51,8 @@ tests:
   - {id: P5, domain: powertrain, title: アクチュエータの力と速さ, applies_if: electric and not self_propelled, requirement_keys: [Q40, Q56]}
   - {id: C1, domain: crash, title: 壁への正面衝突, applies_if: ride and self_propelled and speed_vehicle, requirement_keys: [Q31, Q65]}
   - {id: C2, domain: crash, title: 人との接触, applies_if: near_people and self_propelled, requirement_keys: [Q50, Q62]}
+  # C3, R7, R8 and H6: functional requirements (the intake department's FN list); builders from the analysis department
+  - {id: C3, domain: crash, title: 横転したときの乗員の空間 (横・後ろ・上から押す), applies_if: ride and rough, requirement_keys: [Q33, Q86]}
   - id: R1
     domain: strength
     title: 静的強度
@@ -62,11 +64,27 @@ tests:
       HIRAKU's choice. The hand calculation takes one rail as a simple beam;
       the 3D frame shares the load through the cross members, so 15 % is
       allowed.
+  - id: R1s
+    domain: strength
+    title: 静的強度 (管のつなぎ目の壁)
+    # listed by the requirements files that run it; not picked from the flags yet (a product's
+    # scripted plan needs its frame_shell step first)
+    applies_if: not always
+    requirement_keys: [Q15, Q33, Q40, Q61]
+    build: r1_joint
+    tolerance_rel: 0.15
+    tolerance_basis: >-
+      HIRAKU's choice, as R1. R1 again with the frame as shells (frame_shell): judged on the IIW
+      hot-spot stress where the tubes meet, which the beams of R1 do not see. The element maximum is not
+      used because at a sharp re-entrant corner it keeps rising as the mesh is refined (the analysis
+      department's runs at 10, 5 and 2.5 mm).
   - {id: R2, domain: strength, title: 衝撃 (落錘・落下・段差), applies_if: lean or cargo or self_propelled, requirement_keys: [Q40]}
   - {id: R3, domain: strength, title: 疲労・耐久, applies_if: always, requirement_keys: [Q90, Q91, Q92]}
   - {id: R4, domain: strength, title: 横転時の保護枠 (ROPS), applies_if: ride and rough, requirement_keys: [Q31, Q64]}
   - {id: R5, domain: strength, title: たわみ・ゆがみ, applies_if: (cargo or lean) and not self_propelled, requirement_keys: [Q40]}
   - {id: R6, domain: strength, title: 電池の取付の振動, applies_if: battery and self_propelled, requirement_keys: [Q73]}
+  - {id: R7, domain: strength, title: 操作部の荷重 (手と足の力を枠まで伝え、動かない), applies_if: ride and self_propelled, requirement_keys: [Q66, Q67, Q68, Q69]}
+  - {id: R8, domain: strength, title: 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える), applies_if: always, requirement_keys: [Q61, Q75, Q76, Q77, Q78]}
   - {id: N1, domain: nvh, title: 固有振動数と加振, applies_if: vibration, requirement_keys: []}
   - {id: N2, domain: nvh, title: 乗り心地, applies_if: ride and self_propelled, requirement_keys: [Q12]}
   - {id: N3, domain: nvh, title: 騒音, applies_if: electric and lean, requirement_keys: []}
@@ -77,8 +95,10 @@ tests:
   - {id: T3, domain: thermal, title: 使い方とデューティ, applies_if: electric and not continuous, requirement_keys: [Q03]}
   - {id: H1, domain: assembly, title: 干渉, applies_if: always, requirement_keys: []}
   - {id: H2, domain: assembly, title: 手と工具が入るか, applies_if: assembly, requirement_keys: [Q81]}
-  - {id: H3, domain: assembly, title: 体格・手が届くか, applies_if: ride or lean or handheld, requirement_keys: [Q31]}
+  # H3 reads a seated person's knee room and reach (K4): not for a product a person only lies or leans on (a bed)
+  - {id: H3, domain: assembly, title: 体格・手が届くか, applies_if: ride or handheld, requirement_keys: [Q31]}
   - {id: H4, domain: assembly, title: 挟み込み, applies_if: pinch, requirement_keys: [Q63]}
   - {id: H5, domain: assembly, title: 組み立ての順番, applies_if: assembly, requirement_keys: [Q82]}
+  - {id: H6, domain: assembly, title: 泥のはね (車輪が巻き上げた物が乗員に届かない), applies_if: ride and outdoor and self_propelled, requirement_keys: [Q31, Q50, Q87, Q88]}
   - {id: G1, domain: assembly, title: 区分・寸法 (法令), applies_if: public_road, requirement_keys: [Q70, Q71]}
   - {id: G2, domain: assembly, title: 規格の項目に当てる, applies_if: always, requirement_keys: [Q72]}

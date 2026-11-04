@@ -130,6 +130,28 @@ class BackgroundRoleTest(ConversationCase, unittest.TestCase):
         self.assertEqual(self.ctx.project["cost_usd"], 0.25)
         self.assert_events_fit()
 
+    def test_after_the_last_wake_up_a_role_finishing_ends_the_run(self):
+        case = self
+
+        async def script(client):
+            await client.inbox.get()
+            await client.hook("SubagentStart")({"agent_id": "a1", "agent_type": "cae-strength"}, None, None)
+            yield AssistantMessage(content=[TextBlock(text="報告を待ちます")], model="m")
+            yield result(0.10)  # the lead's turn ends while the role works
+            case.strength_work()
+            await client.hook("SubagentStop")({"agent_id": "a1", "agent_type": "cae-strength",
+                                               "stop_hook_active": False}, None, None)
+            await asyncio.Event().wait()  # no wake-up is left, so no turn comes: reading on would hang
+
+        with mock.patch.object(runner, "MAX_WAKES", 0):
+            status, client = self.run_claude(script)
+        self.assertEqual(status, "done")
+        self.assertEqual(len(client.queries), 1)
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and e["agent"] == "system"]
+        self.assertIn("まとめ役を起こす回数の上限 (0 回) に達したので、実行を終えます", said)
+        self.assertEqual(self.kinds("agent.stopped")[-1], ("agent.stopped", "lead"))
+        self.assert_events_fit()
+
     def test_a_turn_the_cli_starts_itself_is_not_doubled(self):
         case = self
 
@@ -203,6 +225,22 @@ class ForegroundRoleTest(ConversationCase, unittest.TestCase):
         finished = self.ctx.store.events()[-1]["data"]
         self.assertEqual((finished["status"], finished["stop_code"]), ("failed", "error"))
         self.assert_events_fit()
+
+
+class BudgetTest(ConversationCase, unittest.TestCase):
+    def test_the_cost_limit_reason_names_the_budget_used(self):
+        async def script(client):
+            await client.inbox.get()
+            yield ResultMessage(subtype="error_max_budget_usd", duration_ms=1, duration_api_ms=1, is_error=True,
+                                num_turns=1, session_id="s", total_cost_usd=0.6)
+            await asyncio.Event().wait()
+
+        client = type("Client", (FakeClient,), {"script": staticmethod(script)})
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "x"}), mock.patch("claude_agent_sdk.ClaudeSDKClient", client):
+            status = asyncio.run(asyncio.wait_for(run_with_claude(self.ctx, max_budget_usd=0.5), timeout=10))
+        self.assertEqual(status, "stopped")
+        finished = self.ctx.store.events()[-1]["data"]
+        self.assertEqual((finished["stop_code"], finished["stop_reason"]), ("cost_limit", "cost limit 0.5 USD reached"))
 
 
 class StopButtonTest(ConversationCase, unittest.TestCase):

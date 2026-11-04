@@ -427,28 +427,27 @@ def slope_inputs(design: Record, load_case: Record) -> Record:
 
 
 def launch_inputs(design: Record, load_case: Record) -> Record:
-    """The launch tool's motor and road load: F_max = T i eta / r of the driven wheels,
+    """The launch tool's motor and road load (hiraku.solvers.k0_handcalc.scene_inputs.launch_inputs):
+    T, i, eta, r for launch.peak_tractive_force (F_max = T i eta / r of the driven wheels), and
     P, eta, C_rr, C_d, A (front) and rho."""
-    from hiraku.solvers.k2_vehicle.shelf import LaunchTool
-    veh, _ = _vehicle(design, load_case)
-    tool = LaunchTool()
-    tool._vars = design.get("variables") or {}
+    from hiraku.solvers.k0_handcalc import scene_inputs
     lp = load_case.get("params", {})
-    motor = tool.motor(lp)
-    aero = tool.aero(veh, lp)
-    driven = [c for c in veh.corners if c.drive]
-    r = sum(c.radius for c in driven) / len(driven)
-    return {"F_max": q(motor.torque * motor.gear * motor.efficiency / r, "N"), "P": q(motor.power / 1000.0, "kW"),
-            "eta": q(motor.efficiency, "1"), "C_rr": q(veh.corners[0].c_rr, "1"), "C_d": q(aero.cd, "1"),
-            "A": q(aero.front_area, "m^2"), "rho": q(aero.rho, "kg/m^3")}
+    return scene_inputs.launch_inputs(design, lp.get("loading"), lp)["inputs"]
 
 
 # ------------------------------------------------------------------ scripted steps
 # lambda is the design's mass_factor (K2 itself takes the wheels as discs of the unsprung
 # mass, about 1 % more on the demo vehicle)
-_LAUNCH_REFS = {"m": "load.mass", "F_max": "from.F_max", "P": "from.P", "eta": "from.eta", "C_rr": "from.C_rr",
-                "C_d": "from.C_d", "A": "from.A", "grade": "lc.grade", "rho": "from.rho",
+# F_max is the prediction of launch.peak_tractive_force made first in the same step (pred.<quantity>).
+_LAUNCH_REFS = {"m": "load.mass", "F_max": "pred.peak_tractive_force", "P": "from.P", "eta": "from.eta",
+                "C_rr": "from.C_rr", "C_d": "from.C_d", "A": "from.A", "grade": "lc.grade", "rho": "from.rho",
                 "lambda": "design.var.mass_factor"}
+_TRACTIVE_FORCE = {
+    "quantity": "peak_tractive_force", "formula_id": "launch.peak_tractive_force", "output": "F_max",
+    "assumptions": ["モーターの最大のトルクが減速比と伝達の効率を通って駆動輪に出る",
+                    "駆動輪の半径は荷重でたわんだ半径 (K2 の車輪の自由半径 − 止まっているときの輪の荷重 / タイヤの縦のばね "
+                    "tyre_stiffness、駆動輪の平均)。設計に tyre_stiffness が無いときは自由半径 (F_max を小さめに出す)"],
+    "inputs": {"T": "from.T", "i": "from.i", "eta": "from.eta", "rolling_radius": "from.rolling_radius"}, "inputs_from": launch_inputs}
 
 PLANS: dict[str, Record] = {
     "S1": {"tool": "tilt", "say": "傾斜台で倒れる角度を、ばねで車体がロールする分を入れた式で先に見積もります",
@@ -547,7 +546,7 @@ PLANS: dict[str, Record] = {
                "inputs": {k: v for k, v in _LAUNCH_REFS.items() if k not in ("F_max", "lambda")},
                "inputs_from": launch_inputs}]},
     "P3": {"tool": "launch", "say": "トルクと出力の線で、目標の速さまでの時間を先に見積もります",
-           "predictions": [{
+           "predictions": [_TRACTIVE_FORCE, {
                "quantity": "time_to_speed", "formula_id": "launch.time_to_speed", "output": "t",
                "assumptions": ["発進から全力、輪は滑らない", "トルクで決まり、その先は出力で決まる"],
                "inputs": dict(_LAUNCH_REFS, v="lc.target_speed"), "inputs_from": launch_inputs}]},

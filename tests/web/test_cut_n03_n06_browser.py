@@ -1,6 +1,6 @@
 """The N03 and N06 cut pages (cut.html?cut=n03 / n06) in a headless browser.
 
-Skipped unless HIRAKU_WEB_BROWSER=1 and Playwright is installed (as tests.web.test_browser).
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed (as tests.web.test_browser).
 The run is made here from the contract sample: the drive-pattern, thermal and launch
 records N03 plays, and load cases past the limit (ids ending in -beyond) for N06. With
 HIRAKU_WEB_DEV_RUNS the newest run there is opened too.
@@ -23,19 +23,22 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.test_browser import ENABLED, sync_playwright
+from tests.web.test_cut_grid_browser import box_of, list_rects
 
 BAND_Y = 910
 COLORS = {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"}
 OVERLAY = {"color": "#c8402a", "opacity": 0.22}
-# around loop_to_s (2.8) and accel_s (2.9), and the end
-N03_TIMES = [0.2, 1.0, 2.0, 2.8, 2.85, 2.9, 3.5, 4.97]
+# the drive's head (eased), its middle (1.45), around ok_s (2.3) and loop_to_s (2.6), accel_s (2.9), and the end
+N03_TIMES = [0.2, 0.4, 1.0, 1.45, 1.9, 2.2, 2.3, 2.5, 2.6, 2.8, 2.85, 2.9, 3.5, 4.97]
 # before the first tile (0.6), each tile's start (0.6 + 0.55 k) and landing, the last landing (3.85), the end
 N06_TIMES = [0.5, 0.7, 1.2, 2.0, 3.3, 3.4, 3.9, 6.0, 11.6]
 
 
 def n03_n06_layout():
-    """The promo department's proposed values for n03 / n06 (until they are written in
-    layout.json), with the top keys the cut pages read; colours and overlay as n01."""
+    """The promo department's values for n03 / n06 (layout.json as of their commit 6b708f4:
+    the sixth N06 tile is wind), with the top keys the cut pages read; colours and overlay as n01.
+    N03's loop as the screens department proposed on 2026-11-03 (not in the promo department's
+    layout.json yet): loop_to_s 2.6, ok_s 2.3, loop.ease "in-out"."""
     return {
         "stage": {"w": 1920, "h": 1080},
         "subtitle_band": {"y": BAND_Y, "h": 170},
@@ -43,14 +46,17 @@ def n03_n06_layout():
         "n03": {
             "duration_s": 5.0,
             "view": {"x": 96, "y": 96, "w": 1200, "h": 790},
-            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22},
-            "times": {"lead_s": 0.3, "loop_to_s": 2.8, "accel_s": 2.9},
+            "popup": {"x": 1328, "y": 96, "w": 496, "h": 790, "title_px": 30, "text_px": 22, "reading_of_title": 2, "ok_of_reading": 0.55},
+            "times": {"lead_s": 0.3, "loop_to_s": 2.6, "accel_s": 2.9, "ok_s": 2.3},
+            "loop": {"ease": "in-out"},
             "colors": dict(COLORS),
         },
         "n06": {
             "duration_s": 11.7,
             "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
-            "tests": ["step_break", "tilt_over", "step_stuck", "battery_hot", "parts_clash", "rollover"],
+            "feature": {"x": 96, "y": 96, "w": 1104, "h": 790},
+            "list": {"x": 1224, "y": 96, "w": 600, "h": 790, "cols": 2, "rows": 3, "gap_x": 24, "gap_y": 24},
+            "tests": ["tilt_over", "step_stuck", "step_break", "battery_hot", "parts_clash", "wind"],
             "tile": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}},
             "times": {"tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55},
             "colors": dict(COLORS),
@@ -105,6 +111,12 @@ def _r(q, v, unit, **kw):
 
 
 ALLOWABLE = 156.7  # MPa (shape example)
+
+
+def design_members():
+    """The member ids of the contract sample's design (the fixture's stress is 60 + 25 k on member k)."""
+    src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
+    return [m["id"] for m in next(e for e in src if e["kind"] == "design.created")["data"]["members"]]
 STOP_LIMIT = 14.0  # m (shape example)
 STOP_GOT = 16.0  # m (shape example)
 
@@ -229,16 +241,28 @@ READ = """async (t) => {
     pages: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").map((p) => p.dataset.page),
     now: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").flatMap((p) => [...p.querySelectorAll(".now")].map((n) => n.textContent)),
     title: [...document.querySelectorAll(".n03-page")].filter((p) => p.style.display !== "none").map((p) => p.querySelector("h3").textContent)[0] ?? null,
+    limitText: [...document.querySelectorAll(".n03-page text.limit")].map((e) => e.textContent).join(" "),
+    ok: (() => { const e = document.querySelector(".n03-ok"); return e ? getComputedStyle(e).visibility : null; })(),
+    okPx: (() => { const e = document.querySelector(".n03-ok"); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
+    carried: (() => { const e = document.querySelector('.n03-page[data-page="launch"] .n03-ok'); return e ? [e.textContent, getComputedStyle(e).visibility, e.scrollWidth <= e.clientWidth + 0.5] : null; })(),
+    okReadingPx: (() => { const e = document.querySelector(".n03-ok"); const r = e && document.querySelector(`[data-box="${e.dataset.box.replace(/\\.ok$/, ".reading")}"]`); return r ? parseFloat(getComputedStyle(r).fontSize) : null; })(),
+    readingPx: (() => { const e = document.querySelector('[data-page="drive"] .n03-reading'); return e ? parseFloat(getComputedStyle(e).fontSize) : null; })(),
+    ticks: [...document.querySelectorAll('[data-page="drive"] text.tick')].map((e) => e.textContent.replace(/,/g, "")),
     tiles: [...document.querySelectorAll(".n06-tile")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el), p: Number(el.dataset.p),
       tau: el.dataset.tau === undefined ? null : Number(el.dataset.tau), miss: el.dataset.miss, over: el.dataset.over ?? null, lift: el.dataset.lift ?? null,
       past: el.dataset.past ?? null, clash: el.dataset.clash ?? null, marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
+      case: el.dataset.case ?? null, version: el.dataset.version ?? null,
+      scale: el.dataset.scale ?? null, overMarks: el.dataset.overMarks === undefined ? null : Number(el.dataset.overMarks),
       outside: el.dataset.outside ?? null, text: el.textContent, mark: el.querySelector(".mark")?.textContent ?? null,
       markColor: el.querySelector(".mark") ? getComputedStyle(el.querySelector(".mark")).color : null })),
+    bigs: [...document.querySelectorAll(".n06-big")].map((el) => ({ box: el.dataset.box, rect: rect(el), shown: shown(el),
+      tau: el.dataset.tau === undefined ? null : Number(el.dataset.tau), marks: el.dataset.marks === undefined ? null : Number(el.dataset.marks),
+      text: el.textContent, label: (() => { const b = el.querySelector('[data-kind="label"]'); return b ? parseFloat(getComputedStyle(b).fontSize) : null; })() })),
   };
 }"""
 
 
-@unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class CutN03N06Test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -327,10 +351,17 @@ class CutN03N06Test(unittest.TestCase):
                 self.assertTrue(got["now"] and all(n for n in got["now"]), (t, got["now"]))
 
     def check_n03_times(self, shots, layout, launch_end):
-        """The drive plays from lead_s to loop_to_s and holds its end until accel_s; the
-        acceleration plays from accel_s (its first sample) to the end of the cut."""
+        """The drive plays from lead_s to loop_to_s along loop.ease ("in-out": slow at the head
+        and the tail) and holds its end until accel_s; the acceleration plays from accel_s (its
+        first sample) to the end of the cut."""
         T = layout["n03"]["times"]
-        self.assertLess(shots[1.0]["view"]["tau"], shots[2.0]["view"]["tau"])
+        ease = lambda p: 0.5 - 0.5 * math.cos(math.pi * p)  # noqa: E731
+        for t in (0.4, 1.0, 1.45, 1.9, 2.2, 2.5):
+            share = (t - T["lead_s"]) / (T["loop_to_s"] - T["lead_s"])
+            self.assertAlmostEqual(shots[t]["view"]["tau"], 2400.0 * ease(share), places=6, msg=t)
+        # slow at the head and the tail: the first and the last 0.1 s of the drive play less record than the middle's
+        self.assertAlmostEqual(shots[1.45]["view"]["tau"], 1200.0, places=6)
+        self.assertLess(shots[0.4]["view"]["tau"], 2400.0 * 0.1 / (T["loop_to_s"] - T["lead_s"]))
         self.assertAlmostEqual(shots[T["loop_to_s"]]["view"]["tau"], 2400.0, places=6)
         self.assertEqual(shots[2.85]["phase"], "drive")
         self.assertAlmostEqual(shots[2.85]["view"]["tau"], 2400.0, places=6)
@@ -338,7 +369,7 @@ class CutN03N06Test(unittest.TestCase):
         self.assertLess(shots[3.5]["view"]["tau"], shots[4.97]["view"]["tau"])
         dur = layout["n03"]["duration_s"]
         self.assertAlmostEqual(shots[4.97]["view"]["tau"], launch_end * (4.97 - T["accel_s"]) / (dur - T["accel_s"]), places=6)
-        # squeezed: 2400 s of record over loop_to_s - lead_s, as rateLabel says it
+        # squeezed: 2400 s of record over loop_to_s - lead_s on the mean, as rateLabel says it
         self.assertEqual(shots[1.0]["view"]["rate"], f"×{round(2400.0 / (T['loop_to_s'] - T['lead_s']))}")
 
     def test_n03_plays_the_long_drive_then_the_straight_acceleration(self):
@@ -349,14 +380,60 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
         self.check_n03_times(shots, layout, launch_end=6.0)  # P3's record: 0 .. 6 s
-        # the popup names the tests it charts: the flat acceleration (P3) is preferred to P2
-        self.assertEqual(shots[1.0]["title"], "電池の残量と温度 (P4・T1)")
-        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P3)")
+        # the popup's titles are words only (the tests' ids are for the makers); the flat
+        # acceleration (P3) is preferred to P2; one graph at a time (the battery's
+        # temperature, then the speed)
+        self.assertEqual(shots[1.0]["title"], "長く走ったときの電池の温度")
+        self.assertEqual(shots[3.5]["title"], "加速の速さ")
+        self.assertEqual(page.evaluate("document.querySelector('.n03-page[data-page=launch] h3').dataset.tests"), "P3")
+        # the battery's limit line says what it is, from the load case's criterion (55 degC);
+        # every recorded value keeps to it (48.4 degC), so "✓ 上限より下" shows from ok_s, and through
+        # the acceleration (under the speed) as "✓ 電池の温度は上限より下"
+        T = layout["n03"]["times"]
+        self.assertIn("上限 55 ℃", shots[1.0]["limitText"])
+        # the axis has round steps from the surroundings (no ambient in this case: 0) up to the
+        # limit, so the room under it reads as numbers
+        ticks = [float(x) for x in shots[1.0]["ticks"]]
+        self.assertEqual(min(ticks), 0.0)
+        self.assertTrue(40.0 <= max(ticks) <= 55.0, ticks)  # up to the limit (0 .. 55: steps of 20)
+        self.assertTrue(all(b > a for a, b in zip(ticks, ticks[1:])))
+        # "✓ 上限より下" on its own line, layout.json n03.popup.ok_of_reading x its reading's size
+        # (not below text_px; shown under a second)
+        P = layout["n03"]["popup"]
+        self.assertEqual(shots[2.6]["okPx"], max(P["text_px"], round(shots[2.6]["okReadingPx"] * P["ok_of_reading"])))
+        self.assertEqual(shots[1.0]["ok"], "hidden")
+        self.assertEqual(shots[2.2]["ok"], "hidden")
+        for t in (T["ok_s"], 2.5, T["loop_to_s"], 2.85):
+            self.assertEqual(shots[t]["ok"], "visible", t)
+            self.assertEqual(shots[t]["carried"][1], "hidden", t)
+        for t in (T["accel_s"], 3.5, 4.97):
+            self.assertEqual(shots[t]["carried"], ["✓ 電池の温度は上限より下", "visible", True], t)
+            self.assertEqual(shots[t]["ok"], "hidden", t)
+        # the squeeze of the record's time is a note (not counted, not read)
+        self.assertEqual(page.evaluate("document.querySelector('[data-box=\"n03.view.rate\"]').dataset.kind"), "note")
+        self.assertEqual({t: len(g["now"]) for t, g in shots.items() if t >= layout["n03"]["times"]["lead_s"]}, {t: 1 for t in N03_TIMES if t >= layout["n03"]["times"]["lead_s"]})
         # the battery warms: its colour's value is the recorded temperature, rising
-        self.assertLess(shots[1.0]["battery"], shots[2.0]["battery"])
+        self.assertLess(shots[1.0]["battery"], shots[2.5]["battery"])
         self.assertGreaterEqual(shots[1.0]["battery"], 40.0)
         self.assertLessEqual(shots[2.8]["battery"], 48.4 + 1e-6)
         self.assertEqual(page.evaluate("window.hiraku.cut.launchView.toggles.arrows && window.hiraku.cut.launchView.toggles.cg"), True)
+        page.close()
+
+    def test_n03_axis_starts_at_the_ambient_temperature(self):
+        """With params.ambient_temperature in the thermal case (40 degC, shape example) the
+        battery chart's axis starts there (at the lowest value if that is lower)."""
+        layout = n03_n06_layout()
+        events = n03_n06_events()
+        for lc in events[0]["data"]["load_cases"]:
+            if lc["load_case_id"] == "T1-v":
+                lc["params"]["ambient_temperature"] = {"value": 40.0, "unit": "degC"}
+        base = self.serve(layout, events={"20261103-120000-n03": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
+        got = page.evaluate(READ, 1.0)
+        self.assertEqual(errors, [])
+        ticks = [float(x) for x in got["ticks"]]
+        self.assertEqual(min(ticks), 40.0)
+        self.assertTrue(max(ticks) <= 55.0, ticks)
         page.close()
 
     def test_n03_takes_p2_without_a_p3_record(self):
@@ -368,12 +445,12 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
         self.check_n03_times(shots, layout, launch_end=8.0)  # P2's record: 0 .. 8 s
-        self.assertEqual(shots[3.5]["title"], "加速の速さと時間 (P2)")
+        self.assertEqual(shots[3.5]["title"], "加速の速さ")
+        self.assertEqual(page.evaluate("document.querySelector('.n03-page[data-page=launch] h3').dataset.tests"), "P2")
         page.close()
 
     def check_n06(self, shots, layout, recorded):
         sp = layout["n06"]
-        g = sp["grid"]
         T = sp["times"]
         for t, got in shots.items():
             self.check_common(got, layout)
@@ -386,9 +463,9 @@ class CutN03N06Test(unittest.TestCase):
                 self.assertAlmostEqual(x["p"], max(0.0, min(1.0, (t - start) / T["tile_in_s"])), places=6, msg=(t, x["box"]))
                 self.assertIsNone(x["outside"], x["box"])
                 if t >= start + T["tile_in_s"]:
-                    col, row = i % g["cols"], i // g["cols"]
-                    left, top = g["x"] + col * (g["tile_w"] + g["gap_x"]), g["y"] + row * (g["tile_h"] + g["gap_y"])
-                    self.assertEqual([round(v) for v in x["rect"]], [left, top, left + g["tile_w"], top + g["tile_h"]], x["box"])
+                    # the list: one slot per tile, row by row (layout.json n06.list)
+                    r = list_rects(sp["list"])[i]
+                    self.assertEqual([round(v) for v in x["rect"]], [r[0], r[1], r[0] + r[2], r[1] + r[3]], x["box"])
                     self.assertLessEqual(x["rect"][3], BAND_Y, x["box"])
                     for b in got["boxes"]:
                         if b["box"].startswith(x["box"] + "."):
@@ -400,6 +477,19 @@ class CutN03N06Test(unittest.TestCase):
                     if x["mark"]:
                         self.assertEqual(x["mark"], "✕")
                         self.assertEqual(x["markColor"], "rgb(200, 64, 42)")
+            # the large box: the tile whose turn it is (the turns share tiles_s .. the end), larger
+            n = len(sp["tests"])
+            turn = (sp["duration_s"] - T["tiles_s"]) / n
+            k = min(n - 1, int((t - T["tiles_s"]) // turn)) if t >= T["tiles_s"] else None
+            shown = [b["box"] for b in got["bigs"] if b["shown"]]
+            self.assertEqual(shown, [] if k is None else [f"n06.big.{sp['tests'][k]}"], t)
+            if k is not None:
+                big = next(b for b in got["bigs"] if b["shown"])
+                f = box_of(sp["feature"])
+                self.assertEqual([round(v) for v in big["rect"]], [f[0], f[1], f[0] + f[2], f[1] + f[3]], t)
+                small = got["tiles"][k]
+                self.assertGreater((big["rect"][2] - big["rect"][0]) * (big["rect"][3] - big["rect"][1]),
+                                   4 * (small["rect"][2] - small["rect"][0]) * (small["rect"][3] - small["rect"][1]), t)
 
     def test_n06_lays_out_the_cases_past_the_limit(self):
         layout = n03_n06_layout()
@@ -414,7 +504,8 @@ class CutN03N06Test(unittest.TestCase):
             self.assertEqual(last[k]["miss"], "1", k)
             self.assertEqual(last[k]["mark"], "✕", k)
         # what happened, read from the records (words only)
-        self.assertIn("フレームが許容を超える", last["step_break"]["text"])
+        self.assertIn("フレームが持たない", last["step_break"]["text"])  # past the allowable, in the viewers' words
+        self.assertNotIn("許容", last["step_break"]["text"])
         self.assertNotIn("越えられない", last["step_break"]["text"])  # its words are the still's
         self.assertIn("越えられない", last["step_stuck"]["text"])
         self.assertNotIn("フレーム", last["step_stuck"]["text"])  # its words are the motion's
@@ -422,32 +513,89 @@ class CutN03N06Test(unittest.TestCase):
         self.assertIn("輪が浮く", last["tilt_over"]["text"])
         self.assertIn("電池が熱くなりすぎる", last["battery_hot"]["text"])
         self.assertIn("部品がぶつかる", last["parts_clash"]["text"])
-        self.assertIn("片側の輪が浮く", last["rollover"]["text"])
+        # wind (F1 past the limit): the record's flag slides_first and its criterion not met
+        # (critical_wind_speed 50 < 57 m/s), in the words of FLAGS and CRITERION_JA
+        self.assertIn("横に流される", last["wind"]["text"])
+        self.assertIn("風に耐えられない", last["wind"]["text"])
+        self.assertEqual(last["wind"]["case"], "F1-wind-beyond")
+        self.assertIsNotNone(last["wind"]["tau"])  # it plays the crosswind's motion
+        # step_break: R1's stress past the limit, played on P1's climb of the same step
+        self.assertEqual(last["step_break"]["case"], "R1-step-beyond")
+        self.assertIsNotNone(last["step_break"]["tau"])
         # where the limit is passed, in red: members over the allowable, a part over its
         # limit, a lifted wheel, the parts that interfere
         self.assertEqual(last["step_break"]["over"], "1")
         self.assertEqual(last["battery_hot"]["over"], "1")
-        self.assertEqual((last["tilt_over"]["lift"], last["rollover"]["lift"]), ("1", "1"))
+        # on the allowable's bands, and what is past it boxed in translucent red (the ✕'s place)
+        self.assertEqual((last["step_break"]["scale"], last["battery_hot"]["scale"]), ("allowable", "allowable"))
+        n_over = sum(1 for k in range(len(design_members())) if 60.0 + 25.0 * k > ALLOWABLE)
+        self.assertEqual(last["step_break"]["overMarks"], n_over)
+        self.assertEqual(last["battery_hot"]["overMarks"], 1)  # the battery (61 > 55 degC); the seat is not judged
+        self.assertEqual(last["tilt_over"]["lift"], "1")
         self.assertEqual(last["parts_clash"]["clash"], "1")
         self.assertEqual(last["parts_clash"]["marks"], 2)  # the battery and the cross member, both in place
-        # the records play from each tile's landing to the end
+        # each record plays in the large box in its turn (from tile_in_s after the turn starts
+        # to its end); in the list a tile holds its first pose until its turn, plays along with the
+        # large box in its turn (no jump to the last pose when the turn ends), then holds its last
         T = layout["n06"]["times"]
         dur = layout["n06"]["duration_s"]
-        mid = {x["box"].split(".")[-1]: x for x in shots[6.0]["tiles"]}
-        for k in ("step_break", "tilt_over", "step_stuck", "parts_clash", "rollover"):
-            self.assertLess(mid[k]["tau"], last[k]["tau"], k)
-        land = lambda k: T["tiles_s"] + keys.index(k) * T["tile_stagger_s"] + T["tile_in_s"]  # noqa: E731
-        self.assertAlmostEqual(last["tilt_over"]["tau"], 8.0 * (11.6 - land("tilt_over")) / (dur - land("tilt_over")), places=6)
-        # the assembly: its two steps over the same span; the battery's box once it is in
-        self.assertAlmostEqual(last["parts_clash"]["tau"], 2.0 * (11.6 - land("parts_clash")) / (dur - land("parts_clash")), places=6)
+        turn = (dur - T["tiles_s"]) / len(keys)
+        self.assertAlmostEqual(last["tilt_over"]["tau"], 8.0, places=6)  # its record: 0 .. 8 s
+        self.assertAlmostEqual(last["parts_clash"]["tau"], 2.0, places=6)  # two steps
+        self.assertEqual(last["parts_clash"]["marks"], 2)
+        # tilt_over's turn (its place in layout.json's order): the record plays in the large box
+        i = keys.index("tilt_over")
+        start = T["tiles_s"] + i * turn + T["tile_in_s"]
+        end = T["tiles_s"] + (i + 1) * turn
+        t_mid = (start + end) / 2
+        at = page.evaluate(READ, t_mid)
+        big = next(b for b in at["bigs"] if b["shown"])
+        self.assertEqual(big["box"], "n06.big.tilt_over")
+        # paced (pace.js): this record turns slowly enough to play evenly
+        self.assertAlmostEqual(big["tau"], 8.0 * (t_mid - start) / (end - start), places=6)
+        self.assertGreater(big["label"], 26)  # the large box's tag is larger than the list's
+        early = {x["box"].split(".")[-1]: x for x in at["tiles"]}
+        self.assertAlmostEqual(early["tilt_over"]["tau"], big["tau"], places=9)  # in the list: along with the large box in its turn
+        before = {x["box"].split(".")[-1]: x for x in page.evaluate(READ, start - 0.05)["tiles"]}
+        self.assertEqual(before["tilt_over"]["tau"], 0.0)  # its first pose until the record plays
+        # parts_clash landed in the list before its turn: its first pose, the cross member only
         early = {x["box"].split(".")[-1]: x for x in shots[3.9]["tiles"]}
-        self.assertLess(early["parts_clash"]["tau"], 2.0)
+        self.assertLess(3.9, T["tiles_s"] + keys.index("parts_clash") * turn)
+        self.assertEqual(early["parts_clash"]["tau"], 0.0)
         self.assertEqual(early["parts_clash"]["marks"], 1)  # the cross member only: the battery is not in yet
+        page.close()
+
+    def test_n06_takes_the_case_whose_record_passes_the_limit(self):
+        """A lower step past the limit, listed first, that the record climbs: step_stuck takes
+        the higher step that it does not climb (the first case whose record says what went
+        wrong), and its words come from the record's flag and criterion."""
+        layout = n03_n06_layout()
+        events = n03_n06_events()
+        run = events[0]
+        run["data"]["load_cases"].insert(0, _lc("P1-low-beyond", "P1", "powertrain", "限界の外: 少し高い段差 (形の見本)",
+                                                criterion=_crit("climbable", ">=", 1.0, "1")))
+        design = events[1]["data"]
+        t_short = [k * 0.2 for k in range(11)]
+        low = {"analysis_id": "ana-0099", "tool": "step_climb_dynamic", "base": "K2", "load_case_id": "P1-low-beyond",
+               "series": _motion(design, t_short, lambda x: (x * 0.5, 0.0, 0.0), fx=lambda x: 3000.0),
+               "results": [_r("climbed", 1.0, "1"), _r("climbable", 1.0, "1")],
+               "design_version": 1, "prediction_ids": ["pred-0099"], "status": "ok"}
+        events.insert(2, {**events[2], "kind": "analysis.finished", "agent": "system", "design_version": 1, "data": low})
+        for i, ev in enumerate(events):
+            ev["seq"] = i
+        base = self.serve(layout, events={"20261103-120000-n06": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n06&run=20261103-120000-n06&t=0")
+        last = {x["box"].split(".")[-1]: x for x in page.evaluate(READ, 11.6)["tiles"]}
+        self.assertEqual(errors, [])
+        self.assertEqual(last["step_stuck"]["case"], "P1-step-beyond")
+        self.assertIn("越えられない", last["step_stuck"]["text"])
+        self.assertEqual(last["step_stuck"]["version"], "1")
         page.close()
 
     def test_missing_layout_keys_are_named(self):
         layout = n03_n06_layout()
         del layout["n03"]["popup"]["title_px"]
+        del layout["n03"]["popup"]["ok_of_reading"]
         del layout["n03"]["times"]["accel_s"]
         del layout["n06"]["tile"]["label"]
         del layout["n06"]["overlay"]["opacity"]
@@ -455,7 +603,7 @@ class CutN03N06Test(unittest.TestCase):
         base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=1")
         err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
-        self.assertIn("layout.json の n03 に無い: popup.title_px, times.accel_s", err)
+        self.assertIn("layout.json の n03 に無い: popup.title_px, popup.ok_of_reading, times.accel_s", err)
         self.assertIn("layout.json に無い: min_text_px", err)
         self.assertEqual(page.evaluate("document.querySelectorAll('.n03-view').length"), 0)
         page.close()
@@ -470,6 +618,20 @@ class CutN03N06Test(unittest.TestCase):
         base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=1")
         self.assertIn("layout.json の n03 に無い: duration_s, view.x", page.evaluate("document.querySelector('.err')?.textContent ?? ''"))
+        page.close()
+        # the loop's keys proposed on 2026-11-03 (not in the promo department's layout.json yet), and an ease it does not know
+        layout = n03_n06_layout()
+        del layout["n03"]["times"]["ok_s"]
+        del layout["n03"]["loop"]
+        base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
+        page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=1")
+        self.assertIn("layout.json の n03 に無い: times.ok_s, loop.ease", page.evaluate("document.querySelector('.err')?.textContent ?? ''"))
+        page.close()
+        layout = n03_n06_layout()
+        layout["n03"]["loop"]["ease"] = "bounce"
+        base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
+        page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=1")
+        self.assertIn("layout.json の n03 の loop.ease が分からない: bounce", page.evaluate("document.querySelector('.err')?.textContent ?? ''"))
         page.close()
 
     def test_on_the_real_tools_records(self):

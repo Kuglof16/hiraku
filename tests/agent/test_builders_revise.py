@@ -22,6 +22,7 @@ from hiraku.catalog import CatalogError, build_load_cases, load_catalog, read_da
 from hiraku.contract import layout
 from hiraku.tools import ToolError
 from hiraku.tools.functions import get_context, revise_design
+from hiraku.tools.judge import update_judgement
 from tests.tools import fakes
 from tests.tools.helpers import REQUIREMENTS, requirements_with_tests
 
@@ -130,6 +131,48 @@ class BeyondBuildTest(unittest.TestCase):
             build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], beyond=["H1"])
 
 
+class SystemCheckTest(BuildersCase, unittest.TestCase):
+    """A system rule (category system) that hits a part turns the assembly tile red."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.enterContext(builders(fakes.builders_module()))
+        design = self.root / "design.json"
+        design.write_text(json.dumps(fakes.loaded_design()), encoding="utf-8")
+        self.ctx = start_run(requirements_with_tests(self.root, ["P1", "R1", "H1"]), design_path=design,
+                             root=self.root / "runs", formulas=fakes.FakeFormulas(), tools=fakes.shelf(assembly=True),
+                             designgen=fakes.FakeDesigngen())
+        rule = {"rule_id": "SY-01", "category": "system", "text": "モーターから駆動輪まで torque の鎖がつながる",
+                "check": "True", "origin": "builtin", "trust": 2, "basis": "test"}
+        self.ctx.store.emit("knowledge.imported", agent="lead", data={
+            "doc": {"doc_id": "SY", "filename": "system.yaml", "origin": "builtin"}, "rules": [rule]})
+
+    def check(self, rule_id, hits):
+        s = self.ctx.store
+        return s.add_record("rule_check", {"rule_check_id": s.next_id("rule_check"), "design_version": 1,
+                                           "rule_id": rule_id, "targets": ["motor"], "hits": hits, "pass": not hits},
+                            design_version=1, agent="packager")
+
+    def tile(self):
+        return next(j for j in self.ctx.store.judgements() if j["domain"] == "assembly")
+
+    def test_a_system_miss_turns_assembly_red_and_says_where(self):
+        self.check("SY-01", [{"part_id": "motor", "values": {}, "message": "後輪までの torque の鎖が切れている"}])
+        tile = update_judgement(self.ctx, "assembly")
+        self.assertEqual((tile["state"], tile["red_count"]), ("red", 1))
+        self.assertIn("系の欠け 1 件: SY-01", tile["summary"])
+        self.assertIn("後輪までの torque の鎖が切れている", tile["summary"])
+        self.check("SY-01", [])  # checked again after the fix: the latest check counts
+        self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")
+
+    def test_other_categories_and_other_domains_are_not_affected(self):
+        self.check("XX-01", [{"part_id": "seat", "values": {}, "message": "m"}])  # not a system rule
+        self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")
+        self.check("SY-01", [{"part_id": "motor", "values": {}, "message": "m"}])
+        self.assertNotIn("系の欠け", update_judgement(self.ctx, "strength")["summary"])
+
+
 class BeyondRunTest(BuildersCase, unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -166,7 +209,7 @@ class AutoTestsTest(BuildersCase, unittest.TestCase):
     tests = None  # the requirements file lists no tests: the catalog picks them from the flags
 
     def test_every_buildable_test_is_run_and_the_rest_named(self):
-        self.assertEqual([lc["test_id"] for lc in self.ctx.load_cases], ["P1", "R1", "H1"])
+        self.assertEqual([lc["test_id"] for lc in self.ctx.load_cases], ["P1", "R1", "H1"])  # R1s only when listed
         (said,) = [e for e in self.events("agent.said") if e["agent"] == "system"]
         self.assertIn("荷重条件の作り方がまだ無い: S1 静的な転倒", said["text"])
         self.assertNotIn("H1", said["text"])
@@ -227,6 +270,17 @@ class ReviseDesignTest(BuildersCase, unittest.TestCase):
             revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "third"}, "designer")
         self.assertIsNone(get_context(self.ctx, {"sections": ["design_variables"]})["design_variables"])
 
+    def test_the_cost_refusal_says_whose_cost_it_reads(self):
+        self.ctx.project["cost_usd"] = self.ctx.project["cost_limit_usd"]  # as written at the end of the lead's turn
+        with self.assertRaises(ToolError) as cm:
+            revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertIn("まとめ役の最後に終わった番の時点で", str(cm.exception))
+
+    def test_a_null_cost_does_not_stop_a_revision(self):
+        self.ctx.project["cost_usd"] = None  # the plugin path: HIRAKU cannot know the cost
+        out = revise_design(self.ctx, {"changes": TRACK_FIX, "reason": "x"}, "designer")
+        self.assertEqual(out["design_version"], 2)
+
 
 class ScriptedReviseTest(BuildersCase, unittest.TestCase):
     def plan(self, revise=True):
@@ -253,7 +307,7 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")
         v1 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(1)}
         v2 = {j["domain"]: j["state"] for j in self.ctx.store.judgements(2)}
-        self.assertEqual(v1, {"strength": "green", "assembly": "red"})
+        self.assertEqual(v1, {"strength": "pending", "assembly": "red"})  # HK5: stage 0 red, revised before R1
         self.assertEqual(v2, {"strength": "green", "assembly": "green"})
         self.assertEqual(self.designgen.calls, [TRACK_FIX])
         # a zero limit (interference <= 0 mm): margin in mm, no percentage
@@ -264,21 +318,31 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         self.assertEqual([(p["design_version"], p["value"], p["agent"]) for p in h1],
                          [(1, 100.0, "packager"), (2, 0.0, "packager")])
         self.assertEqual({p["design_version"] for p in self.ctx.store.records("prediction")
-                          if p["load_case_id"] == "R1-step100"}, {1, 2})  # every load case is redone
+                          if p["load_case_id"] == "R1-step100"}, {2})  # the heavier stage waits for the layout
         created = self.events("design.created")
         self.assertEqual([(e["agent"], e["design_version"]) for e in created], [("designer", 1), ("designer", 2)])
         started = [e["agent"] for e in self.events("agent.started")]
-        self.assertEqual(started, ["lead", "cae.strength", "packager", "designer"])
-        self.assertIn("設計の版 2 で、全部の荷重条件をやり直します", [e["text"] for e in self.events("agent.said")])
+        self.assertEqual(started, ["lead", "packager", "designer", "cae.strength"])
+        said = [e["text"] for e in self.events("agent.said")]
+        self.assertIn("設計の版 2 で、段 0 から全部の荷重条件をやり直します", said)
+        self.assertIn("版 1、段 0 (レイアウトと規則)の荷重条件を確かめます: H1-steer30", said)
+        self.assertIn("版 2、段 1 (軽い計算)の荷重条件を確かめます: P1-step100、R1-step100", said)
+        self.assertNotIn("hook.denied", [e["kind"] for e in self.ctx.store.events()
+                                         if (e.get("data") or {}).get("rule") == "HK5_light_first"])
         events = self.ctx.store.events()
         self.assertEqual([e["seq"] for e in events], list(range(len(events))))
 
-    def test_without_a_revision_the_red_tile_ends_the_run(self):
-        self.assertEqual(run_scripted(self.ctx, self.plan(revise=False)), "done")  # judged: red is an answer
+    def test_without_a_revision_the_red_layout_holds_the_heavier_stages(self):
+        # HK5: a red stage 0 and no revision in the plan: the lighter stage's red is the answer,
+        # the heavier stages are not checked (a revision was left in round_limit, so not_judged)
+        self.assertEqual(run_scripted(self.ctx, self.plan(revise=False)), "stopped")
         self.assertEqual(self.ctx.version, 1)
         self.assertEqual({j["domain"]: j["state"] for j in self.ctx.store.judgements()},
-                         {"strength": "green", "assembly": "red"})
-        self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "done")  # a revision was left
+                         {"strength": "pending", "assembly": "red"})
+        finished = self.events("run.finished")[-1]["data"]
+        self.assertEqual(finished["stop_code"], "not_judged")
+        self.assertIn("台本に設計の直しが残っていません", finished["stop_reason"])
+        self.assertIn("HK5", finished["stop_reason"])
 
     def test_red_after_the_last_revision_ends_at_the_round_limit(self):
         plan = self.plan()

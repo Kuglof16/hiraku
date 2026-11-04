@@ -1,0 +1,44 @@
+{
+  "description": "HIRAKU's hooks (HK1-HK5, role start and stop): python -m hiraku hook <Event> on the current run",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__plugin_hiraku_hiraku__.*",
+        "hooks": [
+          {"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hiraku_cli.py", "hook", "PreToolUse"], "timeout": 60}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__plugin_hiraku_hiraku__.*",
+        "hooks": [
+          {"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hiraku_cli.py", "hook", "PostToolUse"], "timeout": 60}
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hiraku_cli.py", "hook", "Stop"], "timeout": 60}
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "^hiraku:.*",
+        "hooks": [
+          {"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hiraku_cli.py", "hook", "SubagentStart"], "timeout": 60}
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "^hiraku:.*",
+        "hooks": [
+          {"type": "command", "command": "python", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hiraku_cli.py", "hook", "SubagentStop"], "timeout": 60}
+        ]
+      }
+    ]
+  }
+}

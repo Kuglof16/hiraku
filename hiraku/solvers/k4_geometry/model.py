@@ -7,9 +7,13 @@ between bodies (shape_overlap) uses the capsule for them instead of the box.
 Mounted pairs may overlap, the boxes being rough: members that share a node
 (welded joints), a part of kind frame and the members at its carried_by
 nodes, frame and gusset parts at the same joint, and the unsprung parts of
-the same support (hub in the wheel) any amount; a part and the members that end at its carried_by nodes,
+the same support (hub in the wheel), a long thin part and the body one of its ends (a joint) lies
+in (joined), and a steering column and the panel it goes through any amount; a part and the members that end at its carried_by nodes,
 and a suspension part and the members at its support's frame node (bolted
-mounts), up to MOUNT_MM. Anything deeper is interference.
+mounts), up to MOUNT_MM. Anything deeper is interference. Brackets (kind bracket) are
+welded in like gussets. A person's body parts (kind occupant, one person per id before the
+first ".") touch each other and the seat, belt, floors and panels, pedals and steering wheel
+any amount (OCCUPANT_REST_KINDS); against anything else they interfere.
 """
 
 from __future__ import annotations
@@ -28,8 +32,24 @@ MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is m
 # Part kinds held as capsules: shafts, steering links and rods. Kinds not in a design yet
 # are listed so that designs using them get capsules without a change here.
 SLENDER_KINDS = ("driveshaft", "propshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "steering_column",
-                 "steering_rack", "stabilizer_link", "link", "rod", "damper")
-WELDED = {"frame", "gusset"}  # part kinds welded into the frame at their carried_by joints
+                 "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper")
+WELDED = {"frame", "gusset", "rollbar", "bracket"}  # part kinds welded into the frame at their carried_by joints
+# The parts of a person (kind occupant, one person per id before the first ".": hiraku.contract.loading.
+# person_of) touch each other and what the person sits on, rests the feet on and holds any amount; anything
+# else they meet is interference.
+OCCUPANT_REST_KINDS = ("seat", "seat_belt", "body", "accelerator_pedal", "brake_pedal", "pedal", "steering",
+                       "steering_wheel")
+# Part kinds that stand for frame members (their box is a member's box): they overlap the members
+# at their carried_by nodes any amount (the roll bar part is its top beam, kit/safety.py; a care bed's side
+# rail part is the box round its tubes, designgen/care_bed.py).
+FRAME_PIECES = ("frame", "rollbar", "side_rail")
+# Links with a joint at each end, fixed at the inner end and moving with the wheel at the outer
+# end (motion.sweep turns them about the inner end).
+LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
+# Kinds that go through a hole in a panel (a part of kind body) on their way: the steering column
+# through the floor (assumption: the panel has the hole).
+THROUGH_PANEL_KINDS = ("steering_column", "steering_shaft")
+PANEL_KINDS = ("body",)
 
 
 @dataclass
@@ -127,7 +147,7 @@ def allowance(a: Body, b: Body, design: dict) -> float:
         return float("inf") if a.nodes & b.nodes else TOUCH_MM
     if a.kind == "member" or b.kind == "member":
         part, mem = (b, a) if a.kind == "member" else (a, b)
-        if part.kind == "frame" and part.nodes & mem.nodes:  # a piece of the frame welded in at the joint
+        if part.kind in FRAME_PIECES and part.nodes & mem.nodes:  # a piece of the frame welded in at the joint
             return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM
@@ -137,7 +157,41 @@ def allowance(a: Body, b: Body, design: dict) -> float:
         return TOUCH_MM
     if {a.kind, b.kind} <= WELDED and a.nodes & b.nodes:  # frame pieces and gussets welded at the same joint
         return float("inf")
+    if "occupant" in (a.kind, b.kind):
+        o, other = (a, b) if a.kind == "occupant" else (b, a)
+        if other.kind == "occupant" and _person(o.id) == _person(other.id):
+            return float("inf")
+        if other.kind in OCCUPANT_REST_KINDS:
+            return float("inf")
+    if joined(a, b):  # a link and what it is jointed to at an end (rack and tie rod, shaft and reducer)
+        return float("inf")
+    if (a.kind in THROUGH_PANEL_KINDS and b.kind in PANEL_KINDS) or (b.kind in THROUGH_PANEL_KINDS and a.kind in PANEL_KINDS):
+        return float("inf")
     return float("inf") if a.support is not None and a.support == b.support else TOUCH_MM
+
+
+def _person(body_id: str) -> str:
+    """The person of a body "part:<id>": the id up to the first "." (hiraku.contract.loading.person_of)."""
+    return body_id.split(":", 1)[-1].split(".", 1)[0]
+
+
+def _inside(point: np.ndarray, b: Body) -> bool:
+    """Whether a point is in a body's shape (its capsule, else its box), within TOUCH_MM."""
+    if b.capsule is not None:
+        c = b.capsule
+        d = c.b - c.a
+        t = float(np.clip((point - c.a) @ d / max(float(d @ d), 1e-12), 0.0, 1.0))
+        return float(np.linalg.norm(point - (c.a + t * d))) <= c.r + TOUCH_MM
+    local = b.obb.axes @ (point - b.obb.center)
+    return bool(np.all(np.abs(local) <= b.obb.half + TOUCH_MM))
+
+
+def joined(a: Body, b: Body) -> bool:
+    """Whether a long thin part ends in the other body: an end of its capsule's axis (a joint) lies in it."""
+    for x, y in ((a, b), (b, a)):
+        if x.capsule is not None and (_inside(x.capsule.a, y) or _inside(x.capsule.b, y)):
+            return True
+    return False
 
 
 def interferences(design: dict, items: dict[str, Body] | None = None) -> list[tuple[str, str, float]]:

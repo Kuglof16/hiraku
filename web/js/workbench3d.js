@@ -20,6 +20,15 @@
 //
 // Parts are shaped by kind inside their boxes (shapes.js); the look (?look=)
 // picks materials and light (look.js).
+//
+// Drawing (render): the picture (in the real look on its own renderer: through
+// realpost.js, antialiased, with ambient occlusion and tone mapping), then the
+// overlay (layer OVERLAY), drawn after it and outside it:
+//   - the contour's colours: an unlit twin (contourTwin) of each coloured mesh, its
+//     colour not tone mapped, so a pixel of the contour is the legend's colour; it is
+//     tested against the depth of the picture's solid things (drawn again, depth only)
+//   - what is drawn over everything (arrows, the setup's marks, free edges, the centre
+//     of gravity), and the diagram's ink lines again over the twins
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -29,20 +38,77 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
 import { overOf } from "./fields.js";
+import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { Look } from "./look.js";
+import { GROUND_MM, Look, cutLookOf } from "./look.js";
+import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
+import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { partPieces, wheelPieces } from "./shapes.js";
+import { mergePieces, partPieces, wheelPieces } from "./shapes.js";
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
 const RULE = "#e2dccf";
 const RULE_MAJOR = "#c9c3b6";
 const LIMIT_RED = "#c8402a";
+// What a rule hit lights (setRuleFocus): a see-through fill and a thick outline, over everything.
+const LIT_FILL = "#ffc400";
+const LIT_LINE = "#ff6a00";
 // joint: the force the body takes at a suspension mounting point (at "<support>.<point>")
 const VECTOR_COLORS = { reaction: "#2b59c3", grip: "#8e6bbf", load: "#c8402a", wind: "#2fa7d6", inertia: "#e9893a", joint: "#1f6f6b" };
 const UP = new THREE.Vector3(0, 1, 0);
+// The layer of what is drawn after the picture (see the top of this file).
+export const OVERLAY = 1;
+// The depth of the picture's solid things for the overlay to test against: pushed back a
+// little (more than a shell's faces are, polygonOffset 1), so a twin on its own surface passes.
+const DEPTH_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 });
+
+// Draw an object (and what is under it) only in the overlay.
+function overlayOnly(obj) {
+  obj.traverse((o) => o.layers.set(OVERLAY));
+  return obj;
+}
+
+// The unlit copy of a mesh in the overlay, on the mesh's own geometry (so it moves and
+// bends with it): its colour is drawn as it is (not lit, not tone mapped).
+function contourTwin(mesh) {
+  let t = mesh.userData.twin;
+  if (!t) {
+    const src = mesh.material;
+    t = new THREE.Mesh(
+      mesh.geometry,
+      new THREE.MeshBasicMaterial({
+        toneMapped: false,
+        fog: false, // the legend's colour, not hazed (a stage's haze)
+        side: src.side,
+        polygonOffset: src.polygonOffset,
+        polygonOffsetFactor: src.polygonOffsetFactor,
+        polygonOffsetUnits: src.polygonOffsetUnits,
+      }),
+    );
+    t.layers.set(OVERLAY);
+    t.matrixAutoUpdate = false; // the mesh's own place
+    t.visible = false;
+    mesh.add(t);
+    mesh.userData.twin = t;
+  }
+  return t;
+}
+
+// Show a mesh's twin in one colour (hex), in its geometry's vertex colours ("vertex"), or hide it (null).
+function paintTwin(mesh, color) {
+  const t = color === null && !mesh.userData.twin ? null : contourTwin(mesh);
+  if (!t) return;
+  t.visible = color !== null;
+  if (color === null) return;
+  const vertex = color === "vertex";
+  if (t.material.vertexColors !== vertex) {
+    t.material.vertexColors = vertex;
+    t.material.needsUpdate = true;
+  }
+  t.material.color.set(vertex ? "#ffffff" : color);
+}
 // Camera directions (ISO, from the target) for the scenes that need their own view.
 export const VIEWS = {
   default: [0.85, 0.95, 0.62],
@@ -196,6 +262,43 @@ function label(text, cls) {
   return new CSS2DObject(el);
 }
 
+// A label that says one of the view's main values (the largest value, the picked wheel's
+// force): it is laid out outside the vehicle with a leader line to its point
+// (placeOutLabels), and counted as a label (data-kind) by the present mode.
+function keyLabel(text, cls) {
+  const tag = label(text, `${cls ?? ""} lbl-key lbl-out`);
+  tag.element.dataset.kind = "label";
+  return tag;
+}
+
+const WHEEL_FORCES = new Set(["reaction", "grip"]);
+
+// Distance (px) from a point {x, y} to the segment (ax, ay)-(bx, by).
+function segmentDistance(p, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const L = dx * dx + dy * dy;
+  const u = L > 0 ? Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / L)) : 0;
+  return Math.hypot(p.x - (ax + u * dx), p.y - (ay + u * dy));
+}
+const LEADER_GAP_PX = 18; // between the vehicle's outline on screen and a label laid outside it
+const LABEL_MARGIN = { top: 52, bottom: 124, side: 10 }; // the view's edges kept for its buttons and bars
+
+// A drawn solid of the picture (not a line, not an overlay twin, not a lit copy).
+function isSolid(x) {
+  return x.isMesh && !x.isLineSegments2 && x.layers.isEnabled(0) && !x.userData.lit;
+}
+
+// The matrix of obj in root's frame (its local matrices up to root).
+function relMatrix(obj, root) {
+  const m = new THREE.Matrix4();
+  for (let o = obj; o && o !== root; o = o.parent) {
+    if (o.matrixAutoUpdate) o.updateMatrix();
+    m.premultiply(o.matrix);
+  }
+  return m;
+}
+
 function disposeTree(obj) {
   obj.traverse((o) => {
     o.geometry?.dispose?.();
@@ -213,7 +316,7 @@ function makeArrow(color) {
   const cone = new THREE.Mesh(new THREE.ConeGeometry(26, 1, 16), mat);
   g.add(shaft, cone);
   for (const o of [g, shaft, cone]) o.renderOrder = 8;
-  return g;
+  return overlayOnly(g);
 }
 
 function placeArrow(g, start, dir, len) {
@@ -244,10 +347,14 @@ export class Workbench3D {
   // opts.renderer: a WebGLRenderer shared with other views (the cut pages draw many
   // views through one); such a view has no labels and no mouse control, and is
   // drawn with renderInto. opts.ground: "shadow" for a ground that only takes the
-  // shadow (a vehicle standing on the page's own background).
+  // shadow (a vehicle standing on the page's own background). opts.quality: the real
+  // look's cost (look.js QUALITY; ?quality=). opts.stage: a cut page's view (look.js: the
+  // sky and its haze behind, the gravel road, the sun behind the vehicle); in the real look
+  // it is drawn through the renderer's shared post (realpost.js sharedPost: antialiasing,
+  // ambient occlusion) when its quality has them.
   constructor(host, lookName = "zu", opts = {}) {
     this.host = host;
-    this.look = new Look(lookName);
+    this.look = new Look(lookName, opts.quality, { stage: !!opts.stage });
     this.ownRenderer = !opts.renderer;
     this.groundStyle = opts.ground ?? null;
     this.renderer = opts.renderer ?? new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -261,6 +368,11 @@ export class Workbench3D {
       this.labelRenderer = new CSS2DRenderer();
       this.labelRenderer.domElement.className = "gl-labels";
       host.appendChild(this.labelRenderer.domElement);
+      // leader lines from the labels laid outside the vehicle to their points
+      const box = document.createElement("div");
+      box.innerHTML = `<svg class="gl-leaders"></svg>`; // parsed as SVG
+      this.leaders = box.firstChild;
+      host.appendChild(this.leaders);
       this.controls = new OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = false;
       this.controls.screenSpacePanning = true;
@@ -270,6 +382,13 @@ export class Workbench3D {
     }
 
     this.sun = this.look.setUp(this.renderer, this.scene);
+    // The lights are in the overlay's layer too: a pass that counts other lights than the
+    // pass before makes three.js choose every lit material's shader again (each frame).
+    this.scene.traverse((o) => o.isLight && o.layers.enable(OVERLAY));
+    // the real look on its own renderer: antialiasing and occlusion in post (none at the low quality)
+    const q = this.look.q;
+    this.post = this.ownRenderer && this.look.real && (q.ao || q.msaa) ? new RealPost(this.renderer, this.scene, this.camera, q) : null;
+    this.sharedPost = !this.ownRenderer && this.look.stage && !!(q.ao || q.msaa);
 
     this.world = new THREE.Group();
     this.scene.add(this.world);
@@ -286,7 +405,8 @@ export class Workbench3D {
     this.overGhosts = new THREE.Group();
     this.names = new THREE.Group();
     this.shells = new THREE.Group(); // shell meshes (one per mesh_id, built when a contour needs it)
-    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names);
+    this.lit = new THREE.Group(); // a rule hit's lit parts, nodes and the design's box (setRuleFocus); shown with the parts off too
+    this.body.add(this.model, this.shells, this.parts, this.overGhosts, this.names, this.lit);
 
     this.wheels = new THREE.Group();
     this.arrows = new THREE.Group();
@@ -297,7 +417,13 @@ export class Workbench3D {
 
     this.inkMat = new LineMaterial({ color: INK, linewidth: 1.7 });
     this.mutedMat = new LineMaterial({ color: MUTED, linewidth: 1.1 });
-    for (const m of [this.inkMat, this.mutedMat]) m.userData.shared = true;
+    this.freeEdgeMat = new LineMaterial({ color: FREE_EDGE_COLOR, linewidth: 4, depthTest: false, transparent: true });
+    this.litLine = new LineMaterial({ color: LIT_LINE, linewidth: 3.5, depthTest: false, transparent: true });
+    this.litFill = new THREE.MeshBasicMaterial({ color: LIT_FILL, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false, toneMapped: false, fog: false, side: THREE.DoubleSide });
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat, this.litLine, this.litFill]) m.userData.shared = true;
+    this.litObjs = []; // what setRuleFocus added (overlay only), taken away by clearLit
+    this.litIds = [];
+    this.litShown = [];
     this.links = new LineSegments2(new LineSegmentsGeometry(), this.mutedMat);
     this.iso.add(this.links);
 
@@ -313,6 +439,7 @@ export class Workbench3D {
 
     this.cg = new THREE.Sprite(new THREE.SpriteMaterial({ map: cgTexture(), depthTest: false, transparent: true }));
     this.cg.renderOrder = 10;
+    overlayOnly(this.cg);
     this.cg.scale.setScalar(150);
     this.cg.visible = false;
     this.iso.add(this.cg);
@@ -337,15 +464,19 @@ export class Workbench3D {
       this.renderer.setPixelRatio(pixelRatio);
       this.renderer.setSize(w, h, true);
       this.labelRenderer.setSize(w, h);
+      this.leaders.setAttribute("width", String(w));
+      this.leaders.setAttribute("height", String(h));
+      this.post?.setSize(w, h, this.renderer.getPixelRatio());
     }
     this.applyAspect();
-    for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w, h);
+    for (const m of [this.inkMat, this.mutedMat, this.freeEdgeMat, this.litLine]) m.resolution.set(w, h);
     this.props.resize(w, h);
   }
 
   setDesign(design) {
     if (design === this.design) return;
     this.design = design;
+    this.clearLit(); // before the meshes it hangs on go
     for (const g of [this.model, this.shells, this.parts, this.names, this.overGhosts, this.markers, this.wheels]) disposeTree(g);
     this.shellObjs = {};
     this.model.visible = true;
@@ -370,7 +501,7 @@ export class Workbench3D {
     for (const m of design.members ?? []) {
       const g = memberGeometry(design, m, nodes);
       if (!g) continue;
-      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial());
+      const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material] ?? null, m.part ?? null));
       mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
       mesh.castShadow = mesh.receiveShadow = this.look.real;
       mesh.matrixAutoUpdate = false;
@@ -383,11 +514,14 @@ export class Workbench3D {
       pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
-      const tag = label(esc(m.id), "lbl-id");
-      tag.position.copy(g.mid);
-      this.names.add(tag);
+      if (this.labelRenderer) {
+        const tag = label(esc(m.id), "lbl-id");
+        tag.position.copy(g.mid);
+        this.names.add(tag);
+      }
     }
-    for (const [id, p] of Object.entries(nodes)) {
+    // the names of members and nodes only where labels are drawn (not on a shared renderer)
+    for (const [id, p] of this.labelRenderer ? Object.entries(nodes) : []) {
       const tag = label(esc(id), "lbl-node");
       tag.position.copy(p);
       this.names.add(tag);
@@ -395,6 +529,8 @@ export class Workbench3D {
     this.restInk = ink;
     this.inkLines = new LineSegments2(new LineSegmentsGeometry().setPositions(ink.length ? ink : [0, 0, 0, 0, 0, 0]), this.inkMat);
     this.inkLines.visible = ink.length > 0 && !this.look.real;
+    this.inkLines.layers.enable(OVERLAY); // again over the contour's twins
+    this.inkLines.renderOrder = 1;
     this.model.add(this.inkLines);
     this.modeShape = null;
 
@@ -405,12 +541,13 @@ export class Workbench3D {
       group.matrixAutoUpdate = false;
       const lines = [];
       if (s.kind === "wheel") {
-        // A tyre, rim, hub and spokes (the spokes show the wheel turning).
-        for (const pc of wheelPieces(r, w)) {
+        // A tyre, rim, hub and spokes (the spokes show the wheel turning); one mesh per material.
+        const pieces = wheelPieces(r, w);
+        for (const pc of pieces) if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
+        for (const pc of mergePieces(pieces)) {
           const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial("wheel", pc.sub));
           mesh.castShadow = mesh.receiveShadow = this.look.real;
           group.add(mesh);
-          if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
         }
         for (const side of [-1, 1]) lines.push(0, side * w * 0.36, 0, r * 0.6, side * w * 0.36, 0);
         geo.dispose();
@@ -427,7 +564,7 @@ export class Workbench3D {
       group.add(ring);
       const tag = label(esc(s.id), "lbl-id");
       tag.position.set(0, 0, r + 60);
-      group.add(tag);
+      if (this.labelRenderer) group.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.wheels.add(group);
       this.wheelObjs[s.id] = { group, base: c, ring, tag, r, w, frameNode: s.frame_node ?? null };
       box.expandByPoint(c.clone().add(v3([r, w / 2, r]))).expandByPoint(c.clone().sub(v3([r, w / 2, r])));
@@ -456,25 +593,29 @@ export class Workbench3D {
         for (const m of [torso, ball]) m.castShadow = this.look.real;
         g.add(torso, ball);
       } else {
-        // The part's shape for its kind inside its box, or the box itself.
-        const pieces = partPieces(p) ?? [{ geo: new THREE.BoxGeometry(sz[0], sz[1], sz[2]), sub: null }];
+        // The part's shape for its kind inside its box, or the box itself (its edges
+        // rounded in the real look only).
+        const pieces = partPieces(p, { round: this.look.real, design });
         const holder = new THREE.Group();
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
         holder.updateMatrix();
         const lines = [];
-        for (const pc of pieces) {
-          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p.kind, pc.sub));
+        for (const pc of pieces) pushEdges(lines, pc.geo, holder.matrix, 35);
+        // one mesh per material (the pieces of the same sub merged)
+        for (const pc of mergePieces(pieces)) {
+          const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial(p, pc.sub, design.materials ?? null));
           mesh.material.userData.sub = pc.sub;
           mesh.renderOrder = 2;
           mesh.castShadow = mesh.receiveShadow = this.look.real;
           holder.add(mesh);
-          pushEdges(lines, pc.geo, holder.matrix, 35);
         }
         g.add(holder);
         if (!this.look.real) {
           edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines.length ? lines : [0, 0, 0, 0, 0, 0]), this.mutedMat);
+          edges.layers.enable(OVERLAY);
+          edges.renderOrder = 1;
           g.add(edges);
         }
       }
@@ -483,7 +624,7 @@ export class Workbench3D {
       const tag = label(`${esc(short)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
       tag.element.title = p.name ?? p.id;
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
-      g.add(tag);
+      if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
       this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
     }
@@ -498,6 +639,134 @@ export class Workbench3D {
       this.fit();
       this.fitted = true;
     }
+    this.lightAll(); // a rule hit pointed at before stays lit on the new version
+  }
+
+  // Light what a rule hit names (the person points at it in A2): ids of parts, frame members,
+  // frame nodes, "support:<id>" (that wheel and its suspension's mounting points),
+  // "<support>.<point>" (one mounting point) and "design" (the whole design: a box round it).
+  // Only the look changes: a see-through fill and a thick outline drawn over everything in the
+  // overlay, on the objects' own geometry (no material, number or shape of the design is
+  // touched, so the running glow of animate() and the contour stay as they are). An id with
+  // nothing in the 3D is left out. [] puts everything back. Returns the ids that were lit.
+  setRuleFocus(ids) {
+    const list = [...new Set((Array.isArray(ids) ? ids : []).filter((x) => typeof x === "string" && x))];
+    if (list.join("\n") === this.litIds.join("\n")) return this.litShown;
+    this.litIds = list;
+    this.lightAll();
+    return this.litShown;
+  }
+
+  lightAll() {
+    this.clearLit();
+    this.litShown = this.design ? this.litIds.filter((id) => this.lightOne(id)) : [];
+  }
+
+  clearLit() {
+    for (const o of this.litObjs) {
+      o.parent?.remove(o);
+      if (o.userData.ownGeometry) o.geometry.dispose(); // a twin's geometry is its mesh's own
+    }
+    this.litObjs = [];
+    this.litShown = [];
+  }
+
+  lightOne(id) {
+    const d = this.design;
+    if (id === "design") return this.litBox(this.bboxIso);
+    if (id.startsWith("support:")) {
+      const sid = id.slice("support:".length);
+      const s = (d.supports ?? []).find((x) => x.id === sid);
+      if (!s) return false;
+      let hit = this.litWheel(sid);
+      for (const p of Object.values(s.suspension?.hardpoints_mm ?? {})) hit = this.litDot(p) || hit;
+      return hit;
+    }
+    let hit = false;
+    const part = this.partObjs[id];
+    if (part) {
+      // under the body (not the parts' group), so it shows with the parts switched off too
+      part.group.traverse((x) => {
+        if (isSolid(x)) hit = this.litTwin(x, this.lit, relMatrix(x, this.body)) || hit;
+      });
+    }
+    // a wheel listed as a part is drawn from its support
+    const asPart = (d.parts ?? []).find((p) => p.id === id);
+    if (!part && asPart?.kind === "wheel") {
+      const c = v3(asPart.box.center_mm);
+      const s = (d.supports ?? []).find((sp) => v3(sp.position_mm).distanceTo(c) < 50);
+      if (s) hit = this.litWheel(s.id) || hit;
+    }
+    // a frame member, or the members of a part (member.part)
+    for (const m of d.members ?? []) {
+      if ((m.id === id || m.part === id) && this.members[m.id]) hit = this.litTwin(this.members[m.id].mesh, this.members[m.id].mesh, null) || hit;
+    }
+    if (!hit && this.nodes?.[id]) hit = this.litDot(this.nodes[id].toArray());
+    if (!hit) {
+      // "<support>.<point>": a suspension mounting point
+      const dot = id.indexOf(".");
+      const s = dot > 0 ? (d.supports ?? []).find((x) => x.id === id.slice(0, dot)) : null;
+      const p = s?.suspension?.hardpoints_mm?.[id.slice(dot + 1)];
+      if (p) hit = this.litDot(p);
+    }
+    return hit;
+  }
+
+  // A lit copy of a mesh on its own geometry: the fill, and the outline of its edges.
+  litTwin(mesh, parent, matrix, ownGeometry = false) {
+    const fill = new THREE.Mesh(mesh.geometry, this.litFill);
+    fill.userData.ownGeometry = ownGeometry;
+    fill.matrixAutoUpdate = false;
+    if (matrix) fill.matrix.copy(matrix);
+    fill.renderOrder = 7;
+    const lines = [];
+    pushEdges(lines, mesh.geometry, matrix, 35);
+    const edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines.length ? lines : [0, 0, 0, 0, 0, 0]), this.litLine);
+    edges.userData.ownGeometry = true;
+    edges.renderOrder = 8;
+    for (const o of [fill, edges]) {
+      overlayOnly(o);
+      o.userData.lit = true;
+      parent.add(o);
+      this.litObjs.push(o);
+    }
+    return true;
+  }
+
+  litWheel(sid) {
+    const w = this.wheelObjs[sid];
+    if (!w) return false;
+    let hit = false;
+    for (const x of [...w.group.children]) if (x !== w.ring && isSolid(x)) hit = this.litTwin(x, w.group, null) || hit;
+    return hit;
+  }
+
+  // A point (ISO mm, on the body): a ball sized to the design.
+  litDot(p) {
+    if (!Array.isArray(p) || p.length !== 3 || !p.every(Number.isFinite)) return false;
+    const size = this.bboxIso ? this.bboxIso.getSize(new THREE.Vector3()).length() : 2000;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(Math.max(20, size * 0.012), 16, 10), this.litFill);
+    ball.position.copy(v3(p));
+    ball.updateMatrix();
+    return this.litTwin(ball, this.lit, ball.matrix, true); // the ball itself is not drawn: its lit copy owns the geometry
+  }
+
+  // A box round the whole design (the outline only).
+  litBox(box) {
+    if (!box || box.isEmpty()) return false;
+    const pad = box.getSize(new THREE.Vector3()).length() * 0.02;
+    const geo = new THREE.BoxGeometry(...box.getSize(new THREE.Vector3()).addScalar(2 * pad).toArray());
+    const lines = [];
+    pushEdges(lines, geo, new THREE.Matrix4().makeTranslation(box.getCenter(new THREE.Vector3())), 35);
+    geo.dispose();
+    const edges = new LineSegments2(new LineSegmentsGeometry().setPositions(lines), this.litLine);
+    edges.userData.ownGeometry = true;
+    edges.userData.lit = true;
+    edges.renderOrder = 8;
+    overlayOnly(edges);
+    this.lit.add(edges);
+    this.litObjs.push(edges);
+    return true;
   }
 
   // Who is on board for a load case's params.loading (empty / driver / two /
@@ -533,7 +802,17 @@ export class Workbench3D {
         if (!m || m.userData.baseColor === undefined) return;
         const own = !m.userData.sub; // pieces like a spring keep their colour
         const valued = typeof v === "number" && own;
-        m.color.set(valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : m.userData.baseColor);
+        const hex = valued ? (overOf(ct, id, v) ? OVER_COLOR : colorOf(v, ct.max, ct.min)) : null;
+        m.color.set(hex ?? m.userData.baseColor);
+        paintTwin(x, hex);
+        // A part with a value is often inside the vehicle (a battery under the floor and the
+        // seats). The diagram look shows it through what is in front; in the real look its
+        // colour is drawn over what is in front, so it can still be read.
+        const twin = x.userData.twin;
+        if (twin && twin.material.depthTest !== !(real && valued)) {
+          twin.material.depthTest = !(real && valued);
+          twin.renderOrder = real && valued ? 3 : 0;
+        }
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
@@ -598,7 +877,9 @@ export class Workbench3D {
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(ISO_TO_THREE);
-      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - 20000, x1 + 20000, y0 - 20000, y1 + 20000));
+      // on a stage the road runs out to where the haze has hidden it (look.js GROUND_MM)
+      const far = this.look.stage ? GROUND_MM : 20000;
+      holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - far, x1 + far, y0 - far, y1 + far));
       this.ground.add(holder);
       return;
     }
@@ -672,30 +953,32 @@ export class Workbench3D {
     this.followApplied = null;
   }
 
-  // A shell mesh (the contract's mesh record) as faces and element edges, built once
-  // per mesh_id. Each triangle corner has its own vertex (a quad a-b-c-d is a-b-c and
-  // a-c-d), so an element takes one colour; vNode / vElem say which mesh node and
-  // element each vertex is. The edges are each element side once, on the node positions.
+  // A mesh (the contract's mesh record: shells, solids or both) as faces and element edges,
+  // built once per mesh_id. What is drawn is each shell element and the outer faces of the
+  // solids (meshkind.js); each triangle corner has its own vertex, so an element takes one
+  // colour; vNode / vElem say which mesh node and element each vertex is. The edges are each
+  // shell side and each edge round a solid's outer face once, on the node positions.
   shellObj(rec) {
     const had = this.shellObjs[rec.mesh_id];
     if (had) return had;
     const P = rec.nodes_mm;
+    const seen = outerFaces(rec);
     let corners = 0;
-    for (const e of rec.elements) corners += 3 * (e.length - 2);
+    for (const f of seen) corners += 3 * f.tris.length;
     const pos = new Float32Array(corners * 3);
     const vNode = new Uint32Array(corners);
     const vElem = new Uint32Array(corners);
     let k = 0;
-    rec.elements.forEach((e, ei) => {
-      for (let t = 1; t + 1 < e.length; t += 1) {
-        for (const n of [e[0], e[t], e[t + 1]]) {
+    for (const f of seen) {
+      for (const tri of f.tris) {
+        for (const n of tri) {
           vNode[k] = n;
-          vElem[k] = ei;
+          vElem[k] = f.elem;
           pos.set(P[n], k * 3);
           k += 1;
         }
       }
-    });
+    }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(corners * 3), 3));
@@ -707,22 +990,14 @@ export class Workbench3D {
     faces.castShadow = faces.receiveShadow = this.look.real;
     const nodePos = new Float32Array(P.length * 3);
     P.forEach((p, i) => nodePos.set(p, i * 3));
-    const seen = new Set();
-    const pairs = [];
-    for (const e of rec.elements) {
-      for (let i = 0; i < e.length; i += 1) {
-        const a = e[i];
-        const b = e[(i + 1) % e.length];
-        const key = Math.min(a, b) * P.length + Math.max(a, b);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        pairs.push(a, b);
-      }
-    }
+    const pairs = edgePairs(rec, seen);
     const eg = new THREE.BufferGeometry();
     eg.setAttribute("position", new THREE.BufferAttribute(nodePos, 3));
     eg.setIndex(pairs);
-    const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.3 }));
+    // the element edges are drawn over the faces' twin, in the overlay
+    const edges = overlayOnly(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: INK, transparent: true, opacity: 0.3, toneMapped: false })));
+    edges.renderOrder = 1;
+    paintTwin(faces, "vertex");
     const group = new THREE.Group();
     group.add(faces, edges);
     group.visible = false;
@@ -732,14 +1007,14 @@ export class Workbench3D {
     return o;
   }
 
-  // Colour a shell's faces by element values (one colour per element) or by node values.
+  // Colour a shell's faces by element values (one colour per element) or by node values,
+  // or by colours given per element (m.colors: the mesh's own views, quality.js).
   paintShell(o, m, contour) {
     const col = o.faces.geometry.getAttribute("color");
     const rgb = new Map(); // band colour -> [r, g, b] (linear)
     const c = new THREE.Color();
     for (let k = 0; k < o.vNode.length; k += 1) {
-      const v = m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]];
-      const hex = colorOf(v, contour.max, contour.min);
+      const hex = m.colors ? m.colors[o.vElem[k]] : colorOf(m.elem ? m.elem[o.vElem[k]] : m.node[o.vNode[k]], contour.max, contour.min);
       let t = rgb.get(hex);
       if (!t) rgb.set(hex, (t = c.set(hex).toArray()));
       col.array.set(t, k * 3);
@@ -759,18 +1034,31 @@ export class Workbench3D {
     this.model.visible = !shell;
     this.setModeShape(contour?.modes || contour?.mesh?.modes ? contour : null);
     this.applyPartLook();
+    this.freeEdgeLines = null;
+    this.setupMarks = null;
     if (shell) {
       this.paintShell(shell, contour.mesh, contour);
-      // the largest value on its element (or node), as recorded
+      // the largest value on its element (or node), as recorded; the worst element of a metric
       const P = contour.mesh.rec.nodes_mm;
       const at = contour.mesh.maxAt;
-      const ids = at.elem !== undefined ? contour.mesh.rec.elements[at.elem] : [at.node];
-      const where = new THREE.Vector3();
-      for (const n of ids) where.add(v3(P[n]));
-      where.multiplyScalar(1 / ids.length);
-      const tag = label(`最大 ${esc(fmtVU(contour.fieldMax, contour.field.unit))}`, "lbl-max");
-      tag.position.copy(where).add(new THREE.Vector3(0, 0, 120));
-      this.overGhosts.add(tag);
+      if (at) {
+        const ids = at.elem !== undefined ? contour.mesh.rec.elements[at.elem] : [at.node];
+        const where = new THREE.Vector3();
+        for (const n of ids) where.add(v3(P[n]));
+        where.multiplyScalar(1 / ids.length);
+        const tag = keyLabel(esc(contour.mesh.tag ?? `最大 ${fmtVU(contour.frameMax ?? contour.fieldMax, contour.field.unit)}`), "lbl-max");
+        tag.position.copy(where);
+        this.overGhosts.add(tag);
+      }
+      if (contour.freeEdges?.length) {
+        const pos = [];
+        for (const [a, b] of contour.freeEdges) pos.push(...P[a], ...P[b]);
+        this.freeEdgeLines = new LineSegments2(new LineSegmentsGeometry().setPositions(pos), this.freeEdgeMat);
+        this.freeEdgeLines.renderOrder = 6;
+        overlayOnly(this.freeEdgeLines);
+        this.overGhosts.add(this.freeEdgeLines);
+      }
+      if (contour.setup) this.buildSetup(contour.setup, contour.mesh.rec);
       return;
     }
     for (const [id, info] of Object.entries(this.members)) {
@@ -781,6 +1069,7 @@ export class Workbench3D {
       if (!contour) {
         mat.color.set(plain);
         mat.needsUpdate = true;
+        paintTwin(info.mesh, null);
         continue;
       }
       const v = contour.values?.[id];
@@ -788,6 +1077,7 @@ export class Workbench3D {
       const vb = contour.nodes?.[info.node_b];
       if (typeof v === "number") {
         mat.color.set(colorOf(v, contour.max, contour.min));
+        paintTwin(info.mesh, colorOf(v, contour.max, contour.min));
       } else if (typeof va === "number" && typeof vb === "number") {
         const pos = geo.getAttribute("position");
         const cols = new Float32Array(pos.count * 3);
@@ -800,8 +1090,10 @@ export class Workbench3D {
         geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
         mat.color.set("#ffffff");
         mat.vertexColors = true;
+        paintTwin(info.mesh, "vertex");
       } else {
         mat.color.set(plain);
+        paintTwin(info.mesh, null);
       }
       mat.needsUpdate = true;
       const over = typeof v === "number" ? v > contour.max : Math.max(va ?? -Infinity, vb ?? -Infinity) > contour.max;
@@ -834,10 +1126,96 @@ export class Workbench3D {
       }
     }
     if (contour?.where && this.members[contour.where] && contour.result) {
-      const tag = label(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
-      tag.position.copy(this.members[contour.where].mid).add(new THREE.Vector3(0, 0, 120));
+      const tag = keyLabel(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
+      tag.position.copy(this.members[contour.where].mid);
       this.overGhosts.add(tag);
     }
+  }
+
+  // What the solver put on the model (quality.js setupContourOf), on its mesh's nodes:
+  // a cone pointing at the node along each stopped translation, a ring round each
+  // stopped rotation's axis; each load an arrow with its head at origin_mm (lengths as
+  // setVectors), a turning arrow round a moment's axis, and a thin line to each node the
+  // load was spread to, darker the larger its weight.
+  buildSetup(st, rec) {
+    const g = new THREE.Group();
+    const P = rec.nodes_mm;
+    const AX = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
+    const Z = new THREE.Vector3(0, 0, 1);
+    const mat = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity });
+    const tMat = mat(FIX_T_COLOR);
+    const rMat = mat(FIX_R_COLOR);
+    for (const c of st.constraints) {
+      const p = v3(P[c.node]);
+      for (const d of c.dofs) {
+        const axis = AX[d[1]];
+        if (!axis) continue;
+        let o;
+        if (d[0] === "u") {
+          o = new THREE.Mesh(new THREE.ConeGeometry(28, 80, 14), tMat);
+          o.quaternion.setFromUnitVectors(UP, axis);
+          o.position.copy(p).addScaledVector(axis, -48);
+          o.userData.kind = "fix-t";
+        } else {
+          o = new THREE.Mesh(new THREE.TorusGeometry(60, 6, 8, 32), rMat);
+          o.quaternion.setFromUnitVectors(Z, axis);
+          o.position.copy(p);
+          o.userData.kind = "fix-r";
+        }
+        o.userData.node = c.node;
+        o.userData.dof = d;
+        o.renderOrder = 9;
+        g.add(o);
+      }
+    }
+    const mags = st.loads.map((l) => Math.hypot(...l.vector_N));
+    const fmax = Math.max(1e-9, ...mags);
+    st.loads.forEach((l, i) => {
+      const origin = v3(l.origin_mm);
+      const mag = mags[i];
+      if (mag > 0) {
+        const dir = v3(l.vector_N).normalize();
+        const len = 160 + 640 * (mag / fmax);
+        const start = origin.clone().addScaledVector(dir, -len);
+        const a = makeArrow(LOAD_COLOR);
+        placeArrow(a, start, dir, len);
+        a.userData.kind = "load";
+        g.add(a);
+        const tag = label(`${esc(l.label ?? `荷重 ${i + 1}`)}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`, "lbl-vec lbl-load");
+        tag.position.copy(start.clone().addScaledVector(dir, -40));
+        g.add(tag);
+      }
+      const mo = Array.isArray(l.moment_Nmm) ? v3(l.moment_Nmm) : null;
+      if (mo && mo.lengthSq() > 0) {
+        // three quarters of a ring round the moment's axis, the cone at its end turning
+        // the right-hand way
+        const r = 150;
+        const arc = 1.5 * Math.PI;
+        const turn = new THREE.Group();
+        const m = mat(LOAD_COLOR);
+        turn.add(new THREE.Mesh(new THREE.TorusGeometry(r, 9, 8, 40, arc), m));
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(26, 70, 14), m);
+        cone.position.set(r * Math.cos(arc), r * Math.sin(arc), 0);
+        cone.quaternion.setFromUnitVectors(UP, new THREE.Vector3(-Math.sin(arc), Math.cos(arc), 0));
+        turn.add(cone);
+        turn.quaternion.setFromUnitVectors(Z, mo.clone().normalize());
+        turn.position.copy(origin);
+        turn.userData.kind = "moment";
+        turn.traverse((o) => (o.renderOrder = 9));
+        g.add(turn);
+      }
+      const spread = (l.spread_to ?? []).filter((s) => st.okNode(s.node) && Number.isFinite(s.weight));
+      const wmax = Math.max(1e-12, ...spread.map((s) => Math.abs(s.weight)));
+      for (const s of spread) {
+        const geo = new THREE.BufferGeometry().setFromPoints([origin, v3(P[s.node])]);
+        const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: LOAD_COLOR, transparent: true, depthTest: false, opacity: 0.2 + 0.8 * (Math.abs(s.weight) / wmax) }));
+        line.userData = { kind: "spread", node: s.node, weight: s.weight };
+        line.renderOrder = 7;
+        g.add(line);
+      }
+    });
+    this.setupMarks = overlayOnly(g);
+    this.overGhosts.add(g);
   }
 
   // The focus (maxElementFocus) of a shell contour's largest element, or null.
@@ -998,28 +1376,176 @@ export class Workbench3D {
   }
 
   // The analysis' vectors (a still: one moment). Hidden while a motion is shown.
-  setVectors(vectors) {
+  // A wheel's forces (reaction, grip) carry words only at the picked wheel (pickWheel, else
+  // the one with the largest recorded force); the other wheels show their arrows alone.
+  setVectors(vectors, keepPick = false) {
     if (vectors === this.keys.vectors) return;
+    if (!keepPick && vectors) this.pickedWheel = null; // another analysis: its largest force again
     this.keys.vectors = vectors;
     disposeTree(this.arrows);
+    this.vecTips = [];
     const list = (vectors ?? []).filter((v) => Array.isArray(v.vector_N) && Array.isArray(v.origin_mm));
     const mags = list.map((v) => Math.hypot(...v.vector_N));
     const fmax = Math.max(1e-9, ...mags);
+    let auto = null;
+    list.forEach((v, i) => {
+      if (WHEEL_FORCES.has(v.kind) && v.at && (auto === null || mags[i] > auto.mag)) auto = { at: v.at, mag: mags[i] };
+    });
+    this.autoWheel = this.motion ? this.autoWheel : auto?.at ?? null;
+    const picked = this.pickedWheel ?? auto?.at ?? null;
     list.forEach((v, i) => {
       const mag = mags[i];
       if (!(mag > 0)) return;
       const dir = v3(v.vector_N).normalize();
       const len = 160 + 640 * (mag / fmax);
       const origin = v3(v.origin_mm);
-      // Loads push on their point (head at the origin); reactions and grip start there.
-      const start = v.kind === "load" ? origin.clone().addScaledVector(dir, -len) : origin;
+      // Loads and reactions push on their point (head at the origin: a reaction at a tyre's
+      // contact comes from below the road, so it does not lie over the wheel); grip and the
+      // other forces start there.
+      const pushes = v.kind === "load" || v.kind === "reaction";
+      const start = pushes ? origin.clone().addScaledVector(dir, -len) : origin;
       const g = makeArrow(VECTOR_COLORS[v.kind] ?? INK);
       placeArrow(g, start, dir, len);
       this.arrows.add(g);
-      const tag = label(`${esc(vectorName(v.kind))}${v.at ? ` ${esc(v.at)}` : ""}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`, `lbl-vec lbl-${v.kind}`);
-      tag.position.copy(start.clone().addScaledVector(dir, len + 40));
+      const wheelForce = WHEEL_FORCES.has(v.kind) && v.at;
+      if (wheelForce) this.vecTips.push({ id: v.at, at: start.clone().addScaledVector(dir, len / 2) });
+      if (wheelForce && v.at !== picked) return; // the arrow alone
+      const text = `${esc(vectorName(v.kind))}${v.at ? ` ${esc(v.at)}` : ""}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`;
+      const tag = wheelForce ? keyLabel(text, `lbl-vec lbl-${v.kind}`) : label(text, `lbl-vec lbl-${v.kind}`);
+      // a wheel's force: its label is led from the arrow near the contact, a quarter of the way
+      // from it (the free end below the road can be out of the view); placeOutLabels lays it out
+      tag.position.copy(wheelForce ? origin.clone().addScaledVector(dir, pushes ? -len / 4 : len / 4) : start.clone().addScaledVector(dir, len + 40));
       this.arrows.add(tag);
     });
+  }
+
+  // The wheel whose forces carry words (null: the largest one). Returns true when it changed.
+  pickWheel(id) {
+    if ((id ?? null) === (this.pickedWheel ?? null)) return false;
+    this.pickedWheel = id ?? null;
+    const v = this.keys.vectors;
+    this.keys.vectors = undefined;
+    this.setVectors(v, true);
+    this.setToggles(this.toggles);
+    for (const o of Object.values(this.motionArrowObjs ?? {})) o.text = null;
+    this.placeMotionArrows(this.frame);
+    return true;
+  }
+
+  // The wheel whose forces carry words now.
+  wheelShown() {
+    return this.pickedWheel ?? this.autoWheel ?? null;
+  }
+
+  // The wheel whose arrows are nearest to a point of the view (px from its top left), within
+  // 60 px, picked; returns its id or null.
+  pickAt(x, y) {
+    const cands = this.frame
+      ? this.frame.wheels.filter((w) => w.contact && this.motionArrowObjs?.[w.id]).map((w) => ({ id: w.id, at: v3(w.contact) }))
+      : this.vecTips ?? [];
+    let best = null;
+    for (const c of cands) {
+      const p = this.screenOf(c.at);
+      if (!p) continue;
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d <= 60 && (!best || d < best.d)) best = { id: c.id, d };
+    }
+    if (best) this.pickWheel(best.id);
+    return best?.id ?? null;
+  }
+
+  // A point in the vehicle's frame of the iso group (ISO mm) on screen (px), or null behind the camera.
+  screenOf(isoPoint, parent = this.iso) {
+    const p = isoPoint.clone().applyMatrix4(parent.matrixWorld).project(this.camera);
+    if (p.z > 1) return null;
+    return { x: (p.x * 0.5 + 0.5) * this.size.w, y: (-p.y * 0.5 + 0.5) * this.size.h };
+  }
+
+  // Labels marked lbl-out go outside the vehicle's outline on screen: above it when their
+  // point is in its upper half, below it otherwise (so a leader line does not cross the
+  // wheels from a point low on the vehicle), at their point's x, kept inside the view and
+  // apart from each other; a leader line joins each label to its point.
+  placeOutLabels() {
+    if (!this.leaders) return;
+    const outs = [];
+    this.scene.traverseVisible((o) => {
+      if (o.isCSS2DObject && o.element.classList.contains("lbl-out") && o.element.style.display !== "none") outs.push(o);
+    });
+    if (!outs.length || !this.design) {
+      if (this.leadersHtml) this.leaders.innerHTML = this.leadersHtml = "";
+      return;
+    }
+    if (this.outline?.design !== this.design) this.outline = { design: this.design, pts: this.contentPoints() };
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const q of this.outline.pts) {
+      const p = this.screenOf(q.clone().applyMatrix4(this.body.matrix));
+      if (!p) continue;
+      x0 = Math.min(x0, p.x);
+      x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y);
+      y1 = Math.max(y1, p.y);
+    }
+    const W = this.size.w;
+    const H = this.size.h;
+    // the wheels on screen, as discs: a leader line or a label should not lie over them
+    const discs = [];
+    for (const w of Object.values(this.wheelObjs)) {
+      const c = new THREE.Vector3().setFromMatrixPosition(w.group.matrix);
+      const p = this.screenOf(c);
+      const q = this.screenOf(c.clone().add(new THREE.Vector3(0, 0, w.r)));
+      if (p && q) discs.push({ x: p.x, y: p.y, r: Math.hypot(q.x - p.x, q.y - p.y) });
+    }
+    // the panels over the view (the graph, the legend, the bars, the notes): a label is not put under them
+    const panels = [];
+    for (const el of this.host.children) {
+      if (el === this.renderer.domElement || el === this.labelRenderer.domElement || el === this.leaders || el.classList.contains("cmp-view")) continue;
+      if (!el.offsetParent || el.hidden || Number(getComputedStyle(el).opacity) === 0) continue;
+      panels.push({ x: el.offsetLeft - (this.host.clientWidth - W), y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    }
+    const placed = [];
+    const lines = [];
+    const at = new THREE.Vector3();
+    const gap = LEADER_GAP_PX;
+    for (const o of outs) {
+      at.setFromMatrixPosition(o.matrixWorld).project(this.camera);
+      if (at.z > 1) continue;
+      const ax = (at.x * 0.5 + 0.5) * W;
+      const ay = (-at.y * 0.5 + 0.5) * H;
+      const w = o.element.offsetWidth;
+      const h = o.element.offsetHeight;
+      const cx = (x) => Math.max(w / 2 + LABEL_MARGIN.side, Math.min(W - w / 2 - LABEL_MARGIN.side, x));
+      const cy = (y) => Math.max(LABEL_MARGIN.top + h / 2, Math.min(H - LABEL_MARGIN.bottom - h / 2, y));
+      // places around the vehicle's outline: above and below it (at the point's x and at the
+      // outline's corners), and at its sides (at the point's y and the outline's top and bottom)
+      const cands = [];
+      for (const x of [ax, x0 + w / 2, x1 - w / 2, x0 - gap - w / 2, x1 + gap + w / 2]) {
+        cands.push([x, y0 - gap - h / 2], [x, y1 + gap + h / 2]);
+      }
+      for (const y of [ay, y0 + h / 2, y1 - h / 2]) cands.push([x0 - gap - w / 2, y], [x1 + gap + w / 2, y]);
+      let best = null;
+      for (const [px, py] of cands) {
+        const lx = cx(px);
+        const ly = cy(py);
+        const ex = Math.max(lx - w / 2, Math.min(lx + w / 2, ax)); // the label's edge nearest the point
+        const ey = Math.max(ly - h / 2, Math.min(ly + h / 2, ay));
+        let score = Math.hypot(ex - ax, ey - ay);
+        for (const d of discs) {
+          // the leader line across a wheel (not the wheel the point is on), the label over a wheel
+          if (Math.hypot(ax - d.x, ay - d.y) > d.r && segmentDistance(d, ax, ay, ex, ey) < d.r) score += 1000;
+          if (Math.abs(d.x - lx) < w / 2 + d.r && Math.abs(d.y - ly) < h / 2 + d.r) score += 400;
+        }
+        if (lx + w / 2 > x0 && lx - w / 2 < x1 && ly + h / 2 > y0 && ly - h / 2 < y1) score += 300; // over the vehicle
+        if (placed.some((r) => Math.abs(r.x - lx) < (r.w + w) / 2 + 6 && Math.abs(r.y - ly) < (r.h + h) / 2 + 4)) score += 2000;
+        if (panels.some((r) => lx + w / 2 > r.x && lx - w / 2 < r.x + r.w && ly + h / 2 > r.y && ly - h / 2 < r.y + r.h)) score += 1500;
+        if (!best || score < best.score) best = { score, lx, ly, ex, ey };
+      }
+      const { lx, ly, ex, ey } = best;
+      placed.push({ x: lx, y: ly, w, h });
+      o.element.style.transform = `translate(-50%,-50%) translate(${lx}px,${ly}px)`;
+      if (Math.hypot(ex - ax, ey - ay) > 4) lines.push(`<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"/><circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="3.5"/>`);
+    }
+    const html = lines.join("");
+    if (html !== this.leadersHtml) this.leaders.innerHTML = this.leadersHtml = html;
   }
 
   // A motion from series.js (or null). Builds the arrow set, the ghost at the
@@ -1028,6 +1554,8 @@ export class Workbench3D {
   setMotion(motion) {
     if (motion === this.motion) return;
     this.motion = motion;
+    this.autoWheel = null;
+    if (motion) this.pickedWheel = null; // another motion: its largest wheel again
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
     this.motionArrowObjs = {};
@@ -1047,10 +1575,20 @@ export class Workbench3D {
     for (const id of motion.wheelIds) {
       const reaction = makeArrow(VECTOR_COLORS.reaction);
       const grip = makeArrow(VECTOR_COLORS.grip);
-      const tag = label("", "lbl-vec lbl-reaction");
+      const tag = keyLabel("", "lbl-vec lbl-reaction");
       this.motionArrows.add(reaction, grip, tag);
       this.motionArrowObjs[id] = { reaction, grip, tag, text: null };
     }
+    // the wheel whose label is shown when none is picked: the largest recorded normal force
+    // over the motion (at the series' samples), so the label does not jump between wheels
+    let best = null;
+    const n = 60;
+    for (let k = 0; k <= n; k += 1) {
+      for (const w of motion.frame(motion.t0 + (motion.duration * k) / n).wheels) {
+        if (w.load !== null && w.load > 0 && motion.wheelIds.includes(w.id) && (!best || w.load > best.load)) best = { id: w.id, load: w.load };
+      }
+    }
+    this.autoWheel = best?.id ?? null;
     if (motion.liftT !== null) this.buildGhost(motion.frame(motion.t1));
   }
 
@@ -1133,16 +1671,23 @@ export class Workbench3D {
         const mag = f ? Math.hypot(...f) : 0;
         const g = o[kind];
         g.visible = !!w.contact && mag > fref * 1e-3;
-        if (g.visible) placeArrow(g, v3(w.contact), v3(f).normalize(), 120 + 680 * Math.min(1, mag / fref));
+        if (!g.visible) continue;
+        const dir = v3(f).normalize();
+        const len = 120 + 680 * Math.min(1, mag / fref);
+        // the road's reaction pushes up into the contact from below (not across the wheel); grip starts there
+        placeArrow(g, kind === "reaction" ? v3(w.contact).addScaledVector(dir, -len) : v3(w.contact), dir, len);
       }
-      // The label shows the recorded normal force (wheel_load) at the nearest sample.
-      o.tag.visible = !!w.contact && w.load !== null && w.load > 0;
-      if (o.tag.visible) {
+      // The picked wheel's label shows the recorded normal force (wheel_load) at the nearest
+      // sample; the other wheels show their arrows without words.
+      o.tag.visible = w.id === this.wheelShown() && !!w.contact && w.load !== null && w.load > 0;
+      if (!o.tag.visible) {
+        if (o.text !== "") o.tag.element.innerHTML = o.text = "";
+      } else {
         const text = `${esc(wheelName(w.id))}<small>${fmt(w.load / 1000, 3)} kN</small>`;
         if (text !== o.text) o.tag.element.innerHTML = o.text = text;
         const f = w.reaction ?? [0, 0, 1];
         const len = 120 + 680 * Math.min(1, Math.hypot(...f) / fref);
-        o.tag.position.copy(v3(w.contact)).addScaledVector(v3(f).normalize(), len + 60);
+        o.tag.position.copy(v3(w.contact)).addScaledVector(v3(f).normalize(), -len / 4); // on the reaction arrow, near the contact
       }
     }
   }
@@ -1235,14 +1780,79 @@ export class Workbench3D {
 
   render() {
     if (!this.noFollow && !this.focused) this.follow();
-    if (this.sun && this.bboxIso) this.look.aimSun(this.sun, this.controls.target, this.bboxIso.getSize(new THREE.Vector3()).length() * 0.0005);
+    // the stage: the sky, the haze and the sun behind the vehicle (none on a see-through overlay)
+    this.camera.updateMatrixWorld();
+    const sunDir = this.look.stage ? this.look.stageFrame(this.scene, this.camera, this.controls.target, !!this.tinted) : null;
+    if (this.sun && this.bboxIso) {
+      this.iso.updateWorldMatrix(true, false); // shadowPoints reads iso's world matrix (the renderer updates the rest)
+      this.look.aimSun(this.sun, this.controls.target, this.shadowPoints(), sunDir);
+    }
     if (!this.ownRenderer) {
       // views of both looks share the renderer: each sets the renderer's look for itself
       this.renderer.toneMapping = this.look.real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
       this.renderer.shadowMap.enabled = this.look.real;
+      if (this.look.real) this.renderer.shadowMap.type = this.look.q.shadow.type === "pcfsoft" ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     }
-    this.renderer.render(this.scene, this.camera);
-    this.labelRenderer?.render(this.scene, this.camera);
+    if (this.post) this.post.render();
+    else if (this.sharedPost && !this.tinted) sharedPost(this.renderer, this.scene, this.camera, this.size.w, this.size.h, this.look.quality, this.look.q).render();
+    else this.renderer.render(this.scene, this.camera);
+    this.renderOverlay();
+    if (this.labelRenderer) {
+      this.labelRenderer.render(this.scene, this.camera);
+      this.placeOutLabels();
+    }
+  }
+
+  // The corners of the vehicle's box (100 mm round it) where it stands now, in three.js
+  // world metres: what the sun's shadow box is fitted to.
+  shadowPoints() {
+    const b = this.bboxIso;
+    const m = new THREE.Matrix4().multiplyMatrices(this.iso.matrixWorld, this.body.matrix);
+    const pts = [];
+    for (const x of [b.min.x - 100, b.max.x + 100]) for (const y of [b.min.y - 100, b.max.y + 100]) for (const z of [b.min.z - 100, b.max.z + 100]) pts.push(new THREE.Vector3(x, y, z).applyMatrix4(m));
+    return pts;
+  }
+
+  // The overlay (layer OVERLAY) over the picture. With a contour, first the depth of the
+  // picture's solid things (lines, sprites and see-through things are left out), so the
+  // twins are hidden where something stands in front of them.
+  renderOverlay() {
+    const r = this.renderer;
+    const autoClear = r.autoClear;
+    const autoShadow = r.shadowMap.autoUpdate;
+    // the sky is in the picture already: the overlay's passes leave it out
+    const background = this.scene.background;
+    this.scene.background = null;
+    r.autoClear = false;
+    r.shadowMap.autoUpdate = false;
+    // the picture's pass has brought every world matrix up to date
+    const autoWorld = this.scene.matrixWorldAutoUpdate;
+    this.scene.matrixWorldAutoUpdate = false;
+    if (this.keys.contour) {
+      r.clearDepth();
+      const hidden = [];
+      this.scene.traverse((o) => {
+        if (o.visible && skipsDepth(o)) {
+          o.visible = false;
+          hidden.push(o);
+        }
+      });
+      this.scene.overrideMaterial = DEPTH_ONLY;
+      r.render(this.scene, this.camera);
+      this.scene.overrideMaterial = null;
+      for (const o of hidden) o.visible = true;
+    }
+    // the overlay's own pass only when something is shown in it (each pass walks the whole scene)
+    let shown = !!this.keys.contour;
+    if (!shown) this.scene.traverseVisible((o) => (shown ||= (o.layers.mask & (1 << OVERLAY)) !== 0 && !o.isGroup && !o.isScene && !o.isCSS2DObject));
+    const mask = this.camera.layers.mask;
+    this.camera.layers.set(OVERLAY);
+    if (shown) r.render(this.scene, this.camera);
+    this.camera.layers.mask = mask;
+    this.scene.matrixWorldAutoUpdate = autoWorld;
+    this.scene.background = background;
+    r.autoClear = autoClear;
+    r.shadowMap.autoUpdate = autoShadow;
   }
 
   // A view on a shared renderer: draw into the lower left w x h pixels of its canvas
@@ -1250,7 +1860,7 @@ export class Workbench3D {
   // scale: device pixels per stage pixel, so ink lines keep their stage width.
   renderInto(ctx, w, h, scale = 1) {
     if (this.size.w !== w || this.size.h !== h) this.resize(w, h);
-    for (const m of [this.inkMat, this.mutedMat]) m.resolution.set(w / scale, h / scale);
+    for (const m of [this.inkMat, this.mutedMat, this.litLine]) m.resolution.set(w / scale, h / scale);
     this.props.resize(w / scale, h / scale);
     const r = this.renderer;
     const H = r.domElement.height;
@@ -1263,6 +1873,7 @@ export class Workbench3D {
     r.setScissorTest(false);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.drawImage(r.domElement, 0, H - h, w, h, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    this.canvas2d = ctx.canvas; // the canvas it was last copied to (the tests read it)
   }
 
   // Points that outline the design at rest (ISO mm): frame nodes, the corners of the
@@ -1320,6 +1931,21 @@ export class Workbench3D {
     this.followApplied = null;
   }
 }
+
+// A 3D view of a cut page (cut*.js): drawn through the cut's one renderer (cut.renderer) as a
+// stage, in the look the layout gives the cut (look.js cutLookOf: its `look` key, "real" when
+// it has none; ?look= over both). opts: more of the constructor's (e.g. quality).
+export function cutView(cut, name, opts = {}) {
+  const look = cutLookOf(cut.layout, name, new URLSearchParams(location.search));
+  const view = new Workbench3D(null, look, { renderer: cut.renderer, stage: true, ...opts });
+  CUT_VIEWS.push(view);
+  return view;
+}
+
+// The cut page's views, in the order they were made (window.hiraku.views(): the tests read
+// their looks and the canvases they were last drawn into, canvas2d).
+const CUT_VIEWS = [];
+export const cutViews = () => [...CUT_VIEWS];
 
 function sectionArea(sec) {
   const d = sec.dims_mm ?? {};

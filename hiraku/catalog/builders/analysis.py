@@ -1,6 +1,7 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
-H5 assembly.
+H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). R7 and R8 (load_path)
+are in load_path.py and joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
 predict). A prediction's inputs_from works out by code the values its from.<name>
@@ -122,6 +123,27 @@ def n1_twist(design: Record, load_case: Record) -> Record:
         raise BuildError(f"no ladder frame for the twist hand calculation: {e}") from None
 
 
+def joint_wall_calc(design: Record, load_case: Record) -> Record:
+    """The inputs of frame_static.joint_wall_bending (frame_inputs.joint_wall_inputs) for a step load case (R1s):
+    the joint off the wheel mounts where the side wall's plate bending is largest, at the load case's loading,
+    step_height and step_supports (default the front-most supports). Quantities named as the formula's inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc import units
+    from hiraku.solvers.k0_handcalc.frame_inputs import joint_wall_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+    from hiraku.solvers.shelf.frame_static import front_supports
+
+    params = load_case.get("params") or {}
+    step = units.to_unit(params["step_height"], "mm", "step_height") if "step_height" in params else None
+    sup = [s.strip() for s in params["step_supports"].split(",")] if params.get("step_supports") else None
+    if step is not None and sup is None:
+        sup = front_supports(design)
+    try:
+        return joint_wall_inputs(design, loading=loading_of(load_case), step_mm=step, step_supports=sup)["inputs"]
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no ladder joint for the joint wall hand calculation: {e}") from None
+
+
 _TWIST = ("E", "nu", "J_r", "J_c", "n_c", "w", "L", "I0", "r_x", "k_f", "k_r", "t_f", "t_r", "d_f", "d_r")
 N1_PLAN = {
     "tool": "modal",
@@ -187,40 +209,104 @@ def _quarter_car(design: Record, summ: Record, loads: Record, sid: str) -> tuple
     return W, m_u, k, c * 1e3 / (2.0 * _m.sqrt(k * 1e3 * m_s))
 
 
-def r3_calc(design: Record, load_case: Record) -> Record:
-    """The rear overhang and its end cross member (frame_inputs.end_cross_member_inputs), the front and
-    rear quarter cars (static load, unsprung mass, spring, damping ratio of the left wheels), the
-    wheelbase and the road class's roughness."""
+_LEG = ("dx", "dy", "dz", "y_p", "b_l", "t_l", "b_x", "t_x", "E", "nu", "k_x", "k_y", "k_z", "theta_front", "theta_rear")
+_QC = ("W_f", "m_uf", "k_sf", "zeta_f", "W_r", "m_ur", "k_sr", "zeta_r", "L", "G_d")
+_DAMAGE_VARS = {"k_t": ("tyre_stiffness", "N/mm"), "FAT": ("fatigue_fat_class", "MPa"), "m": ("fatigue_slope", "1"),
+                "N_knee": ("fatigue_knee_cycles", "1")}
+
+
+def _r3_common(design: Record, load_case: Record) -> Record:
+    """The quarter cars of the left wheels (static load, unsprung mass, spring, damping ratio), the wheelbase and
+    the road class's roughness."""
     from hiraku.contract.loading import loading_of, on_board
-    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
-    from hiraku.solvers.k0_handcalc.vehicle import DesignError, mass_summary, support_loads
+    from hiraku.solvers.k0_handcalc.vehicle import mass_summary, support_loads
     from hiraku.solvers.shelf.fatigue import ROAD_CLASSES
 
-    loading_name = loading_of(load_case)
-    try:
-        ec = end_cross_member_inputs(design, loading=loading_name)
-    except (DesignError, KeyError, ValueError) as e:
-        raise BuildError(f"no rear overhang with an end cross member for the hand calculation: {e}") from None
-    on = on_board(design, loading_name)
+    on = on_board(design, loading_of(load_case))
     summ = mass_summary(on)
     loads = support_loads(on, summary=summ)["supports"]
-    rear_a, _, front_a, _ = ec["supports"]
-    out = dict(ec["inputs"])
+    sup = design["supports"]
+    x_rear = min(s["position_mm"][0] for s in sup)
+    rear_a = max((s for s in sup if abs(s["position_mm"][0] - x_rear) < 1e-6), key=lambda s: s["position_mm"][1])["id"]
+    front_a = max((s for s in sup if abs(s["position_mm"][0] - x_rear) > 1e-6), key=lambda s: s["position_mm"][1])["id"]
+    qc = {}
     for tag, sid in (("f", front_a), ("r", rear_a)):
         W, m_u, k, zeta = _quarter_car(design, summ, loads, sid)
-        out.update({f"W_{tag}": q(W, "N"), f"m_u{tag}": q(m_u, "kg"), f"k_s{tag}": q(k, "N/mm"), f"zeta_{tag}": q(zeta, "1")})
-    x = {s["id"]: float(s["position_mm"][0]) for s in design["supports"]}
-    out["L"] = q(abs(x[front_a] - x[rear_a]), "mm")
-    out["G_d"] = q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")
-    return out
+        qc.update({f"W_{tag}": q(W, "N"), f"m_u{tag}": q(m_u, "kg"), f"k_s{tag}": q(k, "N/mm"), f"zeta_{tag}": q(zeta, "1")})
+    x = {s["id"]: float(s["position_mm"][0]) for s in sup}
+    qc["L"] = q(abs(x[front_a] - x[rear_a]), "mm")
+    qc["G_d"] = q(ROAD_CLASSES[load_case["params"]["road_class"]] * 1e9, "mm^3")
+    return qc
+
+
+def _hand_damage(design: Record, load_case: Record, formula_id: str, inputs: Record, qc: Record) -> float:
+    from hiraku.solvers import formula_registry
+
+    reg = formula_registry()
+    s = reg.evaluate(formula_id, inputs)["outputs"]
+    p = load_case["params"]
+    return reg.evaluate("fatigue.road_damage_four_wheels", {
+        **{k: s[k] for k in ("sigma_ra", "sigma_rb", "sigma_fa", "sigma_fb")}, **qc,
+        **{k: design["variables"][name] for k, (name, _) in _DAMAGE_VARS.items()},
+        "v": p["speed"], "d": p["distance"]})["outputs"]["D"]["value"]
+
+
+def r3_legs(design: Record, load_case: Record) -> list[tuple[float, Record]]:
+    """Each U-frame's leg under the rails (frame_inputs.mount_leg_inputs, its left leg) with its hand damage:
+    [(damage, the leg's record)], the most damaged first."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import mount_leg_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        legs = mount_leg_inputs(design, loading=loading_of(load_case))
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no lower arm legs for the hand calculation: {e}") from None
+    if not legs:
+        raise BuildError("the design has no U-frame of legs and a lower cross member under the rails (lower_cross 0?), "
+                         "so the leg hand calculation has nothing to look at")
+    qc = _r3_common(design, load_case)
+    out = [(_hand_damage(design, load_case, "frame_static.mount_leg_stress", leg["inputs"], qc), leg) for leg in legs]
+    return sorted(out, key=lambda r: -r[0])
+
+
+def r3_places(design: Record, load_case: Record) -> list[tuple[float, str]]:
+    """The welds the plan compares, with their hand damage: the most damaged leg and the end cross member."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+
+    D_leg, leg = r3_legs(design, load_case)[0]
+    ec = end_cross_member_inputs(design, loading=loading_of(load_case))
+    D_end = _hand_damage(design, load_case, "frame_static.end_cross_member_stress", ec["inputs"],
+                         _r3_common(design, load_case))
+    return [(D_leg, leg["leg"]), (D_end, ec["end_cross_member"])]
+
+
+def r3_calc(design: Record, load_case: Record) -> Record:
+    """The plan's from-values: the rear overhang and its end cross member (frame_inputs.end_cross_member_inputs),
+    the leg whose hand damage is the largest (r3_legs; its inputs as leg_<name>), the quarter cars, the wheelbase
+    and the road's roughness."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.frame_inputs import end_cross_member_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        ec = end_cross_member_inputs(design, loading=loading_of(load_case))
+    except (DesignError, KeyError, ValueError) as e:
+        raise BuildError(f"no rear overhang with an end cross member for the hand calculation: {e}") from None
+    leg = r3_legs(design, load_case)[0][1]
+    return {**ec["inputs"], **{f"leg_{k}": v for k, v in leg["inputs"].items()}, **_r3_common(design, load_case)}
 
 
 _END = {k: f"from.{k}" for k in ("e", "a", "w", "L1", "E", "nu", "b", "h", "t", "b_c", "h_c", "t_c", "b_j", "h_j", "t_j",
-                                 "misfit_rear", "misfit_front")}
+                                 "misfit_rear", "misfit_front", "give_per_kNm")}
 _END_ASSUME = ["輪はレールより外にあり、輪の力はレールをそのずれの分ねじる",
                "左右そろった分は、後ろの継ぎ手で 1 回だけモーメントを分ける",
-               "左右逆向きの分は、はしご全体が反りのあるねじり (薄肉のはり) でねじれ、張り出しがその率のまま続こうとするのを"
-               "端の横の部材が止める"]
+               "左右逆向きの分は、はしごの左右逆向きの半分を梁の鎖 (レールのねじりと逆向きの曲げ、横の部材の S 字の曲げとねじり。"
+               "回す力は質量の慣性が受ける) で解く。端の横の部材が曲がらないとしたときのレールの端のずれを、その部材とフレームの"
+               "残りが直列のばねのように分けて受ける",
+               "端の横の部材は上下の曲げだけを数え、横の曲げ (慣性の横向きの力による) は入れない",
+               "レールに無い節 (ロールバー) にかかる重さと慣性は、部材でつながるレールの節へ、ずれのモーメントごと剛に移す"]
 _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右の後輪"), ("front_a", "sigma_fa", "左の前輪"),
            ("front_b", "sigma_fb", "右の前輪"))
 # Why the end cross member (the analysis department's check of the demo vehicle, 2026-11-03): the fatigue tool's
@@ -228,26 +314,73 @@ _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右�
 # patterns as warp 7.7, roll 3.7, heave 2.4 and pitch 2.1 MPa of spread (9.1 in all, class C at 40 km/h): left
 # and right differ, not the body's heave and pitch. The wheels stand 200 mm outboard of the rails, so their
 # forces twist the rails, and cross_E holds the overhang's rails by bending. The earlier plan (one quarter car
-# at the rail joint) gave 0.0003 against 0.080. This plan gives 0.057 against 0.080 (version 1) and 0.120
-# against 0.117 (version 2, track 1220 mm); per kN on one wheel the symmetric part is within 1 %, the rear
-# antisymmetric part 21 % low and the front one 58 % high.
+# at the rail joint) gave 0.0003 against 0.080. With the ladder's twist from a warping-torsion beam the plan
+# gave 0.057 against 0.080 (version 1) and 0.081 against 0.134 (track 1220 mm with 4.5 mm rails): cross_E's
+# antisymmetric moment came out low and fell as the rails stiffened, while K1's stayed. In K1 that moment is
+# the redundant of the misfit at the rail ends against cross_E's double-curvature give in series with the
+# rest of the frame's give, which is as large as the overhang's own (the joint's cross member bending, the
+# ladder ahead warping), and where a moment enters matters: as a turn of the rails' own axes (the wheels'
+# offset, the masses' inertia at the nodes) or as a chord couple. A beam chain of the ladder's antisymmetric
+# half carries both, and gives 0.084 against 0.080 (version 1), 0.096 against 0.094 (4.5 mm rails), 0.133
+# against 0.117 (track 1220 mm) and 0.140 against 0.134 (both). Per kN on one wheel at the weld corner the
+# symmetric part is within 1 % (10 % low with 4.5 mm rails), the antisymmetric part 5-7 % low at the rear and
+# 16-19 % high at the front: the gap is cross_E's sideways bending from the masses' sideways inertia (0.8-1.0
+# MPa, the same at the rear and the front), which the hand calculation leaves out.
+# The values above were summed with slope 22 below the S-N knee. Both sides now use 2 m - 1 = 5 there (IIW-1823-07
+# (2008) sec. 4.3.1, p.110, for a spectrum): hand 0.151 against tool 0.126 (version 1) and 0.215 against 0.193
+# (track 1220 mm, steering_x -200 mm, rail_t 4.5 mm, gusset_leg 40 mm, motor_peak_power 12 kW).
+
+_LEG_ASSUME = ["はしごがねじれると左右のレールが上下逆に曲がり、脚の付く所で左右逆に前後へ傾く (反りのあるねじり、U 字が無いとき)",
+               "脚と下の横の部材の U 字がその傾きを止め、横の部材はねじられ脚は曲げられる。U 字は中で左右逆の形 (半分を解く)",
+               "レールは脚の下で 3 つの回るばね (ねじれ・前後の傾き・横の振れ)。U 字はレールを押し返して傾きを減らす",
+               "左右そろった分 (左右のレールが鏡に回る) は入れない"]
+_DAMAGE_ASSUME = ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
+                  "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
+                  "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
+                  "設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので使わない"]
+
+
+# A known bias, not worked on (the analysis department's comparisons, 2026-11-03): on the revised version and
+# the version with rail_t 4.5 mm the hand calculation of the end cross member comes out 26-31 % below the tool.
+_END_BIAS = ("偏り (直していない): 直しの版と rail_t 4.5 mm の版では、端の横の部材の手計算が道具より 26〜31 % 小さく出る "
+             "(解析部の照合、2026-11-03)")
+
+
+def _damage_from(prefix: str, place: str, extra: tuple[str, ...] = ()) -> Record:
+    return {"quantity": f"fatigue_damage_{place}", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
+            "assumptions": [*_DAMAGE_ASSUME, *extra],
+            "inputs": {**{out: f"pred.{prefix}_per_kN_{tag}" for tag, out, _ in _WHEELS},
+                       **{k: f"from.{k}" for k in _QC},
+                       **{k: f"design.var.{name}" for k, (name, _) in _DAMAGE_VARS.items()},
+                       "v": "lc.speed", "d": "lc.distance"},
+            "inputs_from": r3_calc}
+
+
+# Where the welds are worst (the analysis department's runs of the fatigue tool, 2026-11-03): with the suspension's
+# mounts on the frame, the root of the front lower arm's rear leg (lower_leg_LA2) on v1; with rail_t 4.5 mm the rear
+# overhang's end cross member (cross_E) again. The leg's stress per kN at each wheel (K1 with inertia relief) is mostly
+# the ladder's twist (v1: front -20.7 / +17.0, rear +10.0 / -10.2 MPa for the left / right wheel): the rails pitch
+# opposite ways at the leg's node, the lower cross member is twisted and the legs bend. The hand side here: front
+# +-20.7, rear +-8.1. So the plan works out both welds and takes the larger damage, as the tool takes its worst point.
 R3_PLAN = {
     "tool": "fatigue",
-    "say": ("輪はレールより外にあるので、輪の力はレールをねじり、後ろの張り出しの端の横の部材を曲げます。4 輪それぞれ 1 kN "
-            "あたりのその応力を出し、4 輪の 1/4 車が悪路で受ける力のゆれから、疲労の損傷を先に見積もります"),
+    "say": ("はしごがねじれると、左右のレールが脚の付く所で逆に傾き、脚と下の横の部材の U 字がそれを止めて脚の根元が曲げられます。"
+            "輪はレールより外にあるので、輪の力は後ろの張り出しの端の横の部材も曲げます。4 輪それぞれ 1 kN あたりのその 2 か所の応力を出し、"
+            "4 輪の 1/4 車が悪路で受ける力のゆれから、傷みの大きいほうの疲労の損傷を先に見積もります"),
     "predictions": [
+        *({"quantity": f"mount_leg_stress_per_kN_{tag}", "formula_id": "frame_static.mount_leg_stress",
+           "output": out, "assumptions": [f"{name}に 1 kN", *_LEG_ASSUME],
+           "inputs": {k: f"from.leg_{k}" for k in _LEG}, "inputs_from": r3_calc}
+          for tag, out, name in _WHEELS),
+        _damage_from("mount_leg_stress", "mount_leg"),
         *({"quantity": f"end_cross_member_stress_per_kN_{tag}", "formula_id": "frame_static.end_cross_member_stress",
            "output": out, "assumptions": [f"{name}に 1 kN", *_END_ASSUME], "inputs": _END, "inputs_from": r3_calc}
           for tag, out, name in _WHEELS),
-        {"quantity": "fatigue_damage", "formula_id": "fatigue.road_damage_four_wheels", "output": "D",
-         "assumptions": ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
-                         "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)"],
-         "inputs": {**{out: f"pred.end_cross_member_stress_per_kN_{tag}" for tag, out, _ in _WHEELS},
-                    **{k: f"from.{k}" for k in ("W_f", "m_uf", "k_sf", "zeta_f", "W_r", "m_ur", "k_sr", "zeta_r", "L", "G_d")},
-                    "k_t": "design.var.tyre_stiffness", "v": "lc.speed", "d": "lc.distance",
-                    "FAT": "design.var.fatigue_fat_class", "m": "design.var.fatigue_slope",
-                    "N_knee": "design.var.fatigue_knee_cycles", "m2": "design.var.fatigue_slope_after_knee"},
-         "inputs_from": r3_calc},
+        _damage_from("end_cross_member_stress", "end_cross_member", (_END_BIAS,)),
+        {"quantity": "fatigue_damage", "formula_id": "fatigue.worst_of_two_welds", "output": "D",
+         "assumptions": ["フレームの寿命はいちばん傷む溶接で決まる (脚の根元か、後ろの張り出しの端の横の部材)",
+                         "脚は、U 字の脚のうち手計算の損傷がいちばん大きいもの"],
+         "inputs": {"D_a": "pred.fatigue_damage_mount_leg", "D_b": "pred.fatigue_damage_end_cross_member"}},
     ],
 }
 
@@ -362,7 +495,7 @@ T_BEYOND_K = 5.0  # the case past the limit: an ambient where the hand-calculate
 def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
     """thermal.loop_steady_temperature with the plan's inputs (_LOOP_INPUTS) for this load case."""
     from hiraku.solvers import formula_registry
-    from hiraku.tools.summary import design_summary
+    from hiraku.catalog.summary import design_summary
 
     vals = {}
     for name, ref in _LOOP_INPUTS.items():
@@ -418,7 +551,20 @@ def _thermal(test_id: str, what: str, quantity: str, limit_var: str, op: str, ou
 
 
 t1_thermal = _thermal("T1", "電池", "temp_battery_max", "battery_max_temperature", "<=", "T_battery")
-t2_thermal = _thermal("T2", "モーターと制御器", "temp_controller_max", "controller_max_temperature", "<", "T_controller")
+# T2 is the motor and the controller: one load case per part, each judged on its own limit (a load
+# case has one criterion), ids T2-<ambient>C-motor and T2-<ambient>C-controller.
+T2_PARTS = (("motor", "モーター", "motor_max_temperature", "<", "T_motor"),
+            ("controller", "制御器", "controller_max_temperature", "<", "T_controller"))
+
+
+def t2_thermal(spec: Record, req: Record, design: Record) -> list[Record]:
+    out = []
+    for part, what, limit_var, op, output in T2_PARTS:
+        lc = _thermal("T2", what, f"temp_{part}_max", limit_var, op, output)(spec, req, design)
+        head, beyond, tail = lc["load_case_id"].partition("-beyond")
+        lc["load_case_id"] = f"{head}-{part}{beyond}{tail}"
+        out.append(lc)
+    return out
 
 _LOOP_INPUTS = {
     "m": "load.mass", "C_rr": "design.var.rolling_resistance", "C_d": "design.var.drag_coefficient",
@@ -434,21 +580,22 @@ _T_ASSUME = ["周回の区間ごとに目標の速さで一定に走るとみる
              "部品は温度 1 つの熱容量と、空気への熱抵抗"]
 
 
-def _t_plan(what: str, quantity: str, output: str) -> Record:
+def _t_plan(what: str, parts: tuple[tuple[str, str], ...]) -> Record:
+    """parts: (quantity, output) of each part temperature predicted, then drive_time."""
     return {
         "tool": "thermal",
         "say": f"周回を区間ごとの一定の速さで走るとみて損失を出し、{what}の温度の上がり方を先に見積もります",
         "predictions": [
             {"quantity": quantity, "formula_id": "thermal.loop_steady_temperature", "output": output,
-             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
-            {"quantity": "drive_time", "formula_id": "thermal.loop_steady_temperature", "output": "t",
-             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)},
+             "assumptions": _T_ASSUME, "inputs": dict(_LOOP_INPUTS)}
+            for quantity, output in (*parts, ("drive_time", "t"))
         ],
     }
 
 
-T1_PLAN = _t_plan("電池", "temp_battery_max", "T_battery")
-T2_PLAN = _t_plan("制御器", "temp_controller_max", "T_controller")
+T1_PLAN = _t_plan("電池", (("temp_battery_max", "T_battery"),))
+# one plan for both T2 load cases (the plans are per test): it predicts both parts
+T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output) for part, _, _, _, output in T2_PARTS))
 
 # ---------------------------------------------------------------- H1, H3, H5 assembly
 
@@ -480,31 +627,36 @@ def h1_interference(spec: Record, req: Record, design: Record) -> Record:
 
 
 def h1_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.solvers.k0_handcalc.library_geometry import _free_steer
-    from hiraku.solvers.k4_geometry import steer_room
+    """geometry.free_steer_angle's inputs: hiraku.solvers.k0_handcalc.scene_inputs.steer_room_inputs."""
+    from hiraku.solvers.k0_handcalc.scene_inputs import steer_room_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
-    rooms = steer_room(design)
-    if not rooms:
-        raise BuildError("no steered wheel has a frame member beside it")
-    sid = min(rooms, key=lambda k: _free_steer(rooms[k])["theta"])
-    r = rooms[sid]
-    return {"steer_w": q(r["w"], "mm"), "steer_l": q(r["l"], "mm"), "steer_c": q(r["c"], "mm")}
+    try:
+        got = steer_room_inputs(design)["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+    return {"steer_w": got["w"], "steer_l": got["l"], "steer_c": got["c"]}
 
 
 H1_PLAN = {
     "tool": "assembly",
     "say": "前輪を上から見た長方形とみて、内側の角がレールに届くまでのハンドルの角度を先に出します",
     "predictions": [
-        {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle", "output": "theta",
+        {"quantity": "free_steer_angle_geometric", "formula_id": "geometry.free_steer_angle", "output": "theta",
          "assumptions": ["車輪は上から見て直径 x 幅の長方形", "車輪の中心を通る縦の軸で回る", "レールの面は前後に真っすぐ"],
          "inputs": {"w": "from.steer_w", "l": "from.steer_l", "c": "from.steer_c"}, "inputs_from": h1_calc},
+        {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle_limited", "output": "theta",
+         "assumptions": ["ハンドルは max_steer_angle で止まる (組み立ての道具も、そこより先は回さない)"],
+         "inputs": {"theta_free": "pred.free_steer_angle_geometric", "theta_stop": "design.var.max_steer_angle"}},
     ],
 }
 
 
-def h3_people(spec: Record, req: Record, design: Record) -> Record:
+def h3_people(spec: Record, req: Record, design: Record) -> list[Record]:
+    """Two cases: the large person's knees clear the part ahead (knee_room), and the driver's pedal knee in the
+    comfortable range for both body sizes (knee_angle_room), each seated at their best place in the slide."""
     load, keys = loading(req, design)
-    return {
+    body = {
         "load_case_id": "H3-body-size",
         "test_id": "H3",
         "domain": spec["domain"],
@@ -516,23 +668,49 @@ def h3_people(spec: Record, req: Record, design: Record) -> Record:
                                "clear the part ahead"},
         "tolerance_rel": tolerance(spec, H_TOL),
     }
+    knee = dict(body, load_case_id="H3-knee-angle",
+                title=f"運転者のペダルを踏む膝の角度が、体格の両端で楽な範囲にあるか ({LOADING_JA[load]})",
+                criterion={"quantity": "knee_angle_room", "op": ">=", "limit": q(0.0, "mm"),
+                           "basis": ("H3: the pedal knee of a female 5th and a male 95th percentile, each at their best "
+                                     "place in the seat's slide, within 99-138 deg (Porter and Gyi 1998, read in "
+                                     "Schmidt et al. 2014; the original not checked)")})
+    return [body, knee]
 
 
 def h3_calc(design: Record, load_case: Record) -> Record:
-    from hiraku.contract.loading import loading_of, on_board
-    from hiraku.solvers.k4_geometry import AIST, knee_space
+    """occupant.knee_room's inputs: hiraku.solvers.k0_handcalc.scene_inputs.knee_space_inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.scene_inputs import knee_space_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
 
-    space = knee_space(on_board(design, loading_of(load_case)))
-    if not space:
-        raise BuildError("no occupant has a part ahead of the knees")
-    return {"knee_length": q(min(length for length, _ in space.values()), "mm"),
-            "buttock_knee": q(AIST["buttock_knee_m95"], "mm")}
+    try:
+        got = knee_space_inputs(design, loading_of(load_case))["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+    return {"knee_length": got["L"], "buttock_knee": got["L_bk"]}
+
+
+def h3_knee_calc(design: Record, load_case: Record) -> Record:
+    """occupant.knee_angle_room's inputs: hiraku.solvers.k0_handcalc.scene_inputs.knee_angle_inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.scene_inputs import knee_angle_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        return knee_angle_inputs(design, loading=loading_of(load_case))["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
 
 
 H3_PLAN = {
     "tool": "assembly",
     "say": "座席の背から前の部品までの長さから、膝の長さを引いて、膝の前の余裕を先に出します",
     "predictions": [
+        {"quantity": "knee_angle_room", "formula_id": "occupant.knee_angle_room", "output": "room",
+         "assumptions": ["脚は膝で曲がる 2 本の棒 (横から見て)", "膝の角度は K4 の座らせ方 (スライドの中のいちばん良い位置) から"],
+         "inputs": {k: f"from.{k}" for k in ("l1_big", "l2_big", "theta_big", "l1_small", "l2_small", "theta_small",
+                                              "theta_lo", "theta_hi")},
+         "inputs_from": h3_knee_calc},
         {"quantity": "knee_room", "formula_id": "occupant.knee_room", "output": "room",
          "assumptions": ["背もたれに付けて座る", "膝の長さは AIST の若年男性 95 パーセンタイル (J5)"],
          "inputs": {"L": "from.knee_length", "L_bk": "from.buttock_knee"}, "inputs_from": h3_calc},
@@ -541,6 +719,9 @@ H3_PLAN = {
 
 
 NOT_ASSEMBLED = ("occupant", "cargo")  # people and load ride in, they are not assembled (as in k4_geometry)
+# Parts welded into the frame (gussets, through pieces, the roll bar's part) are in place before
+# assembly, as the frame is (k4_geometry.model.WELDED): not assembly steps either.
+NOT_ASSEMBLED += ("frame", "gusset", "rollbar", "bracket")
 
 
 def _assembled(design: Record) -> int:
@@ -579,10 +760,163 @@ H5_PLAN = {
 }
 
 
+# ---------------------------------------------------------------- R4 roll-over protective structure (ROPS)
+
+# The loads are those of the OECD static test of tractor roll-over protective structures, borrowed for this
+# vehicle (the code is for tractors of at least 600 kg unballasted, section 2.1; this is not a certification):
+# source: OECD Standard Code for the Official Testing of Protective Structures on Agricultural and Forestry
+# Tractors (Static Test), Code 4, February 2026 edition, read from
+# https://www.oecd.org/content/dam/oecd/en/topics/policy-sub-issues/tractors/04-Code4-EN.pdf on 2026-11-03:
+# 3.5.2.1 longitudinal loading E_IL1 = 1.4 M, 3.5.3.1 side loading E_IS = 1.75 M, 3.6 crushing F = 20 M (M the
+# reference mass, kg; E in J, F in N), 3.5.2 the longitudinal load on the uppermost transverse member at one
+# sixth of the width of the top inwards from the outside corner, 3.5.3 the side load at the upper extremity,
+# 3.6.1 the crushing force across the rear uppermost members with its resultant in the median plane, 3.5.2.2 and
+# 3.5.3.2 the loading stopped when the structure infringes on the clearance zone.
+R4_CODE4 = {"rear": 1.4, "side": 1.75, "crush": 20.0}  # J/kg, J/kg, N/kg
+# Reference mass: 500 kg, the mass for which the catalog's values (side 875 J, rear 700 J, from above 10 kN) are
+# the Code 4 formulas (875 / 1.75 = 700 / 1.4 = 10 000 / 20 = 500). Not the demo vehicle's mass; Code 4 sets M
+# from the tractor (an assumption of this catalog, kept as given).
+R4_REFERENCE_MASS_KG = 500.0
+# Code 4 3.5.2: one sixth of the top's width in from the outside corner. Here the width is taken as the posts'
+# centre-to-centre span (assumption: Code 4 measures it to the outside of the structure).
+R4_REAR_FRACTION = 1.0 / 6.0
+# A tool's crushed roll bar against the hand calculation's roll bar on its feet (portal_pushover): the deflection at
+# the required energy is long on the plastic plateau and sensitive to the collapse load and to how the feet are
+# held, and the clearance is a difference of that deflection and the gap: 25 % (assumption).
+R4_TOL = 0.25
+
+# No PLAN: the tool that loads the roll bar and judges it is not on the shelf (HIRAKU's Claude writes it in the run).
+# Its prediction is R4_PREDICTIONS, inputs read off the design by r4_inputs
+# (hiraku.solvers.k0_handcalc.rops_inputs.rops_inputs: frame_inputs.portal_frame_inputs's "side", "rear" and "top"
+# dicts as from.side_<k>, from.rear_<k>, from.top_<k>, and the gaps g_side, g_rear, g_top), in this order:
+#   frame_static.portal_frame_side  E_in = lc.side_energy           -> delta_E (sideways at the top)
+#   frame_static.portal_frame_rear  E_in = lc.rear_energy, f = lc.rear_fraction -> delta_E (along the vehicle)
+#   frame_static.portal_frame_top   F = lc.crush_force               -> delta (down at mid-span)
+#   frame_static.rops_occupant_clearance  g_*, s_*, d0_* = from.*, d_* = pred.rops_*_deflection
+#                                         -> rops_occupant_clearance = min(s_*)
+# (s_*: the shortest distance between the roll bar's members and k4_geometry.occupant_spaces, as
+# k4_geometry.occupant_clearance measures it, with the top corners moved by each loading's motion at the deflection
+# d0_* the portal formulas give, which must equal d_*; g_*: the travel to contact along the motion; rops_inputs).
+R4_DEFLECTIONS = (("side", "frame_static.portal_frame_side", "delta_E", {"E_in": "lc.side_energy"}),
+                  ("rear", "frame_static.portal_frame_rear", "delta_E", {"E_in": "lc.rear_energy", "f": "lc.rear_fraction"}),
+                  ("top", "frame_static.portal_frame_top", "delta", {"F": "lc.crush_force"}))
+
+
+def _r4_portal_inputs() -> dict:
+    from hiraku.solvers.k0_handcalc.library_portal import COMMON
+    return {"side": COMMON, "rear": COMMON, "top": COMMON + ("f_y",)}
+
+
+# The portal formulas' inputs (library_portal.COMMON_INPUTS: the roll bar, its outriggers and the rail pieces to
+# where the rail is held, as frame_inputs.portal_frame_inputs reads them); the top adds the posts' yield stress.
+R4_PORTAL_INPUTS = _r4_portal_inputs()
+
+
+def r4_inputs(design: Record, load_case: Record) -> Record:
+    """R4_PREDICTIONS' from.<name> values: the portal formulas' inputs off the roll bar, the gaps to the occupants'
+    space of the load case's loading, and the shortest distances to it at the portal formulas' deflections
+    (rops_inputs.rops_inputs; the rear motion's corner shares from portal_frame_rear at the load case's rear_energy).
+    A param the load case lacks is taken from Code 4 and the reference mass, as r4_rops sets it."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc import units
+    from hiraku.solvers.k0_handcalc.rops_inputs import rops_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    p = load_case.get("params") or {}
+
+    def param(name: str, unit: str, default: float) -> float:
+        return units.to_unit(p[name], unit, name) if name in p else default
+
+    M = R4_REFERENCE_MASS_KG
+    try:
+        return rops_inputs(design, loading=loading_of(load_case),
+                           rear_fraction=param("rear_fraction", "1", R4_REAR_FRACTION),
+                           rear_energy_J=param("rear_energy", "J", R4_CODE4["rear"] * M),
+                           side_energy_J=param("side_energy", "J", R4_CODE4["side"] * M),
+                           crush_force_N=param("crush_force", "N", R4_CODE4["crush"] * M))["inputs"]
+    except (DesignError, ValueError) as e:
+        raise BuildError(str(e)) from None
+
+
+_R4_ASSUME = ["ロールバーは柱 2 本と上の梁の骨組で、足は張り出しとレール (車輪の所まで) に立つ。塑性ヒンジを一つずつ入れて押し、"
+              "横と後ろはエネルギーを吸うまで、上は力まで (力の前に崩れれば柱の長さ)",
+              "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)",
+              "運転席が前後にスライドする設計 (seat_slide) では、運転者の体の部分の箱は、H3 が大きい人 (AIST の若年男性 95 パーセンタイル) を座らせたスライドの中の位置にある。その位置で数が決まる"]
+R4_PREDICTIONS = [
+    {"quantity": f"rops_{d}_deflection", "formula_id": fid, "output": out, "assumptions": list(_R4_ASSUME),
+     "inputs": {**{k: f"from.{d}_{k}" for k in R4_PORTAL_INPUTS[d]}, **extra}, "inputs_from": r4_inputs}
+    for d, fid, out, extra in R4_DEFLECTIONS
+] + [
+    {"quantity": "rops_occupant_clearance", "formula_id": "frame_static.rops_occupant_clearance",
+     "output": "rops_occupant_clearance",
+     "assumptions": _R4_ASSUME + ["隙間は、荷重ごとに上の角をたわみの分だけ動かした (柱は足のまわりにまっすぐ回る) ロールバーと、"
+                                  "乗員の空間のいちばん近い距離"],
+     "inputs": {**{f"{x}_{d}": f"from.{x}_{d}" for d, *_x in R4_DEFLECTIONS for x in ("g", "s", "d0")},
+                **{f"d_{d}": f"pred.rops_{d}_deflection" for d, *_x in R4_DEFLECTIONS}},
+     "inputs_from": r4_inputs},
+]
+
+
+def r4_rops(spec: Record, req: Record, design: Record) -> Record:
+    """R4: the side, rear and crushing loads of OECD Code 4 (borrowed), on the roll bar; the occupants' space
+    must stay clear. A catalog param side_energy, rear_energy, crush_force or rear_fraction wins over the value
+    from the code and the reference mass. Q64 (ROPS) and Q31 (the body sizes the space is made for) are listed
+    when the requirements have them; Q64 saying there is none is an error."""
+    from hiraku.solvers.k0_handcalc import units
+
+    load, keys = loading(req, design)
+    q64 = entry(req, "Q64")
+    if q64 is not None and str(q64.get("value")).strip().lower() in ("なし", "no", "none", "false", "0"):
+        raise BuildError(f"requirement Q64 says there is no roll-over protective structure ({q64.get('value')!r}); "
+                         "R4 does not apply")
+    given = spec.get("params", {})
+
+    def param(name: str, unit: str, default: float) -> float:
+        if name not in given:
+            return default
+        try:
+            return units.to_unit(given[name], unit, name)
+        except ValueError as e:
+            raise BuildError(f"catalog params of {spec['id']}: {e}") from None
+
+    M = R4_REFERENCE_MASS_KG
+    side = param("side_energy", "J", R4_CODE4["side"] * M)
+    rear = param("rear_energy", "J", R4_CODE4["rear"] * M)
+    crush = param("crush_force", "N", R4_CODE4["crush"] * M)
+    frac = param("rear_fraction", "1", R4_REAR_FRACTION)
+    if not 0.0 <= frac <= 0.5 or min(side, rear, crush) <= 0:
+        raise BuildError(f"{spec['id']}: the energies and the force must be positive and rear_fraction within 0..0.5")
+    req_keys = (["Q64"] if q64 is not None else []) + (["Q31"] if entry(req, "Q31") else [])
+    return {
+        "load_case_id": "R4-rops",
+        "test_id": "R4",
+        "domain": spec["domain"],
+        "title": (f"横転の保護枠: 横から {side:g} J・後ろから {rear:g} J を吸わせ、上から {crush / 1000:g} kN で押す "
+                  f"(OECD Code 4 の静的試験を借りる、{LOADING_JA[load]})"),
+        "params": {"side_energy": q(side, "J"), "rear_energy": q(rear, "J"), "crush_force": q(crush, "N"),
+                   "rear_fraction": q(frac, "1"), "loading": load},
+        "requirement_keys": req_keys + keys,
+        "criterion": {"quantity": "rops_occupant_clearance", "op": ">=", "limit": q(0.0, "mm"),
+                      "basis": ("R4 (OECD Code 4, 3.5.2.2, 3.5.3.2 and 3.8, borrowed): the roll bar, deflected by "
+                                "each loading, must not enter the occupants' space; the smallest gap over the loadings "
+                                "between the roll bar's members and the space of k4_geometry.occupant_spaces (the "
+                                "occupant box, widened to AIST D2 and raised to AIST I1 of a young male 95th "
+                                "percentile) stays at 0 mm or more. The code's second condition (the clearance zone "
+                                "left unprotected under the ground plane) is not in this quantity"),
+                      "requirement_keys": req_keys},
+        "tolerance_rel": tolerance(spec, R4_TOL),
+    }
+
+
+from hiraku.catalog.builders.load_path import BUILDERS as _LOAD_PATH_BUILDERS  # noqa: E402  (R7, R8: load_path.py)
+from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa: E402
+
 BUILDERS = {
+    **_LOAD_PATH_BUILDERS,
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
+    "R4": r4_rops,
     "P4": p4_drive_energy,
     "T1": t1_thermal,
     "T2": t2_thermal,
@@ -591,5 +925,5 @@ BUILDERS = {
     "H5": h5_assembly,
 }
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN,
-         "H3": H3_PLAN, "H5": H5_PLAN}
+         "H3": H3_PLAN, "H5": H5_PLAN, **_LOAD_PATH_PLANS}
 FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results

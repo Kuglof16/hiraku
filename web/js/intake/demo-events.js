@@ -12,7 +12,7 @@ export const DEMOS = {
    "data": {
     "run_id": "20261103-100000-offroad-4w",
     "created_at": "2026-11-03T10:00:00.000+09:00",
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "product": "offroad-4w",
     "flags": {
      "ride": true,
@@ -31,7 +31,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 1,
+    "round_limit": 2,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -59,7 +59,7 @@ export const DEMOS = {
       "unit": "%",
       "source": "default",
       "trust": 1,
-      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+      "basis": "林道規程 (林野庁) 第 20 条: 縦断勾配 12 % は第 1 項のただし書、14 % は第 4 項の 2 級林道の例外 (the steepest stretch), https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (the article and its paragraphs read for this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
      },
      {
       "key": "Q14",
@@ -153,7 +153,7 @@ export const DEMOS = {
      },
      {
       "key": "Q51",
-      "name": "0 → 最高速度 (Q50) の時間",
+      "name": "0 → 最高速度の時間",
       "value": 6,
       "unit": "s",
       "source": "default",
@@ -194,7 +194,7 @@ export const DEMOS = {
       "unit": "deg",
       "source": "default",
       "trust": 1,
-      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized in the CPSC staff briefing of 2016-11-22 (PDF p.11), which also gives 33 deg for two people (both read on that page for this repository); 35 deg empty: an assumption (no source found)"
      },
      {
       "key": "Q61",
@@ -238,6 +238,105 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption (no public basis found)"
+     },
+     {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)",
+      "value": 300,
+      "unit": "N",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text), table \"Steering control effort requirements\" (M1, with a failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is the assumption)"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the range where the feel and position of the control do not change; no source)"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力 (踏む面、踏む向き)",
+      "value": 500,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN, read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (small against the control's travel; no source)"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "value": 0.7,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(e) (0.70 g; read by the intake department on 2026-11-03). The vehicle's own peak from its dynamics tests counts instead when it is larger"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "value": 0.9,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1) (peak braking coefficient 0.90; read by the intake department on 2026-11-03). The vehicle's own peak counts instead when it is larger"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "value": 725,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(1)-(5) (read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "value": 25,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c) (less than 25 mm; read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)",
+      "value": 500,
+      "unit": "kg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract having no unit J/kg or N/kg for them"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "value": 30,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for other traffic, borrowed: applying it to the occupants is an assumption"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "value": 50,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
      }
     ],
     "domain_picks": [],
@@ -254,9 +353,9 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (5)・動力 (4)・空力 (2)・衝突 (1)・強度信頼性 (5)・音振 (3)・熱 (2)",
+   "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
      "ride": true,
      "lean": true,
@@ -283,10 +382,9 @@ export const DEMOS = {
      {
       "domain": "handling",
       "shown_name": "操安",
-      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S2 旋回での転倒 (J ターン・定常円)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる",
+      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる。S2 旋回での転倒 (J ターン・定常円) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "S1",
-       "S2",
        "S3",
        "S4",
        "S5"
@@ -306,16 +404,15 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "空力",
-      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
+      "reason": "外・走 に当てはまるので、F1 横風 を当てる。F2 空気抵抗 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
-       "F1",
-       "F2"
+       "F1"
       ]
      },
      {
       "domain": "crash",
       "shown_name": "衝突",
-      "reason": "乗・走 に当てはまるので、C1 壁への正面衝突 を当てる",
+      "reason": "乗・走・悪 に当てはまるので、C1 壁への正面衝突 を当てる。C3 横転したときの乗員の空間 (横・後ろ・上から押す) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "C1"
       ]
@@ -323,23 +420,21 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "預・荷・走・乗・悪・池 に当てはまるので、R1 静的強度・R2 衝撃 (落錘・落下・段差)・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R6 電池の取付の振動 を当てる",
+      "reason": "乗・悪・走・預・荷・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
-       "R2",
        "R3",
        "R4",
-       "R6"
+       "R7",
+       "R8"
       ]
      },
      {
       "domain": "nvh",
       "shown_name": "音振",
-      "reason": "振・乗・走・電・預 に当てはまるので、N1 固有振動数と加振・N2 乗り心地・N3 騒音 を当てる",
+      "reason": "振・乗・走・電・預 に当てはまるので、N1 固有振動数と加振 を当てる。N2 乗り心地・N3 騒音 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
-       "N1",
-       "N2",
-       "N3"
+       "N1"
       ]
      },
      {
@@ -355,11 +450,8 @@ export const DEMOS = {
     "off": [],
     "assembly_test_ids": [
      "H1",
-     "H2",
      "H3",
-     "H4",
-     "H5",
-     "G2"
+     "H5"
     ]
    }
   },
@@ -433,8 +525,8 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 3.5(1) and Table 3.3 (printed p. 23): minimum end distance e1 = 1.2 d0 and minimum edge distance e2 = 1.2 d0; 1.5 Symbols (p. 13): d0 = hole diameter, e1/e2 measured from the centre of the fastener hole to the adjacent end/edge (e1 in the direction of load transfer, e2 at right angles to it). Maximum e1, e2 = 4t + 40 mm for steel exposed to weather, larger of 8t or 125 mm for unprotected EN 10025-5 steel, otherwise unlimited (note 1). Fatigue: see EN 1993-1-9 (3.5(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 25 and p. 15), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame",
@@ -468,7 +560,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -480,11 +572,11 @@ export const DEMOS = {
       "rule_id": "WD-01",
       "doc_id": "KN-WD",
       "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
+      "text": "溶接する角形鋼管の外形 (b, h) は肉厚の 35 倍以下",
+      "check": "section_ratio_rect_max <= 35",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.5.1 and Table 7.8 \"Range of validity for welded joints between CHS or RHS brace members and RHS chord members\" (printed p. 116): RHS braces bi/ti <= 35 and hi/ti <= 35 (tension; in compression also Class 1 or 2 for T, Y, X and K/N gap joints, Class 1 for overlap joints); RHS chord b0/t0 <= 35 and h0/t0 <= 35 and Class 1 or 2 for T, Y, X and K/N gap joints (overlap joints: Class 1 or 2 only). Outside the range all failure modes of 7.2.2 and secondary moments are to be considered (7.5.1(3)). The limit 35 holds for rectangular sections only; circular tubes are WD-03 (Table 7.1). The check does not look at the section class. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame"
@@ -498,8 +590,23 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 4.5.1(2) (printed p. 42): a fillet weld whose effective length is less than 30 mm or less than 6 times its throat thickness, whichever is larger, is not to be designed to carry load. The length meant is the effective length l_eff (4.5.1(1): the length over which the fillet is full size; may be taken as the overall length minus 2a, no reduction if full size including starts and ends); a = effective throat thickness (4.5.2), itself at least 3 mm (4.5.2(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 44), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-03",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する円形鋼管の外径は肉厚の 50 倍以下",
+      "check": "section_ratio_round_max <= 50",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
       "applies_to": {
        "kinds": [
         "frame"
@@ -548,7 +655,7 @@ export const DEMOS = {
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
       "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "basis": "Fixed-fastener formula T = (H - F)/2 as given in Goodheart-Willcox, \"GD&T: Application and Interpretation\", 7th ed., p. 308 (secondary source; the ASME Y14.5 text itself was not opened). There T = position tolerance applied to all holes (the value in the feature control frame, at MMC), H = MMC size of the clearance holes (smallest hole), F = MMC size of the fastener (largest fastener). So clearance_hole_mm is the smallest clearance-hole diameter and bolt_diameter_mm the largest bolt diameter. Condition: holds only if the fixed (threaded / press-fit) feature carries a projected tolerance zone or the clearance-hole part is very thin. Floating fasteners (clearance holes in all parts) use T = H - F instead (same book, same page). Read 2026-11-03 in a saved copy of https:\/\/www.g-wonlinetextbooks.com/gdt-application-and-interpretation-2021/324 (printed page 308)",
       "applies_to": {
        "kinds": [
         "frame",
@@ -582,7 +689,7 @@ export const DEMOS = {
       "check": "size_y_mm >= 391",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, item J2 座位殿幅:足底支持 (hip breadth, sitting, feet supported), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J2.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 95th percentile 391.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The elderly female 95th percentile is 391.4 mm, so the limit also covers that group to within 1 mm. Read 2026-11-03",
       "applies_to": {
        "kinds": [
         "seat"
@@ -597,7 +704,7 @@ export const DEMOS = {
       "check": "size_x_mm <= 406",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "basis": "AIST 人体寸法データベース 1991-92, item J6 座位殿・膝窩距離 (buttock-popliteal length, sitting), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 5th percentile 406.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The limit holds for that group only: the elderly (60+) female 5th percentile in the same table is 391.2 mm. Read 2026-11-03. The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
        "kinds": [
         "seat"
@@ -612,7 +719,7 @@ export const DEMOS = {
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
       "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996, 4.2 Table 1 (minimum gap a: finger 25 mm; hand/wrist/fist 100, arm 120, toes 50, foot 120, leg 180, head 300, body 500), iTeh sample p.3 (PDF p.7), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf , read 2026-11-03. Condition (4.1 b): if a larger body part can foreseeably enter the crushing zone, the gap for the largest part applies, so 25 mm is a floor only for zones that admit nothing larger than a finger; children and bulky clothing must also be considered. The current edition is ISO 13854:2017 (2nd ed., a \"minor revision\" per its foreword, ANSI preview read 2026-11-03); its Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not checked",
       "applies_to": {
        "kinds": [
         "suspension",
@@ -646,7 +753,7 @@ export const DEMOS = {
       "check": "req_Q19 <= 55",
       "origin": "builtin",
       "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "basis": "EVE Energy LF50K Product Specification, file LF50K-73103 version D (2019-12-02), sec. 3 Nominal Technical Parameter, row 7 charge temperature 0-55 degC and row 8 discharge temperature -20-55 degC (row 9 storage: 1 month -20-45 degC, 1 year 0-35 degC), https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (a distributor's copy of the maker's specification); read 2026-11-03. 55 degC is the upper limit for both charging and discharging, i.e. for use; storage limits are lower and are not checked here. Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
        "kinds": [
         "battery"
@@ -661,7 +768,7 @@ export const DEMOS = {
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
       "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
       "applies_to": {
        "kinds": [
         "battery"
@@ -693,8 +800,8 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "trust": 1,
+      "basis": "Waters, Putz-Anderson, Garg, Fine, \"Revised NIOSH equation for the design and evaluation of manual lifting tasks\", Ergonomics 36(7):749-776, 1993, https:\/\/doi.org/10.1080/00140139308967940, sec. 6.2 (p.762) and Appendix A (LC = 23 kg / 51 lb), sec. 8.1 limitations (p.768-769); read 2026-11-03. The 23 kg is the load constant: the recommended weight limit at the standard lifting location (75 cm high, 25 cm out) under ideal conditions (all six multipliers = 1: sagittal, occasional, good coupling, short travel). The equation reduces it for real postures and frequencies; it is for two-handed lifting and not for one-handed, seated/kneeling or constrained-space lifts. This rule uses the 23 kg as the one-person limit for any lift, which is the most lenient value the equation allows. A hit means two people or a lifting aid are needed",
       "applies_to": {
        "kinds": [
         "battery",
@@ -793,7 +900,7 @@ export const DEMOS = {
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
       "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "basis": "JIS G 3466 table 5 (square) and table 6 (rectangular), read in the JISF committee draft of the revision dated 2024-12-20 (資料 16, PDF p.9-12), https:\/\/www.jisf.or.jp/business/standard/jis/documents/docs_kouzai_1600_JISG3466_20241220.pdf, and the maker's range table of 日鐵住金建材 角パイプ (STKR) 製造可能範囲 (catalogue p.4), https:\/\/www.ns-kenzai.co.jp/pdf/a1/u-kaku-eco_kikaku.pdf; read 2026-11-03. The thinnest wall in both tables is 1.6 mm (sides 40-75 mm square, and rectangles up to 125x40); larger tubes start thicker (80-100 square 2.3, 125 square 3.2, 150-300 square 4.5). Clause 8.1 lets other sizes be agreed between buyer and maker, so 1.6 mm is the lower limit of the listed sizes, not a ban. The issued standard (2015 edition with amendment, as used for data/sections/standard_tubes.json) was not reopened for this rule; the draft lists the same 112 sizes",
       "applies_to": {
        "kinds": [
         "frame"
@@ -805,6 +912,124 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated by UN Regulation No. 79, \"Uniform provisions concerning the approval of vehicles with regard to steering equipment\" (in force 1 December 1988); its paragraph 1 (Scope) applies it to the steering equipment of vehicles of categories M, N and O, and paragraph 2.3 defines steering equipment as all the equipment that determines the direction of movement (steering control, steering transmission, steered wheels, energy supply if any). In that original text paragraph 1 also leaves out transmissions that are purely hydraulic or electric at any point (except auxiliary steering equipment). Read in the original text, United Nations Treaty Series vol. 1519, A-4789 (https:\/\/treaties.un.org/doc/Publication/UNTS/Volume%201519/volume-1519-A-4789-English.pdf), and the UN Treaty Collection status page XI-B-16-79, read 2026-11-03. The current text (04 series of amendments) was not opened; the rule does not take any value from the regulation"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated. UN Regulation No. 13-H, \"Uniform provisions concerning the approval of passenger cars with regard to braking\": paragraph 1.1 applies it to the braking of vehicles of categories M1 and N1, and paragraph 1.2 leaves out vehicles with a design speed not over 25 km/h and vehicles fitted for invalid drivers (read in MLIT's English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R013H.pdf). Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第12条 (制動装置), paragraph 1: a motor vehicle must have two or more braking systems (二系統以上) meeting the braking performance set by 告示; one system is enough for vehicles with a maximum speed under 25 km/h, large special vehicles under 35 km/h and small special farm vehicles (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Both read 2026-11-03. The rule checks one connected brake chain, not the number of systems or their performance"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Road vehicles: 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第22条の3 (座席ベルト等), paragraph 1, asks for seat belts and their anchorages (取付装置) on the seats listed in its table (a lap-and-shoulder 第二種座席ベルト on forward-facing seats of passenger vehicles under 10 seats, for example); two-wheelers, sidecar two-wheelers and vehicles under 20 km/h (other than large and small special vehicles) are left out, and so are some seat kinds (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Recreational off-highway vehicles: ANSI/ROHVA 1 (current edition 2023 per ROHVA, https:\/\/rohva.org/ansi-standard/, which lists an Occupant Retention System among its contents). The standard itself was not opened (sold); secondary: CPSC staff letter to ROHVA of 10 March 2011 on the canvass draft (section 11.1 Seat Belts asks for at least a three-point seat belt; https:\/\/www.cpsc.gov/s3fs-public/pdfs/blk_pdf_commcanvass03102111.pdf) and CPSC NPR 79 FR 68964 (19 Nov 2014), p. 68985-68986 (ANSI/ROHVA 1-2011 section 11.2 seat belt reminder, 11.3 ORS zones; ORS defined as including three-point seat belts; https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). All read 2026-11-03"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 (current edition 2023) lists a Roll Over Protective Structure (ROPS) among the requirements it covers (ROHVA's page, https:\/\/rohva.org/ansi-standard/); the CPSC NPR 79 FR 68964 (19 Nov 2014) describes ROVs as equipped with ROPS (p. 68964) and puts ROPS in its proposed ROV definition, 16 CFR 1422.2(a) (p. 69022) (https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Read 2026-11-03. The standard text was not opened (sold): its ROPS clause number and test method were not seen, and ROHVA 1 covers ROVs only (in the NPR definition, among other features, a top speed over 30 mph)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号): 第32条 (前照灯等; 走行用前照灯 para. 1, すれ違い用前照灯 para. 4, on the front), 第37条 (尾灯), 第39条 (制動灯), 第41条 (方向指示器). 第37条 and 第39条 para. 1 ask for the lamp on both sides of the rear (one is enough for two-wheelers and vehicles 0.8 m wide or less) and do not apply to 軽自動車 and 小型特殊自動車 under 20 km/h; 第41条 para. 1 leaves out vehicles under 20 km/h shorter than 6 m with the driver's seat outside a cabin (and other listed conditions). Colour, brightness and mounting are left to the 告示 (not opened). Read in the e-Gov 法令 XML, law id 326M50000800067 (https:\/\/laws.e-gov.go.jp/law/326M50000800067), 2026-11-03. The design check counts one of each, not two per rear side"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -930,21 +1155,74 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 4 件、既定値 2 件、答えが無いまま 3 件",
+   "text": "質問 7 件、答え 7 件、既定値 14 件",
    "data": {
     "answers": [
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
       "source": "default",
       "trust": 1,
-      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
       "value": 180,
       "unit": "mm"
      },
@@ -953,8 +1231,78 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
+      "unit": "mm"
+     },
+     {
+      "key": "Q03",
+      "name": "使う頻度・年数",
+      "value": "週末ごと、5 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer)"
+     },
+     {
+      "key": "Q20",
+      "name": "水・ほこり (IP)",
+      "value": "IP54",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer, dust and splashing water on a forest road)"
      },
      {
       "key": "Q34",
@@ -970,7 +1318,7 @@ export const DEMOS = {
       "value": "あり",
       "source": "hearing",
       "trust": 1,
-      "basis": "ROHVA 1 has an item for ROPS, https:\/\/rohva.org/ansi-standard/ (not checked in this repository)"
+      "basis": "ROHVA 1 has an item for ROPS, https:\/\/rohva.org/ansi-standard/; read 2026-11-03 in a source check"
      },
      {
       "key": "Q74",
@@ -988,13 +1336,21 @@ export const DEMOS = {
       "source": "hearing",
       "trust": 3,
       "basis": "assumption (steel tube frame)"
+     },
+     {
+      "key": "Q91",
+      "name": "運転時間",
+      "value": "1 日 2 時間、5 年",
+      "source": "hearing",
+      "trust": 3,
+      "basis": "assumption (a sample answer)"
      }
     ],
     "note": "林道だけで使い、公道は走らない"
    }
   },
   {
-   "seq": 13,
+   "seq": 14,
    "ts": "2026-11-03T10:00:11.000+09:00",
    "t": 11.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -1044,7 +1400,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 14,
+   "seq": 15,
    "ts": "2026-11-03T10:00:12.000+09:00",
    "t": 12.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -1058,7 +1414,7 @@ export const DEMOS = {
     "change_reason": "first version (fixed demo design)",
     "variables": {
      "wheelbase": {
-      "value": 1700.0,
+      "value": 2020.0,
       "unit": "mm"
      },
      "track": {
@@ -1245,7 +1601,7 @@ export const DEMOS = {
       "value": 10000000.0,
       "unit": "1"
      },
-     "fatigue_slope_after_knee": {
+     "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
       "unit": "1"
      },
@@ -1277,8 +1633,28 @@ export const DEMOS = {
       "value": 2.3,
       "unit": "mm"
      },
+     "tower_b": {
+      "value": 30.0,
+      "unit": "mm"
+     },
+     "tower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "lower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_cross": {
+      "value": 1.0,
+      "unit": "1"
+     },
      "seat_x": {
-      "value": -725.0,
+      "value": -1045.0,
       "unit": "mm"
      },
      "seat_y": {
@@ -1286,11 +1662,27 @@ export const DEMOS = {
       "unit": "mm"
      },
      "steering_x": {
-      "value": -250.0,
+      "value": -570.0,
       "unit": "mm"
      },
      "battery_x": {
-      "value": -725.0,
+      "value": -1045.0,
+      "unit": "mm"
+     },
+     "seat_height": {
+      "value": 260.0,
+      "unit": "mm"
+     },
+     "steering_column_angle": {
+      "value": 35.0,
+      "unit": "deg"
+     },
+     "steering_wheel_height": {
+      "value": 495.4114925552308,
+      "unit": "mm"
+     },
+     "pedal_x": {
+      "value": -393.1890219018587,
       "unit": "mm"
      },
      "front_spring_rate": {
@@ -1333,6 +1725,54 @@ export const DEMOS = {
       "value": 10.0,
       "unit": "1"
      },
+     "driveshaft_diameter": {
+      "value": 30.0,
+      "unit": "mm"
+     },
+     "driveshaft_wall": {
+      "value": 5.0,
+      "unit": "mm"
+     },
+     "driveshafts": {
+      "value": 1.0,
+      "unit": "1"
+     },
+     "lamps": {
+      "value": 0.0,
+      "unit": "1"
+     },
+     "rollbar": {
+      "value": 1.0,
+      "unit": "1"
+     },
+     "rollbar_height": {
+      "value": 1100.0,
+      "unit": "mm"
+     },
+     "rollbar_width": {
+      "value": 1200.0,
+      "unit": "mm"
+     },
+     "rollbar_offset": {
+      "value": 80.0,
+      "unit": "mm"
+     },
+     "rollbar_square": {
+      "value": 0.0,
+      "unit": "1"
+     },
+     "rollbar_d": {
+      "value": 42.7,
+      "unit": "mm"
+     },
+     "rollbar_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "rollbar_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
      "tyre_relaxation_length": {
       "value": 300.0,
       "unit": "mm"
@@ -1340,6 +1780,18 @@ export const DEMOS = {
      "wheel_inertia": {
       "value": 0.63,
       "unit": "kg*m^2"
+     },
+     "motor_rotor_inertia": {
+      "value": 0.005147246483552594,
+      "unit": "kg*m^2"
+     },
+     "reducer_output_inertia": {
+      "value": 0.005764916061578906,
+      "unit": "kg*m^2"
+     },
+     "driveshaft_inner_drop": {
+      "value": 32.0,
+      "unit": "mm"
      }
     },
     "supports": [
@@ -1354,10 +1806,68 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         120.0,
+         196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -120.0,
+         196.0,
+         180.0
+        ],
+        "lca_outer": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         100.0,
+         266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -100.0,
+         266.8,
+         478.0
+        ],
+        "uca_outer": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -120.0,
+         226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -120.0,
+         475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         0.0,
+         550.0,
+         300.0
+        ],
+        "damper_lower": [
+         0.0,
+         401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         0.0,
+         428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": false,
@@ -1377,10 +1887,68 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         120.0,
+         -196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -120.0,
+         -196.0,
+         180.0
+        ],
+        "lca_outer": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         100.0,
+         -266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -100.0,
+         -266.8,
+         478.0
+        ],
+        "uca_outer": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -120.0,
+         -226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -120.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         0.0,
+         -550.0,
+         300.0
+        ],
+        "damper_lower": [
+         0.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         0.0,
+         -428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": false,
@@ -1393,17 +1961,75 @@ export const DEMOS = {
       "id": "RL",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        550.0,
        300.0
       ],
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         -1900.0,
+         196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -2140.0,
+         196.0,
+         180.0
+        ],
+        "lca_outer": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         -1920.0,
+         266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -2120.0,
+         266.8,
+         478.0
+        ],
+        "uca_outer": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -2140.0,
+         226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -2140.0,
+         475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         -2020.0,
+         550.0,
+         300.0
+        ],
+        "damper_lower": [
+         -2020.0,
+         401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         -2020.0,
+         428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": true,
@@ -1416,17 +2042,75 @@ export const DEMOS = {
       "id": "RR",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        -550.0,
        300.0
       ],
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         -1900.0,
+         -196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -2140.0,
+         -196.0,
+         180.0
+        ],
+        "lca_outer": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         -1920.0,
+         -266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -2120.0,
+         -266.8,
+         478.0
+        ],
+        "uca_outer": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -2140.0,
+         -226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -2140.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         -2020.0,
+         -550.0,
+         300.0
+        ],
+        "damper_lower": [
+         -2020.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         -2020.0,
+         -428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": true,
@@ -1443,7 +2127,7 @@ export const DEMOS = {
       "kind": "battery",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
         330.0
        ],
@@ -1459,17 +2143,79 @@ export const DEMOS = {
        "RS1",
        "LS2",
        "RS2"
+      ],
+      "system": "battery",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "main_switch",
+        "via": "wire",
+        "carries": "power"
+       }
+      ]
+     },
+     {
+      "id": "main_switch",
+      "name": "電池の主スイッチ (遮断)",
+      "kind": "switch",
+      "box": {
+       "center_mm": [
+        -620.0,
+        190.0,
+        300.0
+       ],
+       "size_mm": [
+        80.0,
+        80.0,
+        80.0
+       ]
+      },
+      "mass_kg": 0.3,
+      "carried_by": [
+       "LS1"
+      ],
+      "system": "battery",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "controller",
+        "via": "wire",
+        "carries": "power"
+       }
       ]
      },
      {
       "id": "motor",
-      "name": "モーターと減速機",
+      "name": "モーター",
       "kind": "motor",
       "box": {
        "center_mm": [
-        -1550.0,
+        -1815.0,
         0.0,
-        310.0
+        268.0
        ],
        "size_mm": [
         250.0,
@@ -1477,10 +2223,135 @@ export const DEMOS = {
         220.0
        ]
       },
-      "mass_kg": 25.0,
+      "mass_kg": 11.765134819548786,
       "carried_by": [
        "LB",
        "RB"
+      ],
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "reducer",
+        "via": "spline",
+        "carries": "torque"
+       }
+      ]
+     },
+     {
+      "id": "reducer",
+      "name": "減速機と差動",
+      "kind": "reducer",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        0.0,
+        268.0
+       ],
+       "size_mm": [
+        160.0,
+        392.0,
+        164.0
+       ]
+      },
+      "mass_kg": 7.8434232130325245,
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "driveshaft_RL",
+        "via": "spline",
+        "carries": "torque"
+       },
+       {
+        "to": "driveshaft_RR",
+        "via": "spline",
+        "carries": "torque"
+       }
+      ]
+     },
+     {
+      "id": "driveshaft_RL",
+      "name": "左のドライブシャフト",
+      "kind": "driveshaft",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        373.0,
+        284.0
+       ],
+       "size_mm": [
+        385.44338508403837,
+        30.0,
+        30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        90.0
+       ]
+      },
+      "mass_kg": 2.6957209837093448,
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "wheel_RL",
+        "via": "spline",
+        "carries": "torque"
+       }
+      ]
+     },
+     {
+      "id": "driveshaft_RR",
+      "name": "右のドライブシャフト",
+      "kind": "driveshaft",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -373.0,
+        284.0
+       ],
+       "size_mm": [
+        385.44338508403837,
+        30.0,
+        30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        -90.0
+       ]
+      },
+      "mass_kg": 2.6957209837093448,
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "wheel_RR",
+        "via": "spline",
+        "carries": "torque"
+       }
       ]
      },
      {
@@ -1489,7 +2360,7 @@ export const DEMOS = {
       "kind": "controller",
       "box": {
        "center_mm": [
-        -1110.0,
+        -1430.0,
         0.0,
         300.0
        ],
@@ -1503,6 +2374,24 @@ export const DEMOS = {
       "carried_by": [
        "LS2",
        "RS2"
+      ],
+      "system": "control",
+      "connects_to": [
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "motor",
+        "via": "wire",
+        "carries": "power"
+       }
       ]
      },
      {
@@ -1511,7 +2400,7 @@ export const DEMOS = {
       "kind": "electrical",
       "box": {
        "center_mm": [
-        -300.0,
+        -620.0,
         0.0,
         300.0
        ],
@@ -1521,12 +2410,28 @@ export const DEMOS = {
         100.0
        ]
       },
-      "mass_kg": 6.0,
+      "mass_kg": 5.7,
       "carried_by": [
-       "LA",
-       "RA",
        "LS1",
        "RS1"
+      ],
+      "system": "electrical",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "battery",
+        "via": "wire",
+        "carries": "power"
+       }
       ]
      },
      {
@@ -1535,22 +2440,207 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -225.0,
+        -540.8888249672586,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
-        450.0,
-        600.0,
-        20.0
+        458.2223500654828,
+        911.0,
+        3.2
        ]
       },
-      "mass_kg": 6.0,
+      "mass_kg": 11.183232626769652,
       "carried_by": [
-       "LA",
-       "RA",
+       "LAp2",
+       "RAp2",
        "LS1",
        "RS1"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "pedal_accel",
+      "name": "アクセルのペダル",
+      "kind": "accelerator_pedal",
+      "box": {
+       "center_mm": [
+        -389.76882046860203,
+        -330.0,
+        492.0360923856119
+       ],
+       "size_mm": [
+        100.0,
+        80.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -19.999999999999535,
+        0.0
+       ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "control",
+      "connects_to": [
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "controller",
+        "via": "wire",
+        "carries": "signal"
+       },
+       {
+        "to": "floor_front",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "pedal_brake",
+      "name": "ブレーキのペダル",
+      "kind": "brake_pedal",
+      "box": {
+       "center_mm": [
+        -389.76882046860203,
+        -220.0,
+        492.0360923856119
+       ],
+       "size_mm": [
+        100.0,
+        80.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -19.999999999999535,
+        0.0
+       ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "brake_master",
+        "via": "pin",
+        "carries": "brake"
+       },
+       {
+        "to": "floor_front",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "brake_master",
+      "name": "ブレーキのマスターシリンダー",
+      "kind": "brake_master_cylinder",
+      "box": {
+       "center_mm": [
+        -332.29999999999995,
+        -220.0,
+        697.7183687566543
+       ],
+       "size_mm": [
+        120.0,
+        70.0,
+        70.0
+       ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "caliper_FL",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "caliper_FR",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "caliper_RL",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "caliper_RR",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "bulkhead",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1559,22 +2649,47 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         550.0,
         1100.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 8.0,
+      "mass_kg": 16.20795,
       "carried_by": [
        "LS1",
        "RS1",
        "LS2",
        "RS2"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1583,17 +2698,17 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         950.0,
-        880.0,
-        20.0
+        483.6,
+        3.2
        ]
       },
-      "mass_kg": 18.0,
+      "mass_kg": 12.3078618,
       "carried_by": [
        "LS2",
        "RS2",
@@ -1601,6 +2716,41 @@ export const DEMOS = {
        "RB",
        "LE",
        "RE"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LE",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RE",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1615,7 +2765,7 @@ export const DEMOS = {
        ],
        "size_mm": [
         360.0,
-        600.0,
+        483.6,
         280.0
        ]
       },
@@ -1623,30 +2773,341 @@ export const DEMOS = {
       "carried_by": [
        "LF",
        "RF",
-       "LA",
-       "RA"
+       "LAp1",
+       "RAp1"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LF",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RF",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LAp1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp1",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
-      "id": "steering",
-      "name": "ハンドルとペダル",
+      "id": "bulkhead",
+      "name": "前の隔壁 (足元と前の区画の仕切りの板)",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -271.15,
+        0.0,
+        622.0431784698708
+       ],
+       "size_mm": [
+        2.3,
+        740.0,
+        384.08635693974145
+       ]
+      },
+      "mass_kg": 5.607737628591613,
+      "material": "ss400",
+      "finish": "painted",
+      "carried_by": [
+       "LAt2",
+       "LDT",
+       "RAt2",
+       "RDT",
+       "LAp2",
+       "RAp2"
+      ],
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "steering_wheel",
+      "name": "ハンドル",
       "kind": "steering",
       "box": {
        "center_mm": [
-        -250.0,
-        -200.0,
-        750.0
+        -720.0,
+        -300.0,
+        1188.6114925552308
        ],
        "size_mm": [
-        300.0,
-        200.0,
-        500.0
+        40.0,
+        350.0,
+        350.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.00000000000025,
+        0.0
        ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 2.5537001056615427,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "steering_column",
+        "via": "spline",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "steering_column",
+      "name": "ステアリングのコラム",
+      "kind": "steering_column",
+      "box": {
+       "center_mm": [
+        -420.0,
+        -300.0,
+        978.5492310923179
+       ],
+       "size_mm": [
+        772.4647532568737,
+        40.0,
+        40.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.00000000000001,
+        0.0
+       ]
+      },
+      "mass_kg": 2.042960084529234,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "steering_shaft",
+        "via": "pin",
+        "carries": "steer"
+       },
+       {
+        "to": "dash_cross",
+        "via": "bolt",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "steering_shaft",
+      "name": "ステアリングの中間軸",
+      "kind": "steering_shaft",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -235.0,
+        523.4082994683935
+       ],
+       "size_mm": [
+        531.1037549373495,
+        24.0,
+        24.0
+       ],
+       "rpy_deg": [
+        0.0,
+        75.14594426906802,
+        90.0
+       ]
+      },
+      "mass_kg": 1.021480042264617,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "steering_rack",
+        "via": "spline",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "steering_rack",
+      "name": "ステアリングのラック",
+      "kind": "steering_rack",
+      "box": {
+       "center_mm": [
+        -120.0,
+        0.0,
+        278.32962930738194
+       ],
+       "size_mm": [
+        50.0,
+        502.69326195850175,
+        50.0
+       ]
+      },
+      "mass_kg": 4.596660190190777,
+      "carried_by": [
+       "LAu2",
+       "RAu2"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAu2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "tie_rod_FL",
+        "via": "ball_joint",
+        "carries": "steer"
+       },
+       {
+        "to": "tie_rod_FR",
+        "via": "ball_joint",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "tie_rod_FL",
+      "name": "前左のタイロッド",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -120.0,
+        350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "knuckle_FL",
+        "via": "ball_joint",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "tie_rod_FR",
+      "name": "前右のタイロッド",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "knuckle_FR",
+        "via": "ball_joint",
+        "carries": "steer"
+       }
       ]
      },
      {
@@ -1655,9 +3116,9 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         -300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -1665,10 +3126,62 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 11.0,
       "carried_by": [
        "RS1",
        "RS2"
+      ],
+      "system": "seat",
+      "connects_to": [
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "seat_belt_R",
+      "name": "運転席のシートベルト (取付金具と巻き取り)",
+      "kind": "seat_belt",
+      "box": {
+       "center_mm": [
+        -1320.0,
+        -540.0,
+        693.2
+       ],
+       "size_mm": [
+        50.0,
+        20.0,
+        300.0
+       ]
+      },
+      "mass_kg": 1.0,
+      "carried_by": [
+       "RS2"
+      ],
+      "system": "restraint",
+      "connects_to": [
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "cross_S2",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1677,9 +3190,9 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -1687,10 +3200,62 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 11.0,
       "carried_by": [
        "LS1",
        "LS2"
+      ],
+      "system": "seat",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "seat_belt_L",
+      "name": "助手席のシートベルト (取付金具と巻き取り)",
+      "kind": "seat_belt",
+      "box": {
+       "center_mm": [
+        -1320.0,
+        540.0,
+        693.2
+       ],
+       "size_mm": [
+        50.0,
+        20.0,
+        300.0
+       ]
+      },
+      "mass_kg": 1.0,
+      "carried_by": [
+       "LS2"
+      ],
+      "system": "restraint",
+      "connects_to": [
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "cross_S2",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1699,20 +3264,28 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         -300.0,
-        970.0
+        1185.8000000000002
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "RS1",
        "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "rest",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1721,20 +3294,28 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         300.0,
-        970.0
+        1185.8000000000002
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "LS1",
        "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "rest",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -1743,13 +3324,13 @@ export const DEMOS = {
       "kind": "cargo",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
-        600.0
+        583.2
        ],
        "size_mm": [
         900.0,
-        880.0,
+        483.6,
         300.0
        ]
       },
@@ -1761,11 +3342,579 @@ export const DEMOS = {
        "RB",
        "LE",
        "RE"
+      ],
+      "system": "cargo",
+      "connects_to": [
+       {
+        "to": "deck",
+        "via": "rest",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_L",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -208.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_L",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -208.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_L",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -111.175,
+        1259.6557462776154
+       ],
+       "size_mm": [
+        592.3093334270052,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696658,
+        -3.2899932439578037
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_L",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -208.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_R",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -392.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_R",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -392.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_R",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -488.825,
+        1259.6557462776154
+       ],
+       "size_mm": [
+        592.3093334270052,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696658,
+        3.2899932439578
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_R",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -392.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_L",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        392.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_L",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        392.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_L",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        447.325,
+        1162.9799424023288
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        -13.624631766406635
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_L",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        392.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_R",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        208.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_R",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        208.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_R",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        152.675,
+        1162.9799424023288
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        13.624631766406637
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_R",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        208.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
       ]
      },
      {
       "id": "wheel_FL",
-      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
@@ -1779,29 +3928,85 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_FL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "FL",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "FL",
+        "via": "rest",
+        "carries": "steer"
+       },
+       {
+        "to": "FL",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_FL",
-      "name": "前左のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        410.0,
-        330.0
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 4.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "LAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "FL",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
      },
      {
       "id": "wheel_FR",
-      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
@@ -1815,33 +4020,89 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_FR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "FR",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "FR",
+        "via": "rest",
+        "carries": "steer"
+       },
+       {
+        "to": "FR",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_FR",
-      "name": "前右のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        -410.0,
-        330.0
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 4.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "RAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "FR",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
      },
      {
       "id": "wheel_RL",
-      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         550.0,
         300.0
        ],
@@ -1851,33 +4112,89 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RL",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "RL",
+        "via": "rest",
+        "carries": "torque"
+       },
+       {
+        "to": "RL",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_RL",
-      "name": "後左のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        410.0,
-        330.0
+        -2020.0,
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 3.1074002113230854,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LBd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RL",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
      },
      {
       "id": "wheel_RR",
-      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         -550.0,
         300.0
        ],
@@ -1887,25 +4204,929 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RR",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "RR",
+        "via": "rest",
+        "carries": "torque"
+       },
+       {
+        "to": "RR",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_RR",
-      "name": "後右のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        -410.0,
-        330.0
+        -2020.0,
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 3.1074002113230854,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RBd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RR",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_FL",
+      "name": "前左のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -60.0,
+        475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_FL",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FL",
+        "via": "bolt",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_FR",
+      "name": "前右のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -60.0,
+        -475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_FR",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FR",
+        "via": "bolt",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_RL",
+      "name": "後左のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_RL",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "toe_link_RL",
+      "name": "後左のトーを決めるリンク",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RL",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RL2",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_RR",
+      "name": "後右のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        -475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_RR",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "toe_link_RR",
+      "name": "後右のトーを決めるリンク",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RR",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RR2",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "caliper_FL",
+      "name": "前左のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -110.0,
+        490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_FL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FL",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "caliper_FR",
+      "name": "前右のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -110.0,
+        -490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_FR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FR",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "caliper_RL",
+      "name": "後左のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -2130.0,
+        490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_RL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_RL",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "caliper_RR",
+      "name": "後右のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -2130.0,
+        -490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_RR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_RR",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FL1",
+      "name": "前左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FL2",
+      "name": "前左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR1",
+      "name": "前右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR2",
+      "name": "前右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL1",
+      "name": "後左の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL2",
+      "name": "後左の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL1",
+      "name": "後左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL2",
+      "name": "後左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR1",
+      "name": "後右の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR2",
+      "name": "後右の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR1",
+      "name": "後右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR2",
+      "name": "後右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FL",
+      "name": "前左のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FR",
+      "name": "前右のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RL",
+      "name": "後左のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RR",
+      "name": "後右のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_column",
+      "name": "ステアリングのコラムの金具 (ダッシュの横の部材の上)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -285.0,
+        -300.0,
+        835.0934450716383
+       ],
+       "size_mm": [
+        50.0,
+        70.0,
+        12.014176263793615
+       ]
+      },
+      "mass_kg": 0.04225145508450939,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "weld",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "rollbar",
+      "name": "ロールバー (横転のときに乗る人を守る枠。管は骨組みの部材)",
+      "kind": "rollbar",
+      "box": {
+       "center_mm": [
+        -1400.0,
+        0.0,
+        1793.2
+       ],
+       "size_mm": [
+        42.69999999999982,
+        1200.0,
+        42.69999999999982
+       ]
+      },
+      "mass_kg": 0.0,
+      "carried_by": [
+       "LH",
+       "LHO",
+       "LHT",
+       "RH",
+       "RHO",
+       "RHT"
+      ],
+      "system": "rops",
+      "connects_to": [
+       {
+        "to": "LH",
+        "via": "weld",
+        "carries": "load"
+       },
+       {
+        "to": "RH",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
      }
     ],
     "nodes": [
@@ -1928,7 +5149,7 @@ export const DEMOS = {
      {
       "id": "LS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        350.0,
        380.0
       ]
@@ -1936,7 +5157,7 @@ export const DEMOS = {
      {
       "id": "LS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        350.0,
        380.0
       ]
@@ -1944,7 +5165,7 @@ export const DEMOS = {
      {
       "id": "LB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        350.0,
        380.0
       ]
@@ -1952,7 +5173,7 @@ export const DEMOS = {
      {
       "id": "LE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        350.0,
        380.0
       ]
@@ -1976,7 +5197,7 @@ export const DEMOS = {
      {
       "id": "RS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        -350.0,
        380.0
       ]
@@ -1984,7 +5205,7 @@ export const DEMOS = {
      {
       "id": "RS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        -350.0,
        380.0
       ]
@@ -1992,7 +5213,7 @@ export const DEMOS = {
      {
       "id": "RB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        -350.0,
        380.0
       ]
@@ -2000,9 +5221,265 @@ export const DEMOS = {
      {
       "id": "RE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        -350.0,
        380.0
+      ]
+     },
+     {
+      "id": "LAp1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAp2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu1",
+      "xyz_mm": [
+       100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu2",
+      "xyz_mm": [
+       -100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAm",
+      "xyz_mm": [
+       0.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAd",
+      "xyz_mm": [
+       0.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAl1",
+      "xyz_mm": [
+       120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LAl2",
+      "xyz_mm": [
+       -120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAp1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAp2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu1",
+      "xyz_mm": [
+       100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu2",
+      "xyz_mm": [
+       -100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAm",
+      "xyz_mm": [
+       0.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAd",
+      "xyz_mm": [
+       0.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAl1",
+      "xyz_mm": [
+       120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAl2",
+      "xyz_mm": [
+       -120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LBd",
+      "xyz_mm": [
+       -2020.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LBm",
+      "xyz_mm": [
+       -2022.0,
+       370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RBd",
+      "xyz_mm": [
+       -2020.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RBm",
+      "xyz_mm": [
+       -2022.0,
+       -370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LDT",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       829.0863569397414
+      ]
+     },
+     {
+      "id": "RDT",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       829.0863569397414
+      ]
+     },
+     {
+      "id": "LH",
+      "xyz_mm": [
+       -1400.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LHO",
+      "xyz_mm": [
+       -1400.0,
+       600.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LHT",
+      "xyz_mm": [
+       -1400.0,
+       600.0,
+       1793.2
+      ]
+     },
+     {
+      "id": "RH",
+      "xyz_mm": [
+       -1400.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RHO",
+      "xyz_mm": [
+       -1400.0,
+       -600.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RHT",
+      "xyz_mm": [
+       -1400.0,
+       -600.0,
+       1793.2
       ]
      }
     ],
@@ -2010,14 +5487,46 @@ export const DEMOS = {
      {
       "id": "rail_L_FA",
       "node_a": "LF",
+      "node_b": "LAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAp1_LAu1",
+      "node_a": "LAp1",
+      "node_b": "LAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu1_LA",
+      "node_a": "LAu1",
       "node_b": "LA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_L_AS1",
+      "id": "rail_L_LA_LAu2",
       "node_a": "LA",
+      "node_b": "LAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu2_LAp2",
+      "node_a": "LAu2",
+      "node_b": "LAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_AS1",
+      "node_a": "LAp2",
       "node_b": "LS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -2032,8 +5541,16 @@ export const DEMOS = {
       "part": "frame"
      },
      {
-      "id": "rail_L_S2B",
+      "id": "rail_L_S2H",
       "node_a": "LS2",
+      "node_b": "LH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_HB",
+      "node_a": "LH",
       "node_b": "LB",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -2050,14 +5567,46 @@ export const DEMOS = {
      {
       "id": "rail_R_FA",
       "node_a": "RF",
+      "node_b": "RAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAp1_RAu1",
+      "node_a": "RAp1",
+      "node_b": "RAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu1_RA",
+      "node_a": "RAu1",
       "node_b": "RA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_R_AS1",
+      "id": "rail_R_RA_RAu2",
       "node_a": "RA",
+      "node_b": "RAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu2_RAp2",
+      "node_a": "RAu2",
+      "node_b": "RAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_AS1",
+      "node_a": "RAp2",
       "node_b": "RS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -2072,8 +5621,16 @@ export const DEMOS = {
       "part": "frame"
      },
      {
-      "id": "rail_R_S2B",
+      "id": "rail_R_S2H",
       "node_a": "RS2",
+      "node_b": "RH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_HB",
+      "node_a": "RH",
       "node_b": "RB",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -2134,6 +5691,230 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame"
+     },
+     {
+      "id": "tower_post_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA1",
+      "node_a": "LAt1",
+      "node_b": "LAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA2",
+      "node_a": "LAm",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LA",
+      "node_a": "LAm",
+      "node_b": "LAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA1",
+      "node_a": "RAt1",
+      "node_b": "RAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA2",
+      "node_a": "RAm",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RA",
+      "node_a": "RAm",
+      "node_b": "RAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LB",
+      "node_a": "LB",
+      "node_b": "LBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LB",
+      "node_a": "LBm",
+      "node_b": "LBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RB",
+      "node_a": "RB",
+      "node_b": "RBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RB",
+      "node_a": "RBm",
+      "node_b": "RBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A1",
+      "node_a": "LAl1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A2",
+      "node_a": "LAl2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_L",
+      "node_a": "LAt2",
+      "node_b": "LDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_R",
+      "node_a": "RAt2",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_cross",
+      "node_a": "LDT",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rollbar_foot_L",
+      "node_a": "LH",
+      "node_b": "LHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_post_L",
+      "node_a": "LHO",
+      "node_b": "LHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_foot_R",
+      "node_a": "RH",
+      "node_b": "RHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_post_R",
+      "node_a": "RHO",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_top",
+      "node_a": "LHT",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
      }
     ],
     "sections": {
@@ -2152,6 +5933,21 @@ export const DEMOS = {
        "h": 40.0,
        "t": 2.3
       }
+     },
+     "rt30x30x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+       "b": 30.0,
+       "h": 30.0,
+       "t": 2.3
+      }
+     },
+     "ct42.7x2.3": {
+      "shape": "round_tube",
+      "dims_mm": {
+       "d": 42.7,
+       "t": 2.3
+      }
      }
     },
     "materials": {
@@ -2163,12 +5959,30 @@ export const DEMOS = {
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
+     },
+     "ss400": {
+      "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     },
+     "stkm13a": {
+      "name": "JIS G 3445 STKM13A (carbon steel tube for machine structural purposes)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 215.0,
+      "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
      }
     }
    }
   },
   {
-   "seq": 15,
+   "seq": 16,
    "ts": "2026-11-03T10:00:14.000+09:00",
    "t": 14.0,
    "run_id": "20261103-100000-offroad-4w",
@@ -2183,7 +5997,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2210,13 +6025,19 @@ export const DEMOS = {
       "missing": [
        "bend_radius_mm"
       ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "bend_radius_mm"
+      ]
      }
     ],
     "pass": true
    }
   },
   {
-   "seq": 16,
+   "seq": 17,
    "ts": "2026-11-03T10:00:14.100+09:00",
    "t": 14.1,
    "run_id": "20261103-100000-offroad-4w",
@@ -2231,7 +6052,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2258,13 +6080,19 @@ export const DEMOS = {
       "missing": [
        "hole_edge_mm"
       ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "hole_edge_mm"
+      ]
      }
     ],
     "pass": true
    }
   },
   {
-   "seq": 17,
+   "seq": 18,
    "ts": "2026-11-03T10:00:14.200+09:00",
    "t": 14.2,
    "run_id": "20261103-100000-offroad-4w",
@@ -2280,7 +6108,56 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
-     "frame"
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2313,7 +6190,350 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "bulkhead",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -2324,7 +6544,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 18,
+   "seq": 19,
    "ts": "2026-11-03T10:00:14.300+09:00",
    "t": 14.3,
    "run_id": "20261103-100000-offroad-4w",
@@ -2340,7 +6560,56 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
-     "frame"
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2373,7 +6642,350 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "bulkhead",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -2384,7 +6996,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 19,
+   "seq": 20,
    "ts": "2026-11-03T10:00:14.400+09:00",
    "t": 14.4,
    "run_id": "20261103-100000-offroad-4w",
@@ -2396,7 +7008,55 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "WD-01",
     "targets": [
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -2404,7 +7064,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 20,
+   "seq": 21,
    "ts": "2026-11-03T10:00:14.500+09:00",
    "t": 14.5,
    "run_id": "20261103-100000-offroad-4w",
@@ -2416,12 +7076,396 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "WD-02",
     "targets": [
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
      {
-      "part_id": "frame",
+      "part_id": "rail_L_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "weld_length_mm",
        "weld_throat_mm"
@@ -2432,7 +7476,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 21,
+   "seq": 22,
    "ts": "2026-11-03T10:00:14.600+09:00",
    "t": 14.6,
    "run_id": "20261103-100000-offroad-4w",
@@ -2442,57 +7486,65 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0007",
     "design_version": 1,
-    "rule_id": "TL-01",
+    "rule_id": "WD-03",
     "targets": [
-     "floor_front",
-     "floor",
-     "deck",
-     "front_body",
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
-    "not_evaluable": [
-     {
-      "part_id": "floor_front",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "floor",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "deck",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "front_body",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "frame",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     }
-    ],
+    "not_evaluable": [],
     "pass": true
    }
   },
   {
-   "seq": 22,
+   "seq": 23,
    "ts": "2026-11-03T10:00:14.700+09:00",
    "t": 14.7,
    "run_id": "20261103-100000-offroad-4w",
@@ -2502,13 +7554,514 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0008",
     "design_version": 1,
+    "rule_id": "TL-01",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 24,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
     "rule_id": "TL-02",
     "targets": [
      "floor_front",
      "floor",
      "deck",
      "front_body",
-     "frame"
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2545,7 +8098,399 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "bulkhead",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -2557,15 +8502,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 23,
-   "ts": "2026-11-03T10:00:14.800+09:00",
-   "t": 14.8,
+   "seq": 25,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0009",
+    "rule_check_id": "rchk-0010",
     "design_version": 1,
     "rule_id": "HU-01",
     "targets": [
@@ -2578,15 +8523,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
-   "ts": "2026-11-03T10:00:14.900+09:00",
-   "t": 14.9,
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0010",
+    "rule_check_id": "rchk-0011",
     "design_version": 1,
     "rule_id": "HU-02",
     "targets": [
@@ -2614,15 +8559,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
-   "ts": "2026-11-03T10:00:15.000+09:00",
-   "t": 15.0,
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0011",
+    "rule_check_id": "rchk-0012",
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
@@ -2630,7 +8575,55 @@ export const DEMOS = {
      "susp_FR",
      "susp_RL",
      "susp_RR",
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2659,7 +8652,295 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "rail_L_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "closing_gap_mm"
       ]
@@ -2669,15 +8950,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
-   "ts": "2026-11-03T10:00:15.100+09:00",
-   "t": 15.1,
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0012",
+    "rule_check_id": "rchk-0013",
     "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
@@ -2689,15 +8970,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
-   "ts": "2026-11-03T10:00:15.200+09:00",
-   "t": 15.2,
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0013",
+    "rule_check_id": "rchk-0014",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -2709,15 +8990,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0015",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -2729,7 +9010,8 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
-     "steering",
+     "bulkhead",
+     "steering_wheel",
      "seat_R",
      "seat_L",
      "wheel_FL",
@@ -2748,13 +9030,6 @@ export const DEMOS = {
        "mass_kg": 50.0
       },
       "message": "1 人で持ち上げる部品は 23 kg 以下 に合わない (mass_kg = 50)"
-     },
-     {
-      "part_id": "motor",
-      "values": {
-       "mass_kg": 25.0
-      },
-      "message": "1 人で持ち上げる部品は 23 kg 以下 に合わない (mass_kg = 25)"
      }
     ],
     "not_evaluable": [],
@@ -2762,48 +9037,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0015",
-    "design_version": 1,
-    "rule_id": "AS-02",
-    "targets": [
-     "battery",
-     "motor",
-     "controller",
-     "aux",
-     "floor_front",
-     "floor",
-     "deck",
-     "front_body",
-     "steering",
-     "seat_R",
-     "seat_L",
-     "occupant_R",
-     "occupant_L",
-     "cargo",
-     "wheel_FL",
-     "susp_FL",
-     "wheel_FR",
-     "susp_FR",
-     "wheel_RL",
-     "susp_RL",
-     "wheel_RR",
-     "susp_RR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 30,
+   "seq": 31,
    "ts": "2026-11-03T10:00:15.500+09:00",
    "t": 15.5,
    "run_id": "20261103-100000-offroad-4w",
@@ -2812,6 +9046,106 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0016",
+    "design_version": 1,
+    "rule_id": "AS-02",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "bulkhead",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "occupant_R",
+     "occupant_L",
+     "cargo",
+     "occupant_R.thigh_L",
+     "occupant_R.shank_L",
+     "occupant_R.arm_L",
+     "occupant_R.foot_L",
+     "occupant_R.thigh_R",
+     "occupant_R.shank_R",
+     "occupant_R.arm_R",
+     "occupant_R.foot_R",
+     "occupant_L.thigh_L",
+     "occupant_L.shank_L",
+     "occupant_L.arm_L",
+     "occupant_L.foot_L",
+     "occupant_L.thigh_R",
+     "occupant_L.shank_R",
+     "occupant_L.arm_R",
+     "occupant_L.foot_R",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
+     "rollbar"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0017",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -2826,15 +9160,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -2849,27 +9183,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0018",
-    "design_version": 1,
-    "rule_id": "MF-01",
-    "targets": [
-     "frame"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 33,
+   "seq": 34,
    "ts": "2026-11-03T10:00:15.800+09:00",
    "t": 15.8,
    "run_id": "20261103-100000-offroad-4w",
@@ -2879,12 +9193,351 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0019",
     "design_version": 1,
+    "rule_id": "MF-01",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 35,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "SY-01",
+    "targets": [
+     "motor",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "SY-02",
+    "targets": [
+     "steering_wheel",
+     "support:FL",
+     "support:FR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "SY-03",
+    "targets": [
+     "pedal_brake",
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "SY-04",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "SY-06",
+    "targets": [
+     "rollbar"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "SY-07",
+    "targets": [],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "battery",
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "SY-10",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "bulkhead",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
+     "rollbar"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -2911,21 +9564,27 @@ export const DEMOS = {
       "missing": [
        "bend_radius_mm"
       ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "bend_radius_mm"
+      ]
      }
     ],
     "pass": true
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -2985,7 +9644,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (4)・騒音 (1)・熱 (デューティ) (1)",
+   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (4)・騒音 (0)・熱 (デューティ) (1)",
    "data": {
     "want": "在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)",
     "flags": {
@@ -3030,21 +9689,19 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "預・荷 に当てはまるので、R1 静的強度・R2 衝撃 (落錘・落下・段差)・R3 疲労・耐久・R5 たわみ・ゆがみ を当てる",
+      "reason": "荷・預 に当てはまるので、R1 静的強度・R3 疲労・耐久・R5 たわみ・ゆがみ・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
-       "R2",
        "R3",
-       "R5"
+       "R5",
+       "R8"
       ]
      },
      {
       "domain": "nvh",
       "shown_name": "騒音",
-      "reason": "電・預 に当てはまるので、N3 騒音 を当てる",
-      "test_ids": [
-       "N3"
-      ]
+      "reason": "電・預 に当てはまる。N3 騒音 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "test_ids": []
      },
      {
       "domain": "thermal",
@@ -3062,16 +9719,12 @@ export const DEMOS = {
      },
      {
       "domain": "crash",
-      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)"
+      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)・C3 横転したときの乗員の空間 (横・後ろ・上から押す) (乗∧悪)"
      }
     ],
     "assembly_test_ids": [
      "H1",
-     "H2",
-     "H3",
-     "H4",
-     "H5",
-     "G2"
+     "H5"
     ]
    }
   },
@@ -3145,8 +9798,8 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 3.5(1) and Table 3.3 (printed p. 23): minimum end distance e1 = 1.2 d0 and minimum edge distance e2 = 1.2 d0; 1.5 Symbols (p. 13): d0 = hole diameter, e1/e2 measured from the centre of the fastener hole to the adjacent end/edge (e1 in the direction of load transfer, e2 at right angles to it). Maximum e1, e2 = 4t + 40 mm for steel exposed to weather, larger of 8t or 125 mm for unprotected EN 10025-5 steel, otherwise unlimited (note 1). Fatigue: see EN 1993-1-9 (3.5(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 25 and p. 15), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame",
@@ -3180,7 +9833,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -3192,11 +9845,11 @@ export const DEMOS = {
       "rule_id": "WD-01",
       "doc_id": "KN-WD",
       "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
+      "text": "溶接する角形鋼管の外形 (b, h) は肉厚の 35 倍以下",
+      "check": "section_ratio_rect_max <= 35",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.5.1 and Table 7.8 \"Range of validity for welded joints between CHS or RHS brace members and RHS chord members\" (printed p. 116): RHS braces bi/ti <= 35 and hi/ti <= 35 (tension; in compression also Class 1 or 2 for T, Y, X and K/N gap joints, Class 1 for overlap joints); RHS chord b0/t0 <= 35 and h0/t0 <= 35 and Class 1 or 2 for T, Y, X and K/N gap joints (overlap joints: Class 1 or 2 only). Outside the range all failure modes of 7.2.2 and secondary moments are to be considered (7.5.1(3)). The limit 35 holds for rectangular sections only; circular tubes are WD-03 (Table 7.1). The check does not look at the section class. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame"
@@ -3210,8 +9863,23 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 4.5.1(2) (printed p. 42): a fillet weld whose effective length is less than 30 mm or less than 6 times its throat thickness, whichever is larger, is not to be designed to carry load. The length meant is the effective length l_eff (4.5.1(1): the length over which the fillet is full size; may be taken as the overall length minus 2a, no reduction if full size including starts and ends); a = effective throat thickness (4.5.2), itself at least 3 mm (4.5.2(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 44), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-03",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する円形鋼管の外径は肉厚の 50 倍以下",
+      "check": "section_ratio_round_max <= 50",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
       "applies_to": {
        "kinds": [
         "frame"
@@ -3260,7 +9928,7 @@ export const DEMOS = {
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
       "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "basis": "Fixed-fastener formula T = (H - F)/2 as given in Goodheart-Willcox, \"GD&T: Application and Interpretation\", 7th ed., p. 308 (secondary source; the ASME Y14.5 text itself was not opened). There T = position tolerance applied to all holes (the value in the feature control frame, at MMC), H = MMC size of the clearance holes (smallest hole), F = MMC size of the fastener (largest fastener). So clearance_hole_mm is the smallest clearance-hole diameter and bolt_diameter_mm the largest bolt diameter. Condition: holds only if the fixed (threaded / press-fit) feature carries a projected tolerance zone or the clearance-hole part is very thin. Floating fasteners (clearance holes in all parts) use T = H - F instead (same book, same page). Read 2026-11-03 in a saved copy of https:\/\/www.g-wonlinetextbooks.com/gdt-application-and-interpretation-2021/324 (printed page 308)",
       "applies_to": {
        "kinds": [
         "frame",
@@ -3294,7 +9962,7 @@ export const DEMOS = {
       "check": "size_y_mm >= 391",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, item J2 座位殿幅:足底支持 (hip breadth, sitting, feet supported), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J2.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 95th percentile 391.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The elderly female 95th percentile is 391.4 mm, so the limit also covers that group to within 1 mm. Read 2026-11-03",
       "applies_to": {
        "kinds": [
         "seat"
@@ -3309,7 +9977,7 @@ export const DEMOS = {
       "check": "size_x_mm <= 406",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "basis": "AIST 人体寸法データベース 1991-92, item J6 座位殿・膝窩距離 (buttock-popliteal length, sitting), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 5th percentile 406.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The limit holds for that group only: the elderly (60+) female 5th percentile in the same table is 391.2 mm. Read 2026-11-03. The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
        "kinds": [
         "seat"
@@ -3324,7 +9992,7 @@ export const DEMOS = {
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
       "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996, 4.2 Table 1 (minimum gap a: finger 25 mm; hand/wrist/fist 100, arm 120, toes 50, foot 120, leg 180, head 300, body 500), iTeh sample p.3 (PDF p.7), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf , read 2026-11-03. Condition (4.1 b): if a larger body part can foreseeably enter the crushing zone, the gap for the largest part applies, so 25 mm is a floor only for zones that admit nothing larger than a finger; children and bulky clothing must also be considered. The current edition is ISO 13854:2017 (2nd ed., a \"minor revision\" per its foreword, ANSI preview read 2026-11-03); its Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not checked",
       "applies_to": {
        "kinds": [
         "suspension",
@@ -3358,7 +10026,7 @@ export const DEMOS = {
       "check": "req_Q19 <= 55",
       "origin": "builtin",
       "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "basis": "EVE Energy LF50K Product Specification, file LF50K-73103 version D (2019-12-02), sec. 3 Nominal Technical Parameter, row 7 charge temperature 0-55 degC and row 8 discharge temperature -20-55 degC (row 9 storage: 1 month -20-45 degC, 1 year 0-35 degC), https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (a distributor's copy of the maker's specification); read 2026-11-03. 55 degC is the upper limit for both charging and discharging, i.e. for use; storage limits are lower and are not checked here. Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
        "kinds": [
         "battery"
@@ -3373,7 +10041,7 @@ export const DEMOS = {
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
       "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
       "applies_to": {
        "kinds": [
         "battery"
@@ -3405,8 +10073,8 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "trust": 1,
+      "basis": "Waters, Putz-Anderson, Garg, Fine, \"Revised NIOSH equation for the design and evaluation of manual lifting tasks\", Ergonomics 36(7):749-776, 1993, https:\/\/doi.org/10.1080/00140139308967940, sec. 6.2 (p.762) and Appendix A (LC = 23 kg / 51 lb), sec. 8.1 limitations (p.768-769); read 2026-11-03. The 23 kg is the load constant: the recommended weight limit at the standard lifting location (75 cm high, 25 cm out) under ideal conditions (all six multipliers = 1: sagittal, occasional, good coupling, short travel). The equation reduces it for real postures and frequencies; it is for two-handed lifting and not for one-handed, seated/kneeling or constrained-space lifts. This rule uses the 23 kg as the one-person limit for any lift, which is the most lenient value the equation allows. A hit means two people or a lifting aid are needed",
       "applies_to": {
        "kinds": [
         "battery",
@@ -3505,7 +10173,7 @@ export const DEMOS = {
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
       "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "basis": "JIS G 3466 table 5 (square) and table 6 (rectangular), read in the JISF committee draft of the revision dated 2024-12-20 (資料 16, PDF p.9-12), https:\/\/www.jisf.or.jp/business/standard/jis/documents/docs_kouzai_1600_JISG3466_20241220.pdf, and the maker's range table of 日鐵住金建材 角パイプ (STKR) 製造可能範囲 (catalogue p.4), https:\/\/www.ns-kenzai.co.jp/pdf/a1/u-kaku-eco_kikaku.pdf; read 2026-11-03. The thinnest wall in both tables is 1.6 mm (sides 40-75 mm square, and rectangles up to 125x40); larger tubes start thicker (80-100 square 2.3, 125 square 3.2, 150-300 square 4.5). Clause 8.1 lets other sizes be agreed between buyer and maker, so 1.6 mm is the lower limit of the listed sizes, not a ban. The issued standard (2015 edition with amendment, as used for data/sections/standard_tubes.json) was not reopened for this rule; the draft lists the same 112 sizes",
       "applies_to": {
        "kinds": [
         "frame"
@@ -3517,6 +10185,124 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-care-bed",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated by UN Regulation No. 79, \"Uniform provisions concerning the approval of vehicles with regard to steering equipment\" (in force 1 December 1988); its paragraph 1 (Scope) applies it to the steering equipment of vehicles of categories M, N and O, and paragraph 2.3 defines steering equipment as all the equipment that determines the direction of movement (steering control, steering transmission, steered wheels, energy supply if any). In that original text paragraph 1 also leaves out transmissions that are purely hydraulic or electric at any point (except auxiliary steering equipment). Read in the original text, United Nations Treaty Series vol. 1519, A-4789 (https:\/\/treaties.un.org/doc/Publication/UNTS/Volume%201519/volume-1519-A-4789-English.pdf), and the UN Treaty Collection status page XI-B-16-79, read 2026-11-03. The current text (04 series of amendments) was not opened; the rule does not take any value from the regulation"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated. UN Regulation No. 13-H, \"Uniform provisions concerning the approval of passenger cars with regard to braking\": paragraph 1.1 applies it to the braking of vehicles of categories M1 and N1, and paragraph 1.2 leaves out vehicles with a design speed not over 25 km/h and vehicles fitted for invalid drivers (read in MLIT's English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R013H.pdf). Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第12条 (制動装置), paragraph 1: a motor vehicle must have two or more braking systems (二系統以上) meeting the braking performance set by 告示; one system is enough for vehicles with a maximum speed under 25 km/h, large special vehicles under 35 km/h and small special farm vehicles (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Both read 2026-11-03. The rule checks one connected brake chain, not the number of systems or their performance"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Road vehicles: 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第22条の3 (座席ベルト等), paragraph 1, asks for seat belts and their anchorages (取付装置) on the seats listed in its table (a lap-and-shoulder 第二種座席ベルト on forward-facing seats of passenger vehicles under 10 seats, for example); two-wheelers, sidecar two-wheelers and vehicles under 20 km/h (other than large and small special vehicles) are left out, and so are some seat kinds (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Recreational off-highway vehicles: ANSI/ROHVA 1 (current edition 2023 per ROHVA, https:\/\/rohva.org/ansi-standard/, which lists an Occupant Retention System among its contents). The standard itself was not opened (sold); secondary: CPSC staff letter to ROHVA of 10 March 2011 on the canvass draft (section 11.1 Seat Belts asks for at least a three-point seat belt; https:\/\/www.cpsc.gov/s3fs-public/pdfs/blk_pdf_commcanvass03102111.pdf) and CPSC NPR 79 FR 68964 (19 Nov 2014), p. 68985-68986 (ANSI/ROHVA 1-2011 section 11.2 seat belt reminder, 11.3 ORS zones; ORS defined as including three-point seat belts; https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). All read 2026-11-03"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 (current edition 2023) lists a Roll Over Protective Structure (ROPS) among the requirements it covers (ROHVA's page, https:\/\/rohva.org/ansi-standard/); the CPSC NPR 79 FR 68964 (19 Nov 2014) describes ROVs as equipped with ROPS (p. 68964) and puts ROPS in its proposed ROV definition, 16 CFR 1422.2(a) (p. 69022) (https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Read 2026-11-03. The standard text was not opened (sold): its ROPS clause number and test method were not seen, and ROHVA 1 covers ROVs only (in the NPR definition, among other features, a top speed over 30 mph)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号): 第32条 (前照灯等; 走行用前照灯 para. 1, すれ違い用前照灯 para. 4, on the front), 第37条 (尾灯), 第39条 (制動灯), 第41条 (方向指示器). 第37条 and 第39条 para. 1 ask for the lamp on both sides of the rear (one is enough for two-wheelers and vehicles 0.8 m wide or less) and do not apply to 軽自動車 and 小型特殊自動車 under 20 km/h; 第41条 para. 1 leaves out vehicles under 20 km/h shorter than 6 m with the driver's seat outside a cabin (and other listed conditions). Colour, brightness and mounting are left to the 告示 (not opened). Read in the e-Gov 法令 XML, law id 326M50000800067 (https:\/\/laws.e-gov.go.jp/law/326M50000800067), 2026-11-03. The design check counts one of each, not two per rear side"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-care-bed",
@@ -3572,7 +10358,7 @@ export const DEMOS = {
        "value": 40,
        "unit": "degC",
        "trust": 1,
-       "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf (not checked in this repository)"
+       "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), LINAK LA31 datasheet, https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf; read 2026-11-03 in a source check"
       }
      },
      {
@@ -3602,15 +10388,33 @@ export const DEMOS = {
       "default": {
        "value": "IPX4",
        "trust": 2,
-       "basis": "JIS T 9254 (copy), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)"
+       "basis": "JIS T 9254 (copy): IPX4, 6.1 g, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
       }
      },
      {
       "req_key": "Q30",
       "name": "人数と荷重の組み合わせ",
-      "text": "何人が、どんな組み合わせで使いますか (たとえば、空車・運転者だけ・2 人・2 人 + 荷の全部を見る)。",
+      "text": "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。",
       "ask": "must",
-      "allow_other": true
+      "allow_other": true,
+      "choices": [
+       {
+        "label": "空車",
+        "value": "empty"
+       },
+       {
+        "label": "運転者だけ",
+        "value": "driver"
+       },
+       {
+        "label": "2 人",
+        "value": "two"
+       },
+       {
+        "label": "2 人 + 荷",
+        "value": "two_cargo"
+       }
+      ]
      },
      {
       "req_key": "Q34",
@@ -3659,7 +10463,7 @@ export const DEMOS = {
        "value": 70,
        "unit": "deg",
        "trust": 2,
-       "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)"
+       "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
       }
      },
      {
@@ -3672,7 +10476,7 @@ export const DEMOS = {
        "value": 4,
        "unit": "1",
        "trust": 2,
-       "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)"
+       "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, 8.1.1, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check"
       }
      },
      {
@@ -3709,7 +10513,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-care-bed",
@@ -3723,7 +10527,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: the AIST page is a list only; not reachable)",
       "value": "高齢女性 5 % 〜 若年男性 95 %"
      },
      {
@@ -3731,7 +10535,7 @@ export const DEMOS = {
       "name": "体重 (強さの不利側)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 利用者の荷重 1350 N (約 138 kg), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), 9.2.1 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 1350,
       "unit": "N"
      },
@@ -3740,7 +10544,7 @@ export const DEMOS = {
       "name": "静的に倒れない限界 (側端にかける力)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 475 x 250 mm の面で側端に 1350 N, 9.3 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 1350,
       "unit": "N"
      },
@@ -3749,7 +10553,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https:\/\/www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf (not checked in this repository)",
+      "basis": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https:\/\/www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf. The FDA zones: FDA guidance, read 2026-11-03 in a source check (the address above returned HTTP 404 when tried again the same day, so the zones were not re-read from it). JIS T 9254:2015 (the copy at https:\/\/kikakurui.com/t9/T9254-2009-01.html), figures 3 and 4: the probes are a neck of 60 mm, a chest of 318 mm and a head of 120 mm, applied with the bottom flat and the side rails at their highest; read 2026-11-03",
       "value": "JIS T 9254 の型と FDA の区分 (Zone 1-4)"
      },
      {
@@ -3757,7 +10561,7 @@ export const DEMOS = {
       "name": "なぞる規格",
       "source": "default",
       "trust": 2,
-      "basis": "catalog research (not checked in this repository)",
+      "basis": "catalog research (not checked in this repository; tried 2026-11-03: the basis has no URL; not reachable)",
       "value": "JIS T 9254・FDA"
      },
      {
@@ -3781,7 +10585,7 @@ export const DEMOS = {
       "name": "繰り返し回数",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy) の耐久の回数 (着座と昇降は別の目で再確認された), 9.5 c, 9.8 c, 9.7.2 c, 9.4 a 1, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": "着座 10000 回・昇降 3000 回・背上げと膝上げ 1000 回・柵の上げ下げ 30000 回"
      },
      {
@@ -3805,7 +10609,7 @@ export const DEMOS = {
       "name": "気温 (範囲の高い端)",
       "source": "default",
       "trust": 1,
-      "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf (not checked in this repository)",
+      "basis": "LINAK LA31 の仕様書: 使う周囲温度 +5〜40 degC (高い端を使う), LINAK LA31 datasheet, https:\/\/media.distrelec.com/Web/Downloads/14/22/05451422.pdf; read 2026-11-03 in a source check",
       "value": 40,
       "unit": "degC"
      },
@@ -3814,16 +10618,16 @@ export const DEMOS = {
       "name": "水・ほこり (IP)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): IPX4, 6.1 g, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": "IPX4"
      },
      {
       "key": "Q30",
       "name": "人数と荷重の組み合わせ",
-      "value": "利用者 1 人 + 介助者 1 人",
+      "value": "driver",
       "source": "hearing",
       "trust": 3,
-      "basis": "assumption (a sample answer)"
+      "basis": "assumption (a sample answer): the one occupant is the bed's user; the carer stands beside the bed and is not counted (only people on board are)"
      },
      {
       "key": "Q34",
@@ -3839,7 +10643,7 @@ export const DEMOS = {
       "value": 1700,
       "source": "hearing",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 安全動作荷重 SWL 1700 N 以上 (= 利用者 1350 + マットレス 200 + 付属品 150), https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 安全動作荷重 SWL 1700 N 以上 (= 利用者 1350 + マットレス 200 + 付属品 150), 9.2.1 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "unit": "N"
      },
      {
@@ -3847,7 +10651,7 @@ export const DEMOS = {
       "name": "アクチュエータの動く範囲",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 70,
       "unit": "deg"
      },
@@ -3856,7 +10660,7 @@ export const DEMOS = {
       "name": "安全率 (降伏に対して)",
       "source": "default",
       "trust": 2,
-      "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, https:\/\/kikakurui.com/t9/T9254-2009-01.html (not checked in this repository)",
+      "basis": "JIS T 9254 (copy): 摩耗・疲労する部品は 4 以上を推奨, 8.1.1, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 4,
       "unit": "1"
      },
@@ -3912,7 +10716,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "2 分野: 強度 (弦の張力) (2)・音振 (1)",
+   "text": "2 分野: 強度 (弦の張力) (3)・音振 (1)",
    "data": {
     "want": "電気ギターを作りたい。弦を張ってもネックが反らず、開放弦の音がデッドスポット無しで鳴る形にしたい",
     "flags": {
@@ -3941,10 +10745,11 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度 (弦の張力)",
-      "reason": "R1 静的強度・R3 疲労・耐久 を当てる",
+      "reason": "R1 静的強度・R3 疲労・耐久・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる",
       "test_ids": [
        "R1",
-       "R3"
+       "R3",
+       "R8"
       ]
      },
      {
@@ -3971,7 +10776,7 @@ export const DEMOS = {
      },
      {
       "domain": "crash",
-      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)"
+      "reason": "この製品の性質では当てはまる試験が無い: C1 壁への正面衝突 (乗∧走∧速=車)・C2 人との接触 (近∧走)・C3 横転したときの乗員の空間 (横・後ろ・上から押す) (乗∧悪)"
      },
      {
       "domain": "thermal",
@@ -3980,10 +10785,8 @@ export const DEMOS = {
     ],
     "assembly_test_ids": [
      "H1",
-     "H2",
      "H3",
-     "H5",
-     "G2"
+     "H5"
     ]
    }
   },
@@ -4057,8 +10860,8 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 3.5(1) and Table 3.3 (printed p. 23): minimum end distance e1 = 1.2 d0 and minimum edge distance e2 = 1.2 d0; 1.5 Symbols (p. 13): d0 = hole diameter, e1/e2 measured from the centre of the fastener hole to the adjacent end/edge (e1 in the direction of load transfer, e2 at right angles to it). Maximum e1, e2 = 4t + 40 mm for steel exposed to weather, larger of 8t or 125 mm for unprotected EN 10025-5 steel, otherwise unlimited (note 1). Fatigue: see EN 1993-1-9 (3.5(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 25 and p. 15), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame",
@@ -4092,7 +10895,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -4104,11 +10907,11 @@ export const DEMOS = {
       "rule_id": "WD-01",
       "doc_id": "KN-WD",
       "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
+      "text": "溶接する角形鋼管の外形 (b, h) は肉厚の 35 倍以下",
+      "check": "section_ratio_rect_max <= 35",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.5.1 and Table 7.8 \"Range of validity for welded joints between CHS or RHS brace members and RHS chord members\" (printed p. 116): RHS braces bi/ti <= 35 and hi/ti <= 35 (tension; in compression also Class 1 or 2 for T, Y, X and K/N gap joints, Class 1 for overlap joints); RHS chord b0/t0 <= 35 and h0/t0 <= 35 and Class 1 or 2 for T, Y, X and K/N gap joints (overlap joints: Class 1 or 2 only). Outside the range all failure modes of 7.2.2 and secondary moments are to be considered (7.5.1(3)). The limit 35 holds for rectangular sections only; circular tubes are WD-03 (Table 7.1). The check does not look at the section class. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame"
@@ -4122,8 +10925,23 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 4.5.1(2) (printed p. 42): a fillet weld whose effective length is less than 30 mm or less than 6 times its throat thickness, whichever is larger, is not to be designed to carry load. The length meant is the effective length l_eff (4.5.1(1): the length over which the fillet is full size; may be taken as the overall length minus 2a, no reduction if full size including starts and ends); a = effective throat thickness (4.5.2), itself at least 3 mm (4.5.2(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 44), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-03",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する円形鋼管の外径は肉厚の 50 倍以下",
+      "check": "section_ratio_round_max <= 50",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
       "applies_to": {
        "kinds": [
         "frame"
@@ -4172,7 +10990,7 @@ export const DEMOS = {
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
       "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "basis": "Fixed-fastener formula T = (H - F)/2 as given in Goodheart-Willcox, \"GD&T: Application and Interpretation\", 7th ed., p. 308 (secondary source; the ASME Y14.5 text itself was not opened). There T = position tolerance applied to all holes (the value in the feature control frame, at MMC), H = MMC size of the clearance holes (smallest hole), F = MMC size of the fastener (largest fastener). So clearance_hole_mm is the smallest clearance-hole diameter and bolt_diameter_mm the largest bolt diameter. Condition: holds only if the fixed (threaded / press-fit) feature carries a projected tolerance zone or the clearance-hole part is very thin. Floating fasteners (clearance holes in all parts) use T = H - F instead (same book, same page). Read 2026-11-03 in a saved copy of https:\/\/www.g-wonlinetextbooks.com/gdt-application-and-interpretation-2021/324 (printed page 308)",
       "applies_to": {
        "kinds": [
         "frame",
@@ -4206,7 +11024,7 @@ export const DEMOS = {
       "check": "size_y_mm >= 391",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, item J2 座位殿幅:足底支持 (hip breadth, sitting, feet supported), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J2.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 95th percentile 391.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The elderly female 95th percentile is 391.4 mm, so the limit also covers that group to within 1 mm. Read 2026-11-03",
       "applies_to": {
        "kinds": [
         "seat"
@@ -4221,7 +11039,7 @@ export const DEMOS = {
       "check": "size_x_mm <= 406",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "basis": "AIST 人体寸法データベース 1991-92, item J6 座位殿・膝窩距離 (buttock-popliteal length, sitting), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 5th percentile 406.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The limit holds for that group only: the elderly (60+) female 5th percentile in the same table is 391.2 mm. Read 2026-11-03. The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
        "kinds": [
         "seat"
@@ -4236,7 +11054,7 @@ export const DEMOS = {
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
       "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996, 4.2 Table 1 (minimum gap a: finger 25 mm; hand/wrist/fist 100, arm 120, toes 50, foot 120, leg 180, head 300, body 500), iTeh sample p.3 (PDF p.7), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf , read 2026-11-03. Condition (4.1 b): if a larger body part can foreseeably enter the crushing zone, the gap for the largest part applies, so 25 mm is a floor only for zones that admit nothing larger than a finger; children and bulky clothing must also be considered. The current edition is ISO 13854:2017 (2nd ed., a \"minor revision\" per its foreword, ANSI preview read 2026-11-03); its Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not checked",
       "applies_to": {
        "kinds": [
         "suspension",
@@ -4270,7 +11088,7 @@ export const DEMOS = {
       "check": "req_Q19 <= 55",
       "origin": "builtin",
       "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "basis": "EVE Energy LF50K Product Specification, file LF50K-73103 version D (2019-12-02), sec. 3 Nominal Technical Parameter, row 7 charge temperature 0-55 degC and row 8 discharge temperature -20-55 degC (row 9 storage: 1 month -20-45 degC, 1 year 0-35 degC), https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (a distributor's copy of the maker's specification); read 2026-11-03. 55 degC is the upper limit for both charging and discharging, i.e. for use; storage limits are lower and are not checked here. Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
        "kinds": [
         "battery"
@@ -4285,7 +11103,7 @@ export const DEMOS = {
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
       "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
       "applies_to": {
        "kinds": [
         "battery"
@@ -4317,8 +11135,8 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "trust": 1,
+      "basis": "Waters, Putz-Anderson, Garg, Fine, \"Revised NIOSH equation for the design and evaluation of manual lifting tasks\", Ergonomics 36(7):749-776, 1993, https:\/\/doi.org/10.1080/00140139308967940, sec. 6.2 (p.762) and Appendix A (LC = 23 kg / 51 lb), sec. 8.1 limitations (p.768-769); read 2026-11-03. The 23 kg is the load constant: the recommended weight limit at the standard lifting location (75 cm high, 25 cm out) under ideal conditions (all six multipliers = 1: sagittal, occasional, good coupling, short travel). The equation reduces it for real postures and frequencies; it is for two-handed lifting and not for one-handed, seated/kneeling or constrained-space lifts. This rule uses the 23 kg as the one-person limit for any lift, which is the most lenient value the equation allows. A hit means two people or a lifting aid are needed",
       "applies_to": {
        "kinds": [
         "battery",
@@ -4417,7 +11235,7 @@ export const DEMOS = {
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
       "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "basis": "JIS G 3466 table 5 (square) and table 6 (rectangular), read in the JISF committee draft of the revision dated 2024-12-20 (資料 16, PDF p.9-12), https:\/\/www.jisf.or.jp/business/standard/jis/documents/docs_kouzai_1600_JISG3466_20241220.pdf, and the maker's range table of 日鐵住金建材 角パイプ (STKR) 製造可能範囲 (catalogue p.4), https:\/\/www.ns-kenzai.co.jp/pdf/a1/u-kaku-eco_kikaku.pdf; read 2026-11-03. The thinnest wall in both tables is 1.6 mm (sides 40-75 mm square, and rectangles up to 125x40); larger tubes start thicker (80-100 square 2.3, 125 square 3.2, 150-300 square 4.5). Clause 8.1 lets other sizes be agreed between buyer and maker, so 1.6 mm is the lower limit of the listed sizes, not a ban. The issued standard (2015 edition with amendment, as used for data/sections/standard_tubes.json) was not reopened for this rule; the draft lists the same 112 sizes",
       "applies_to": {
        "kinds": [
         "frame"
@@ -4429,6 +11247,124 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-electric-guitar",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated by UN Regulation No. 79, \"Uniform provisions concerning the approval of vehicles with regard to steering equipment\" (in force 1 December 1988); its paragraph 1 (Scope) applies it to the steering equipment of vehicles of categories M, N and O, and paragraph 2.3 defines steering equipment as all the equipment that determines the direction of movement (steering control, steering transmission, steered wheels, energy supply if any). In that original text paragraph 1 also leaves out transmissions that are purely hydraulic or electric at any point (except auxiliary steering equipment). Read in the original text, United Nations Treaty Series vol. 1519, A-4789 (https:\/\/treaties.un.org/doc/Publication/UNTS/Volume%201519/volume-1519-A-4789-English.pdf), and the UN Treaty Collection status page XI-B-16-79, read 2026-11-03. The current text (04 series of amendments) was not opened; the rule does not take any value from the regulation"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated. UN Regulation No. 13-H, \"Uniform provisions concerning the approval of passenger cars with regard to braking\": paragraph 1.1 applies it to the braking of vehicles of categories M1 and N1, and paragraph 1.2 leaves out vehicles with a design speed not over 25 km/h and vehicles fitted for invalid drivers (read in MLIT's English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R013H.pdf). Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第12条 (制動装置), paragraph 1: a motor vehicle must have two or more braking systems (二系統以上) meeting the braking performance set by 告示; one system is enough for vehicles with a maximum speed under 25 km/h, large special vehicles under 35 km/h and small special farm vehicles (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Both read 2026-11-03. The rule checks one connected brake chain, not the number of systems or their performance"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Road vehicles: 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第22条の3 (座席ベルト等), paragraph 1, asks for seat belts and their anchorages (取付装置) on the seats listed in its table (a lap-and-shoulder 第二種座席ベルト on forward-facing seats of passenger vehicles under 10 seats, for example); two-wheelers, sidecar two-wheelers and vehicles under 20 km/h (other than large and small special vehicles) are left out, and so are some seat kinds (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Recreational off-highway vehicles: ANSI/ROHVA 1 (current edition 2023 per ROHVA, https:\/\/rohva.org/ansi-standard/, which lists an Occupant Retention System among its contents). The standard itself was not opened (sold); secondary: CPSC staff letter to ROHVA of 10 March 2011 on the canvass draft (section 11.1 Seat Belts asks for at least a three-point seat belt; https:\/\/www.cpsc.gov/s3fs-public/pdfs/blk_pdf_commcanvass03102111.pdf) and CPSC NPR 79 FR 68964 (19 Nov 2014), p. 68985-68986 (ANSI/ROHVA 1-2011 section 11.2 seat belt reminder, 11.3 ORS zones; ORS defined as including three-point seat belts; https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). All read 2026-11-03"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 (current edition 2023) lists a Roll Over Protective Structure (ROPS) among the requirements it covers (ROHVA's page, https:\/\/rohva.org/ansi-standard/); the CPSC NPR 79 FR 68964 (19 Nov 2014) describes ROVs as equipped with ROPS (p. 68964) and puts ROPS in its proposed ROV definition, 16 CFR 1422.2(a) (p. 69022) (https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Read 2026-11-03. The standard text was not opened (sold): its ROPS clause number and test method were not seen, and ROHVA 1 covers ROVs only (in the NPR definition, among other features, a top speed over 30 mph)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号): 第32条 (前照灯等; 走行用前照灯 para. 1, すれ違い用前照灯 para. 4, on the front), 第37条 (尾灯), 第39条 (制動灯), 第41条 (方向指示器). 第37条 and 第39条 para. 1 ask for the lamp on both sides of the rear (one is enough for two-wheelers and vehicles 0.8 m wide or less) and do not apply to 軽自動車 and 小型特殊自動車 under 20 km/h; 第41条 para. 1 leaves out vehicles under 20 km/h shorter than 6 m with the driver's seat outside a cabin (and other listed conditions). Colour, brightness and mounting are left to the 告示 (not opened). Read in the e-Gov 法令 XML, law id 326M50000800067 (https:\/\/laws.e-gov.go.jp/law/326M50000800067), 2026-11-03. The design check counts one of each, not two per rear side"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-electric-guitar",
@@ -4511,7 +11447,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-electric-guitar",
@@ -4525,7 +11461,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: AIST; not reachable)",
       "value": "若年女性 5 % 〜 若年男性 95 %"
      },
      {
@@ -4533,7 +11469,7 @@ export const DEMOS = {
       "name": "常にかかる内力 (弦の張力、6 本の合計)",
       "source": "default",
       "trust": 2,
-      "basis": "D'Addario EXL110 (10-46) の 6 本の張力の表の値を足した 46.5 kgf = 456 N. 足したのは調査エージェント (販売店が載せた表の写し), https:\/\/www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR (not checked in this repository)",
+      "basis": "D'Addario EXL110 (10-46) の 6 本の張力の表の値を足した 46.5 kgf = 456 N. 足したのは調査エージェント (販売店が載せた表の写し), https:\/\/www.yamahamusiclondon.com/EXL110-Electric-Guitar-Strings/pidDAD-EXL-110-STR; read 2026-11-03 in a source check (the sum of the EXL110 chart, computed: 456 N)",
       "value": 456,
       "unit": "N",
       "note": "6 本の張りを足した値。弦の太さの組み合わせを変えたら聞き直す"
@@ -4596,7 +11532,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (3)・動力 (4)・液体のこぼれ (1)・人との接触 (1)・強度信頼性 (4)・音振 (1)・熱 (2)",
+   "text": "7 分野: 操安 (2)・動力 (4)・液体のこぼれ (0)・人との接触 (0)・強度信頼性 (3)・音振 (1)・熱 (2)",
    "data": {
     "want": "飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい",
     "flags": {
@@ -4625,10 +11561,9 @@ export const DEMOS = {
      {
       "domain": "handling",
       "shown_name": "操安",
-      "reason": "置・走 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S2 旋回での転倒 (J ターン・定常円)・S4 制動と前のめり を当てる",
+      "reason": "置・走 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S4 制動と前のめり を当てる。S2 旋回での転倒 (J ターン・定常円) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "S1",
-       "S2",
        "S4"
       ]
      },
@@ -4646,28 +11581,23 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "液体のこぼれ",
-      "reason": "液・走 に当てはまるので、F3 液体のこぼれ を当てる",
-      "test_ids": [
-       "F3"
-      ]
+      "reason": "液・走 に当てはまる。F3 液体のこぼれ は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "test_ids": []
      },
      {
       "domain": "crash",
       "shown_name": "人との接触",
-      "reason": "近・走 に当てはまるので、C2 人との接触 を当てる",
-      "test_ids": [
-       "C2"
-      ]
+      "reason": "近・走 に当てはまる。C2 人との接触 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "test_ids": []
      },
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "荷・走・池 に当てはまるので、R1 静的強度・R2 衝撃 (落錘・落下・段差)・R3 疲労・耐久・R6 電池の取付の振動 を当てる",
+      "reason": "荷・走・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
-       "R2",
        "R3",
-       "R6"
+       "R8"
       ]
      },
      {
@@ -4691,10 +11621,7 @@ export const DEMOS = {
     "off": [],
     "assembly_test_ids": [
      "H1",
-     "H2",
-     "H4",
-     "H5",
-     "G2"
+     "H5"
     ]
    }
   },
@@ -4768,8 +11695,8 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 3.5(1) and Table 3.3 (printed p. 23): minimum end distance e1 = 1.2 d0 and minimum edge distance e2 = 1.2 d0; 1.5 Symbols (p. 13): d0 = hole diameter, e1/e2 measured from the centre of the fastener hole to the adjacent end/edge (e1 in the direction of load transfer, e2 at right angles to it). Maximum e1, e2 = 4t + 40 mm for steel exposed to weather, larger of 8t or 125 mm for unprotected EN 10025-5 steel, otherwise unlimited (note 1). Fatigue: see EN 1993-1-9 (3.5(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 25 and p. 15), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame",
@@ -4803,7 +11730,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -4815,11 +11742,11 @@ export const DEMOS = {
       "rule_id": "WD-01",
       "doc_id": "KN-WD",
       "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
+      "text": "溶接する角形鋼管の外形 (b, h) は肉厚の 35 倍以下",
+      "check": "section_ratio_rect_max <= 35",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.5.1 and Table 7.8 \"Range of validity for welded joints between CHS or RHS brace members and RHS chord members\" (printed p. 116): RHS braces bi/ti <= 35 and hi/ti <= 35 (tension; in compression also Class 1 or 2 for T, Y, X and K/N gap joints, Class 1 for overlap joints); RHS chord b0/t0 <= 35 and h0/t0 <= 35 and Class 1 or 2 for T, Y, X and K/N gap joints (overlap joints: Class 1 or 2 only). Outside the range all failure modes of 7.2.2 and secondary moments are to be considered (7.5.1(3)). The limit 35 holds for rectangular sections only; circular tubes are WD-03 (Table 7.1). The check does not look at the section class. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame"
@@ -4833,8 +11760,23 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 4.5.1(2) (printed p. 42): a fillet weld whose effective length is less than 30 mm or less than 6 times its throat thickness, whichever is larger, is not to be designed to carry load. The length meant is the effective length l_eff (4.5.1(1): the length over which the fillet is full size; may be taken as the overall length minus 2a, no reduction if full size including starts and ends); a = effective throat thickness (4.5.2), itself at least 3 mm (4.5.2(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 44), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-03",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する円形鋼管の外径は肉厚の 50 倍以下",
+      "check": "section_ratio_round_max <= 50",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
       "applies_to": {
        "kinds": [
         "frame"
@@ -4883,7 +11825,7 @@ export const DEMOS = {
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
       "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "basis": "Fixed-fastener formula T = (H - F)/2 as given in Goodheart-Willcox, \"GD&T: Application and Interpretation\", 7th ed., p. 308 (secondary source; the ASME Y14.5 text itself was not opened). There T = position tolerance applied to all holes (the value in the feature control frame, at MMC), H = MMC size of the clearance holes (smallest hole), F = MMC size of the fastener (largest fastener). So clearance_hole_mm is the smallest clearance-hole diameter and bolt_diameter_mm the largest bolt diameter. Condition: holds only if the fixed (threaded / press-fit) feature carries a projected tolerance zone or the clearance-hole part is very thin. Floating fasteners (clearance holes in all parts) use T = H - F instead (same book, same page). Read 2026-11-03 in a saved copy of https:\/\/www.g-wonlinetextbooks.com/gdt-application-and-interpretation-2021/324 (printed page 308)",
       "applies_to": {
        "kinds": [
         "frame",
@@ -4917,7 +11859,7 @@ export const DEMOS = {
       "check": "size_y_mm >= 391",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, item J2 座位殿幅:足底支持 (hip breadth, sitting, feet supported), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J2.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 95th percentile 391.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The elderly female 95th percentile is 391.4 mm, so the limit also covers that group to within 1 mm. Read 2026-11-03",
       "applies_to": {
        "kinds": [
         "seat"
@@ -4932,7 +11874,7 @@ export const DEMOS = {
       "check": "size_x_mm <= 406",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "basis": "AIST 人体寸法データベース 1991-92, item J6 座位殿・膝窩距離 (buttock-popliteal length, sitting), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 5th percentile 406.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The limit holds for that group only: the elderly (60+) female 5th percentile in the same table is 391.2 mm. Read 2026-11-03. The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
        "kinds": [
         "seat"
@@ -4947,7 +11889,7 @@ export const DEMOS = {
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
       "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996, 4.2 Table 1 (minimum gap a: finger 25 mm; hand/wrist/fist 100, arm 120, toes 50, foot 120, leg 180, head 300, body 500), iTeh sample p.3 (PDF p.7), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf , read 2026-11-03. Condition (4.1 b): if a larger body part can foreseeably enter the crushing zone, the gap for the largest part applies, so 25 mm is a floor only for zones that admit nothing larger than a finger; children and bulky clothing must also be considered. The current edition is ISO 13854:2017 (2nd ed., a \"minor revision\" per its foreword, ANSI preview read 2026-11-03); its Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not checked",
       "applies_to": {
        "kinds": [
         "suspension",
@@ -4981,7 +11923,7 @@ export const DEMOS = {
       "check": "req_Q19 <= 55",
       "origin": "builtin",
       "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "basis": "EVE Energy LF50K Product Specification, file LF50K-73103 version D (2019-12-02), sec. 3 Nominal Technical Parameter, row 7 charge temperature 0-55 degC and row 8 discharge temperature -20-55 degC (row 9 storage: 1 month -20-45 degC, 1 year 0-35 degC), https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (a distributor's copy of the maker's specification); read 2026-11-03. 55 degC is the upper limit for both charging and discharging, i.e. for use; storage limits are lower and are not checked here. Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
        "kinds": [
         "battery"
@@ -4996,7 +11938,7 @@ export const DEMOS = {
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
       "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
       "applies_to": {
        "kinds": [
         "battery"
@@ -5028,8 +11970,8 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "trust": 1,
+      "basis": "Waters, Putz-Anderson, Garg, Fine, \"Revised NIOSH equation for the design and evaluation of manual lifting tasks\", Ergonomics 36(7):749-776, 1993, https:\/\/doi.org/10.1080/00140139308967940, sec. 6.2 (p.762) and Appendix A (LC = 23 kg / 51 lb), sec. 8.1 limitations (p.768-769); read 2026-11-03. The 23 kg is the load constant: the recommended weight limit at the standard lifting location (75 cm high, 25 cm out) under ideal conditions (all six multipliers = 1: sagittal, occasional, good coupling, short travel). The equation reduces it for real postures and frequencies; it is for two-handed lifting and not for one-handed, seated/kneeling or constrained-space lifts. This rule uses the 23 kg as the one-person limit for any lift, which is the most lenient value the equation allows. A hit means two people or a lifting aid are needed",
       "applies_to": {
        "kinds": [
         "battery",
@@ -5128,7 +12070,7 @@ export const DEMOS = {
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
       "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "basis": "JIS G 3466 table 5 (square) and table 6 (rectangular), read in the JISF committee draft of the revision dated 2024-12-20 (資料 16, PDF p.9-12), https:\/\/www.jisf.or.jp/business/standard/jis/documents/docs_kouzai_1600_JISG3466_20241220.pdf, and the maker's range table of 日鐵住金建材 角パイプ (STKR) 製造可能範囲 (catalogue p.4), https:\/\/www.ns-kenzai.co.jp/pdf/a1/u-kaku-eco_kikaku.pdf; read 2026-11-03. The thinnest wall in both tables is 1.6 mm (sides 40-75 mm square, and rectangles up to 125x40); larger tubes start thicker (80-100 square 2.3, 125 square 3.2, 150-300 square 4.5). Clause 8.1 lets other sizes be agreed between buyer and maker, so 1.6 mm is the lower limit of the listed sizes, not a ban. The issued standard (2015 edition with amendment, as used for data/sections/standard_tubes.json) was not reopened for this rule; the draft lists the same 112 sizes",
       "applies_to": {
        "kinds": [
         "frame"
@@ -5140,6 +12082,124 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-serving-robot",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated by UN Regulation No. 79, \"Uniform provisions concerning the approval of vehicles with regard to steering equipment\" (in force 1 December 1988); its paragraph 1 (Scope) applies it to the steering equipment of vehicles of categories M, N and O, and paragraph 2.3 defines steering equipment as all the equipment that determines the direction of movement (steering control, steering transmission, steered wheels, energy supply if any). In that original text paragraph 1 also leaves out transmissions that are purely hydraulic or electric at any point (except auxiliary steering equipment). Read in the original text, United Nations Treaty Series vol. 1519, A-4789 (https:\/\/treaties.un.org/doc/Publication/UNTS/Volume%201519/volume-1519-A-4789-English.pdf), and the UN Treaty Collection status page XI-B-16-79, read 2026-11-03. The current text (04 series of amendments) was not opened; the rule does not take any value from the regulation"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated. UN Regulation No. 13-H, \"Uniform provisions concerning the approval of passenger cars with regard to braking\": paragraph 1.1 applies it to the braking of vehicles of categories M1 and N1, and paragraph 1.2 leaves out vehicles with a design speed not over 25 km/h and vehicles fitted for invalid drivers (read in MLIT's English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R013H.pdf). Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第12条 (制動装置), paragraph 1: a motor vehicle must have two or more braking systems (二系統以上) meeting the braking performance set by 告示; one system is enough for vehicles with a maximum speed under 25 km/h, large special vehicles under 35 km/h and small special farm vehicles (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Both read 2026-11-03. The rule checks one connected brake chain, not the number of systems or their performance"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Road vehicles: 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第22条の3 (座席ベルト等), paragraph 1, asks for seat belts and their anchorages (取付装置) on the seats listed in its table (a lap-and-shoulder 第二種座席ベルト on forward-facing seats of passenger vehicles under 10 seats, for example); two-wheelers, sidecar two-wheelers and vehicles under 20 km/h (other than large and small special vehicles) are left out, and so are some seat kinds (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Recreational off-highway vehicles: ANSI/ROHVA 1 (current edition 2023 per ROHVA, https:\/\/rohva.org/ansi-standard/, which lists an Occupant Retention System among its contents). The standard itself was not opened (sold); secondary: CPSC staff letter to ROHVA of 10 March 2011 on the canvass draft (section 11.1 Seat Belts asks for at least a three-point seat belt; https:\/\/www.cpsc.gov/s3fs-public/pdfs/blk_pdf_commcanvass03102111.pdf) and CPSC NPR 79 FR 68964 (19 Nov 2014), p. 68985-68986 (ANSI/ROHVA 1-2011 section 11.2 seat belt reminder, 11.3 ORS zones; ORS defined as including three-point seat belts; https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). All read 2026-11-03"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 (current edition 2023) lists a Roll Over Protective Structure (ROPS) among the requirements it covers (ROHVA's page, https:\/\/rohva.org/ansi-standard/); the CPSC NPR 79 FR 68964 (19 Nov 2014) describes ROVs as equipped with ROPS (p. 68964) and puts ROPS in its proposed ROV definition, 16 CFR 1422.2(a) (p. 69022) (https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Read 2026-11-03. The standard text was not opened (sold): its ROPS clause number and test method were not seen, and ROHVA 1 covers ROVs only (in the NPR definition, among other features, a top speed over 30 mph)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号): 第32条 (前照灯等; 走行用前照灯 para. 1, すれ違い用前照灯 para. 4, on the front), 第37条 (尾灯), 第39条 (制動灯), 第41条 (方向指示器). 第37条 and 第39条 para. 1 ask for the lamp on both sides of the rear (one is enough for two-wheelers and vehicles 0.8 m wide or less) and do not apply to 軽自動車 and 小型特殊自動車 under 20 km/h; 第41条 para. 1 leaves out vehicles under 20 km/h shorter than 6 m with the driver's seat outside a cabin (and other listed conditions). Colour, brightness and mounting are left to the 告示 (not opened). Read in the e-Gov 法令 XML, law id 326M50000800067 (https:\/\/laws.e-gov.go.jp/law/326M50000800067), 2026-11-03. The design check counts one of each, not two per rear side"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-serving-robot",
@@ -5187,7 +12247,7 @@ export const DEMOS = {
       "default": {
        "value": "タイル・木・カーペット",
        "trust": 1,
-       "basis": "JARI のロボット安定性試験設備の走行路の路面, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf (not checked in this repository)"
+       "basis": "JARI のロボット安定性試験設備の走行路の路面, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check"
       }
      },
      {
@@ -5200,7 +12260,7 @@ export const DEMOS = {
        "value": 12.7,
        "unit": "mm",
        "trust": 1,
-       "basis": "Bear Robotics Servi Plus の敷居, https:\/\/www.bearrobotics.ai/servi-plus (not checked in this repository)"
+       "basis": "Bear Robotics Servi Plus の敷居 (1/2 in), Servi Plus page, https:\/\/www.bearrobotics.ai/servi-plus; read 2026-11-03 in a source check"
       }
      },
      {
@@ -5309,7 +12369,7 @@ export const DEMOS = {
        "value": 10,
        "unit": "h",
        "trust": 1,
-       "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか (not checked in this repository)"
+       "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)"
       }
      },
      {
@@ -5378,13 +12438,13 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:08.000+09:00",
    "t": 8.0,
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 15 件、答え 3 件、既定値 21 件、答えが無いまま 4 件",
+   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件",
    "data": {
     "answers": [
      {
@@ -5392,7 +12452,7 @@ export const DEMOS = {
       "name": "縦の坂",
       "source": "default",
       "trust": 1,
-      "basis": "バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), https:\/\/laws.e-gov.go.jp/api/1/lawdata/418CO0000000379. 製品の定格は 5 度以下 (Pudu BellaBot), https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "バリアフリー法施行令の傾斜路 1/12 (= 8.33 %), 第19条, https:\/\/laws.e-gov.go.jp/api/1/lawdata/418CO0000000379; read 2026-11-03 in a source check. 製品の定格は 5 度以下 (Pudu BellaBot), https:\/\/www.pudurobotics.com/en/products/bellabot (this part not checked in this repository)",
       "value": 8.33,
       "unit": "%"
      },
@@ -5401,8 +12461,8 @@ export const DEMOS = {
       "name": "通る幅",
       "source": "default",
       "trust": 1,
-      "basis": "各社 (Keenon T8・T9・T10 ほか) の最小通路 0.55〜0.80 m の上の端, https:\/\/www.keenon.com/en/product/T9 ほか (not checked in this repository)",
-      "value": 0.8,
+      "basis": "Keenon の製品ページの最小通路 (T8 0.55 m・T10 0.59 m・T9 0.70 m) の上の端, https:\/\/www.keenon.com/en/product/T9 (read 2026-11-03 in a source check; it recorded only the T9 page address). The earlier value 0.80 m is on none of the pages",
+      "value": 0.7,
       "unit": "m",
       "note": "建物の廊下は 1.2 m 以上 (バリアフリー法施行令)"
      },
@@ -5419,7 +12479,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html (not checked in this repository)",
+      "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html. Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
       "value": "子どもを含む"
      },
      {
@@ -5435,7 +12495,7 @@ export const DEMOS = {
       "name": "充電時間",
       "source": "default",
       "trust": 1,
-      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "value": 4.5,
       "unit": "h"
      },
@@ -5453,7 +12513,7 @@ export const DEMOS = {
       "name": "人に当たったときの力",
       "source": "default",
       "trust": 2,
-      "basis": "ISO/TS 15066 の体のモデルの表を載せた論文, https:\/\/arxiv.org/pdf/2311.13814. 産業用ロボットの値を借りる (配膳ロボの規格の値ではない) (not checked in this repository)",
+      "basis": "ISO/TS 15066 の体のモデルの表を載せた論文, Table 1, https:\/\/arxiv.org/pdf/2311.13814; read 2026-11-03 in a source check. 産業用ロボットの値を借りる (配膳ロボの規格の値ではない)",
       "value": "ISO/TS 15066 の部位ごとの値 (準静的、下腿 130・大腿 220・胸 140・頭 130 N) を借用"
      },
      {
@@ -5461,7 +12521,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
      },
      {
@@ -5469,7 +12529,7 @@ export const DEMOS = {
       "name": "なぞる規格",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13482 の要旨 https:\/\/www.iso.org/standard/53820.html (not checked in this repository)",
+      "basis": "ISO 13482 の要旨 https:\/\/www.iso.org/standard/53820.html. Secondary: seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
       "value": "ISO 13482 = JIS B 8445、JIS B 8446-1"
      },
      {
@@ -5477,7 +12537,7 @@ export const DEMOS = {
       "name": "電池の規則",
       "source": "default",
       "trust": 1,
-      "basis": "UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版), https:\/\/certifico.com/component/attachments/download/748 (not checked in this repository)",
+      "basis": "UN 試験・基準マニュアル Rev.5 (2009) の第三者の写し (読めたのは旧版), https:\/\/certifico.com/component/attachments/download/748; read 2026-11-03 in a source check",
       "value": "輸送は UN 38.3"
      },
      {
@@ -5501,7 +12561,7 @@ export const DEMOS = {
       "name": "路面・床と摩擦係数",
       "source": "default",
       "trust": 1,
-      "basis": "JARI のロボット安定性試験設備の走行路の路面, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf (not checked in this repository)",
+      "basis": "JARI のロボット安定性試験設備の走行路の路面, p.1, https:\/\/img.jari.or.jp/v=1740017440/files/user/pdf/stability_tests_of_robots_and_robotic_devices_2020.pdf; read 2026-11-03 in a source check",
       "value": "タイル・木・カーペット"
      },
      {
@@ -5509,7 +12569,7 @@ export const DEMOS = {
       "name": "段差",
       "source": "default",
       "trust": 1,
-      "basis": "Bear Robotics Servi Plus の敷居, https:\/\/www.bearrobotics.ai/servi-plus (not checked in this repository)",
+      "basis": "Bear Robotics Servi Plus の敷居 (1/2 in), Servi Plus page, https:\/\/www.bearrobotics.ai/servi-plus; read 2026-11-03 in a source check",
       "value": 12.7,
       "unit": "mm"
      },
@@ -5536,7 +12596,7 @@ export const DEMOS = {
       "value": 40,
       "source": "hearing",
       "trust": 1,
-      "basis": "Pudu BellaBot: 1 段 10 kg・計 40 kg, https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "Pudu BellaBot: 1 段 10 kg・計 40 kg, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "unit": "kg"
      },
      {
@@ -5545,7 +12605,7 @@ export const DEMOS = {
       "value": 1.2,
       "source": "hearing",
       "trust": 1,
-      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot (not checked in this repository)",
+      "basis": "Pudu BellaBot, https:\/\/www.pudurobotics.com/en/products/bellabot; read 2026-11-03 in a source check",
       "unit": "m/s"
      },
      {
@@ -5553,7 +12613,7 @@ export const DEMOS = {
       "name": "航続・稼働時間",
       "source": "default",
       "trust": 1,
-      "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか (not checked in this repository)",
+      "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)",
       "value": 10,
       "unit": "h"
      },
@@ -5581,14 +12641,6 @@ export const DEMOS = {
       "trust": 3,
       "basis": "assumption",
       "value": "10 h/日 を 5 年"
-     },
-     {
-      "key": "Q30",
-      "name": "人数と荷重の組み合わせ",
-      "value": "周りの客",
-      "source": "hearing",
-      "trust": 3,
-      "basis": "assumption (a sample answer)"
      }
     ]
    }
@@ -5605,7 +12657,7 @@ export const DEMOS = {
    "data": {
     "run_id": "20261103-100000-offroad-4w-file",
     "created_at": "2026-11-03T10:00:00.000+09:00",
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "product": "offroad-4w",
     "flags": {
      "ride": true,
@@ -5624,7 +12676,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 1,
+    "round_limit": 2,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -5652,7 +12704,7 @@ export const DEMOS = {
       "unit": "%",
       "source": "default",
       "trust": 1,
-      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+      "basis": "林道規程 (林野庁) 第 20 条: 縦断勾配 12 % は第 1 項のただし書、14 % は第 4 項の 2 級林道の例外 (the steepest stretch), https:\/\/www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (the article and its paragraphs read for this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
      },
      {
       "key": "Q14",
@@ -5736,6 +12788,59 @@ export const DEMOS = {
       "basis": "the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm (data/designs/offroad-4w-v1.json, parts cargo and deck)"
      },
      {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
+     {
       "key": "Q50",
       "name": "最高速度",
       "value": 40,
@@ -5746,7 +12851,7 @@ export const DEMOS = {
      },
      {
       "key": "Q51",
-      "name": "0 → 最高速度 (Q50) の時間",
+      "name": "0 → 最高速度の時間",
       "value": 6,
       "unit": "s",
       "source": "default",
@@ -5785,7 +12890,7 @@ export const DEMOS = {
       "name": "最低地上高",
       "source": "default",
       "trust": 1,
-      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
       "value": 180,
       "unit": "mm"
      },
@@ -5796,7 +12901,7 @@ export const DEMOS = {
       "unit": "deg",
       "source": "default",
       "trust": 1,
-      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized in the CPSC staff briefing of 2016-11-22 (PDF p.11), which also gives 33 deg for two people (both read on that page for this repository); 35 deg empty: an assumption (no source found)"
      },
      {
       "key": "Q61",
@@ -5812,7 +12917,7 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
      },
      {
@@ -5825,12 +12930,84 @@ export const DEMOS = {
       "basis": "assumption (the top speed, Q50)"
      },
      {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)",
+      "value": 300,
+      "unit": "N",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text), table \"Steering control effort requirements\" (M1, with a failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is the assumption)"
+     },
+     {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the range where the feel and position of the control do not change; no source)"
+     },
+     {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力 (踏む面、踏む向き)",
+      "value": 500,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN, read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (small against the control's travel; no source)"
+     },
+     {
       "key": "Q70",
       "name": "公道を走るか",
       "value": "私有地 (林道) だけ",
       "source": "default",
       "trust": 3,
       "basis": "assumption of this fixed file; Q70 is a required question and was not asked"
+     },
+     {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "value": 0.7,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(e) (0.70 g; read by the intake department on 2026-11-03). The vehicle's own peak from its dynamics tests counts instead when it is larger"
+     },
+     {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "value": 0.9,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1) (peak braking coefficient 0.90; read by the intake department on 2026-11-03). The vehicle's own peak counts instead when it is larger"
+     },
+     {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "value": 725,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(1)-(5) (read by the intake department on 2026-11-03)"
+     },
+     {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "value": 25,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c) (less than 25 mm; read by the intake department on 2026-11-03)"
      },
      {
       "key": "Q82",
@@ -5841,6 +13018,42 @@ export const DEMOS = {
       "basis": "assumption"
      },
      {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)",
+      "value": 500,
+      "unit": "kg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract having no unit J/kg or N/kg for them"
+     },
+     {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "value": 30,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for other traffic, borrowed: applying it to the occupants is an assumption"
+     },
+     {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "value": 50,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
+     },
+     {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
       "key": "Q90",
       "name": "悪路の走行距離 (疲労)",
       "value": 5000,
@@ -5848,6 +13061,51 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption (no public basis found)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
+      "unit": "mm"
      }
     ],
     "domain_picks": [],
@@ -5864,9 +13122,9 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (5)・動力 (4)・空力 (2)・衝突 (1)・強度信頼性 (5)・音振 (3)・熱 (2)",
+   "text": "7 分野: 操安 (4)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (5)・音振 (1)・熱 (2)",
    "data": {
-    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
      "ride": true,
      "lean": true,
@@ -5893,10 +13151,9 @@ export const DEMOS = {
      {
       "domain": "handling",
       "shown_name": "操安",
-      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S2 旋回での転倒 (J ターン・定常円)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる",
+      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる。S2 旋回での転倒 (J ターン・定常円) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "S1",
-       "S2",
        "S3",
        "S4",
        "S5"
@@ -5916,16 +13173,15 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "空力",
-      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
+      "reason": "外・走 に当てはまるので、F1 横風 を当てる。F2 空気抵抗 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
-       "F1",
-       "F2"
+       "F1"
       ]
      },
      {
       "domain": "crash",
       "shown_name": "衝突",
-      "reason": "乗・走 に当てはまるので、C1 壁への正面衝突 を当てる",
+      "reason": "乗・走・悪 に当てはまるので、C1 壁への正面衝突 を当てる。C3 横転したときの乗員の空間 (横・後ろ・上から押す) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "C1"
       ]
@@ -5933,23 +13189,21 @@ export const DEMOS = {
      {
       "domain": "strength",
       "shown_name": "強度信頼性",
-      "reason": "預・荷・走・乗・悪・池 に当てはまるので、R1 静的強度・R2 衝撃 (落錘・落下・段差)・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R6 電池の取付の振動 を当てる",
+      "reason": "乗・悪・走・預・荷・池 に当てはまるので、R1 静的強度・R3 疲労・耐久・R4 横転時の保護枠 (ROPS)・R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える) を当てる。R2 衝撃 (落錘・落下・段差)・R6 電池の取付の振動 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "R1",
-       "R2",
        "R3",
        "R4",
-       "R6"
+       "R7",
+       "R8"
       ]
      },
      {
       "domain": "nvh",
       "shown_name": "音振",
-      "reason": "振・乗・走・電・預 に当てはまるので、N1 固有振動数と加振・N2 乗り心地・N3 騒音 を当てる",
+      "reason": "振・乗・走・電・預 に当てはまるので、N1 固有振動数と加振 を当てる。N2 乗り心地・N3 騒音 は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
-       "N1",
-       "N2",
-       "N3"
+       "N1"
       ]
      },
      {
@@ -5965,11 +13219,8 @@ export const DEMOS = {
     "off": [],
     "assembly_test_ids": [
      "H1",
-     "H2",
      "H3",
-     "H4",
-     "H5",
-     "G2"
+     "H5"
     ]
    }
   },
@@ -6043,8 +13294,8 @@ export const DEMOS = {
       "text": "ボルト穴の中心から縁までの距離は穴径の 1.2 倍以上",
       "check": "hole_edge_mm >= 1.2 * hole_diameter_mm",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 Table 3.3: minimum end and edge distance e1, e2 = 1.2 d0 (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 3.5(1) and Table 3.3 (printed p. 23): minimum end distance e1 = 1.2 d0 and minimum edge distance e2 = 1.2 d0; 1.5 Symbols (p. 13): d0 = hole diameter, e1/e2 measured from the centre of the fastener hole to the adjacent end/edge (e1 in the direction of load transfer, e2 at right angles to it). Maximum e1, e2 = 4t + 40 mm for steel exposed to weather, larger of 8t or 125 mm for unprotected EN 10025-5 steel, otherwise unlimited (note 1). Fatigue: see EN 1993-1-9 (3.5(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 25 and p. 15), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame",
@@ -6078,7 +13329,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -6090,11 +13341,11 @@ export const DEMOS = {
       "rule_id": "WD-01",
       "doc_id": "KN-WD",
       "category": "weld",
-      "text": "溶接する角形・円形の鋼管の外形は肉厚の 35 倍以下",
-      "check": "section_ratio_max <= 35",
+      "text": "溶接する角形鋼管の外形 (b, h) は肉厚の 35 倍以下",
+      "check": "section_ratio_rect_max <= 35",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 section 7: the tabulated resistances of welded hollow-section joints hold for b/t and h/t up to 35 in the usual case (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.5.1 and Table 7.8 \"Range of validity for welded joints between CHS or RHS brace members and RHS chord members\" (printed p. 116): RHS braces bi/ti <= 35 and hi/ti <= 35 (tension; in compression also Class 1 or 2 for T, Y, X and K/N gap joints, Class 1 for overlap joints); RHS chord b0/t0 <= 35 and h0/t0 <= 35 and Class 1 or 2 for T, Y, X and K/N gap joints (overlap joints: Class 1 or 2 only). Outside the range all failure modes of 7.2.2 and secondary moments are to be considered (7.5.1(3)). The limit 35 holds for rectangular sections only; circular tubes are WD-03 (Table 7.1). The check does not look at the section class. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
       "applies_to": {
        "kinds": [
         "frame"
@@ -6108,8 +13359,23 @@ export const DEMOS = {
       "text": "すみ肉溶接の長さは、のど厚の 6 倍と 30 mm の大きい方以上",
       "check": "weld_length_mm >= max(30, 6 * weld_throat_mm)",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "EN 1993-1-8 4.5.1: a fillet weld is not shorter than 30 mm or 6 times its throat thickness (recalled; not checked in this repository)",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 4.5.1(2) (printed p. 42): a fillet weld whose effective length is less than 30 mm or less than 6 times its throat thickness, whichever is larger, is not to be designed to carry load. The length meant is the effective length l_eff (4.5.1(1): the length over which the fillet is full size; may be taken as the overall length minus 2a, no reduction if full size including starts and ends); a = effective throat thickness (4.5.2), itself at least 3 mm (4.5.2(2)). Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 44), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-03",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "溶接する円形鋼管の外径は肉厚の 50 倍以下",
+      "check": "section_ratio_round_max <= 50",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
       "applies_to": {
        "kinds": [
         "frame"
@@ -6158,7 +13424,7 @@ export const DEMOS = {
       "check": "position_tolerance_mm <= (clearance_hole_mm - bolt_diameter_mm) / 2",
       "origin": "builtin",
       "trust": 2,
-      "basis": "ASME Y14.5 formula for fixed fasteners, T = (H - F) / 2 (recalled; not checked in this repository)",
+      "basis": "Fixed-fastener formula T = (H - F)/2 as given in Goodheart-Willcox, \"GD&T: Application and Interpretation\", 7th ed., p. 308 (secondary source; the ASME Y14.5 text itself was not opened). There T = position tolerance applied to all holes (the value in the feature control frame, at MMC), H = MMC size of the clearance holes (smallest hole), F = MMC size of the fastener (largest fastener). So clearance_hole_mm is the smallest clearance-hole diameter and bolt_diameter_mm the largest bolt diameter. Condition: holds only if the fixed (threaded / press-fit) feature carries a projected tolerance zone or the clearance-hole part is very thin. Floating fasteners (clearance holes in all parts) use T = H - F instead (same book, same page). Read 2026-11-03 in a saved copy of https:\/\/www.g-wonlinetextbooks.com/gdt-application-and-interpretation-2021/324 (printed page 308)",
       "applies_to": {
        "kinds": [
         "frame",
@@ -6192,7 +13458,7 @@ export const DEMOS = {
       "check": "size_y_mm >= 391",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿幅, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)",
+      "basis": "AIST 人体寸法データベース 1991-92, item J2 座位殿幅:足底支持 (hip breadth, sitting, feet supported), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J2.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 95th percentile 391.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The elderly female 95th percentile is 391.4 mm, so the limit also covers that group to within 1 mm. Read 2026-11-03",
       "applies_to": {
        "kinds": [
         "seat"
@@ -6207,7 +13473,7 @@ export const DEMOS = {
       "check": "size_x_mm <= 406",
       "origin": "builtin",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 座位殿・膝窩距離, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository). The seat box may include the back, so a hit is a question to the designer, not a verdict",
+      "basis": "AIST 人体寸法データベース 1991-92, item J6 座位殿・膝窩距離 (buttock-popliteal length, sitting), statistics table https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/gif/J6.gif (from https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html): young adults, female, 5th percentile 406.0 mm (N 202). Young adults = 18-29 years, women measured July-August 1992 (https:\/\/www.airc.aist.go.jp/dhrt/91-92/index.html, section 1.2-1.3). The limit holds for that group only: the elderly (60+) female 5th percentile in the same table is 391.2 mm. Read 2026-11-03. The seat box may include the back, so a hit is a question to the designer, not a verdict",
       "applies_to": {
        "kinds": [
         "seat"
@@ -6222,7 +13488,7 @@ export const DEMOS = {
       "check": "closing_gap_mm >= 25",
       "origin": "builtin",
       "trust": 1,
-      "basis": "ISO 13854:1996 (finger 25 mm), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996, 4.2 Table 1 (minimum gap a: finger 25 mm; hand/wrist/fist 100, arm 120, toes 50, foot 120, leg 180, head 300, body 500), iTeh sample p.3 (PDF p.7), https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf , read 2026-11-03. Condition (4.1 b): if a larger body part can foreseeably enter the crushing zone, the gap for the largest part applies, so 25 mm is a floor only for zones that admit nothing larger than a finger; children and bulky clothing must also be considered. The current edition is ISO 13854:2017 (2nd ed., a \"minor revision\" per its foreword, ANSI preview read 2026-11-03); its Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not checked",
       "applies_to": {
        "kinds": [
         "suspension",
@@ -6256,7 +13522,7 @@ export const DEMOS = {
       "check": "req_Q19 <= 55",
       "origin": "builtin",
       "trust": 1,
-      "basis": "EVE LF50K datasheet: cell temperature up to 55 degC, https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (not checked in this repository). Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
+      "basis": "EVE Energy LF50K Product Specification, file LF50K-73103 version D (2019-12-02), sec. 3 Nominal Technical Parameter, row 7 charge temperature 0-55 degC and row 8 discharge temperature -20-55 degC (row 9 storage: 1 month -20-45 degC, 1 year 0-35 degC), https:\/\/www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf (a distributor's copy of the maker's specification); read 2026-11-03. 55 degC is the upper limit for both charging and discharging, i.e. for use; storage limits are lower and are not checked here. Q19 is the hot end of the range of use, so this is a first screen; the thermal tests (T1) judge the cell temperature itself",
       "applies_to": {
        "kinds": [
         "battery"
@@ -6271,7 +13537,7 @@ export const DEMOS = {
       "check": "var_battery_voltage <= 60",
       "origin": "builtin",
       "trust": 2,
-      "basis": "UN R100 voltage class B starts above 60 V DC (recalled; not checked in this repository), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf",
+      "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
       "applies_to": {
        "kinds": [
         "battery"
@@ -6303,8 +13569,8 @@ export const DEMOS = {
       "text": "1 人で持ち上げる部品は 23 kg 以下",
       "check": "mass_kg <= 23",
       "origin": "builtin",
-      "trust": 2,
-      "basis": "NIOSH revised lifting equation, load constant 23 kg (Waters et al., Ergonomics 36(7), 1993) (recalled; not checked in this repository). A hit means two people or a lifting aid are needed",
+      "trust": 1,
+      "basis": "Waters, Putz-Anderson, Garg, Fine, \"Revised NIOSH equation for the design and evaluation of manual lifting tasks\", Ergonomics 36(7):749-776, 1993, https:\/\/doi.org/10.1080/00140139308967940, sec. 6.2 (p.762) and Appendix A (LC = 23 kg / 51 lb), sec. 8.1 limitations (p.768-769); read 2026-11-03. The 23 kg is the load constant: the recommended weight limit at the standard lifting location (75 cm high, 25 cm out) under ideal conditions (all six multipliers = 1: sagittal, occasional, good coupling, short travel). The equation reduces it for real postures and frequencies; it is for two-handed lifting and not for one-handed, seated/kneeling or constrained-space lifts. This rule uses the 23 kg as the one-person limit for any lift, which is the most lenient value the equation allows. A hit means two people or a lifting aid are needed",
       "applies_to": {
        "kinds": [
         "battery",
@@ -6403,7 +13669,7 @@ export const DEMOS = {
       "check": "wall_mm >= 1.6",
       "origin": "builtin",
       "trust": 2,
-      "basis": "JIS G 3466 square and rectangular steel tubes are made from 1.6 mm up (recalled from product tables; not checked in this repository)",
+      "basis": "JIS G 3466 table 5 (square) and table 6 (rectangular), read in the JISF committee draft of the revision dated 2024-12-20 (資料 16, PDF p.9-12), https:\/\/www.jisf.or.jp/business/standard/jis/documents/docs_kouzai_1600_JISG3466_20241220.pdf, and the maker's range table of 日鐵住金建材 角パイプ (STKR) 製造可能範囲 (catalogue p.4), https:\/\/www.ns-kenzai.co.jp/pdf/a1/u-kaku-eco_kikaku.pdf; read 2026-11-03. The thinnest wall in both tables is 1.6 mm (sides 40-75 mm square, and rectangles up to 125x40); larger tubes start thicker (80-100 square 2.3, 125 square 3.2, 150-300 square 4.5). Clause 8.1 lets other sizes be agreed between buyer and maker, so 1.6 mm is the lower limit of the listed sizes, not a ban. The issued standard (2015 edition with amendment, as used for data/sections/standard_tubes.json) was not reopened for this rule; the draft lists the same 112 sizes",
       "applies_to": {
        "kinds": [
         "frame"
@@ -6415,20 +13681,191 @@ export const DEMOS = {
   },
   {
    "seq": 11,
+   "ts": "2026-11-03T10:00:04.800+09:00",
+   "t": 4.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "knowledge.imported",
+   "agent": "lead",
+   "text": "最初から入っているナレッジ「系の決まり」から 10 件の規則",
+   "data": {
+    "doc": {
+     "doc_id": "KN-SY",
+     "filename": "系の決まり",
+     "origin": "builtin"
+    },
+    "rules": [
+     {
+      "rule_id": "SY-01",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、動力源から駆動輪まで、トルクを伝える鎖が切れずにつながる",
+      "check": "system:drive_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum for a self-propelled product (the driven wheels, support.actuation.drive, are reached from the motor or engine by links that carry torque); not taken from a standard"
+     },
+     {
+      "rule_id": "SY-02",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って走る製品は、ハンドルから操舵輪まで、操舵の鎖が切れずにつながる",
+      "check": "system:steer_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a steering input reaches every steered support). Steering equipment of road vehicles is regulated by UN Regulation No. 79, \"Uniform provisions concerning the approval of vehicles with regard to steering equipment\" (in force 1 December 1988); its paragraph 1 (Scope) applies it to the steering equipment of vehicles of categories M, N and O, and paragraph 2.3 defines steering equipment as all the equipment that determines the direction of movement (steering control, steering transmission, steered wheels, energy supply if any). In that original text paragraph 1 also leaves out transmissions that are purely hydraulic or electric at any point (except auxiliary steering equipment). Read in the original text, United Nations Treaty Series vol. 1519, A-4789 (https:\/\/treaties.un.org/doc/Publication/UNTS/Volume%201519/volume-1519-A-4789-English.pdf), and the UN Treaty Collection status page XI-B-16-79, read 2026-11-03. The current text (04 series of amendments) was not opened; the rule does not take any value from the regulation"
+     },
+     {
+      "rule_id": "SY-03",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "走る製品は、制動の入力から制動する輪まで、制動の鎖が切れずにつながる",
+      "check": "system:brake_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a brake input reaches every braked support). Braking of road vehicles is regulated. UN Regulation No. 13-H, \"Uniform provisions concerning the approval of passenger cars with regard to braking\": paragraph 1.1 applies it to the braking of vehicles of categories M1 and N1, and paragraph 1.2 leaves out vehicles with a design speed not over 25 km/h and vehicles fitted for invalid drivers (read in MLIT's English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R013H.pdf). Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第12条 (制動装置), paragraph 1: a motor vehicle must have two or more braking systems (二系統以上) meeting the braking performance set by 告示; one system is enough for vehicles with a maximum speed under 25 km/h, large special vehicles under 35 km/h and small special farm vehicles (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Both read 2026-11-03. The rule checks one connected brake chain, not the number of systems or their performance"
+     },
+     {
+      "rule_id": "SY-04",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席が骨組みにつながる",
+      "check": "system:seat_attach",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a seat is joined to the frame by some chain of links)"
+     },
+     {
+      "rule_id": "SY-05",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗る製品は、座席ごとに拘束 (シートベルトなど) が座席と骨組みにつながる",
+      "check": "system:restraint",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (each seat has a restraint joined to the seat and to the frame). Road vehicles: 道路運送車両の保安基準 (昭和26年運輸省令第67号) 第22条の3 (座席ベルト等), paragraph 1, asks for seat belts and their anchorages (取付装置) on the seats listed in its table (a lap-and-shoulder 第二種座席ベルト on forward-facing seats of passenger vehicles under 10 seats, for example); two-wheelers, sidecar two-wheelers and vehicles under 20 km/h (other than large and small special vehicles) are left out, and so are some seat kinds (read in the e-Gov 法令 XML, law id 326M50000800067, https:\/\/laws.e-gov.go.jp/law/326M50000800067). Recreational off-highway vehicles: ANSI/ROHVA 1 (current edition 2023 per ROHVA, https:\/\/rohva.org/ansi-standard/, which lists an Occupant Retention System among its contents). The standard itself was not opened (sold); secondary: CPSC staff letter to ROHVA of 10 March 2011 on the canvass draft (section 11.1 Seat Belts asks for at least a three-point seat belt; https:\/\/www.cpsc.gov/s3fs-public/pdfs/blk_pdf_commcanvass03102111.pdf) and CPSC NPR 79 FR 68964 (19 Nov 2014), p. 68985-68986 (ANSI/ROHVA 1-2011 section 11.2 seat belt reminder, 11.3 ORS zones; ORS defined as including three-point seat belts; https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). All read 2026-11-03"
+     },
+     {
+      "rule_id": "SY-06",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "人が乗って屋外の悪路を走る製品は、乗員を囲む転倒保護の枠 (ROPS) が骨組みにつながる",
+      "check": "system:rops",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a roll-over protective structure is in the design and joined to the frame; that it encloses the occupants is not checked here). ANSI/ROHVA 1 (current edition 2023) lists a Roll Over Protective Structure (ROPS) among the requirements it covers (ROHVA's page, https:\/\/rohva.org/ansi-standard/); the CPSC NPR 79 FR 68964 (19 Nov 2014) describes ROVs as equipped with ROPS (p. 68964) and puts ROPS in its proposed ROV definition, 16 CFR 1422.2(a) (p. 69022) (https:\/\/www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Read 2026-11-03. The standard text was not opened (sold): its ROPS clause number and test method were not seen, and ROHVA 1 covers ROVs only (in the NPR definition, among other features, a top speed over 30 mph)"
+     },
+     {
+      "rule_id": "SY-07",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "公道を走る製品は、前照灯・尾灯・制動灯・方向指示器がそろう",
+      "check": "system:lighting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (one of each in the design). Lamps of road vehicles are regulated by Japan's 道路運送車両の保安基準 (昭和26年運輸省令第67号): 第32条 (前照灯等; 走行用前照灯 para. 1, すれ違い用前照灯 para. 4, on the front), 第37条 (尾灯), 第39条 (制動灯), 第41条 (方向指示器). 第37条 and 第39条 para. 1 ask for the lamp on both sides of the rear (one is enough for two-wheelers and vehicles 0.8 m wide or less) and do not apply to 軽自動車 and 小型特殊自動車 under 20 km/h; 第41条 para. 1 leaves out vehicles under 20 km/h shorter than 6 m with the driver's seat outside a cabin (and other listed conditions). Colour, brightness and mounting are left to the 告示 (not opened). Read in the e-Gov 法令 XML, law id 326M50000800067 (https:\/\/laws.e-gov.go.jp/law/326M50000800067), 2026-11-03. The design check counts one of each, not two per rear side"
+     },
+     {
+      "rule_id": "SY-08",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電池からモーターまで、電力を伝える鎖が切れずにつながる",
+      "check": "system:power_chain",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (the motors are reached from a battery by links that carry power)"
+     },
+     {
+      "rule_id": "SY-09",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "電池を積む製品は、電力の鎖に遮断 (ヒューズかスイッチ) がある",
+      "check": "system:disconnect",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a fuse, switch, contactor or breaker is on the battery's power chain). Electrical safety of electric propulsion is the subject of ISO 6469-3:2021, \"Electrically propelled road vehicles - Safety specifications - Part 3: Electrical safety\" (edition 4, published 2021-10, stage 90.92 to be revised): per its abstract on the ISO catalogue page (https:\/\/www.iso.org/standard/81746.html, copy saved and read 2026-11-03), it covers voltage class B circuits of the propulsion system and conductively connected auxiliary systems, against electric shock and thermal incidents; post-crash is ISO 6469-4 and motorcycles and mopeds the ISO 13063 series. The text is sold and no preview was opened, so whether it requires a fuse, switch or other disconnect was not checked in this repository; the basis only says the standard covers the electrical safety of the propulsion system"
+     },
+     {
+      "rule_id": "SY-10",
+      "doc_id": "KN-SY",
+      "category": "system",
+      "text": "どの部品も、骨組みに止まっている (乗員と荷を除く。止め先の部材か節が、部品の箱から 500 mm 以内。500 mm は仮の値)",
+      "check": "system:mounting",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (every part, people and cargo apart, is held by structural links, carries load or none, that reach a member, a node or a ground point of the frame; a link to a member counts only when the part's box is within 500 mm of it, a PROVISIONAL limit chosen here and not taken from a source; torque, steer, brake and power links pass a force on and do not hold a part). It finds a part drawn in the air whose connects_to says it is bolted on. Provisional: to be replaced by a load-path calculation (the force a part's weight and the road's acceleration put on its mount reaches the frame, and the deflection under a hand or foot load stays within the requirement); remove it then"
+     }
+    ]
+   }
+  },
+  {
+   "seq": 12,
    "ts": "2026-11-03T10:00:06.000+09:00",
    "t": 6.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "text": "要件のファイルのまま進みます (既定値で足した 14 件: Q44・Q45・Q46・Q47・Q48・Q49・Q57・Q63・Q89・Q93・Q94・Q95・Q96・Q97)",
    "data": {
     "answers": [
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
       "source": "default",
       "trust": 1,
-      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I (not checked in this repository)",
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https:\/\/www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
       "value": 180,
       "unit": "mm"
      },
@@ -6437,14 +13874,68 @@ export const DEMOS = {
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
-      "basis": "ISO 13854:1996 の試し読み, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf (not checked in this repository)",
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
+      "value": 450,
+      "unit": "mm"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
+      "unit": "mm"
      }
     ]
    }
   },
   {
-   "seq": 12,
+   "seq": 13,
    "ts": "2026-11-03T10:00:11.000+09:00",
    "t": 11.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -6494,7 +13985,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 13,
+   "seq": 14,
    "ts": "2026-11-03T10:00:12.000+09:00",
    "t": 12.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -6508,7 +13999,7 @@ export const DEMOS = {
     "change_reason": "first version (fixed demo design)",
     "variables": {
      "wheelbase": {
-      "value": 1700.0,
+      "value": 2020.0,
       "unit": "mm"
      },
      "track": {
@@ -6695,7 +14186,7 @@ export const DEMOS = {
       "value": 10000000.0,
       "unit": "1"
      },
-     "fatigue_slope_after_knee": {
+     "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
       "unit": "1"
      },
@@ -6727,8 +14218,28 @@ export const DEMOS = {
       "value": 2.3,
       "unit": "mm"
      },
+     "tower_b": {
+      "value": 30.0,
+      "unit": "mm"
+     },
+     "tower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "lower_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
+     "lower_cross": {
+      "value": 1.0,
+      "unit": "1"
+     },
      "seat_x": {
-      "value": -725.0,
+      "value": -1045.0,
       "unit": "mm"
      },
      "seat_y": {
@@ -6736,11 +14247,27 @@ export const DEMOS = {
       "unit": "mm"
      },
      "steering_x": {
-      "value": -250.0,
+      "value": -570.0,
       "unit": "mm"
      },
      "battery_x": {
-      "value": -725.0,
+      "value": -1045.0,
+      "unit": "mm"
+     },
+     "seat_height": {
+      "value": 260.0,
+      "unit": "mm"
+     },
+     "steering_column_angle": {
+      "value": 35.0,
+      "unit": "deg"
+     },
+     "steering_wheel_height": {
+      "value": 495.4114925552308,
+      "unit": "mm"
+     },
+     "pedal_x": {
+      "value": -393.1890219018587,
       "unit": "mm"
      },
      "front_spring_rate": {
@@ -6783,6 +14310,54 @@ export const DEMOS = {
       "value": 10.0,
       "unit": "1"
      },
+     "driveshaft_diameter": {
+      "value": 30.0,
+      "unit": "mm"
+     },
+     "driveshaft_wall": {
+      "value": 5.0,
+      "unit": "mm"
+     },
+     "driveshafts": {
+      "value": 1.0,
+      "unit": "1"
+     },
+     "lamps": {
+      "value": 0.0,
+      "unit": "1"
+     },
+     "rollbar": {
+      "value": 1.0,
+      "unit": "1"
+     },
+     "rollbar_height": {
+      "value": 1100.0,
+      "unit": "mm"
+     },
+     "rollbar_width": {
+      "value": 1200.0,
+      "unit": "mm"
+     },
+     "rollbar_offset": {
+      "value": 80.0,
+      "unit": "mm"
+     },
+     "rollbar_square": {
+      "value": 0.0,
+      "unit": "1"
+     },
+     "rollbar_d": {
+      "value": 42.7,
+      "unit": "mm"
+     },
+     "rollbar_b": {
+      "value": 40.0,
+      "unit": "mm"
+     },
+     "rollbar_t": {
+      "value": 2.3,
+      "unit": "mm"
+     },
      "tyre_relaxation_length": {
       "value": 300.0,
       "unit": "mm"
@@ -6790,6 +14365,18 @@ export const DEMOS = {
      "wheel_inertia": {
       "value": 0.63,
       "unit": "kg*m^2"
+     },
+     "motor_rotor_inertia": {
+      "value": 0.005147246483552594,
+      "unit": "kg*m^2"
+     },
+     "reducer_output_inertia": {
+      "value": 0.005764916061578906,
+      "unit": "kg*m^2"
+     },
+     "driveshaft_inner_drop": {
+      "value": 32.0,
+      "unit": "mm"
      }
     },
     "supports": [
@@ -6804,10 +14391,68 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         120.0,
+         196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -120.0,
+         196.0,
+         180.0
+        ],
+        "lca_outer": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         100.0,
+         266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -100.0,
+         266.8,
+         478.0
+        ],
+        "uca_outer": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -120.0,
+         226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -120.0,
+         475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         0.0,
+         550.0,
+         300.0
+        ],
+        "damper_lower": [
+         0.0,
+         401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         0.0,
+         428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": false,
@@ -6827,10 +14472,68 @@ export const DEMOS = {
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         120.0,
+         -196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -120.0,
+         -196.0,
+         180.0
+        ],
+        "lca_outer": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         100.0,
+         -266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -100.0,
+         -266.8,
+         478.0
+        ],
+        "uca_outer": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -120.0,
+         -226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -120.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         0.0,
+         -550.0,
+         300.0
+        ],
+        "damper_lower": [
+         0.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         0.0,
+         -428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": false,
@@ -6843,17 +14546,75 @@ export const DEMOS = {
       "id": "RL",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        550.0,
        300.0
       ],
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         -1900.0,
+         196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -2140.0,
+         196.0,
+         180.0
+        ],
+        "lca_outer": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         -1920.0,
+         266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -2120.0,
+         266.8,
+         478.0
+        ],
+        "uca_outer": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -2140.0,
+         226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -2140.0,
+         475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         -2020.0,
+         550.0,
+         300.0
+        ],
+        "damper_lower": [
+         -2020.0,
+         401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         -2020.0,
+         428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": true,
@@ -6866,17 +14627,75 @@ export const DEMOS = {
       "id": "RR",
       "kind": "wheel",
       "position_mm": [
-       -1700.0,
+       -2020.0,
        -550.0,
        300.0
       ],
       "radius_mm": 300.0,
       "width_mm": 200.0,
       "suspension": {
-       "type": "spring",
+       "type": "kc_table",
        "stiffness_N_per_mm": 20.0,
        "damping_Ns_per_mm": 1.2,
-       "travel_mm": 150.0
+       "travel_mm": 150.0,
+       "kc_table": "builtin:double_wishbone",
+       "hardpoints_mm": {
+        "lca_front": [
+         -1900.0,
+         -196.0,
+         180.0
+        ],
+        "lca_rear": [
+         -2140.0,
+         -196.0,
+         180.0
+        ],
+        "lca_outer": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "uca_front": [
+         -1920.0,
+         -266.8,
+         478.0
+        ],
+        "uca_rear": [
+         -2120.0,
+         -266.8,
+         478.0
+        ],
+        "uca_outer": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "tie_inner": [
+         -2140.0,
+         -226.34663097925088,
+         278.32962930738194
+        ],
+        "tie_outer": [
+         -2140.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "wheel_center": [
+         -2020.0,
+         -550.0,
+         300.0
+        ],
+        "damper_lower": [
+         -2020.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "damper_upper": [
+         -2020.0,
+         -428.8,
+         603.0
+        ]
+       }
       },
       "actuation": {
        "drive": true,
@@ -6893,7 +14712,7 @@ export const DEMOS = {
       "kind": "battery",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
         330.0
        ],
@@ -6909,17 +14728,79 @@ export const DEMOS = {
        "RS1",
        "LS2",
        "RS2"
+      ],
+      "system": "battery",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "main_switch",
+        "via": "wire",
+        "carries": "power"
+       }
+      ]
+     },
+     {
+      "id": "main_switch",
+      "name": "電池の主スイッチ (遮断)",
+      "kind": "switch",
+      "box": {
+       "center_mm": [
+        -620.0,
+        190.0,
+        300.0
+       ],
+       "size_mm": [
+        80.0,
+        80.0,
+        80.0
+       ]
+      },
+      "mass_kg": 0.3,
+      "carried_by": [
+       "LS1"
+      ],
+      "system": "battery",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "controller",
+        "via": "wire",
+        "carries": "power"
+       }
       ]
      },
      {
       "id": "motor",
-      "name": "モーターと減速機",
+      "name": "モーター",
       "kind": "motor",
       "box": {
        "center_mm": [
-        -1550.0,
+        -1815.0,
         0.0,
-        310.0
+        268.0
        ],
        "size_mm": [
         250.0,
@@ -6927,10 +14808,135 @@ export const DEMOS = {
         220.0
        ]
       },
-      "mass_kg": 25.0,
+      "mass_kg": 11.765134819548786,
       "carried_by": [
        "LB",
        "RB"
+      ],
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "reducer",
+        "via": "spline",
+        "carries": "torque"
+       }
+      ]
+     },
+     {
+      "id": "reducer",
+      "name": "減速機と差動",
+      "kind": "reducer",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        0.0,
+        268.0
+       ],
+       "size_mm": [
+        160.0,
+        392.0,
+        164.0
+       ]
+      },
+      "mass_kg": 7.8434232130325245,
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "driveshaft_RL",
+        "via": "spline",
+        "carries": "torque"
+       },
+       {
+        "to": "driveshaft_RR",
+        "via": "spline",
+        "carries": "torque"
+       }
+      ]
+     },
+     {
+      "id": "driveshaft_RL",
+      "name": "左のドライブシャフト",
+      "kind": "driveshaft",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        373.0,
+        284.0
+       ],
+       "size_mm": [
+        385.44338508403837,
+        30.0,
+        30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        90.0
+       ]
+      },
+      "mass_kg": 2.6957209837093448,
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "wheel_RL",
+        "via": "spline",
+        "carries": "torque"
+       }
+      ]
+     },
+     {
+      "id": "driveshaft_RR",
+      "name": "右のドライブシャフト",
+      "kind": "driveshaft",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -373.0,
+        284.0
+       ],
+       "size_mm": [
+        385.44338508403837,
+        30.0,
+        30.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -5.165241044995761,
+        -90.0
+       ]
+      },
+      "mass_kg": 2.6957209837093448,
+      "system": "drive",
+      "connects_to": [
+       {
+        "to": "wheel_RR",
+        "via": "spline",
+        "carries": "torque"
+       }
       ]
      },
      {
@@ -6939,7 +14945,7 @@ export const DEMOS = {
       "kind": "controller",
       "box": {
        "center_mm": [
-        -1110.0,
+        -1430.0,
         0.0,
         300.0
        ],
@@ -6953,6 +14959,24 @@ export const DEMOS = {
       "carried_by": [
        "LS2",
        "RS2"
+      ],
+      "system": "control",
+      "connects_to": [
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "motor",
+        "via": "wire",
+        "carries": "power"
+       }
       ]
      },
      {
@@ -6961,7 +14985,7 @@ export const DEMOS = {
       "kind": "electrical",
       "box": {
        "center_mm": [
-        -300.0,
+        -620.0,
         0.0,
         300.0
        ],
@@ -6971,12 +14995,28 @@ export const DEMOS = {
         100.0
        ]
       },
-      "mass_kg": 6.0,
+      "mass_kg": 5.7,
       "carried_by": [
-       "LA",
-       "RA",
        "LS1",
        "RS1"
+      ],
+      "system": "electrical",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "battery",
+        "via": "wire",
+        "carries": "power"
+       }
       ]
      },
      {
@@ -6985,22 +15025,207 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -225.0,
+        -540.8888249672586,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
-        450.0,
-        600.0,
-        20.0
+        458.2223500654828,
+        911.0,
+        3.2
        ]
       },
-      "mass_kg": 6.0,
+      "mass_kg": 11.183232626769652,
       "carried_by": [
-       "LA",
-       "RA",
+       "LAp2",
+       "RAp2",
        "LS1",
        "RS1"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "pedal_accel",
+      "name": "アクセルのペダル",
+      "kind": "accelerator_pedal",
+      "box": {
+       "center_mm": [
+        -389.76882046860203,
+        -330.0,
+        492.0360923856119
+       ],
+       "size_mm": [
+        100.0,
+        80.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -19.999999999999535,
+        0.0
+       ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "control",
+      "connects_to": [
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "controller",
+        "via": "wire",
+        "carries": "signal"
+       },
+       {
+        "to": "floor_front",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "pedal_brake",
+      "name": "ブレーキのペダル",
+      "kind": "brake_pedal",
+      "box": {
+       "center_mm": [
+        -389.76882046860203,
+        -220.0,
+        492.0360923856119
+       ],
+       "size_mm": [
+        100.0,
+        80.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -19.999999999999535,
+        0.0
+       ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "brake_master",
+        "via": "pin",
+        "carries": "brake"
+       },
+       {
+        "to": "floor_front",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "brake_master",
+      "name": "ブレーキのマスターシリンダー",
+      "kind": "brake_master_cylinder",
+      "box": {
+       "center_mm": [
+        -332.29999999999995,
+        -220.0,
+        697.7183687566543
+       ],
+       "size_mm": [
+        120.0,
+        70.0,
+        70.0
+       ]
+      },
+      "mass_kg": 0.8,
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "caliper_FL",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "caliper_FR",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "caliper_RL",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "caliper_RR",
+        "via": "hose",
+        "carries": "brake"
+       },
+       {
+        "to": "bulkhead",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7009,22 +15234,47 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         550.0,
         1100.0,
-        20.0
+        3.2
        ]
       },
-      "mass_kg": 8.0,
+      "mass_kg": 16.20795,
       "carried_by": [
        "LS1",
        "RS1",
        "LS2",
        "RS2"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7033,17 +15283,17 @@ export const DEMOS = {
       "kind": "body",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
-        440.0
+        431.6
        ],
        "size_mm": [
         950.0,
-        880.0,
-        20.0
+        483.6,
+        3.2
        ]
       },
-      "mass_kg": 18.0,
+      "mass_kg": 12.3078618,
       "carried_by": [
        "LS2",
        "RS2",
@@ -7051,6 +15301,41 @@ export const DEMOS = {
        "RB",
        "LE",
        "RE"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RB",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LE",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RE",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7065,7 +15350,7 @@ export const DEMOS = {
        ],
        "size_mm": [
         360.0,
-        600.0,
+        483.6,
         280.0
        ]
       },
@@ -7073,30 +15358,341 @@ export const DEMOS = {
       "carried_by": [
        "LF",
        "RF",
-       "LA",
-       "RA"
+       "LAp1",
+       "RAp1"
+      ],
+      "material": "ss400",
+      "finish": "painted",
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LF",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RF",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LAp1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp1",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
-      "id": "steering",
-      "name": "ハンドルとペダル",
+      "id": "bulkhead",
+      "name": "前の隔壁 (足元と前の区画の仕切りの板)",
+      "kind": "body",
+      "box": {
+       "center_mm": [
+        -271.15,
+        0.0,
+        622.0431784698708
+       ],
+       "size_mm": [
+        2.3,
+        740.0,
+        384.08635693974145
+       ]
+      },
+      "mass_kg": 5.607737628591613,
+      "material": "ss400",
+      "finish": "painted",
+      "carried_by": [
+       "LAt2",
+       "LDT",
+       "RAt2",
+       "RDT",
+       "LAp2",
+       "RAp2"
+      ],
+      "system": "body",
+      "connects_to": [
+       {
+        "to": "LAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAt2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LAp2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAp2",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "steering_wheel",
+      "name": "ハンドル",
       "kind": "steering",
       "box": {
        "center_mm": [
-        -250.0,
-        -200.0,
-        750.0
+        -720.0,
+        -300.0,
+        1188.6114925552308
        ],
        "size_mm": [
-        300.0,
-        200.0,
-        500.0
+        40.0,
+        350.0,
+        350.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.00000000000025,
+        0.0
        ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 2.5537001056615427,
       "carried_by": [
-       "RA",
-       "RS1"
+       "LDT",
+       "RDT"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "steering_column",
+        "via": "spline",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "steering_column",
+      "name": "ステアリングのコラム",
+      "kind": "steering_column",
+      "box": {
+       "center_mm": [
+        -420.0,
+        -300.0,
+        978.5492310923179
+       ],
+       "size_mm": [
+        772.4647532568737,
+        40.0,
+        40.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.00000000000001,
+        0.0
+       ]
+      },
+      "mass_kg": 2.042960084529234,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "steering_shaft",
+        "via": "pin",
+        "carries": "steer"
+       },
+       {
+        "to": "dash_cross",
+        "via": "bolt",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "steering_shaft",
+      "name": "ステアリングの中間軸",
+      "kind": "steering_shaft",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -235.0,
+        523.4082994683935
+       ],
+       "size_mm": [
+        531.1037549373495,
+        24.0,
+        24.0
+       ],
+       "rpy_deg": [
+        0.0,
+        75.14594426906802,
+        90.0
+       ]
+      },
+      "mass_kg": 1.021480042264617,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "steering_rack",
+        "via": "spline",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "steering_rack",
+      "name": "ステアリングのラック",
+      "kind": "steering_rack",
+      "box": {
+       "center_mm": [
+        -120.0,
+        0.0,
+        278.32962930738194
+       ],
+       "size_mm": [
+        50.0,
+        502.69326195850175,
+        50.0
+       ]
+      },
+      "mass_kg": 4.596660190190777,
+      "carried_by": [
+       "LAu2",
+       "RAu2"
+      ],
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RAu2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "tie_rod_FL",
+        "via": "ball_joint",
+        "carries": "steer"
+       },
+       {
+        "to": "tie_rod_FR",
+        "via": "ball_joint",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "tie_rod_FL",
+      "name": "前左のタイロッド",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -120.0,
+        350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "knuckle_FL",
+        "via": "ball_joint",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "tie_rod_FR",
+      "name": "前右のタイロッド",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "steering",
+      "connects_to": [
+       {
+        "to": "knuckle_FR",
+        "via": "ball_joint",
+        "carries": "steer"
+       }
       ]
      },
      {
@@ -7105,9 +15701,9 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         -300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -7115,10 +15711,62 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 11.0,
       "carried_by": [
        "RS1",
        "RS2"
+      ],
+      "system": "seat",
+      "connects_to": [
+       {
+        "to": "RS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "seat_belt_R",
+      "name": "運転席のシートベルト (取付金具と巻き取り)",
+      "kind": "seat_belt",
+      "box": {
+       "center_mm": [
+        -1320.0,
+        -540.0,
+        693.2
+       ],
+       "size_mm": [
+        50.0,
+        20.0,
+        300.0
+       ]
+      },
+      "mass_kg": 1.0,
+      "carried_by": [
+       "RS2"
+      ],
+      "system": "restraint",
+      "connects_to": [
+       {
+        "to": "RS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "cross_S2",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7127,9 +15775,9 @@ export const DEMOS = {
       "kind": "seat",
       "box": {
        "center_mm": [
-        -725.0,
+        -1045.0,
         300.0,
-        580.0
+        563.2
        ],
        "size_mm": [
         500.0,
@@ -7137,10 +15785,62 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 12.0,
+      "mass_kg": 11.0,
       "carried_by": [
        "LS1",
        "LS2"
+      ],
+      "system": "seat",
+      "connects_to": [
+       {
+        "to": "LS1",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "seat_belt_L",
+      "name": "助手席のシートベルト (取付金具と巻き取り)",
+      "kind": "seat_belt",
+      "box": {
+       "center_mm": [
+        -1320.0,
+        540.0,
+        693.2
+       ],
+       "size_mm": [
+        50.0,
+        20.0,
+        300.0
+       ]
+      },
+      "mass_kg": 1.0,
+      "carried_by": [
+       "LS2"
+      ],
+      "system": "restraint",
+      "connects_to": [
+       {
+        "to": "LS2",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "cross_S2",
+        "via": "bolt",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7149,20 +15849,28 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         -300.0,
-        970.0
+        1185.8000000000002
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "RS1",
        "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "rest",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7171,20 +15879,28 @@ export const DEMOS = {
       "kind": "occupant",
       "box": {
        "center_mm": [
-        -780.0,
+        -1149.0,
         300.0,
-        970.0
+        1185.8000000000002
        ],
        "size_mm": [
-        450.0,
-        450.0,
-        520.0
+        292.0,
+        495.3,
+        985.2
        ]
       },
-      "mass_kg": 76.6,
+      "mass_kg": 44.2748,
       "carried_by": [
        "LS1",
        "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "rest",
+        "carries": "load"
+       }
       ]
      },
      {
@@ -7193,13 +15909,13 @@ export const DEMOS = {
       "kind": "cargo",
       "box": {
        "center_mm": [
-        -1625.0,
+        -1945.0,
         0.0,
-        600.0
+        583.2
        ],
        "size_mm": [
         900.0,
-        880.0,
+        483.6,
         300.0
        ]
       },
@@ -7211,11 +15927,579 @@ export const DEMOS = {
        "RB",
        "LE",
        "RE"
+      ],
+      "system": "cargo",
+      "connects_to": [
+       {
+        "to": "deck",
+        "via": "rest",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_L",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -208.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_L",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -208.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_L",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -111.175,
+        1259.6557462776154
+       ],
+       "size_mm": [
+        592.3093334270052,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696658,
+        -3.2899932439578037
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_L",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -208.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.thigh_R",
+      "name": "運転者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        -392.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.shank_R",
+      "name": "運転者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        -392.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.arm_R",
+      "name": "運転者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -960.5,
+        -488.825,
+        1259.6557462776154
+       ],
+       "size_mm": [
+        592.3093334270052,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        16.431601884696658,
+        3.2899932439578
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_R.foot_R",
+      "name": "運転者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        -392.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_R",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_L",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        392.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_L",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        392.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_L",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        447.325,
+        1162.9799424023288
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        -13.624631766406635
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_L",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        392.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.thigh_R",
+      "name": "同乗者 (体重は強さの不利側): thigh",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -946.743259751487,
+        208.0,
+        839.2299424023288
+       ],
+       "size_mm": [
+        608.3,
+        184.0,
+        184.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -17.56661777409156,
+        0.0
+       ]
+      },
+      "mass_kg": 7.66,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.shank_R",
+      "name": "同乗者 (体重は強さの不利側): shank",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -647.3490755980956,
+        208.0,
+        717.1891267806559
+       ],
+       "size_mm": [
+        545.7999999999997,
+        126.0,
+        126.0
+       ],
+       "rpy_deg": [
+        0.0,
+        62.43338222590844,
+        0.0
+       ]
+      },
+      "mass_kg": 3.5618999999999996,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.arm_R",
+      "name": "同乗者 (体重は強さの不利側): arm",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -972.743259751487,
+        152.675,
+        1162.9799424023288
+       ],
+       "size_mm": [
+        667.2071129653317,
+        90.0,
+        90.0
+       ],
+       "rpy_deg": [
+        0.0,
+        35.53100489934624,
+        13.624631766406637
+       ]
+      },
+      "mass_kg": 3.829999999999999,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "occupant_L.foot_R",
+      "name": "同乗者 (体重は強さの不利側): foot",
+      "kind": "occupant",
+      "box": {
+       "center_mm": [
+        -466.57900201425474,
+        208.0,
+        518.1397034561875
+       ],
+       "size_mm": [
+        272.5,
+        107.0,
+        81.6
+       ],
+       "rpy_deg": [
+        0.0,
+        -20.000000000000004,
+        0.0
+       ]
+      },
+      "mass_kg": 1.1107,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "system": "occupant",
+      "connects_to": [
+       {
+        "to": "occupant_L",
+        "via": "pin",
+        "carries": "load"
+       }
       ]
      },
      {
       "id": "wheel_FL",
-      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "前左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
@@ -7229,29 +16513,85 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_FL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "FL",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "FL",
+        "via": "rest",
+        "carries": "steer"
+       },
+       {
+        "to": "FL",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_FL",
-      "name": "前左のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        410.0,
-        330.0
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 4.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "LAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LAd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "FL",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
      },
      {
       "id": "wheel_FR",
-      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "前右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
@@ -7265,33 +16605,89 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_FR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "FR",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "FR",
+        "via": "rest",
+        "carries": "steer"
+       },
+       {
+        "to": "FR",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_FR",
-      "name": "前右のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
         0.0,
-        -410.0,
-        330.0
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 4.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "RAl1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAl2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_FR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RAd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "FR",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
      },
      {
       "id": "wheel_RL",
-      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "後左の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         550.0,
         300.0
        ],
@@ -7301,33 +16697,89 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RL",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "RL",
+        "via": "rest",
+        "carries": "torque"
+       },
+       {
+        "to": "RL",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_RL",
-      "name": "後左のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        410.0,
-        330.0
+        -2020.0,
+        355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 3.1074002113230854,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RL2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "LBd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RL",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
      },
      {
       "id": "wheel_RR",
-      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキ)",
+      "name": "後右の車輪 (タイヤ・ホイール・ハブ・ブレーキの円板)",
       "kind": "wheel",
       "box": {
        "center_mm": [
-        -1700.0,
+        -2020.0,
         -550.0,
         300.0
        ],
@@ -7337,25 +16789,929 @@ export const DEMOS = {
         600.0
        ]
       },
-      "mass_kg": 14.0
+      "mass_kg": 14.0,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "RR",
+        "via": "rest",
+        "carries": "load"
+       },
+       {
+        "to": "RR",
+        "via": "rest",
+        "carries": "torque"
+       },
+       {
+        "to": "RR",
+        "via": "rest",
+        "carries": "brake"
+       }
+      ]
      },
      {
       "id": "susp_RR",
-      "name": "後右のサスペンション (アーム・ナックル・ダンパー)",
+      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
       "kind": "suspension",
       "box": {
        "center_mm": [
-        -1700.0,
-        -410.0,
-        330.0
+        -2020.0,
+        -355.5,
+        180.0
        ],
        "size_mm": [
-        250.0,
-        120.0,
-        200.0
+        190.0,
+        269.00000000000006,
+        60.0
        ]
       },
-      "mass_kg": 8.0
+      "mass_kg": 3.1074002113230854,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR1",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_uca_RR2",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RBd",
+        "via": "bushing",
+        "carries": "load"
+       },
+       {
+        "to": "RR",
+        "via": "bushing",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_FL",
+      "name": "前左のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -60.0,
+        475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_FL",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FL",
+        "via": "bolt",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_FR",
+      "name": "前右のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -60.0,
+        -475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_FR",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FR",
+        "via": "bolt",
+        "carries": "steer"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_RL",
+      "name": "後左のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_RL",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "toe_link_RL",
+      "name": "後左のトーを決めるリンク",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RL",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RL2",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "knuckle_RR",
+      "name": "後右のナックル (ハブの軸受けを含む)",
+      "kind": "knuckle",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        -475.00000000000006,
+        336.5
+       ],
+       "size_mm": [
+        160.0,
+        70.0,
+        353.0
+       ]
+      },
+      "mass_kg": 2.5,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "susp_RR",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "toe_link_RR",
+      "name": "後右のトーを決めるリンク",
+      "kind": "tie_rod",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -350.67331548962545,
+        281.664814653691
+       ],
+       "size_mm": [
+        264.74282255081414,
+        16.0,
+        16.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -1.536646988053206,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.8925997886769148,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "knuckle_RR",
+        "via": "ball_joint",
+        "carries": "load"
+       },
+       {
+        "to": "bracket_lca_RR2",
+        "via": "ball_joint",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "caliper_FL",
+      "name": "前左のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -110.0,
+        490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_FL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FL",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "caliper_FR",
+      "name": "前右のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -110.0,
+        -490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_FR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_FR",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "caliper_RL",
+      "name": "後左のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -2130.0,
+        490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_RL",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_RL",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "caliper_RR",
+      "name": "後右のブレーキのキャリパー",
+      "kind": "brake_caliper",
+      "box": {
+       "center_mm": [
+        -2130.0,
+        -490.0,
+        300.0
+       ],
+       "size_mm": [
+        60.0,
+        50.0,
+        90.0
+       ]
+      },
+      "mass_kg": 1.5,
+      "system": "brake",
+      "connects_to": [
+       {
+        "to": "knuckle_RR",
+        "via": "bolt",
+        "carries": "load"
+       },
+       {
+        "to": "wheel_RR",
+        "via": "friction",
+        "carries": "brake"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FL1",
+      "name": "前左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FL2",
+      "name": "前左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR1",
+      "name": "前右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu1",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_FR2",
+      "name": "前右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -100.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL1",
+      "name": "後左の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RL2",
+      "name": "後左の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL1",
+      "name": "後左の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RL2",
+      "name": "後左の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR1",
+      "name": "後右の下の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1900.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_lca_RR2",
+      "name": "後右の下の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -265.5,
+        252.5
+       ],
+       "size_mm": [
+        50.0,
+        169.0,
+        175.0
+       ]
+      },
+      "mass_kg": 1.4858480000000003,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR1",
+      "name": "後右の上の腕の付け根の金具 (前)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1920.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_uca_RR2",
+      "name": "後右の上の腕の付け根の金具 (後)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2120.0,
+        -300.9,
+        456.5
+       ],
+       "size_mm": [
+        50.0,
+        98.19999999999999,
+        73.0
+       ]
+      },
+      "mass_kg": 0.360150464,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FL",
+      "name": "前左のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_FR",
+      "name": "前右のラックの留め金具 (タイロッドの内の端)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -120.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RAu2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAu2",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RL",
+      "name": "後左のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "LB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_tie_RR",
+      "name": "後右のトーのリンクの内の端の金具",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2140.0,
+        -280.67331548962545,
+        296.664814653691
+       ],
+       "size_mm": [
+        50.0,
+        138.65336902074912,
+        86.67037069261806
+       ]
+      },
+      "mass_kg": 0.6037410578742288,
+      "carried_by": [
+       "RB"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RB",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "bracket_column",
+      "name": "ステアリングのコラムの金具 (ダッシュの横の部材の上)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -285.0,
+        -300.0,
+        835.0934450716383
+       ],
+       "size_mm": [
+        50.0,
+        70.0,
+        12.014176263793615
+       ]
+      },
+      "mass_kg": 0.04225145508450939,
+      "carried_by": [
+       "LDT",
+       "RDT"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LDT",
+        "via": "weld",
+        "carries": "load"
+       },
+       {
+        "to": "RDT",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
+     },
+     {
+      "id": "rollbar",
+      "name": "ロールバー (横転のときに乗る人を守る枠。管は骨組みの部材)",
+      "kind": "rollbar",
+      "box": {
+       "center_mm": [
+        -1400.0,
+        0.0,
+        1793.2
+       ],
+       "size_mm": [
+        42.69999999999982,
+        1200.0,
+        42.69999999999982
+       ]
+      },
+      "mass_kg": 0.0,
+      "carried_by": [
+       "LH",
+       "LHO",
+       "LHT",
+       "RH",
+       "RHO",
+       "RHT"
+      ],
+      "system": "rops",
+      "connects_to": [
+       {
+        "to": "LH",
+        "via": "weld",
+        "carries": "load"
+       },
+       {
+        "to": "RH",
+        "via": "weld",
+        "carries": "load"
+       }
+      ]
      }
     ],
     "nodes": [
@@ -7378,7 +17734,7 @@ export const DEMOS = {
      {
       "id": "LS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        350.0,
        380.0
       ]
@@ -7386,7 +17742,7 @@ export const DEMOS = {
      {
       "id": "LS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        350.0,
        380.0
       ]
@@ -7394,7 +17750,7 @@ export const DEMOS = {
      {
       "id": "LB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        350.0,
        380.0
       ]
@@ -7402,7 +17758,7 @@ export const DEMOS = {
      {
       "id": "LE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        350.0,
        380.0
       ]
@@ -7426,7 +17782,7 @@ export const DEMOS = {
      {
       "id": "RS1",
       "xyz_mm": [
-       -450.0,
+       -770.0,
        -350.0,
        380.0
       ]
@@ -7434,7 +17790,7 @@ export const DEMOS = {
      {
       "id": "RS2",
       "xyz_mm": [
-       -1000.0,
+       -1320.0,
        -350.0,
        380.0
       ]
@@ -7442,7 +17798,7 @@ export const DEMOS = {
      {
       "id": "RB",
       "xyz_mm": [
-       -1700.0,
+       -2020.0,
        -350.0,
        380.0
       ]
@@ -7450,9 +17806,265 @@ export const DEMOS = {
      {
       "id": "RE",
       "xyz_mm": [
-       -2100.0,
+       -2420.0,
        -350.0,
        380.0
+      ]
+     },
+     {
+      "id": "LAp1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAp2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu1",
+      "xyz_mm": [
+       100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAu2",
+      "xyz_mm": [
+       -100.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LAm",
+      "xyz_mm": [
+       0.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAd",
+      "xyz_mm": [
+       0.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt1",
+      "xyz_mm": [
+       285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAt2",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LAl1",
+      "xyz_mm": [
+       120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LAl2",
+      "xyz_mm": [
+       -120.0,
+       196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAp1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAp2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu1",
+      "xyz_mm": [
+       100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAu2",
+      "xyz_mm": [
+       -100.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RAm",
+      "xyz_mm": [
+       0.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAd",
+      "xyz_mm": [
+       0.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt1",
+      "xyz_mm": [
+       285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAt2",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RAl1",
+      "xyz_mm": [
+       120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "RAl2",
+      "xyz_mm": [
+       -120.0,
+       -196.0,
+       180.0
+      ]
+     },
+     {
+      "id": "LBd",
+      "xyz_mm": [
+       -2020.0,
+       428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "LBm",
+      "xyz_mm": [
+       -2022.0,
+       370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "RBd",
+      "xyz_mm": [
+       -2020.0,
+       -428.8,
+       603.0
+      ]
+     },
+     {
+      "id": "RBm",
+      "xyz_mm": [
+       -2022.0,
+       -370.0,
+       603.0
+      ]
+     },
+     {
+      "id": "LDT",
+      "xyz_mm": [
+       -285.0,
+       350.0,
+       829.0863569397414
+      ]
+     },
+     {
+      "id": "RDT",
+      "xyz_mm": [
+       -285.0,
+       -350.0,
+       829.0863569397414
+      ]
+     },
+     {
+      "id": "LH",
+      "xyz_mm": [
+       -1400.0,
+       350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LHO",
+      "xyz_mm": [
+       -1400.0,
+       600.0,
+       380.0
+      ]
+     },
+     {
+      "id": "LHT",
+      "xyz_mm": [
+       -1400.0,
+       600.0,
+       1793.2
+      ]
+     },
+     {
+      "id": "RH",
+      "xyz_mm": [
+       -1400.0,
+       -350.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RHO",
+      "xyz_mm": [
+       -1400.0,
+       -600.0,
+       380.0
+      ]
+     },
+     {
+      "id": "RHT",
+      "xyz_mm": [
+       -1400.0,
+       -600.0,
+       1793.2
       ]
      }
     ],
@@ -7460,14 +18072,46 @@ export const DEMOS = {
      {
       "id": "rail_L_FA",
       "node_a": "LF",
+      "node_b": "LAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAp1_LAu1",
+      "node_a": "LAp1",
+      "node_b": "LAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu1_LA",
+      "node_a": "LAu1",
       "node_b": "LA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_L_AS1",
+      "id": "rail_L_LA_LAu2",
       "node_a": "LA",
+      "node_b": "LAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_LAu2_LAp2",
+      "node_a": "LAu2",
+      "node_b": "LAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_AS1",
+      "node_a": "LAp2",
       "node_b": "LS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -7482,8 +18126,16 @@ export const DEMOS = {
       "part": "frame"
      },
      {
-      "id": "rail_L_S2B",
+      "id": "rail_L_S2H",
       "node_a": "LS2",
+      "node_b": "LH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_L_HB",
+      "node_a": "LH",
       "node_b": "LB",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -7500,14 +18152,46 @@ export const DEMOS = {
      {
       "id": "rail_R_FA",
       "node_a": "RF",
+      "node_b": "RAp1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAp1_RAu1",
+      "node_a": "RAp1",
+      "node_b": "RAu1",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu1_RA",
+      "node_a": "RAu1",
       "node_b": "RA",
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame"
      },
      {
-      "id": "rail_R_AS1",
+      "id": "rail_R_RA_RAu2",
       "node_a": "RA",
+      "node_b": "RAu2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_RAu2_RAp2",
+      "node_a": "RAu2",
+      "node_b": "RAp2",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_AS1",
+      "node_a": "RAp2",
       "node_b": "RS1",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -7522,8 +18206,16 @@ export const DEMOS = {
       "part": "frame"
      },
      {
-      "id": "rail_R_S2B",
+      "id": "rail_R_S2H",
       "node_a": "RS2",
+      "node_b": "RH",
+      "section": "rt40x80x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rail_R_HB",
+      "node_a": "RH",
       "node_b": "RB",
       "section": "rt40x80x2.3",
       "material": "stkr400",
@@ -7584,6 +18276,230 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame"
+     },
+     {
+      "id": "tower_post_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA1",
+      "node_a": "LAt1",
+      "node_b": "LAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_LA2",
+      "node_a": "LAm",
+      "node_b": "LAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LA",
+      "node_a": "LAm",
+      "node_b": "LAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA1",
+      "node_a": "LAp1",
+      "node_b": "LAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_LA2",
+      "node_a": "LAp2",
+      "node_b": "LAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAt1",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA1",
+      "node_a": "RAt1",
+      "node_b": "RAm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_top_RA2",
+      "node_a": "RAm",
+      "node_b": "RAt2",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RA",
+      "node_a": "RAm",
+      "node_b": "RAd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA1",
+      "node_a": "RAp1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_leg_RA2",
+      "node_a": "RAp2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_LB",
+      "node_a": "LB",
+      "node_b": "LBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_LB",
+      "node_a": "LBm",
+      "node_b": "LBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_post_RB",
+      "node_a": "RB",
+      "node_b": "RBm",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "tower_arm_RB",
+      "node_a": "RBm",
+      "node_b": "RBd",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A1",
+      "node_a": "LAl1",
+      "node_b": "RAl1",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "lower_cross_A2",
+      "node_a": "LAl2",
+      "node_b": "RAl2",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_L",
+      "node_a": "LAt2",
+      "node_b": "LDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_post_R",
+      "node_a": "RAt2",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "dash_cross",
+      "node_a": "LDT",
+      "node_b": "RDT",
+      "section": "rt30x30x2.3",
+      "material": "stkr400",
+      "part": "frame"
+     },
+     {
+      "id": "rollbar_foot_L",
+      "node_a": "LH",
+      "node_b": "LHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_post_L",
+      "node_a": "LHO",
+      "node_b": "LHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_foot_R",
+      "node_a": "RH",
+      "node_b": "RHO",
+      "section": "rt40x40x2.3",
+      "material": "stkr400",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_post_R",
+      "node_a": "RHO",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
+     },
+     {
+      "id": "rollbar_top",
+      "node_a": "LHT",
+      "node_b": "RHT",
+      "section": "ct42.7x2.3",
+      "material": "stkm13a",
+      "part": "rollbar"
      }
     ],
     "sections": {
@@ -7602,6 +18518,21 @@ export const DEMOS = {
        "h": 40.0,
        "t": 2.3
       }
+     },
+     "rt30x30x2.3": {
+      "shape": "rect_tube",
+      "dims_mm": {
+       "b": 30.0,
+       "h": 30.0,
+       "t": 2.3
+      }
+     },
+     "ct42.7x2.3": {
+      "shape": "round_tube",
+      "dims_mm": {
+       "d": 42.7,
+       "t": 2.3
+      }
      }
     },
     "materials": {
@@ -7613,12 +18544,30 @@ export const DEMOS = {
       "yield_MPa": 245.0,
       "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
+     },
+     "ss400": {
+      "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 245.0,
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
+     },
+     "stkm13a": {
+      "name": "JIS G 3445 STKM13A (carbon steel tube for machine structural purposes)",
+      "E_MPa": 205000.0,
+      "nu": 0.3,
+      "density_kg_m3": 7850.0,
+      "yield_MPa": 215.0,
+      "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "verified": false
      }
     }
    }
   },
   {
-   "seq": 14,
+   "seq": 15,
    "ts": "2026-11-03T10:00:14.000+09:00",
    "t": 14.0,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7633,7 +18582,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -7660,13 +18610,19 @@ export const DEMOS = {
       "missing": [
        "bend_radius_mm"
       ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "bend_radius_mm"
+      ]
      }
     ],
     "pass": true
    }
   },
   {
-   "seq": 15,
+   "seq": 16,
    "ts": "2026-11-03T10:00:14.100+09:00",
    "t": 14.1,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7681,7 +18637,8 @@ export const DEMOS = {
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -7708,13 +18665,19 @@ export const DEMOS = {
       "missing": [
        "hole_edge_mm"
       ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "hole_edge_mm"
+      ]
      }
     ],
     "pass": true
    }
   },
   {
-   "seq": 16,
+   "seq": 17,
    "ts": "2026-11-03T10:00:14.200+09:00",
    "t": 14.2,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7730,7 +18693,56 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
-     "frame"
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -7763,7 +18775,350 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "bulkhead",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "hole_edge_mm",
+       "hole_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "hole_edge_mm",
        "hole_diameter_mm"
@@ -7774,7 +19129,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 17,
+   "seq": 18,
    "ts": "2026-11-03T10:00:14.300+09:00",
    "t": 14.3,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7790,7 +19145,56 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
-     "frame"
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -7823,7 +19227,350 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "bulkhead",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "thread_engagement_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "thread_engagement_mm",
        "bolt_diameter_mm"
@@ -7834,7 +19581,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 18,
+   "seq": 19,
    "ts": "2026-11-03T10:00:14.400+09:00",
    "t": 14.4,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7846,7 +19593,55 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "WD-01",
     "targets": [
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -7854,7 +19649,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 19,
+   "seq": 20,
    "ts": "2026-11-03T10:00:14.500+09:00",
    "t": 14.5,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7866,12 +19661,396 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "WD-02",
     "targets": [
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
      {
-      "part_id": "frame",
+      "part_id": "rail_L_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "weld_length_mm",
+       "weld_throat_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "weld_length_mm",
        "weld_throat_mm"
@@ -7882,7 +20061,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 20,
+   "seq": 21,
    "ts": "2026-11-03T10:00:14.600+09:00",
    "t": 14.6,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7892,57 +20071,65 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0007",
     "design_version": 1,
-    "rule_id": "TL-01",
+    "rule_id": "WD-03",
     "targets": [
-     "floor_front",
-     "floor",
-     "deck",
-     "front_body",
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
-    "not_evaluable": [
-     {
-      "part_id": "floor_front",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "floor",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "deck",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "front_body",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     },
-     {
-      "part_id": "frame",
-      "missing": [
-       "clearance_mm",
-       "tolerance_stack_mm"
-      ]
-     }
-    ],
+    "not_evaluable": [],
     "pass": true
    }
   },
   {
-   "seq": 21,
+   "seq": 22,
    "ts": "2026-11-03T10:00:14.700+09:00",
    "t": 14.7,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -7952,13 +20139,514 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0008",
     "design_version": 1,
+    "rule_id": "TL-01",
+    "targets": [
+     "floor_front",
+     "floor",
+     "deck",
+     "front_body",
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "floor_front",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "floor",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "deck",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "front_body",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "clearance_mm",
+       "tolerance_stack_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 23,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
     "rule_id": "TL-02",
     "targets": [
      "floor_front",
      "floor",
      "deck",
      "front_body",
-     "frame"
+     "bulkhead",
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -7995,7 +20683,399 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "bulkhead",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "position_tolerance_mm",
+       "clearance_hole_mm",
+       "bolt_diameter_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "position_tolerance_mm",
        "clearance_hole_mm",
@@ -8007,15 +21087,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 22,
-   "ts": "2026-11-03T10:00:14.800+09:00",
-   "t": 14.8,
+   "seq": 24,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0009",
+    "rule_check_id": "rchk-0010",
     "design_version": 1,
     "rule_id": "HU-01",
     "targets": [
@@ -8028,15 +21108,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 23,
-   "ts": "2026-11-03T10:00:14.900+09:00",
-   "t": 14.9,
+   "seq": 25,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0010",
+    "rule_check_id": "rchk-0011",
     "design_version": 1,
     "rule_id": "HU-02",
     "targets": [
@@ -8064,15 +21144,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
-   "ts": "2026-11-03T10:00:15.000+09:00",
-   "t": 15.0,
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0011",
+    "rule_check_id": "rchk-0012",
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
@@ -8080,7 +21160,55 @@ export const DEMOS = {
      "susp_FR",
      "susp_RL",
      "susp_RR",
-     "frame"
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
     ],
     "hits": [],
     "not_evaluable": [
@@ -8109,7 +21237,295 @@ export const DEMOS = {
       ]
      },
      {
-      "part_id": "frame",
+      "part_id": "rail_L_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_HB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_HB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "closing_gap_mm"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
       "missing": [
        "closing_gap_mm"
       ]
@@ -8119,15 +21535,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
-   "ts": "2026-11-03T10:00:15.100+09:00",
-   "t": 15.1,
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0012",
+    "rule_check_id": "rchk-0013",
     "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
@@ -8139,15 +21555,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
-   "ts": "2026-11-03T10:00:15.200+09:00",
-   "t": 15.2,
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0013",
+    "rule_check_id": "rchk-0014",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -8159,15 +21575,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0015",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -8179,7 +21595,8 @@ export const DEMOS = {
      "floor",
      "deck",
      "front_body",
-     "steering",
+     "bulkhead",
+     "steering_wheel",
      "seat_R",
      "seat_L",
      "wheel_FL",
@@ -8198,13 +21615,6 @@ export const DEMOS = {
        "mass_kg": 50.0
       },
       "message": "1 人で持ち上げる部品は 23 kg 以下 に合わない (mass_kg = 50)"
-     },
-     {
-      "part_id": "motor",
-      "values": {
-       "mass_kg": 25.0
-      },
-      "message": "1 人で持ち上げる部品は 23 kg 以下 に合わない (mass_kg = 25)"
      }
     ],
     "not_evaluable": [],
@@ -8212,48 +21622,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0015",
-    "design_version": 1,
-    "rule_id": "AS-02",
-    "targets": [
-     "battery",
-     "motor",
-     "controller",
-     "aux",
-     "floor_front",
-     "floor",
-     "deck",
-     "front_body",
-     "steering",
-     "seat_R",
-     "seat_L",
-     "occupant_R",
-     "occupant_L",
-     "cargo",
-     "wheel_FL",
-     "susp_FL",
-     "wheel_FR",
-     "susp_FR",
-     "wheel_RL",
-     "susp_RL",
-     "wheel_RR",
-     "susp_RR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 29,
+   "seq": 30,
    "ts": "2026-11-03T10:00:15.500+09:00",
    "t": 15.5,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8262,6 +21631,106 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0016",
+    "design_version": 1,
+    "rule_id": "AS-02",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "bulkhead",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "occupant_R",
+     "occupant_L",
+     "cargo",
+     "occupant_R.thigh_L",
+     "occupant_R.shank_L",
+     "occupant_R.arm_L",
+     "occupant_R.foot_L",
+     "occupant_R.thigh_R",
+     "occupant_R.shank_R",
+     "occupant_R.arm_R",
+     "occupant_R.foot_R",
+     "occupant_L.thigh_L",
+     "occupant_L.shank_L",
+     "occupant_L.arm_L",
+     "occupant_L.foot_L",
+     "occupant_L.thigh_R",
+     "occupant_L.shank_R",
+     "occupant_L.arm_R",
+     "occupant_L.foot_R",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
+     "rollbar"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0017",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -8276,15 +21745,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -8299,27 +21768,7 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0018",
-    "design_version": 1,
-    "rule_id": "MF-01",
-    "targets": [
-     "frame"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 32,
+   "seq": 33,
    "ts": "2026-11-03T10:00:15.800+09:00",
    "t": 15.8,
    "run_id": "20261103-100000-offroad-4w-file",
@@ -8329,12 +21778,351 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0019",
     "design_version": 1,
+    "rule_id": "MF-01",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "SY-01",
+    "targets": [
+     "motor",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 35,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "SY-02",
+    "targets": [
+     "steering_wheel",
+     "support:FL",
+     "support:FR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "SY-03",
+    "targets": [
+     "pedal_brake",
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "SY-04",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "SY-06",
+    "targets": [
+     "rollbar"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "SY-07",
+    "targets": [],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "battery",
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "SY-10",
+    "targets": [
+     "battery",
+     "main_switch",
+     "motor",
+     "reducer",
+     "driveshaft_RL",
+     "driveshaft_RR",
+     "controller",
+     "aux",
+     "floor_front",
+     "pedal_accel",
+     "pedal_brake",
+     "brake_master",
+     "floor",
+     "deck",
+     "front_body",
+     "bulkhead",
+     "steering_wheel",
+     "steering_column",
+     "steering_shaft",
+     "steering_rack",
+     "tie_rod_FL",
+     "tie_rod_FR",
+     "seat_R",
+     "seat_belt_R",
+     "seat_L",
+     "seat_belt_L",
+     "wheel_FL",
+     "susp_FL",
+     "wheel_FR",
+     "susp_FR",
+     "wheel_RL",
+     "susp_RL",
+     "wheel_RR",
+     "susp_RR",
+     "knuckle_FL",
+     "knuckle_FR",
+     "knuckle_RL",
+     "toe_link_RL",
+     "knuckle_RR",
+     "toe_link_RR",
+     "caliper_FL",
+     "caliper_FR",
+     "caliper_RL",
+     "caliper_RR",
+     "bracket_uca_FL1",
+     "bracket_uca_FL2",
+     "bracket_uca_FR1",
+     "bracket_uca_FR2",
+     "bracket_lca_RL1",
+     "bracket_lca_RL2",
+     "bracket_uca_RL1",
+     "bracket_uca_RL2",
+     "bracket_lca_RR1",
+     "bracket_lca_RR2",
+     "bracket_uca_RR1",
+     "bracket_uca_RR2",
+     "bracket_tie_FL",
+     "bracket_tie_FR",
+     "bracket_tie_RL",
+     "bracket_tie_RR",
+     "bracket_column",
+     "rollbar"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
      "floor_front",
      "floor",
      "deck",
-     "front_body"
+     "front_body",
+     "bulkhead"
     ],
     "hits": [],
     "not_evaluable": [
@@ -8361,21 +22149,27 @@ export const DEMOS = {
       "missing": [
        "bend_radius_mm"
       ]
+     },
+     {
+      "part_id": "bulkhead",
+      "missing": [
+       "bend_radius_mm"
+      ]
      }
     ],
     "pass": true
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [

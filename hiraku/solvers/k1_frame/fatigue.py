@@ -16,7 +16,7 @@ import math
 import numpy as np
 
 from ..k0_handcalc.vehicle import mass_summary, inertia_tensor, support_contact
-from .model import COMBO, build
+from .model import COMBO, build, stress_dims
 
 
 # ---------------------------------------------------------------- rainflow (ASTM E1049-85, 5.4.4)
@@ -101,6 +101,7 @@ def _point_stresses(fm) -> np.ndarray:
     vals = []
     for mid, mp in fm.props.items():
         s = mp["section"]
+        stress_dims(s, mid, ("cy",) if s["round"] else ("cy", "cz"))
         pm = fm.model.members[mid]
         L = pm.L()
         for x in (0.0, L):

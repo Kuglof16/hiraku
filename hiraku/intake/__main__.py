@@ -65,11 +65,11 @@ def cmd_pick(a: argparse.Namespace) -> int:
         print("Claude の返事:\n  " + run.reply.replace("\n", "\n  "))
         _print_pick(run.record)
         if file_flags is not None:
-            req_domains = [p["domain"] for p in pick_domains(want, file_flags, speed)["picks"]]
+            req_domains = [p["domain"] for p in pick_domains(want, file_flags, speed, product=a.product)["picks"]]
             print("製品のファイルとの比べ:", json.dumps(agent.compare_with_product(run, file_flags, req_domains), ensure_ascii=False))
         print(f"pick_domains の呼び出し {len(run.calls)} 回、費用 {run.cost_usd} USD")
         return 0
-    record = pick_domains(want, file_flags or {}, speed)
+    record = pick_domains(want, file_flags or {}, speed, product=a.product)
     if a.json:
         print(json.dumps(record, ensure_ascii=False, indent=2))
     else:
@@ -113,7 +113,8 @@ def cmd_rules(a: argparse.Namespace) -> int:
         print(f"{p.name}: 規則 {len(got.record['rules'])} 件" + (f"、式が要る文 {len(got.needs_formula)} 件 (Claude に書かせる)" if got.needs_formula else ""))
         for nf in got.needs_formula:
             print(f"    {nf['cand_id']}: {nf['text']}" + (f"  [{nf['problem']}]" if "problem" in nf else ""))
-    checks = rulecheck.check_all(rules, design, requirements)
+    flags = _product(a.product)["flags"] if a.product else None
+    checks = rulecheck.check_all(rules, design, requirements, flags=flags)
     text = {r["rule_id"]: r["text"] for r in rules}
     print(rulecheck.summary_line(checks, rules))
     for c in checks:

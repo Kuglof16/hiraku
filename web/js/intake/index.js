@@ -1,8 +1,13 @@
 // The intake screens (A1 new design, A2 hearing, A5 knowledge) as one module for the main screen to mount.
 //
 //   import { mountIntake } from "./intake/index.js";
-//   const intake = mountIntake(hostElement, api, { nav: true, screen: "A1" });
-//   intake.show("A5"); intake.update(); intake.destroy();
+//   const intake = mountIntake(hostElement, api, { nav: true, screen: "A1", want: "ギターを作りたい" });
+//   intake.show("A5"); intake.update(); intake.setWant("介護ベッドを作りたい"); intake.destroy();
+//
+// options: onRuleFocus(partIds) is called when a person points at a rule hit in A2 (its part ids; [] when they leave), so
+// the host can light those parts in its 3D view.
+// options: nav (false hides the tab bar), screen (the first one shown), want (a request text put in A1's
+// input box, not sent: the person reads it and presses 送る). setWant(text) does the same later; "" empties the box.
 //
 // api (all optional except events/onEvent):
 //   events()             every event so far (the screens draw only from events)
@@ -23,7 +28,7 @@ import { renderA1 } from "./a1.js";
 import { renderA2 } from "./a2.js";
 import { renderA5 } from "./a5.js";
 
-const SCREENS = [["A1", "依頼", renderA1], ["A2", "ヒアリング", renderA2], ["A5", "ナレッジ", renderA5]];
+const SCREENS = [["A1", "作りたいもの", renderA1], ["A2", "確認したいこと", renderA2], ["A5", "守るルール", renderA5]];
 
 function ensureCss() {
   const href = new URL("./intake.css", import.meta.url).href;
@@ -35,7 +40,8 @@ export function mountIntake(host, api, options = {}) {
   ensureCss();
   const ui = {
     screen: options.screen || "A1",
-    draft: "", note: "", answers: {}, litSeen: new Set(), error: "", sending: false,
+    draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, ruleAnswers: {},
+    onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, picksFinal: !!options.picksFinal, time: null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
   };
@@ -45,7 +51,7 @@ export function mountIntake(host, api, options = {}) {
   fill(host, root);
 
   let seen = api.events();
-  let model = buildModel(seen);
+  let model = buildModel(seen, ui);
   let pending = false;
 
   function draw(opts = {}) {
@@ -61,7 +67,7 @@ export function mountIntake(host, api, options = {}) {
         }
       }
     }
-    fill(nav, SCREENS.map(([id, label]) => h("button", { class: id === ui.screen ? "on" : "", onclick: () => show(id) }, `${id} ${label}`)));
+    fill(nav, SCREENS.map(([id, label]) => h("button", { class: id === ui.screen ? "on" : "", onclick: () => show(id), dataset: { screen: id } }, label)));
   }
   ui.rerender = (opts) => draw(opts);
 
@@ -75,7 +81,7 @@ export function mountIntake(host, api, options = {}) {
     const events = api.events();
     if (events.length < seen.length) ui.litSeen.clear(); // a rewind or another run: let the cards glow again
     seen = events;
-    model = buildModel(events);
+    model = buildModel(events, ui);
     draw();
   }
 
@@ -95,6 +101,19 @@ export function mountIntake(host, api, options = {}) {
     pending = true;
     queueMicrotask(() => { pending = false; update(); });
   });
+  // put a request text in A1's input box without sending it (the box keeps what the person is typing otherwise)
+  function setWant(text) {
+    ui.draft = typeof text === "string" ? text : "";
+    if (ui.screen === "A1") draw();
+  }
+
+  // playback time (seconds): the glow of a lit card follows it, so a frame at time t always looks the same
+  // (null = live: the glow plays once as a CSS animation)
+  function setTime(t) {
+    ui.time = typeof t === "number" && Number.isFinite(t) ? t : null;
+    draw();
+  }
+
   draw();
-  return { show, update, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
+  return { show, update, setWant, setTime, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
 }

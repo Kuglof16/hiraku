@@ -1,5 +1,11 @@
 {
   "name": "hiraku",
-  "version": "0.1.0",
-  "description": "HIRAKU の役が使う手順: 依頼を受け、手計算で予測してから解析し、照合し、食い違いの原因を書く"
+  "version": "0.2.0",
+  "description": "HIRAKU を自分の Claude Code から動かす: 要件から、手計算で予測してから解析し、照合し、食い違いの原因を書いて合否を出す (ツール・hooks・役・手順)",
+  "mcpServers": {
+    "hiraku": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hiraku_cli.py", "mcp"]
+    }
+  }
 }

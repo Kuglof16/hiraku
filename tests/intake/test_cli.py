@@ -19,7 +19,8 @@ def run(*argv):
 
 class PickCliTest(unittest.TestCase):
     def test_pick_from_the_product_file(self):
-        code, out, _ = run("pick", "--product", "serving-robot")
+        with mock.patch("hiraku.intake.domains.builder_for", lambda catalog, tid: object()):  # every test has a builder
+            code, out, _ = run("pick", "--product", "serving-robot")
         self.assertEqual(code, 0)
         self.assertIn("7 分野: 操安 (3)・動力 (4)・液体のこぼれ (1)・人との接触 (1)", out)
 
@@ -82,7 +83,7 @@ class RulesCliTest(unittest.TestCase):
     def test_the_demo_design(self):
         code, out, _ = run("rules", "--design", "data/designs/offroad-4w-v1.json", "--product", "offroad-4w")
         self.assertEqual(code, 0)
-        self.assertIn("18 規則", out)  # the demo design's numbers belong to the analysis department: no hit is asserted
+        self.assertIn("29 規則", out)  # the demo design's numbers belong to the analysis department: no hit is asserted
 
 
 class WebDataTest(unittest.TestCase):
@@ -94,7 +95,7 @@ class WebDataTest(unittest.TestCase):
         t = webdata.tables()
         self.assertEqual(len(t["FLAGS"]), 19)
         self.assertEqual([d["name"] for d in t["DOMAINS"]], ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal"])
-        self.assertEqual(len(t["CATEGORIES"]), 9)
+        self.assertEqual(len(t["CATEGORIES"]), 10)
         self.assertFalse(t["FACTS"]["bend_radius_mm"]["inDesigns"])
         self.assertTrue(t["FACTS"]["mass_kg"]["inDesigns"])
 

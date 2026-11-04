@@ -92,8 +92,51 @@ def k0_formulas():
     return {f["formula_id"]: f for f in solvers.formula_registry().list_formulas()}
 
 
+class Units(unittest.TestCase):
+    def test_rpm_counts_revolutions_as_k0_does(self):
+        # rpm is a frequency (revolutions per second after / 60), as K0 and the QA known answers
+        # read it; a motor speed limit becomes rad/s only where the motor needs it (2 pi rad a turn)
+        import math
+        from hiraku.solvers.k0_handcalc import units as k0_units
+        from hiraku.solvers.k2_vehicle.shelf import StepClimbTool
+        from hiraku.solvers.k2_vehicle.units import si
+        self.assertAlmostEqual(si({"value": 600.0, "unit": "rpm"}, "Hz"), 10.0, places=12)
+        self.assertEqual(SI_OF["rpm"], SI_OF["Hz"])
+        with self.assertRaises(ValueError):
+            si({"value": 60.0, "unit": "rpm"}, "rad/s")
+        self.assertAlmostEqual(si({"value": 180.0, "unit": "deg/s"}, "rad/s"), math.pi, places=12)
+        self.assertAlmostEqual(k0_units.UNIT_TABLE["rpm"][0], si({"value": 1.0, "unit": "rpm"}, "Hz"), places=15)
+        tool = StepClimbTool()  # declares the motor params
+        for given, want in (({"value": 6000.0, "unit": "rpm"}, 2.0 * math.pi * 100.0),
+                            ({"value": 100.0, "unit": "Hz"}, 2.0 * math.pi * 100.0),
+                            ({"value": 500.0, "unit": "rad/s"}, 500.0)):
+            self.assertAlmostEqual(tool.turn_rate({"motor_max_speed": given}, "motor_max_speed"), want, places=9)
+
+
+class CheckRecords(unittest.TestCase):
+    def test_an_expected_zero_is_held_to_an_absolute_bound(self):
+        from hiraku.solvers.k2_vehicle.checks import _check
+        from hiraku.solvers.toolmaker.make import check_passes
+        zero = _check("mirror", "yaw_rate", 0.0, 4e-10, "rad/s", 1e-9, "symmetry")
+        self.assertEqual((zero["tolerance_rel"], zero["tolerance_abs"], zero["pass"]), (1e-9, 1e-9, True))
+        self.assertEqual(contract.errors("tool_check", zero), [])
+        self.assertTrue(check_passes(zero))
+        self.assertFalse(check_passes(dict(zero, got=2e-9)))
+        rel = _check("beam", "deflection", 2.0, 2.01, "mm", 1e-2, "beam formula")
+        self.assertNotIn("tolerance_abs", rel)
+        self.assertEqual(contract.errors("tool_check", rel), [])
+        self.assertTrue(check_passes(rel))
+
+
 class Declarations(unittest.TestCase):
     """The load-case params and the K0 pairs that the load-case builders and the agents use."""
+
+    def test_stages_for_light_first(self):
+        # contract tool_spec.stage (HK5): the K&C bench is a static one-corner model (1), the others
+        # integrate the vehicle in time (2)
+        want = {"kc_bench": 1}
+        for name, tool in TOOLS.items():
+            self.assertEqual(tool.describe()["stage"], want.get(name, 2), name)
 
     def test_describe_params(self):
         for name, tool in TOOLS.items():
@@ -187,6 +230,39 @@ class Declarations(unittest.TestCase):
         self.assertIn("direction", rec["error"])
 
 
+class StepOrigin(unittest.TestCase):
+    def test_climbed_and_climb_time_do_not_depend_on_the_design_origin(self):
+        # the same vehicle with its design origin under the front axle and 1 m behind it
+        def design(dx_mm):
+            d = box_design(mass=300.0, wheel_mass=15.0, name=f"step origin {dx_mm:g}")
+            for s in d["supports"]:
+                s["position_mm"][0] += dx_mm
+            for p in d["parts"]:
+                p["box"]["center_mm"][0] += dx_mm
+            return d
+
+        lc = {"load_case_id": "x", "params": {"step_height": q(100.0, "mm"), "speed": q(10.0, "km/h"),
+                                              "mu": q(0.8, "1")}}
+        res = []
+        for dx in (0.0, 1000.0):
+            rec = TOOLS["step_climb_dynamic"].run(design(dx), lc, [{"prediction_id": "pred-0001"}], {})
+            self.assertEqual(rec["status"], "ok", rec.get("error"))
+            res.append({r["quantity"]: r["value"] for r in rec["results"]})
+        self.assertEqual(res[0]["climbed"], 1.0)
+        self.assertEqual(res[1]["climbed"], 1.0)
+        self.assertAlmostEqual(res[1]["climb_time"], res[0]["climb_time"], delta=2e-3)
+
+
+class RigidWheelNote(unittest.TestCase):
+    def test_a_rigid_wheel_says_its_mass_only_sets_the_spin_inertia(self):
+        notes = build_vehicle(box_design(susp="rigid")).assumptions
+        self.assertTrue(any("only sets the spin inertia" in n for n in notes), notes)
+        self.assertFalse(any(n.startswith("unsprung mass") for n in notes), notes)
+        notes = build_vehicle(box_design()).assumptions  # sprung corners without wheel parts
+        self.assertTrue(any(n.startswith("unsprung mass") for n in notes), notes)
+        self.assertFalse(any("only sets the spin inertia" in n for n in notes), notes)
+
+
 class KcChannels(unittest.TestCase):
     def test_kc_vehicle_records_camber_and_toe(self):
         from hiraku.solvers.k2_vehicle.record import Recorder
@@ -237,10 +313,11 @@ class Runs(unittest.TestCase):
     def test_paired_results_carry_the_formula_unit(self):
         formulas = k0_formulas()
         only_past_the_limit = {"tip_slope_angle"}  # in test_a_vehicle_that_tips_stops_the_run
+        only_until_top = {"top_speed", "top_speed_power"}  # launch with until = top_speed: test_launch.py
         for name, rec in self.recs.items():
             units = {r["quantity"]: r["unit"] for r in rec["results"]}
             for pair in TOOLS[name].describe()["predicts"]:
-                if pair["quantity"] in only_past_the_limit:
+                if pair["quantity"] in only_past_the_limit or (name == "launch" and pair["quantity"] in only_until_top):
                     continue
                 with self.subTest(tool=name, quantity=pair["quantity"], formula=pair["formula_id"]):
                     self.assertIn(pair["quantity"], units)
@@ -329,7 +406,8 @@ class Runs(unittest.TestCase):
     def test_launch_reaches_40(self):
         r = self.res("launch")
         self.assertEqual(r["reached_target"], 1.0)
-        self.assertGreater(r["top_speed"], 40.0)
+        self.assertGreater(r["speed_at_stop"], 40.0)
+        self.assertNotIn("top_speed", r)  # until = target stops 1 s after 40 km/h: no top speed
 
     def test_crosswind_tips_above_the_gust(self):
         r = self.res("crosswind")

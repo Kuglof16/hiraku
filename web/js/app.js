@@ -8,26 +8,34 @@
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
+//   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
+//                   見せる / 作業台 switch at the top right turns it on and off
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DOMAINS, DOMAIN_JA, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVER_JA, PICK_DEMO_ID, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
-import { FIELD_JA, FIELD_ORDER, contourOf, fieldsOf, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
+import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { mountIntake } from "./intake/index.js";
-import { lookFromParams } from "./look.js";
+import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
+import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
+import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+// ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
+const DEV = params.get("dev") === "1";
+const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
 const STAGE_H = 1080;
 const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
@@ -53,8 +61,12 @@ const ui = {
   fieldVariant: null, // among the fields of that kind: `${tool}|${variantOf}` (the analysis' tool; the beams, or a mesh and its surface)
   zoomMax: false, // the camera at a shell contour's largest element (legend: 最大の所に寄る)
   compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
+  meshMode: null, // the mesh's own view in place of a field (quality.js MODE_ORDER), or null
+  qualityMetric: null, // the mesh check's metric the elements are coloured by (null: the first)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
+  present: params.get("present") === "1", // the present mode
+  detail: false, // in the present mode: the log, the chain and the hooks opened (詳しく)
 };
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
@@ -78,7 +90,8 @@ function fitStage() {
 const viewport = $("viewport");
 const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
 document.body.classList.add(`look-${look}`);
-const bench = new Workbench3D(viewport, look);
+const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
+const bench = new Workbench3D(viewport, look, { quality });
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -140,7 +153,7 @@ if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapma
 let feed = null;
 
 // ---- panels ---------------------------------------------------------------
-let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
+let drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0, resolved: "" };
 let contour = null;
 
 function selectedLc(s) {
@@ -162,25 +175,171 @@ const intakeListeners = new Set();
 let intakeApplied = null; // run id, events applied and own-run when the listeners last heard
 let intake = null;
 const intakeApi = {
-  events: () => player.events.slice(0, player.applied),
+  events: () => (draft ? draftEvents() : player.events.slice(0, player.applied)),
   onEvent(fn) {
     intakeListeners.add(fn);
     return () => intakeListeners.delete(fn);
   },
-  // Only for a run this screen started while it runs (a replay stays read-only). The
+  // Only while the watched run is going (runGoing; a replay stays read-only). The
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
-    return ownRunGoing() ? answerHearing : undefined;
+    if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
+    return runGoing() ? answerHearing : undefined;
   },
   get dropFile() {
-    return ownRunGoing() ? dropFile : undefined;
+    return runGoing() ? dropFile : undefined;
+  },
+  // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
+  get send() {
+    return draft && !draft.busy ? draftSend : undefined;
+  },
+  get editFlags() {
+    return draft?.state && !draft.busy ? (flags) => draftChange({ flags }) : undefined;
+  },
+  get exclude() {
+    return draft?.state && !draft.busy ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
+  },
+  get setLimits() {
+    return draft?.state && !draft.busy ? (limits) => draftChange({ limits }) : undefined;
   },
 };
+
+// ---- a new request (?new=1): A1 and A2 before a run --------------------------------------
+// The server keeps nothing between the calls (hiraku.intake.request): each answer carries the
+// draft, sent back with the next change. A1 and A2 draw the draft's intake events (with the
+// request as the person's words, and the server's warnings as the lead's). When the hearing is
+// settled the request's files are saved and 始める starts a run on them (--intake-events).
+const draft = params.has("new")
+  ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false, prefill: "", demoTitle: "" }
+  : null;
+
+function draftEvents() {
+  const list = [
+    ...(draft.want ? [{ kind: "user.said", agent: "user", text: draft.want }] : []),
+    ...draft.events,
+    ...draft.warnings.map((w) => ({ kind: "agent.said", agent: "lead", text: w })),
+  ];
+  return list.map((e, i) => ({ seq: i, t: 0, ts: "", run_id: "request", ...e }));
+}
+
+async function postRequest(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const got = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  return got;
+}
+
+// One call at a time; the bar says what is going on, and an error stays there in its words.
+async function draftCall(busy, fn) {
+  Object.assign(draft, { busy, error: "" });
+  renderDraft();
+  try {
+    await fn();
+  } catch (e) {
+    draft.error = e.message ?? String(e);
+  }
+  draft.busy = "";
+  renderDraft();
+}
+
+function takeDraft(got) {
+  draft.state = got.draft;
+  draft.events = got.events ?? [];
+  draft.warnings = got.warnings ?? [];
+}
+
+function draftSend(text) {
+  return draftCall(draft.useClaude ? "Claude が分野を選んでいます (数十秒かかります)…" : "分野を選んでいます…", async () => {
+    draft.want = text;
+    draft.done = null;
+    draft.excluded = [];
+    takeDraft(await postRequest("/api/request", { want: text, claude: draft.useClaude }));
+  });
+}
+
+function draftChange(change) {
+  return draftCall("選び直しています…", async () => {
+    if (change.exclude) draft.excluded = change.exclude;
+    draft.done = null;
+    takeDraft(await postRequest("/api/request", { draft: draft.state, ...change }));
+  });
+}
+
+function draftAnswer({ answers, note }) {
+  return draftCall("答えを確かめています…", async () => {
+    const got = await postRequest("/api/request/answer", { draft: draft.state, answers: answers ?? {}, note: note ?? "" });
+    draft.state = got.draft ?? draft.state;
+    draft.events = got.events ?? draft.events;
+    draft.done = got;
+  });
+}
+
+async function draftStart(mode) {
+  if (mode === "claude" && !draft.confirm) {
+    draft.confirm = true;
+    renderDraft();
+    return;
+  }
+  draft.confirm = false;
+  await draftCall("走らせています…", async () => {
+    const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
+    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
+  });
+}
+
+// The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
+function renderDraft() {
+  const bar = $("draftbar");
+  if (!draft || !bar) return;
+  const d = draft.done;
+  const rf = d?.requirements_file ?? {};
+  const usd = typeof rf.cost_limit_usd === "number" ? fmtUsd(rf.cost_limit_usd) : "—";
+  const keyed = !!draft.claudeReady;
+  let body;
+  if (draft.busy) body = `<span class="busy">${esc(draft.busy)}</span>`;
+  else if (d?.ready && d.designable === false) body = `<span class="err">この製品の設計の作り方がまだ無いので、走らせられません</span>`;
+  else if (d?.ready) {
+    const scripted =
+      `<button data-start="scripted">台本で始める (Claude は呼ばない)</button>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`);
+    const claude = !keyed
+      ? `<button disabled>Claude で始める</button><span class="why">HIRAKU を起こした窓に ${esc(draft.keyName ?? "ANTHROPIC_API_KEY")} が無い</span>`
+      : draft.confirm
+        ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
+        : `<button data-start="claude">Claude で始める (費用の上限 ${usd})</button>`;
+    body = `<b>要件がそろいました</b>${scripted}${claude}`;
+  } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
+  else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、標準の値のまま進めてください</span>`;
+  else
+    body =
+      (draft.demoTitle
+        ? `<span>デモ「${esc(draft.demoTitle)}」の依頼の文を入れました。直してもかまいません。送ると分野を選びます</span>`
+        : `<span>依頼のタブで、作りたいものを書いて送ってください</span>`) +
+      (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
+  bar.innerHTML = body + (draft.error ? `<span class="err">${esc(draft.error)}</span>` : "");
+  intake?.update();
+  fillPrefill();
+}
+
+// The demo's want goes into A1's box through intake.setWant (not sent: the person presses 送る).
+// Once, when the intake is mounted.
+function fillPrefill() {
+  if (!draft?.prefill || !intake) return;
+  intake.setWant(draft.prefill);
+  draft.prefill = "";
+}
 
 function ownRunGoing() {
   const s = player.state;
   return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
+}
+
+// The run being watched is going: started here (launch), or followed live while its record says
+// running (a run started elsewhere, e.g. from a Claude Code session with the plugin). A replay
+// (?live=0, a dropped file, a finished run) is not. The server checks again (Launcher.going_dir).
+function runGoing() {
+  return ownRunGoing() || (player.live && player.state.status === "running");
 }
 
 async function postLaunch(path, body) {
@@ -203,15 +362,87 @@ async function dropFile(name, text) {
 }
 
 function renderIntake(tab) {
-  intake ??= mountIntake($("view-intake"), intakeApi, { nav: false, screen: tab });
+  if (!intake) {
+    // in a new request the bar (renderDraft) sits above the screens
+    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
+    renderDraft();
+  }
   if (intake.screen !== tab) intake.show(tab);
-  // (and when the run turns out to be this screen's own, which offers the answer and the drop)
-  const now = `${player.state.runId}|${player.applied}|${ownRunGoing()}`;
+  // (and when the run turns out to be going, which offers the answer and the drop)
+  const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
   if (now !== intakeApplied) {
     intakeApplied = now;
     const last = player.events[player.applied - 1] ?? null;
     for (const fn of intakeListeners) fn(last);
   }
+}
+
+// A rule hit pointed at in A2 (its part ids; [] when the person leaves it): the workbench
+// lights them (Workbench3D.setRuleFocus), and since A2 hides the workbench, a small 3D view
+// (the peek) shows the same lit design in the corner of the intake screen while something is
+// pointed at. Ids with nothing in the 3D (and a design not made yet) show no peek.
+let ruleFocus = [];
+let rulePeek = null; // { el, cap, host, bench, key }
+const PEEK_W = 440;
+const PEEK_H = 300;
+function onRuleFocus(ids) {
+  ruleFocus = Array.isArray(ids) ? ids.filter((x) => typeof x === "string") : [];
+  bench.setRuleFocus(ruleFocus);
+  cmpView?.bench.setRuleFocus(ruleFocus);
+}
+
+function drawRulePeek(s, shown) {
+  const design = shown ? s.designs[s.currentVersion] ?? null : null;
+  if (!ruleFocus.length || !design) {
+    if (rulePeek) rulePeek.el.hidden = true;
+    return;
+  }
+  if (!rulePeek) {
+    const el = document.createElement("div");
+    el.className = "rule-peek";
+    el.id = "rule-peek";
+    el.innerHTML = `<div class="rule-peek-cap"></div><div class="rule-peek-gl"></div>`;
+    stage.append(el);
+    const host = el.querySelector(".rule-peek-gl");
+    rulePeek = { el, cap: el.firstChild, host, bench: new Workbench3D(host, look, { quality }), key: null, size: "" };
+    window.hiraku.peekBench = rulePeek.bench;
+  }
+  const p = rulePeek;
+  const b = p.bench;
+  b.setDesign(design);
+  const lit = b.setRuleFocus(ruleFocus);
+  p.el.hidden = lit.length === 0;
+  if (p.el.hidden) return;
+  // the lower right corner of the intake screen (in stage pixels)
+  const sr = stage.getBoundingClientRect();
+  const vr = $("view-intake").getBoundingClientRect();
+  p.el.style.left = `${(vr.right - sr.left) / stageScale - PEEK_W - 14}px`;
+  p.el.style.top = `${(vr.bottom - sr.top) / stageScale - PEEK_H - 44}px`; // above the screen's last line (A2's note)
+  const w = p.host.clientWidth;
+  const h = p.host.clientHeight;
+  const size = `${w}x${h}x${stageScale}`;
+  if (size !== p.size && w > 0 && h > 0) {
+    p.size = size;
+    b.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    p.key = null;
+  }
+  const key = `${design.design_version}|${lit.join(",")}`;
+  if (key !== p.key) {
+    p.key = key;
+    b.fitPoints(b.contentPoints(), VIEWS.default, 1.08);
+    const said = (id) => {
+      if (id === "design") return "設計の全体";
+      if (id.startsWith("support:")) return `接地点 ${id.slice(8)}`;
+      const part = (design.parts ?? []).find((x) => x.id === id);
+      return part ? String(part.name ?? id).replace(/\s*[（(].*$/, "") || id : id;
+    };
+    p.cap.textContent = `規則の当たり: ${lit.map(said).join("・")}`;
+    p.el.dataset.lit = lit.join(",");
+  }
+  b.setToggles({ ...ui.toggles, names: false, arrows: false, contour: false });
+  b.animate(player.playhead, false);
+  b.render();
 }
 
 // A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
@@ -226,16 +457,19 @@ function renderTop(s) {
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
   $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
-  $("pill-cost").textContent = `費用 ${fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0
+  $("pill-cost").textContent = `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
   const live = player.live;
   const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
-    `<a class="runid" href="?list=1" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
+    `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
     // a run this screen started can be stopped while it goes
     (ui.stoppable && ui.stoppable === s.runId && s.status === "running"
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
-      : `<a class="launch-link" href="?list=1" title="台本か Claude で、新しく走らせる">▶ その場で走らせる</a>`);
+      : DEV
+        ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
+        : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
 }
 
 function renderChips(s, lcId) {
@@ -266,7 +500,19 @@ function rank(id) {
   return 20;
 }
 
-function logItem(e) {
+// A hooks line: what happened and what comes next in short words, 解決済み once the stopped
+// action was done later in the records; the recorded words are folded under it.
+function hookLogItem(e, hook, resolved) {
+  const w = hookWords(hook?.rule);
+  const mark = resolved ? `<span class="resolved">解決済み</span>` : "";
+  return (
+    `<li class="hook${resolved ? " done" : ""}" data-seq="${e.seq}">${mark}<b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>` +
+    `<details><summary>詳しい記録 (${esc(w.id)} ${esc(w.ja)})<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
+  );
+}
+
+function logItem(e, ctx = null) {
+  if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
   const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
@@ -275,20 +521,23 @@ function logItem(e) {
   return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
-function renderLog(s) {
+function renderLog(s, resolved) {
   const ol = $("log");
   const first = s.log[0]?.seq ?? null;
-  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev) {
+  const resolvedKey = [...resolved].join(",");
+  if (s.log.length < drawn.logLen || first !== drawn.logFirstSeq || s.logRev !== drawn.logRev || resolvedKey !== drawn.resolved) {
     ol.innerHTML = "";
     drawn.logLen = 0;
   }
   if (s.log.length > drawn.logLen) {
-    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map(logItem).join(""));
+    const ctx = { resolved, hooks: new Map([...s.hooks.denied, ...s.hooks.blockedStops].map((h) => [h.seq, h])) };
+    ol.insertAdjacentHTML("beforeend", s.log.slice(drawn.logLen).map((e) => logItem(e, ctx)).join(""));
     ol.scrollTop = ol.scrollHeight;
   }
   drawn.logLen = s.log.length;
   drawn.logFirstSeq = first;
   drawn.logRev = s.logRev;
+  drawn.resolved = resolvedKey;
 }
 
 function renderTests(s, lcId) {
@@ -339,7 +588,8 @@ function renderChain(s, chain) {
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
       `<div class="sub">${esc(ana.tool)}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
-      (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`);
+      (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
+      (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "");
   } else if (running) {
     a.className = "card busy";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${esc(running.tool)} で解析中…</div>`;
@@ -357,9 +607,12 @@ function renderChain(s, chain) {
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
       const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      const big = verdictSentence(verdict);
+      // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
-        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))} ${esc(fmtQ(verdict.value))} ${esc(opLabel(verdict.op))} ${esc(fmtQ(verdict.limit))} → ${verdict.pass ? "合格 ✓" : "不合格 ✗"}` +
-        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${fmt(verdict.margin_pct, 3)} %${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+        `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
+        `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
+        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${esc(fmtMargin(verdict))}${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
     } else if (ok && loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
     }
@@ -422,7 +675,29 @@ function previousOf(s, ana, field) {
 // analysis' first of stress, damage, temperature, mode shape, displacement, on a mesh
 // when there is one. With ui.compare, the same field of the previous design version
 // comes along on one shared colour scale (contour.compare).
-function buildContour(s, chain) {
+// In its place, the mesh's own views (ui.meshMode, quality.js): the mesh check of the
+// field's mesh, its wall thicknesses, and the setup of the field's analysis. With no
+// field to show (e.g. a mesh the solver refused), the newest mesh of the version.
+function buildContour(s, chain, withCompare = ui.compare) {
+  const base = fieldContour(s, chain, withCompare);
+  const ana = (base && s.analyses[base.analysisId]) || chain.shown || null;
+  const version = ana?.design_version ?? s.currentVersion;
+  const newest = s.order.meshes.map((id) => s.meshes[id]).filter((m) => m.design_version === version).at(-1) ?? null;
+  const rec = base ? base.mesh?.rec ?? null : setupOf(ana, s.meshes)?.rec ?? newest;
+  const design = s.designs[rec?.design_version ?? version] ?? null;
+  const thick = rec ? thicknessContourOf(base?.analysisId ?? ana?.analysis_id ?? null, rec, design) : null;
+  const setup = setupContourOf(ana, s.meshes);
+  const modes = MODE_ORDER.filter((m) => (m === "quality" ? !!qualityOf(rec) : m === "thickness" ? !!thick : !!setup));
+  let mode = modes.includes(ui.meshMode) ? ui.meshMode : null;
+  if (!base && !mode && modes.includes("quality")) mode = "quality";
+  if (!mode) return base ? { ...base, meshModes: modes } : null;
+  const metrics = mode === "quality" ? drawableMetrics(rec) : [];
+  const metric = metrics.includes(ui.qualityMetric) ? ui.qualityMetric : metrics[0] ?? null;
+  const ct = mode === "quality" ? qualityContourOf(base?.analysisId ?? ana?.analysis_id ?? null, rec, metric, design) : mode === "thickness" ? thick : setup;
+  return { ...ct, kinds: base?.kinds ?? [], fieldKind: base?.kind ?? null, variants: [], meshModes: modes, metrics, canCompare: false, compare: null, toolTitle: base?.toolTitle ?? "" };
+}
+
+function fieldContour(s, chain, withCompare = ui.compare) {
   const anas = analysesBeside(s, chain.shown);
   const all = anas.flatMap((a) => fieldsOf(a).map((f) => ({ a, f })));
   const kinds = FIELD_ORDER.filter((k) => all.some((x) => x.f.kind === k));
@@ -452,7 +727,7 @@ function buildContour(s, chain) {
   });
   const prev = previousOf(s, pick.a, pick.f);
   let compare = null;
-  if (prev && ui.compare) {
+  if (prev && withCompare) {
     const before = contourOf(prev.ana, prev.field, chain.loadCase?.criterion, s.meshes);
     if (before) {
       const [after, was] = onSharedScale([ct, before]);
@@ -463,7 +738,46 @@ function buildContour(s, chain) {
   return { ...ct, kinds, variants, tool: pick.a.tool, toolTitle: toolTitle(s, pick.a.tool), canCompare: !!prev, compare };
 }
 
-function renderLegend(ct) {
+// A contour with frames (the same field at moments of a time history) at the moment shown: the
+// one nearest to the motion's time while the analysis that gave its loads plays, else the moment
+// with the largest value. The legend says which moment.
+function framedContour() {
+  if (!contour?.frames) return contour;
+  const playing = shownMotion && contour.frames.source && shownMotion.ana?.analysis_id === contour.frames.source;
+  const k = frameIndex(contour, playing ? shownMotion.tau : null);
+  const t = $("legend-t");
+  if (t) t.textContent = `t = ${fmt(contour.frames.t_s[k], 3)} s${playing ? "" : " (いちばん大きい時刻)"}`;
+  return atFrame(contour, k);
+}
+
+// The colour bar's bands, top (max) to bottom (min), every other one with its value.
+function bandRows(ct, relative) {
+  const rows = [];
+  for (let i = BANDS - 1; i >= 0; i -= 1) {
+    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
+    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
+  }
+  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
+  return rows.join("");
+}
+
+// The card beside the legend: the list of the mesh's own view (quality.js), else hidden.
+let meshCard = null;
+function renderMeshCard(ct) {
+  const html = ui.toggles.contour && ct?.mode ? modeCardHtml(ct) : "";
+  if (!meshCard) {
+    if (!html) return;
+    meshCard = document.createElement("div");
+    meshCard.className = "meshcard";
+    meshCard.id = "meshcard";
+    viewport.append(meshCard);
+  }
+  meshCard.hidden = !html;
+  meshCard.innerHTML = html;
+}
+
+// motion / shown: the test's motion and the analysis it plays (the colours may come from another).
+function renderLegend(ct, s = null, shown = null, motion = null) {
   const el = $("legend");
   if (!ct?.key || !ui.toggles.contour) {
     el.hidden = true;
@@ -472,12 +786,25 @@ function renderLegend(ct) {
   el.hidden = false;
   const unit = unitLabel(ct.field.unit);
   const relative = ct.kind === "mode_shape";
-  const rows = [];
-  for (let i = BANDS - 1; i >= 0; i -= 1) {
-    const top = ct.min + ((ct.max - ct.min) * (i + 1)) / BANDS;
-    rows.push(`<span class="sw${i === 0 ? " end" : ""}" style="background:${BAND_COLORS[i]}"></span><span class="tk">${i % 2 === 1 && !relative ? fmt(top, 3) : ""}</span>`);
+  const fieldOn = (k) => !ct.mode && k === ct.kind;
+  // the field kinds, then the mesh's own views (quality.js), in one row
+  const modes = ct.meshModes ?? [];
+  const kindRow =
+    ct.kinds.length + modes.length > 1
+      ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${fieldOn(k) ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}` +
+        `${modes.map((m) => `<button data-mode="${m}" class="${ct.mode === m ? "on" : ""}">${MODE_JA[m]}</button>`).join("")}</div>`
+      : "";
+  const zoomAct = ct.mesh?.maxAt
+    ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : ct.mode === "quality" ? "いちばん悪い要素に寄る" : "最大の所に寄る"}</button>`
+    : "";
+  if (ct.mode) {
+    const p = modeLegendParts(ct);
+    const metricRow = ct.metrics?.length
+      ? `<div class="kinds metrics">${ct.metrics.map((k) => `<button data-metric="${esc(k)}" class="${k === ct.metric ? "on" : ""}">${esc(METRIC_JA[k] ?? k)}</button>`).join("")}</div>`
+      : "";
+    el.innerHTML = kindRow + metricRow + (zoomAct ? `<div class="acts">${zoomAct}</div>` : "") + `<div class="ttl">${p.title}</div>` + (p.bar ?? `<div class="bar">${bandRows(ct, false)}</div>`) + p.under + `<div class="src">${p.src}</div>`;
+    return;
   }
-  rows.push(`<span></span><span class="tk">${relative ? "" : fmt(ct.min, 3)}</span>`);
   const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
   const over = ct.limitKnown
     ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
@@ -487,14 +814,14 @@ function renderLegend(ct) {
   // one row of buttons per analysis (its tool's title is on each button when there are several)
   const nButtons = ct.variants.reduce((n, g) => n + g.buttons.length, 0);
   const chips =
-    (ct.kinds.length > 1 ? `<div class="kinds">${ct.kinds.map((k) => `<button data-field="${k}" class="${k === ct.kind ? "on" : ""}">${FIELD_JA[k]}</button>`).join("")}</div>` : "") +
+    kindRow +
     (nButtons > 1
       ? ct.variants
           .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>`)
           .join("")
       : "");
   const acts =
-    (ct.mesh ? `<button data-act="zoom" class="${ui.zoomMax ? "on" : ""}">${ui.zoomMax ? "元の見え方に戻る" : "最大の所に寄る"}</button>` : "") +
+    zoomAct +
     (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "前の版と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
@@ -506,11 +833,23 @@ function renderLegend(ct) {
       `<div>版 ${ct.compare.version} (左): 最大 ${esc(fmtVU(ct.compare.before.fieldMax, ct.field.unit))}</div>` +
       `<div>版 ${ct.compare.nowVersion} (右): 最大 ${esc(fmtVU(ct.fieldMax, ct.field.unit))}</div></div>`
     : "";
+  // While a motion plays, colours from another analysis (a static one of the same load case) are that
+  // analysis' one moment, pasted on the moving vehicle: the legend says so, with the model it ran on.
+  const from = s?.analyses?.[ct.analysisId];
+  const still = motion && from && from.analysis_id !== shown?.analysis_id && !from.series?.length && !ct.frames;
+  const when = ct.frames
+    ? `<div class="when">色は <span id="legend-t"></span> の値です。目盛りは全部の時刻で同じです。</div>`
+    : still
+    ? `<div class="when">色は ${esc(ct.toolTitle ?? from.tool)} (${esc(BASE_JA[from.base] ?? from.base ?? "")}) の、1 つの瞬間の値です。動きの再生の間も変わりません。</div>`
+    : "";
+  const conv = from?.mesh_convergence && from.analysis_id !== shown?.analysis_id ? `<div class="conv">${esc(convergenceLine(from.mesh_convergence))}</div>` : "";
   el.innerHTML =
     chips +
     (acts ? `<div class="acts">${acts}</div>` : "") +
     `<div class="ttl">${title}</div>` +
-    `<div class="bar">${rows.join("")}</div>` +
+    when +
+    conv +
+    `<div class="bar">${bandRows(ct, relative)}</div>` +
     over +
     cmp +
     `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの版の最大値" : "・上端 = 最大値"}</div>`;
@@ -535,7 +874,7 @@ function setCompare(s, chain, ct) {
       tags.className = "cmp-tags";
       viewport.prepend(el);
       viewport.append(tags);
-      cmpView = { el, tags, bench: new Workbench3D(el, look) };
+      cmpView = { el, tags, bench: new Workbench3D(el, look, { quality }) };
       window.hiraku.cmpBench = cmpView.bench;
     }
     const b = cmpView.bench;
@@ -544,14 +883,14 @@ function setCompare(s, chain, ct) {
     b.setScene(chain.loadCase, c.ana);
     b.setContour(c.before);
     b.setToggles(ui.toggles);
-    cmpView.tags.innerHTML = `<span data-version="${c.version}">版 ${c.version}</span><span data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
+    cmpView.tags.innerHTML = `<span data-kind="label" data-version="${c.version}">版 ${c.version}</span><span data-kind="label" data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
   }
   cmpView?.tags && (cmpView.tags.hidden = !c);
   // The right view keeps clear the strip under the legend (from the legend's left edge to
   // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
   // left view looks through the same camera, so its vehicle sits the same way in its half.
   const lg = $("legend");
-  const room = c && !lg.hidden ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0;
+  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0; // (in the present mode the legend is beside the view)
   if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
     if (was !== !!c) resize3d();
     bench.setReserve(room);
@@ -697,18 +1036,18 @@ function renderStatus(s) {
   $("activity").innerHTML = act ? `<span class="dot"></span>${esc(agentLongName(act.agent) || "HIRAKU")}: ${esc(act.text)}` : "";
 }
 
-function renderHooks(s, playhead) {
+// A rule whose stops were all done later says 解決済み (resolvedHooks), apart from one still open.
+function renderHooks(s, playhead, resolved) {
   const counts = {};
+  const open = {};
   const recent = {};
-  for (const d of s.hooks.denied) {
+  for (const d of [...s.hooks.denied, ...s.hooks.blockedStops]) {
     counts[d.rule] = (counts[d.rule] ?? 0) + 1;
+    if (!resolved.has(d.seq)) open[d.rule] = true;
     if (playhead - d.t < SHOW_S) recent[d.rule] = true;
   }
-  for (const b of s.hooks.blockedStops) {
-    counts[b.rule] = (counts[b.rule] ?? 0) + 1;
-    if (playhead - b.t < SHOW_S) recent[b.rule] = true;
-  }
-  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${counts[r.id] ? ` ×${counts[r.id]}` : " ✓"}</span>`).join("");
+  const state = (r) => (!counts[r.id] ? " ✓" : ` ×${counts[r.id]}${open[r.id] ? "" : `<span class="resolved">解決済み</span>`}`);
+  const html = `hooks: ` + RULES.map((r) => `<span class="rule ${recent[r.id] ? "hit" : ""} ${counts[r.id] && !open[r.id] ? "done" : ""}" title="${esc(r.key)}"><span class="hk">${r.id}</span> ${esc(r.ja)}${state(r)}</span>`).join("");
   if (html !== hooksHtml) $("hooks").innerHTML = hooksHtml = html;
 }
 let hooksHtml = "";
@@ -718,7 +1057,7 @@ function fade(dt) {
   return Math.min(1, dt / 0.25, (SHOW_S - dt) / 0.6);
 }
 
-function renderTransient(s, playhead, chain) {
+function renderTransient(s, playhead, chain, resolved) {
   const said = s.said;
   const b = $("bubble");
   const sa = said ? fade(playhead - said.t) : 0;
@@ -730,9 +1069,13 @@ function renderTransient(s, playhead, chain) {
   const den = s.denied;
   const h = $("hookflash");
   h.style.opacity = den ? fade(playhead - den.t) : 0;
-  if (den && h.dataset.seq !== String(den.seq)) {
+  // what happened and what comes next, in short words (the recorded words are in the log)
+  const done = den ? resolved.has(den.seq) : false;
+  if (den && (h.dataset.seq !== String(den.seq) || h.dataset.done !== String(done))) {
     h.dataset.seq = String(den.seq);
-    h.innerHTML = `<b>hooks が止めた (${esc(den.rule)} ${esc(den.ruleJa ?? "")})</b>${esc(den.text)}`;
+    h.dataset.done = String(done);
+    const w = hookWords(den.rule);
+    h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
   const run = chain.running ?? Object.values(s.running)[0] ?? null;
   const r = $("running");
@@ -741,7 +1084,7 @@ function renderTransient(s, playhead, chain) {
     const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(playhead * Math.PI * 2));
     r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(run.tool)} で解析中 (${esc(run.load_case_id)})`;
   }
-  renderHooks(s, playhead);
+  renderHooks(s, playhead, resolved);
 }
 
 // ---- play bar ----------------------------------------------------------------
@@ -776,6 +1119,34 @@ function seekFromPointer(ev) {
   player.seek(f * player.duration);
 }
 
+// ---- the present mode -----------------------------------------------------------
+// The colour bar and the graph move beside the view (into the rail, under the card), so
+// neither lies over the 3D; the panels the mode hides (css: body.present) come back over
+// the view with 詳しく.
+function applyPresent() {
+  const on = ui.present;
+  document.body.classList.toggle("present", on);
+  document.body.classList.toggle("present-detail", on && ui.detail);
+  $("present-rail").hidden = !on;
+  // (both are placed absolutely in the view, so where they go back among its children does not matter)
+  (on ? $("present-rail") : viewport).append($("legend"), $("graph"));
+  for (const b of document.querySelectorAll("#viewswitch [data-view]")) b.classList.toggle("on", (b.dataset.view === "present") === on);
+  $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
+  $("detail-btn").classList.toggle("on", ui.detail);
+  const url = new URL(location.href);
+  if (on) url.searchParams.set("present", "1");
+  else url.searchParams.delete("present");
+  history.replaceState(null, "", url);
+  drawn.rev = -2;
+  // the view changed size: frame the vehicle again in it
+  requestAnimationFrame(() => {
+    resize3d();
+    if (bench.design && !bench.focused) bench.fitPoints(bench.contentPoints(), VIEWS[bench.view ?? "default"], 1.08);
+    bench.focusKey = undefined;
+  });
+}
+let resolvedMemo = { rev: -1, s: null, set: new Set() };
+
 // ---- frame ----------------------------------------------------------------
 function draw() {
   const s = player.state;
@@ -784,11 +1155,13 @@ function draw() {
   const togglesKey = JSON.stringify(ui.toggles);
   const chain = chainFor(s, lcId, s.currentVersion);
   const motion = motionFor(chain.shown);
-  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles) {
+  if (resolvedMemo.rev !== s.rev || resolvedMemo.s !== s) resolvedMemo = { rev: s.rev, s, set: resolvedHooks(s) };
+  const resolved = resolvedMemo.set;
+  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present) {
     renderTop(s);
     renderChips(s, lcId);
     renderAgents(s);
-    renderLog(s);
+    renderLog(s, resolved);
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
@@ -810,21 +1183,32 @@ function draw() {
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
     bench.setScene(chain.loadCase, chain.shown);
-    const ct = buildContour(s, chain);
+    let ct = buildContour(s, chain);
+    // the present mode shows a shell's before / after side by side when there is an earlier version
+    if (ui.present && tab === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
-    bench.setContour(ui.toggles.contour ? contour : null);
-    if (!contour?.mesh) ui.zoomMax = false;
-    renderLegend(contour); // before setCompare, which keeps the legend's strip clear
+    bench.setContour(ui.toggles.contour ? framedContour() : null);
+    if (!contour?.mesh?.maxAt) ui.zoomMax = false;
+    renderLegend(contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
+    renderMeshCard(contour);
     setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
     cmpView?.bench.setCloseUp(!!bench.focused);
     // With a motion the arrows come from the series, frame by frame.
     bench.setVectors(chain.shown?.status === "ok" && !motion ? chain.shown.vectors ?? null : null);
     bench.setToggles(ui.toggles);
-    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey };
+    // what is going on, in one sentence; and the present mode's card for this scene
+    const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
+    $("now").textContent = now;
+    $("now").hidden = !now;
+    const scene = presentScene({ s, chain, contour, tab, toolTitle: (tool) => toolTitle(s, tool) });
+    document.body.dataset.presentScene = scene.key;
+    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now);
+    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
-  renderTransient(s, player.playhead, chain);
+  if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
+  renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
   if (tab === "bench") {
@@ -837,6 +1221,7 @@ function draw() {
   }
   else if (tab === "grid") board.tick(player.playhead);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
+  drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 
 let lastTs = null;
@@ -874,6 +1259,8 @@ async function seekAndDraw(t) {
 let readyResolve;
 const ready = new Promise((r) => (readyResolve = r));
 window.hiraku = {
+  // a new request's steps, for the tests (the screen's own controls call the same)
+  request: draft ? { send: (t) => draftSend(t), answer: (a) => draftAnswer(a), start: (m) => draftStart(m), get state() { return draft; } } : null,
   player,
   ready,
   seek: seekAndDraw,
@@ -930,12 +1317,14 @@ $("tests").addEventListener("click", (ev) => {
   drawn.rev = -2;
 });
 $("legend").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act]");
+  const b = ev.target.closest("button[data-field], button[data-variant], button[data-act], button[data-mode], button[data-metric]");
   if (!b) return;
   if (b.dataset.act === "zoom") ui.zoomMax = !ui.zoomMax;
   else if (b.dataset.act === "compare") ui.compare = !ui.compare;
-  else if (b.dataset.field) ui.fieldKind = b.dataset.field;
-  else ui.fieldVariant = b.dataset.variant;
+  else if (b.dataset.mode) ui.meshMode = b.dataset.mode;
+  else if (b.dataset.metric) ui.qualityMetric = b.dataset.metric;
+  else if (b.dataset.field) [ui.fieldKind, ui.meshMode] = [b.dataset.field, null];
+  else [ui.fieldVariant, ui.meshMode] = [b.dataset.variant, null];
   drawn.rev = -2;
 });
 $("toggles").addEventListener("click", (ev) => {
@@ -944,6 +1333,25 @@ $("toggles").addEventListener("click", (ev) => {
   const k = b.dataset.toggle;
   if (k === "shape") ui.toggles.contour = false;
   else ui.toggles[k] = !ui.toggles[k];
+});
+$("viewswitch").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.view) ui.present = b.dataset.view === "present";
+  else if (b.id === "detail-btn") ui.detail = !ui.detail;
+  if (!ui.present) ui.detail = false;
+  applyPresent();
+});
+// A click (not a drag) near a wheel's arrows picks that wheel: its forces get the words.
+let pressAt = null;
+viewport.addEventListener("pointerdown", (ev) => {
+  pressAt = ev.target === bench.renderer.domElement ? { x: ev.clientX, y: ev.clientY } : null;
+});
+viewport.addEventListener("pointerup", (ev) => {
+  if (!pressAt || Math.hypot(ev.clientX - pressAt.x, ev.clientY - pressAt.y) > 5) return;
+  const r = bench.renderer.domElement.getBoundingClientRect();
+  if (bench.pickAt((ev.clientX - r.left) / stageScale, (ev.clientY - r.top) / stageScale)) drawn.rev = -2;
+  pressAt = null;
 });
 $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
@@ -989,7 +1397,7 @@ function resetPlayer() {
   player.minEnd = 0;
   ui.anim = { key: null, local: false, playing: false, tau: 0 };
   player.rebuild();
-  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0 };
+  drawn = { rev: -1, lc: undefined, tab: undefined, toggles: "", logLen: 0, logFirstSeq: null, logRev: 0, resolved: "" };
   $("runlist").hidden = true;
 }
 
@@ -1065,12 +1473,31 @@ async function showRunList(message = "", runs = null) {
       message = message || `実行の一覧を読めなかった (${e})。python -m hiraku.webserve で開いてください`;
     }
   }
+  listRuns = runs;
+  box.classList.toggle("plain", !DEV);
+  // what drove the run (project.driver); nothing for older records without it
+  const drvOf = (r) => (DRIVER_JA[r.driver] ? ` <span class="drv" data-driver="${esc(r.driver)}">${DRIVER_JA[r.driver]}</span>` : "");
+  if (!DEV) {
+    // for people: the want, done or going, and one verb; the run ids and the contract sample under ?dev=1
+    const row = (r) => {
+      const href = `?run=${encodeURIComponent(r.run_id)}`;
+      return `<tr data-run="${esc(r.run_id)}"><td>${esc(r.want || "(依頼の文なし)")}${drvOf(r)}</td><td>${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
+    };
+    const table = (title, list) => (list.length ? `<h3>${title}</h3><table>${list.map(row).join("")}</table>` : "");
+    box.innerHTML =
+      `<h2>HIRAKU でできること</h2><p class="lead">作りたいものを書くと、Claude が確かめる解析を選び、計算して、設計を直します。</p>` +
+      `${message ? `<p class="err">${esc(message)}</p>` : ""}<div id="launch"></div>` +
+      table("保存した記録", runs.filter((r) => r.saved)) +
+      table("この PC で実行した記録", runs.filter((r) => !r.saved && !r.sample));
+    renderLaunch();
+    return;
+  }
   const row = (r) => {
     const st = r.sample ? "形の見本 (数値は計算結果ではない)" : r.finished ? "終わった" : "書き込み中";
-    const href = `?run=${encodeURIComponent(r.run_id)}`;
+    const href = withDev(`?run=${encodeURIComponent(r.run_id)}`);
     const links = r.finished ? `<a href="${href}">再生</a> <a href="${href}&video=1">動画の配置で</a>` : `<a href="${href}">追いかける</a>`;
     const mark = r.default ? `<span class="def">画面を開くと再生</span>` : "";
-    return `<tr><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
+    return `<tr data-run="${esc(r.run_id)}"><td>${esc(r.want)}<div class="rid">${esc(r.run_id)}${drvOf(r)}</div></td><td>${esc(st)}${mark}</td><td>${links}</td></tr>`;
   };
   const table = (title, list) => (list.length ? `<h3>${title}</h3><table><tr><th>依頼</th><th>状態</th><th></th></tr>${list.map(row).join("")}</table>` : "");
   box.innerHTML =
@@ -1088,6 +1515,7 @@ async function showRunList(message = "", runs = null) {
 // has the API key (the screen never asks for it), and only after its cost limit
 // was shown and confirmed.
 let launchConfirm = null; // the requirements file waiting for the Claude confirmation
+let listRuns = []; // /api/runs as the run list last showed it (the recommendation picks from it)
 
 async function renderLaunch(message = "") {
   const box = $("launch");
@@ -1096,7 +1524,10 @@ async function renderLaunch(message = "") {
   try {
     info = await (await fetch("/api/launch", { cache: "no-store" })).json();
   } catch (e) {
-    box.innerHTML = "";
+    info = { available: false };
+  }
+  if (!DEV) {
+    box.innerHTML = plainLaunch(info, message);
     return;
   }
   if (info.available === false) {
@@ -1104,32 +1535,196 @@ async function renderLaunch(message = "") {
     return;
   }
   const busy = !!info.running;
-  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
   const rows = (info.requirements ?? [])
     .map((r) => {
       if (r.error) return `<div class="lreq"><div>${esc(r.file)}<div class="err">読めなかった: ${esc(r.error)}</div></div></div>`;
-      const file = esc(r.file);
-      let claude;
-      if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>`;
-      else if (launchConfirm === r.file)
-        claude =
-          `<span class="confirm">Claude を呼びます。費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。走らせますか?</span>` +
-          `<button class="go" data-launch="claude" data-req="${file}">走らせる</button><button data-launch-cancel="1">やめる</button>`;
-      else claude = `<button data-launch-ask="${file}" ${busy ? "disabled" : ""}>Claude で走らせる (費用の上限 ${usd(r.cost_limit_usd)})</button>`;
-      return (
-        `<div class="lreq"><div>${esc(r.want)}<div class="rid">${file}</div></div>` +
-        `<div class="lbtns"><button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>台本で走らせる (Claude は呼ばない)</button>${claude}</div></div>`
-      );
+      return `<div class="lreq"><div>${esc(r.want)}<div class="rid">${esc(r.file)}</div></div>${runButtons(info, r, r.file, busy)}</div>`;
     })
     .join("");
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えた</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
-  const running = busy ? `<p>走っている: <a href="?run=${encodeURIComponent(rid)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
+  const running = busy ? `<p>走っている: <a href="${withDev(`?run=${encodeURIComponent(rid)}`)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
   // without the key in the server's window, only scripted runs and replays are there (the key is never asked for)
   const keyless = info.claude_ready
     ? ""
-    : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは台本の運転と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
-  box.innerHTML = `<h3>その場で走らせる</h3>${keyless}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+    : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは決まった手順の再現と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
+  const fresh = `<p><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+  box.innerHTML =
+    demoSection(info, busy) +
+    `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+}
+
+// 決まった手順で再現 / Claude で走らせる (?dev=1) for one requirements file r ({file, cost_limit_usd, round_limit}).
+// ask: what launchConfirm holds while this row's Claude confirmation is open. A Claude run
+// needs the key in the server's window, and the cost limit is shown and confirmed first.
+// r.modes (when the demo runs list the file): only those buttons. r.estimate_usd (a demo row):
+// the estimate of a real Claude run, shown with the limit; when it is over the limit, the button
+// and the confirmation say the run stops at the limit (it can still be started).
+function runButtons(info, r, ask, busy) {
+  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+  const file = esc(r.file);
+  const modes = r.modes ?? ["scripted", "claude"];
+  const demo = "estimate_usd" in r;
+  const over = demo && overLimit(r);
+  const overNote = over ? `<span class="over">見込みが上限を超えるので、上限 ${usd(r.cost_limit_usd)} で止まる</span>` : "";
+  let claude = ""; // (none when the demo runs list the file without claude)
+  if (!modes.includes("claude")) claude = "";
+  else if (!info.claude_ready) claude = `<button disabled>Claude で走らせる</button><span class="why">サーバーを立ち上げた窓に ${esc(info.key_name)} が無いので押せない</span>${overNote}`;
+  else if (launchConfirm === ask)
+    claude =
+      `<span class="confirm">Claude を呼びます。${demo ? `見込みは ${usd(r.estimate_usd)}、` : ""}費用の上限は ${usd(r.cost_limit_usd)}、繰り返しは ${esc(r.round_limit ?? "—")} 回まで。` +
+      `${over ? `見込みが上限を超えるので、上限 ${usd(r.cost_limit_usd)} で止まります。` : ""}走らせますか?</span>` +
+      `<button class="go" data-launch="claude" data-req="${file}">走らせる</button><button data-launch-cancel="1">やめる</button>`;
+  else {
+    const label = demo ? `見込み ${usd(r.estimate_usd)}・上限 ${usd(r.cost_limit_usd)}` : `費用の上限 ${usd(r.cost_limit_usd)}`;
+    claude = `<button data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>Claude で走らせる (${label})</button>${overNote}`;
+  }
+  const scripted = modes.includes("scripted")
+    ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>決まった手順で再現 (Claude なし)</button>`
+    : "";
+  return `<div class="lbtns">${scripted}${claude}</div>`;
+}
+
+// The two values as written (no estimate or no limit: not over).
+const overLimit = (r) => typeof r.estimate_usd === "number" && typeof r.cost_limit_usd === "number" && r.estimate_usd > r.cost_limit_usd;
+
+// デモの実行: the rows of data/requirements/demo_runs.yaml (the design department's), in its order.
+// A file row runs like the files below; a request row opens A1 (?new=1&demo=<id>) with the
+// product's want written in, to be sent by the person.
+function demoSection(info, busy) {
+  if (info.demo_runs_error) return `<h3>デモの実行</h3><p class="err">デモの一覧を読めなかった: ${esc(info.demo_runs_error)}</p>`;
+  const list = info.demo_runs ?? [];
+  if (!list.length) return "";
+  const rows = list.map((d) => {
+    const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
+    const head =
+      `<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>` +
+      (d.shows ? `<div class="shows">${esc(d.shows)}</div>` : "");
+    let left, right = "";
+    if (d.error) left = `<div class="err">使えない: ${esc(d.error)}${d.file ? ` (${esc(d.file)})` : ""}</div>`;
+    else if (d.file) {
+      // (a file row carries its requirements' product too; file is what tells the two apart)
+      const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+      left =
+        `<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}</div>` +
+        `<div class="rid">${esc(d.file)}</div>`;
+      right = runButtons(info, d, `demo:${d.id}`, busy);
+    } else {
+      left = `<div class="rid">${esc(d.want)} (products/${esc(d.product)}.yaml)</div>`;
+      right =
+        `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">A1 で依頼する</a>` +
+        `<span class="why">依頼の文が入った A1 が開く。送るのは押してから</span></div>`;
+    }
+    return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}</div>${right}</div>`;
+  });
+  return `<h3>デモの実行</h3><div class="demo-runs">${rows.join("")}</div>`;
+}
+
+// ---- the run list for people (no ?dev=1) --------------------------------------
+// One line per row saying what it lets you do, one verb per button: 見る (replay a record),
+// 再現する (the scripted run, no Claude), 実行する (a Claude run, after its confirmation),
+// 試す (A1 with the request written in). The files, cut numbers, cost lines and why a button
+// cannot be pressed are inside each row's くわしく, or under ?dev=1.
+const README_RUN = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"; // README の「動かし方」
+const KEYLESS_JA = "Claude で実行するには、API キーを設定して HIRAKU を起動し直してください。";
+const usdShort = (v) => (Number.isInteger(v) ? `$${v}` : fmtUsd(v));
+
+// The cost limits of the demo rows a Claude run can start from (a run stops at its file's limit), as a range.
+function claudeLimitRange(info) {
+  const lims = (info.demo_runs ?? [])
+    .filter((d) => d.file && !d.error && (d.modes ?? []).includes("claude") && typeof d.cost_limit_usd === "number")
+    .map((d) => d.cost_limit_usd);
+  if (!lims.length) return "";
+  const lo = Math.min(...lims);
+  const hi = Math.max(...lims);
+  return lo === hi ? `1 回 ${usdShort(lo)} まで` : `1 回 ${usdShort(lo)}〜${String(usdShort(hi)).slice(1)} まで`;
+}
+
+// おすすめ: the server's default saved run (else the newest saved one) as a replay; with no saved run,
+// the scripted run of the demo row PICK_DEMO_ID. Nothing when neither is there.
+function pickHtml(info, busy) {
+  const saved = listRuns.filter((r) => r.saved && r.finished);
+  const run = saved.find((r) => r.default) ?? saved[0];
+  const head = `<span class="tag">おすすめ</span>`;
+  if (run)
+    return (
+      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、不合格の所を直すまでを、保存した記録で見ます (無料・すぐ)` +
+      `${run.want ? `<div class="sub">依頼: ${esc(run.want)}</div>` : ""}</div><a class="go" href="?run=${encodeURIComponent(run.run_id)}">見る</a></div>`
+    );
+  const d = (info.demo_runs ?? []).find((r) => r.id === PICK_DEMO_ID && r.file && !r.error && (r.modes ?? []).includes("scripted"));
+  if (!d) return "";
+  return (
+    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、不合格の所を直すまでを、決まった手順で再現します (無料・Claude なし)` +
+    `${d.want ? `<div class="sub">依頼: ${esc(d.want)}</div>` : ""}</div><button class="go" data-launch="scripted" data-req="${esc(d.file)}" ${busy ? "disabled" : ""}>再現する</button></div>`
+  );
+}
+
+// The ways to run, once above the rows (the verbs on the buttons below), and the one line without the key.
+function waysHtml(info) {
+  const range = claudeLimitRange(info);
+  const claude = info.available === false ? "" : `<li><span class="vb claude">実行する</span>Claude で新しく実行する (Anthropic の API キーが要ります${range ? `・${range}` : ""})</li>`;
+  const scripted = info.available === false ? "" : `<li><span class="vb">再現する</span>決まった手順で再現する (無料・Claude なし)</li>`;
+  const keyless = info.available === false || info.claude_ready ? "" : `<p class="keyless">${KEYLESS_JA}<a class="readme" href="${README_RUN}" target="_blank" rel="noopener">README の「動かし方」</a></p>`;
+  return `<ul class="ways"><li><span class="vb">見る</span>記録を再生する (無料・すぐ)</li>${scripted}${claude}</ul>${keyless}`;
+}
+
+// What ?dev=1 shows for a demo row, inside its くわしく.
+function demoDetail(d) {
+  const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
+  const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
+  const lines = [`<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>`];
+  if (d.shows) lines.push(`<div class="shows">${esc(d.shows)}</div>`);
+  if (d.error) lines.push(`<div class="err">使えない: ${esc(d.error)}</div>`);
+  if (d.file) {
+    lines.push(`<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}${overLimit(d) ? " (見込みが上限を超えるので、上限で止まる)" : ""}</div>`);
+    lines.push(`<div class="rid">${esc(d.file)}</div>`);
+  } else if (d.product) lines.push(`<div class="rid">${esc(d.want ?? "")} (products/${esc(d.product)}.yaml)</div>`);
+  return lines.join("");
+}
+
+// 再現する / 実行する for a demo file row; the Claude confirmation shows the cost limit before anything starts.
+function plainButtons(info, d, busy) {
+  const modes = d.modes ?? ["scripted", "claude"];
+  const ask = `demo:${d.id}`;
+  const file = esc(d.file);
+  const scripted = modes.includes("scripted") ? `<button data-launch="scripted" data-req="${file}" ${busy ? "disabled" : ""}>再現する</button>` : "";
+  let claude = "";
+  if (!modes.includes("claude")) claude = "";
+  else if (!info.claude_ready) claude = `<button class="claude" disabled>実行する</button>`;
+  else if (launchConfirm === ask) {
+    const est = typeof d.estimate_usd === "number" ? `見込みは ${fmtUsd(d.estimate_usd)}、` : "";
+    const over = overLimit(d) ? "見込みが上限を超えるので、途中で止まります。" : "";
+    claude =
+      `<span class="confirm">Claude で実行します。${est}費用の上限は ${fmtUsd(d.cost_limit_usd)} で、そこで止まります。${over}実行しますか？</span>` +
+      `<button class="go claude" data-launch="claude" data-req="${file}">実行する</button><button data-launch-cancel="1">やめる</button>`;
+  } else claude = `<button class="claude" data-launch-ask="${esc(ask)}" ${busy ? "disabled" : ""}>実行する</button>`;
+  return `<div class="lbtns">${scripted}${claude}</div>`;
+}
+
+function plainLaunch(info, message) {
+  const busy = !!info.running;
+  const pick = pickHtml(info, busy);
+  if (info.available === false) return pick + waysHtml(info);
+  const rid = info.running?.run_id ?? "";
+  const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えました</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
+  const running = busy ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${rid ? stop : ""}</p>` : "";
+  const rows = info.demo_runs_error
+    ? [`<p class="err">デモの一覧を読めませんでした</p>`]
+    : (info.demo_runs ?? []).map((d) => {
+        const line = DEMO_LINE_JA[d.id] ?? (d.title || d.id);
+        let btns;
+        if (d.error) btns = `<div class="lbtns"><span class="why">いまは使えません</span></div>`;
+        else if (d.file) btns = plainButtons(info, d, busy);
+        else btns = `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">試す</a></div>`;
+        return `<div class="lreq demo" data-demo="${esc(d.id)}"><div class="dline">${esc(line)}<details class="more"><summary>くわしく</summary>${demoDetail(d)}</details></div>${btns}</div>`;
+      });
+  const fresh =
+    `<div class="lreq fresh"><div class="dline">自分で頼む — 作りたいものを文で書いて、はじめから頼みます</div>` +
+    `<div class="lbtns"><a class="new-request" href="?new=1">書く</a></div></div>`;
+  return (
+    pick + waysHtml(info) + (message ? `<p class="err">${esc(message)}</p>` : "") + running +
+    `<h3>デモ</h3><div class="demo-runs">${rows.join("")}${fresh}</div>`
+  );
 }
 
 async function launch(file, mode) {
@@ -1139,7 +1734,7 @@ async function launch(file, mode) {
     const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
     const out = await res.json();
     if (!res.ok) throw new Error(out.error ?? String(res.status));
-    location.href = `?run=${encodeURIComponent(out.run_id)}`; // follow it live
+    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
   } catch (e) {
     renderLaunch(`走らせられなかった: ${e.message ?? e}`);
   }
@@ -1182,6 +1777,38 @@ $("runlist").addEventListener("click", (ev) => {
   }
 });
 
+// A new request: the intake tabs on the draft (whether Claude can be asked comes from the launcher).
+async function startDraft() {
+  ui.pinnedTab = "A1";
+  try {
+    const info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    Object.assign(draft, { claudeReady: !!info.claude_ready, keyName: info.key_name });
+    const demoId = params.get("demo");
+    if (demoId) {
+      // a request row of デモの実行: its product's want goes into A1 (sent only when 送る is pressed)
+      const d = (info.demo_runs ?? []).find((r) => r.id === demoId);
+      if (d && !d.file && d.product && d.want && !d.error) Object.assign(draft, { prefill: d.want, demoTitle: d.title || d.id });
+      else draft.error = `デモの実行 ${demoId} の依頼の文が見つからなかった`;
+    }
+  } catch (e) {
+    draft.error = `サーバーに聞けなかった: ${e.message ?? e}`;
+  }
+  drawn.rev = -1;
+  renderDraft();
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-start], [data-start-cancel]");
+  if (!b || !draft) return;
+  if (b.dataset.startCancel) {
+    draft.confirm = false;
+    renderDraft();
+  } else draftStart(b.dataset.start);
+});
+$("view-intake").addEventListener("change", (ev) => {
+  if (draft && ev.target.matches("[data-use-claude]")) draft.useClaude = ev.target.checked;
+});
+
 // No run in the URL: open the server's default run (a saved run), else the run list.
 async function openDefault() {
   let runs;
@@ -1197,6 +1824,8 @@ async function openDefault() {
 }
 
 fitStage();
+if (ui.present) applyPresent();
+else $("viewswitch").querySelector('[data-view="bench"]').classList.add("on");
 requestAnimationFrame(loop);
 if (params.get("run")) openRun(params.get("run"));
 else if (params.get("src")) {
@@ -1205,4 +1834,5 @@ else if (params.get("src")) {
     .then((text) => loadEvents(parseJsonl(text), { live: false }))
     .catch((e) => showRunList(`読めなかった: ${e}`));
 } else if (params.get("list")) showRunList();
+else if (draft) startDraft();
 else openDefault();

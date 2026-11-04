@@ -1,4 +1,5 @@
 import copy
+import json
 import unittest
 from unittest import mock
 
@@ -80,7 +81,11 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertGreater(r1[0]["diff_rel"], 0.15)
         self.assertLess(r1[1]["diff_rel"], -0.15)
         causes = [cause_of(self.ctx, c) for c in r1]
+        # resolved_by names only a later match; the safe-side verdict settles the earlier cause for the tile
         self.assertEqual([c["resolved"] for c in causes], [False, False])
+        from hiraku.tools.judge import held_cases
+
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", self.ctx.version))
         self.assertIn("張り出し", causes[0]["cause"])
         self.assertIn("rail_joint_stress", causes[0]["fix"])
         self.assertNotIn("safe_side", causes[0])
@@ -97,6 +102,74 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
+
+    def test_a_fit_driver_revision_takes_the_values_found_by_code(self):
+        from unittest import mock
+
+        from hiraku import designgen
+        from hiraku.agent import scripted
+        from hiraku.designgen import driver_fit
+
+        found = {"changes": {"steering_x": {"value": -509.5, "unit": "mm"}, "seat_height": {"value": 317.0, "unit": "mm"}},
+                 "smallest": {"name": "knee_room", "value": 12.0, "unit": "mm", "where": "steering_column"}}
+        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit,                 mock.patch.object(scripted, "range_ends", return_value=["seat_slide 300 mm (上限)"]):
+            changes, reason = scripted.fit_driver(self.ctx, {"track": {"value": 1220, "unit": "mm"},
+                                                             "steering_x": {"value": -200, "unit": "mm"}}, "H3: 膝", 5)
+        self.assertEqual(fit.call_args.args[0], {"design": "with track"})  # measured on the design with the plan's changes
+        self.assertEqual(fit.call_args.kwargs["time_limit_s"], 5.0)
+        self.assertEqual(fit.call_args.kwargs["max_evals"], scripted.FIT_EVALS)  # a fixed count by default
+        self.assertEqual(regen.call_args.args[1]["track"]["value"], 1220)
+        self.assertEqual(changes["steering_x"]["value"], -509.5)  # the fit wins for its variables
+        self.assertEqual(changes["track"]["value"], 1220)
+        self.assertIn("driver_fit", reason)
+        self.assertIn("knee_room 12.0 mm", reason)
+        self.assertIn("範囲の端 (確かめていない値) で決まった: seat_slide 300 mm (上限)", reason)
+
+    def test_range_ends_names_the_bounds(self):
+        import json
+
+        from hiraku import designgen
+        from hiraku.agent import scripted
+
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        d = json.loads((root / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        spec = {s["name"]: s for s in designgen.variables(d)}
+        lo = spec["steering_column_angle"]["min"]
+        got = scripted.range_ends(d, {"steering_column_angle": {"value": lo, "unit": "deg"},
+                                      "seat_height": {"value": spec["seat_height"]["value"], "unit": "mm"}})
+        self.assertEqual(got, [f"steering_column_angle {lo:g} deg (下限)"])
+
+    def test_a_prediction_whose_inputs_cannot_be_read_is_skipped_and_said(self):
+        """R8-push's K0 (load_path.bar_on_posts) has no inputs on a design with nothing outside point R: the scripted
+        run skips that prediction, says why (agent.said of system), and goes on with the others."""
+        from hiraku.agent import scripted
+
+        def no_point_r(design, load_case):
+            raise ValueError("nothing outside point R")
+
+        lc = self.ctx.load_case("R1-step100")
+        bad = {"quantity": "occupant_push_deflection", "formula_id": "frame_static.rail_bending", "output": "sigma",
+               "inputs": {}, "inputs_from": no_point_r}
+        self.assertEqual(scripted._predict(self.ctx, lc, "cae.strength", [bad]), [])
+        said = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and (e.get("data") or {}).get("skipped_prediction")]
+        self.assertEqual(said[-1]["data"]["quantity"], "occupant_push_deflection")
+        self.assertIn("nothing outside point R", said[-1]["text"])
+        self.assert_events_fit()
+        # a step left with no prediction is not analysed (HK1 would refuse it); the run goes on
+        before = len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"])
+        scripted._run_step(self.ctx, lc, "cae.strength", "frame_static", {"predictions": [bad]})
+        self.assertEqual(len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"]), before)
+
+    def test_plan_notes_are_said_and_reported(self):
+        plan = copy.deepcopy(load_plan("offroad-4w"))
+        plan["notes"] = ["R4 は回していません"]
+        self.assertEqual(run_scripted(self.ctx, plan), "done")
+        said = [json.dumps(e, ensure_ascii=False) for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("R4 は回していません" in t for t in said))
+        report = next(e for e in self.ctx.store.events() if e["kind"] == "report.written")
+        self.assertIn("R4 は回していません", report["data"]["summary"])
 
     def test_rail_joint_inputs_come_from_the_design(self):
         run_scripted(self.ctx)
@@ -220,10 +293,24 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
                 with self.assertRaises(ScriptError):
                     resolve(self.ctx, bad, lc)
 
+    def test_pred_ref_reads_the_load_case_being_run(self):
+        p1 = self.ctx.load_case("P1-step100")
+        load, _ = self.predict_p1()
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        # a newer prediction of the same quantity for another load case does not count for P1
+        self.ctx.load_cases.append(dict(p1, load_case_id="P1-step250-beyond"))
+        other = self.ctx.store.add_record("prediction", dict(load, prediction_id=self.ctx.store.next_id("prediction"),
+                                                             load_case_id="P1-step250-beyond", value=load["value"] * 2),
+                                          design_version=self.ctx.version, agent="cae.strength", domain="strength")
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", p1)["value"], load["value"])
+        self.assertEqual(resolve(self.ctx, "pred.front_wheel_load", self.ctx.load_case("P1-step250-beyond"))["value"],
+                         other["value"])
+
     def test_plan_names_no_member_or_section(self):
         plan = load_plan("offroad-4w")
         self.assertEqual([(s["load_case"], s["tool"]) for s in plan["steps"]],
                          [("P1-step100", "step_climb"), ("R1-step100", "frame_static"),
+                          ("R1s-step100", "frame_shell"),  # only where R1s is built
                           ("P1-step100", "step_climb_dynamic"),  # after R1: R1 reads step_climb's wheel loads
                           ("P1-step250-beyond", "step_climb"), ("R1-step250-beyond", "frame_static"),
                           ("P1-step250-beyond", "step_climb_dynamic"),
@@ -291,7 +378,7 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
                                                          {"load_case": "R1-step100", "tool": "frame_static", "say": "b"}]}
 
     def plans(self, data):
-        return mock.patch("hiraku.agent.scripted.read_data", return_value=data)
+        return mock.patch("hiraku.tools.plan.read_data", return_value=data)
 
     def test_a_file_entry_extends_the_products_plan(self):
         own = {"extends": "offroad-4w", "rule_check": True,
