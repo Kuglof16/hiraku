@@ -3281,7 +3281,8 @@
         "knowledge.imported",
         "rule_check.recorded",
         "mesh.created",
-        "design.change_proposed"
+        "design.change_proposed",
+        "load_cases.created"
       ]
     },
     "event": {
@@ -3899,6 +3900,25 @@
             "properties": {
               "data": {
                 "$ref": "#/$defs/module_change"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "load_cases.created"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/version_load_cases"
               }
             }
           }
@@ -5116,6 +5136,27 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/interface"
+          }
+        }
+      }
+    },
+    "version_load_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_version",
+        "load_cases"
+      ],
+      "description": "The load cases built for one design version (a builder's criterion may read the version's own design, e.g. how many parts to assemble). Written to v00N/load_cases.json; project.load_cases stays the first version's.",
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "load_cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/load_case"
           }
         }
       }
