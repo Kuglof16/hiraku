@@ -5137,6 +5137,14 @@
           "items": {
             "$ref": "#/$defs/interface"
           }
+        },
+        "regrow": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "uniqueItems": true,
+          "description": "Modules whose envelopes the code re-grows around their parts in the new version (designgen.modules.envelopes), instead of boxes written in envelopes. The packager names each module on purpose and says why in reason; overlaps between modules are still judged by H1-interference."
         }
       }
     },
