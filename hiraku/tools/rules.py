@@ -24,8 +24,9 @@ HK2 = "HK2_tool_usable"
 HK3 = "HK3_cause_before_continue"
 HK4 = "HK4_no_stop_before_judged"
 HK5 = "HK5_light_first"
+HK6 = "HK6_module_scope"
 
-assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4, HK5}
+assert set(HOOK_RULES) == {HK1, HK2, HK3, HK4, HK5, HK6}
 
 Record = dict[str, Any]
 
@@ -221,8 +222,86 @@ def check_compare(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
 CHECKS = {"analyze": check_analyze, "compare": check_compare}
 
 
-def check_call(ctx: RunContext, tool: str, args: dict[str, Any]) -> Denial | None:
-    """HK1-HK3 and HK5 for one tool call. tool is the short name (analyze, compare, ...)."""
+# ---------------------------------------------------------------------------- HK6 (designs with modules)
+
+
+def design_modules(ctx: RunContext) -> dict[str, Record] | None:
+    """The current design's modules by module_id, or None for a design without modules (and before version 1)."""
+    if not ctx.version:
+        return None
+    mods = ctx.store.design().get("modules")
+    return {m["module_id"]: m for m in mods} if mods else None
+
+
+def _module_ja(m: str) -> str:
+    return f"{contract.MODULE_NAMES_JA.get(m, m)} ({m})"
+
+
+def owners_of(mods: dict[str, Record], name: str, key: str = "variables") -> list[str]:
+    """The modules whose `key` (variables or choices) list a name."""
+    return [m for m, mod in mods.items() if name in (mod.get(key) or [])]
+
+
+def outside_module(mods: dict[str, Record], module: str, args: dict[str, Any], what: str = "設計役") -> list[str]:
+    """One sentence per variable (changes) or choice (choices) the module may not change, naming who may."""
+    mod = mods.get(module) or {}
+    out = []
+    for key, word, names in (("variables", "変数", args.get("changes") or {}), ("choices", "近道", args.get("choices") or {})):
+        for name in names:
+            if name in (mod.get(key) or []):
+                continue
+            owners = owners_of(mods, name, key)
+            who = "、".join(_module_ja(m) for m in owners) if owners else "どのモジュールにも入っていない"
+            out.append(f"{word} {name} は{_module_ja(module)}の{what}が変えられるものではありません (持ち主: {who})")
+    return out
+
+
+def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | None) -> Denial | None:
+    """HK6 on a design with modules: revise_design only with `module`, by designer.<module>, inside the module's
+    variables and choices, never by the packager; build_version only by the packager, with package variables only.
+    agent None (a direct call that names no caller) skips the who-checks and keeps the scope checks."""
+    mods = design_modules(ctx)
+    if mods is None:
+        return None
+    if tool == "revise_design":
+        if agent == "packager":
+            return Denial(HK6, ("パッケージ役は revise_design を使いません。この設計はモジュールに分かれているので、"
+                                "その回の提案とレイアウトの変更は build_version で 1 つの版にまとめてください"))
+        module = args.get("module")
+        if not module:
+            return Denial(HK6, ("この設計はモジュールに分かれているので、revise_design には module (どのモジュールの提案か) が要ります。"
+                                f"モジュールは {', '.join(mods)} です。自分のモジュールを付けて呼び直してください"))
+        if module == "package":
+            return Denial(HK6, ("レイアウト (package) の変数・空間・取付点を変えるのはパッケージ役だけで、build_version で変えます。"
+                                "パッケージ役に、何をなぜ変えたいかを伝えてください"))
+        if module not in mods:
+            return Denial(HK6, f"モジュール {module} はこの設計にありません。あるのは {', '.join(mods)} です")
+        if agent is not None and agent != f"designer.{module}":
+            return Denial(HK6, (f"{_module_ja(module)}の提案を出せるのは、そのモジュールの設計役 (designer.{module}) だけです "
+                                f"(呼んだのは {agent})。そのモジュールを変えたいときは、まとめ役から designer.{module} に頼んでください"))
+        bad = outside_module(mods, module, args)
+        if bad:
+            return Denial(HK6, "自分のモジュールの外は変えられません: " + "; ".join(bad)
+                          + "。自分のモジュールの変数と近道だけにして呼び直すか、持ち主の設計役に頼んでください")
+        return None
+    if tool == "build_version":
+        if agent is not None and agent != "packager":
+            return Denial(HK6, (f"次の版を作る build_version はパッケージ役 (packager) だけが使えます (呼んだのは {agent})。"
+                                "モジュールの設計役は revise_design に module を付けて提案してください"))
+        if "package" in mods:
+            bad = outside_module(mods, "package", {"changes": args.get("changes") or {}}, "パッケージ役")
+            if bad:
+                return Denial(HK6, "パッケージ役の changes はレイアウトの変数だけです: " + "; ".join(bad)
+                              + "。ほかのモジュールの変数は、そのモジュールの設計役が revise_design で提案します")
+        return None
+    return None
+
+
+def check_call(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | None = None) -> Denial | None:
+    """HK1-HK3, HK5 and HK6 for one tool call. tool is the short name (analyze, compare, ...); agent is the
+    caller's contract agent id (HK6 reads it; None skips HK6's who-checks)."""
+    if tool in ("revise_design", "build_version"):
+        return check_hk6(ctx, tool, args, agent)
     check = CHECKS.get(tool)
     return check(ctx, args) if check else None
 

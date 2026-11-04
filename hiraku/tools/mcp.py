@@ -5,7 +5,8 @@ each schema stands alone; get_context, list_formulas and list_tools have
 their own. Results are JSON text of what the function returns: the record
 for record_prediction; for analyze the record without what only the screen
 uses (for_agent); {comparison, verdict} for compare; {cause, verdict} for
-record_cause; a summary of the new version for revise_design; the asked-for
+record_cause; a summary of the new version for revise_design (a proposal's id and the pending
+proposals on a design with modules) and build_version; the asked-for
 parts for the reading tools. A ToolError comes back with is_error and its
 message (what is wrong, what to do next).
 """
@@ -112,6 +113,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "compare": compare_input_schema(),
     "record_cause": contract_input_schema("record_cause"),
     "revise_design": contract_input_schema("revise_design"),
+    "build_version": contract_input_schema("build_version"),
     "propose_design": contract_input_schema("propose_design"),
     "make_tool": contract_input_schema("make_tool"),
     "check_tool": check_tool_input_schema(),
@@ -171,7 +173,17 @@ DESCRIPTIONS = {
     ),
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"
-        "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる"
+        "次の版の設計を組み直して記録する。回数は round_limit まで。新しい版では全部の荷重条件の判定がやり直しになる。"
+        "設計がモジュールに分かれているとき (get_context の modules) は、module に自分のモジュールを付けて、"
+        "モジュールの設計役 (designer.<module>) が呼ぶ。変えられるのは自分のモジュールの変数と近道 (choices) だけで、"
+        "版は作らず提案 (change_id) として記録される。その回の提案はパッケージ役が build_version で 1 つの版にまとめる"
+    ),
+    "build_version": (
+        "パッケージ役だけが使う (モジュールに分かれた設計)。その回の提案 (モジュールの設計役の revise_design) を全部まとめ、"
+        "パッケージ役のレイアウトの変数 (changes)・モジュールの空間 (envelopes)・取付点 (interfaces) と理由 (reason) から、"
+        "次の版を組み直して記録する。自分の変更が無くても毎回呼ぶ。回数は round_limit まで (1 回で 1 回分)。"
+        "2 つの提案が同じ変数を変えるとき、部品がモジュールの空間からはみ出すときは断られる。"
+        "新しい版では全部の荷重条件の判定がやり直しになる"
     ),
     "propose_design": (
         "設計役だけが使う。設計がまだ無い (版 0) ときに、型 (archetype)・選択肢 (choices)・変数 (variables) と理由から"
@@ -228,7 +240,7 @@ def for_agent(name: str, result: Any) -> Any:
 # Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
-ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "write_report")
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_report")
 NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
              "見つかりません)。同じ入力でもう一度呼んでください")
 

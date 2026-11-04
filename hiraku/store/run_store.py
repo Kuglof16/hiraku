@@ -29,6 +29,13 @@ Record = dict[str, Any]
 RECORD_EVENT = layout.RECORD_EVENT
 # project.driver whose cost HIRAKU cannot know (the person's own Claude Code pays): cost_usd null
 UNPRICED_DRIVER = "claude_code_plugin"
+# A module designer's proposal (design.change_proposed, data a module_change) has a run-wide id chg-0001, ...
+# It has no file of its own: layout has no folder for it, so the events are its record (the event's
+# design_version is the version it was based on) and a proposal is built once a later design lists it in
+# module_changes (build_version). ID_PREFIX is the contract's with this one added.
+MODULE_CHANGE = "module_change"
+CHANGE_PROPOSED = "design.change_proposed"
+ID_PREFIX = {**layout.ID_PREFIX, MODULE_CHANGE: "chg"}
 
 
 class StoreError(RuntimeError):
@@ -89,7 +96,7 @@ class RunStore:
         self._seq = 0
         self._t0_mono = mono()
         self._t_offset = 0.0  # t of the last event when reopened
-        self._counters = {kind: 0 for kind in layout.ID_PREFIX}
+        self._counters = {kind: 0 for kind in ID_PREFIX}
 
     # ------------------------------------------------------------------ create / open
 
@@ -135,6 +142,9 @@ class RunStore:
         for kind in layout.ID_PREFIX:
             ids = [r[f"{kind}_id"] for r in store.records(kind)]
             store._counters[kind] = max((int(i.rsplit("-", 1)[1]) for i in ids), default=0)
+        chg = [c["change_id"] for _, c in store._proposals(events)]
+        chg += [c["change_id"] for v in store._project.get("design_versions") or [] for c in store.design(v).get("module_changes") or []]
+        store._counters[MODULE_CHANGE] = max((int(i.rsplit("-", 1)[1]) for i in chg), default=0)
         return store
 
     # ------------------------------------------------------------------ events
@@ -284,7 +294,7 @@ class RunStore:
         """Reserve the next run-wide id of a record kind (pred-0001, ana-0001, ...)."""
         with self._lock:
             self._counters[kind] += 1
-            return layout.format_id(kind, self._counters[kind])
+            return f"{ID_PREFIX[kind]}-{self._counters[kind]:04d}"
 
     def add_record(self, kind: str, record: Record, *, design_version: int, agent: str,
                    domain: str | None = None, text: str | None = None) -> Record:
@@ -324,6 +334,47 @@ class RunStore:
     def get(self, kind: str, record_id: str) -> Record | None:
         hit = self.find(kind, record_id)
         return hit[1] if hit else None
+
+    # ------------------------------------------------------------------ module changes (designs with modules)
+
+    def propose_change(self, change: Record, *, design_version: int, agent: str, text: str | None = None) -> Record:
+        """Emit design.change_proposed: data is the module_change (validated), the event's design_version the
+        version it was based on. No version is made; build_version builds the round's proposals into one."""
+        with self._lock:
+            contract.validate(MODULE_CHANGE, change)
+            if design_version not in (self._project.get("design_versions") or []):
+                raise StoreError(f"no design version {design_version} to base a proposal on")
+            self.emit(CHANGE_PROPOSED, agent=agent, design_version=design_version, text=text, data=change)
+            return change
+
+    @staticmethod
+    def _proposals(events: list[Record]) -> list[tuple[int, Record]]:
+        """(based-on version, module_change) of every design.change_proposed, the last event per change_id."""
+        latest: dict[str, tuple[int, Record]] = {}
+        for e in events:
+            if e["kind"] == CHANGE_PROPOSED and isinstance(e.get("data"), dict) and "change_id" in e["data"]:
+                latest[e["data"]["change_id"]] = (e.get("design_version") or 0, e["data"])
+        return list(latest.values())
+
+    def built_change_ids(self) -> set[str]:
+        """The change_ids some version was built from (its design's module_changes)."""
+        with self._lock:
+            return {c["change_id"] for v in self._project.get("design_versions") or []
+                    for c in self.design(v).get("module_changes") or []}
+
+    def proposals(self, design_version: int | None = None, *, pending: bool = False) -> list[Record]:
+        """The module designers' proposals, in id order: those based on one version (or all); with pending,
+        only those no version was built from yet."""
+        with self._lock:  # tools run in threads: no read while another thread appends or replaces
+            got = self._proposals(self.events())
+            built = self.built_change_ids() if pending else set()
+            out = [c for v, c in got if (design_version is None or v == design_version) and c["change_id"] not in built]
+            return sorted(out, key=lambda c: int(c["change_id"].rsplit("-", 1)[1]))
+
+    def pending_proposals(self, design_version: int | None = None) -> list[Record]:
+        """The proposals based on the current version (or the one given) that no version was built from yet."""
+        with self._lock:
+            return self.proposals(design_version or self.design_version, pending=True)
 
     # ------------------------------------------------------------------ judgements
 
