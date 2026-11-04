@@ -310,6 +310,11 @@ def joint_inputs(design: dict) -> dict:
             if other is None:
                 continue
             g = gap(me, other)
+            if "at_mm" in c:  # where the joint says the two meet: in (or on) both boxes
+                at = np.asarray(c["at_mm"], float)
+                g = max(g, gap(me, (at, at)), gap(other, (at, at)))
+            else:
+                g = np.inf  # a joint that does not say where it is
             if g > JOINT_GAP_MM:
                 gaps.append((p["id"], to, g))
     return {"n_gap": float(len(gaps)), "n_none": float(len(none)), "gaps": sorted(gaps, key=lambda t: -t[2]),

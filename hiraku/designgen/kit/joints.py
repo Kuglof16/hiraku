@@ -57,7 +57,8 @@ def _gap(design: dict, bs, pid: str, to: str) -> float | None:
     return None
 
 
-FIXED_KINDS = ("body", "frame", "gusset", "rollbar")  # parts fixed to the frame that others may be fastened to
+# parts fixed to the frame that others may be fastened to (a bracket: a mount or a fitting welded to the frame)
+FIXED_KINDS = ("body", "frame", "gusset", "rollbar", "bracket")
 
 
 def _touching_fixed_part(bs, pid: str, near) -> str | None:
@@ -245,7 +246,7 @@ def retarget_and_bridge(design: dict, only=None) -> dict:
         dropped_here = False
         for g, c in far:
             # a far fixed joint is dropped when the part touches its holder, or (to a node) anything else
-            if touching and ((c["to"] in nodes) or (held and c.get("via") not in MOVING_VIA)):
+            if touching and c.get("via") not in MOVING_VIA:
                 n_drop += 1
                 dropped_here = True
                 continue
@@ -415,7 +416,9 @@ def brake_master(design: dict) -> str | None:
     a = closest(bs["part:pedal_brake"], rear)
     rod = _add(design, {"id": "pushrod_brake", "name": "ブレーキの押し棒", "kind": "pushrod",
                         "box": strut_box(a, rear, PUSHROD_D_MM), "mass_kg": 0.1,
-                        "connects_to": [{"to": "brake_master", "via": "pin", "carries": "brake"}]})
+                        "connects_to": [{"to": "brake_master", "via": "pin", "carries": "brake"}],
+                        # carried as the pedal is (it moves with the pedal, not with a wheel)
+                        **({"carried_by": list(pedal["carried_by"])} if pedal.get("carried_by") else {})})
     pedal["connects_to"] = [c for c in pedal.get("connects_to") or [] if c["to"] != "brake_master"] + [
         {"to": rod["id"], "via": "pin", "carries": "brake"}]
     m["connects_to"] = [c for c in m.get("connects_to") or [] if c["to"] not in {n["id"] for n in design["nodes"]}]

@@ -37,7 +37,7 @@ def joint_gaps(design: dict, bs: dict[str, Body] | None = None) -> dict:
     bs = bs or bodies(design)
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     supports = {s["id"]: np.asarray(s["position_mm"], float) for s in design.get("supports", [])}
-    gaps, unjoined, n = [], [], 0
+    gaps, unjoined, n, missing_at = [], [], 0, []
     for p in design.get("parts", []):
         me = bs.get(f"part:{p['id']}")
         links = [c for c in p.get("connects_to") or [] if c.get("via") not in NOT_TOUCHING_VIA]
@@ -48,6 +48,7 @@ def joint_gaps(design: dict, bs: dict[str, Body] | None = None) -> dict:
             continue
         for c in links:
             to = c["to"]
+            other = None
             if to in nodes:
                 g = point_gap(nodes[to], me)
             elif f"part:{to}" in bs or f"member:{to}" in bs:
@@ -58,9 +59,17 @@ def joint_gaps(design: dict, bs: dict[str, Body] | None = None) -> dict:
             else:
                 continue
             n += 1
+            # where the joint says the two meet (at_mm) must lie on both shapes (a node's or a support's point for one)
+            if "at_mm" in c:
+                at = np.asarray(c["at_mm"], float)
+                pt = nodes.get(to, supports.get(to))
+                off = max(point_gap(at, me), point_gap(at, other) if other is not None else float(np.linalg.norm(at - pt)))
+                g = max(g, off)
+            else:
+                missing_at.append((p["id"], to))
             if g > JOINT_GAP_MM:
                 gaps.append((p["id"], to, c.get("via", ""), g))
-    return {"gaps": sorted(gaps, key=lambda t: -t[3]), "unjoined": unjoined, "joints": n}
+    return {"gaps": sorted(gaps, key=lambda t: -t[3]), "unjoined": unjoined, "joints": n, "no_at": missing_at}
 
 
 def outside_envelopes(design: dict, bs: dict[str, Body] | None = None,

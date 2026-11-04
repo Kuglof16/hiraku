@@ -45,7 +45,8 @@ OCCUPANT_REST_KINDS = ("seat", "seat_belt", "body", "accelerator_pedal", "brake_
 FRAME_PIECES = ("frame", "rollbar", "side_rail")
 # Links with a joint at each end, fixed at the inner end and moving with the wheel at the outer
 # end (motion.sweep turns them about the inner end).
-LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
+# links with an inner end on the body and an outer end on the wheel (the arms' legs, designgen kit/arms.py: link)
+LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link", "link")
 # Kinds that go through a hole in a panel (a part of kind body) on their way: the steering column
 # through the floor (assumption: the panel has the hole).
 # anchor: a bolt through a sheet, pushrod: the brake pedal's through the bulkhead (designgen kit/joints)

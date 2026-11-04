@@ -168,8 +168,11 @@ class Assembly(BuiltinTool):
         ]
         joints = joint_gaps(design, bs)
         results += [
-            result("joint_gap_count", float(len(joints["gaps"]) + len(joints["unjoined"])), "1",
+            # joints that do not touch (or whose at_mm is off either shape), joints that do not say where (no at_mm),
+            # and parts joined to nothing
+            result("joint_gap_count", float(len(joints["gaps"]) + len(joints["no_at"]) + len(joints["unjoined"])), "1",
                    ", ".join(joints["unjoined"][:5]) or None),
+            result("joints_without_at", float(len(joints["no_at"])), "1"),
             result("joint_gaps", float(len(joints["gaps"])), "1"),
             result("unjoined_parts", float(len(joints["unjoined"])), "1"),
             result("worst_joint_gap", joints["gaps"][0][3] if joints["gaps"] else 0.0, "mm",
