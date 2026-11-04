@@ -259,6 +259,31 @@ class ModuleSkillTest(unittest.TestCase):
         self.assertNotIn("道具", text)
 
 
+class RunnerRoutingTest(unittest.TestCase):
+    def test_new_routing_is_told_once_per_version_and_change(self):
+        from hiraku.agent.runner import new_routing
+
+        ctx = fake_ctx(MODULAR_DESIGN, LOAD_CASES, [LEAD], [red(1, "R1-frame-bending")])
+        hooks = SimpleNamespace(running={"x": "cae.strength"})
+        routed: dict = {}
+        self.assertIsNone(new_routing(ctx, hooks, routed))  # a role is at work: wait
+        hooks.running = {}
+        first = new_routing(ctx, hooks, routed)
+        self.assertIn("designer.frame", first)
+        self.assertIsNone(new_routing(ctx, hooks, routed))  # told already
+        ctx.store._verdicts.append(red(2, "H1-interference"))
+        self.assertIn("packager", new_routing(ctx, hooks, routed))  # a new red: told again
+        ctx.project["round_limit"] = 0
+        ctx.store._verdicts.append(red(3, "R1-frame-bending"))
+        self.assertIsNone(new_routing(ctx, hooks, routed))  # no round left
+
+    def test_no_routing_without_modules(self):
+        from hiraku.agent.runner import new_routing
+
+        ctx = fake_ctx(PLAIN_DESIGN, LOAD_CASES, [LEAD], [red(1, "R1-frame-bending")])
+        self.assertIsNone(new_routing(ctx, SimpleNamespace(running={}), {}))
+
+
 class SessionAgentsTest(unittest.TestCase):
     def test_agents_with_modules(self):
         props = {"designer": "pencil", "packager": "spanner"}
