@@ -2290,6 +2290,10 @@
         "safe_side_reason": {
           "type": "string",
           "description": "Why the unfavourable value bounds the true one (required when safe_side is true)."
+        },
+        "ends_case": {
+          "type": "boolean",
+          "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
         }
       },
       "allOf": [
@@ -2308,6 +2312,30 @@
             "required": [
               "safe_side_reason"
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "ends_case": {
+                "const": true
+              }
+            },
+            "required": [
+              "ends_case"
+            ]
+          },
+          "then": {
+            "not": {
+              "properties": {
+                "safe_side": {
+                  "const": true
+                }
+              },
+              "required": [
+                "safe_side"
+              ]
+            }
           }
         }
       ]
@@ -3928,6 +3956,10 @@
         },
         "safe_side_reason": {
           "type": "string"
+        },
+        "ends_case": {
+          "type": "boolean",
+          "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
         }
       }
     },
