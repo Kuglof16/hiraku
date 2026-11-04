@@ -43,6 +43,16 @@
 // (fewer segments, no thin outlines, no node dots, fewer shadow casters);
 // pet.cost() gives the draw calls and triangles. Without lite the picture
 // is the v8 one, pixel for pixel.
+// v10: six module designers at the end of ROLES (the rows with a `module`
+// key): frame, suspension, steering, occupant, powertrain and body. Each
+// one is the designer's CAD body (cad-model, no contour) with the face
+// colour tinted by MODULE_TINT of its role colour, and a prop of its own
+// (welding torch, coil spring, pedal, seat, spark plug, fender panel). The
+// role ids live in ROLES only (BODIES takes the module rows from
+// MODULE_BODIES by the module key). The six role colours are kept here
+// (the app takes them from ROLES); their CIEDE2000 distance to the ten
+// older colours and to each other is at least 21 (checked in the tests).
+// The ten older pets draw as in v9, pixel for pixel (with and without lite).
 //
 // Every value shown in a contour is computed here from where things act on the
 // body (loads, flow direction, heat source, crush, mode shape...). These are
@@ -52,7 +62,8 @@
 // web/js/colormap.js; the CAE domain colours --d-*, --paper, --night,
 // --pass, --miss, --s4/--s5 (props) and --ink-* come from
 // promo/screens/common.css; lead / designer / packager colours come from
-// PET_COLORS in web/js/app.js.
+// PET_COLORS in web/js/app.js. The six module designer colours are not in
+// the app yet; they are defined in ROLES here.
 
 (function () {
   "use strict";
@@ -81,7 +92,18 @@
     { id: "cae.strength", name: "強度信頼性", color: "#55524b", prop: "ibeam", propName: "I 形の梁" },
     { id: "cae.nvh", name: "音振", color: "#8a5cc2", prop: "fork", propName: "音叉" },
     { id: "cae.thermal", name: "熱", color: "#e0682a", prop: "thermometer", propName: "温度計" },
+    // v10: the module designers (ids not settled yet; change them here only).
+    // The module key comes first: rows starting with `{ id:` are the ten app roles.
+    { module: "frame", id: "designer.frame", name: "枠の設計役", color: "#2b6e40", prop: "torch", propName: "溶接のトーチ" },
+    { module: "suspension", id: "designer.suspension", name: "足まわりの設計役", color: "#8db33a", prop: "coil", propName: "コイルばね" },
+    { module: "steering", id: "designer.steering", name: "操作系の設計役", color: "#e2759f", prop: "pedal", propName: "ペダル" },
+    { module: "occupant", id: "designer.occupant", name: "乗員まわりの設計役", color: "#917430", prop: "seat", propName: "座席" },
+    { module: "powertrain", id: "designer.powertrain", name: "動力の設計役", color: "#7d2240", prop: "plug", propName: "点火プラグ" },
+    { module: "body", id: "designer.body", name: "車体の設計役", color: "#57b8a0", prop: "fender", propName: "フェンダーの板" },
   ];
+  // v10: share of the role colour mixed into the designer's CAD face colour
+  // on the module designers (the designer itself keeps its own colour)
+  const MODULE_TINT = 0.34;
 
   // One body per role: what analysis picture it is and what the colour shows.
   // quantity null = no contour on that body (and no legend).
@@ -97,6 +119,18 @@
     "cae.nvh": { kind: "mode-shape", quantity: "変位 (相対)", analysis: "固有モードで揺れる網目と、変形前の形の薄い線" },
     "cae.thermal": { kind: "heat", quantity: "温度 (相対)", analysis: "下から温まる温度のコンターと等温線、立ちのぼる熱の線" },
   };
+  // v10: the module designers' bodies, by the module key of ROLES (so the
+  // role ids are written in ROLES only). All are the designer's CAD model
+  // with the face colour tinted toward the role colour.
+  const MODULE_BODIES = {
+    frame: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に枠の色を少し混ぜる。持ち場は枠 (フレーム) の設計" },
+    suspension: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に足まわりの色を少し混ぜる。持ち場は足まわり (サスペンション) の設計" },
+    steering: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に操作系の色を少し混ぜる。持ち場はペダル・ハンドルまわりの操作系の設計" },
+    occupant: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に乗員まわりの色を少し混ぜる。持ち場は座席・乗員の空間の設計" },
+    powertrain: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に動力の色を少し混ぜる。持ち場はエンジン・モーターの載せ方の設計" },
+    body: { kind: "cad-model", quantity: null, analysis: "CAD のモデル (設計役と同じ体)。面の色に車体の色を少し混ぜる。持ち場は車体の外板の設計" },
+  };
+  for (const r of ROLES) if (r.module) BODIES[r.id] = MODULE_BODIES[r.module];
 
   const STATES = ["idle", "report", "pass", "mismatch", "working", "run", "waiting", "blocked"];
   // waiting: a long calm wait. The weight goes from foot to foot every
@@ -170,6 +204,7 @@
   const PROP_MASS = {
     clipboard: 0.3, pencil: 0.24, spanner: 0.34, wheel: 0.4, battery: 0.48,
     windsock: 0.3, target: 0.36, ibeam: 0.5, fork: 0.26, thermometer: 0.24,
+    torch: 0.3, coil: 0.32, pedal: 0.3, seat: 0.36, plug: 0.22, fender: 0.3,
   };
 
   // Load factor over time: the working state steps the load up in 10
@@ -1653,7 +1688,9 @@
     const first = RB.place(HALF, R0);
     const fe = feMesh(THREE, first.P, RB.elems, { smooth: true, normals: first.N });
     const group = new THREE.Group();
-    const mat = cadMaterial(THREE, ctx.U, { color: mixHex(C.inkFaint, C.s[0], 0.3), rough: 0.38, metal: 0.1 });
+    // v10: a module designer tints the face colour toward its role colour
+    const face = mixHex(C.inkFaint, C.s[0], 0.3);
+    const mat = cadMaterial(THREE, ctx.U, { color: ctx.role.module ? mixHex(face, hexNum(ctx.role.color), MODULE_TINT) : face, rough: 0.38, metal: 0.1 });
     const mesh = new THREE.Mesh(fe.geom, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -2736,6 +2773,48 @@
       if (hull) addHull(THREE, m, hull, hulls);
       return m;
     };
+    // v10: one mesh per material for the module props (one draw call, one
+    // outline). parts: [geometry, x, y, z, rx, ry, rz]; hull = outline
+    // width (0 = none); parent defaults to the prop group.
+    const LT = !!THREE.liteSegments;
+    const HL = 0.018;
+    const merged = (mat, parts, hull, parent) => {
+      const geoms = parts.map(([geo, x, y, z, rx, ry, rz]) => {
+        const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(1, 1, 1));
+        const n = geo.index ? geo.toNonIndexed() : geo;
+        n.applyMatrix4(m);
+        return n;
+      });
+      const out = new THREE.BufferGeometry();
+      for (const k of ["position", "normal"]) {
+        const arr = new Float32Array(geoms.reduce((s, q) => s + q.attributes[k].array.length, 0));
+        let at = 0;
+        for (const q of geoms) {
+          arr.set(q.attributes[k].array, at);
+          at += q.attributes[k].array.length;
+        }
+        out.setAttribute(k, new THREE.BufferAttribute(arr, 3));
+      }
+      const mesh = new THREE.Mesh(out, mat);
+      mesh.castShadow = true;
+      (parent || g).add(mesh);
+      if (hull) addHull(THREE, mesh, hull, hulls);
+      return mesh;
+    };
+    // a spark (one mesh): a small ball and three rays, in --s4 yellow
+    const sparkMesh = (x, y, z, r, len, off, a0) => {
+      const grp = new THREE.Group();
+      grp.position.set(x, y, z);
+      g.add(grp);
+      const parts = [[new THREE.IcosahedronGeometry(r, 0), 0, 0, 0]];
+      for (let i = 0; i < 3; i++) {
+        const a = a0 + (i * TAU) / 3;
+        parts.push([new THREE.BoxGeometry(len, 0.014, 0.014), Math.cos(a) * off, Math.sin(a) * off, 0, 0, 0, a]);
+      }
+      const m = merged(new THREE.MeshBasicMaterial({ color: C.s[3] }), parts, 0, grp);
+      m.castShadow = false;
+      return grp;
+    };
     const accent = std(THREE, role.color, 0.45);
     const H = 0.022; // prop outline width
 
@@ -2912,6 +2991,116 @@
         live.liquid = liquid;
         for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(0.035, 0.012, 0.012), M.ink, 0.06, 0.16 + i * 0.09, 0.03);
         g.rotation.set(0, -0.2, -0.1);
+        break;
+      }
+      // ---- v10: the module designers' props ----
+      // Built with merged (one mesh per material) and few segments, so each
+      // prop costs no more than the designer's pencil (pet.cost()). In lite
+      // the segment counts go down further (LT) and the outlines of width
+      // HL (< LITE.hull) are left out by prunePet.
+      case "torch": {
+        // MIG welding gun: grip (role colour), bent neck and cable (ink),
+        // nozzle (metal) and the arc spark at its tip
+        merged(accent, [[new THREE.CylinderGeometry(0.07, 0.078, 0.32, LT ? 6 : 8), 0, 0.06, 0]], H);
+        const cable = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, -0.1, 0), new THREE.Vector3(0, -0.3, 0.02), new THREE.Vector3(-0.2, -0.36, 0.04));
+        merged(M.ink, [
+          [new THREE.CylinderGeometry(0.032, 0.032, 0.3, LT ? 5 : 6, 1, true), 0.1, 0.33, 0, 0, 0, -0.75],
+          [new THREE.TubeGeometry(cable, LT ? 5 : 6, 0.026, 3, false), 0, 0, 0],
+        ], HL);
+        merged(M.metal, [[new THREE.CylinderGeometry(0.042, 0.058, 0.13, LT ? 6 : 8), 0.235, 0.455, 0, 0, 0, -0.75]], H);
+        live.spark = sparkMesh(0.3, 0.515, 0, 0.065, 0.11, 0.08, 0.35);
+        g.scale.setScalar(1.3);
+        g.rotation.set(0, -0.25, 0.05);
+        break;
+      }
+      case "coil": {
+        // coil spring (role colour) between two metal spring seats; it is
+        // squeezed in time while working (live.coil)
+        const turns = 5, R = 0.12, Hc = 0.5;
+        const helix = new THREE.Curve();
+        helix.getPoint = (u, out = new THREE.Vector3()) => out.set(R * Math.cos(TAU * turns * u), Hc * u, R * Math.sin(TAU * turns * u));
+        const coil = new THREE.Group();
+        coil.position.set(0, -0.02, 0);
+        g.add(coil);
+        merged(accent, [[new THREE.TubeGeometry(helix, turns * 4, 0.032, 3, false), 0, 0, 0]], HL, coil);
+        const seat = () => new THREE.CylinderGeometry(0.165, 0.165, 0.035, 6);
+        merged(M.metal, [[seat(), 0, -0.03, 0], [seat(), 0, Hc + 0.03, 0]], HL, coil);
+        live.coil = coil;
+        g.scale.setScalar(1.12);
+        g.rotation.set(0.25, 0, -0.18);
+        break;
+      }
+      case "pedal": {
+        // a pedal: pivot (metal) at the bottom, the pedal arm (role colour)
+        // with a bend, and the pad (ink) with ribs (paper) at the top
+        merged(M.metal, [[new THREE.CylinderGeometry(0.045, 0.045, 0.12, LT ? 6 : 8), 0, -0.12, 0, Math.PI / 2, 0, 0]], H);
+        merged(accent, [
+          [new THREE.BoxGeometry(0.095, 0.3, 0.05), 0, 0.02, 0],
+          [new THREE.BoxGeometry(0.095, 0.22, 0.05), 0.04, 0.24, 0, 0, 0, -0.35],
+        ], H);
+        const pad = new THREE.Group();
+        pad.position.set(0.08, 0.41, 0.02);
+        pad.rotation.set(-0.15, 0, -0.1);
+        g.add(pad);
+        merged(M.ink, [[new THREE.BoxGeometry(0.34, 0.25, 0.05), 0, 0, 0]], H, pad);
+        merged(M.paper, [0, 1, 2].map((i) => [new THREE.BoxGeometry(0.27, 0.03, 0.016), 0, -0.07 + i * 0.07, 0.031]), 0, pad);
+        g.scale.setScalar(1.25);
+        g.rotation.set(0, -0.3, 0.12);
+        break;
+      }
+      case "seat": {
+        // a car seat: cushion, rounded backrest and headrest (role colour),
+        // a stripe (paper) on the backrest, head rest posts (metal), the rail (ink)
+        const back = -0.22;
+        merged(accent, [
+          [new THREE.BoxGeometry(0.38, 0.11, 0.38), 0, 0.0, 0.03],
+          [roundedBlock(THREE, 0.18, 0.23, 0.055, 0.045, 1), 0, 0.26, -0.15, back, 0, 0],
+          [new THREE.BoxGeometry(0.2, 0.12, 0.09), 0, 0.6, -0.27, back, 0, 0],
+        ], HL);
+        merged(M.paper, [[new THREE.BoxGeometry(0.05, 0.3, 0.012), 0, 0.27, -0.09, back, 0, 0]], 0);
+        merged(M.metal, [-1, 1].map((sx) => [new THREE.CylinderGeometry(0.012, 0.012, 0.1, LT ? 4 : 6, 1, true), sx * 0.05, 0.52, -0.25, back, 0, 0]), 0);
+        merged(M.ink, [[new THREE.BoxGeometry(0.34, 0.035, 0.05), 0, -0.09, 0.03]], 0);
+        g.scale.setScalar(1.12);
+        g.rotation.set(0.1, -0.75, 0);
+        break;
+      }
+      case "plug": {
+        // spark plug, upright: terminal and threaded shell (metal), white
+        // insulator, hex (role colour), ground electrode and a spark
+        merged(M.metal, [
+          [new THREE.CylinderGeometry(0.024, 0.024, 0.07, LT ? 4 : 6), 0, 0.6, 0],
+          [new THREE.CylinderGeometry(0.05, 0.05, 0.17, LT ? 6 : 8), 0, 0.145, 0],
+          [new THREE.BoxGeometry(0.02, 0.06, 0.02), 0.035, 0.035, 0],
+          [new THREE.BoxGeometry(0.05, 0.018, 0.02), 0.018, 0.01, 0],
+        ], HL);
+        merged(M.white, [[new THREE.CylinderGeometry(0.044, 0.056, 0.26, LT ? 5 : 8), 0, 0.44, 0]], H);
+        merged(accent, [[new THREE.CylinderGeometry(0.088, 0.088, 0.08, 6), 0, 0.27, 0]], H);
+        live.spark = sparkMesh(0, -0.01, 0.02, 0.035, 0.08, 0.06, -0.4);
+        g.position.y = -0.05;
+        g.scale.setScalar(1.4);
+        g.rotation.set(0, -0.2, -0.22);
+        break;
+      }
+      case "fender": {
+        // a fender panel: the outer face (role colour, painted) with the
+        // wheel arch cut out, and the top of a tyre with its hub in the arch
+        const s = 0.78, Ra = 0.24 * s, y0 = -0.02;
+        const P = new THREE.Shape();
+        P.moveTo(-0.52 * s, y0);
+        P.lineTo(-Ra, y0);
+        P.absarc(0, y0, Ra, Math.PI, 0, true);
+        P.lineTo(0.52 * s, y0);
+        P.lineTo(0.54 * s, y0 + 0.22 * s);
+        P.quadraticCurveTo(0.46 * s, y0 + 0.44 * s, 0, y0 + 0.46 * s);
+        P.quadraticCurveTo(-0.48 * s, y0 + 0.45 * s, -0.54 * s, y0 + 0.26 * s);
+        P.closePath();
+        const paint = std(THREE, role.color, 0.32, 0.25);
+        merged(paint, [[new THREE.ExtrudeGeometry(P, { depth: 0.04, bevelEnabled: false, curveSegments: LT ? 4 : 6 }), 0, 0.18, 0]], H);
+        const yc = 0.18 + y0 - 0.03;
+        merged(M.ink, [[new THREE.CylinderGeometry(Ra - 0.035, Ra - 0.035, 0.1, LT ? 8 : 10), 0, yc, -0.05, Math.PI / 2, 0, 0]], 0);
+        merged(M.metal, [[new THREE.CylinderGeometry(0.07, 0.07, 0.104, LT ? 5 : 6), 0, yc, -0.05, Math.PI / 2, 0, 0]], 0);
+        g.scale.setScalar(1.12);
+        g.rotation.set(0, -0.4, 0.06);
         break;
       }
     }
@@ -3613,6 +3802,12 @@
         live.liquid.scale.y = lvl;
         live.liquid.position.y = lvl / 2;
       }
+      // v10: the torch / plug spark flickers and the coil is squeezed while working
+      if (live.spark) {
+        const k = state === "working" ? 0.75 + 0.45 * Math.abs(Math.sin(TAU * tb * 2.3)) : 0.85;
+        live.spark.scale.setScalar(k);
+      }
+      if (live.coil) live.coil.scale.y = state === "working" ? 0.86 + 0.14 * Math.cos(TAU * tb / 1.1) : 1;
     }
 
     // pxPerUnit: framebuffer pixels per pet unit. Small pets get lighter

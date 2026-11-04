@@ -21,18 +21,89 @@ def has_network(host="cdn.jsdelivr.net", port=443, timeout=3.0):
         return False
 
 
-def roles_in_pet3d():
+ROLE_ROW = r'\{ (?:module: "(\w+)", )?id: "([^"]+)", name: "([^"]+)", color: "(#[0-9a-f]{6})", prop: "(\w+)", propName: "([^"]+)" \}'
+
+
+def role_rows():
+    """(id, name, colour, prop, propName, module or "") of every ROLES row.
+    v10: the module rows start with the module key, so the rows starting
+    with `{ id:` are exactly the ten app roles."""
     block = PET3D[PET3D.index("const ROLES = ["):]
     block = block[: block.index("];")]
-    return re.findall(r'\{ id: "([^"]+)", name: "([^"]+)", color: "(#[0-9a-f]{6})", prop: "(\w+)", propName: "([^"]+)" \}', block)
+    return [r[1:] + (r[0],) for r in re.findall(ROLE_ROW, block)]
+
+
+def roles_in_pet3d():
+    """(id, name, colour, prop, propName) of all roles, in order."""
+    return [r[:5] for r in role_rows()]
+
+
+def module_roles():
+    """(id, name, colour, prop, propName, module) of the v10 module designers."""
+    return [r for r in role_rows() if r[5]]
+
+
+def app_roles():
+    """The ten roles the app knows (the rows without a module key)."""
+    return [r[:5] for r in role_rows() if not r[5]]
+
+
+BODY_ROW = r'"?([\w.]+)"?: \{ kind: "([^"]+)", quantity: (?:"([^"]+)"|null), analysis: "([^"]+)" \}'
 
 
 def bodies_in_pet3d():
     block = PET3D[PET3D.index("const BODIES = {"):]
     block = block[: block.index("};")]
-    rows = re.findall(r'"([^"]+)": \{ kind: "([^"]+)", quantity: (?:"([^"]+)"|null), analysis: "([^"]+)" \}', block)
+    rows = re.findall(BODY_ROW, block)
     # quantity None = a body without a contour
     return [(rid, kind, q or None, a) for rid, kind, q, a in rows]
+
+
+def module_bodies_in_pet3d():
+    block = PET3D[PET3D.index("const MODULE_BODIES = {"):]
+    block = block[: block.index("};")]
+    return [(m, kind, q or None, a) for m, kind, q, a in re.findall(BODY_ROW, block)]
+
+
+def lab(h):
+    """sRGB hex -> CIE L*a*b* (D65)."""
+    c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    xyz = (0.4124564 * c[0] + 0.3575761 * c[1] + 0.1804375 * c[2],
+           0.2126729 * c[0] + 0.7151522 * c[1] + 0.0721750 * c[2],
+           0.0193339 * c[0] + 0.1191920 * c[1] + 0.9503041 * c[2])
+    f = lambda t: t ** (1 / 3) if t > (6 / 29) ** 3 else t / (3 * (6 / 29) ** 2) + 4 / 29
+    fx, fy, fz = (f(v / n) for v, n in zip(xyz, (0.95047, 1.0, 1.08883)))
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+
+def de2000(c1, c2):
+    """CIEDE2000 colour difference (Sharma, Wu and Dalal 2005 formulation)."""
+    L1, a1, b1 = lab(c1)
+    L2, a2, b2 = lab(c2)
+    Cb = (math.hypot(a1, b1) + math.hypot(a2, b2)) / 2
+    G = 0.5 * (1 - math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7)))
+    a1p, a2p = (1 + G) * a1, (1 + G) * a2
+    C1p, C2p = math.hypot(a1p, b1), math.hypot(a2p, b2)
+    h1p = math.degrees(math.atan2(b1, a1p)) % 360
+    h2p = math.degrees(math.atan2(b2, a2p)) % 360
+    dhp = 0 if C1p * C2p == 0 else (h2p - h1p + 180) % 360 - 180
+    dHp = 2 * math.sqrt(C1p * C2p) * math.sin(math.radians(dhp / 2))
+    Lbp, Cbp = (L1 + L2) / 2, (C1p + C2p) / 2
+    if C1p * C2p == 0:
+        hbp = h1p + h2p
+    elif abs(h1p - h2p) <= 180:
+        hbp = (h1p + h2p) / 2
+    else:
+        hbp = (h1p + h2p + 360) / 2 if h1p + h2p < 360 else (h1p + h2p - 360) / 2
+    T = (1 - 0.17 * math.cos(math.radians(hbp - 30)) + 0.24 * math.cos(math.radians(2 * hbp))
+         + 0.32 * math.cos(math.radians(3 * hbp + 6)) - 0.20 * math.cos(math.radians(4 * hbp - 63)))
+    RC = 2 * math.sqrt(Cbp ** 7 / (Cbp ** 7 + 25 ** 7))
+    SL = 1 + 0.015 * (Lbp - 50) ** 2 / math.sqrt(20 + (Lbp - 50) ** 2)
+    SC, SH = 1 + 0.045 * Cbp, 1 + 0.015 * Cbp * T
+    RT = -math.sin(math.radians(60 * math.exp(-(((hbp - 275) / 25) ** 2)))) * RC
+    dL, dC, dH = (L2 - L1) / SL, (C2p - C1p) / SC, dHp / SH
+    return math.sqrt(dL ** 2 + dC ** 2 + dH ** 2 + RT * dC * dH)
 
 
 def stops(src):
@@ -78,20 +149,67 @@ def app_role_ids():
 
 class Roles(unittest.TestCase):
     def test_ten_roles_match_the_app_ids(self):
+        # the first ten are the app's roles, then the six module designers (v10)
         roles = roles_in_pet3d()
-        self.assertEqual(len(roles), 10)
-        self.assertEqual([r[0] for r in roles], app_role_ids())
+        self.assertEqual(len(roles), 16)
+        self.assertEqual([r[0] for r in roles[:10]], app_role_ids())
+        self.assertEqual([r[0] for r in roles[:10]], [r[0] for r in app_roles()])
+        self.assertEqual(roles[10:], [m[:5] for m in module_roles()])
+        # the cast checks of the cuts read the rows starting with `{ id:` (the ten)
+        self.assertEqual(re.findall(r'\{ id: "([a-z.]+)", name:', PET3D), app_role_ids())
+
+    def test_module_roles(self):
+        mods = module_roles()
+        self.assertEqual([m[5] for m in mods], ["frame", "suspension", "steering", "occupant", "powertrain", "body"])
+        self.assertEqual([m[0] for m in mods], ["designer.frame", "designer.suspension", "designer.steering",
+                                                "designer.occupant", "designer.powertrain", "designer.body"])
+        self.assertEqual([m[3] for m in mods], ["torch", "coil", "pedal", "seat", "plug", "fender"])
+        for m in mods:
+            self.assertTrue(m[1].endswith("の設計役"), m)
+            # the id is written in ROLES only (nowhere else in pet3d.js)
+            self.assertEqual(PET3D.count('"%s"' % m[0]), 1, m[0])
+            self.assertRegex(PET3D, r"\b%s: 0\.\d+," % m[3])  # PROP_MASS row
+        # each module row has a body row (by the module key) of the CAD kind, without a contour
+        bodies = module_bodies_in_pet3d()
+        self.assertEqual([b[0] for b in bodies], [m[5] for m in mods])
+        for _, kind, q, a in bodies:
+            self.assertEqual(kind, "cad-model")
+            self.assertIsNone(q)
+            self.assertIn("CAD", a)
+        self.assertIn("for (const r of ROLES) if (r.module) BODIES[r.id] = MODULE_BODIES[r.module];", PET3D)
+
+    def test_module_colours_are_distinct(self):
+        old = [r[2] for r in app_roles()]
+        new = [m[2] for m in module_roles()]
+        self.assertEqual(len(set(new)), 6)
+        d = min([de2000(a, b) for a in new for b in old] + [de2000(a, b) for i, a in enumerate(new) for b in new[i + 1:]])
+        self.assertGreater(d, 20, d)
+        # same colour -> 0; the older ten have a close pair (designer / aero)
+        self.assertLess(de2000("#2fa7d6", "#2fa2c3"), 5)
+        self.assertAlmostEqual(de2000("#57b8a0", "#57b8a0"), 0.0)
+
+    def test_ten_older_pets_unchanged_in_the_source(self):
+        # the designer keeps its face colour; only rows with a module key are tinted
+        self.assertIn("const face = mixHex(C.inkFaint, C.s[0], 0.3);", PET3D)
+        self.assertIn("ctx.role.module ? mixHex(face, hexNum(ctx.role.color), MODULE_TINT) : face", PET3D)
+        # the new live parts are set only by the new props
+        props = PET3D[PET3D.index("// ---- v10: the module designers' props ----"):PET3D.index("function buildCheck(")]
+        for k in ("live.spark =", "live.coil ="):
+            self.assertEqual(PET3D.count(k), props.count(k), k)
+            self.assertGreater(props.count(k), 0, k)
+        self.assertNotIn("Math.random", props)
 
     def test_props_are_distinct(self):
         roles = roles_in_pet3d()
-        self.assertEqual(len({r[3] for r in roles}), 10)
+        self.assertEqual(len({r[3] for r in roles}), 16)
+        self.assertEqual(len({r[4] for r in roles}), 16)
         for r in roles:
             self.assertIn(f'case "{r[3]}"', PET3D, r[0])
 
     def test_colours_come_from_the_repo(self):
         css = (ROOT / "promo" / "screens" / "common.css").read_text(encoding="utf-8")
         app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-        for rid, _, colour, _, _ in roles_in_pet3d():
+        for rid, _, colour, _, _ in app_roles():
             if rid.startswith("cae."):
                 m = re.search(r"--d-%s:\s*(#[0-9a-f]{6})" % rid[4:], css)
             else:
@@ -115,11 +233,19 @@ class Roles(unittest.TestCase):
         # three.js IcosahedronGeometry detail 1 -> 80 faces, detail 2 -> 180
         self.assertRegex(PET3D, r"DETAIL = \{ coarse: 1, fine: 2 \}")
 
-    def test_version_mark_is_v9(self):
+    def test_version_mark_is_v10(self):
         viewer = (PETS / "viewer.html").read_text(encoding="utf-8")
-        self.assertIn('<div id="ver">v9</div>', viewer)
-        self.assertIn("版は v9", (PETS / "README.md").read_text(encoding="utf-8"))
+        self.assertIn('<div id="ver">v10</div>', viewer)
+        readme = (PETS / "README.md").read_text(encoding="utf-8")
+        self.assertIn("版は v10", readme)
         self.assertIn("// v9:", PET3D)
+        self.assertIn("// v10:", PET3D)
+        # README: the table of the six (id, name, prop, colour) and where the app takes the colours
+        for rid, name, colour, _, _, _ in module_roles():
+            self.assertRegex(readme, r"\| `%s` \| %s \| [^|\n]+ \| `%s` \|" % (re.escape(rid), re.escape(name), colour), rid)
+        self.assertIn("アプリの色は ここ", readme)
+        # viewer: the module row under the ten
+        self.assertIn("ROLES.filter((r) => !r.module).length", viewer)
 
     def test_v9_states_lite_and_cost_in_the_source(self):
         # the two states, their marks, o.since / o.mark, lite and cost
@@ -191,7 +317,7 @@ class Roles(unittest.TestCase):
 
     def test_each_role_has_its_own_body(self):
         bodies = bodies_in_pet3d()
-        self.assertEqual([b[0] for b in bodies], [r[0] for r in roles_in_pet3d()])
+        self.assertEqual([b[0] for b in bodies], [r[0] for r in app_roles()])
         self.assertEqual(len({b[1] for b in bodies}), 10, "body kinds must differ")
         quantities = [b[2] for b in bodies if b[2] is not None]
         self.assertEqual(len(quantities), 8, "only the designer and the packager have no contour")
@@ -219,7 +345,8 @@ class Roles(unittest.TestCase):
         self.assertEqual(quantity["cae.thermal"], "温度 (相対)")
         # README carries the table of bodies
         readme = (PETS / "README.md").read_text(encoding="utf-8")
-        for rid, kind, q, _ in bodies:
+        mods = [(m[0], b[1], b[2], b[3]) for m, b in zip(module_roles(), module_bodies_in_pet3d())]
+        for rid, kind, q, _ in bodies + mods:
             self.assertRegex(readme, r"`%s`[^\n]*`%s`[^\n]*%s" % (re.escape(rid), re.escape(kind), re.escape(q or "なし")), rid)
 
     def test_v6_fixes_in_the_source(self):
@@ -339,7 +466,7 @@ class Viewer(unittest.TestCase):
                 page.goto(url)
                 page.wait_for_function("window.petViewer !== undefined", timeout=30000)
                 info = page.evaluate("window.petViewer.ready")
-                self.assertEqual(info["roles"], 10)
+                self.assertEqual(info["roles"], 16)
                 self.assertAlmostEqual(info["t"], 1.2)
                 self.assertIn("t=1.2", page.evaluate("location.search"))
                 self.assertEqual(errors, [])
@@ -525,10 +652,11 @@ class Viewer(unittest.TestCase):
             finally:
                 browser.close()
         out = res["out"]
-        self.assertEqual(len(out), 10)
+        # 16 roles; the six module designers share the designer's cad-model
+        self.assertEqual(len(out), 16)
         self.assertEqual(len({v["kind"] for v in out.values()}), 10)
         heights = sorted(v["h"] for v in out.values())
-        median = heights[5]
+        median = heights[len(heights) // 2]
         for rid, v in out.items():
             self.assertEqual(v["kind"], res["bodies"][rid]["kind"], rid)
             # same height in the line-up (within 12 % of the median)
@@ -1169,6 +1297,14 @@ class Viewer(unittest.TestCase):
         v8 = {"lead": (31, 7886), "designer": (31, 11426), "packager": (56, 16168), "cae.handling": (108, 23558),
               "cae.powertrain": (47, 11546), "cae.aero": (35, 25162), "cae.crash": (36, 12886),
               "cae.strength": (32, 11146), "cae.nvh": (34, 9818), "cae.thermal": (34, 13650)}
+        # v10: the module designers cost no more than the designer (with and without lite)
+        des = res["roles"]["designer"]
+        mods = [r for r in res["roles"] if r not in v8]
+        self.assertEqual(len(mods), 6)
+        for rid in mods:
+            for k in ("full", "lite"):
+                self.assertLessEqual(res["roles"][rid][k]["calls"], des[k]["calls"], (rid, k))
+                self.assertLessEqual(res["roles"][rid][k]["triangles"], des[k]["triangles"], (rid, k))
         for rid, o in res["roles"].items():
             self.assertTrue(o["waitingSame"], rid)
             self.assertTrue(o["blockedSame"], rid)
@@ -1187,7 +1323,8 @@ class Viewer(unittest.TestCase):
                 self.assertEqual(o[k], {"stop": 0, "dots": 0, "lit": 0, "checks": 0}, (rid, k))
             self.assertEqual(o["pass"]["checks"], 1, rid)
             full, lite = o["full"], o["lite"]
-            self.assertEqual((full["calls"], full["triangles"]), v8[rid], rid)
+            if rid in v8:
+                self.assertEqual((full["calls"], full["triangles"]), v8[rid], rid)
             self.assertFalse(full["lite"])
             self.assertTrue(lite["lite"])
             self.assertLess(lite["triangles"], 0.7 * full["triangles"], rid)
