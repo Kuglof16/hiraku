@@ -84,9 +84,22 @@ def same_file(a: Path | str, b: Path | str) -> bool:
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
+def say(text: str) -> None:
+    """One line on stderr in UTF-8, as Claude Code reads it (on a Japanese Windows a pipe's default is cp932)."""
+    raw = getattr(sys.stderr, "buffer", None)
+    if raw is None:  # a stream without bytes under it (a test's StringIO)
+        sys.stderr.write(text + "\n")
+    else:
+        raw.write((text + "\n").encode("utf-8"))
+    sys.stderr.flush()
+
+
 def relaunch(python: Path, args: list[str]) -> int:
-    """Run python with args as a child process with stdin, stdout and stderr inherited; its exit code."""
+    """Run python with args as a child process with stdin, stdout and stderr inherited; its exit code. The child
+    runs in Python's UTF-8 mode (PYTHONUTF8=1, unless the person set it), so what it writes on stderr (an error's
+    traceback) reaches Claude Code as UTF-8 too."""
     env = dict(os.environ, **{ENV_CHILD: "1"})
+    env.setdefault("PYTHONUTF8", "1")
     return subprocess.call([str(python), *args], env=env)
 
 
@@ -107,11 +120,11 @@ def main(argv: list[str]) -> int:
         python = choose_python()
         if python is not None and not same_file(python, sys.executable):
             if not python.is_file():
-                print(f"hiraku plugin: {ENV_PYTHON} の {python} がありません", file=sys.stderr)
+                say(f"hiraku plugin: {ENV_PYTHON} の {python} がありません")
                 return 1
             return relaunch(python, [str(Path(__file__).resolve()), *args])
         if python is None and importlib.util.find_spec("mcp") is None:
-            print(NO_PYTHON.format(repo=REPO), file=sys.stderr)
+            say(NO_PYTHON.format(repo=REPO))
             return 1
     run_hiraku(args)
     return 0

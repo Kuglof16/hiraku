@@ -117,10 +117,25 @@ ZU_DESIGNS = Path(__file__).resolve().parent / "zu_designs"
 # Taken again for two changes together: the zu is drawn from the frozen design copies in
 # ZU_DESIGNS (claude/screen-body-fix), and shapes the design does not list are no longer
 # drawn (shapes.js from claude/screen-cut-real, in claude/dept-screen-812e37 at 26cc6d9).
+# Taken again when occupant segments got their own shapes (tests/web/test_occupant_browser.py).
+# The frozen copies are not one box per occupant: each has the torso box (head included) and
+# 8 segments per person (thigh, shank, arm, foot, left and right), with rpy_deg. Before, every
+# segment was drawn as an upright capsule with a ball and was counted as a seat of its own, so
+# under two_cargo the segments were off board (opacity 0.07). Now each segment is one capsule
+# or rounded box turned with its box, on board with its person. With the code before the change
+# (5708693) the copies still give the old hashes (v1 9ed7fc65..., nodriveshaft c94992b4...,
+# tallcargo acf1eb37...); comparing the two fingerprints part by part, only the 16
+# "part:occupant_?.<segment>" entries differ in each design: the torsos (no head part, so
+# still the capsule and ball), the other parts and the members are the same.
+# Taken again when the frame's members became hollow tubes (web/js/tubes.js): with the code before
+# (a0c2b23) the copies still give the hashes above (v1 fcef1c24..., nodriveshaft b1936a80...,
+# tallcargo 7daf4c4a...); part by part, only the 54 "member:" entries of each design differ (a solid
+# BoxGeometry of 24 points from node to node -> the shared unit tube, a BufferGeometry along x 0..1
+# stretched by the member's matrix, 120 points for a rect tube with both ends, ...); the parts are the same.
 ZU_PRINT = {
-    "offroad-4w-v1": "9ed7fc656bee0247954a35c3ff226f6bc81b6baf0edb2755d1ef4568e075c3d8",
-    "offroad-4w-nodriveshaft": "c94992b46e1bc28d1f58bf184089af165f3a792580103f78654f7125b03f63b4",
-    "offroad-4w-tallcargo": "acf1eb37defd590e490e4cec88470c6056f666028204dd203b52dff6e49c0558",
+    "offroad-4w-v1": "fca41bda2f3f5fe6220e1b69aaf3b683500dbbe06353e9efad14f45cbfc4ba29",
+    "offroad-4w-nodriveshaft": "795890128ddecbabcb78ab48c4972204f0b47e12478f2e4828b70b7b059e008c",
+    "offroad-4w-tallcargo": "ea452149c5d1219ce8dff62ae336e093622ecda6d9aed085ecaffd3a940bcc75",
 }
 
 

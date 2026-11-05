@@ -135,6 +135,31 @@ def _member_away(design: Record, node: str, nodes: dict) -> np.ndarray | None:
     return None
 
 
+REACH_STEP_MM = 0.5  # the damper bracket's inboard reach is cut back by this much at a time
+
+
+def _clear_of_members(design: Record, pid: str, node: str, lo: np.ndarray, hi: np.ndarray, sy: float):
+    """The damper-top bracket's box with its inboard reach cut back until K4 allows it against every frame
+    member (attach.fits): on a short tower arm the box reached into the tower's post (track 1200 mm). The
+    reach keeps at least NODE_TOL_MM past the eye; the box is returned as it is when nothing is in the way."""
+    from hiraku.solvers.k4_geometry import model as k4
+
+    from . import attach
+
+    bs = {k: v for k, v in k4.bodies(design).items() if v.kind == "member"}
+    lo, hi = np.array(lo, float), np.array(hi, float)
+    eye = (hi[1] if sy > 0 else lo[1]) - sy * NODE_TOL_MM  # the hard point's y
+    reach = abs(eye - (lo[1] if sy > 0 else hi[1]))
+    while True:
+        if sy > 0:
+            lo[1] = eye - reach
+        else:
+            hi[1] = eye + reach
+        if reach <= NODE_TOL_MM or attach.fits(design, attach._body(pid, lo, hi, [node]), set(), bs) is None:
+            return lo, hi
+        reach = max(NODE_TOL_MM, reach - REACH_STEP_MM)
+
+
 def pivot_brackets(design: Record, rho: float) -> list[str]:
     """A clevis bracket at each lower arm pivot and damper top that sits on a frame node with no bracket
     round it, added to design["parts"]; returns the new brackets' ids."""
@@ -171,6 +196,8 @@ def pivot_brackets(design: Record, rho: float) -> list[str]:
                 for i in (0, 2):
                     reach = 2.0 * pad[i]
                     lo[i], hi[i] = ((q[i] - reach, q[i] + NODE_TOL_MM) if leg[i] > 0 else (q[i] - NODE_TOL_MM, q[i] + reach))
+            if key == "damper_upper":
+                lo, hi = _clear_of_members(design, pid, at[0], lo, hi, sy)
             b = mounts._bracket(pid, f"{corner}の{label} (クレビス、溶接)", lo, hi, at[:1], rho)
             # before the joints' reinforcement (gussets, through pieces), which a design adds last
             at_end = next((i for i, x in enumerate(parts) if x["kind"] == "gusset" or x["id"].startswith("through_")),

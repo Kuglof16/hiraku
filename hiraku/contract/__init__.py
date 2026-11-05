@@ -30,13 +30,65 @@ def kinds() -> list[str]:
     return sorted(schema()["$defs"])
 
 
+# Fast path for the big, plain parts of a record (a field's per_member / per_node / per_element,
+# a series' values): jsonschema walks every element through descend(), about 4 s for a 10 MB
+# analysis. When every element of a long array or map surely fits one of the few plain element
+# schemas below, the keyword reports nothing, as jsonschema would; otherwise (and for short ones)
+# jsonschema's own check runs, so the errors are word for word the same.
+_BASE = jsonschema.Draft202012Validator
+_FAST_MIN = 16
+_VEC3 = {"$ref": "#/$defs/vec3"}
+
+
+def _num(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _vec3(v: Any) -> bool:
+    return type(v) is list and len(v) == 3 and _num(v[0]) and _num(v[1]) and _num(v[2])
+
+
+def _plain_check(sub: Any):
+    """A function that says True when a value surely fits the element schema `sub`, or None when
+    `sub` is not one of the plain schemas handled here."""
+    if sub == {"type": "number"}:
+        return _num
+    if sub == {"type": "string"}:
+        return lambda v: type(v) is str
+    if sub == _VEC3:
+        return _vec3
+    if sub == {"oneOf": [{"type": "number"}, _VEC3]}:  # a number is never a vec3: exactly one fits
+        return lambda v: _num(v) or _vec3(v)
+    return None
+
+
+def _fast_items(validator, items, instance, schema):
+    if type(instance) is list and len(instance) >= _FAST_MIN and isinstance(items, dict):
+        ok = _plain_check(items)
+        if ok is not None and all(ok(x) for x in instance):
+            return
+    yield from _BASE.VALIDATORS["items"](validator, items, instance, schema)
+
+
+def _fast_additional(validator, extras, instance, schema):
+    if (type(instance) is dict and len(instance) >= _FAST_MIN and isinstance(extras, dict)
+            and not schema.get("properties") and not schema.get("patternProperties")):
+        ok = _plain_check(extras)
+        if ok is not None and all(ok(x) for x in instance.values()):
+            return
+    yield from _BASE.VALIDATORS["additionalProperties"](validator, extras, instance, schema)
+
+
+_Validator = jsonschema.validators.extend(_BASE, {"items": _fast_items, "additionalProperties": _fast_additional})
+
+
 @lru_cache(maxsize=None)
 def _validator(kind: str) -> jsonschema.Draft202012Validator:
     root = schema()
     if kind not in root["$defs"]:
         raise KeyError(f"unknown contract kind {kind!r}; known: {', '.join(kinds())}")
     sub = {"$schema": root["$schema"], "$defs": root["$defs"], "$ref": f"#/$defs/{kind}"}
-    return jsonschema.Draft202012Validator(sub, format_checker=jsonschema.FormatChecker())
+    return _Validator(sub, format_checker=jsonschema.FormatChecker())
 
 
 def errors(kind: str, obj: Any) -> list[str]:

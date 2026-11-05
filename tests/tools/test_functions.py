@@ -1,4 +1,5 @@
 import importlib
+import json
 import unittest
 from unittest import mock
 
@@ -444,6 +445,23 @@ class UnsupportedLoadTest(RunCase, unittest.TestCase):
         self.assertEqual([v for v in self.ctx.store.records("verdict") if v["load_case_id"] == "R1-step100"], [])
 
 
+class CompactAnalysisTest(unittest.TestCase):
+    def test_many_per_place_results_are_trimmed_to_each_quantitys_extremes(self):
+        """Run 094333: get_context's records with a shell's per-place results went over Claude Code's limit."""
+        from hiraku.tools.functions import RESULTS_EACH_END, _compact_analysis
+
+        rs = [{"quantity": f"max_stress.m{i}", "value": float(i), "unit": "MPa", "where": f"m{i}"} for i in range(40)]
+        rs += [{"quantity": "max_deflection", "value": 1.0, "unit": "mm"}]
+        out = _compact_analysis({"analysis_id": "ana-0001", "tool": "frame_static", "results": rs, "fields": [1]})
+        kept = [r["value"] for r in out["results"] if r["quantity"].startswith("max_stress")]
+        self.assertEqual(kept, [0.0, 1.0, 2.0, 37.0, 38.0, 39.0][:2 * RESULTS_EACH_END])
+        self.assertIn("max_deflection", [r["quantity"] for r in out["results"]])
+        self.assertIn("41 件", out["results_note"])
+        self.assertNotIn("fields", out)
+        few = _compact_analysis({"analysis_id": "ana-0002", "results": rs[:5]})
+        self.assertEqual((few["results"], "results_note" in few), (rs[:5], False))
+
+
 class PickResultTest(unittest.TestCase):
     def test_several_places_give_the_unfavourable_one(self):
         from hiraku.tools.functions import _pick_result
@@ -621,6 +639,19 @@ class SafeSideTest(RunCase, unittest.TestCase):
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
 
+    def test_an_ended_case_beyond_its_criterion_says_the_tools_numbers(self):
+        from hiraku.tools import judge
+
+        cmp = self.r1_mismatch(6.0)  # the tool's stress (about 186 MPa) beyond the criterion (156.7 MPa)
+        record_cause(self.ctx, self.args(cmp, ends_case=True))
+        text = rules.cannot_judge_text(self.ctx)
+        self.assertIn("R1-step100 は、食い違いの原因を記録して判定なしで終えた", text)
+        self.assertRegex(text, r"R1-step100: ツール frame_static では .*max_stress が [\d.]+ MPa で、基準 ≤ [\d.]+ MPa を超える")
+        self.assertIn("赤にもしていません", text)
+        self.assertNotIn("R1-step100", judge.latest_verdicts(self.ctx, 1))  # no red without a prediction
+        with mock.patch.object(judge, "beyond_results", return_value=[]):  # within its criterion: nothing more said
+            self.assertNotIn("ツール", rules.cannot_judge_text(self.ctx))
+
     def test_a_cause_without_ends_case_ends_nothing(self):
         cmp = self.r1_mismatch(1.5)
         cause = record_cause(self.ctx, self.args(cmp))["cause"]
@@ -644,6 +675,100 @@ class SafeSideTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError) as cm:
             record_cause(self.ctx, self.args(cmp, safe_side=True, safe_side_reason="larger is safer"))
         self.assertIn("基準は なし", str(cm.exception))
+
+
+class ToolDecidesTest(RunCase, unittest.TestCase):
+    """docs/contract.md 手計算の役目 (contract 2fc1006): a mismatch the hand calculation does not reach, with the load
+    path checked by hand in the version (a load_path.free_parts prediction of 0, an analysis that follows the path
+    with no unsupported load), is judged on the tool's value (basis path_checked), pass or fail."""
+
+    r1_mismatch, args = SafeSideTest.r1_mismatch, SafeSideTest.args
+
+    def setUp(self):
+        super().setUp()
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def with_path(design, load_case, predictions, params):  # as the analysis department's frame tools will
+            out = run(design, load_case, predictions, params)
+            out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": self.lost, "unit": "1"}]
+            return out
+
+        self.lost = 0.0
+        tool.run = with_path
+
+    def path_prediction(self, n, load_case_id="R1-step100", quantity="free_parts"):
+        """A load_path.free_parts prediction of n, as K0 records it (written to the store here: the stand-in
+        registry has no load_path formulas)."""
+        from importlib import resources
+
+        p = json.loads((resources.files("hiraku.contract") / "examples" / "prediction.json").read_text(encoding="utf-8"))
+        lc = self.ctx.load_case(load_case_id)
+        p.update(prediction_id=self.ctx.store.next_id("prediction"), design_version=self.ctx.version,
+                 load_case_id=load_case_id, test_id=lc["test_id"], domain=lc["domain"], quantity=quantity,
+                 value=float(n), unit="1", formula_id="load_path.free_parts", expression="n = n_parts - n_held",
+                 inputs={"n_parts": {"value": 5.0, "unit": "1"}, "n_held": {"value": 5.0 - n, "unit": "1"}}, terms=[])
+        self.ctx.store.add_record("prediction", p, design_version=self.ctx.version, agent="cae.strength",
+                                  domain=lc["domain"])
+        return p
+
+    def decides(self, cmp, **kw):
+        return self.args(cmp, tool_decides=True, tool_decides_reason="the joint's twist is not in the formula", **kw)
+
+    def test_the_tools_value_decides_after_the_path_check(self):
+        cmp = self.r1_mismatch(1.5)  # analysis above the prediction: not safe side
+        self.path_prediction(0, load_case_id="P1-step100")  # every part of the version (contract 947969a)
+        out = record_cause(self.ctx, self.decides(cmp))
+        cause, ver = out["cause"], out["verdict"]
+        self.assertEqual((cause["tool_decides"], cause["tool_decides_reason"]),
+                         (True, "the joint's twist is not in the formula"))
+        self.assertEqual((ver["basis"], ver["value_from"], ver["cause_id"], ver["value"]),
+                         ("path_checked", "analysis", cause["cause_id"], cmp["analyzed"]))
+        self.assertEqual(ver["pass"], cmp["analyzed"]["value"] <= ver["limit"]["value"])
+        from hiraku.contract import errors
+        from hiraku.tools.judge import held_cases
+
+        self.assertEqual(errors("verdict", ver), [])
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", self.ctx.version))  # green rule (b)
+        tile = self.ctx.store.judgements()[0]
+        self.assertEqual(tile["state"], "green" if ver["pass"] else "red")
+        self.assertIn("道を手計算で確かめ、ツールの値で", tile["summary"])
+        self.assert_events_fit()
+
+    def test_refused_without_the_path_check(self):
+        cmp = self.r1_mismatch(1.5)
+        with self.assertRaises(ToolError) as cm:  # no load_path.free_parts prediction in the version
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("load_path.free_parts", str(cm.exception))
+        self.path_prediction(1)
+        with self.assertRaises(ToolError) as cm:  # a part joined to nothing
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("つながらない部品が 1", str(cm.exception))
+        self.assertEqual(self.ctx.store.records("cause"), [])
+
+    def test_refused_when_the_analysis_has_an_unsupported_load(self):
+        self.lost = 1.0
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("支えのない荷重が 1", str(cm.exception))
+
+    def test_needs_a_reason_and_goes_alone(self):
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.args(cmp, tool_decides=True, tool_decides_reason=" "))
+        self.assertIn("tool_decides_reason", str(cm.exception))
+        with self.assertRaises(ToolError):  # the contract refuses it with ends_case, and so does the tool
+            record_cause(self.ctx, self.decides(cmp, ends_case=True))
+
+    def test_ends_case_is_refused_once_the_path_is_checked(self):
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.args(cmp, ends_case=True))
+        self.assertIn("tool_decides", str(cm.exception))
 
 
 class FakeShell(fakes.FakeTool):
@@ -678,7 +803,7 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
         self.ctx.specs["frame_shell"] = {**tool.spec(), "usable": True, "checks": tool.check()}
         return tool
 
-    def beam_green(self, frame_factor=1.03):
+    def beam_green(self, frame_factor=1.03, state="green"):
         """P1 matched, R1 by frame_static: a match (or, frame_factor 0.7, a safe-side mismatch) and green."""
         ana, _, _ = self.run_p1()
         self.F = {"value": ana["results"][1]["value"], "unit": "N"}
@@ -691,7 +816,7 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
                                           "fix": "judge from the hand calculation", "safe_side": True,
                                           "safe_side_reason": "fixed joints overestimate the bending"})
         self.assertTrue(out["verdict"]["pass"])
-        self.assertEqual(self.tile()["state"], "green")
+        self.assertEqual(self.tile()["state"], state)
 
     def tile(self):
         return self.ctx.store.judgements()[0]
@@ -732,6 +857,29 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
         self.assertEqual(self.tile()["state"], "red")
         self.assertEqual(rules.pending(self.ctx), [])
         self.assert_events_fit()
+
+    def test_a_beam_pass_on_the_next_version_does_not_clear_an_earlier_shell_beyond(self):
+        """Contract 460043d, condition (d) (N13 run 094333): the shell was beyond on version 1; on version 2 the
+        beam's pass alone keeps the case pending (also with the shell failed), until the shell gives the quantity."""
+        from hiraku.tools.functions import revise_design
+
+        shell = self.add_shell(6.0)
+        self.beam_green()
+        self.shell(self.F)
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "test"}, "designer")
+        self.beam_green(state="pending")  # the beam passes, the tile waits for the shell
+        self.assertEqual(self.ctx.version, 2)
+        tile = self.tile()
+        self.assertEqual(tile["state"], "pending")
+        self.assertIn("版 1 で解析", tile["summary"])
+        self.assertIn("この版ではまだ回していない", tile["summary"])
+        orig = shell.run
+        shell.run = lambda *a: {"status": "failed", "base": "K1", "results": [], "error": "gusset at no T joint"}
+        _, failed = self.shell(self.F)
+        self.assertIn(f"この版の解析 {failed['analysis_id']} は失敗した", rules.stop_reason(self.ctx))
+        shell.run, shell.factor = orig, 0.9  # within the limit
+        self.shell(self.F)
+        self.assertEqual(self.tile()["state"], "green")
 
     def test_a_later_result_beyond_the_limit_voids_a_safe_side_verdict(self):
         self.beam_green(frame_factor=0.7)
@@ -1181,6 +1329,24 @@ class DesignContextTest(RunCase, unittest.TestCase):
         self.assertEqual((ch["from_version"], ch["to_version"]), (1, 2))
         self.assertEqual(ch["changed"], [{"variable": "track", "old": {"value": old["value"], "unit": old["unit"]},
                                           "new": {"value": 1400.0, "unit": "mm"}}])
+
+    def test_revise_design_builds_the_load_cases_again_for_the_new_version(self):
+        from hiraku.contract import layout
+        from hiraku.tools.functions import revise_design
+
+        first = [dict(lc) for lc in self.ctx.load_cases]
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "wider"}, "designer")
+        made = [e for e in self.ctx.store.events() if e["kind"] == "load_cases.created"]
+        self.assertEqual([e["design_version"] for e in made], [2])
+        self.assertEqual(made[0]["data"]["design_version"], 2)
+        path = layout.version_dir(self.ctx.store.path, 2) / layout.VERSION_LOAD_CASES_FILE
+        self.assertTrue(path.exists())
+        # the same ids, in the same order; the context reads the new version's; project.load_cases stays version 1's
+        self.assertEqual([lc["load_case_id"] for lc in self.ctx.load_cases], [lc["load_case_id"] for lc in first])
+        self.assertIs(self.ctx.load_cases, self.ctx.store.version_load_cases(2))
+        self.assertEqual(self.ctx.project["load_cases"], first)
+        self.assertEqual(self.ctx.store.version_load_cases(1), first)
+        self.assert_events_fit()
 
 
 class UnpredictableCaseTest(RunCase, unittest.TestCase):

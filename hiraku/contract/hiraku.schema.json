@@ -2353,6 +2353,14 @@
         "ends_case": {
           "type": "boolean",
           "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
+        },
+        "tool_decides": {
+          "type": "boolean",
+          "description": "The hand calculation does not reach the quantity (no formula, only a loose bound, or a cause it cannot model), but the load path was checked by hand in this version (a load_path prediction that every loaded part is joined to the frame, and the tool's analysis found no unsupported load): the tool's value decides the verdict (basis path_checked, pass or fail). Not with ends_case or safe_side (one verdict: safe_side's from the prediction, tool_decides' from the analysis)."
+        },
+        "tool_decides_reason": {
+          "type": "string",
+          "description": "Why the hand calculation does not reach the quantity, for people."
         }
       },
       "allOf": [
@@ -2394,6 +2402,38 @@
               "required": [
                 "safe_side"
               ]
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "ends_case"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "ends_case": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "safe_side"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "safe_side": {
+                "const": true
+              }
             }
           }
         }
@@ -2475,9 +2515,10 @@
           "enum": [
             "match",
             "explained_safe_side",
-            "unsupported_load"
+            "unsupported_load",
+            "path_checked"
           ],
-          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false)."
+          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false). path_checked: from a mismatch whose cause has tool_decides true, with the version's load path checked by hand (value = analysis, pass or fail by the criterion)."
         },
         "value_from": {
           "enum": [
@@ -2520,6 +2561,28 @@
             "required": [
               "comparison_id"
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "path_checked"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "cause_id"
+            ],
+            "properties": {
+              "value_from": {
+                "const": "analysis"
+              }
+            }
           }
         }
       ]
@@ -3585,6 +3648,40 @@
           "if": {
             "properties": {
               "kind": {
+                "const": "agent.stopped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "agent_id": {
+                    "$ref": "#/$defs/agent_id"
+                  },
+                  "stop_code": {
+                    "enum": [
+                      "done",
+                      "run_ended",
+                      "user_stop",
+                      "error"
+                    ],
+                    "description": "Why the role stopped, for the screen to word: done = it ended its own work; run_ended = the run ended while the role was still working (the run's own reason is run.finished's stop_code); user_stop = the stop button; error = the role ended with an error. Optional."
+                  },
+                  "stop_reason": {
+                    "type": "string",
+                    "description": "Free text for people (may be English); the screen shows stop_code."
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
                 "const": "run.finished"
               }
             }
@@ -4062,8 +4159,50 @@
         "ends_case": {
           "type": "boolean",
           "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
+        },
+        "tool_decides": {
+          "type": "boolean",
+          "description": "The hand calculation does not reach the quantity; the version's load path was checked by hand, so the tool's value decides (cause.tool_decides). Not with ends_case or safe_side."
+        },
+        "tool_decides_reason": {
+          "type": "string",
+          "description": "Why the hand calculation does not reach the quantity."
         }
-      }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "safe_side"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "safe_side": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "ends_case"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "ends_case": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
     },
     "assembly_step": {
       "description": "One step of the assembly order (A7).",

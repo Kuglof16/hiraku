@@ -72,6 +72,29 @@ class RunStoreTest(unittest.TestCase):
         with self.assertRaises(StoreError):
             self.store.write_design(d3)
 
+    def test_load_cases_per_version(self):
+        d = example("design.json")
+        self.store.write_design(d)
+        first = self.store.project["load_cases"]
+        self.assertEqual(self.store.version_load_cases(1), first)
+        with self.assertRaises(StoreError):  # version 1's are project.load_cases
+            self.store.write_version_load_cases(1, first)
+        self.store.write_design(dict(d, design_version=2, parent_version=1))
+        self.store.write_design(dict(d, design_version=3, parent_version=2))
+        self.assertEqual(self.store.version_load_cases(3), first)  # nothing written yet: project.load_cases
+        changed = [dict(lc, params=dict(lc.get("params") or {}, note={"value": 1.0, "unit": "1"})) for lc in first[:1]] + first[1:]
+        self.store.write_version_load_cases(2, changed)
+        self.assertEqual(self.store.version_load_cases(2), changed)
+        self.assertEqual(self.store.version_load_cases(3), changed)  # the nearest earlier version's
+        self.assertEqual(self.store.project["load_cases"], first)
+        ev = self.store.events()[-1]
+        self.assertEqual((ev["kind"], ev["design_version"], ev["data"]["design_version"]), ("load_cases.created", 2, 2))
+        self.assertEqual(json.loads((layout.version_dir(self.store.path, 2) / layout.VERSION_LOAD_CASES_FILE)
+                                    .read_text(encoding="utf-8")), ev["data"])
+        self.assertEqual(contract.errors("event", ev), [])
+        with self.assertRaises(StoreError):  # a version that does not exist
+            self.store.write_version_load_cases(4, first)
+
     def test_record_file_equals_event_data(self):
         self.store.write_design(example("design.json"))
         pred = example("prediction.json")
@@ -84,6 +107,79 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual(last["kind"], "prediction.recorded")
         self.assertEqual(last["data"], on_disk)
         self.assertEqual(self.store.get("prediction", "pred-0001"), on_disk)
+
+    def test_reading_reads_each_record_file_once_until_the_next_write(self):
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        self.assertIsNot(self.store.get("prediction", "pred-0001"), self.store.get("prediction", "pred-0001"))
+        with self.store.reading():
+            with self.store.reading():  # nested: the same stretch
+                first = self.store.get("prediction", "pred-0001")
+            self.assertIs(self.store.records("prediction", 1)[0], first)
+            self.store.add_record("prediction", dict(pred, assumptions=["again"]), design_version=1,
+                                  agent="cae.strength", domain="strength")  # a write: read the file again
+            again = self.store.get("prediction", "pred-0001")
+            self.assertIsNot(again, first)
+            self.assertEqual(again["assumptions"], ["again"])
+        self.assertIsNone(self.store._read_cache)
+
+    def test_reading_keeps_files_across_stretches_until_they_change(self):
+        """Contract-neutral speed: a later reading() stretch reads only files written since (stat changed), and
+        keeps analyses without READING_DROPS; records outside reading() are whole and fresh."""
+        from hiraku.store import run_store as RS
+
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        with self.store.reading():
+            first = self.store.get("prediction", "pred-0001")
+        reads = []
+        orig = RS._read_json
+        RS._read_json = lambda p: reads.append(p) or orig(p)
+        try:
+            with self.store.reading():
+                self.assertIs(self.store.get("prediction", "pred-0001"), first)  # kept: not read again
+                self.assertIsNone(self.store.get("prediction", "pred-9999"))
+            self.assertEqual(reads, [])
+            path = layout.record_path(self.store.path, 1, "prediction", "pred-0001")
+            path.write_text(json.dumps(dict(pred, assumptions=["by hand", "longer than before"])), encoding="utf-8")
+            with self.store.reading():  # written by someone else: the stat changed
+                self.assertEqual(self.store.get("prediction", "pred-0001")["assumptions"][0], "by hand")
+            self.assertEqual(len(reads), 1)
+        finally:
+            RS._read_json = orig
+        ana = {"analysis_id": "ana-0001", "fields": [1, 2], "series": {"t": [0]}, "results": []}
+        apath = layout.record_path(self.store.path, 1, "analysis", "ana-0001")
+        apath.parent.mkdir(parents=True, exist_ok=True)
+        apath.write_text(json.dumps(ana), encoding="utf-8")
+        with self.store.reading():
+            self.assertEqual(self.store.records("analysis", 1), [{"analysis_id": "ana-0001", "results": []}])
+        self.assertEqual(self.store.records("analysis", 1), [ana])  # outside reading(): the whole record
+
+    def test_a_record_with_large_arrays_is_validated_once_whole_and_its_event_is_whole(self):
+        """The event of a record add_record validated is checked without READING_DROPS (speed); what is written
+        is the whole record, and it fits the event schema whole."""
+        from unittest import mock
+
+        self.store.write_design(example("design.json"))
+        ana = example("analysis.json")
+        self.assertIn("fields", ana)
+        seen = []
+        orig = contract.validate
+        with mock.patch.object(contract, "validate", side_effect=lambda k, o: (seen.append((k, o)), orig(k, o))[1]):
+            self.store.add_record("analysis", ana, design_version=1, agent="cae.strength", domain="strength")
+        self.assertEqual([k for k, _ in seen], ["analysis", "event"])
+        self.assertIn("fields", seen[0][1])
+        self.assertNotIn("fields", seen[1][1]["data"])
+        last = self.store.events()[-1]
+        self.assertEqual(last["data"], ana)
+        self.assertEqual(contract.errors("event", last), [])
+        bad = dict(ana, fields="not a list")
+        with self.assertRaises(ValueError):  # the record's own check still sees the large parts
+            self.store.add_record("analysis", bad, design_version=1, agent="cae.strength", domain="strength")
 
     def test_invalid_record_is_not_written(self):
         self.store.write_design(example("design.json"))
@@ -177,6 +273,50 @@ class RunStoreTest(unittest.TestCase):
         ev = again.events()
         self.assertEqual([e["seq"] for e in ev], list(range(len(ev))))
         self.assertGreaterEqual(ev[-1]["t"], ev[-2]["t"])
+
+
+class ModuleChangeTest(unittest.TestCase):
+    """Proposals of module designers (design.change_proposed): run-wide ids chg-NNNN, pending until a version
+    lists them in module_changes, kept in the events (layout has no folder for them)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        clock = FakeClock()
+        self.store = RunStore.create(project_fields(), root=Path(self.tmp.name), wall=clock.wall, mono=clock.mono)
+        self.store.write_design(example("design.json"))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def change(self, module="frame"):
+        return {"change_id": self.store.next_id("module_change"), "module_id": module, "agent_id": f"designer.{module}",
+                "reason": "R1", "changes": {"rail_t": {"value": 3.0, "unit": "mm"}}}
+
+    def test_ids_pending_and_built(self):
+        a = self.store.propose_change(self.change(), design_version=1, agent="designer.frame")
+        b = self.store.propose_change(self.change("body"), design_version=1, agent="designer.body")
+        self.assertEqual((a["change_id"], b["change_id"]), ("chg-0001", "chg-0002"))
+        ev = self.store.events()[-1]
+        self.assertEqual((ev["kind"], ev["design_version"], ev["agent"]), ("design.change_proposed", 1, "designer.body"))
+        self.assertEqual(ev["data"], b)
+        self.assertEqual([c["change_id"] for c in self.store.pending_proposals()], ["chg-0001", "chg-0002"])
+        d2 = example("design.json")
+        d2.update(design_version=2, parent_version=1, change_reason="その回の提案をまとめた (chg-0001)", module_changes=[a])
+        self.store.write_design(d2)
+        self.assertEqual(self.store.built_change_ids(), {"chg-0001"})
+        self.assertEqual(self.store.pending_proposals(), [])  # none based on version 2
+        self.assertEqual([c["change_id"] for c in self.store.pending_proposals(1)], ["chg-0002"])
+        self.assertEqual([c["change_id"] for c in self.store.proposals()], ["chg-0001", "chg-0002"])
+        self.assertEqual(RunStore.open(self.store.path).next_id("module_change"), "chg-0003")
+
+    def test_a_bad_proposal_never_reaches_the_events(self):
+        bad = dict(self.change(), based_on=1)  # not a module_change field
+        n = len(self.store.events())
+        with self.assertRaises(ValueError):
+            self.store.propose_change(bad, design_version=1, agent="designer.frame")
+        with self.assertRaises(StoreError):
+            self.store.propose_change(self.change(), design_version=5, agent="designer.frame")
+        self.assertEqual(len(self.store.events()), n)
 
 
 if __name__ == "__main__":

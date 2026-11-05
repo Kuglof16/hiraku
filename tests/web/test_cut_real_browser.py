@@ -74,8 +74,9 @@ COLOURS = """async () => {
     const g = c.getContext("2d");
     const kx = c.width / b.size.w;
     const ky = c.height / b.size.h;
-    // drawn again without what is laid over everything (the centre-of-gravity mark, arrows)
-    const hide = [b.cg, b.arrows, b.motionArrows].filter((o) => o.visible);
+    // drawn again without what is laid over everything (the centre-of-gravity mark, arrows,
+    // N07's outline round what the version after added)
+    const hide = [b.cg, b.arrows, b.motionArrows, b.diffMarks].filter((o) => o && o.visible);
     for (const o of hide) o.visible = false;
     b.renderInto(g, c.width, c.height, kx);
     for (const o of hide) o.visible = true;

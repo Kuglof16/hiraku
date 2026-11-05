@@ -5,7 +5,9 @@
 import {
   DOMAINS,
   DOMAIN_JA,
+  AGENT_STOP_NOTE_CHARS,
   STOP_CODE_JA,
+  agentStopWhy,
   agentLongName,
   agentName,
   fmt,
@@ -16,10 +18,12 @@ import {
   fmtVU,
   opLabel,
   plainText,
+  plainToolName,
   quantityName,
   ruleOf,
 } from "./labels.js";
 import { kindCountText } from "./meshkind.js";
+import { proposalText } from "./proposals.js";
 
 const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts", "meshes"];
 
@@ -62,6 +66,9 @@ export function initialState() {
     // What the intake events brought (drawn by js/intake/): the picked domains, the
     // hearing, the rule documents and the rule checks (the last per rule_check_id).
     intake: { picked: null, questions: [], answers: [], note: null, docs: [], rules: {}, ruleChecks: {} },
+    proposals: [], // modules: design.change_proposed data (module_change), with t, seq and baseVersion
+    builtT: {}, // modules: design version -> t of its design.created when it was built from proposals
+    versionLoadCases: {}, // design version -> its load cases (load_cases.created, from version 2 on; project.load_cases is version 1's)
   };
   for (const r of RECORDS) {
     s[r] = {};
@@ -140,6 +147,21 @@ function who(ev) {
   return agentName(ev.agent) || "HIRAKU";
 }
 
+// A tool in the log's words: labels.js's name for viewers, else the record's own title
+// (tool.checked, up to its bracket: "フレームの静的 (3D の梁)" -> "フレームの静的"), else the
+// name as written.
+function toolWord(s, name) {
+  const title = String(s.tools[name]?.title ?? "").replace(/\s*[（(].*$/, "");
+  return plainToolName(name) ?? (title || name);
+}
+
+// A load case in the log's words: its title in the record (the version's load cases, else the
+// project's), else its id as written.
+function caseWord(s, id, version = null) {
+  const lc = [...(s.versionLoadCases[version] ?? []), ...(s.project?.load_cases ?? [])].find((c) => c.load_case_id === id);
+  return lc?.title ? `「${lc.title}」` : id ?? "";
+}
+
 // Apply one event (mutates and returns s). Unknown kinds are counted, not fatal.
 export function applyEvent(s, ev) {
   const d = ev.data ?? {};
@@ -211,6 +233,11 @@ export function applyEvent(s, ev) {
         const n = (c) => ras.filter((a) => a.choice === c).length;
         said.push(`規則の当たりの答え: 設計を直す ${n("revise_design")}・規則を外す ${n("drop_rule")}`);
       }
+      // asked (hearing.asked), with neither an answer nor a default in hearing.answered: the
+      // record's "答えが無いまま" (hiraku/intake/hearing.py unresolved), said what it is
+      const got = new Set(ans.map((a) => a.key));
+      const left = (s.intake.questions ?? []).filter((q) => q.req_key && !got.has(q.req_key)).length;
+      if (left) said.push(`答えが無いまま ${left} 個 (聞いたが、答えも既定値も無いので要件に入っていない)`);
       const txt = said.join("・");
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
@@ -267,14 +294,22 @@ export function applyEvent(s, ev) {
     }
     case "agent.started": {
       const a = ensureAgent(s, d.agent_id ?? ev.agent);
-      if (a) Object.assign(a, { active: true, stopped: false, status: "作業中" });
+      if (a) Object.assign(a, { active: true, stopped: false, stopWhy: null, status: "作業中" });
       log(s, ev, "muted", `${agentLongName(d.agent_id ?? ev.agent)}が動き始めた`);
       break;
     }
     case "agent.stopped": {
       const a = ensureAgent(s, d.agent_id ?? ev.agent);
-      if (a) Object.assign(a, { active: false, stopped: true, status: "終わり" });
-      log(s, ev, "muted", `${agentLongName(d.agent_id ?? ev.agent)}が手を止めた`);
+      // why (contract a31e520): stop_code in words on the line and in the agents' pane; stop_reason
+      // under the line (a long one under くわしく). A record without either says 手を止めた only.
+      const why = agentStopWhy(d);
+      if (a) Object.assign(a, { active: false, stopped: true, stopWhy: why, status: "終わり" });
+      log(s, ev, "muted", `${agentLongName(d.agent_id ?? ev.agent)}が手を止めた${why?.words ? ` (${why.words})` : ""}`);
+      if (why?.reason) {
+        const e = s.log[s.log.length - 1];
+        if ([...why.reason].length <= AGENT_STOP_NOTE_CHARS) e.note = why.reason;
+        else e.more = why.reason;
+      }
       break;
     }
     case "agent.said":
@@ -292,8 +327,33 @@ export function applyEvent(s, ev) {
       s.currentVersion = Math.max(...s.versions);
       ensureAgent(s, ev.agent ?? "designer");
       if (agent) agent.status = `版 ${v}`;
+      // modules: a version built from module designers' proposals says so (modules.js builtLine)
+      const n = (d.module_changes ?? []).length;
+      if (n) {
+        s.builtT[v] = ev.t;
+        log(s, ev, "info", `${who(ev)}が ${n} つの提案を版 ${v} にまとめた`);
+        setActivity(s, ev, `${who(ev)}が ${n} つの提案を版 ${v} にまとめた`);
+        break;
+      }
       log(s, ev, "info", `${who(ev)}: 版 ${v} を作った${d.change_reason ? ` (${d.change_reason})` : ""}`);
       setActivity(s, ev, `版 ${v} の設計を作った`);
+      break;
+    }
+    case "design.change_proposed": {
+      // modules: one module designer's proposal for the next version (data: module_change)
+      s.proposals.push({ ...d, t: ev.t, seq: ev.seq, baseVersion: ev.design_version ?? s.currentVersion });
+      if (agent) agent.status = "提案した";
+      const txt = proposalText(d, s.designs[ev.design_version ?? s.currentVersion]);
+      log(s, ev, "step", `${agentName(d.agent_id ?? ev.agent)}: ${txt}`);
+      setActivity(s, ev, txt);
+      break;
+    }
+    case "load_cases.created": {
+      // The load cases built again for a design version (data: version_load_cases, contract
+      // 39b6a8c). Kept per version; the screen's lookups still read project.load_cases (version 1's).
+      const v = d.design_version ?? ev.design_version;
+      if (v != null) s.versionLoadCases[v] = d.load_cases ?? [];
+      log(s, ev, "info", `版 ${v} の荷重条件を作り直した: ${(d.load_cases ?? []).length}`);
       break;
     }
     case "mesh.created": {
@@ -320,7 +380,7 @@ export function applyEvent(s, ev) {
       s.running[d.analysis_id] = { ...d, agent: ev.agent, t: ev.t, design_version: ev.design_version ?? null };
       focusLoadCase(s, d.load_case_id, ev.t);
       if (agent) agent.status = "解析中";
-      const txt = `${d.tool} で解析を始めた (${d.load_case_id})`;
+      const txt = `${toolWord(s, d.tool)} で解析を始めた: ${caseWord(s, d.load_case_id, ev.design_version)}`;
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -331,7 +391,7 @@ export function applyEvent(s, ev) {
       focusLoadCase(s, d.load_case_id, ev.t);
       if (d.status === "failed") {
         if (agent) agent.status = "解析が通らない";
-        logRecord(s, ev, d.analysis_id, "bad", `${who(ev)}: ${d.tool} の解析が通らなかった: ${d.error ?? ""}`);
+        logRecord(s, ev, d.analysis_id, "bad", `${who(ev)}: ${toolWord(s, d.tool)} の解析が通らなかった: ${d.error ?? ""}`);
         setActivity(s, ev, `解析が通らなかった: ${d.error ?? ""}`);
       } else {
         if (agent) agent.status = "解析した";

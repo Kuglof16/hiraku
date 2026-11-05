@@ -675,10 +675,11 @@ class BrowserReplayTest(unittest.TestCase):
             more = page.inner_text(f"{row('n12')} details.more")
             for w in ("offroad-4w-n12.yaml", "N11", "要件の誤りを見つけて直す", "上限 $2.00"):
                 self.assertIn(w, more)
-            # ?dev=1: as before
+            # ?dev=1: all there (the demo rows' files and tags inside their closed くわしく: the text, not
+            # only what is drawn)
             page.goto(f"{base}/?list=1&dev=1")
             page.wait_for_selector("#launch .demo-runs")
-            text = page.inner_text("#runlist")
+            text = page.text_content("#runlist")
             for w in self.DEV_WORDS:
                 self.assertIn(w, text)
             self.assertEqual(page.locator("#runlist .keyless").count(), 1)
@@ -1373,6 +1374,7 @@ class BrowserReplayTest(unittest.TestCase):
                 """() => ({ duration: window.hiraku.player.duration, err: document.querySelector(".err")?.textContent ?? null,
                            cards: [...document.querySelectorAll(".n01-card")].map((c) => [c.dataset.box, c.querySelector("h3").textContent]),
                            tables: document.querySelectorAll(".n01-card table").length,
+                           pane: document.querySelector('[data-box="n01.pane"]').innerText,
                            ghost: !!window.hiraku.cut.ghost, tinted: window.hiraku.cut.ghost?.view.tinted ?? false,
                            contour: window.hiraku.cut.contour?.kind ?? null,
                            view: document.querySelector('[data-box="n01.view"]').getBoundingClientRect().bottom,
@@ -1390,6 +1392,9 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(got["cards"][0][1], "段差 100 mm")
             self.assertEqual(got["cards"][1][1], "段差 250 mm")
             self.assertEqual(got["tables"], 0)
+            # no explaining notes in the pane (許容を超えた部材, 半透明の赤 ...): the cards and the colour bar only
+            for w in ("許容を超えた部材", "半透明"):
+                self.assertNotIn(w, got["pane"])
             self.assertTrue(got["ghost"] and got["tinted"])
             self.assertEqual(got["contour"], "stress")  # the K1 static analysis of the same load case
             self.assertLessEqual(got["view"], 910)
@@ -1466,8 +1471,9 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(got, {"applied": 15, "list": False, "link": "?list=1"})
             page.goto(f"{base}/?list=1")
             page.wait_for_selector("#launch .pick")
+            # the recommendation comes first after 「＋ 新しく依頼する」 (the list's first line, test_runlist_order_browser)
             pick = page.evaluate("""() => { const p = document.querySelector("#launch .pick");
-                return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > *"),
+                return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > .fresh-top + *"),
                          run: p.dataset.run, href: p.querySelector("a.go").getAttribute("href"), verb: p.querySelector("a.go").textContent }; }""")
             self.assertEqual(pick, {"n": 1, "first": True, "run": run_id, "href": f"?run={run_id}", "verb": "見る"})
             page.goto(f"{base}/?list=1&dev=1")
@@ -1557,7 +1563,8 @@ class BrowserReplayTest(unittest.TestCase):
               const out = {
                 order: tiles.map((t) => t.dataset.domain),
                 red: tiles.filter((t) => t.classList.contains("red")).map((t) => t.dataset.domain),
-                flow: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.textContent),
+                flow: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.firstChild.textContent),
+                flowRed: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.querySelector(".vred")?.textContent ?? ""),
                 banner: document.getElementById("grid-banner").hidden ? "" : document.getElementById("grid-banner").textContent,
                 assembly: document.querySelector('#tiles .tile[data-domain="assembly"] .cap').textContent,
                 thermal: document.querySelector('#tiles svg.side[data-domain="thermal"]').textContent,

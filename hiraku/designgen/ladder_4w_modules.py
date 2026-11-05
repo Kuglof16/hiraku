@@ -52,17 +52,23 @@ VARIABLE_MODULE = {
     **dict.fromkeys(("steering_column_angle", "steering_wheel_height", "max_steer_angle", "pedal_mount",
                      "bulkhead_t"), "steering"),
     **dict.fromkeys(("seat_height", "seat_slide", "seat_depth", "rollbar", "rollbar_height", "rollbar_width",
-                     "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b", "rollbar_t", "mount_seats",
+                     "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b", "rollbar_t",
                      "side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t",
                      "side_net", "side_net_wire_d", "side_net_pitch", "rollbar_foot_b", "rollbar_foot_h",
                      "rollbar_foot_t", "rollbar_stays", "rollbar_stay_d", "rollbar_stay_t", "rollbar_front_posts",
                      "side_opening", "side_bar_reach", "grab_bar", "grab_bar_d", "grab_bar_t", "grab_bar_gap"),
                     "occupant"),
     **dict.fromkeys(("motor_peak_power", "motor_peak_torque", "motor_max_speed", "gear_ratio", "battery_capacity",
-                     "driveshafts", "battery_split", "mount_electrics", "mount_drive"), "powertrain"),
-    **dict.fromkeys(("bumper_stroke", "crush_stiffness", "lamps", "mount_floor", "fenders", "fender_front_deg",
+                     "driveshafts", "battery_split"), "powertrain"),
+    **dict.fromkeys(("bumper_stroke", "crush_stiffness", "lamps", "fenders", "fender_front_deg",
                      "fender_rear_deg", "fender_width", "fender_gap", "floor_t", "deck_t"), "body"),
+    # the mounts (part_mounts) are welded to the frame: the frame's, whatever they carry (the program management's
+    # decision); where they meet the carried module is an interface
+    **dict.fromkeys(("mount_floor", "mount_electrics", "mount_seats", "mount_drive"), "frame"),
 }
+# The generator's derived quantities (ladder_4w.DERIVED: the wheel's, the rotor's and the reducer's inertia, the
+# driveshafts' inner drop, the tyre's relaxation length) are computed from other variables and not revisable: no
+# module's designer changes them, so they are in no module.
 CHOICE_MODULE = {"joints": "frame", "part_mounts": "frame", "pedal_mount": "steering", "side_guard": "occupant",
                  "rops": "occupant", "side_opening": "occupant", "grab_bar": "occupant", "fenders": "body"}
 

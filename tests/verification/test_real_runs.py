@@ -32,7 +32,7 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.contract import layout
 from qa import check_run as cr
-from qa import compare_runs, procs
+from qa import compare_runs, procs, shared_runs
 
 from ._solvers import tool_or_skip
 
@@ -44,9 +44,19 @@ REQUIREMENTS = [r for r in sorted((ROOT / "data" / "requirements").glob("*.yaml"
 CLAUDE_ONLY = ".claude.yaml"  # requirements only Claude can run (no scripted way to predict a load case)
 NO_SCRIPT = "台本の予測のしかたが無いので回せない荷重条件"  # what the scripted run says for them
 VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice and compared
-# Subprocess timeout of one scripted run. The video run alone takes about 680 s (600 s
-# erred with TimeoutExpired); this stays below qa.run_tests' 1800 s per-class timeout.
-RUN_TIMEOUT_S = 1200
+# load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
+# so the run stops not_judged with every other tile of the last version green. None at present: R7-hand and
+# R7-foot are both judged on their hand bounds (load_path.grip_bound, pedal_bound_inputs; safe side), the plans'
+# rev_controls answers R7-hand, and the demo and N15 runs end done (tests/agent/test_scene_n15.py).
+ENDED: dict[str, set[str]] = {}
+# requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
+# the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
+BEHIND_RED: set[str] = set()
+LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
+# Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
+# has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
+# qa.run_tests' 3600 s per-class timeout.
+RUN_TIMEOUT_S = 3000
 DEMO_DESIGN = ROOT / "data" / "designs" / "offroad-4w-v1.json"
 
 
@@ -116,7 +126,12 @@ class _ScriptedRunTests:
     @classmethod
     def _make_runs(cls):
         # run_dir, not run: an attribute named run would hide TestCase.run
-        cls.run_dir, cls.proc, cls.seconds = _scripted_run(cls.REQ, Path(cls._tmp.name) / cls.REQ.stem)
+        # the run other classes read too (qa.shared_runs: one per requirements file and code version)
+        s = shared_runs.scripted_run(cls.REQ, timeout=RUN_TIMEOUT_S)
+        cls.proc = subprocess.CompletedProcess([], s.returncode, s.stdout, s.stderr)
+        cls.run_dir, cls.seconds = s.run_dir, s.seconds
+        print(f"scripted run {cls.REQ.name}: {s.seconds:.0f} s{' (made by an earlier class)' if s.reused else ''}",
+              file=sys.stderr)
 
     @classmethod
     def tearDownClass(cls):
@@ -137,6 +152,7 @@ class _ScriptedRunTests:
 
     def test_mvp_scripted_run_goes_through(self):
         # fixed requirements -> prediction -> step climb -> frame -> comparison -> judgement, ending done.
+        # Requirements in ENDED stop not_judged with only their ended load cases left (ends_case).
         # A run with load cases past the limit (load_case_id ending -beyond, whose verdicts are meant to
         # fail) does not end done: it stops at round_limit, or not_judged while a load case is left
         # without a verdict. A *.claude.yaml file is a scene only Claude can run (no tool or scripted
@@ -154,11 +170,46 @@ class _ScriptedRunTests:
                 self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
                 said = [e.get("text", "") for e in events if e["kind"] == "agent.said"]
                 self.assertTrue(any(NO_SCRIPT in s for s in said), f"no agent.said with {NO_SCRIPT!r}; {why}")
+            elif name in BEHIND_RED:
+                self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
+                self.assertIn(LOWER_RED, project.get("stop_reason") or "", why)
+                last = max(int(d.name[1:]) for d in run.glob("v[0-9][0-9][0-9]") if d.is_dir())
+                tiles = json.loads((layout.version_dir(run, last) / layout.JUDGEMENTS_FILE).read_text(encoding="utf-8"))
+                self.assertIn("red", [j.get("state") for j in tiles if j.get("design_version") == last], why)
+            elif name in ENDED:
+                self.assertEqual((project["status"], fin[0]["data"].get("stop_code")), ("stopped", "not_judged"), why)
+                self._only_ended_left(run, project, ENDED[name])
             elif any(lc["load_case_id"].endswith("-beyond") for lc in project["load_cases"]):
                 self.assertEqual(project["status"], "stopped", why)
                 self.assertIn(fin[0]["data"].get("stop_code"), ("not_judged", "round_limit"), why)
             else:
                 self.assertEqual(project["status"], "done", why)
+
+    def _only_ended_left(self, run, project, ended):
+        """In the last version: the load cases without a verdict (not -beyond) are just `ended`, each with a
+        mismatch whose cause says ends_case; their domains' tiles are pending, every other tile green."""
+        last = max(int(d.name[1:]) for d in run.glob("v[0-9][0-9][0-9]") if d.is_dir())
+        vdir = layout.version_dir(run, last)
+
+        def records(kind):
+            d = vdir / layout.RECORD_DIRS[kind]
+            return [json.loads(f.read_text(encoding="utf-8")) for f in sorted(d.glob("*.json"))] if d.is_dir() else []
+
+        judged = {v.get("load_case_id") for v in records("verdict")}
+        lcs = {lc["load_case_id"]: lc for lc in project["load_cases"]}
+        left = {k for k, lc in lcs.items() if "criterion" in lc and not k.endswith("-beyond") and k not in judged}
+        self.assertEqual(left, ended, f"load cases without a verdict in v{last:03d}")
+        preds = {r.get("prediction_id"): r for r in records("prediction")}
+        cmps = {r.get("comparison_id"): r for r in records("comparison")}
+        ends = {preds.get(cmps.get(k.get("comparison_id"), {}).get("prediction_id"), {}).get("load_case_id")
+                for k in records("cause") if k.get("ends_case") is True}
+        self.assertEqual(ended - ends, set(), f"no cause with ends_case in v{last:03d}")
+        tiles = {j.get("domain"): j.get("state")
+                 for j in json.loads((vdir / layout.JUDGEMENTS_FILE).read_text(encoding="utf-8"))
+                 if j.get("design_version") == last}
+        held = {lcs[k].get("domain") for k in ended}
+        self.assertEqual({d: s for d, s in tiles.items() if d in held}, {d: "pending" for d in held}, str(tiles))
+        self.assertEqual({d: s for d, s in tiles.items() if d not in held and s != "green"}, {}, str(tiles))
 
     def test_each_denial_is_followed_as_the_hook_asks(self):
         name, run, proc = self.REQ.name, self.run_dir, self.proc
@@ -224,6 +275,18 @@ else:
 
 class ScriptedRunWithFakes(unittest.TestCase):
     CASES = {"done": (1.03, 1.03, True), "mismatch": (1.03, 1.4, True), "unusable": (1.03, 1.03, False)}
+    # the tests the fakes are made for: the demo file's own list now adds R8, R7 and H6, whose builders need
+    # parts (controls, nets, fenders) the fake design does not have
+    FAKE_TESTS = ["P1", "R1", "N1", "H1", "H3", "P3"]
+
+    def _requirements(self, tmp: Path) -> Path:
+        """offroad-4w.yaml with the fakes' tests, beside the run (the demo file names more)."""
+        import yaml
+        req = yaml.safe_load((ROOT / "data" / "requirements" / "offroad-4w.yaml").read_text(encoding="utf-8"))
+        req["tests"] = [t for t in req["tests"] if t in self.FAKE_TESTS]
+        out = tmp / "offroad-4w.yaml"
+        out.write_text(yaml.safe_dump(req, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return out
 
     def test_store_output_follows_the_contract(self):
         try:
@@ -232,9 +295,9 @@ class ScriptedRunWithFakes(unittest.TestCase):
             from tests.tools import fakes
         except ImportError as e:
             self.skipTest(f"needs hiraku.agent and tests/tools/fakes.py (design dept): {e}")
-        req = ROOT / "data" / "requirements" / "offroad-4w.yaml"
         for name, (step, frame, checks_pass) in self.CASES.items():
             with self.subTest(case=name), tempfile.TemporaryDirectory() as tmp:
+                req = self._requirements(Path(tmp))
                 design = contract.EXAMPLES_DIR / "design.json"
                 if callable(getattr(fakes, "loaded_design", None)):  # the design the fakes are made for
                     design = Path(tmp) / "design.json"

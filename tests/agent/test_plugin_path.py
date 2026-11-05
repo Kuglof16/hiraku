@@ -107,7 +107,7 @@ class StdioTest(unittest.TestCase):
                 self.assertIn("tools", init["result"]["capabilities"])
                 ask({"jsonrpc": "2.0", "method": "notifications/initialized"})
                 tools = ask({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
-                self.assertEqual({t["name"] for t in tools}, {"start_run", "open_run", *RUN_TOOLS})
+                self.assertEqual({t["name"] for t in tools}, {"start_run", "open_run", "wait_for_roles", *RUN_TOOLS})
                 from hiraku.tools.mcp import DESCRIPTIONS, INPUT_SCHEMAS
 
                 for t in tools:
@@ -194,6 +194,9 @@ class PluginRunCase:
 
 class ServerTest(PluginRunCase, unittest.TestCase):
     def test_start_run_makes_a_plugin_run_and_names_it_current(self):
+        from hiraku.webserve.server import DEFAULT_PORT
+
+        self.assertIn(f"http://127.0.0.1:{DEFAULT_PORT}/?run={self.ctx.project['run_id']}", self.started["screen"])
         self.assertEqual(self.ctx.project["driver"], plugin.DRIVER)
         self.assertEqual(self.started["driver"], "claude_code_plugin")
         self.assertIn("get_context", self.started["task"])
@@ -250,6 +253,7 @@ class ServerTest(PluginRunCase, unittest.TestCase):
         self.assertFalse((self.ctx.store.path / layout.PLUGIN_ALIVE_FILE).exists())  # the server let go
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("run.finished")[-1]["data"]["stop_code"], "user_stop")
+        self.assertEqual(self.events("agent.stopped")[-1]["data"], {"agent_id": "lead", "stop_code": "user_stop"})
         self.assertTrue(self.call_error("get_context"))
         self.assertEqual(self.hook("Stop", {"stop_hook_active": False}), {})  # the hooks let everything through
 
@@ -370,6 +374,7 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.assertEqual(fin["data"]["stop_code"], "not_judged")
         self.assertEqual(self.ctx.project["status"], "stopped")
         self.assertEqual(self.events("agent.stopped")[-1]["agent"], "lead")
+        self.assertEqual(self.events("agent.stopped")[-1]["data"]["stop_code"], "done")
         self.assert_events_fit()
 
     def _stop_to_the_cap(self):
@@ -457,6 +462,25 @@ class HookCommandTest(PluginRunCase, unittest.TestCase):
         self.server.drain()
         self.assertEqual([e["agent"] for e in self.events("agent.started")][-1], "cae.strength")
         self.assertEqual(len(self.events("hook.blocked_stop")), 1)
+
+    def test_the_lead_waits_for_a_running_role_instead_of_ending_its_turn(self):
+        """Run 20261105-011041: the lead ended its turn with a role in the background and claude -p cut the role
+        off. The Stop hook now blocks that stop and the lead waits with wait_for_roles."""
+        self.hook("SubagentStart", {"agent_id": "a1", "agent_type": "hiraku:cae-strength"})
+        out = self.hook("Stop", {"stop_hook_active": False})
+        self.assertEqual(out["decision"], "block")
+        self.assertIn(TOOL(plugin.WAIT_TOOL), out["reason"])
+        self.assertEqual(self.ctx.project["status"], "running")
+        self.assertEqual(plugin.read_state(self.ctx.store.path)["stop_blocks"], 0)
+        self.assertEqual(self.server.wait_for_roles(wait_s=0, poll_s=0), plugin.WAIT_MORE.format(roles="cae.strength"))
+        state = plugin.read_state(self.ctx.store.path)
+        plugin.write_state(self.ctx.store.path, {**state, "running": {}})  # the role's SubagentStop took it out
+        self.assertEqual(self.call_text(plugin.WAIT_TOOL), plugin.WAIT_DONE)
+        (self.ctx.store.path / layout.STOP_REQUEST_FILE).write_text("", encoding="utf-8")  # the stop button
+        self.assertEqual(self.server.wait_for_roles(wait_s=0, poll_s=0), plugin.WAIT_ENDED)
+
+    def call_text(self, name):
+        return asyncio.run(self.server.call_tool(name, {}))["content"][0]["text"]
 
     def test_no_current_run_lets_everything_through(self):
         with tempfile.TemporaryDirectory() as empty:

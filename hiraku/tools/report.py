@@ -132,6 +132,11 @@ def domain_parts(ctx: RunContext) -> list[Record]:
         tile = tiles.get(domain, {})
         cases = []
         for lc in ctx.load_cases:
+            if lc["domain"] == domain and "criterion" not in lc:
+                line = shown_count_line(ctx, lc, v)
+                if line:  # measured, not judged: said in the domain's line, so the domain does not read as all passed
+                    cases.append({"load_case_id": lc["load_case_id"], "verdict_id": None, "line": line, "effects": [],
+                                  "assumptions": [], "differences": []})
             if lc["domain"] != domain or "criterion" not in lc:
                 continue
             ver = next((x for x in reversed(verdicts) if x["load_case_id"] == lc["load_case_id"]), None)
@@ -152,6 +157,25 @@ def domain_parts(ctx: RunContext) -> list[Record]:
         out.append({"domain": domain, "state": tile.get("state", "pending"), "summary": tile.get("summary", ""),
                     "cases": cases})
     return out
+
+
+NOT_JUDGED_MARK = "判定なし: "
+
+
+def shown_count_line(ctx: RunContext, lc: Record, version: int) -> str | None:
+    """The report's line for a load case without a criterion (measured and shown, not judged) whose latest
+    analysis of the version has a count that is not 0: which load case, why it is not judged (its title's
+    「判定なし: …」 up to the first 。, else the title) and the counts. None when every count is 0 or nothing ran."""
+    ana = next((a for a in reversed(ctx.store.records("analysis", version))
+                if a.get("load_case_id") == lc["load_case_id"] and a.get("status", "ok") == "ok"), None)
+    counts = [r for r in (ana or {}).get("results", []) if r.get("unit") == "1" and r.get("value")]
+    counts = [r for r in counts if not r.get("where")] or counts[:3]  # the totals, else a few places
+    if not counts:
+        return None
+    title = lc.get("title") or ""
+    reason = title.split(NOT_JUDGED_MARK, 1)[1].split("。", 1)[0] if NOT_JUDGED_MARK in title else title
+    what = "、".join(f"{r['quantity']} {r['value']:g}" + (f" ({r['where']})" if r.get("where") else "") for r in counts)
+    return f"{lc['load_case_id']} は判定していない (理由: {reason}) が、{what} ({ana['analysis_id']})"
 
 
 def unjudged_line(ctx: RunContext, lc: Record, version: int) -> str:

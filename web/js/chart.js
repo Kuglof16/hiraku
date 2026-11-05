@@ -4,13 +4,14 @@
 // Values printed next to the legend are the recorded samples nearest to the cursor.
 
 import { esc, fmt, quantityName, unitLabel } from "./labels.js";
-import { abscissa, chartGroups, extent, nearestAt, wheelName } from "./series.js";
+import { abscissa, chartGroups, extent, nearestAt, seriesName } from "./series.js";
 
 const W = 380;
 const H = 150;
 const M = { l: 54, r: 12, t: 10, b: 24 };
 const COLORS = ["#2b59c3", "#8e6bbf", "#2f7d4f", "#e9893a", "#c8402a", "#2fa7d6", "#6b665c", "#e8c547"];
 const MAX_POINTS = 800;
+const MAX_CHIPS = 5; // chips shown before ほか N (screen choice)
 
 function niceStep(span, count) {
   const raw = span / count;
@@ -26,10 +27,7 @@ function ticks(min, max, count) {
   return out;
 }
 
-function shortName(channel) {
-  const dot = channel.indexOf(".");
-  return dot > 0 ? wheelName(channel.slice(dot + 1)) : channel;
-}
+const shortName = seriesName;
 
 export class SeriesChart {
   constructor(el, onPick) {
@@ -42,6 +40,7 @@ export class SeriesChart {
   // Draw a group of channels (a Map, channel -> series); marks are times to flag (e.g.
   // wheel lift) on a chart against time.
   set(channels, groupKey, marks = []) {
+    this.last = [channels, groupKey, marks]; // (drawn again with these when ほか / たたむ is pressed)
     const groups = chartGroups(channels);
     const group = groups.find((g) => g.key === groupKey) ?? groups[0];
     const key = `${groups.map((g) => g.key).join(",")}|${group?.key}`;
@@ -95,7 +94,12 @@ export class SeriesChart {
       .map((m) => `<line x1="${x(m.t)}" x2="${x(m.t)}" y1="${M.t}" y2="${H - M.b}" class="mk"/><text x="${x(m.t) + 4}" y="${M.t + 10}" class="mkl">${esc(m.label)}</text>`)
       .join("");
     const chipName = (g) => (g.x ? quantityName(g.ja) : g.ja);
-    const chips = groups.map((g) => `<button data-group="${esc(g.key)}" class="${g.key === group.key ? "on" : ""}">${esc(chipName(g))}</button>`).join("");
+    // many groups: the first MAX_CHIPS (and the one shown) and a button for the rest, so the chips
+    // do not grow the box over the 3D
+    const folded = groups.length > MAX_CHIPS + 1 && !this.expanded;
+    const listed = folded ? groups.filter((g, i) => i < MAX_CHIPS || g.key === group.key) : groups;
+    const more = groups.length > MAX_CHIPS + 1 ? `<button data-more="1" class="more">${folded ? `ほか ${groups.length - listed.length} ▾` : "たたむ ▴"}</button>` : "";
+    const chips = listed.map((g) => `<button data-group="${esc(g.key)}" class="${g.key === group.key ? "on" : ""}">${esc(chipName(g))}</button>`).join("") + more;
     const legend = series
       .map((s, i) => `<span><i style="background:${COLORS[i % COLORS.length]}"></i>${esc(shortName(s.channel))} <b data-ch="${esc(s.channel)}"></b></span>`)
       .join("");
@@ -107,6 +111,12 @@ export class SeriesChart {
       `${markHtml}${lines}${timed ? `<line class="cur" x1="0" x2="0" y1="${M.t}" y2="${H - M.b}"/>` : ""}</svg>` +
       `<div class="gr-legend">${legend}</div>`;
     this.el.querySelector(".gr-chips").addEventListener("click", (ev) => {
+      if (ev.target.closest("button[data-more]")) {
+        this.expanded = !this.expanded;
+        this.key = null;
+        if (this.last) this.set(...this.last); // now, not on the next change of the replay
+        return;
+      }
       const b = ev.target.closest("button[data-group]");
       if (b) this.onPick(b.dataset.group);
     });

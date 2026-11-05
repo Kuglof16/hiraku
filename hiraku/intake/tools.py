@@ -179,6 +179,8 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     wording, choices = args.get("wording"), args.get("choices")
     problems: list[str] = []
     asked_early = False
+    got_answers: dict[str, Any] = {}
+    plan = None
     wait = float(args.get("wait_seconds") or 0)
     run_path = getattr(_store(ctx), "path", None)
     if wait > 0 and not answers and run_path is not None:
@@ -196,9 +198,21 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
             hearing.clear_mailbox(run_path)
             if got:
                 answers = dict(got.get("answers") or {})
+                got_answers = answers
                 note = note or got.get("note")
                 rule_answers = hearing.check_rule_answers(got.get("rule_answers"), rule_questions)
-    prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices)
+    from_screen = bool(got_answers)
+    try:
+        prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices,
+                                   skip_present=from_screen)
+    except IntakeError as e:
+        if not (from_screen and run_path is not None and asked_early):
+            raise
+        # the screen's answer was refused here: keep the question open (A2 still asks) and say what to do, instead of
+        # closing the hearing with no answers
+        hearing.write_request(run_path, {k: v for k, v in {"questions": plan.questions, "rule_questions": rule_questions}.items() if v})
+        return {"recorded": False, "answers": [], "ready": False, "refused": str(e),
+                "next": f"画面の答えを受け付けられませんでした ({e})。聞き取りは開いたままです。もう一度 wait_seconds をつけて呼ぶと、答え直しを待ちます"}
     if rule_questions:
         prepared.asked["rule_questions"] = rule_questions
     if rule_answers:
@@ -241,6 +255,8 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
             out["rules_dropped"] = dropped  # rule_check leaves them out of this run from now on
         if revise:
             out["rules_to_revise"] = revise  # the designer changes the design for these
+    if prepared.ignored:
+        out["ignored"] = prepared.ignored  # answers to keys the requirements file already has
     if unchanged:
         out["unchanged"] = f"{' と '.join(unchanged)} は前に記録した内容と同じなので、記録は増やしていません"
     if not recorded_req and new:

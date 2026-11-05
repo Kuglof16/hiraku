@@ -71,6 +71,26 @@ class SplitTest(unittest.TestCase):
         mm = {m["id"]: m.get("module") for m in d["members"]}
         self.assertEqual({mm[k] for k in mm if k.startswith("dash_")}, {"steering"})
 
+    def test_mounts_are_the_frames_and_derived_are_nobodys(self):
+        mods = {m["module_id"]: m for m in GEN.build()["modules"]}
+        self.assertLessEqual({"mount_floor", "mount_electrics", "mount_seats", "mount_drive"},
+                             set(mods["frame"]["variables"]))
+        owned = {v for m in mods.values() for v in m["variables"]}
+        self.assertEqual(owned & set(GEN.DERIVED), set())  # computed by the generator: no designer changes them
+
+    def test_catalogs_own_builders_set_modules(self):
+        """P1, R1 and R1s are built by hiraku.catalog.build, not the builders package: they carry modules too."""
+        from hiraku.catalog.build import BUILDERS as OWN
+        from tests.solvers.test_builders_load_path import REQ
+
+        d = GEN.build()
+        spec = {"id": "R1s", "domain": "strength", "tolerance_rel": 0.15, "params": {"step_height": {"value": 100, "unit": "mm"}}}
+        try:
+            lc = OWN["r1_joint"](spec, REQ, d)
+        except (KeyError, ValueError):
+            self.skipTest("R1s needs the catalog's spec")
+        self.assertEqual(lc["modules"], ["frame", "steering"])  # the dash members and the bulkhead are steering's
+
     def test_unknown_kind_is_refused(self):
         d = GEN.build()
         d["parts"][0] = dict(d["parts"][0], kind="mystery")

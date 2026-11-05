@@ -89,6 +89,38 @@ class PastTheLimitWithoutFormulaTest(RunCase, unittest.TestCase):
             self.assertIn(NO_FORMULA_NOTE, text)
 
 
+class ShownCountTest(RunCase, unittest.TestCase):
+    """A load case without a criterion (measured, not judged; H1-joints tonight) whose analysis counts something
+    not 0 is said in its domain's report line, so the domain does not read as all passed."""
+
+    def add_shown_case(self, count):
+        ana, _, _ = self.run_p1()
+        lc = dict(self.ctx.load_case("R1-step100"), load_case_id="R1-joints",
+                  title="つながりが触れているか (判定なし: 設計の型が部品を形の上でつないでいない。直している途中)")
+        del lc["criterion"]
+        self.ctx.load_cases.append(lc)
+        shown = dict(ana, analysis_id=self.ctx.store.next_id("analysis"), load_case_id="R1-joints",
+                     results=[{"quantity": "joint_gap_count", "value": float(count), "unit": "1"}])
+        self.ctx.store.add_record("analysis", shown, design_version=1, agent="cae.strength", domain="strength")
+        return shown
+
+    def test_a_count_not_0_is_in_the_domains_line(self):
+        from hiraku.tools.report import domain_parts
+
+        shown = self.add_shown_case(206)
+        (strength,) = [p for p in domain_parts(self.ctx) if p["domain"] == "strength"]
+        line = next(c["line"] for c in strength["cases"] if c["load_case_id"] == "R1-joints")
+        self.assertEqual(line, "R1-joints は判定していない (理由: 設計の型が部品を形の上でつないでいない) が、"
+                               f"joint_gap_count 206 ({shown['analysis_id']})")
+
+    def test_a_count_of_0_says_nothing(self):
+        from hiraku.tools.report import domain_parts
+
+        self.add_shown_case(0)
+        (strength,) = [p for p in domain_parts(self.ctx) if p["domain"] == "strength"]
+        self.assertNotIn("R1-joints", [c["load_case_id"] for c in strength["cases"]])
+
+
 class ReportTest(RunCase, unittest.TestCase):
     frame_factor = (1.5, 1.8, 1.03)  # R1: rail_step_bending mismatches, then the rail joint is judged safe side
 
