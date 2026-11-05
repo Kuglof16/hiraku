@@ -20,7 +20,8 @@ parts sharing the id before the first "." as one person (person_of), and so do K
 (k4_geometry.people.occupants). The segment shares are D. A. Winter's (below, not checked in this
 repository); the generator writes the bodies (ladder_4w.BODY_PARTS).
 
-The segments' sizes are the AIST items in k4_geometry.people.SIZES (people.SOURCE, people.BODY_SOURCE):
+The segments' sizes are the AIST items in k4_geometry.people.SIZES (people.SOURCE, people.BODY_SOURCE: the
+AIST anthropometric database 1991-92, each item's source and the date it was read are there):
 - trunk: from the seat back to twice the hip's distance ahead of it (2 x J9) along x, the bideltoid breadth D2
   across, from the seat top up to the cervicale (I4 Cervicale height, sitting);
 - neck: a square prism as wide as the neck's diameter (F1 Neck circumference / pi), from the cervicale up to the
@@ -49,14 +50,16 @@ from hiraku.designgen.kit.package import Item, Layout
 
 Record = dict[str, Any]
 
+# The pedals' mass, size and spacing and the shoulder's inset: HIRAKU's choices (assumptions, no source)
 PEDAL_KG = 0.8  # one pedal with its arm (assumption)
 PEDAL_PAD_MM = (100.0, 80.0, 20.0)  # pad along the sole, across, thick (assumption)
 BRAKE_OFFSET_MM = 110.0  # the brake pad's middle this far inboard of the accelerator's (assumption)
 ARM_RADIUS_MM = 45.0  # the shoulder point this far inside the bideltoid breadth's half (assumption, as before)
 # Segment masses as shares of the body mass: D. A. Winter, Biomechanics and Motor Control of Human
 # Movement, 4th ed., Wiley 2009, table 4.1 (after Dempster 1955): head and neck 0.081, trunk 0.497,
-# upper arm 0.028, forearm 0.016, hand 0.006, thigh 0.100, leg 0.0465, foot 0.0145. Not checked
-# in this repository. The table has the head and the neck as one segment: occupant_parts splits its share
+# upper arm 0.028, forearm 0.016, hand 0.006, thigh 0.100, leg 0.0465, foot 0.0145 (the "leg" is the shank
+# here). Not checked: the book's table was not read in
+# this repository (README, the table of values not checked). The table has the head and the neck as one segment: occupant_parts splits its share
 # between the head's and the neck's boxes by their volumes (the same density: assumption).
 SEGMENT_SHARE = {"trunk": 0.497, "head_neck": 0.081, "thigh": 0.100, "shank": 0.0465, "foot": 0.0145,
                  "arm": 0.028, "forearm": 0.016, "hand": 0.006}

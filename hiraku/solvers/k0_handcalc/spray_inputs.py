@@ -27,9 +27,9 @@ import numpy as np
 from . import units
 from .vehicle import DesignError
 
-ARC_STEP_DEG = 5.0  # assumption (not checked): spacing of the tread points along the arc
-LINES_ACROSS = 5  # assumption (not checked): tread points across the tyre's width
-LINE_LENGTH_MM = 3000.0  # assumption (not checked): how far a line is followed
+ARC_STEP_DEG = 5.0  # HIRAKU's choice, an assumption, no source: spacing of the tread points along the arc
+LINES_ACROSS = 5  # HIRAKU's choice, an assumption, no source: tread points across the tyre's width
+LINE_LENGTH_MM = 3000.0  # HIRAKU's choice, an assumption, no source: how far a line is followed
 # The fender variables of the ladder_4w design (hiraku.designgen.ladder_4w VARIABLES)
 FENDER_VARS = ("fenders", "fender_front_deg", "fender_rear_deg", "fender_gap", "fender_width")
 

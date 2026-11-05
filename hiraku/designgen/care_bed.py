@@ -59,10 +59,14 @@ from hiraku.designgen.ladder_4w import DesignGenError  # one error class for eve
 Record = dict[str, Any]
 
 MATERIALS = Path(__file__).resolve().parents[2] / "data" / "materials" / "materials.json"
+# The grades are HIRAKU's choices (assumptions); their yields and densities are in MATERIALS, whose source
+# fields cite the JIS minimum yields (G 3466, G 3445, G 3101) and common design values, not checked
+# (README, the table of values not checked)
 TUBE = "stkr400"  # rectangular tubes (assumption)
 ROUND = "stkm13a"  # the side rails' round tube (assumption)
 PLATE = "ss400"  # deck boards and brackets (assumption)
-G0 = 9.80665  # m/s^2, standard gravity (as hiraku.solvers.k0_handcalc.units.STANDARD_GRAVITY)
+# m/s^2, standard gravity, a defined value (3rd CGPM, 1901) (as hiraku.solvers.k0_handcalc.units.STANDARD_GRAVITY)
+G0 = 9.80665
 
 MIN_STATION_GAP_MM = 100.0  # stations closer than this make members shorter than the joints (assumption)
 MIN_LEG_MM = 300.0  # the leg board is at least this long (assumption)
@@ -70,7 +74,9 @@ MIN_POST_MM = 80.0  # lift posts at least this long between the base and the upp
 CASTER_FORK_MM = 40.0  # caster fork and plate between the wheel's top and the base rail's bottom (assumption)
 CASTER_WIDTH_MM = 30.0  # caster wheel width (assumption)
 BOARD_GAP_MM = 1.0  # deck boards sit this far above the rail tops; gaps between parts that touch (assumption)
-MATTRESS_T_MM = 150.0  # mattress thickness: the sample answers' note says 150 mm or less (taken at 150)
+# mattress thickness: the sample answers' note says 150 mm or less (data/requirements/products/care-bed.answers.yaml,
+# "note"; the customer's plan, not an outside value), taken at 150
+MATTRESS_T_MM = 150.0
 OCCUPANT_BOX_MM = (1700.0, 500.0, 250.0)  # a lying person as a mass box, centred on the deck (assumption)
 ACTUATOR_SECTION_MM = 60.0  # actuator body as a box this wide and high (assumption)
 ACTUATOR_Y_MM = 120.0  # back actuator at y = +this, knee actuator at -this (they pass each other; assumption)
@@ -158,7 +164,12 @@ VARIABLES: dict[str, Var] = {
     "bracket_t": Var("mm", 6.0, 4.0, 12.0, f"actuator bracket lug thickness ({PLATE}; the thick part, meshed as solid)"),
     "bracket_width": Var("mm", 40.0, 30.0, 80.0, "actuator bracket lug width (along x)"),
     "pin_d": Var("mm", 10.0, 8.0, 16.0, "actuator pin diameter"),
-    # requirements (not design choices)
+    # The actuator's rating (actuator_rated_force, actuator_speed here; duty, on time and motor speed below): HIRAKU's
+    # values of the kind printed in bed actuator data sheets; no data sheet's figures were read for them (not
+    # checked). data/requirements/products/care-bed.yaml cites the LINAK LA31 data sheet for the 40 degC only.
+    # requirements (not design choices). The defaults stand until propose() takes the requirements' values; the
+    # sources are the requirements' basis fields (JIS T 9254 as copied there: 1350 N, 70 deg, and the sample
+    # answers' 1700 N, recorded as checked in README, the table of values not checked, the products' row)
     "occupant_load": Var("N", 1350.0, meaning="Q33: the user's weight on the deck"),
     "safe_working_load": Var("N", 1700.0, meaning="Q40: safe working load (user + mattress + accessories)"),
     "back_angle_max": Var("deg", 70.0, meaning="Q56: back raise range"),
@@ -176,7 +187,8 @@ VARIABLES: dict[str, Var] = {
     # A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed.,
     # Springer 2016 (IIW), not checked in this repository; FAT 71 and the slope 22 are assumptions.
     # The counts of use (R3) are a spectrum: the damage takes 2 m - 1 below the knee (IIW-1823-07 (2008)
-    # sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not fatigue_slope_after_knee_constant_amplitude
+    # sec. 4.3.1, p.110, as cited in README, the table of values not checked; library_fatigue.spectrum_slope),
+    # not fatigue_slope_after_knee_constant_amplitude
     "fatigue_fat_class": Var("MPa", 71.0, meaning="assumption (see the module)"),
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
