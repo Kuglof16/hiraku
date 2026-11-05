@@ -164,6 +164,12 @@ class FrameShellTest(Shape, unittest.TestCase):
         again = copy.deepcopy(hot)
         hot_spots.mark_predicted(again, pred())
         self.assertFalse(any(h["predicted"] for h in again))
+        # a plan that predicts max_stress: the shell compares it as max_hot_spot_stress (judged_as), so the weld row
+        # at the main result is the predicted place (and the max_stress sharp row too)
+        hot_spots.mark_predicted(again, pred("max_stress"), FrameShell())
+        top_weld = max((h for h in again if h["quantity"] == "max_hot_spot_stress"), key=lambda h: h["value"]["value"])
+        self.assertTrue(top_weld["predicted"])
+        self.assertEqual(sum(h["predicted"] for h in again if h["quantity"] == "max_hot_spot_stress"), 1)
 
     def test_untied_joints_in_the_assumptions(self):
         said = [a for a in self.recs["R1s"]["assumptions"] if a.startswith("判定していない継ぎ手: ")]
