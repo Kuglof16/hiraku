@@ -80,33 +80,6 @@ function rodPart(size) {
   return [{ geo: rod(a, b, r, 16), sub: null }];
 }
 
-// A box with cooling fins on top.
-function finned([sx, sy, sz]) {
-  const base = sz * 0.6;
-  const out = [piece(rounded(sx, sy, base, 6), 0, 0, -sz / 2 + base / 2)];
-  const n = Math.max(3, Math.round(sy / 25));
-  for (let i = 0; i < n; i += 1) {
-    const y = -sy / 2 + (sy * (i + 0.5)) / n;
-    out.push(piece(new THREE.BoxGeometry(sx * 0.9, 4, sz - base), 0, y, -sz / 2 + base + (sz - base) / 2));
-  }
-  return out;
-}
-
-// The front of the body: a nose that slopes down to the front, and a bumper bar.
-function nose([sx, sy, sz]) {
-  const shape = new THREE.Shape();
-  shape.moveTo(-sx / 2, -sz / 2);
-  shape.lineTo(sx / 2 - 30, -sz / 2);
-  shape.lineTo(sx / 2 - 30, -sz / 2 + sz * 0.45);
-  shape.lineTo(sx / 2 - sx * 0.35, sz / 2);
-  shape.lineTo(-sx / 2, sz / 2);
-  shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: sy * 0.94, bevelEnabled: true, bevelSize: 8, bevelThickness: 8, bevelSegments: 2 });
-  // extruded along +z in the shape's frame: shape x -> ISO x, shape y -> ISO z, depth -> ISO y
-  geo.rotateX(Math.PI / 2).translate(0, sy * 0.47, 0);
-  return [{ geo, sub: null }];
-}
-
 // The corner radius of a box drawn with rounded edges (the real look), from its
 // thinnest side: 0.35 of it, at most 40 mm. A 1.2 mm panel gets 0.42 mm, a 100 mm
 // cushion 35 mm. These are values for the picture (how the edges catch the light), not
@@ -131,32 +104,6 @@ export function boxGeometry([sx, sy, sz], round = false) {
   return g;
 }
 
-// A plate (floor, deck, a body panel): a box whose thinnest side is its thickness.
-function plate(size, round) {
-  return [{ geo: boxGeometry(size, round), sub: null }];
-}
-
-// A box is a plate when its thinnest side is a tenth of the middle one or less.
-function isPlate(size) {
-  const s = [...size].sort((a, b) => a - b);
-  return s[0] <= s[1] * 0.1;
-}
-
-// Cargo: crates in a grid that fills the box, with a gap between them.
-function crates([sx, sy, sz]) {
-  const nx = Math.max(1, Math.round(sx / 450));
-  const ny = Math.max(1, Math.round(sy / 450));
-  const gap = 20;
-  const cx = (sx - gap * (nx - 1)) / nx;
-  const cy = (sy - gap * (ny - 1)) / ny;
-  const out = [];
-  for (let i = 0; i < nx; i += 1) {
-    for (let j = 0; j < ny; j += 1) {
-      out.push(piece(rounded(cx, cy, sz, 8), -sx / 2 + cx / 2 + i * (cx + gap), -sy / 2 + cy / 2 + j * (cy + gap), 0));
-    }
-  }
-  return out;
-}
 
 // The support a suspension part belongs to: the one whose id ends its id ("susp_FL" -> "FL"),
 // else the nearest to its box.
@@ -312,9 +259,8 @@ const SHAPES = {
   steering,
   battery,
   motor,
-  controller: finned,
-  electrical: finned,
-  cargo: crates,
+  // controller, electrical, cargo, body: their box (no fins, no crates, no sloped nose: the
+  // design gives one box and nothing more)
   suspension,
   tie_rod: rodPart,
   driveshaft: rodPart,
@@ -331,7 +277,6 @@ const SHAPES = {
 export function partPieces(part, { round = false, design = null } = {}) {
   const size = part.box.size_mm;
   const kind = part.kind;
-  if (kind === "body") return isPlate(size) ? plate(size, round) : nose(size);
   const make = SHAPES[kind];
   return (make ? make(size, part.box.center_mm, part, design) : null) ?? [{ geo: boxGeometry(size, round), sub: null }];
 }
