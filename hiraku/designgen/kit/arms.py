@@ -160,9 +160,11 @@ def _clear_of_members(design: Record, pid: str, node: str, lo: np.ndarray, hi: n
         reach = max(NODE_TOL_MM, reach - REACH_STEP_MM)
 
 
-def pivot_brackets(design: Record, rho: float) -> list[str]:
+def pivot_brackets(design: Record, rho: float, joint: Record | None = None) -> list[str]:
     """A clevis bracket at each lower arm pivot and damper top that sits on a frame node with no bracket
-    round it, added to design["parts"]; returns the new brackets' ids."""
+    round it, added to design["parts"]; returns the new brackets' ids. joint: their part.joint
+    (mounts.joint_sizes(), the default)."""
+    joint = mounts.joint_sizes() if joint is None else joint
     parts = design["parts"]
     nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
     brackets = [p for p in parts if p["kind"] == "bracket"]
@@ -198,7 +200,7 @@ def pivot_brackets(design: Record, rho: float) -> list[str]:
                     lo[i], hi[i] = ((q[i] - reach, q[i] + NODE_TOL_MM) if leg[i] > 0 else (q[i] - NODE_TOL_MM, q[i] + reach))
             if key == "damper_upper":
                 lo, hi = _clear_of_members(design, pid, at[0], lo, hi, sy)
-            b = mounts._bracket(pid, f"{corner}の{label} (クレビス、溶接)", lo, hi, at[:1], rho)
+            b = mounts._bracket(pid, f"{corner}の{label} (クレビス、溶接)", lo, hi, at[:1], rho, joint)
             # before the joints' reinforcement (gussets, through pieces), which a design adds last
             at_end = next((i for i, x in enumerate(parts) if x["kind"] == "gusset" or x["id"].startswith("through_")),
                           len(parts))
