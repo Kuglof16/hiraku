@@ -221,6 +221,22 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
     return out
 
 
+def beyond_text(ctx: RunContext, load_case: Record, version: int) -> str | None:
+    """A load case that ends not judged, said with the tool's numbers when a tool's result is beyond the
+    criterion (beyond_results): "ツールでは <where> の <quantity> が <value> で、基準 <op> <limit> を超える
+    (the other results at the same place)". No verdict comes of it (HK4: no verdict without a prediction);
+    None when no tool result is beyond."""
+    crit = load_case.get("criterion")
+    lines = []
+    for a, r in beyond_results(ctx, load_case, version):
+        at = f"{r['where']} の " if r.get("where") else ""
+        same = [x for x in a.get("results", []) if r.get("where") and x.get("where") == r["where"] and x is not r]
+        more = f" ({'、'.join(x['quantity'] + ' ' + _amount(x['value'], x['unit']) for x in same)})" if same else ""
+        lines.append(f"ツール {a['tool']} では {at}{r['quantity']} が {_amount(r['value'], r['unit'])} で、基準 "
+                     f"{OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超える{more}")
+    return "; ".join(lines) or None
+
+
 NO_FORMULA_NOTE = "手計算 (K0) の式が無いので判定していない"
 
 

@@ -22,8 +22,10 @@
   pending cases, counted per design version, and not while a
   message for the lead waits (the role returns so the lead hears it). Load cases no K0
   formula can predict (rules.unpredictable_cases) do not hold a stop. The
-  lead's stop while a role is still running is neither blocked nor counted: the
-  run waits for the role (hiraku.agent.runner.converse). A stop of the lead's
+  lead's stop while a role is still running is not counted: the SDK run waits for the
+  role (hiraku.agent.runner.converse); the plugin blocks it and the lead waits with the
+  plugin's wait tool (wait_tool, plugin.WAIT_TOOL), since claude -p may cut background
+  roles off some minutes after the lead's turn ends. A stop of the lead's
   with a message from the person not yet told is blocked once with that message
   (not counted either).
 - The stop button (stop.request in the run folder): every tool call is denied
@@ -52,8 +54,25 @@ PREFIX = f"mcp__{contract.MCP_SERVER}__"
 PLUGIN_PREFIX = f"mcp__plugin_{contract.MCP_SERVER}_{contract.MCP_SERVER}__"
 MAX_STOP_BLOCKS = 3
 MAX_SUBAGENT_STOP_BLOCKS = 2
+# The plugin: the lead's stop while roles still run is blocked with WAIT_REASON (it waits with the wait tool), at
+# most this many times; the bound only keeps a run whose role never stops from going on for ever
+MAX_WAIT_BLOCKS = 60
+WAIT_REASON = ("役 ({roles}) がまだ動いています。番を終えると Claude Code が役を打ち切ることがあるので、{tool} を呼んで"
+               "役が終わるのを待ち、役の結果を受け取ってから続けてください")
 STOP_REASON_FOR_AGENT = "止めるボタンが押されたので、実行を止めます。ツールを呼ばずに、ここまでのことを 1 文で言って番を終えてください"
 # what a role is told while a message from the person waits for the lead (the message itself stays for the lead)
+
+# run.finished's stop_code -> the stop_code of the roles (and the lead) it closes (contract a31e520): the stop
+# button and an error are said as such; a run cut by its cost or turn limit cuts the lead's work too
+_ROLE_STOP_OF_RUN = {"user_stop": "user_stop", "error": "error", "cost_limit": "run_ended", "turn_limit": "run_ended"}
+
+
+def stopped_data(agent: str, run_code: str | None = None, *, cut_off: bool = False) -> dict[str, Any]:
+    """agent.stopped's data: the agent id and why it stopped. run_code is the run's stop_code when the run's end
+    closes the agent; cut_off marks a role still working then (run_ended). Without either: it ended its own work."""
+    code = _ROLE_STOP_OF_RUN.get(run_code or "") or ("run_ended" if cut_off else "done")
+    return {"agent_id": agent, "stop_code": code}
+
 
 def role_domain(agent: str) -> str | None:
     """The domain whose load cases hold a role's stop (HK4): cae.<domain>'s, and the packager's assembly."""
@@ -84,11 +103,16 @@ class Hooks:
         # the hooks; the SDK run's runner sends it as a message of its own (runner.new_routing)
         self.tell_routing = False
         self.routed: dict[str, str] = {}  # design version (str) -> the routing told for it
+        # the plugin: the tool the lead waits for running roles with (plugin.WAIT_TOOL). Claude Code (claude -p) may
+        # end background roles some time after the lead's turn ends, so the lead's stop while roles run is blocked
+        # and the lead waits with this tool. The SDK run leaves it None: its runner waits for the roles itself
+        self.wait_tool: str | None = None
+        self.wait_blocks = 0
 
     # ------------------------------------------------------------------ state kept between calls
 
     STATE_FIELDS = ("stop_blocks", "subagent_stop_blocks", "running", "stop_requested", "for_lead", "told_roles",
-                    "routed")
+                    "routed", "wait_blocks")
 
     def state(self) -> dict[str, Any]:
         return {k: getattr(self, k) for k in self.STATE_FIELDS}
@@ -121,16 +145,17 @@ class Hooks:
 
     def decide(self, event: str, input_data: dict[str, Any]) -> dict:
         """The answer to one hook event (PreToolUse, PostToolUse, Stop, SubagentStart, SubagentStop)."""
-        return {
-            "PreToolUse": self.decide_pre_tool_use,
-            "PostToolUse": self.decide_post_tool_use,
-            "Stop": self.decide_stop,
-            "SubagentStart": self.decide_subagent_start,
-            "SubagentStop": self.decide_subagent_stop,
-        }[event](input_data)
+        with rules.reading(self.ctx):  # the decisions only read the records: each file once
+            return {
+                "PreToolUse": self.decide_pre_tool_use,
+                "PostToolUse": self.decide_post_tool_use,
+                "Stop": self.decide_stop,
+                "SubagentStart": self.decide_subagent_start,
+                "SubagentStop": self.decide_subagent_stop,
+            }[event](input_data)
 
     async def pre_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_pre_tool_use(input_data)
+        return self.decide("PreToolUse", input_data)
 
     def decide_pre_tool_use(self, input_data: dict[str, Any]) -> dict:
         name = input_data.get("tool_name", "")
@@ -221,7 +246,7 @@ class Hooks:
         return "\n".join(texts)
 
     async def post_tool_use(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_post_tool_use(input_data)
+        return self.decide("PostToolUse", input_data)
 
     def decide_post_tool_use(self, input_data: dict[str, Any]) -> dict:
         short = self._short(input_data.get("tool_name", ""))
@@ -244,7 +269,7 @@ class Hooks:
     # ------------------------------------------------------------------ Stop (HK4)
 
     async def stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_stop(input_data)
+        return self.decide("Stop", input_data)
 
     def _end(self) -> dict:
         if self.on_end is not None:
@@ -257,7 +282,11 @@ class Hooks:
         told = self.take_for_lead()
         if told:  # the person said something the lead has not heard: go on with it (not HK4, not counted)
             return {"decision": "block", "reason": told}
-        if self.running:  # the lead waits for roles still at work: not giving up, so neither blocked nor counted
+        if self.running:  # the lead waits for roles still at work: not giving up, so not counted against HK4
+            if self.wait_tool and self.wait_blocks < MAX_WAIT_BLOCKS:
+                self.wait_blocks += 1
+                roles = "、".join(sorted(set(self.running.values())))
+                return {"decision": "block", "reason": WAIT_REASON.format(roles=roles, tool=self.wait_tool)}
             return {}
         # the round limit ends revisions only: the latest version is still judged (HOOK_RULES HK4), so a
         # pending case still holds the stop; red_left_reason already lets a red tile go once no revision is left
@@ -295,7 +324,7 @@ class Hooks:
         return {}
 
     async def subagent_stop(self, input_data: dict[str, Any], tool_use_id: str | None, context: Any) -> dict:
-        return self.decide_subagent_stop(input_data)
+        return self.decide("SubagentStop", input_data)
 
     def decide_subagent_stop(self, input_data: dict[str, Any]) -> dict:
         agent = agent_id_from_sdk(input_data.get("agent_type"))
@@ -317,7 +346,7 @@ class Hooks:
         was_running = bool(self.running)
         self.running.pop(input_data.get("agent_id", ""), None)
         self.emit("agent.stopped", agent=agent, domain=agent.split(".", 1)[1] if agent.startswith("cae.") else None,
-                  data={"agent_id": agent})
+                  data=stopped_data(agent))
         if was_running and not self.running and self.on_roles_done is not None:
             self.on_roles_done()
         return {}

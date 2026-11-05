@@ -169,6 +169,13 @@ class ServerTest(unittest.TestCase):
         _, headers, _ = self.get("/js/app.js")
         self.assertTrue(headers["Content-Type"].startswith("text/javascript"))
 
+    def test_formula_titles(self):
+        # the K0 formulas' ids and Japanese titles for the prediction card (no shelf checks run)
+        _, headers, body = self.get("/api/formulas")
+        self.assertTrue(headers["Content-Type"].startswith("application/json"))
+        got = {f["formula_id"]: f["title"] for f in json.loads(body)["formulas"]}
+        self.assertEqual(got["launch.time_to_speed"], "止まった所から目標の速さまでの時間と最高速度")
+
     def test_runs_list(self):
         _, _, body = self.get("/api/runs")
         runs = json.loads(body)

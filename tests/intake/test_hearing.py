@@ -301,5 +301,40 @@ class EntryExitItemsTest(unittest.TestCase):
             self.assertIn("付けて働く網", item(key)["why"], key)
 
 
+class TypedNumberTest(unittest.TestCase):
+    """A person types a number into a box: '150 kg' must reach the run as 150 with the unit kg (the run once stopped at its
+    start with 'requirement Q40 must be in kg, got None')."""
+
+    def answer(self, key, value):
+        from hiraku.intake.hearing import _answer_requirement
+        return _answer_requirement(item(key), value)
+
+    def test_a_number_with_its_unit_in_words_becomes_a_value_and_a_unit(self):
+        got = self.answer("Q40", "150 kg")
+        self.assertEqual((got["value"], got["unit"]), (150, "kg"))
+        got = self.answer("Q50", "40km/h")
+        self.assertEqual((got["value"], got["unit"]), (40, "km/h"))
+
+    def test_a_number_alone_takes_the_unit_of_the_item_and_a_known_other_unit_is_converted(self):
+        self.assertEqual(self.answer("Q40", "150")["unit"], "kg")
+        self.assertEqual(self.answer("Q40", 150)["unit"], "kg")
+        self.assertEqual(self.answer("Q14", "12")["unit"], "deg")  # the unit comes from the choices
+        got = self.answer("Q50", "10 m/s")
+        self.assertEqual((got["value"], got["unit"]), (36, "km/h"))
+        got = self.answer("Q40", "0.2 t")
+        self.assertEqual((got["value"], got["unit"]), (200, "kg"))
+
+    def test_text_that_is_not_a_number_or_a_unit_that_cannot_be_read_is_refused_in_plain_words(self):
+        for bad in ("たくさん", "150 lbf", "kg 150"):
+            with self.assertRaises(IntakeError, msg=bad) as ctx:
+                self.answer("Q40", bad)
+            self.assertIn("積載", str(ctx.exception))
+            self.assertIn("kg", str(ctx.exception))
+
+    def test_an_answer_that_names_its_unit_and_an_item_without_a_unit_are_left_alone(self):
+        self.assertEqual(self.answer("Q40", {"value": 150, "unit": "kg"})["unit"], "kg")
+        self.assertNotIn("unit", self.answer("Q11", "砂利"))  # a surface is a word, not a number
+
+
 if __name__ == "__main__":
     unittest.main()

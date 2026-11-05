@@ -97,7 +97,7 @@ def close_ownerless_plugin_runs(root: Path) -> list[str]:
                 store = RunStore.open(path)
                 if store.project["status"] != "running":
                     continue
-                store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+                store.emit("agent.stopped", agent="lead", data={"agent_id": "lead", "stop_code": "user_stop"})
                 store.finish("stopped", stop_reason=OWNERLESS_REASON, stop_code="user_stop")
         except (OSError, ValueError, TimeoutError):
             continue  # a folder that cannot be closed now is left for the next start

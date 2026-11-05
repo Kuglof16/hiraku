@@ -125,6 +125,8 @@ class BackgroundRoleTest(ConversationCase, unittest.TestCase):
         self.assertEqual(self.kinds("agent.started", "agent.stopped"),
                          [("agent.started", "lead"), ("agent.started", "cae.strength"),
                           ("agent.stopped", "cae.strength"), ("agent.stopped", "lead")])
+        self.assertEqual([e["data"].get("stop_code") for e in self.ctx.store.events() if e["kind"] == "agent.stopped"],
+                         ["done", "done"])
         waited = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and e["agent"] == "system"]
         self.assertEqual(waited, ["まとめ役の番が終わりましたが、役がまだ動いているので待ちます: cae.strength"])
         self.assertEqual(self.ctx.project["cost_usd"], 0.25)
@@ -248,6 +250,8 @@ class StopButtonTest(ConversationCase, unittest.TestCase):
         finished = self.ctx.store.events()[-1]
         self.assertEqual(finished["kind"], "run.finished")
         self.assertEqual((finished["data"]["status"], finished["data"]["stop_code"]), ("stopped", "user_stop"))
+        lead = [e for e in self.ctx.store.events() if e["kind"] == "agent.stopped" and e["agent"] == "lead"][-1]
+        self.assertEqual(lead["data"]["stop_code"], "user_stop")
         self.assertFalse((self.ctx.store.path / layout.STOP_REQUEST_FILE).exists())  # carried out, so taken away
         self.assertEqual(self.kinds("hook.blocked_stop"), [])
         self.assert_events_fit()

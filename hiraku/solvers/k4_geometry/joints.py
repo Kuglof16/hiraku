@@ -3,7 +3,7 @@ H1-envelope).
 
 A part's connects_to says what it is joined to (a node, a part, a member, a support) and how (via). A joint that
 carries something mechanically has to touch: the gap between the part's shape and the other (a node's point, the
-other body's shape, a support's wheel centre) at most JOINT_GAP_MM. Wires and hoses (NOT_TOUCHING_VIA) run between
+other body's shape, a support's wheel centre) at most JOINT_GAP_MM. Wires, hoses and straps (NOT_TOUCHING_VIA) run between
 the two and are not counted. A part with no mechanical connection at all is joined to nothing.
 
 The spaces: a design split into modules gives each module an envelope (boxes); a body counts as outside when the
@@ -16,7 +16,7 @@ import numpy as np
 from .model import Body, bodies, shape_overlap
 
 JOINT_GAP_MM = 2.0  # a joint touches when the gap is no more than this (the program management's figure)
-NOT_TOUCHING_VIA = ("wire", "hose")
+NOT_TOUCHING_VIA = ("wire", "hose", "strap")  # strap: a belt's webbing to its seat
 ENVELOPE_TOL_MM = 0.5
 
 

@@ -260,10 +260,80 @@ class SplitByMethod(unittest.TestCase):
         self.assertEqual(rt._weight("m.B", last), 80.0)  # not m.BC
         self.assertIsNone(rt._weight("m.C", last))
 
+    def test_a_class_never_timed_is_not_split(self):
+        groups = rt.discover(["tests.verification.test_remote_suite"], {})
+        self.assertEqual(list(groups), ["tests.verification.test_remote_suite.ReadResult"])
+
     def test_a_method_split_for_the_first_time_gets_its_share(self):
         groups = {"m.A.test_a": ["m.A.test_a"], "m.A.test_b": ["m.A.test_b"], "m.Z": ["m.Z.t1"]}
         self.assertEqual(rt._order(groups, {"m.A": 100.0, "m.Z": 40.0}), ["m.A.test_a", "m.A.test_b", "m.Z"])
         self.assertEqual(rt._order(groups, {"m.A": 100.0, "m.Z": 51.0})[0], "m.Z")
+
+
+class MemoryAware(unittest.TestCase):
+    """qa.run_tests.schedule: at most max_heavy heavy classes at once, and room in memory for the next."""
+
+    def run_all(self, names, memory, jobs=4, max_heavy=2, free=lambda: 100.0):
+        import threading
+        lock = threading.Lock()
+        now = {"heavy": 0, "max": 0}
+        order = []
+
+        def run(n):
+            with lock:
+                order.append(n)
+                if (memory.get(n) or 0) >= rt.HEAVY_GB:
+                    now["heavy"] += 1
+                    now["max"] = max(now["max"], now["heavy"])
+            time.sleep(0.05)
+            with lock:
+                if (memory.get(n) or 0) >= rt.HEAVY_GB:
+                    now["heavy"] -= 1
+            return {"name": n}
+
+        res = rt.schedule(names, jobs, run, memory, max_heavy=max_heavy, free=free, poll_s=0.01)
+        return res, order, now["max"]
+
+    def test_at_most_two_heavy_classes_at_once(self):
+        names = ["h1", "h2", "h3", "h4", "l1", "l2"]
+        memory = {"h1": 8.7, "h2": 8.6, "h3": 8.6, "h4": 7.6, "l1": 0.5, "l2": None}
+        res, order, most = self.run_all(names, memory, jobs=6)
+        self.assertEqual(sorted(r["name"] for r in res), sorted(names))
+        self.assertEqual(most, 2)
+        self.assertLess(order.index("l1"), order.index("h3"))  # the light ones go first meanwhile
+
+    def test_a_heavy_class_waits_for_free_memory_while_another_runs(self):
+        res, order, most = self.run_all(["h1", "h2"], {"h1": 8.0, "h2": 8.0}, jobs=2, free=lambda: 5.0)
+        self.assertEqual(most, 1)  # h2 waited (5 GB free < 8 + 4) until h1 ended, then started alone
+        self.assertEqual(len(res), 2)
+
+    def test_the_first_heavy_class_starts_even_when_memory_is_short(self):
+        res, _, _ = self.run_all(["h1"], {"h1": 8.0}, jobs=2, free=lambda: 1.0)
+        self.assertEqual(len(res), 1)
+
+    def test_a_class_whose_runner_raised_is_reported_not_lost(self):
+        def run(n):
+            raise RuntimeError("boom")
+        res = rt.schedule(["a"], 1, run, {"a": None}, poll_s=0.01)
+        self.assertEqual(len(res), 1)
+        self.assertIn("boom", res[0]["crash"])
+
+    def test_memory_of(self):
+        last = {"m.A": 5.0, "m.B.test_x": 1.0}
+        self.assertEqual(rt.memory_of("m.A", last), 5.0)
+        self.assertEqual(rt.memory_of("m.A.test_y", last), 5.0)  # split for the first time: the class's peak
+        self.assertEqual(rt.memory_of("m.B.test_x", last), 1.0)
+        self.assertEqual(rt.memory_of("tests.solvers.test_frame_tubes.MeshFlowTest", {}), 7.6)
+        # a known one is a floor: its levels run in child processes the worker's peak does not see
+        conv = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
+        self.assertEqual(rt.memory_of(conv, {conv: 0.6}), 14.4)
+        self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), 14.4)
+        self.assertEqual(rt.memory_of(conv, {conv: 20.0}), 20.0)
+        self.assertIsNone(rt.memory_of("m.C", last))
+
+    def test_this_process_peak_and_free_memory_read(self):
+        self.assertGreater(rt.peak_gb() or 0.0, 0.0)
+        self.assertGreater(rt.free_gb() or 0.0, 0.0)
 
 
 class Procs(unittest.TestCase):

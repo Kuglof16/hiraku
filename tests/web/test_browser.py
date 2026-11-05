@@ -1557,7 +1557,8 @@ class BrowserReplayTest(unittest.TestCase):
               const out = {
                 order: tiles.map((t) => t.dataset.domain),
                 red: tiles.filter((t) => t.classList.contains("red")).map((t) => t.dataset.domain),
-                flow: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.textContent),
+                flow: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.firstChild.textContent),
+                flowRed: [...document.querySelectorAll("#grid-head .vbox")].map((b) => b.querySelector(".vred")?.textContent ?? ""),
                 banner: document.getElementById("grid-banner").hidden ? "" : document.getElementById("grid-banner").textContent,
                 assembly: document.querySelector('#tiles .tile[data-domain="assembly"] .cap').textContent,
                 thermal: document.querySelector('#tiles svg.side[data-domain="thermal"]').textContent,

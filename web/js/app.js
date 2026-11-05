@@ -15,7 +15,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, esc, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -478,12 +478,15 @@ function renderTop(s) {
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
   $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
-  // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0
-  $("pill-cost").textContent = `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0.
+  // A scripted run (project.driver) calls no Claude: no cost, said so rather than $0.00.
+  const scripted = s.project?.driver === "scripted";
+  $("pill-cost").textContent = scripted ? "費用なし (台本の再生)" : `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
   const live = player.live;
-  const status = { running: "実行中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
+  // a replay says where the record is at the playhead (not that something runs now)
+  const status = { running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
-    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
+    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "台本の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
     `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` +
     // a run this screen started can be stopped while it goes
     (ui.stoppable && ui.stoppable === s.runId && s.status === "running"
@@ -528,8 +531,9 @@ function renderAgents(s) {
     .map((id) => {
       const a = s.agents[id];
       const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
-      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls });
-      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
+      // the role's name in full (操安の CAE 役), not the domain alone
+      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id) });
+      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
     })
     .join("");
   agentPets?.mount(ul, "bench");
@@ -550,21 +554,22 @@ function hookLogItem(e, hook, resolved) {
   const mark = resolved ? `<span class="resolved">解決済み</span>` : "";
   return (
     `<li class="hook${resolved ? " done" : ""}" data-seq="${e.seq}">${mark}<b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>` +
-    `<details><summary>詳しい記録 (${esc(w.id)} ${esc(w.ja)})<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
+    `<details><summary title="${esc(`${w.id} ${w.ja}`)}">詳しい記録 (${esc(w.id)})<span class="tm">${fmtTime(e.tRec ?? e.t)}s</span></summary>${esc(e.text)}</details></li>`
   );
 }
 
-// Escaped text with each short aside in brackets (up to 24 characters) kept on one line (.nw).
-const keepAsides = (s) => esc(s).replace(/\(([^()]{1,24})\)/g, '<span class="nw">($1)</span>');
+// Escaped text with each short aside in brackets kept in one piece (labels.js keepAsides).
 
 function logItem(e, ctx = null) {
   if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
-  const note = e.note ? `<span class="note">${esc(e.note)}</span>` : "";
+  const note = e.note ? `<span class="note">${keepAsides(e.note)}</span>` : "";
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
   // What an agent said can run long: the line shows its first lines, the record keeps all of it.
   // A short aside in brackets stays on one line: not "(形の見 / 本)".
-  const text = e.level === "said" ? `<span class="tx" title="${esc(e.text)}">${keepAsides(e.text)}</span>` : keepAsides(e.text);
+  // (an agent's own words, of any length, in the narrow log: an aside longer than the line has to
+  // break somewhere, so the lint's one-letter and bracket checks are let off there: data-lint)
+  const text = e.level === "said" ? `<span class="tx" data-lint="lonely" title="${esc(e.text)}">${keepAsides(e.text)}</span>` : keepAsides(e.text);
   return `<li class="${e.level}">${who}${text}<span class="tm" title="記録の t (実行が始まってからの秒)">${fmtTime(e.tRec ?? e.t)}s</span>${upd}${note}</li>`;
 }
 
@@ -587,14 +592,57 @@ function renderLog(s, resolved) {
   drawn.resolved = resolvedKey;
 }
 
+// Many load cases: the chips show the id (and, for an id shared by several, a short name from the
+// title) and the row scrolls sideways, the chosen one kept in sight; the whole title is the tooltip.
+const MANY_TESTS = 12;
 function renderTests(s, lcId) {
   const cases = s.project?.load_cases ?? [];
+  const shorts = caseShortNames(cases);
   const auto = `<button class="auto ${ui.pinnedLc ? "" : "on"}" data-lc="">自動</button>`;
-  $("tests").innerHTML =
+  const el = $("tests");
+  const html =
     auto +
     cases
-      .map((c) => `<button class="test ${c.load_case_id === lcId ? "on" : ""}" data-lc="${esc(c.load_case_id)}" title="${esc(c.load_case_id)}: ${esc(c.title)}"><span class="tid">${esc(c.test_id)}</span>${esc(c.title)}</button>`)
+      .map((c) => {
+        const short = shorts.get(c.load_case_id);
+        return `<button class="test ${c.load_case_id === lcId ? "on" : ""}" data-lc="${esc(c.load_case_id)}" title="${esc(c.load_case_id)}: ${esc(c.title)}"><span class="tid">${esc(c.test_id)}${short ? `<small>${esc(short)}</small>` : ""}</span><span class="ttl">${esc(c.title)}</span></button>`;
+      })
       .join("");
+  if (html === drawn.tests) return;
+  drawn.tests = html;
+  el.classList.toggle("many", cases.length > MANY_TESTS);
+  // (a row that scrolls sideways on purpose: not a text running out of its box)
+  if (cases.length > MANY_TESTS) el.dataset.lint = "overflow";
+  else delete el.dataset.lint;
+  el.innerHTML = html;
+  el.querySelector(".test.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+// The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
+// a prediction shows its formula as written.
+const formulaTitles = new Map();
+fetch("/api/formulas", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : { formulas: [] }))
+  .then((got) => {
+    for (const f of got.formulas ?? []) if (f.title) formulaTitles.set(f.formula_id, f.title);
+    drawn.rev = -1;
+  })
+  .catch(() => {});
+
+// A "くわしく" (details[data-keep]) stays open or shut across the cards' redraws.
+const openMore = new Set();
+document.addEventListener(
+  "toggle",
+  (ev) => {
+    const d = ev.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.dataset.keep) return;
+    if (d.open) openMore.add(d.dataset.keep);
+    else openMore.delete(d.dataset.keep);
+  },
+  true,
+);
+function keepOpen(el) {
+  for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep);
 }
 
 function renderChain(s, chain) {
@@ -615,14 +663,20 @@ function renderChain(s, chain) {
       : "";
     const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(a)}</li>`).join("");
     p.className = "card";
+    // the formula's title in words when the catalogue has one; the formula itself and its inputs
+    // folded under くわしく (without a title: as written, as before)
+    const title = formulaTitles.get(pred.formula_id);
+    const formula = `<div class="expr">${esc(pred.expression)}</div><div class="kv">${inputs}</div>`;
     p.innerHTML =
       `<h3>1. 予測<small>手計算の段 (K0)・${esc(agentLongName(pred.agent))}</small></h3>` +
-      `<div class="sub">${esc(quantityName(pred.quantity))}・${esc(pred.formula_id)}</div>` +
-      `<div class="expr">${esc(pred.expression)}</div>` +
-      `<div class="kv">${inputs}</div>` +
+      (title
+        ? `<div class="sub">${esc(quantityName(pred.quantity))}</div><div class="fl-title" data-formula="${esc(pred.formula_id)}">${keepAsides(title)}</div>` +
+          `<details class="more" data-keep="pred-formula"><summary>くわしく (式と入力)</summary><div class="sub">${esc(pred.formula_id)}</div>${formula}</details>`
+        : `<div class="sub">${esc(quantityName(pred.quantity))}・${esc(pred.formula_id)}</div>${formula}`) +
       `<div class="big">= ${esc(fmtVU(pred.value, pred.unit))}</div>` +
       termsHtml +
       (asm ? `<ul class="asm">${asm}</ul>` : "");
+    keepOpen(p);
   } else {
     p.className = "card wait";
     p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める (HK1)` : "試験がまだ無い"}</div>`;
@@ -659,9 +713,12 @@ function renderChain(s, chain) {
       v =
         `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
         `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
-        `<span class="sub" title="${esc(loadCase?.criterion?.basis ?? "")}">余裕 ${esc(fmtMargin(verdict))}${loadCase?.criterion?.basis ? `・基準 ${esc(loadCase.criterion.basis)}` : ""}</span></div>`;
+        `<span class="sub">余裕 ${esc(fmtMargin(verdict))}${loadCase?.title ? `・${esc(loadCase.title)}` : ""}</span>` +
+        // the criterion's basis is the record's own words (English): folded
+        (loadCase?.criterion?.basis ? `<details class="more" data-keep="cmp-basis"><summary>くわしく (基準の根拠)</summary><div class="sub basis">${esc(loadCase.criterion.basis)}</div></details>` : "") +
+        `</div>`;
     } else if (ok && loadCase?.criterion) {
-      v = `<div class="sub">基準: ${esc(loadCase.criterion.quantity)} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
+      v = `<div class="sub">基準: ${esc(quantityName(loadCase.criterion.quantity))} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
     }
     // Long words are cut to a few lines here; the log keeps them whole.
     const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(cause.safe_side_reason ?? "")}"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
@@ -681,6 +738,7 @@ function renderChain(s, chain) {
       `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "一致 ✓" : "食い違い ✗"}</span>` +
       cz +
       v;
+    keepOpen(c);
   } else {
     c.className = "card wait";
     const tol = loadCase ? `許す幅 ${fmtPct(loadCase.tolerance_rel, 0)} (荷重条件で決まっている)` : "";
@@ -1250,12 +1308,23 @@ function draw() {
     bench.setToggles(ui.toggles);
     // modules: the module colours and spaces on the 3D, and their legend
     modLayer.set({ colors: ui.toggles.modules, spaces: ui.toggles.spaces });
-    renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces });
+    renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces }, modLayer);
     renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && tab === "bench"); // joints:
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
     $("now").textContent = now;
+    $("now").title = now;
     $("now").hidden = !now;
+    // the line keeps left of the toggles (their row grows with the switches a design offers)
+    // (too little room there: on a row of its own under the toggles, as wide as the 3D)
+    const tg = $("toggles");
+    const nowEl = $("now");
+    if (!nowEl.hidden && tg.offsetWidth) {
+      const room = tg.offsetLeft - nowEl.offsetLeft - 12;
+      const under = room < 360;
+      nowEl.style.top = under ? `${tg.offsetTop + tg.offsetHeight + 8}px` : "";
+      nowEl.style.maxWidth = `${under ? viewport.clientWidth - 2 * nowEl.offsetLeft : room}px`;
+    }
     const scene = presentScene({ s, chain, contour, tab, toolTitle: (tool) => toolTitle(s, tool) });
     document.body.dataset.presentScene = scene.key;
     if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now);
@@ -1501,15 +1570,35 @@ function loadEvents(events, { live }) {
   startPlayback();
 }
 
+// While a record is read (all of it, before it plays): a notice with how much is read.
+function loadingNote(body) {
+  let el = $("loading-note");
+  if (!body) return el?.remove();
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "loading-note";
+    el.className = "loading-note";
+    document.body.append(el);
+  }
+  const mb = (n) => fmt(n / 1e6, 2);
+  el.textContent = `記録を読み込み中… ${mb(body.next_offset ?? 0)} / ${mb(body.size ?? 0)} MB (読み終わると再生が始まる。長さは読んだ分だけ伸びる)`;
+}
+
 async function openRun(runId) {
   resetPlayer();
-  feed = new EventFeed(runId, addEvents);
+  feed = new EventFeed(runId, (evs, body) => {
+    addEvents(evs);
+    if (!feed?.loaded && body && body.next_offset < body.size) loadingNote(body);
+  });
   try {
     await feed.readAll();
   } catch (e) {
+    loadingNote(null);
     showRunList(`読めなかった: ${e}`);
     return;
   }
+  feed.loaded = true;
+  loadingNote(null);
   const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
   if (follow) {

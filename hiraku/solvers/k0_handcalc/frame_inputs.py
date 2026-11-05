@@ -678,11 +678,13 @@ def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str
     to_rail: dict[str, str] = {}
 
     def rail_node(node: str) -> str:
-        """The rail node an off-rail node is joined to: the fewest members away, then the nearest."""
+        """The rail node an off-rail node is joined to: the fewest members away, then the nearest, then by name (the
+        ring is a set, whose order changes with the process's string hashing)."""
         if node not in to_rail:
             seen, ring = {node}, {node}
             while ring:
-                hit = sorted((n for n in ring if n in where), key=lambda n: float(np.linalg.norm(nodes[n] - nodes[node])))
+                hit = sorted((n for n in ring if n in where),
+                             key=lambda n: (float(np.linalg.norm(nodes[n] - nodes[node])), n))
                 if hit:
                     to_rail[node] = hit[0]
                     break

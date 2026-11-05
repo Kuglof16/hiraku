@@ -45,15 +45,20 @@ CLAUDE_ONLY = ".claude.yaml"  # requirements only Claude can run (no scripted wa
 NO_SCRIPT = "台本の予測のしかたが無いので回せない荷重条件"  # what the scripted run says for them
 VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice and compared
 # load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
-# so the run stops not_judged with every other tile of the last version green
-ENDED = {"offroad-4w.yaml": {"R7-hand-300N"}}
+# so the run stops not_judged with every other tile of the last version green. R7-hand: the grip's movement
+# with the frame has no hand calculation; R7-foot: the pedal on a rail strut, the ladder's twist is not in the
+# hand calculation (R7_PLAN expected_mismatch in hiraku/catalog/builders/load_path.py). The N15 plan's last
+# version has no red (tests/agent/test_scene_n15.py ENDED_CASES).
+_R7_ENDED = {"R7-hand-300N", "R7-foot-500N"}
+ENDED = {"offroad-4w.yaml": _R7_ENDED, "offroad-4w-n15.yaml": _R7_ENDED}
 # requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
-# the red's modules, so the run stops not_judged and says the lower stage's red is left
-BEHIND_RED = {"offroad-4w-n15.yaml"}
+# the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
+BEHIND_RED: set[str] = set()
 LOWER_RED = "低い段の赤が残るので判定していない"  # what the stop reason says then (docs/contract.md, HK5)
-# Subprocess timeout of one scripted run. The video run alone takes about 680 s (600 s
-# erred with TimeoutExpired); this stays below qa.run_tests' 1800 s per-class timeout.
-RUN_TIMEOUT_S = 1200
+# Subprocess timeout of one scripted run. The video run alone takes about 2060 s since its plan
+# has five versions (11/5, alone on Windows; it was about 680 s with two); this stays below
+# qa.run_tests' 3600 s per-class timeout.
+RUN_TIMEOUT_S = 3000
 DEMO_DESIGN = ROOT / "data" / "designs" / "offroad-4w-v1.json"
 
 

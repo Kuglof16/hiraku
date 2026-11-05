@@ -22,6 +22,10 @@ const MODULE_COLORS = {
 export const OUTSIDE_COLOR = "#e0201a"; // a part outside its module's space
 
 export function moduleColor(m) {
+  return readable(petModuleColor(m));
+}
+
+function petModuleColor(m) {
   const roles = globalThis.window?.HirakuPets?.ROLES;
   const row = Array.isArray(roles) ? roles.find((r) => r.module === m && r.color) : null;
   if (row) return row.color;
@@ -32,7 +36,28 @@ export function moduleColor(m) {
   return MODULE_COLORS[m] ?? "#9a948a";
 }
 
-// "前のばねの固さ 25 → 30 N/mm" for each changed variable (before: the base design's value),
+// A colour too dark to tell apart on the 3D's shaded parts (relative luminance under MIN_LUMINANCE,
+// WCAG's formula) is mixed toward white, a step at a time, until it reaches it (hue kept, so a dark
+// red does not turn into the bright red of OUTSIDE_COLOR). Screen choice: the pet keeps its own
+// colour; the 3D and the legend use this one. Others as they are.
+export const MIN_LUMINANCE = 0.1;
+const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+export function luminance(hex) {
+  const n = parseInt(String(hex).slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => lin(x / 255));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+export function readable(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(hex)) || luminance(hex) >= MIN_LUMINANCE) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const mix = (t) => "#" + rgb.map((v) => Math.round(v + (255 - v) * t).toString(16).padStart(2, "0")).join("");
+  let t = 0;
+  while (t < 1 && luminance(mix(t)) < MIN_LUMINANCE) t += 0.02;
+  return mix(t);
+}
+
+// "前のばねの硬さ 25 → 30 N/mm" for each changed variable (before: the base design's value),
 // "part_mounts を brackets に" for each choice.
 export function changeWords(chg, base) {
   const out = [];
@@ -98,7 +123,7 @@ export function roundCardHtml(s, playhead) {
   );
 }
 
-// The grid head's line for a version built from proposals: "版 1 → 2: 足まわり 前のばねの固さ 25 → 30・…".
+// The grid head's line for a version built from proposals: "版 1 → 2: 足まわり 前のばねの硬さ 25 → 30・…".
 export function builtLine(s, v) {
   const d = s.designs[v];
   const list = d?.module_changes ?? [];

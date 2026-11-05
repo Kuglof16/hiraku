@@ -13,8 +13,10 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
 | `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。全部の試験は PC で 1 つずつ回す: 始める前に PC 全体の鍵 (システムの一時フォルダの `hiraku-run-tests/suite.lock`。プロセスが終われば外れる) を取り、ほかが持っている間は「waiting for <pid> (<worktree>, since hh:mm)」と出して待つ。鍵を持っている間は CPU の数 − 4 (8 以上) のプロセスで回す。急ぐときだけ `--no-wait` (待たずに 8 プロセスで回し、重なりを「warning: another qa.run_tests is running on this PC」で知らせる) |
 | `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う。`run_tests` の試験のプロセスと台本の運転には、BLAS のスレッドを 1 本にして渡す (`OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`、もう決めてあればそのまま)。numpy と scipy の OpenBLAS は、使うかもしれないスレッドの数だけメモリを先に取るので、たくさん同時に回すと PC のメモリが尽きる |
+| `slot.py` | 手元の PC で重い仕事 (本物の運転、動画の書き出し、K2 の収束の計測、比べる仕事) を回す入口: `python -m qa.slot <用途> -- <コマンド>`。`run_tests` と同じ PC 全体の鍵を取り、試験一式やほかの重い仕事が持っている間は「waiting for <pid> (<用途>, <worktree>, since hh:mm)」と出して待つ。コマンドが終わっても、失敗しても、Ctrl+C で取り消しても (コマンドが始めたプロセスごと止める) 鍵は外れる。`--no-wait` は、鍵が取られていればコマンドを回さずに終わる (終了コード 3) |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
 | `shared_runs.py` | 遅い試験の台本の運転を、要件ファイルとコードの版ごとに 1 回だけ作り、それを読むクラスで使い回す (下の「走らせ方」) |
+| `numba_cache.py` | numba の `@njit(cache=True)` を、いくつものプロセスが同時に初めて呼んだとき、cache (`__pycache__` の `.nbi`・`.nbc`) の書き込みがぶつからないかと、機械語に直す最初の呼び出しの秒を見る (`python -m qa.numba_cache --procs 12`)。1 回目は直し、2 回目は cache を読む。どちらも、落ちたプロセス・違う結果・cache の注意を数える。numba が無ければ何もしない |
 | `remote_suite.py` | 速い一式・ブラウザ・遅い一式を順に回し、回った数・OK/FAILED・秒を 1 つの要約 (JSON) にする。試験だけをする機械 (Linux など) のため |
 
 ## 走らせ方
@@ -52,7 +54,7 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 
 重い試験は、main に入れる前に毎回回す `python -m unittest` には入れない。毎回回す `test_real_runs` は、動画用の要件の台本の運転 1 本だけ (記録が契約と hooks に合うか、終わり方)。`HIRAKU_SLOW_TESTS=1` のときだけ、次も回す:
 
-- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 1200 秒で、かかった秒数を標準エラーに 1 行出す
+- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 3000 秒 (動画の要件は 5 つの版で単独約 2060 秒)、1 クラスの時間切れは 3600 秒で、かかった秒数を標準エラーに 1 行出す
 - 動画用の要件をもう 1 回回して、バイトで比べる。2 回目は 1 回目と同時に回す (`ScriptedRun_offroad_4w_video` の中で 2 つのスレッド)。なので、そのクラスも運転 1 本ぶんの時間で終わる
 - `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く。使える設計の型を持つツール (`applies_to`) はその型の設計で解き、自分でメッシュを作るツール (`make_mesh`) にはそのメッシュ (`mesher` はツールの名前) を渡し、field はそのメッシュを名指す。`make_mesh` の無いツールは部材ごとの値だけ。ツールごとに 1 つのクラス (`MeshFieldRecord_<ツール名>`、例 `MeshFieldRecord_frame_shell`) なので、これも並べて回す。`HIRAKU_SLOW_TESTS` が無いときは `MeshFieldRecord` が 1 つだけあって、skip の理由を出す
 
@@ -75,6 +77,10 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 `qa.run_tests` のほかの決まり:
 
 - 前の回に 60 秒以上かかったクラスは、メソッドごとに別のプロセスで回す。ただし、メソッドのあいだで何も共有しないクラスだけ (`setUpClass`・`tearDownClass`・`setUpModule` が無い)。`--no-split` にすると、クラスのまま回す
+- メモリの重いクラスは、同時に `--max-heavy` (既定 2) 個まで。前の回の山が 4 GB 以上のクラスを重いとみる
+  - まだ測っていないときは、11/5 に測った 4 つ (RearLinkRevision・SpaceFrameConvergence・SpaceFrameK2・MeshFlow、7.6〜8.7 GB) を重いとみる
+  - 山はプロセスごとに `runs/test_memory.json` に残る。Windows では、台本の運転の別のプロセスの分は入らない
+  - 重いクラスがほかに走っているときは、空きが「そのクラスの山 + 4 GB」になるまで待つ (`waiting for memory: ...`)。待つ間は、後ろの軽いクラスを先に回す
 - `--only tests.web` のように付けると、名前がその前置きで始まるクラスだけを回す (何度でも付けられる)
 
 ### Linux (Ubuntu 24.04、Python 3.12) で回すとき

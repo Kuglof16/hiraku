@@ -423,5 +423,5 @@ requirements:
 tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, R8, R7, H1, H3, H6, H7, H5]
 # No cases past the limit: every tile of the last version is meant to be green.
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 5  # HK5: one revision per red stage (layout, the opening, load path, motor, joints)
+round_limit: 5  # HK5: one revision per red stage (layout, the opening, motor, joints; one spare)
 cost_limit_usd: 2.0

@@ -16,9 +16,10 @@ import json
 import os
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from hiraku import contract
 from hiraku.contract import layout
@@ -98,6 +99,10 @@ class RunStore:
         self._t0_mono = mono()
         self._t_offset = 0.0  # t of the last event when reopened
         self._counters = {kind: 0 for kind in ID_PREFIX}
+        # inside reading(): record files already read, by path (None outside). Emptied on every event, since every
+        # write of this store emits one
+        self._read_cache: dict[Path, Any] | None = None
+        self._reading_depth = 0
 
     # ------------------------------------------------------------------ create / open
 
@@ -161,6 +166,8 @@ class RunStore:
              design_version: int | None = None, text: str | None = None, data: Record | None = None) -> Record:
         """Append one event to events.jsonl (validated) and return it."""
         with self._lock:
+            if self._read_cache:
+                self._read_cache.clear()  # the event goes with a write (or a hook's answer): read the files again
             if kind == "run.started":
                 # t counts from run.started, so its own t is exactly 0
                 self._t0_mono, self._t_offset = self._mono(), 0.0
@@ -341,6 +348,31 @@ class RunStore:
                       text=text, data=record)
             return record
 
+    @contextmanager
+    def reading(self) -> Iterator[None]:
+        """A stretch of reads that change nothing (the hooks' and the rules' checks): each record file is read
+        once, and records(), find() and get() hand back the same objects for it, so the caller must not change
+        them. The store's lock is held throughout (tools run in threads); an event (every write emits one)
+        empties what was read. Nested calls share the outer stretch."""
+        with self._lock:
+            self._reading_depth += 1
+            if self._reading_depth == 1:
+                self._read_cache = {}
+            try:
+                yield
+            finally:
+                self._reading_depth -= 1
+                if self._reading_depth == 0:
+                    self._read_cache = None
+
+    def _read_record(self, path: Path) -> Any:
+        cache = self._read_cache
+        if cache is None:
+            return _read_json(path)
+        if path not in cache:
+            cache[path] = _read_json(path)
+        return cache[path]
+
     def records(self, kind: str, design_version: int | None = None) -> list[Record]:
         """Records of one kind, in id order, for one version or for the whole run."""
         with self._lock:  # tools run in threads (the MCP servers): no read while another thread replaces a file
@@ -349,7 +381,7 @@ class RunStore:
             for v in versions:
                 folder = layout.version_dir(self.path, v) / layout.RECORD_DIRS[kind]
                 if folder.is_dir():
-                    out.extend(_read_json(p) for p in sorted(folder.glob("*.json")))
+                    out.extend(self._read_record(p) for p in sorted(folder.glob("*.json")))
             return out
 
     def find(self, kind: str, record_id: str) -> tuple[int, Record] | None:
@@ -357,8 +389,8 @@ class RunStore:
         with self._lock:
             for v in sorted(self._project.get("design_versions") or []):
                 p = layout.record_path(self.path, v, kind, record_id)
-                if p.exists():
-                    return v, _read_json(p)
+                if (self._read_cache is not None and p in self._read_cache) or p.exists():
+                    return v, self._read_record(p)
             return None
 
     def get(self, kind: str, record_id: str) -> Record | None:

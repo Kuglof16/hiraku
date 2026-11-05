@@ -83,12 +83,14 @@ def column_height_to_clear_knees(design, angle):
 class DefaultsTest(unittest.TestCase):
     def test_v1_keeps_its_parts(self):
         """The four variables at their defaults build v1; a v1 saved without them rebuilds to the same parts."""
-        self.assertEqual(ladder_4w.build(), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, ladder_4w.build(), V1)
         old = json.loads(json.dumps(V1))
         for k in NEW:
             del old["variables"][k]
         again = designgen.regenerate(old, {})
-        self.assertEqual(again, V1)
+        assert_same_design(self, again, V1)
         self.assertEqual({k: V1["variables"][k]["value"] for k in NEW}, {k: VAR[k].default for k in NEW})
 
     def test_defaults_are_the_earlier_placement(self):

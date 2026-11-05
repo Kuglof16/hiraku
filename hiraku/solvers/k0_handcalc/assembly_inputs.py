@@ -309,7 +309,7 @@ def _all_boxes(design: dict) -> dict[str, tuple[np.ndarray, np.ndarray]]:
 
 
 JOINT_GAP_MM = 2.0
-NOT_TOUCHING_VIA = ("wire", "hose")
+NOT_TOUCHING_VIA = ("wire", "hose", "strap")  # strap: a belt's webbing to its seat
 
 
 def joint_inputs(design: dict) -> dict:

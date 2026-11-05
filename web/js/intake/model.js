@@ -33,6 +33,7 @@ export function emptyModel() {
     domainsDraft: false, // the picks on screen are the code's candidates (from the product's properties), not Claude's choice
     litAt: new Map(), // domain -> t (s) of the event that lit it, for a glow that follows the playback time
     finished: false,
+    runEnd: null,
   };
 }
 
@@ -81,6 +82,7 @@ export function apply(m, e) {
       break;
     case "run.finished":
       m.finished = true;
+      m.runEnd = { status: d.status || "", stop_code: d.stop_code || "", stop_reason: d.stop_reason || "" }; // questions still open now will never be read
       break;
     case "hearing.asked":
       {
@@ -152,7 +154,7 @@ export function hearingRows(m) {
   const answers = new Map((m.hearing.answered?.answers || []).map((a) => [a.key, a]));
   return asked.map((q) => {
     const a = answers.get(q.req_key);
-    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : "asking" };
+    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
 }
 
@@ -162,7 +164,7 @@ export function ruleRows(m) {
   const answers = new Map((m.hearing.answered?.rule_answers || []).map((a) => [a.rule_id, a]));
   return asked.map((q) => {
     const a = answers.get(q.rule_id) || null;
-    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : "asking" };
+    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
 }
 
@@ -251,7 +253,11 @@ export function ruleNeeds(rule, facts = {}) {
                    label: facts[n]?.label || (n.startsWith("req_") ? `要件 ${n.slice(4)} の数値` : "設計の変数の値") }));
 }
 
+/** Units as a person reads them (the requirement keeps deg, degC, s: those are for the code). */
+export const UNIT_JA = { deg: "度", degC: "℃", s: "秒", min: "分", h: "時間" };
+
 export function showValue(v, unit) {
-  if (typeof v === "number") return unit && unit !== "1" ? `${+v.toFixed(4)} ${unit}` : `${+v.toFixed(4)}`;
-  return unit && unit !== "1" ? `${v} ${unit}` : String(v);
+  const u = unit && unit !== "1" ? UNIT_JA[unit] || unit : "";
+  const body = typeof v === "number" ? +v.toFixed(4) : v;
+  return u ? `${body} ${u}` : String(body);
 }

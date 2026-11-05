@@ -31,7 +31,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 4,
+    "round_limit": 5,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -337,6 +337,113 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
+     },
+     {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "value": 450,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked"
+     },
+     {
+      "key": "Q94",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "value": 300,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "value": 985.2,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface"
+     },
+     {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "value": 1250,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "value": 550,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "value": 300,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "value": 150,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "value": 150,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "value": "はい",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found"
+     },
+     {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "value": 1600,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)"
+     },
+     {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "value": 16,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+     },
+     {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "value": 38,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      }
     ],
     "domain_picks": [],
@@ -452,7 +559,8 @@ export const DEMOS = {
      "H1",
      "H3",
      "H5",
-     "H6"
+     "H6",
+     "H7"
     ]
    }
   },
@@ -1162,62 +1270,9 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 7 件、既定値 14 件",
+   "text": "質問 7 件、答え 7 件、既定値 2 件",
    "data": {
     "answers": [
-     {
-      "key": "Q44",
-      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 300,
-      "unit": "mm"
-     },
-     {
-      "key": "Q45",
-      "name": "足を置く面の幅の下限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 150,
-      "unit": "mm"
-     },
-     {
-      "key": "Q46",
-      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 150,
-      "unit": "mm"
-     },
-     {
-      "key": "Q47",
-      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
-      "value": "はい"
-     },
-     {
-      "key": "Q48",
-      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
-      "value": 1600,
-      "unit": "mm"
-     },
-     {
-      "key": "Q49",
-      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 16,
-      "unit": "mm"
-     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -1234,60 +1289,6 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
-     },
-     {
-      "key": "Q89",
-      "name": "手でつかむ所の太さの上限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 38,
-      "unit": "mm"
-     },
-     {
-      "key": "Q93",
-      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
-      "value": 450,
-      "unit": "mm"
-     },
-     {
-      "key": "Q94",
-      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 300,
-      "unit": "mm"
-     },
-     {
-      "key": "Q95",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
-      "value": 985.2,
-      "unit": "mm"
-     },
-     {
-      "key": "Q96",
-      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 1250,
-      "unit": "mm"
-     },
-     {
-      "key": "Q97",
-      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 550,
-      "unit": "mm"
      },
      {
       "key": "Q03",
@@ -2148,24 +2149,14 @@ export const DEMOS = {
       "system": "battery",
       "connects_to": [
        {
-        "to": "LS1",
+        "to": "floor",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         0.0,
+         430.0
+        ]
        },
        {
         "to": "main_switch",
@@ -2198,14 +2189,19 @@ export const DEMOS = {
       "system": "battery",
       "connects_to": [
        {
-        "to": "LS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "controller",
         "via": "wire",
         "carries": "power"
+       },
+       {
+        "to": "fit_main_switch_rail_L_AS1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -580.0,
+         230.0,
+         340.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2234,19 +2230,24 @@ export const DEMOS = {
       "system": "drive",
       "connects_to": [
        {
-        "to": "LB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "reducer",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -1940.0,
+         0.0,
+         268.0
+        ]
+       },
+       {
+        "to": "fit_motor_cross_B",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1940.0,
+         0.0,
+         378.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2275,24 +2276,34 @@ export const DEMOS = {
       "system": "drive",
       "connects_to": [
        {
-        "to": "LB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "driveshaft_RL",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         196.0,
+         283.1
+        ]
        },
        {
         "to": "driveshaft_RR",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         -196.0,
+         283.1
+        ]
+       },
+       {
+        "to": "fit_reducer_cross_B",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         350.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2324,7 +2335,12 @@ export const DEMOS = {
        {
         "to": "wheel_RL",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2356,7 +2372,12 @@ export const DEMOS = {
        {
         "to": "wheel_RR",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2385,19 +2406,19 @@ export const DEMOS = {
       "system": "control",
       "connects_to": [
        {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "motor",
         "via": "wire",
         "carries": "power"
+       },
+       {
+        "to": "fit_controller_cross_S2",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1320.0,
+         0.0,
+         340.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2426,19 +2447,19 @@ export const DEMOS = {
       "system": "electrical",
       "connects_to": [
        {
-        "to": "LS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "battery",
         "via": "wire",
         "carries": "power"
+       },
+       {
+        "to": "fit_aux_cross_S1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         350.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -2471,24 +2492,34 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LAp2",
+        "to": "fit_floor_front_rail_L_AS1",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         350.0,
+         430.0
+        ]
        },
        {
-        "to": "RAp2",
+        "to": "fit_floor_front_rail_R_AS1",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         -350.0,
+         430.0
+        ]
        },
        {
-        "to": "LS1",
+        "to": "fit_floor_front_cross_S1",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         430.0
+        ]
        }
       ],
       "module": "body"
@@ -2522,24 +2553,19 @@ export const DEMOS = {
       "system": "control",
       "connects_to": [
        {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "controller",
         "via": "wire",
         "carries": "signal"
        },
        {
-        "to": "floor_front",
+        "to": "fit_pedal_accel_tower_post_RA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -339.4,
+         -350.0,
+         499.7
+        ]
        }
       ],
       "module": "steering"
@@ -2573,24 +2599,29 @@ export const DEMOS = {
       "system": "brake",
       "connects_to": [
        {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "brake_master",
+        "to": "pushrod_brake",
         "via": "pin",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -339.4,
+         -220.0,
+         499.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
-        "to": "floor_front",
+        "to": "fit_pedal_brake_tower_post_RA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -339.4,
+         -260.0,
+         499.7
+        ]
        }
       ],
       "module": "steering"
@@ -2601,9 +2632,9 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -332.29999999999995,
+        -210.0,
         -220.0,
-        697.7183687566543
+        492.0360923856119
        ],
        "size_mm": [
         120.0,
@@ -2618,16 +2649,6 @@ export const DEMOS = {
       ],
       "system": "brake",
       "connects_to": [
-       {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
        {
         "to": "caliper_FL",
         "via": "hose",
@@ -2651,7 +2672,12 @@ export const DEMOS = {
        {
         "to": "bulkhead",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -270.0,
+         -185.0,
+         527.0
+        ]
        }
       ],
       "module": "steering"
@@ -2684,24 +2710,14 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LS1",
+        "to": "floor_front",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         431.6
+        ]
        }
       ],
       "module": "body"
@@ -2736,34 +2752,44 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LS2",
+        "to": "fit_deck_cross_S2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1470.0,
+         0.0,
+         430.0
+        ]
        },
        {
-        "to": "RS2",
+        "to": "fit_deck_cross_B",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         430.0
+        ]
        },
        {
-        "to": "LB",
+        "to": "fit_deck_rail_L_BE",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         241.8,
+         430.0
+        ]
        },
        {
-        "to": "RB",
+        "to": "fit_deck_rail_R_BE",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LE",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RE",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         -241.8,
+         430.0
+        ]
        }
       ],
       "module": "body"
@@ -2796,24 +2822,34 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LF",
+        "to": "fit_front_body_cross_F",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         400.0,
+         0.0,
+         430.0
+        ]
        },
        {
-        "to": "RF",
+        "to": "fit_front_body_tower_post_LA1",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         241.8,
+         491.5
+        ]
        },
        {
-        "to": "LAp1",
+        "to": "fit_front_body_tower_post_RA1",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RAp1",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         -241.8,
+         491.5
+        ]
        }
       ],
       "module": "body"
@@ -2848,37 +2884,47 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LAt2",
+        "to": "tower_post_LA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         350.0,
+         491.5
+        ]
        },
        {
-        "to": "LDT",
+        "to": "dash_post_L",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         350.0,
+         716.0
+        ]
        },
        {
-        "to": "RAt2",
+        "to": "tower_post_RA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         -350.0,
+         491.5
+        ]
        },
        {
-        "to": "RDT",
+        "to": "dash_post_R",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         -350.0,
+         716.0
+        ]
        }
       ],
-      "module": "body"
+      "module": "steering"
      },
      {
       "id": "steering_wheel",
@@ -2909,19 +2955,24 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RDT",
-        "via": "bolt",
-        "carries": "load"
+        "to": "steering_column",
+        "via": "spline",
+        "carries": "steer",
+        "at_mm": [
+         -703.6,
+         -300.0,
+         1177.1
+        ]
        },
        {
         "to": "steering_column",
         "via": "spline",
-        "carries": "steer"
+        "carries": "load",
+        "at_mm": [
+         -703.6,
+         -300.0,
+         1177.1
+        ]
        }
       ],
       "module": "steering"
@@ -2955,24 +3006,39 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "steering_shaft",
         "via": "pin",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -294.9,
+         749.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
-        "to": "dash_cross",
+        "to": "bracket_column",
         "via": "bolt",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -259.8,
+         -300.0,
+         841.4
+        ]
+       },
+       {
+        "to": "bracket_column",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -259.8,
+         -300.0,
+         841.4
+        ]
        }
       ],
       "module": "steering"
@@ -3006,19 +3072,24 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RDT",
-        "via": "bolt",
-        "carries": "load"
+        "to": "steering_rack",
+        "via": "spline",
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -158.0,
+         278.3
+        ]
        },
        {
         "to": "steering_rack",
         "via": "spline",
-        "carries": "steer"
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -158.0,
+         278.3
+        ]
        }
       ],
       "module": "steering"
@@ -3047,24 +3118,54 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LAu2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RAu2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "tie_rod_FL",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         251.3,
+         279.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
         "to": "tie_rod_FR",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -251.3,
+         279.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
+       },
+       {
+        "to": "bracket_tie_FL",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         250.0,
+         286.3
+        ]
+       },
+       {
+        "to": "bracket_tie_FR",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -250.0,
+         286.3
+        ]
        }
       ],
       "module": "steering"
@@ -3096,7 +3197,17 @@ export const DEMOS = {
        {
         "to": "knuckle_FL",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         1.1426142527026246e-16,
+         0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "steering"
@@ -3128,7 +3239,17 @@ export const DEMOS = {
        {
         "to": "knuckle_FR",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         1.1426142527026246e-16,
+         -0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "steering"
@@ -3157,14 +3278,14 @@ export const DEMOS = {
       "system": "seat",
       "connects_to": [
        {
-        "to": "RS1",
+        "to": "floor",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         -50.0,
+         433.2
+        ]
        }
       ],
       "module": "occupant"
@@ -3192,19 +3313,14 @@ export const DEMOS = {
       "system": "restraint",
       "connects_to": [
        {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "seat_R",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "cross_S2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -530.0,
+         563.2
+        ]
        }
       ],
       "module": "occupant"
@@ -3233,14 +3349,14 @@ export const DEMOS = {
       "system": "seat",
       "connects_to": [
        {
-        "to": "LS1",
+        "to": "floor",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         50.0,
+         433.2
+        ]
        }
       ],
       "module": "occupant"
@@ -3268,19 +3384,14 @@ export const DEMOS = {
       "system": "restraint",
       "connects_to": [
        {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "seat_L",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "cross_S2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         530.0,
+         563.2
+        ]
        }
       ],
       "module": "occupant"
@@ -3311,7 +3422,12 @@ export const DEMOS = {
        {
         "to": "seat_R",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         -300.0,
+         693.2
+        ]
        }
       ],
       "module": "occupant"
@@ -3342,7 +3458,12 @@ export const DEMOS = {
        {
         "to": "seat_L",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         300.0,
+         693.2
+        ]
        }
       ],
       "module": "occupant"
@@ -3377,7 +3498,12 @@ export const DEMOS = {
        {
         "to": "deck",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1945.0,
+         0.0,
+         433.2
+        ]
        }
       ],
       "module": "body"
@@ -3408,7 +3534,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1172.1,
+         -300.0,
+         1407.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3437,9 +3573,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.neck",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1233.5,
+         -300.0,
+         1426.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3475,7 +3621,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         -300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3509,9 +3665,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.thigh_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         -208.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3547,7 +3713,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1118.6,
+         -153.7,
+         1061.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3581,9 +3757,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.arm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1069.0,
+         -104.9,
+         1072.1
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3617,9 +3803,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.forearm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -798.2,
+         -120.5,
+         1151.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3653,9 +3849,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.shank_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         -208.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3691,7 +3897,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         -300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3725,9 +3941,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.thigh_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         -392.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3763,7 +3989,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1118.6,
+         -446.3,
+         1061.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3797,9 +4033,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.arm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1069.0,
+         -495.1,
+         1072.1
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3833,9 +4079,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.forearm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -798.2,
+         -479.5,
+         1151.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3869,9 +4125,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.shank_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         -392.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3902,7 +4168,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1172.1,
+         300.0,
+         1407.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3931,9 +4207,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.neck",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1233.5,
+         300.0,
+         1426.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -3969,7 +4255,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4003,9 +4299,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.thigh_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         392.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4041,7 +4347,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1117.6,
+         429.4,
+         1050.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4075,9 +4391,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.arm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1134.0,
+         486.4,
+         1061.5
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4111,9 +4437,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.forearm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -828.7,
+         412.4,
+         999.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4147,9 +4483,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.shank_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         392.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4185,7 +4531,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4219,9 +4575,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.thigh_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         208.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4257,7 +4623,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1117.6,
+         170.6,
+         1050.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4291,9 +4667,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.arm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1134.0,
+         113.6,
+         1061.5
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4327,9 +4713,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.forearm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -828.7,
+         187.6,
+         999.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4363,9 +4759,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.shank_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         208.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -4392,74 +4798,47 @@ export const DEMOS = {
        {
         "to": "knuckle_FL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
         "to": "FL",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "FL",
         "via": "rest",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "FL",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_FL",
-      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        0.0,
-        355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 4.0,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "LAl1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "LAl2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FL1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FL2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "LAd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "FL",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         0.0,
+         550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4486,74 +4865,47 @@ export const DEMOS = {
        {
         "to": "knuckle_FR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         -1.0,
+         0.0
+        ]
        },
        {
         "to": "FR",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "FR",
         "via": "rest",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "FR",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_FR",
-      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        0.0,
-        -355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 4.0,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "RAl1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RAl2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FR1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FR2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RAd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "FR",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         0.0,
+         -550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4580,74 +4932,47 @@ export const DEMOS = {
        {
         "to": "knuckle_RL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
         "to": "RL",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "RL",
         "via": "rest",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "RL",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_RL",
-      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        -2020.0,
-        355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 3.1074002113230854,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "bracket_lca_RL1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_lca_RL2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RL1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RL2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "LBd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RL",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4674,74 +4999,47 @@ export const DEMOS = {
        {
         "to": "knuckle_RR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         -1.0,
+         0.0
+        ]
        },
        {
         "to": "RR",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "RR",
         "via": "rest",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "RR",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_RR",
-      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        -2020.0,
-        -355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 3.1074002113230854,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "bracket_lca_RR1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_lca_RR2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RR1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RR2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RBd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RR",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4766,14 +5064,49 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_FL",
+        "to": "bj_lower_FL",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_FL",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
        },
        {
         "to": "wheel_FL",
         "via": "bolt",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4798,14 +5131,49 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_FR",
+        "to": "bj_lower_FR",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_FR",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
        },
        {
         "to": "wheel_FR",
         "via": "bolt",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         -510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         -1.0,
+         0.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4830,9 +5198,34 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_RL",
+        "to": "bj_lower_RL",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_RL",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
        }
       ],
       "module": "suspension"
@@ -4864,12 +5257,32 @@ export const DEMOS = {
        {
         "to": "knuckle_RL",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         0.0,
+         0.999640377442261,
+         0.02681633433364885
+        ]
        },
        {
         "to": "bracket_lca_RL2",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         265.0,
+         271.4
+        ],
+        "axis": [
+         0.0,
+         0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "suspension"
@@ -4894,9 +5307,34 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_RR",
+        "to": "bj_lower_RR",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_RR",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
        }
       ],
       "module": "suspension"
@@ -4928,12 +5366,32 @@ export const DEMOS = {
        {
         "to": "knuckle_RR",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         0.0,
+         -0.999640377442261,
+         0.02681633433364885
+        ]
        },
        {
         "to": "bracket_lca_RR2",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         -265.0,
+         271.4
+        ],
+        "axis": [
+         0.0,
+         -0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "suspension"
@@ -4960,12 +5418,22 @@ export const DEMOS = {
        {
         "to": "knuckle_FL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -80.0,
+         475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_FL",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -80.0,
+         515.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -4992,12 +5460,22 @@ export const DEMOS = {
        {
         "to": "knuckle_FR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -80.0,
+         -475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_FR",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -80.0,
+         -515.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -5024,12 +5502,22 @@ export const DEMOS = {
        {
         "to": "knuckle_RL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2100.0,
+         475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_RL",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -2100.0,
+         515.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -5056,12 +5544,1426 @@ export const DEMOS = {
        {
         "to": "knuckle_RR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2100.0,
+         -475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_RR",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -2100.0,
+         -515.0,
+         300.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FL_f",
+      "name": "前左の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        60.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FL_r",
+      "name": "前左の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -60.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FL_x",
+      "name": "前左の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        0.0,
+        401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.39999999999998,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345888,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         35.999999999999986,
+         401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -35.999999999999986,
+         401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FL_f",
+      "name": "前左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        50.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         100.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FL_r",
+      "name": "前左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -50.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -100.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_FL",
+      "name": "前左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_FL",
+      "name": "前左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_FL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_FL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_FL",
+      "name": "前左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        0.0,
+        415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        90.0
+       ]
+      },
+      "mass_kg": 2.2805447189759964,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_FL",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_FL_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FR_f",
+      "name": "前右の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        60.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FR_r",
+      "name": "前右の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -60.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FR_x",
+      "name": "前右の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        0.0,
+        -401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.39999999999998,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345888,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         35.999999999999986,
+         -401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -35.999999999999986,
+         -401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FR_f",
+      "name": "前右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        50.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         100.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FR_r",
+      "name": "前右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -50.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -100.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_FR",
+      "name": "前右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        -490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_FR",
+      "name": "前右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        -460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_FR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_FR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_FR",
+      "name": "前右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        0.0,
+        -415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        -90.0
+       ]
+      },
+      "mass_kg": 2.2805447189759964,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_FR",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_FR_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RL_f",
+      "name": "後左の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1960.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1900.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RL_r",
+      "name": "後左の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RL_x",
+      "name": "後左の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.4,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345891,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1984.0,
+         401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2056.0,
+         401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RL_f",
+      "name": "後左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1970.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1920.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RL_r",
+      "name": "後左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2070.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2120.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_RL",
+      "name": "後左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_RL",
+      "name": "後左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_RL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_RL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_RL",
+      "name": "後左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        90.0
+       ]
+      },
+      "mass_kg": 1.3879449302990818,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_RL",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_RL_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RR_f",
+      "name": "後右の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1960.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1900.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RR_r",
+      "name": "後右の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RR_x",
+      "name": "後右の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.4,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345891,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1984.0,
+         -401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2056.0,
+         -401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RR_f",
+      "name": "後右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1970.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1920.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RR_r",
+      "name": "後右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2070.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2120.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_RR",
+      "name": "後右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_RR",
+      "name": "後右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_RR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_RR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_RR",
+      "name": "後右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        -90.0
+       ]
+      },
+      "mass_kg": 1.3879449302990818,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_RR",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_RR_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
        }
       ],
       "module": "suspension"
@@ -5089,9 +6991,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LAu1",
+        "to": "rail_L_LAu1_LA",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         75.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5119,9 +7026,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LAu2",
+        "to": "rail_L_LA_LAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -75.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5149,9 +7061,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RAu1",
+        "to": "rail_R_RAu1_RA",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         75.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5179,9 +7096,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RAu2",
+        "to": "rail_R_RA_RAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -75.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5209,9 +7131,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1875.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5239,9 +7166,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5269,9 +7201,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1895.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5299,9 +7236,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2145.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5329,9 +7271,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1875.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5359,9 +7306,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5389,9 +7341,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1895.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5419,9 +7376,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2145.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -5449,9 +7411,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LAu2",
+        "to": "rail_L_LA_LAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -95.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5479,9 +7446,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RAu2",
+        "to": "rail_R_RA_RAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -95.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5509,9 +7481,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5539,9 +7516,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -5570,17 +7552,27 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LDT",
+        "to": "dash_cross",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -285.0,
+         -265.0,
+         829.1
+        ]
        },
        {
-        "to": "RDT",
+        "to": "dash_post_R",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -285.0,
+         -335.0,
+         829.1
+        ]
        }
       ],
-      "module": "frame"
+      "module": "steering"
      },
      {
       "id": "rollbar",
@@ -5612,15 +7604,1048 @@ export const DEMOS = {
        {
         "to": "LH",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1400.0,
+         350.0,
+         380.0
+        ]
        },
        {
         "to": "RH",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1400.0,
+         -350.0,
+         380.0
+        ]
        }
       ],
       "module": "occupant"
+     },
+     {
+      "id": "bracket_lca_FL1",
+      "name": "前左の下の腕の付け根の金具 (前) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        95.5,
+        196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "LAl1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAl1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_lca_FL2",
+      "name": "前左の下の腕の付け根の金具 (後) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -95.5,
+        196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "LAl2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAl2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_FL",
+      "name": "前左のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        0.0,
+        414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "LAd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_lca_FR1",
+      "name": "前右の下の腕の付け根の金具 (前) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        95.5,
+        -196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "RAl1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAl1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         -196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_lca_FR2",
+      "name": "前右の下の腕の付け根の金具 (後) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -95.5,
+        -196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "RAl2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAl2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_FR",
+      "name": "前右のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        0.0,
+        -414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "RAd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_RL",
+      "name": "後左のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "LBd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LBd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_RR",
+      "name": "後右のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "RBd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RBd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "pushrod_brake",
+      "name": "ブレーキの押し棒",
+      "kind": "pushrod",
+      "box": {
+       "center_mm": [
+        -304.68199399802495,
+        -220.0,
+        495.8881328648239
+       ],
+       "size_mm": [
+        69.79051292353493,
+        10.0,
+        10.0
+       ],
+       "rpy_deg": [
+        0.0,
+        6.337720390910457,
+        0.0
+       ]
+      },
+      "mass_kg": 0.1,
+      "connects_to": [
+       {
+        "to": "brake_master",
+        "via": "pin",
+        "carries": "brake",
+        "at_mm": [
+         -270.0,
+         -220.0,
+         492.5
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
+       }
+      ],
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "brake",
+      "module": "steering"
+     },
+     {
+      "id": "fit_floor_front_rail_L_AS1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LAp2",
+       "LS1"
+      ],
+      "box": {
+       "center_mm": [
+        -527.5,
+        350.0,
+        425.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "rail_L_AS1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         350.0,
+         420.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_floor_front_rail_R_AS1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "box": {
+       "center_mm": [
+        -527.5,
+        -350.0,
+        425.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "rail_R_AS1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         -350.0,
+         420.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_floor_front_cross_S1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS1",
+       "RS1"
+      ],
+      "box": {
+       "center_mm": [
+        -770.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        30.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+       {
+        "to": "cross_S1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         400.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_cross_S2",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "box": {
+       "center_mm": [
+        -1405.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        133.41664064126334,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        12.994616791916505,
+        0.0
+       ]
+      },
+      "mass_kg": 0.11844917258853584,
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.1,
+         0.0,
+         398.7
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_cross_B",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "box": {
+       "center_mm": [
+        -2020.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        30.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+       {
+        "to": "cross_B",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         400.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_rail_L_BE",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "LE"
+      ],
+      "box": {
+       "center_mm": [
+        -2220.0,
+        285.9,
+        425.0
+       ],
+       "size_mm": [
+        88.76508322533134,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        6.468497581602585,
+        90.0
+       ]
+      },
+      "mass_kg": 0.07880689104640207,
+      "connects_to": [
+       {
+        "to": "rail_L_BE",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         329.7,
+         414.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_rail_R_BE",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RB",
+       "RE"
+      ],
+      "box": {
+       "center_mm": [
+        -2220.0,
+        -285.9,
+        425.0
+       ],
+       "size_mm": [
+        88.76508322533134,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        6.468497581602585,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.07880689104640207,
+      "connects_to": [
+       {
+        "to": "rail_R_BE",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         -329.7,
+         414.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_front_body_cross_F",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LF",
+       "RF"
+      ],
+      "box": {
+       "center_mm": [
+        400.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        30.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+       {
+        "to": "cross_F",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         400.0,
+         0.0,
+         400.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_front_body_tower_post_LA1",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LAp1",
+       "LAt1"
+      ],
+      "box": {
+       "center_mm": [
+        285.0,
+        288.4,
+        491.5
+       ],
+       "size_mm": [
+        93.19999999999999,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        90.0
+       ]
+      },
+      "mass_kg": 0.08274427261989711,
+      "connects_to": [
+       {
+        "to": "tower_post_LA1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         335.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_front_body_tower_post_RA1",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp1",
+       "RAt1"
+      ],
+      "box": {
+       "center_mm": [
+        285.0,
+        -288.4,
+        491.5
+       ],
+       "size_mm": [
+        93.19999999999999,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.08274427261989711,
+      "connects_to": [
+       {
+        "to": "tower_post_RA1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         -335.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_main_switch_rail_L_AS1",
+      "name": "電池の主スイッチ (遮断) の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LAp2",
+       "LS1"
+      ],
+      "box": {
+       "center_mm": [
+        -580.0,
+        280.0,
+        340.0
+       ],
+       "size_mm": [
+        100.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        90.0
+       ]
+      },
+      "mass_kg": 0.08878140839044757,
+      "connects_to": [
+       {
+        "to": "rail_L_AS1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -570.0,
+         330.0,
+         350.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_motor_cross_B",
+      "name": "モーター の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "box": {
+       "center_mm": [
+        -1970.0,
+        0.0,
+        378.0
+       ],
+       "size_mm": [
+        60.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        180.0
+       ]
+      },
+      "mass_kg": 0.05326884503426854,
+      "connects_to": [
+       {
+        "to": "cross_B",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2000.0,
+         -0.0,
+         380.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_reducer_cross_B",
+      "name": "減速機と差動 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "box": {
+       "center_mm": [
+        -2020.0,
+        0.0,
+        355.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "cross_B",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         360.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_controller_cross_S2",
+      "name": "モーターの制御器 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "box": {
+       "center_mm": [
+        -1320.0,
+        0.0,
+        350.0
+       ],
+       "size_mm": [
+        20.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.01775628167808951,
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1320.0,
+         0.0,
+         360.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_aux_cross_S1",
+      "name": "配線と 12 V の補機 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS1",
+       "RS1"
+      ],
+      "box": {
+       "center_mm": [
+        -770.0,
+        0.0,
+        355.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "cross_S1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         360.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_pedal_accel_tower_post_RA2",
+      "name": "アクセルのペダル の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp2",
+       "RAt2"
+      ],
+      "box": {
+       "center_mm": [
+        -319.68199399802495,
+        -350.0,
+        499.74017334403584
+       ],
+       "size_mm": [
+        39.36398799604984,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.034947902941539766,
+      "connects_to": [
+       {
+        "to": "tower_post_RA2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -300.0,
+         -350.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_pedal_brake_tower_post_RA2",
+      "name": "ブレーキのペダル の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp2",
+       "RAt2"
+      ],
+      "box": {
+       "center_mm": [
+        -319.68199399802495,
+        -297.5,
+        499.74017334403584
+       ],
+       "size_mm": [
+        84.70255929399747,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -62.30712243716878
+       ]
+      },
+      "mass_kg": 0.07520012508396488,
+      "connects_to": [
+       {
+        "to": "tower_post_RA2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -300.0,
+         -335.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
      }
     ],
     "nodes": [
@@ -6029,7 +9054,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の端から前の塔の前の柱まで)"
      },
      {
       "id": "rail_L_LAp1_LAu1",
@@ -6038,7 +9064,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の塔の前の柱から上の腕の前の付け根の下まで)"
      },
      {
       "id": "rail_L_LAu1_LA",
@@ -6047,7 +9074,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (上の腕の前の付け根の下から前の車軸まで)"
      },
      {
       "id": "rail_L_LA_LAu2",
@@ -6056,7 +9084,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の車軸から上の腕の後ろの付け根の下まで)"
      },
      {
       "id": "rail_L_LAu2_LAp2",
@@ -6065,7 +9094,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (上の腕の後ろの付け根の下から前の塔の後ろの柱まで)"
      },
      {
       "id": "rail_L_AS1",
@@ -6074,7 +9104,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の塔の後ろの柱から座席の前まで)"
      },
      {
       "id": "rail_L_S1S2",
@@ -6083,7 +9114,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (座席の前から座席の後ろまで)"
      },
      {
       "id": "rail_L_S2H",
@@ -6092,7 +9124,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (座席の後ろからロールバーの足まで)"
      },
      {
       "id": "rail_L_HB",
@@ -6101,7 +9134,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (ロールバーの足から後ろの車軸まで)"
      },
      {
       "id": "rail_L_BE",
@@ -6110,7 +9144,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (後ろの車軸から後ろの端まで)"
      },
      {
       "id": "rail_R_FA",
@@ -6119,7 +9154,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の端から前の塔の前の柱まで)"
      },
      {
       "id": "rail_R_RAp1_RAu1",
@@ -6128,7 +9164,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の塔の前の柱から上の腕の前の付け根の下まで)"
      },
      {
       "id": "rail_R_RAu1_RA",
@@ -6137,7 +9174,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (上の腕の前の付け根の下から前の車軸まで)"
      },
      {
       "id": "rail_R_RA_RAu2",
@@ -6146,7 +9184,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の車軸から上の腕の後ろの付け根の下まで)"
      },
      {
       "id": "rail_R_RAu2_RAp2",
@@ -6155,7 +9194,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (上の腕の後ろの付け根の下から前の塔の後ろの柱まで)"
      },
      {
       "id": "rail_R_AS1",
@@ -6164,7 +9204,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の塔の後ろの柱から座席の前まで)"
      },
      {
       "id": "rail_R_S1S2",
@@ -6173,7 +9214,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (座席の前から座席の後ろまで)"
      },
      {
       "id": "rail_R_S2H",
@@ -6182,7 +9224,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (座席の後ろからロールバーの足まで)"
      },
      {
       "id": "rail_R_HB",
@@ -6191,7 +9234,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (ロールバーの足から後ろの車軸まで)"
      },
      {
       "id": "rail_R_BE",
@@ -6200,7 +9244,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (後ろの車軸から後ろの端まで)"
      },
      {
       "id": "cross_F",
@@ -6209,7 +9254,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の端の横の部材"
      },
      {
       "id": "cross_A",
@@ -6218,7 +9264,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の車軸の横の部材"
      },
      {
       "id": "cross_S1",
@@ -6227,7 +9274,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "座席の前の横の部材"
      },
      {
       "id": "cross_S2",
@@ -6236,7 +9284,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "座席の後ろの横の部材"
      },
      {
       "id": "cross_B",
@@ -6245,7 +9294,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろの車軸の横の部材"
      },
      {
       "id": "cross_E",
@@ -6254,7 +9304,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろの端の横の部材"
      },
      {
       "id": "tower_post_LA1",
@@ -6263,7 +9314,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左のサスペンションの塔の柱 (前)"
      },
      {
       "id": "tower_top_LA1",
@@ -6272,7 +9324,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の塔の上の梁 (前の柱から真ん中まで)"
      },
      {
       "id": "tower_post_LA2",
@@ -6281,7 +9334,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左のサスペンションの塔の柱 (後ろ)"
      },
      {
       "id": "tower_top_LA2",
@@ -6290,7 +9344,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の塔の上の梁 (真ん中から後ろの柱まで)"
      },
      {
       "id": "tower_arm_LA",
@@ -6299,7 +9354,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "lower_leg_LA1",
@@ -6308,7 +9364,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の下の脚 (塔の前の柱の足から、下の腕の前の付け根へ)"
      },
      {
       "id": "lower_leg_LA2",
@@ -6317,7 +9374,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の下の脚 (塔の後ろの柱の足から、下の腕の後ろの付け根へ)"
      },
      {
       "id": "tower_post_RA1",
@@ -6326,7 +9384,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右のサスペンションの塔の柱 (前)"
      },
      {
       "id": "tower_top_RA1",
@@ -6335,7 +9394,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の塔の上の梁 (前の柱から真ん中まで)"
      },
      {
       "id": "tower_post_RA2",
@@ -6344,7 +9404,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右のサスペンションの塔の柱 (後ろ)"
      },
      {
       "id": "tower_top_RA2",
@@ -6353,7 +9414,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の塔の上の梁 (真ん中から後ろの柱まで)"
      },
      {
       "id": "tower_arm_RA",
@@ -6362,7 +9424,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "lower_leg_RA1",
@@ -6371,7 +9434,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の下の脚 (塔の前の柱の足から、下の腕の前の付け根へ)"
      },
      {
       "id": "lower_leg_RA2",
@@ -6380,7 +9444,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の下の脚 (塔の後ろの柱の足から、下の腕の後ろの付け根へ)"
      },
      {
       "id": "tower_post_LB",
@@ -6389,7 +9454,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ左のサスペンションの塔の柱"
      },
      {
       "id": "tower_arm_LB",
@@ -6398,7 +9464,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ左の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "tower_post_RB",
@@ -6407,7 +9474,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ右のサスペンションの塔の柱"
      },
      {
       "id": "tower_arm_RB",
@@ -6416,7 +9484,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ右の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "lower_cross_A1",
@@ -6425,7 +9494,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の下の横の部材 (下の腕の前の付け根どうし)"
      },
      {
       "id": "lower_cross_A2",
@@ -6434,7 +9504,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の下の横の部材 (下の腕の後ろの付け根どうし)"
      },
      {
       "id": "dash_post_L",
@@ -6443,7 +9514,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "steering",
+      "name": "ダッシュの左の柱 (前の塔の後ろの柱の上から)"
      },
      {
       "id": "dash_post_R",
@@ -6452,7 +9524,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "steering",
+      "name": "ダッシュの右の柱 (前の塔の後ろの柱の上から)"
      },
      {
       "id": "dash_cross",
@@ -6461,7 +9534,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "steering",
+      "name": "ダッシュの横の部材 (コラムの金具を持つ)"
      },
      {
       "id": "rollbar_foot_L",
@@ -6470,7 +9544,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの左の足 (レールから外へ)"
      },
      {
       "id": "rollbar_post_L",
@@ -6479,7 +9554,8 @@ export const DEMOS = {
       "section": "ct42.7x2.3",
       "material": "stkm13a",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの左の柱"
      },
      {
       "id": "rollbar_foot_R",
@@ -6488,7 +9564,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの右の足 (レールから外へ)"
      },
      {
       "id": "rollbar_post_R",
@@ -6497,7 +9574,8 @@ export const DEMOS = {
       "section": "ct42.7x2.3",
       "material": "stkm13a",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの右の柱"
      },
      {
       "id": "rollbar_top",
@@ -6506,7 +9584,8 @@ export const DEMOS = {
       "section": "ct42.7x2.3",
       "material": "stkm13a",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの上の棒"
      }
     ],
     "sections": {
@@ -6571,6 +9650,7 @@ export const DEMOS = {
       "verified": false
      }
     },
+    "archetype": "ladder_4w",
     "modules": [
      {
       "module_id": "package",
@@ -6779,8 +9859,8 @@ export const DEMOS = {
        {
         "id": "if-023",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LAt2"
@@ -6788,8 +9868,8 @@ export const DEMOS = {
        {
         "id": "if-024",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LDT"
@@ -6797,8 +9877,8 @@ export const DEMOS = {
        {
         "id": "if-025",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RAt2"
@@ -6806,8 +9886,8 @@ export const DEMOS = {
        {
         "id": "if-026",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RDT"
@@ -6819,7 +9899,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LDT"
+        "node": "LAp2"
        },
        {
         "id": "if-028",
@@ -6828,7 +9908,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "RDT"
+        "node": "LAu2"
        },
        {
         "id": "if-029",
@@ -6837,19 +9917,10 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LAu2"
-       },
-       {
-        "id": "if-030",
-        "between": [
-         "frame",
-         "steering"
-        ],
-        "via": "bolt",
         "node": "RAu2"
        },
        {
-        "id": "if-031",
+        "id": "if-030",
         "between": [
          "frame",
          "occupant"
@@ -6858,7 +9929,7 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-032",
+        "id": "if-031",
         "between": [
          "frame",
          "occupant"
@@ -6867,7 +9938,7 @@ export const DEMOS = {
         "node": "RS2"
        },
        {
-        "id": "if-033",
+        "id": "if-032",
         "between": [
          "frame",
          "occupant"
@@ -6876,7 +9947,7 @@ export const DEMOS = {
         "node": "LS1"
        },
        {
-        "id": "if-034",
+        "id": "if-033",
         "between": [
          "frame",
          "occupant"
@@ -6885,7 +9956,7 @@ export const DEMOS = {
         "node": "LS2"
        },
        {
-        "id": "if-035",
+        "id": "if-034",
         "between": [
          "frame",
          "occupant"
@@ -6894,7 +9965,7 @@ export const DEMOS = {
         "node": "LH"
        },
        {
-        "id": "if-036",
+        "id": "if-035",
         "between": [
          "frame",
          "occupant"
@@ -6903,7 +9974,7 @@ export const DEMOS = {
         "node": "LHO"
        },
        {
-        "id": "if-037",
+        "id": "if-036",
         "between": [
          "frame",
          "occupant"
@@ -6912,7 +9983,7 @@ export const DEMOS = {
         "node": "LHT"
        },
        {
-        "id": "if-038",
+        "id": "if-037",
         "between": [
          "frame",
          "occupant"
@@ -6921,7 +9992,7 @@ export const DEMOS = {
         "node": "RH"
        },
        {
-        "id": "if-039",
+        "id": "if-038",
         "between": [
          "frame",
          "occupant"
@@ -6930,13 +10001,26 @@ export const DEMOS = {
         "node": "RHO"
        },
        {
-        "id": "if-040",
+        "id": "if-039",
         "between": [
          "frame",
          "occupant"
         ],
         "via": "bolt",
         "node": "RHT"
+       },
+       {
+        "id": "if-040",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
        },
        {
         "id": "if-041",
@@ -6946,7 +10030,7 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         120.0,
+         -120.0,
          196.0,
          180.0
         ]
@@ -6959,26 +10043,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -120.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-043",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          100.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-044",
+        "id": "if-043",
         "between": [
          "frame",
          "suspension"
@@ -6991,7 +10062,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-045",
+        "id": "if-044",
         "between": [
          "frame",
          "suspension"
@@ -7004,7 +10075,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-046",
+        "id": "if-045",
         "between": [
          "frame",
          "suspension"
@@ -7017,7 +10088,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-047",
+        "id": "if-046",
         "between": [
          "frame",
          "suspension"
@@ -7030,7 +10101,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-048",
+        "id": "if-047",
         "between": [
          "frame",
          "suspension"
@@ -7043,7 +10114,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-049",
+        "id": "if-048",
         "between": [
          "frame",
          "suspension"
@@ -7056,7 +10127,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-050",
+        "id": "if-049",
         "between": [
          "frame",
          "suspension"
@@ -7069,7 +10140,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-051",
+        "id": "if-050",
         "between": [
          "frame",
          "suspension"
@@ -7077,6 +10148,19 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1900.0,
+         196.0,
+         180.0
+        ]
+       },
+       {
+        "id": "if-051",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2140.0,
          196.0,
          180.0
         ]
@@ -7089,26 +10173,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -2140.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-053",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          -1920.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-054",
+        "id": "if-053",
         "between": [
          "frame",
          "suspension"
@@ -7121,7 +10192,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-055",
+        "id": "if-054",
         "between": [
          "frame",
          "suspension"
@@ -7134,7 +10205,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-056",
+        "id": "if-055",
         "between": [
          "frame",
          "suspension"
@@ -7147,7 +10218,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-057",
+        "id": "if-056",
         "between": [
          "frame",
          "suspension"
@@ -7160,7 +10231,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-058",
+        "id": "if-057",
         "between": [
          "frame",
          "suspension"
@@ -7173,7 +10244,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-059",
+        "id": "if-058",
         "between": [
          "frame",
          "suspension"
@@ -7186,7 +10257,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-060",
+        "id": "if-059",
         "between": [
          "frame",
          "suspension"
@@ -7199,7 +10270,59 @@ export const DEMOS = {
         ]
        },
        {
+        "id": "if-060",
+        "between": [
+         "body",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         0.0,
+         380.8
+        ]
+       },
+       {
         "id": "if-061",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -600.0,
+         235.0,
+         320.0
+        ]
+       },
+       {
+        "id": "if-062",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1892.5,
+         0.0,
+         323.0
+        ]
+       },
+       {
+        "id": "if-063",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2020.0,
+         0.0,
+         311.5
+        ]
+       },
+       {
+        "id": "if-064",
         "between": [
          "powertrain",
          "suspension"
@@ -7212,7 +10335,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-062",
+        "id": "if-065",
         "between": [
          "powertrain",
          "suspension"
@@ -7225,7 +10348,72 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-063",
+        "id": "if-066",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1375.0,
+         0.0,
+         325.0
+        ]
+       },
+       {
+        "id": "if-067",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -695.0,
+         0.0,
+         327.5
+        ]
+       },
+       {
+        "id": "if-068",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-069",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         -175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-070",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -655.4444124836293,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-071",
         "between": [
          "powertrain",
          "steering"
@@ -7238,98 +10426,202 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-064",
+        "id": "if-072",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -165.0,
-         461.8180461928059
+         -354.7254072333135,
+         -340.0,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-065",
+        "id": "if-073",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -110.0,
-         461.8180461928059
+         -354.7254072333135,
+         -258.75,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-066",
+        "id": "if-074",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-067",
+        "id": "if-075",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-068",
+        "id": "if-076",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-069",
+        "id": "if-077",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-070",
+        "id": "if-078",
         "between": [
          "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1675.0,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-079",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1982.5,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-080",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-081",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         -142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-082",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         310.0,
+         0.0,
+         492.5
+        ]
+       },
+       {
+        "id": "if-083",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-084",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         -144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-085",
+        "between": [
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -301.72499999999997,
-         -110.0,
-         659.8807736132626
+         -120.0,
+         140.33665774481273,
+         287.49722198053644
         ]
        },
        {
-        "id": "if-071",
+        "id": "if-086",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         -140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-087",
         "between": [
          "steering",
          "suspension"
@@ -7342,7 +10634,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-072",
+        "id": "if-088",
         "between": [
          "steering",
          "suspension"
@@ -7355,163 +10647,33 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-073",
+        "id": "if-089",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "occupant"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         50.0,
-         328.2,
-         318.25
+         -1045.0,
+         -150.0,
+         497.40000000000003
         ]
        },
        {
-        "id": "if-074",
+        "id": "if-090",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "occupant"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -50.0,
-         328.2,
-         318.25
+         -1045.0,
+         150.0,
+         497.40000000000003
         ]
        },
        {
-        "id": "if-075",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-076",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-077",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-078",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-079",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-080",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-081",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-082",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-083",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-084",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-085",
+        "id": "if-091",
         "between": [
          "frame",
          "suspension"
@@ -7524,7 +10686,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-086",
+        "id": "if-092",
         "between": [
          "frame",
          "suspension"
@@ -7534,6 +10696,266 @@ export const DEMOS = {
          -2140.0,
          -308.0866577448127,
          267.0824073268455
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-094",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-095",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-096",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-097",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-098",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-099",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-100",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-101",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-102",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         -414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-103",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-104",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-105",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-106",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-107",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-108",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-109",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-110",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-111",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-112",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         -414.80000000000007,
+         493.75
         ]
        }
       ],
@@ -8112,242 +11534,494 @@ export const DEMOS = {
        },
        {
         "center_mm": [
-         -285.0,
-         350.0,
-         716.0431784698708
+         100.0,
+         300.9,
+         456.5
         ],
         "size_mm": [
-         80.0,
-         80.0,
-         276.08635693974156
+         100.0,
+         148.20000000000002,
+         123.0
         ]
        },
        {
         "center_mm": [
-         -285.0,
-         -350.0,
-         716.0431784698708
+         -100.0,
+         300.9,
+         456.5
         ],
         "size_mm": [
-         80.0,
-         80.0,
-         276.08635693974156
+         100.0,
+         148.20000000000002,
+         123.0
         ]
        },
        {
         "center_mm": [
-         -285.0,
+         100.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -100.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1900.0,
+         265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1920.0,
+         300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2120.0,
+         300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1900.0,
+         -265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         -265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1920.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2120.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -120.0,
+         280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         -120.0,
+         -280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         -280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         95.5,
+         196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
+         80.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
+         -95.5,
+         196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
+         80.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
          0.0,
-         829.0863569397414
+         414.3,
+         596.0
         ],
         "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         95.5,
+         -196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
          80.0,
-         750.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
+         -95.5,
+         -196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
+         80.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -414.3,
+         596.0
+        ],
+        "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         414.3,
+         596.0
+        ],
+        "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -414.3,
+         596.0
+        ],
+        "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         -527.5,
+         350.0,
+         425.0
+        ],
+        "size_mm": [
+         70.0,
+         70.0,
+         60.0
+        ]
+       },
+       {
+        "center_mm": [
+         -527.5,
+         -350.0,
+         425.0
+        ],
+        "size_mm": [
+         70.0,
+         70.0,
+         60.0
+        ]
+       },
+       {
+        "center_mm": [
+         -770.0,
+         0.0,
+         415.0
+        ],
+        "size_mm": [
+         70.0,
+         70.0,
          80.0
         ]
        },
        {
         "center_mm": [
-         100.0,
-         300.9,
-         456.5
+         -1405.0,
+         0.0,
+         415.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         184.49719013397498,
+         70.0,
+         99.48782391389238
         ]
        },
        {
         "center_mm": [
-         -100.0,
-         300.9,
-         456.5
+         -2020.0,
+         0.0,
+         415.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         70.0,
+         80.0
         ]
        },
        {
         "center_mm": [
-         100.0,
-         -300.9,
-         456.5
+         -2220.0,
+         285.9,
+         425.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         140.45313820178933,
+         79.87267893978151
         ]
        },
        {
         "center_mm": [
-         -100.0,
-         -300.9,
-         456.5
+         -2220.0,
+         -285.9,
+         425.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         140.45313820178933,
+         79.87267893978151
         ]
        },
        {
         "center_mm": [
-         -1900.0,
-         265.5,
-         252.5
+         400.0,
+         0.0,
+         415.0
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         70.0,
+         70.0,
+         80.0
         ]
        },
        {
         "center_mm": [
-         -2140.0,
-         265.5,
-         252.5
+         285.0,
+         288.4,
+         491.5
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         70.0,
+         143.20000000000002,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -1920.0,
-         300.9,
-         456.5
+         285.0,
+         -288.4,
+         491.5
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         143.20000000000002,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -2120.0,
-         300.9,
-         456.5
+         -580.0,
+         280.0,
+         340.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         150.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -1900.0,
-         -265.5,
-         252.5
+         -1970.0,
+         0.0,
+         378.0
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         110.0,
+         70.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -2140.0,
-         -265.5,
-         252.5
+         -2020.0,
+         0.0,
+         355.0
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         70.0,
+         70.0,
+         60.0
         ]
        },
        {
         "center_mm": [
-         -1920.0,
-         -300.9,
-         456.5
+         -1320.0,
+         0.0,
+         350.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         70.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -2120.0,
-         -300.9,
-         456.5
+         -770.0,
+         0.0,
+         355.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         70.0,
+         60.0
         ]
        },
        {
         "center_mm": [
-         -120.0,
-         280.67331548962545,
-         296.664814653691
+         -319.68199399802495,
+         -350.0,
+         499.74017334403584
         ],
         "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
+         89.3639879960499,
+         70.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -120.0,
-         -280.67331548962545,
-         296.664814653691
+         -319.68199399802495,
+         -297.5,
+         499.74017334403584
         ],
         "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
-        ]
-       },
-       {
-        "center_mm": [
-         -2140.0,
-         280.67331548962545,
-         296.664814653691
-        ],
-        "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
-        ]
-       },
-       {
-        "center_mm": [
-         -2140.0,
-         -280.67331548962545,
-         296.664814653691
-        ],
-        "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
-        ]
-       },
-       {
-        "center_mm": [
-         -285.0,
-         -300.0,
-         835.0934450716383
-        ],
-        "size_mm": [
-         100.0,
-         120.0,
-         62.014176263793615
+         107.07301606441774,
+         134.29463957739927,
+         70.0
         ]
        }
       ],
@@ -8553,8 +12227,8 @@ export const DEMOS = {
        {
         "id": "if-023",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LAt2"
@@ -8562,8 +12236,8 @@ export const DEMOS = {
        {
         "id": "if-024",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LDT"
@@ -8571,8 +12245,8 @@ export const DEMOS = {
        {
         "id": "if-025",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RAt2"
@@ -8580,8 +12254,8 @@ export const DEMOS = {
        {
         "id": "if-026",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RDT"
@@ -8593,7 +12267,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LDT"
+        "node": "LAp2"
        },
        {
         "id": "if-028",
@@ -8602,7 +12276,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "RDT"
+        "node": "LAu2"
        },
        {
         "id": "if-029",
@@ -8611,19 +12285,10 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LAu2"
-       },
-       {
-        "id": "if-030",
-        "between": [
-         "frame",
-         "steering"
-        ],
-        "via": "bolt",
         "node": "RAu2"
        },
        {
-        "id": "if-031",
+        "id": "if-030",
         "between": [
          "frame",
          "occupant"
@@ -8632,7 +12297,7 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-032",
+        "id": "if-031",
         "between": [
          "frame",
          "occupant"
@@ -8641,7 +12306,7 @@ export const DEMOS = {
         "node": "RS2"
        },
        {
-        "id": "if-033",
+        "id": "if-032",
         "between": [
          "frame",
          "occupant"
@@ -8650,7 +12315,7 @@ export const DEMOS = {
         "node": "LS1"
        },
        {
-        "id": "if-034",
+        "id": "if-033",
         "between": [
          "frame",
          "occupant"
@@ -8659,7 +12324,7 @@ export const DEMOS = {
         "node": "LS2"
        },
        {
-        "id": "if-035",
+        "id": "if-034",
         "between": [
          "frame",
          "occupant"
@@ -8668,7 +12333,7 @@ export const DEMOS = {
         "node": "LH"
        },
        {
-        "id": "if-036",
+        "id": "if-035",
         "between": [
          "frame",
          "occupant"
@@ -8677,7 +12342,7 @@ export const DEMOS = {
         "node": "LHO"
        },
        {
-        "id": "if-037",
+        "id": "if-036",
         "between": [
          "frame",
          "occupant"
@@ -8686,7 +12351,7 @@ export const DEMOS = {
         "node": "LHT"
        },
        {
-        "id": "if-038",
+        "id": "if-037",
         "between": [
          "frame",
          "occupant"
@@ -8695,7 +12360,7 @@ export const DEMOS = {
         "node": "RH"
        },
        {
-        "id": "if-039",
+        "id": "if-038",
         "between": [
          "frame",
          "occupant"
@@ -8704,13 +12369,26 @@ export const DEMOS = {
         "node": "RHO"
        },
        {
-        "id": "if-040",
+        "id": "if-039",
         "between": [
          "frame",
          "occupant"
         ],
         "via": "bolt",
         "node": "RHT"
+       },
+       {
+        "id": "if-040",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
        },
        {
         "id": "if-041",
@@ -8720,7 +12398,7 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         120.0,
+         -120.0,
          196.0,
          180.0
         ]
@@ -8733,26 +12411,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -120.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-043",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          100.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-044",
+        "id": "if-043",
         "between": [
          "frame",
          "suspension"
@@ -8765,7 +12430,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-045",
+        "id": "if-044",
         "between": [
          "frame",
          "suspension"
@@ -8778,7 +12443,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-046",
+        "id": "if-045",
         "between": [
          "frame",
          "suspension"
@@ -8791,7 +12456,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-047",
+        "id": "if-046",
         "between": [
          "frame",
          "suspension"
@@ -8804,7 +12469,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-048",
+        "id": "if-047",
         "between": [
          "frame",
          "suspension"
@@ -8817,7 +12482,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-049",
+        "id": "if-048",
         "between": [
          "frame",
          "suspension"
@@ -8830,7 +12495,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-050",
+        "id": "if-049",
         "between": [
          "frame",
          "suspension"
@@ -8843,7 +12508,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-051",
+        "id": "if-050",
         "between": [
          "frame",
          "suspension"
@@ -8851,6 +12516,19 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1900.0,
+         196.0,
+         180.0
+        ]
+       },
+       {
+        "id": "if-051",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2140.0,
          196.0,
          180.0
         ]
@@ -8863,26 +12541,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -2140.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-053",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          -1920.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-054",
+        "id": "if-053",
         "between": [
          "frame",
          "suspension"
@@ -8895,7 +12560,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-055",
+        "id": "if-054",
         "between": [
          "frame",
          "suspension"
@@ -8908,7 +12573,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-056",
+        "id": "if-055",
         "between": [
          "frame",
          "suspension"
@@ -8921,7 +12586,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-057",
+        "id": "if-056",
         "between": [
          "frame",
          "suspension"
@@ -8934,7 +12599,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-058",
+        "id": "if-057",
         "between": [
          "frame",
          "suspension"
@@ -8947,7 +12612,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-059",
+        "id": "if-058",
         "between": [
          "frame",
          "suspension"
@@ -8960,7 +12625,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-060",
+        "id": "if-059",
         "between": [
          "frame",
          "suspension"
@@ -8973,163 +12638,254 @@ export const DEMOS = {
         ]
        },
        {
+        "id": "if-061",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -600.0,
+         235.0,
+         320.0
+        ]
+       },
+       {
+        "id": "if-062",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1892.5,
+         0.0,
+         323.0
+        ]
+       },
+       {
+        "id": "if-063",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2020.0,
+         0.0,
+         311.5
+        ]
+       },
+       {
+        "id": "if-066",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1375.0,
+         0.0,
+         325.0
+        ]
+       },
+       {
+        "id": "if-067",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -695.0,
+         0.0,
+         327.5
+        ]
+       },
+       {
+        "id": "if-068",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-069",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         -175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-070",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -655.4444124836293,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-072",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -354.7254072333135,
+         -340.0,
+         495.8881328648239
+        ]
+       },
+       {
         "id": "if-073",
         "between": [
          "frame",
-         "suspension"
+         "steering"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-074",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-075",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-076",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-077",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         310.5,
-         216.25
+         -354.7254072333135,
+         -258.75,
+         495.8881328648239
         ]
        },
        {
         "id": "if-078",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2080.0,
-         310.5,
-         216.25
+         -1675.0,
+         0.0,
+         423.3
         ]
        },
        {
         "id": "if-079",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -1970.0,
-         328.2,
-         318.25
+         -1982.5,
+         0.0,
+         423.3
         ]
        },
        {
         "id": "if-080",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2070.0,
-         328.2,
-         318.25
+         -2082.5,
+         142.95,
+         428.3
         ]
        },
        {
         "id": "if-081",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -1960.0,
-         -310.5,
-         216.25
+         -2082.5,
+         -142.95,
+         428.3
         ]
        },
        {
         "id": "if-082",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2080.0,
-         -310.5,
-         216.25
+         310.0,
+         0.0,
+         492.5
         ]
        },
        {
         "id": "if-083",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -1970.0,
-         -328.2,
-         318.25
+         252.5,
+         144.2,
+         530.75
         ]
        },
        {
         "id": "if-084",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2070.0,
-         -328.2,
-         318.25
+         252.5,
+         -144.2,
+         530.75
         ]
        },
        {
         "id": "if-085",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-086",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         -140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-091",
         "between": [
          "frame",
          "suspension"
@@ -9142,7 +12898,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-086",
+        "id": "if-092",
         "between": [
          "frame",
          "suspension"
@@ -9152,6 +12908,266 @@ export const DEMOS = {
          -2140.0,
          -308.0866577448127,
          267.0824073268455
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-094",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-095",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-096",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-097",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-098",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-099",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-100",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-101",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-102",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         -414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-103",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-104",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-105",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-106",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-107",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-108",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-109",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-110",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-111",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-112",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         -414.80000000000007,
+         493.75
         ]
        }
       ],
@@ -9200,18 +13216,6 @@ export const DEMOS = {
        {
         "center_mm": [
          0.0,
-         355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
-        ]
-       },
-       {
-        "center_mm": [
-         0.0,
          -550.0,
          300.0
         ],
@@ -9219,18 +13223,6 @@ export const DEMOS = {
          650.0,
          250.0,
          650.0
-        ]
-       },
-       {
-        "center_mm": [
-         0.0,
-         -355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
         ]
        },
        {
@@ -9248,18 +13240,6 @@ export const DEMOS = {
        {
         "center_mm": [
          -2020.0,
-         355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
-        ]
-       },
-       {
-        "center_mm": [
-         -2020.0,
          -550.0,
          300.0
         ],
@@ -9267,18 +13247,6 @@ export const DEMOS = {
          650.0,
          250.0,
          650.0
-        ]
-       },
-       {
-        "center_mm": [
-         -2020.0,
-         -355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
         ]
        },
        {
@@ -9400,9 +13368,406 @@ export const DEMOS = {
          100.0,
          140.0
         ]
+       },
+       {
+        "center_mm": [
+         60.0,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449395,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -60.00000000000001,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.115113884494,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999998,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         49.99999999999999,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -50.0,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
+       },
+       {
+        "center_mm": [
+         60.0,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449395,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -60.00000000000001,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.115113884494,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999998,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         49.99999999999999,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -50.0,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
+       },
+       {
+        "center_mm": [
+         -1960.0,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2080.0,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999986,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -1970.0,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2070.0,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
+       },
+       {
+        "center_mm": [
+         -1960.0,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2080.0,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999986,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -1970.0,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2070.0,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
        }
       ],
       "interfaces": [
+       {
+        "id": "if-040",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
+       },
        {
         "id": "if-041",
         "between": [
@@ -9411,7 +13776,7 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         120.0,
+         -120.0,
          196.0,
          180.0
         ]
@@ -9424,26 +13789,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -120.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-043",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          100.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-044",
+        "id": "if-043",
         "between": [
          "frame",
          "suspension"
@@ -9456,7 +13808,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-045",
+        "id": "if-044",
         "between": [
          "frame",
          "suspension"
@@ -9469,7 +13821,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-046",
+        "id": "if-045",
         "between": [
          "frame",
          "suspension"
@@ -9482,7 +13834,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-047",
+        "id": "if-046",
         "between": [
          "frame",
          "suspension"
@@ -9495,7 +13847,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-048",
+        "id": "if-047",
         "between": [
          "frame",
          "suspension"
@@ -9508,7 +13860,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-049",
+        "id": "if-048",
         "between": [
          "frame",
          "suspension"
@@ -9521,7 +13873,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-050",
+        "id": "if-049",
         "between": [
          "frame",
          "suspension"
@@ -9534,7 +13886,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-051",
+        "id": "if-050",
         "between": [
          "frame",
          "suspension"
@@ -9542,6 +13894,19 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1900.0,
+         196.0,
+         180.0
+        ]
+       },
+       {
+        "id": "if-051",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2140.0,
          196.0,
          180.0
         ]
@@ -9554,26 +13919,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -2140.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-053",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          -1920.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-054",
+        "id": "if-053",
         "between": [
          "frame",
          "suspension"
@@ -9586,7 +13938,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-055",
+        "id": "if-054",
         "between": [
          "frame",
          "suspension"
@@ -9599,7 +13951,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-056",
+        "id": "if-055",
         "between": [
          "frame",
          "suspension"
@@ -9612,7 +13964,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-057",
+        "id": "if-056",
         "between": [
          "frame",
          "suspension"
@@ -9625,7 +13977,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-058",
+        "id": "if-057",
         "between": [
          "frame",
          "suspension"
@@ -9638,7 +13990,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-059",
+        "id": "if-058",
         "between": [
          "frame",
          "suspension"
@@ -9651,7 +14003,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-060",
+        "id": "if-059",
         "between": [
          "frame",
          "suspension"
@@ -9664,7 +14016,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-061",
+        "id": "if-064",
         "between": [
          "powertrain",
          "suspension"
@@ -9677,7 +14029,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-062",
+        "id": "if-065",
         "between": [
          "powertrain",
          "suspension"
@@ -9690,59 +14042,59 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-066",
+        "id": "if-074",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-067",
+        "id": "if-075",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-068",
+        "id": "if-076",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-069",
+        "id": "if-077",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-071",
+        "id": "if-087",
         "between": [
          "steering",
          "suspension"
@@ -9755,7 +14107,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-072",
+        "id": "if-088",
         "between": [
          "steering",
          "suspension"
@@ -9768,163 +14120,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-073",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-074",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-075",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-076",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-077",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-078",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-079",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-080",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-081",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-082",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-083",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-084",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-085",
+        "id": "if-091",
         "between": [
          "frame",
          "suspension"
@@ -9937,7 +14133,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-086",
+        "id": "if-092",
         "between": [
          "frame",
          "suspension"
@@ -9947,6 +14143,266 @@ export const DEMOS = {
          -2140.0,
          -308.0866577448127,
          267.0824073268455
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-094",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-095",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-096",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-097",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-098",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-099",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-100",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-101",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-102",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         -414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-103",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-104",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-105",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-106",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-107",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-108",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-109",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-110",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-111",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-112",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         -414.80000000000007,
+         493.75
         ]
        }
       ],
@@ -9964,6 +14420,42 @@ export const DEMOS = {
       "title": "操作系",
       "owner": "designer.steering",
       "envelope": [
+       {
+        "center_mm": [
+         -285.0,
+         350.0,
+         716.0431784698708
+        ],
+        "size_mm": [
+         80.0,
+         80.0,
+         276.08635693974156
+        ]
+       },
+       {
+        "center_mm": [
+         -285.0,
+         -350.0,
+         716.0431784698708
+        ],
+        "size_mm": [
+         80.0,
+         80.0,
+         276.08635693974156
+        ]
+       },
+       {
+        "center_mm": [
+         -285.0,
+         0.0,
+         829.0863569397414
+        ],
+        "size_mm": [
+         80.0,
+         750.0,
+         80.0
+        ]
+       },
        {
         "center_mm": [
          -389.76882046860203,
@@ -9990,14 +14482,26 @@ export const DEMOS = {
        },
        {
         "center_mm": [
-         -332.29999999999995,
+         -210.0,
          -220.0,
-         697.7183687566543
+         492.03609238561194
         ],
         "size_mm": [
          170.0,
          120.0,
-         120.0
+         120.00000000000006
+        ]
+       },
+       {
+        "center_mm": [
+         -271.15,
+         0.0,
+         622.0431784698708
+        ],
+        "size_mm": [
+         52.299999999999955,
+         790.0,
+         434.0863569397415
         ]
        },
        {
@@ -10071,6 +14575,30 @@ export const DEMOS = {
          315.0766764091637,
          73.09367808103264
         ]
+       },
+       {
+        "center_mm": [
+         -285.0,
+         -300.0,
+         835.0934450716383
+        ],
+        "size_mm": [
+         100.0,
+         120.0,
+         62.014176263793615
+        ]
+       },
+       {
+        "center_mm": [
+         -304.68199399802495,
+         -220.0,
+         495.8881328648239
+        ],
+        "size_mm": [
+         120.46787456109985,
+         60.0,
+         67.64296592865594
+        ]
        }
       ],
       "interfaces": [
@@ -10093,7 +14621,16 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-027",
+        "id": "if-023",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "node": "LAt2"
+       },
+       {
+        "id": "if-024",
         "between": [
          "frame",
          "steering"
@@ -10102,7 +14639,16 @@ export const DEMOS = {
         "node": "LDT"
        },
        {
-        "id": "if-028",
+        "id": "if-025",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "node": "RAt2"
+       },
+       {
+        "id": "if-026",
         "between": [
          "frame",
          "steering"
@@ -10111,7 +14657,16 @@ export const DEMOS = {
         "node": "RDT"
        },
        {
-        "id": "if-029",
+        "id": "if-027",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "node": "LAp2"
+       },
+       {
+        "id": "if-028",
         "between": [
          "frame",
          "steering"
@@ -10120,7 +14675,7 @@ export const DEMOS = {
         "node": "LAu2"
        },
        {
-        "id": "if-030",
+        "id": "if-029",
         "between": [
          "frame",
          "steering"
@@ -10129,7 +14684,7 @@ export const DEMOS = {
         "node": "RAu2"
        },
        {
-        "id": "if-063",
+        "id": "if-071",
         "between": [
          "powertrain",
          "steering"
@@ -10142,98 +14697,111 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-064",
+        "id": "if-072",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -165.0,
-         461.8180461928059
+         -354.7254072333135,
+         -340.0,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-065",
+        "id": "if-073",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -110.0,
-         461.8180461928059
+         -354.7254072333135,
+         -258.75,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-066",
+        "id": "if-074",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-067",
+        "id": "if-075",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-068",
+        "id": "if-076",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-069",
+        "id": "if-077",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-070",
+        "id": "if-085",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -301.72499999999997,
-         -110.0,
-         659.8807736132626
+         -120.0,
+         140.33665774481273,
+         287.49722198053644
         ]
        },
        {
-        "id": "if-071",
+        "id": "if-086",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         -140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-087",
         "between": [
          "steering",
          "suspension"
@@ -10246,7 +14814,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-072",
+        "id": "if-088",
         "between": [
          "steering",
          "suspension"
@@ -10260,6 +14828,7 @@ export const DEMOS = {
        }
       ],
       "variables": [
+       "bulkhead_t",
        "max_steer_angle",
        "pedal_mount",
        "steering_column_angle",
@@ -10757,7 +15326,7 @@ export const DEMOS = {
       ],
       "interfaces": [
        {
-        "id": "if-031",
+        "id": "if-030",
         "between": [
          "frame",
          "occupant"
@@ -10766,7 +15335,7 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-032",
+        "id": "if-031",
         "between": [
          "frame",
          "occupant"
@@ -10775,7 +15344,7 @@ export const DEMOS = {
         "node": "RS2"
        },
        {
-        "id": "if-033",
+        "id": "if-032",
         "between": [
          "frame",
          "occupant"
@@ -10784,7 +15353,7 @@ export const DEMOS = {
         "node": "LS1"
        },
        {
-        "id": "if-034",
+        "id": "if-033",
         "between": [
          "frame",
          "occupant"
@@ -10793,7 +15362,7 @@ export const DEMOS = {
         "node": "LS2"
        },
        {
-        "id": "if-035",
+        "id": "if-034",
         "between": [
          "frame",
          "occupant"
@@ -10802,7 +15371,7 @@ export const DEMOS = {
         "node": "LH"
        },
        {
-        "id": "if-036",
+        "id": "if-035",
         "between": [
          "frame",
          "occupant"
@@ -10811,7 +15380,7 @@ export const DEMOS = {
         "node": "LHO"
        },
        {
-        "id": "if-037",
+        "id": "if-036",
         "between": [
          "frame",
          "occupant"
@@ -10820,7 +15389,7 @@ export const DEMOS = {
         "node": "LHT"
        },
        {
-        "id": "if-038",
+        "id": "if-037",
         "between": [
          "frame",
          "occupant"
@@ -10829,7 +15398,7 @@ export const DEMOS = {
         "node": "RH"
        },
        {
-        "id": "if-039",
+        "id": "if-038",
         "between": [
          "frame",
          "occupant"
@@ -10838,13 +15407,39 @@ export const DEMOS = {
         "node": "RHO"
        },
        {
-        "id": "if-040",
+        "id": "if-039",
         "between": [
          "frame",
          "occupant"
         ],
         "via": "bolt",
         "node": "RHT"
+       },
+       {
+        "id": "if-089",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         -150.0,
+         497.40000000000003
+        ]
+       },
+       {
+        "id": "if-090",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         150.0,
+         497.40000000000003
+        ]
        }
       ],
       "variables": [
@@ -11047,7 +15642,59 @@ export const DEMOS = {
         "node": "RB"
        },
        {
+        "id": "if-060",
+        "between": [
+         "body",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         0.0,
+         380.8
+        ]
+       },
+       {
         "id": "if-061",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -600.0,
+         235.0,
+         320.0
+        ]
+       },
+       {
+        "id": "if-062",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1892.5,
+         0.0,
+         323.0
+        ]
+       },
+       {
+        "id": "if-063",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2020.0,
+         0.0,
+         311.5
+        ]
+       },
+       {
+        "id": "if-064",
         "between": [
          "powertrain",
          "suspension"
@@ -11060,7 +15707,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-062",
+        "id": "if-065",
         "between": [
          "powertrain",
          "suspension"
@@ -11073,7 +15720,33 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-063",
+        "id": "if-066",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1375.0,
+         0.0,
+         325.0
+        ]
+       },
+       {
+        "id": "if-067",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -695.0,
+         0.0,
+         327.5
+        ]
+       },
+       {
+        "id": "if-071",
         "between": [
          "powertrain",
          "steering"
@@ -11148,18 +15821,6 @@ export const DEMOS = {
          410.0,
          533.6,
          330.0
-        ]
-       },
-       {
-        "center_mm": [
-         -271.15,
-         0.0,
-         622.0431784698708
-        ],
-        "size_mm": [
-         52.299999999999955,
-         790.0,
-         434.0863569397415
         ]
        },
        {
@@ -11303,83 +15964,176 @@ export const DEMOS = {
         "node": "RAp1"
        },
        {
-        "id": "if-023",
+        "id": "if-060",
         "between": [
          "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "LAt2"
-       },
-       {
-        "id": "if-024",
-        "between": [
-         "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "LDT"
-       },
-       {
-        "id": "if-025",
-        "between": [
-         "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "RAt2"
-       },
-       {
-        "id": "if-026",
-        "between": [
-         "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "RDT"
-       },
-       {
-        "id": "if-064",
-        "between": [
-         "body",
-         "steering"
+         "powertrain"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -165.0,
-         461.8180461928059
+         -1045.0,
+         0.0,
+         380.8
         ]
        },
        {
-        "id": "if-065",
+        "id": "if-068",
         "between": [
          "body",
-         "steering"
+         "frame"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -110.0,
-         461.8180461928059
+         -534.1944124836293,
+         175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-069",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         -175.0,
+         428.3
         ]
        },
        {
         "id": "if-070",
         "between": [
          "body",
-         "steering"
+         "frame"
         ],
         "via": "bolt",
         "point_mm": [
-         -301.72499999999997,
-         -110.0,
-         659.8807736132626
+         -655.4444124836293,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-078",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1675.0,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-079",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1982.5,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-080",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-081",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         -142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-082",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         310.0,
+         0.0,
+         492.5
+        ]
+       },
+       {
+        "id": "if-083",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-084",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         -144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-089",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         -150.0,
+         497.40000000000003
+        ]
+       },
+       {
+        "id": "if-090",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         150.0,
+         497.40000000000003
         ]
        }
       ],
       "variables": [
-       "bulkhead_t",
        "bumper_stroke",
        "crush_stiffness",
        "deck_t",
@@ -11395,7 +16149,99 @@ export const DEMOS = {
        "fenders"
       ]
      }
-    ]
+    ],
+    "variable_names": {
+     "battery_x": "電池の前後の位置",
+     "bulkhead_dx": "前の隔壁の位置 (前の車軸からの後ろへの距離)",
+     "front_overhang": "前の張り出し (前の車軸より前の枠)",
+     "pedal_x": "ペダルの前後の位置",
+     "rail_height": "レールの高さ",
+     "rail_spacing": "レールの左右の間",
+     "rear_overhang": "後ろの張り出し (後ろの車軸より後ろの枠)",
+     "seat_x": "座席の前後の位置",
+     "seat_y": "座席の左右の位置",
+     "steering_x": "ハンドルの前後の位置",
+     "track": "トレッド (左右の車輪の間)",
+     "wheelbase": "軸距 (前と後ろの車軸の間)",
+     "cross_b": "横の部材の管の幅",
+     "cross_h": "横の部材の管の高さ",
+     "cross_members_through": "横の部材がレールを通り抜けるか",
+     "cross_t": "横の部材の管の厚さ",
+     "gusset_leg": "ガセットの辺の長さ",
+     "gusset_thickness": "ガセットの板の厚さ",
+     "lower_b": "下の脚の管の幅",
+     "lower_cross": "下の横の部材 (あり・なし)",
+     "lower_t": "下の脚の管の厚さ",
+     "mount_drive": "モーターと減速機の取付の金具",
+     "mount_electrics": "電池・制御器・配線箱の取付の金具",
+     "mount_floor": "床・荷台・前の囲いの取付の金具",
+     "mount_seats": "座席とベルトの取付の金具",
+     "rail_b": "レールの管の幅",
+     "rail_h": "レールの管の高さ",
+     "rail_t": "レールの管の厚さ",
+     "tower_b": "塔とダッシュの管の幅",
+     "tower_t": "塔とダッシュの管の厚さ",
+     "front_spring_rate": "前のばねの硬さ",
+     "rear_spring_rate": "後ろのばねの硬さ",
+     "suspension_travel": "車輪の上下の動く量",
+     "wheel_radius": "タイヤの半径",
+     "wheel_width": "タイヤの幅",
+     "bulkhead_t": "隔壁の板の厚さ",
+     "max_steer_angle": "ハンドルを切れる角度",
+     "pedal_mount": "ペダルの台",
+     "steering_column_angle": "コラムの傾き",
+     "steering_wheel_height": "ハンドルの高さ (座面から)",
+     "grab_bar": "握り棒 (あり・なし)",
+     "grab_bar_d": "握り棒の太さ",
+     "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
+     "grab_bar_t": "握り棒の管の厚さ",
+     "rollbar": "ロールバー (あり・なし)",
+     "rollbar_b": "ロールバーの角管の幅",
+     "rollbar_d": "ロールバーの丸管の太さ",
+     "rollbar_foot_b": "外へ出す足の管の幅",
+     "rollbar_foot_h": "外へ出す足の管の高さ",
+     "rollbar_foot_t": "外へ出す足の管の厚さ",
+     "rollbar_front_posts": "前の柱 (4 本柱にするか)",
+     "rollbar_height": "ロールバーの高さ (座面から)",
+     "rollbar_offset": "ロールバーの位置 (座席の後ろからの距離)",
+     "rollbar_square": "ロールバーを角管にするか",
+     "rollbar_stay_d": "後ろの支えの管の太さ",
+     "rollbar_stay_t": "後ろの支えの管の厚さ",
+     "rollbar_stays": "ロールバーの後ろの支え (あり・なし)",
+     "rollbar_t": "ロールバーの管の厚さ",
+     "rollbar_width": "ロールバーの左右の柱の間",
+     "seat_depth": "座面の奥行き",
+     "seat_height": "座面の高さ (床から)",
+     "seat_slide": "座席の前後の滑りの量",
+     "side_bar_count": "横の守りの棒の本数",
+     "side_bar_d": "横の守りの管の太さ",
+     "side_bar_high": "横の守りのいちばん上の棒の高さ",
+     "side_bar_low": "横の守りのいちばん下の棒の高さ",
+     "side_bar_reach": "横の守りの前の柱の位置 (肩と腰の点より前へ)",
+     "side_bar_t": "横の守りの管の厚さ",
+     "side_bars": "横の守りの枠 (あり・なし)",
+     "side_net": "横の網 (あり・なし)",
+     "side_net_pitch": "網の目の間隔",
+     "side_net_wire_d": "網の線の太さ",
+     "side_opening": "乗り降りの開口 (なし・網・扉)",
+     "battery_capacity": "電池の容量",
+     "battery_split": "電池を 2 つに分けるか",
+     "driveshafts": "駆動軸 (あり・なし)",
+     "gear_ratio": "減速比",
+     "motor_max_speed": "モーターの最高回転数",
+     "motor_peak_power": "モーターの最大出力",
+     "motor_peak_torque": "モーターの最大トルク",
+     "bumper_stroke": "バンパーのつぶれる量",
+     "crush_stiffness": "前のつぶれる所の硬さ",
+     "deck_t": "荷台の板の厚さ",
+     "fender_front_deg": "フェンダーの前への長さ (角度)",
+     "fender_gap": "フェンダーとタイヤの間",
+     "fender_rear_deg": "フェンダーの後ろへの長さ (角度)",
+     "fender_width": "フェンダーの幅",
+     "fenders": "フェンダー (あり・なし)",
+     "floor_t": "床の板の厚さ",
+     "lamps": "灯火 (あり・なし)"
+    }
    }
   },
   {
@@ -13988,10 +18834,6 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
-     "susp_FL",
-     "susp_FR",
-     "susp_RL",
-     "susp_RR",
      "rail_L_FA",
      "rail_L_LAp1_LAu1",
      "rail_L_LAu1_LA",
@@ -14044,30 +18886,6 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [
-     {
-      "part_id": "susp_FL",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
-     {
-      "part_id": "susp_FR",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RL",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RR",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
      {
       "part_id": "rail_L_FA",
       "missing": [
@@ -14432,13 +19250,9 @@ export const DEMOS = {
      "seat_R",
      "seat_L",
      "wheel_FL",
-     "susp_FL",
      "wheel_FR",
-     "susp_FR",
      "wheel_RL",
-     "susp_RL",
-     "wheel_RR",
-     "susp_RR"
+     "wheel_RR"
     ],
     "hits": [
      {
@@ -14524,13 +19338,9 @@ export const DEMOS = {
      "occupant_L.hand_R",
      "occupant_L.foot_R",
      "wheel_FL",
-     "susp_FL",
      "wheel_FR",
-     "susp_FR",
      "wheel_RL",
-     "susp_RL",
      "wheel_RR",
-     "susp_RR",
      "knuckle_FL",
      "knuckle_FR",
      "knuckle_RL",
@@ -14541,6 +19351,38 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "lca_FL_f",
+     "lca_FL_r",
+     "lca_FL_x",
+     "uca_FL_f",
+     "uca_FL_r",
+     "bj_lower_FL",
+     "bj_upper_FL",
+     "damper_FL",
+     "lca_FR_f",
+     "lca_FR_r",
+     "lca_FR_x",
+     "uca_FR_f",
+     "uca_FR_r",
+     "bj_lower_FR",
+     "bj_upper_FR",
+     "damper_FR",
+     "lca_RL_f",
+     "lca_RL_r",
+     "lca_RL_x",
+     "uca_RL_f",
+     "uca_RL_r",
+     "bj_lower_RL",
+     "bj_upper_RL",
+     "damper_RL",
+     "lca_RR_f",
+     "lca_RR_r",
+     "lca_RR_x",
+     "uca_RR_f",
+     "uca_RR_r",
+     "bj_lower_RR",
+     "bj_upper_RR",
+     "damper_RR",
      "bracket_uca_FL1",
      "bracket_uca_FL2",
      "bracket_uca_FR1",
@@ -14558,7 +19400,33 @@ export const DEMOS = {
      "bracket_tie_RL",
      "bracket_tie_RR",
      "bracket_column",
-     "rollbar"
+     "rollbar",
+     "bracket_lca_FL1",
+     "bracket_lca_FL2",
+     "bracket_damper_FL",
+     "bracket_lca_FR1",
+     "bracket_lca_FR2",
+     "bracket_damper_FR",
+     "bracket_damper_RL",
+     "bracket_damper_RR",
+     "pushrod_brake",
+     "fit_floor_front_rail_L_AS1",
+     "fit_floor_front_rail_R_AS1",
+     "fit_floor_front_cross_S1",
+     "fit_deck_cross_S2",
+     "fit_deck_cross_B",
+     "fit_deck_rail_L_BE",
+     "fit_deck_rail_R_BE",
+     "fit_front_body_cross_F",
+     "fit_front_body_tower_post_LA1",
+     "fit_front_body_tower_post_RA1",
+     "fit_main_switch_rail_L_AS1",
+     "fit_motor_cross_B",
+     "fit_reducer_cross_B",
+     "fit_controller_cross_S2",
+     "fit_aux_cross_S1",
+     "fit_pedal_accel_tower_post_RA2",
+     "fit_pedal_brake_tower_post_RA2"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -14908,13 +19776,9 @@ export const DEMOS = {
      "seat_L",
      "seat_belt_L",
      "wheel_FL",
-     "susp_FL",
      "wheel_FR",
-     "susp_FR",
      "wheel_RL",
-     "susp_RL",
      "wheel_RR",
-     "susp_RR",
      "knuckle_FL",
      "knuckle_FR",
      "knuckle_RL",
@@ -14925,6 +19789,38 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "lca_FL_f",
+     "lca_FL_r",
+     "lca_FL_x",
+     "uca_FL_f",
+     "uca_FL_r",
+     "bj_lower_FL",
+     "bj_upper_FL",
+     "damper_FL",
+     "lca_FR_f",
+     "lca_FR_r",
+     "lca_FR_x",
+     "uca_FR_f",
+     "uca_FR_r",
+     "bj_lower_FR",
+     "bj_upper_FR",
+     "damper_FR",
+     "lca_RL_f",
+     "lca_RL_r",
+     "lca_RL_x",
+     "uca_RL_f",
+     "uca_RL_r",
+     "bj_lower_RL",
+     "bj_upper_RL",
+     "damper_RL",
+     "lca_RR_f",
+     "lca_RR_r",
+     "lca_RR_x",
+     "uca_RR_f",
+     "uca_RR_r",
+     "bj_lower_RR",
+     "bj_upper_RR",
+     "damper_RR",
      "bracket_uca_FL1",
      "bracket_uca_FL2",
      "bracket_uca_FR1",
@@ -14942,7 +19838,33 @@ export const DEMOS = {
      "bracket_tie_RL",
      "bracket_tie_RR",
      "bracket_column",
-     "rollbar"
+     "rollbar",
+     "bracket_lca_FL1",
+     "bracket_lca_FL2",
+     "bracket_damper_FL",
+     "bracket_lca_FR1",
+     "bracket_lca_FR2",
+     "bracket_damper_FR",
+     "bracket_damper_RL",
+     "bracket_damper_RR",
+     "pushrod_brake",
+     "fit_floor_front_rail_L_AS1",
+     "fit_floor_front_rail_R_AS1",
+     "fit_floor_front_cross_S1",
+     "fit_deck_cross_S2",
+     "fit_deck_cross_B",
+     "fit_deck_rail_L_BE",
+     "fit_deck_rail_R_BE",
+     "fit_front_body_cross_F",
+     "fit_front_body_tower_post_LA1",
+     "fit_front_body_tower_post_RA1",
+     "fit_main_switch_rail_L_AS1",
+     "fit_motor_cross_B",
+     "fit_reducer_cross_B",
+     "fit_controller_cross_S2",
+     "fit_aux_cross_S1",
+     "fit_pedal_accel_tower_post_RA2",
+     "fit_pedal_brake_tower_post_RA2"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -18105,7 +23027,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 4,
+    "round_limit": 5,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -18219,55 +23141,55 @@ export const DEMOS = {
      {
       "key": "Q44",
       "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "value": 300,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 300,
-      "unit": "mm"
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q45",
       "name": "足を置く面の幅の下限",
+      "value": 150,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 150,
-      "unit": "mm"
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q46",
       "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "value": 150,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 150,
-      "unit": "mm"
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q47",
       "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "value": "はい",
       "source": "default",
       "trust": 3,
-      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
-      "value": "はい"
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found"
      },
      {
       "key": "Q48",
       "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "value": 1600,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
-      "value": 1600,
-      "unit": "mm"
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)"
      },
      {
       "key": "Q49",
       "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "value": 16,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 16,
-      "unit": "mm"
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q50",
@@ -18476,11 +23398,11 @@ export const DEMOS = {
      {
       "key": "Q89",
       "name": "手でつかむ所の太さの上限",
+      "value": 38,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 38,
-      "unit": "mm"
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q90",
@@ -18494,47 +23416,47 @@ export const DEMOS = {
      {
       "key": "Q93",
       "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "value": 450,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
-      "value": 450,
-      "unit": "mm"
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked"
      },
      {
       "key": "Q94",
       "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "value": 300,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 300,
-      "unit": "mm"
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q95",
       "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "value": 985.2,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
-      "value": 985.2,
-      "unit": "mm"
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface"
      },
      {
       "key": "Q96",
       "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "value": 1250,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 1250,
-      "unit": "mm"
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      },
      {
       "key": "Q97",
       "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "value": 550,
+      "unit": "mm",
       "source": "default",
       "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 550,
-      "unit": "mm"
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
      }
     ],
     "domain_picks": [],
@@ -18650,7 +23572,8 @@ export const DEMOS = {
      "H1",
      "H3",
      "H5",
-     "H6"
+     "H6",
+     "H7"
     ]
    }
   },
@@ -19234,62 +24157,9 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 14 件: Q44・Q45・Q46・Q47・Q48・Q49・Q57・Q63・Q89・Q93・Q94・Q95・Q96・Q97)",
+   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
    "data": {
     "answers": [
-     {
-      "key": "Q44",
-      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 300,
-      "unit": "mm"
-     },
-     {
-      "key": "Q45",
-      "name": "足を置く面の幅の下限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 150,
-      "unit": "mm"
-     },
-     {
-      "key": "Q46",
-      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 150,
-      "unit": "mm"
-     },
-     {
-      "key": "Q47",
-      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
-      "value": "はい"
-     },
-     {
-      "key": "Q48",
-      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
-      "value": 1600,
-      "unit": "mm"
-     },
-     {
-      "key": "Q49",
-      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 16,
-      "unit": "mm"
-     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -19306,60 +24176,6 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
-     },
-     {
-      "key": "Q89",
-      "name": "手でつかむ所の太さの上限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 38,
-      "unit": "mm"
-     },
-     {
-      "key": "Q93",
-      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
-      "value": 450,
-      "unit": "mm"
-     },
-     {
-      "key": "Q94",
-      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 300,
-      "unit": "mm"
-     },
-     {
-      "key": "Q95",
-      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
-      "value": 985.2,
-      "unit": "mm"
-     },
-     {
-      "key": "Q96",
-      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 1250,
-      "unit": "mm"
-     },
-     {
-      "key": "Q97",
-      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
-      "source": "default",
-      "trust": 3,
-      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
-      "value": 550,
-      "unit": "mm"
      }
     ]
    }
@@ -20162,24 +24978,14 @@ export const DEMOS = {
       "system": "battery",
       "connects_to": [
        {
-        "to": "LS1",
+        "to": "floor",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         0.0,
+         430.0
+        ]
        },
        {
         "to": "main_switch",
@@ -20212,14 +25018,19 @@ export const DEMOS = {
       "system": "battery",
       "connects_to": [
        {
-        "to": "LS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "controller",
         "via": "wire",
         "carries": "power"
+       },
+       {
+        "to": "fit_main_switch_rail_L_AS1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -580.0,
+         230.0,
+         340.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20248,19 +25059,24 @@ export const DEMOS = {
       "system": "drive",
       "connects_to": [
        {
-        "to": "LB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "reducer",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -1940.0,
+         0.0,
+         268.0
+        ]
+       },
+       {
+        "to": "fit_motor_cross_B",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1940.0,
+         0.0,
+         378.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20289,24 +25105,34 @@ export const DEMOS = {
       "system": "drive",
       "connects_to": [
        {
-        "to": "LB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RB",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "driveshaft_RL",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         196.0,
+         283.1
+        ]
        },
        {
         "to": "driveshaft_RR",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         -196.0,
+         283.1
+        ]
+       },
+       {
+        "to": "fit_reducer_cross_B",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         350.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20338,7 +25164,12 @@ export const DEMOS = {
        {
         "to": "wheel_RL",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20370,7 +25201,12 @@ export const DEMOS = {
        {
         "to": "wheel_RR",
         "via": "spline",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20399,19 +25235,19 @@ export const DEMOS = {
       "system": "control",
       "connects_to": [
        {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "motor",
         "via": "wire",
         "carries": "power"
+       },
+       {
+        "to": "fit_controller_cross_S2",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1320.0,
+         0.0,
+         340.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20440,19 +25276,19 @@ export const DEMOS = {
       "system": "electrical",
       "connects_to": [
        {
-        "to": "LS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "battery",
         "via": "wire",
         "carries": "power"
+       },
+       {
+        "to": "fit_aux_cross_S1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         350.0
+        ]
        }
       ],
       "module": "powertrain"
@@ -20485,24 +25321,34 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LAp2",
+        "to": "fit_floor_front_rail_L_AS1",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         350.0,
+         430.0
+        ]
        },
        {
-        "to": "RAp2",
+        "to": "fit_floor_front_rail_R_AS1",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         -350.0,
+         430.0
+        ]
        },
        {
-        "to": "LS1",
+        "to": "fit_floor_front_cross_S1",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         430.0
+        ]
        }
       ],
       "module": "body"
@@ -20536,24 +25382,19 @@ export const DEMOS = {
       "system": "control",
       "connects_to": [
        {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "controller",
         "via": "wire",
         "carries": "signal"
        },
        {
-        "to": "floor_front",
+        "to": "fit_pedal_accel_tower_post_RA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -339.4,
+         -350.0,
+         499.7
+        ]
        }
       ],
       "module": "steering"
@@ -20587,24 +25428,29 @@ export const DEMOS = {
       "system": "brake",
       "connects_to": [
        {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "brake_master",
+        "to": "pushrod_brake",
         "via": "pin",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -339.4,
+         -220.0,
+         499.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
-        "to": "floor_front",
+        "to": "fit_pedal_brake_tower_post_RA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -339.4,
+         -260.0,
+         499.7
+        ]
        }
       ],
       "module": "steering"
@@ -20615,9 +25461,9 @@ export const DEMOS = {
       "kind": "brake_master_cylinder",
       "box": {
        "center_mm": [
-        -332.29999999999995,
+        -210.0,
         -220.0,
-        697.7183687566543
+        492.0360923856119
        ],
        "size_mm": [
         120.0,
@@ -20632,16 +25478,6 @@ export const DEMOS = {
       ],
       "system": "brake",
       "connects_to": [
-       {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
        {
         "to": "caliper_FL",
         "via": "hose",
@@ -20665,7 +25501,12 @@ export const DEMOS = {
        {
         "to": "bulkhead",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -270.0,
+         -185.0,
+         527.0
+        ]
        }
       ],
       "module": "steering"
@@ -20698,24 +25539,14 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LS1",
+        "to": "floor_front",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS1",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         431.6
+        ]
        }
       ],
       "module": "body"
@@ -20750,34 +25581,44 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LS2",
+        "to": "fit_deck_cross_S2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1470.0,
+         0.0,
+         430.0
+        ]
        },
        {
-        "to": "RS2",
+        "to": "fit_deck_cross_B",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         430.0
+        ]
        },
        {
-        "to": "LB",
+        "to": "fit_deck_rail_L_BE",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         241.8,
+         430.0
+        ]
        },
        {
-        "to": "RB",
+        "to": "fit_deck_rail_R_BE",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LE",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RE",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         -241.8,
+         430.0
+        ]
        }
       ],
       "module": "body"
@@ -20810,24 +25651,34 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LF",
+        "to": "fit_front_body_cross_F",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         400.0,
+         0.0,
+         430.0
+        ]
        },
        {
-        "to": "RF",
+        "to": "fit_front_body_tower_post_LA1",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         241.8,
+         491.5
+        ]
        },
        {
-        "to": "LAp1",
+        "to": "fit_front_body_tower_post_RA1",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RAp1",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         -241.8,
+         491.5
+        ]
        }
       ],
       "module": "body"
@@ -20862,37 +25713,47 @@ export const DEMOS = {
       "system": "body",
       "connects_to": [
        {
-        "to": "LAt2",
+        "to": "tower_post_LA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         350.0,
+         491.5
+        ]
        },
        {
-        "to": "LDT",
+        "to": "dash_post_L",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         350.0,
+         716.0
+        ]
        },
        {
-        "to": "RAt2",
+        "to": "tower_post_RA2",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         -350.0,
+         491.5
+        ]
        },
        {
-        "to": "RDT",
+        "to": "dash_post_R",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LAp2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RAp2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -272.3,
+         -350.0,
+         716.0
+        ]
        }
       ],
-      "module": "body"
+      "module": "steering"
      },
      {
       "id": "steering_wheel",
@@ -20923,19 +25784,24 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RDT",
-        "via": "bolt",
-        "carries": "load"
+        "to": "steering_column",
+        "via": "spline",
+        "carries": "steer",
+        "at_mm": [
+         -703.6,
+         -300.0,
+         1177.1
+        ]
        },
        {
         "to": "steering_column",
         "via": "spline",
-        "carries": "steer"
+        "carries": "load",
+        "at_mm": [
+         -703.6,
+         -300.0,
+         1177.1
+        ]
        }
       ],
       "module": "steering"
@@ -20969,24 +25835,39 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "steering_shaft",
         "via": "pin",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -294.9,
+         749.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
-        "to": "dash_cross",
+        "to": "bracket_column",
         "via": "bolt",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -259.8,
+         -300.0,
+         841.4
+        ]
+       },
+       {
+        "to": "bracket_column",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -259.8,
+         -300.0,
+         841.4
+        ]
        }
       ],
       "module": "steering"
@@ -21020,19 +25901,24 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LDT",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RDT",
-        "via": "bolt",
-        "carries": "load"
+        "to": "steering_rack",
+        "via": "spline",
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -158.0,
+         278.3
+        ]
        },
        {
         "to": "steering_rack",
         "via": "spline",
-        "carries": "steer"
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -158.0,
+         278.3
+        ]
        }
       ],
       "module": "steering"
@@ -21061,24 +25947,54 @@ export const DEMOS = {
       "system": "steering",
       "connects_to": [
        {
-        "to": "LAu2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RAu2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "tie_rod_FL",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         251.3,
+         279.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
         "to": "tie_rod_FR",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -251.3,
+         279.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
+       },
+       {
+        "to": "bracket_tie_FL",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         250.0,
+         286.3
+        ]
+       },
+       {
+        "to": "bracket_tie_FR",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -250.0,
+         286.3
+        ]
        }
       ],
       "module": "steering"
@@ -21110,7 +26026,17 @@ export const DEMOS = {
        {
         "to": "knuckle_FL",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         1.1426142527026246e-16,
+         0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "steering"
@@ -21142,7 +26068,17 @@ export const DEMOS = {
        {
         "to": "knuckle_FR",
         "via": "ball_joint",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         -120.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         1.1426142527026246e-16,
+         -0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "steering"
@@ -21171,14 +26107,14 @@ export const DEMOS = {
       "system": "seat",
       "connects_to": [
        {
-        "to": "RS1",
+        "to": "floor",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         -50.0,
+         433.2
+        ]
        }
       ],
       "module": "occupant"
@@ -21206,19 +26142,14 @@ export const DEMOS = {
       "system": "restraint",
       "connects_to": [
        {
-        "to": "RS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "seat_R",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "cross_S2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -530.0,
+         563.2
+        ]
        }
       ],
       "module": "occupant"
@@ -21247,14 +26178,14 @@ export const DEMOS = {
       "system": "seat",
       "connects_to": [
        {
-        "to": "LS1",
+        "to": "floor",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         50.0,
+         433.2
+        ]
        }
       ],
       "module": "occupant"
@@ -21282,19 +26213,14 @@ export const DEMOS = {
       "system": "restraint",
       "connects_to": [
        {
-        "to": "LS2",
-        "via": "bolt",
-        "carries": "load"
-       },
-       {
         "to": "seat_L",
         "via": "bolt",
-        "carries": "load"
-       },
-       {
-        "to": "cross_S2",
-        "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         530.0,
+         563.2
+        ]
        }
       ],
       "module": "occupant"
@@ -21325,7 +26251,12 @@ export const DEMOS = {
        {
         "to": "seat_R",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         -300.0,
+         693.2
+        ]
        }
       ],
       "module": "occupant"
@@ -21356,7 +26287,12 @@ export const DEMOS = {
        {
         "to": "seat_L",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1045.0,
+         300.0,
+         693.2
+        ]
        }
       ],
       "module": "occupant"
@@ -21391,7 +26327,12 @@ export const DEMOS = {
        {
         "to": "deck",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1945.0,
+         0.0,
+         433.2
+        ]
        }
       ],
       "module": "body"
@@ -21422,7 +26363,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1172.1,
+         -300.0,
+         1407.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21451,9 +26402,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.neck",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1233.5,
+         -300.0,
+         1426.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21489,7 +26450,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         -300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21523,9 +26494,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.thigh_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         -208.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21561,7 +26542,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1118.6,
+         -153.7,
+         1061.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21595,9 +26586,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.arm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1069.0,
+         -104.9,
+         1072.1
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21631,9 +26632,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.forearm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -798.2,
+         -120.5,
+         1151.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21667,9 +26678,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.shank_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         -208.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21705,7 +26726,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         -300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21739,9 +26770,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.thigh_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         -392.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21777,7 +26818,17 @@ export const DEMOS = {
        {
         "to": "occupant_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1118.6,
+         -446.3,
+         1061.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21811,9 +26862,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.arm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1069.0,
+         -495.1,
+         1072.1
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21847,9 +26908,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.forearm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -798.2,
+         -479.5,
+         1151.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21883,9 +26954,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_R",
+        "to": "occupant_R.shank_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         -392.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21916,7 +26997,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1172.1,
+         300.0,
+         1407.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21945,9 +27036,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.neck",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1233.5,
+         300.0,
+         1426.9
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -21983,7 +27084,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22017,9 +27128,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.thigh_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         392.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22055,7 +27176,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1117.6,
+         429.4,
+         1050.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22089,9 +27220,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.arm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1134.0,
+         486.4,
+         1061.5
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22125,9 +27266,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.forearm_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -828.7,
+         412.4,
+         999.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22161,9 +27312,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.shank_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         392.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22199,7 +27360,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1097.6,
+         300.0,
+         888.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22233,9 +27404,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.thigh_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -817.4,
+         208.0,
+         906.8
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22271,7 +27452,17 @@ export const DEMOS = {
        {
         "to": "occupant_L",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1117.6,
+         170.6,
+         1050.2
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22305,9 +27496,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.arm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1134.0,
+         113.6,
+         1061.5
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22341,9 +27542,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.forearm_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -828.7,
+         187.6,
+         999.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22377,9 +27588,19 @@ export const DEMOS = {
       "system": "occupant",
       "connects_to": [
        {
-        "to": "occupant_L",
+        "to": "occupant_L.shank_R",
         "via": "pin",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -576.2,
+         208.0,
+         521.7
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "occupant"
@@ -22406,74 +27627,47 @@ export const DEMOS = {
        {
         "to": "knuckle_FL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
         "to": "FL",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "FL",
         "via": "rest",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "FL",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_FL",
-      "name": "前左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        0.0,
-        355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 4.0,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "LAl1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "LAl2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FL1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FL2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "LAd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "FL",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         0.0,
+         550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -22500,74 +27694,47 @@ export const DEMOS = {
        {
         "to": "knuckle_FR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         -1.0,
+         0.0
+        ]
        },
        {
         "to": "FR",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "FR",
         "via": "rest",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "FR",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_FR",
-      "name": "前右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        0.0,
-        -355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 4.0,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "RAl1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RAl2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FR1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_FR2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RAd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "FR",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         0.0,
+         -550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -22594,74 +27761,47 @@ export const DEMOS = {
        {
         "to": "knuckle_RL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        },
        {
         "to": "RL",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "RL",
         "via": "rest",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        },
        {
         "to": "RL",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_RL",
-      "name": "後左のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        -2020.0,
-        355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 3.1074002113230854,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "bracket_lca_RL1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_lca_RL2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RL1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RL2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "LBd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RL",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         -2020.0,
+         550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -22688,74 +27828,47 @@ export const DEMOS = {
        {
         "to": "knuckle_RR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         -1.0,
+         0.0
+        ]
        },
        {
         "to": "RR",
         "via": "rest",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "RR",
         "via": "rest",
-        "carries": "torque"
+        "carries": "torque",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        },
        {
         "to": "RR",
         "via": "rest",
-        "carries": "brake"
-       }
-      ],
-      "module": "suspension"
-     },
-     {
-      "id": "susp_RR",
-      "name": "後右のサスペンション (アームとダンパー。箱は下の腕のまわり)",
-      "kind": "suspension",
-      "box": {
-       "center_mm": [
-        -2020.0,
-        -355.5,
-        180.0
-       ],
-       "size_mm": [
-        190.0,
-        269.00000000000006,
-        60.0
-       ]
-      },
-      "mass_kg": 3.1074002113230854,
-      "system": "suspension",
-      "connects_to": [
-       {
-        "to": "bracket_lca_RR1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_lca_RR2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RR1",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "bracket_uca_RR2",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RBd",
-        "via": "bushing",
-        "carries": "load"
-       },
-       {
-        "to": "RR",
-        "via": "bushing",
-        "carries": "load"
+        "carries": "brake",
+        "at_mm": [
+         -2020.0,
+         -550.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -22780,14 +27893,49 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_FL",
+        "to": "bj_lower_FL",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_FL",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
        },
        {
         "to": "wheel_FL",
         "via": "bolt",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
        }
       ],
       "module": "suspension"
@@ -22812,14 +27960,49 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_FR",
+        "to": "bj_lower_FR",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_FR",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
        },
        {
         "to": "wheel_FR",
         "via": "bolt",
-        "carries": "steer"
+        "carries": "steer",
+        "at_mm": [
+         0.0,
+         -510.00000000000006,
+         300.0
+        ],
+        "axis": [
+         0.0,
+         -1.0,
+         0.0
+        ]
        }
       ],
       "module": "suspension"
@@ -22844,9 +28027,34 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_RL",
+        "to": "bj_lower_RL",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_RL",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         -0.09540940422425438,
+         0.9954381174063874
+        ]
        }
       ],
       "module": "suspension"
@@ -22878,12 +28086,32 @@ export const DEMOS = {
        {
         "to": "knuckle_RL",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         0.0,
+         0.999640377442261,
+         0.02681633433364885
+        ]
        },
        {
         "to": "bracket_lca_RL2",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         265.0,
+         271.4
+        ],
+        "axis": [
+         0.0,
+         0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "suspension"
@@ -22908,9 +28136,34 @@ export const DEMOS = {
       "system": "suspension",
       "connects_to": [
        {
-        "to": "susp_RR",
+        "to": "bj_lower_RR",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
+       },
+       {
+        "to": "bj_upper_RR",
+        "via": "ball_joint",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "axis": [
+         0.0,
+         0.09540940422425438,
+         0.9954381174063874
+        ]
        }
       ],
       "module": "suspension"
@@ -22942,12 +28195,32 @@ export const DEMOS = {
        {
         "to": "knuckle_RR",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         -475.00000000000006,
+         285.0
+        ],
+        "axis": [
+         0.0,
+         -0.999640377442261,
+         0.02681633433364885
+        ]
        },
        {
         "to": "bracket_lca_RR2",
         "via": "ball_joint",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         -265.0,
+         271.4
+        ],
+        "axis": [
+         0.0,
+         -0.999640377442261,
+         0.02681633433364885
+        ]
        }
       ],
       "module": "suspension"
@@ -22974,12 +28247,22 @@ export const DEMOS = {
        {
         "to": "knuckle_FL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -80.0,
+         475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_FL",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -80.0,
+         515.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -23006,12 +28289,22 @@ export const DEMOS = {
        {
         "to": "knuckle_FR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -80.0,
+         -475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_FR",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -80.0,
+         -515.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -23038,12 +28331,22 @@ export const DEMOS = {
        {
         "to": "knuckle_RL",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2100.0,
+         475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_RL",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -2100.0,
+         515.0,
+         300.0
+        ]
        }
       ],
       "module": "suspension"
@@ -23070,12 +28373,1426 @@ export const DEMOS = {
        {
         "to": "knuckle_RR",
         "via": "bolt",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2100.0,
+         -475.0,
+         336.5
+        ]
        },
        {
         "to": "wheel_RR",
         "via": "friction",
-        "carries": "brake"
+        "carries": "brake",
+        "at_mm": [
+         -2100.0,
+         -515.0,
+         300.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FL_f",
+      "name": "前左の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        60.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FL_r",
+      "name": "前左の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -60.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FL_x",
+      "name": "前左の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        0.0,
+        401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.39999999999998,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345888,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         35.999999999999986,
+         401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -35.999999999999986,
+         401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FL_f",
+      "name": "前左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        50.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         100.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FL_r",
+      "name": "前左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -50.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -100.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_FL",
+      "name": "前左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_FL",
+      "name": "前左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_FL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_FL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_FL",
+      "name": "前左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        0.0,
+        415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        90.0
+       ]
+      },
+      "mass_kg": 2.2805447189759964,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_FL",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_FL_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FR_f",
+      "name": "前右の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        60.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FR_r",
+      "name": "前右の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -60.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_FR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_FR_x",
+      "name": "前右の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        0.0,
+        -401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.39999999999998,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345888,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         35.999999999999986,
+         -401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -35.999999999999986,
+         -401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FR_f",
+      "name": "前右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        50.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         100.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_FR_r",
+      "name": "前右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -50.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_FR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -100.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_FR",
+      "name": "前右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        -490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_FR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_FR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_FR",
+      "name": "前右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        0.0,
+        -460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_FR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_FR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_FR",
+      "name": "前右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        0.0,
+        -415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        -90.0
+       ]
+      },
+      "mass_kg": 2.2805447189759964,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_FR",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_FR_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RL_f",
+      "name": "後左の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1960.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1900.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RL_r",
+      "name": "後左の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RL_x",
+      "name": "後左の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.4,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345891,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1984.0,
+         401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2056.0,
+         401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RL_f",
+      "name": "後左の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1970.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RL1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1920.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RL_r",
+      "name": "後左の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2070.0,
+        363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RL2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2120.0,
+         266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_RL",
+      "name": "後左の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_RL",
+      "name": "後左の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_RL_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_RL_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_RL",
+      "name": "後左のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        90.0
+       ]
+      },
+      "mass_kg": 1.3879449302990818,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_RL",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_RL_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RR_f",
+      "name": "後右の下の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1960.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -112.20347853205739
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1900.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RR_r",
+      "name": "後右の下の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2080.0,
+        -343.0,
+        180.0
+       ],
+       "size_mm": [
+        342.9468469375818,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -67.79652146794261
+       ]
+      },
+      "mass_kg": 0.36649933191383716,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_lca_RR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2140.0,
+         -196.0,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "lca_RR_x",
+      "name": "後右の下の腕の横の管 (ダンパーの下の取付)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -401.80000000000007,
+        180.0
+       ],
+       "size_mm": [
+        97.4,
+        25.4,
+        25.4
+       ]
+      },
+      "mass_kg": 0.08309939825345891,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1984.0,
+         -401.80000000000007,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2056.0,
+         -401.80000000000007,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RR_f",
+      "name": "後右の上の腕 (前の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -1970.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -117.36600907341865
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RR1",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -1920.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "uca_RR_r",
+      "name": "後右の上の腕 (後の脚)",
+      "kind": "link",
+      "box": {
+       "center_mm": [
+        -2070.0,
+        -363.40000000000003,
+        485.5
+       ],
+       "size_mm": [
+        243.46246811407053,
+        25.4,
+        25.4
+       ],
+       "rpy_deg": [
+        0.0,
+        -3.944355573403167,
+        -62.63399092658136
+       ]
+      },
+      "mass_kg": 0.25167860947143517,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_uca_RR2",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2120.0,
+         -266.8,
+         478.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_lower_RR",
+      "name": "後右の下のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -490.00000000000006,
+        180.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "lca_RR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ]
+       },
+       {
+        "to": "lca_RR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -490.00000000000006,
+         180.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "bj_upper_RR",
+      "name": "後右の上のボールジョイント",
+      "kind": "ball_joint",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -460.00000000000006,
+        493.0
+       ],
+       "size_mm": [
+        40.0,
+        40.0,
+        40.0
+       ]
+      },
+      "mass_kg": 0.2,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "uca_RR_f",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ]
+       },
+       {
+        "to": "uca_RR_r",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ]
+       }
+      ],
+      "module": "suspension"
+     },
+     {
+      "id": "damper_RR",
+      "name": "後右のダンパー (コイルばねつき)",
+      "kind": "damper",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -415.30000000000007,
+        391.5
+       ],
+       "size_mm": [
+        473.8608262153982,
+        50.0,
+        50.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -86.34777721969367,
+        -90.0
+       ]
+      },
+      "mass_kg": 1.3879449302990818,
+      "system": "suspension",
+      "connects_to": [
+       {
+        "to": "bracket_damper_RR",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -428.8,
+         603.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       {
+        "to": "lca_RR_x",
+        "via": "bushing",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "axis": [
+         1.0,
+         0.0,
+         0.0
+        ]
        }
       ],
       "module": "suspension"
@@ -23103,9 +29820,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LAu1",
+        "to": "rail_L_LAu1_LA",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         75.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23133,9 +29855,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LAu2",
+        "to": "rail_L_LA_LAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -75.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23163,9 +29890,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RAu1",
+        "to": "rail_R_RAu1_RA",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         75.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23193,9 +29925,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RAu2",
+        "to": "rail_R_RA_RAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -75.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23223,9 +29960,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1875.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23253,9 +29995,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23283,9 +30030,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1895.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23313,9 +30065,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2145.0,
+         350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23343,9 +30100,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1875.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23373,9 +30135,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23403,9 +30170,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_HB",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1895.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23433,9 +30205,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2145.0,
+         -350.0,
+         420.0
+        ]
        }
       ],
       "module": "frame"
@@ -23463,9 +30240,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LAu2",
+        "to": "rail_L_LA_LAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -95.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23493,9 +30275,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RAu2",
+        "to": "rail_R_RA_RAu2",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -95.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23523,9 +30310,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LB",
+        "to": "rail_L_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23553,9 +30345,14 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "RB",
+        "to": "rail_R_BE",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -2165.0,
+         -350.0,
+         340.0
+        ]
        }
       ],
       "module": "frame"
@@ -23584,17 +30381,27 @@ export const DEMOS = {
       "system": "frame",
       "connects_to": [
        {
-        "to": "LDT",
+        "to": "dash_cross",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -285.0,
+         -265.0,
+         829.1
+        ]
        },
        {
-        "to": "RDT",
+        "to": "dash_post_R",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -285.0,
+         -335.0,
+         829.1
+        ]
        }
       ],
-      "module": "frame"
+      "module": "steering"
      },
      {
       "id": "rollbar",
@@ -23626,15 +30433,1048 @@ export const DEMOS = {
        {
         "to": "LH",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1400.0,
+         350.0,
+         380.0
+        ]
        },
        {
         "to": "RH",
         "via": "weld",
-        "carries": "load"
+        "carries": "load",
+        "at_mm": [
+         -1400.0,
+         -350.0,
+         380.0
+        ]
        }
       ],
       "module": "occupant"
+     },
+     {
+      "id": "bracket_lca_FL1",
+      "name": "前左の下の腕の付け根の金具 (前) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        95.5,
+        196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "LAl1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAl1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_lca_FL2",
+      "name": "前左の下の腕の付け根の金具 (後) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -95.5,
+        196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "LAl2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAl2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_FL",
+      "name": "前左のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        0.0,
+        414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "LAd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LAd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_lca_FR1",
+      "name": "前右の下の腕の付け根の金具 (前) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        95.5,
+        -196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "RAl1"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAl1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         120.0,
+         -196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_lca_FR2",
+      "name": "前右の下の腕の付け根の金具 (後) (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -95.5,
+        -196.0,
+        165.5
+       ],
+       "size_mm": [
+        51.0,
+        30.0,
+        31.0
+       ]
+      },
+      "mass_kg": 0.046723200000000006,
+      "carried_by": [
+       "RAl2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAl2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -120.0,
+         -196.0,
+         180.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_FR",
+      "name": "前右のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        0.0,
+        -414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "RAd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RAd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         0.0,
+         -428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_RL",
+      "name": "後左のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "LBd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "LBd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "bracket_damper_RR",
+      "name": "後右のダンパーの上の金具 (クレビス、溶接)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -2020.0,
+        -414.3,
+        596.0
+       ],
+       "size_mm": [
+        50.0,
+        31.0,
+        16.0
+       ]
+      },
+      "mass_kg": 0.024919040000000003,
+      "carried_by": [
+       "RBd"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "RBd",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         -428.8,
+         603.0
+        ]
+       }
+      ],
+      "module": "frame"
+     },
+     {
+      "id": "pushrod_brake",
+      "name": "ブレーキの押し棒",
+      "kind": "pushrod",
+      "box": {
+       "center_mm": [
+        -304.68199399802495,
+        -220.0,
+        495.8881328648239
+       ],
+       "size_mm": [
+        69.79051292353493,
+        10.0,
+        10.0
+       ],
+       "rpy_deg": [
+        0.0,
+        6.337720390910457,
+        0.0
+       ]
+      },
+      "mass_kg": 0.1,
+      "connects_to": [
+       {
+        "to": "brake_master",
+        "via": "pin",
+        "carries": "brake",
+        "at_mm": [
+         -270.0,
+         -220.0,
+         492.5
+        ],
+        "axis": [
+         0.0,
+         1.0,
+         0.0
+        ]
+       }
+      ],
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "system": "brake",
+      "module": "steering"
+     },
+     {
+      "id": "fit_floor_front_rail_L_AS1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LAp2",
+       "LS1"
+      ],
+      "box": {
+       "center_mm": [
+        -527.5,
+        350.0,
+        425.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "rail_L_AS1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         350.0,
+         420.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_floor_front_rail_R_AS1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp2",
+       "RS1"
+      ],
+      "box": {
+       "center_mm": [
+        -527.5,
+        -350.0,
+        425.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "rail_R_AS1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -527.5,
+         -350.0,
+         420.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_floor_front_cross_S1",
+      "name": "足元の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS1",
+       "RS1"
+      ],
+      "box": {
+       "center_mm": [
+        -770.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        30.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+       {
+        "to": "cross_S1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         400.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_cross_S2",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "box": {
+       "center_mm": [
+        -1405.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        133.41664064126334,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        12.994616791916505,
+        0.0
+       ]
+      },
+      "mass_kg": 0.11844917258853584,
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.1,
+         0.0,
+         398.7
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_cross_B",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "box": {
+       "center_mm": [
+        -2020.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        30.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+       {
+        "to": "cross_B",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         400.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_rail_L_BE",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "LE"
+      ],
+      "box": {
+       "center_mm": [
+        -2220.0,
+        285.9,
+        425.0
+       ],
+       "size_mm": [
+        88.76508322533134,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        6.468497581602585,
+        90.0
+       ]
+      },
+      "mass_kg": 0.07880689104640207,
+      "connects_to": [
+       {
+        "to": "rail_L_BE",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         329.7,
+         414.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_deck_rail_R_BE",
+      "name": "荷台の床 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RB",
+       "RE"
+      ],
+      "box": {
+       "center_mm": [
+        -2220.0,
+        -285.9,
+        425.0
+       ],
+       "size_mm": [
+        88.76508322533134,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        6.468497581602585,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.07880689104640207,
+      "connects_to": [
+       {
+        "to": "rail_R_BE",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2220.0,
+         -329.7,
+         414.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_front_body_cross_F",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LF",
+       "RF"
+      ],
+      "box": {
+       "center_mm": [
+        400.0,
+        0.0,
+        415.0
+       ],
+       "size_mm": [
+        30.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.02663442251713427,
+      "connects_to": [
+       {
+        "to": "cross_F",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         400.0,
+         0.0,
+         400.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_front_body_tower_post_LA1",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LAp1",
+       "LAt1"
+      ],
+      "box": {
+       "center_mm": [
+        285.0,
+        288.4,
+        491.5
+       ],
+       "size_mm": [
+        93.19999999999999,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        90.0
+       ]
+      },
+      "mass_kg": 0.08274427261989711,
+      "connects_to": [
+       {
+        "to": "tower_post_LA1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         335.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_front_body_tower_post_RA1",
+      "name": "前の外板とバンパー の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp1",
+       "RAt1"
+      ],
+      "box": {
+       "center_mm": [
+        285.0,
+        -288.4,
+        491.5
+       ],
+       "size_mm": [
+        93.19999999999999,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -90.0
+       ]
+      },
+      "mass_kg": 0.08274427261989711,
+      "connects_to": [
+       {
+        "to": "tower_post_RA1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         285.0,
+         -335.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_main_switch_rail_L_AS1",
+      "name": "電池の主スイッチ (遮断) の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LAp2",
+       "LS1"
+      ],
+      "box": {
+       "center_mm": [
+        -580.0,
+        280.0,
+        340.0
+       ],
+       "size_mm": [
+        100.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        90.0
+       ]
+      },
+      "mass_kg": 0.08878140839044757,
+      "connects_to": [
+       {
+        "to": "rail_L_AS1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -570.0,
+         330.0,
+         350.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_motor_cross_B",
+      "name": "モーター の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "box": {
+       "center_mm": [
+        -1970.0,
+        0.0,
+        378.0
+       ],
+       "size_mm": [
+        60.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        180.0
+       ]
+      },
+      "mass_kg": 0.05326884503426854,
+      "connects_to": [
+       {
+        "to": "cross_B",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2000.0,
+         -0.0,
+         380.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_reducer_cross_B",
+      "name": "減速機と差動 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LB",
+       "RB"
+      ],
+      "box": {
+       "center_mm": [
+        -2020.0,
+        0.0,
+        355.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "cross_B",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -2020.0,
+         0.0,
+         360.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_controller_cross_S2",
+      "name": "モーターの制御器 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "box": {
+       "center_mm": [
+        -1320.0,
+        0.0,
+        350.0
+       ],
+       "size_mm": [
+        20.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.01775628167808951,
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1320.0,
+         0.0,
+         360.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_aux_cross_S1",
+      "name": "配線と 12 V の補機 の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "LS1",
+       "RS1"
+      ],
+      "box": {
+       "center_mm": [
+        -770.0,
+        0.0,
+        355.0
+       ],
+       "size_mm": [
+        10.0,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -90.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.008878140839044755,
+      "connects_to": [
+       {
+        "to": "cross_S1",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -770.0,
+         0.0,
+         360.0
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_pedal_accel_tower_post_RA2",
+      "name": "アクセルのペダル の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp2",
+       "RAt2"
+      ],
+      "box": {
+       "center_mm": [
+        -319.68199399802495,
+        -350.0,
+        499.74017334403584
+       ],
+       "size_mm": [
+        39.36398799604984,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        0.0
+       ]
+      },
+      "mass_kg": 0.034947902941539766,
+      "connects_to": [
+       {
+        "to": "tower_post_RA2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -300.0,
+         -350.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
+     },
+     {
+      "id": "fit_pedal_brake_tower_post_RA2",
+      "name": "ブレーキのペダル の金具",
+      "kind": "bracket",
+      "carried_by": [
+       "RAp2",
+       "RAt2"
+      ],
+      "box": {
+       "center_mm": [
+        -319.68199399802495,
+        -297.5,
+        499.74017334403584
+       ],
+       "size_mm": [
+        84.70255929399747,
+        20.0,
+        20.0
+       ],
+       "rpy_deg": [
+        0.0,
+        -0.0,
+        -62.30712243716878
+       ]
+      },
+      "mass_kg": 0.07520012508396488,
+      "connects_to": [
+       {
+        "to": "tower_post_RA2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -300.0,
+         -335.0,
+         491.5
+        ]
+       }
+      ],
+      "system": "frame",
+      "module": "frame"
      }
     ],
     "nodes": [
@@ -24043,7 +31883,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の端から前の塔の前の柱まで)"
      },
      {
       "id": "rail_L_LAp1_LAu1",
@@ -24052,7 +31893,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の塔の前の柱から上の腕の前の付け根の下まで)"
      },
      {
       "id": "rail_L_LAu1_LA",
@@ -24061,7 +31903,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (上の腕の前の付け根の下から前の車軸まで)"
      },
      {
       "id": "rail_L_LA_LAu2",
@@ -24070,7 +31913,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の車軸から上の腕の後ろの付け根の下まで)"
      },
      {
       "id": "rail_L_LAu2_LAp2",
@@ -24079,7 +31923,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (上の腕の後ろの付け根の下から前の塔の後ろの柱まで)"
      },
      {
       "id": "rail_L_AS1",
@@ -24088,7 +31933,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (前の塔の後ろの柱から座席の前まで)"
      },
      {
       "id": "rail_L_S1S2",
@@ -24097,7 +31943,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (座席の前から座席の後ろまで)"
      },
      {
       "id": "rail_L_S2H",
@@ -24106,7 +31953,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (座席の後ろからロールバーの足まで)"
      },
      {
       "id": "rail_L_HB",
@@ -24115,7 +31963,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (ロールバーの足から後ろの車軸まで)"
      },
      {
       "id": "rail_L_BE",
@@ -24124,7 +31973,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "左のレール (後ろの車軸から後ろの端まで)"
      },
      {
       "id": "rail_R_FA",
@@ -24133,7 +31983,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の端から前の塔の前の柱まで)"
      },
      {
       "id": "rail_R_RAp1_RAu1",
@@ -24142,7 +31993,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の塔の前の柱から上の腕の前の付け根の下まで)"
      },
      {
       "id": "rail_R_RAu1_RA",
@@ -24151,7 +32003,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (上の腕の前の付け根の下から前の車軸まで)"
      },
      {
       "id": "rail_R_RA_RAu2",
@@ -24160,7 +32013,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の車軸から上の腕の後ろの付け根の下まで)"
      },
      {
       "id": "rail_R_RAu2_RAp2",
@@ -24169,7 +32023,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (上の腕の後ろの付け根の下から前の塔の後ろの柱まで)"
      },
      {
       "id": "rail_R_AS1",
@@ -24178,7 +32033,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (前の塔の後ろの柱から座席の前まで)"
      },
      {
       "id": "rail_R_S1S2",
@@ -24187,7 +32043,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (座席の前から座席の後ろまで)"
      },
      {
       "id": "rail_R_S2H",
@@ -24196,7 +32053,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (座席の後ろからロールバーの足まで)"
      },
      {
       "id": "rail_R_HB",
@@ -24205,7 +32063,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (ロールバーの足から後ろの車軸まで)"
      },
      {
       "id": "rail_R_BE",
@@ -24214,7 +32073,8 @@ export const DEMOS = {
       "section": "rt40x80x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "右のレール (後ろの車軸から後ろの端まで)"
      },
      {
       "id": "cross_F",
@@ -24223,7 +32083,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の端の横の部材"
      },
      {
       "id": "cross_A",
@@ -24232,7 +32093,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の車軸の横の部材"
      },
      {
       "id": "cross_S1",
@@ -24241,7 +32103,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "座席の前の横の部材"
      },
      {
       "id": "cross_S2",
@@ -24250,7 +32113,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "座席の後ろの横の部材"
      },
      {
       "id": "cross_B",
@@ -24259,7 +32123,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろの車軸の横の部材"
      },
      {
       "id": "cross_E",
@@ -24268,7 +32133,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろの端の横の部材"
      },
      {
       "id": "tower_post_LA1",
@@ -24277,7 +32143,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左のサスペンションの塔の柱 (前)"
      },
      {
       "id": "tower_top_LA1",
@@ -24286,7 +32153,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の塔の上の梁 (前の柱から真ん中まで)"
      },
      {
       "id": "tower_post_LA2",
@@ -24295,7 +32163,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左のサスペンションの塔の柱 (後ろ)"
      },
      {
       "id": "tower_top_LA2",
@@ -24304,7 +32173,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の塔の上の梁 (真ん中から後ろの柱まで)"
      },
      {
       "id": "tower_arm_LA",
@@ -24313,7 +32183,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "lower_leg_LA1",
@@ -24322,7 +32193,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の下の脚 (塔の前の柱の足から、下の腕の前の付け根へ)"
      },
      {
       "id": "lower_leg_LA2",
@@ -24331,7 +32203,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前左の下の脚 (塔の後ろの柱の足から、下の腕の後ろの付け根へ)"
      },
      {
       "id": "tower_post_RA1",
@@ -24340,7 +32213,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右のサスペンションの塔の柱 (前)"
      },
      {
       "id": "tower_top_RA1",
@@ -24349,7 +32223,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の塔の上の梁 (前の柱から真ん中まで)"
      },
      {
       "id": "tower_post_RA2",
@@ -24358,7 +32233,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右のサスペンションの塔の柱 (後ろ)"
      },
      {
       "id": "tower_top_RA2",
@@ -24367,7 +32243,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の塔の上の梁 (真ん中から後ろの柱まで)"
      },
      {
       "id": "tower_arm_RA",
@@ -24376,7 +32253,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "lower_leg_RA1",
@@ -24385,7 +32263,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の下の脚 (塔の前の柱の足から、下の腕の前の付け根へ)"
      },
      {
       "id": "lower_leg_RA2",
@@ -24394,7 +32273,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前右の下の脚 (塔の後ろの柱の足から、下の腕の後ろの付け根へ)"
      },
      {
       "id": "tower_post_LB",
@@ -24403,7 +32283,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ左のサスペンションの塔の柱"
      },
      {
       "id": "tower_arm_LB",
@@ -24412,7 +32293,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ左の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "tower_post_RB",
@@ -24421,7 +32303,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ右のサスペンションの塔の柱"
      },
      {
       "id": "tower_arm_RB",
@@ -24430,7 +32313,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "後ろ右の塔の腕 (ダンパーの上へ)"
      },
      {
       "id": "lower_cross_A1",
@@ -24439,7 +32323,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の下の横の部材 (下の腕の前の付け根どうし)"
      },
      {
       "id": "lower_cross_A2",
@@ -24448,7 +32333,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "frame",
+      "name": "前の下の横の部材 (下の腕の後ろの付け根どうし)"
      },
      {
       "id": "dash_post_L",
@@ -24457,7 +32343,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "steering",
+      "name": "ダッシュの左の柱 (前の塔の後ろの柱の上から)"
      },
      {
       "id": "dash_post_R",
@@ -24466,7 +32353,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "steering",
+      "name": "ダッシュの右の柱 (前の塔の後ろの柱の上から)"
      },
      {
       "id": "dash_cross",
@@ -24475,7 +32363,8 @@ export const DEMOS = {
       "section": "rt30x30x2.3",
       "material": "stkr400",
       "part": "frame",
-      "module": "frame"
+      "module": "steering",
+      "name": "ダッシュの横の部材 (コラムの金具を持つ)"
      },
      {
       "id": "rollbar_foot_L",
@@ -24484,7 +32373,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの左の足 (レールから外へ)"
      },
      {
       "id": "rollbar_post_L",
@@ -24493,7 +32383,8 @@ export const DEMOS = {
       "section": "ct42.7x2.3",
       "material": "stkm13a",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの左の柱"
      },
      {
       "id": "rollbar_foot_R",
@@ -24502,7 +32393,8 @@ export const DEMOS = {
       "section": "rt40x40x2.3",
       "material": "stkr400",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの右の足 (レールから外へ)"
      },
      {
       "id": "rollbar_post_R",
@@ -24511,7 +32403,8 @@ export const DEMOS = {
       "section": "ct42.7x2.3",
       "material": "stkm13a",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの右の柱"
      },
      {
       "id": "rollbar_top",
@@ -24520,7 +32413,8 @@ export const DEMOS = {
       "section": "ct42.7x2.3",
       "material": "stkm13a",
       "part": "rollbar",
-      "module": "occupant"
+      "module": "occupant",
+      "name": "ロールバーの上の棒"
      }
     ],
     "sections": {
@@ -24585,6 +32479,7 @@ export const DEMOS = {
       "verified": false
      }
     },
+    "archetype": "ladder_4w",
     "modules": [
      {
       "module_id": "package",
@@ -24793,8 +32688,8 @@ export const DEMOS = {
        {
         "id": "if-023",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LAt2"
@@ -24802,8 +32697,8 @@ export const DEMOS = {
        {
         "id": "if-024",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LDT"
@@ -24811,8 +32706,8 @@ export const DEMOS = {
        {
         "id": "if-025",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RAt2"
@@ -24820,8 +32715,8 @@ export const DEMOS = {
        {
         "id": "if-026",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RDT"
@@ -24833,7 +32728,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LDT"
+        "node": "LAp2"
        },
        {
         "id": "if-028",
@@ -24842,7 +32737,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "RDT"
+        "node": "LAu2"
        },
        {
         "id": "if-029",
@@ -24851,19 +32746,10 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LAu2"
-       },
-       {
-        "id": "if-030",
-        "between": [
-         "frame",
-         "steering"
-        ],
-        "via": "bolt",
         "node": "RAu2"
        },
        {
-        "id": "if-031",
+        "id": "if-030",
         "between": [
          "frame",
          "occupant"
@@ -24872,7 +32758,7 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-032",
+        "id": "if-031",
         "between": [
          "frame",
          "occupant"
@@ -24881,7 +32767,7 @@ export const DEMOS = {
         "node": "RS2"
        },
        {
-        "id": "if-033",
+        "id": "if-032",
         "between": [
          "frame",
          "occupant"
@@ -24890,7 +32776,7 @@ export const DEMOS = {
         "node": "LS1"
        },
        {
-        "id": "if-034",
+        "id": "if-033",
         "between": [
          "frame",
          "occupant"
@@ -24899,7 +32785,7 @@ export const DEMOS = {
         "node": "LS2"
        },
        {
-        "id": "if-035",
+        "id": "if-034",
         "between": [
          "frame",
          "occupant"
@@ -24908,7 +32794,7 @@ export const DEMOS = {
         "node": "LH"
        },
        {
-        "id": "if-036",
+        "id": "if-035",
         "between": [
          "frame",
          "occupant"
@@ -24917,7 +32803,7 @@ export const DEMOS = {
         "node": "LHO"
        },
        {
-        "id": "if-037",
+        "id": "if-036",
         "between": [
          "frame",
          "occupant"
@@ -24926,7 +32812,7 @@ export const DEMOS = {
         "node": "LHT"
        },
        {
-        "id": "if-038",
+        "id": "if-037",
         "between": [
          "frame",
          "occupant"
@@ -24935,7 +32821,7 @@ export const DEMOS = {
         "node": "RH"
        },
        {
-        "id": "if-039",
+        "id": "if-038",
         "between": [
          "frame",
          "occupant"
@@ -24944,13 +32830,26 @@ export const DEMOS = {
         "node": "RHO"
        },
        {
-        "id": "if-040",
+        "id": "if-039",
         "between": [
          "frame",
          "occupant"
         ],
         "via": "bolt",
         "node": "RHT"
+       },
+       {
+        "id": "if-040",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
        },
        {
         "id": "if-041",
@@ -24960,7 +32859,7 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         120.0,
+         -120.0,
          196.0,
          180.0
         ]
@@ -24973,26 +32872,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -120.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-043",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          100.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-044",
+        "id": "if-043",
         "between": [
          "frame",
          "suspension"
@@ -25005,7 +32891,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-045",
+        "id": "if-044",
         "between": [
          "frame",
          "suspension"
@@ -25018,7 +32904,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-046",
+        "id": "if-045",
         "between": [
          "frame",
          "suspension"
@@ -25031,7 +32917,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-047",
+        "id": "if-046",
         "between": [
          "frame",
          "suspension"
@@ -25044,7 +32930,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-048",
+        "id": "if-047",
         "between": [
          "frame",
          "suspension"
@@ -25057,7 +32943,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-049",
+        "id": "if-048",
         "between": [
          "frame",
          "suspension"
@@ -25070,7 +32956,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-050",
+        "id": "if-049",
         "between": [
          "frame",
          "suspension"
@@ -25083,7 +32969,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-051",
+        "id": "if-050",
         "between": [
          "frame",
          "suspension"
@@ -25091,6 +32977,19 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1900.0,
+         196.0,
+         180.0
+        ]
+       },
+       {
+        "id": "if-051",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2140.0,
          196.0,
          180.0
         ]
@@ -25103,26 +33002,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -2140.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-053",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          -1920.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-054",
+        "id": "if-053",
         "between": [
          "frame",
          "suspension"
@@ -25135,7 +33021,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-055",
+        "id": "if-054",
         "between": [
          "frame",
          "suspension"
@@ -25148,7 +33034,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-056",
+        "id": "if-055",
         "between": [
          "frame",
          "suspension"
@@ -25161,7 +33047,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-057",
+        "id": "if-056",
         "between": [
          "frame",
          "suspension"
@@ -25174,7 +33060,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-058",
+        "id": "if-057",
         "between": [
          "frame",
          "suspension"
@@ -25187,7 +33073,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-059",
+        "id": "if-058",
         "between": [
          "frame",
          "suspension"
@@ -25200,7 +33086,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-060",
+        "id": "if-059",
         "between": [
          "frame",
          "suspension"
@@ -25213,7 +33099,59 @@ export const DEMOS = {
         ]
        },
        {
+        "id": "if-060",
+        "between": [
+         "body",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         0.0,
+         380.8
+        ]
+       },
+       {
         "id": "if-061",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -600.0,
+         235.0,
+         320.0
+        ]
+       },
+       {
+        "id": "if-062",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1892.5,
+         0.0,
+         323.0
+        ]
+       },
+       {
+        "id": "if-063",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2020.0,
+         0.0,
+         311.5
+        ]
+       },
+       {
+        "id": "if-064",
         "between": [
          "powertrain",
          "suspension"
@@ -25226,7 +33164,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-062",
+        "id": "if-065",
         "between": [
          "powertrain",
          "suspension"
@@ -25239,7 +33177,72 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-063",
+        "id": "if-066",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1375.0,
+         0.0,
+         325.0
+        ]
+       },
+       {
+        "id": "if-067",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -695.0,
+         0.0,
+         327.5
+        ]
+       },
+       {
+        "id": "if-068",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-069",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         -175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-070",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -655.4444124836293,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-071",
         "between": [
          "powertrain",
          "steering"
@@ -25252,98 +33255,202 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-064",
+        "id": "if-072",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -165.0,
-         461.8180461928059
+         -354.7254072333135,
+         -340.0,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-065",
+        "id": "if-073",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -110.0,
-         461.8180461928059
+         -354.7254072333135,
+         -258.75,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-066",
+        "id": "if-074",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-067",
+        "id": "if-075",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-068",
+        "id": "if-076",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-069",
+        "id": "if-077",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-070",
+        "id": "if-078",
         "between": [
          "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1675.0,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-079",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1982.5,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-080",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-081",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         -142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-082",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         310.0,
+         0.0,
+         492.5
+        ]
+       },
+       {
+        "id": "if-083",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-084",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         -144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-085",
+        "between": [
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -301.72499999999997,
-         -110.0,
-         659.8807736132626
+         -120.0,
+         140.33665774481273,
+         287.49722198053644
         ]
        },
        {
-        "id": "if-071",
+        "id": "if-086",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         -140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-087",
         "between": [
          "steering",
          "suspension"
@@ -25356,7 +33463,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-072",
+        "id": "if-088",
         "between": [
          "steering",
          "suspension"
@@ -25369,163 +33476,33 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-073",
+        "id": "if-089",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "occupant"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         50.0,
-         328.2,
-         318.25
+         -1045.0,
+         -150.0,
+         497.40000000000003
         ]
        },
        {
-        "id": "if-074",
+        "id": "if-090",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "occupant"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -50.0,
-         328.2,
-         318.25
+         -1045.0,
+         150.0,
+         497.40000000000003
         ]
        },
        {
-        "id": "if-075",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-076",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-077",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-078",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-079",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-080",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-081",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-082",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-083",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-084",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-085",
+        "id": "if-091",
         "between": [
          "frame",
          "suspension"
@@ -25538,7 +33515,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-086",
+        "id": "if-092",
         "between": [
          "frame",
          "suspension"
@@ -25548,6 +33525,266 @@ export const DEMOS = {
          -2140.0,
          -308.0866577448127,
          267.0824073268455
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-094",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-095",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-096",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-097",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-098",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-099",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-100",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-101",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-102",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         -414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-103",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-104",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-105",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-106",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-107",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-108",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-109",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-110",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-111",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-112",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         -414.80000000000007,
+         493.75
         ]
        }
       ],
@@ -26126,242 +34363,494 @@ export const DEMOS = {
        },
        {
         "center_mm": [
-         -285.0,
-         350.0,
-         716.0431784698708
+         100.0,
+         300.9,
+         456.5
         ],
         "size_mm": [
-         80.0,
-         80.0,
-         276.08635693974156
+         100.0,
+         148.20000000000002,
+         123.0
         ]
        },
        {
         "center_mm": [
-         -285.0,
-         -350.0,
-         716.0431784698708
+         -100.0,
+         300.9,
+         456.5
         ],
         "size_mm": [
-         80.0,
-         80.0,
-         276.08635693974156
+         100.0,
+         148.20000000000002,
+         123.0
         ]
        },
        {
         "center_mm": [
-         -285.0,
+         100.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -100.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1900.0,
+         265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1920.0,
+         300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2120.0,
+         300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1900.0,
+         -265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         -265.5,
+         252.5
+        ],
+        "size_mm": [
+         100.0,
+         219.0,
+         225.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1920.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2120.0,
+         -300.9,
+         456.5
+        ],
+        "size_mm": [
+         100.0,
+         148.20000000000002,
+         123.0
+        ]
+       },
+       {
+        "center_mm": [
+         -120.0,
+         280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         -120.0,
+         -280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         -2140.0,
+         -280.67331548962545,
+         296.664814653691
+        ],
+        "size_mm": [
+         100.0,
+         188.6533690207491,
+         136.67037069261804
+        ]
+       },
+       {
+        "center_mm": [
+         95.5,
+         196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
+         80.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
+         -95.5,
+         196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
+         80.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
          0.0,
-         829.0863569397414
+         414.3,
+         596.0
         ],
         "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         95.5,
+         -196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
          80.0,
-         750.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
+         -95.5,
+         -196.0,
+         165.5
+        ],
+        "size_mm": [
+         101.0,
+         80.0,
+         81.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -414.3,
+         596.0
+        ],
+        "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         414.3,
+         596.0
+        ],
+        "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -414.3,
+         596.0
+        ],
+        "size_mm": [
+         100.0,
+         81.0,
+         66.0
+        ]
+       },
+       {
+        "center_mm": [
+         -527.5,
+         350.0,
+         425.0
+        ],
+        "size_mm": [
+         70.0,
+         70.0,
+         60.0
+        ]
+       },
+       {
+        "center_mm": [
+         -527.5,
+         -350.0,
+         425.0
+        ],
+        "size_mm": [
+         70.0,
+         70.0,
+         60.0
+        ]
+       },
+       {
+        "center_mm": [
+         -770.0,
+         0.0,
+         415.0
+        ],
+        "size_mm": [
+         70.0,
+         70.0,
          80.0
         ]
        },
        {
         "center_mm": [
-         100.0,
-         300.9,
-         456.5
+         -1405.0,
+         0.0,
+         415.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         184.49719013397498,
+         70.0,
+         99.48782391389238
         ]
        },
        {
         "center_mm": [
-         -100.0,
-         300.9,
-         456.5
+         -2020.0,
+         0.0,
+         415.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         70.0,
+         80.0
         ]
        },
        {
         "center_mm": [
-         100.0,
-         -300.9,
-         456.5
+         -2220.0,
+         285.9,
+         425.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         140.45313820178933,
+         79.87267893978151
         ]
        },
        {
         "center_mm": [
-         -100.0,
-         -300.9,
-         456.5
+         -2220.0,
+         -285.9,
+         425.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         140.45313820178933,
+         79.87267893978151
         ]
        },
        {
         "center_mm": [
-         -1900.0,
-         265.5,
-         252.5
+         400.0,
+         0.0,
+         415.0
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         70.0,
+         70.0,
+         80.0
         ]
        },
        {
         "center_mm": [
-         -2140.0,
-         265.5,
-         252.5
+         285.0,
+         288.4,
+         491.5
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         70.0,
+         143.20000000000002,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -1920.0,
-         300.9,
-         456.5
+         285.0,
+         -288.4,
+         491.5
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         143.20000000000002,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -2120.0,
-         300.9,
-         456.5
+         -580.0,
+         280.0,
+         340.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         150.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -1900.0,
-         -265.5,
-         252.5
+         -1970.0,
+         0.0,
+         378.0
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         110.0,
+         70.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -2140.0,
-         -265.5,
-         252.5
+         -2020.0,
+         0.0,
+         355.0
         ],
         "size_mm": [
-         100.0,
-         219.0,
-         225.0
+         70.0,
+         70.0,
+         60.0
         ]
        },
        {
         "center_mm": [
-         -1920.0,
-         -300.9,
-         456.5
+         -1320.0,
+         0.0,
+         350.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         70.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -2120.0,
-         -300.9,
-         456.5
+         -770.0,
+         0.0,
+         355.0
         ],
         "size_mm": [
-         100.0,
-         148.20000000000002,
-         123.0
+         70.0,
+         70.0,
+         60.0
         ]
        },
        {
         "center_mm": [
-         -120.0,
-         280.67331548962545,
-         296.664814653691
+         -319.68199399802495,
+         -350.0,
+         499.74017334403584
         ],
         "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
+         89.3639879960499,
+         70.0,
+         70.0
         ]
        },
        {
         "center_mm": [
-         -120.0,
-         -280.67331548962545,
-         296.664814653691
+         -319.68199399802495,
+         -297.5,
+         499.74017334403584
         ],
         "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
-        ]
-       },
-       {
-        "center_mm": [
-         -2140.0,
-         280.67331548962545,
-         296.664814653691
-        ],
-        "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
-        ]
-       },
-       {
-        "center_mm": [
-         -2140.0,
-         -280.67331548962545,
-         296.664814653691
-        ],
-        "size_mm": [
-         100.0,
-         188.6533690207491,
-         136.67037069261804
-        ]
-       },
-       {
-        "center_mm": [
-         -285.0,
-         -300.0,
-         835.0934450716383
-        ],
-        "size_mm": [
-         100.0,
-         120.0,
-         62.014176263793615
+         107.07301606441774,
+         134.29463957739927,
+         70.0
         ]
        }
       ],
@@ -26567,8 +35056,8 @@ export const DEMOS = {
        {
         "id": "if-023",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LAt2"
@@ -26576,8 +35065,8 @@ export const DEMOS = {
        {
         "id": "if-024",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "LDT"
@@ -26585,8 +35074,8 @@ export const DEMOS = {
        {
         "id": "if-025",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RAt2"
@@ -26594,8 +35083,8 @@ export const DEMOS = {
        {
         "id": "if-026",
         "between": [
-         "body",
-         "frame"
+         "frame",
+         "steering"
         ],
         "via": "bolt",
         "node": "RDT"
@@ -26607,7 +35096,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LDT"
+        "node": "LAp2"
        },
        {
         "id": "if-028",
@@ -26616,7 +35105,7 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "RDT"
+        "node": "LAu2"
        },
        {
         "id": "if-029",
@@ -26625,19 +35114,10 @@ export const DEMOS = {
          "steering"
         ],
         "via": "bolt",
-        "node": "LAu2"
-       },
-       {
-        "id": "if-030",
-        "between": [
-         "frame",
-         "steering"
-        ],
-        "via": "bolt",
         "node": "RAu2"
        },
        {
-        "id": "if-031",
+        "id": "if-030",
         "between": [
          "frame",
          "occupant"
@@ -26646,7 +35126,7 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-032",
+        "id": "if-031",
         "between": [
          "frame",
          "occupant"
@@ -26655,7 +35135,7 @@ export const DEMOS = {
         "node": "RS2"
        },
        {
-        "id": "if-033",
+        "id": "if-032",
         "between": [
          "frame",
          "occupant"
@@ -26664,7 +35144,7 @@ export const DEMOS = {
         "node": "LS1"
        },
        {
-        "id": "if-034",
+        "id": "if-033",
         "between": [
          "frame",
          "occupant"
@@ -26673,7 +35153,7 @@ export const DEMOS = {
         "node": "LS2"
        },
        {
-        "id": "if-035",
+        "id": "if-034",
         "between": [
          "frame",
          "occupant"
@@ -26682,7 +35162,7 @@ export const DEMOS = {
         "node": "LH"
        },
        {
-        "id": "if-036",
+        "id": "if-035",
         "between": [
          "frame",
          "occupant"
@@ -26691,7 +35171,7 @@ export const DEMOS = {
         "node": "LHO"
        },
        {
-        "id": "if-037",
+        "id": "if-036",
         "between": [
          "frame",
          "occupant"
@@ -26700,7 +35180,7 @@ export const DEMOS = {
         "node": "LHT"
        },
        {
-        "id": "if-038",
+        "id": "if-037",
         "between": [
          "frame",
          "occupant"
@@ -26709,7 +35189,7 @@ export const DEMOS = {
         "node": "RH"
        },
        {
-        "id": "if-039",
+        "id": "if-038",
         "between": [
          "frame",
          "occupant"
@@ -26718,13 +35198,26 @@ export const DEMOS = {
         "node": "RHO"
        },
        {
-        "id": "if-040",
+        "id": "if-039",
         "between": [
          "frame",
          "occupant"
         ],
         "via": "bolt",
         "node": "RHT"
+       },
+       {
+        "id": "if-040",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
        },
        {
         "id": "if-041",
@@ -26734,7 +35227,7 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         120.0,
+         -120.0,
          196.0,
          180.0
         ]
@@ -26747,26 +35240,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -120.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-043",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          100.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-044",
+        "id": "if-043",
         "between": [
          "frame",
          "suspension"
@@ -26779,7 +35259,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-045",
+        "id": "if-044",
         "between": [
          "frame",
          "suspension"
@@ -26792,7 +35272,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-046",
+        "id": "if-045",
         "between": [
          "frame",
          "suspension"
@@ -26805,7 +35285,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-047",
+        "id": "if-046",
         "between": [
          "frame",
          "suspension"
@@ -26818,7 +35298,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-048",
+        "id": "if-047",
         "between": [
          "frame",
          "suspension"
@@ -26831,7 +35311,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-049",
+        "id": "if-048",
         "between": [
          "frame",
          "suspension"
@@ -26844,7 +35324,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-050",
+        "id": "if-049",
         "between": [
          "frame",
          "suspension"
@@ -26857,7 +35337,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-051",
+        "id": "if-050",
         "between": [
          "frame",
          "suspension"
@@ -26865,6 +35345,19 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1900.0,
+         196.0,
+         180.0
+        ]
+       },
+       {
+        "id": "if-051",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2140.0,
          196.0,
          180.0
         ]
@@ -26877,26 +35370,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -2140.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-053",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          -1920.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-054",
+        "id": "if-053",
         "between": [
          "frame",
          "suspension"
@@ -26909,7 +35389,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-055",
+        "id": "if-054",
         "between": [
          "frame",
          "suspension"
@@ -26922,7 +35402,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-056",
+        "id": "if-055",
         "between": [
          "frame",
          "suspension"
@@ -26935,7 +35415,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-057",
+        "id": "if-056",
         "between": [
          "frame",
          "suspension"
@@ -26948,7 +35428,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-058",
+        "id": "if-057",
         "between": [
          "frame",
          "suspension"
@@ -26961,7 +35441,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-059",
+        "id": "if-058",
         "between": [
          "frame",
          "suspension"
@@ -26974,7 +35454,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-060",
+        "id": "if-059",
         "between": [
          "frame",
          "suspension"
@@ -26987,163 +35467,254 @@ export const DEMOS = {
         ]
        },
        {
+        "id": "if-061",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -600.0,
+         235.0,
+         320.0
+        ]
+       },
+       {
+        "id": "if-062",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1892.5,
+         0.0,
+         323.0
+        ]
+       },
+       {
+        "id": "if-063",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2020.0,
+         0.0,
+         311.5
+        ]
+       },
+       {
+        "id": "if-066",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1375.0,
+         0.0,
+         325.0
+        ]
+       },
+       {
+        "id": "if-067",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -695.0,
+         0.0,
+         327.5
+        ]
+       },
+       {
+        "id": "if-068",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-069",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         -175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-070",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -655.4444124836293,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-072",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -354.7254072333135,
+         -340.0,
+         495.8881328648239
+        ]
+       },
+       {
         "id": "if-073",
         "between": [
          "frame",
-         "suspension"
+         "steering"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-074",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-075",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-076",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-077",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         310.5,
-         216.25
+         -354.7254072333135,
+         -258.75,
+         495.8881328648239
         ]
        },
        {
         "id": "if-078",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2080.0,
-         310.5,
-         216.25
+         -1675.0,
+         0.0,
+         423.3
         ]
        },
        {
         "id": "if-079",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -1970.0,
-         328.2,
-         318.25
+         -1982.5,
+         0.0,
+         423.3
         ]
        },
        {
         "id": "if-080",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2070.0,
-         328.2,
-         318.25
+         -2082.5,
+         142.95,
+         428.3
         ]
        },
        {
         "id": "if-081",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -1960.0,
-         -310.5,
-         216.25
+         -2082.5,
+         -142.95,
+         428.3
         ]
        },
        {
         "id": "if-082",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2080.0,
-         -310.5,
-         216.25
+         310.0,
+         0.0,
+         492.5
         ]
        },
        {
         "id": "if-083",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -1970.0,
-         -328.2,
-         318.25
+         252.5,
+         144.2,
+         530.75
         ]
        },
        {
         "id": "if-084",
         "between": [
-         "frame",
-         "suspension"
+         "body",
+         "frame"
         ],
-        "via": "bushing",
+        "via": "bolt",
         "point_mm": [
-         -2070.0,
-         -328.2,
-         318.25
+         252.5,
+         -144.2,
+         530.75
         ]
        },
        {
         "id": "if-085",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-086",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         -140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-091",
         "between": [
          "frame",
          "suspension"
@@ -27156,7 +35727,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-086",
+        "id": "if-092",
         "between": [
          "frame",
          "suspension"
@@ -27166,6 +35737,266 @@ export const DEMOS = {
          -2140.0,
          -308.0866577448127,
          267.0824073268455
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-094",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-095",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-096",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-097",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-098",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-099",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-100",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-101",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-102",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         -414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-103",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-104",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-105",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-106",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-107",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-108",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-109",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-110",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-111",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-112",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         -414.80000000000007,
+         493.75
         ]
        }
       ],
@@ -27214,18 +36045,6 @@ export const DEMOS = {
        {
         "center_mm": [
          0.0,
-         355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
-        ]
-       },
-       {
-        "center_mm": [
-         0.0,
          -550.0,
          300.0
         ],
@@ -27233,18 +36052,6 @@ export const DEMOS = {
          650.0,
          250.0,
          650.0
-        ]
-       },
-       {
-        "center_mm": [
-         0.0,
-         -355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
         ]
        },
        {
@@ -27262,18 +36069,6 @@ export const DEMOS = {
        {
         "center_mm": [
          -2020.0,
-         355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
-        ]
-       },
-       {
-        "center_mm": [
-         -2020.0,
          -550.0,
          300.0
         ],
@@ -27281,18 +36076,6 @@ export const DEMOS = {
          650.0,
          250.0,
          650.0
-        ]
-       },
-       {
-        "center_mm": [
-         -2020.0,
-         -355.5,
-         180.0
-        ],
-        "size_mm": [
-         240.0,
-         319.0,
-         110.0
         ]
        },
        {
@@ -27414,9 +36197,406 @@ export const DEMOS = {
          100.0,
          140.0
         ]
+       },
+       {
+        "center_mm": [
+         60.0,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449395,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -60.00000000000001,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.115113884494,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999998,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         49.99999999999999,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -50.0,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
+       },
+       {
+        "center_mm": [
+         60.0,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449395,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -60.00000000000001,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.115113884494,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999998,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         49.99999999999999,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -50.0,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896423,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         0.0,
+         -415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
+       },
+       {
+        "center_mm": [
+         -1960.0,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2080.0,
+         343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999986,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -1970.0,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2070.0,
+         363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
+       },
+       {
+        "center_mm": [
+         -1960.0,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2080.0,
+         -343.0,
+         180.0
+        ],
+        "size_mm": [
+         203.11511388449412,
+         377.1151138844941,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -401.80000000000007,
+         180.0
+        ],
+        "size_mm": [
+         147.39999999999986,
+         75.39999999999998,
+         75.39999999999998
+        ]
+       },
+       {
+        "center_mm": [
+         -1970.0,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2070.0,
+         -363.40000000000003,
+         485.5
+        ],
+        "size_mm": [
+         185.00862310896446,
+         278.9313773694072,
+         92.08704143352185
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -490.0,
+         180.0
+        ],
+        "size_mm": [
+         90.0,
+         89.99999999999994,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -460.00000000000006,
+         493.0
+        ],
+        "size_mm": [
+         90.0,
+         90.0,
+         90.0
+        ]
+       },
+       {
+        "center_mm": [
+         -2020.0,
+         -415.30000000000007,
+         391.5
+        ],
+        "size_mm": [
+         100.0,
+         130.08346185444816,
+         526.0834618544482
+        ]
        }
       ],
       "interfaces": [
+       {
+        "id": "if-040",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         120.0,
+         196.0,
+         180.0
+        ]
+       },
        {
         "id": "if-041",
         "between": [
@@ -27425,7 +36605,7 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         120.0,
+         -120.0,
          196.0,
          180.0
         ]
@@ -27438,26 +36618,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -120.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-043",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          100.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-044",
+        "id": "if-043",
         "between": [
          "frame",
          "suspension"
@@ -27470,7 +36637,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-045",
+        "id": "if-044",
         "between": [
          "frame",
          "suspension"
@@ -27483,7 +36650,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-046",
+        "id": "if-045",
         "between": [
          "frame",
          "suspension"
@@ -27496,7 +36663,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-047",
+        "id": "if-046",
         "between": [
          "frame",
          "suspension"
@@ -27509,7 +36676,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-048",
+        "id": "if-047",
         "between": [
          "frame",
          "suspension"
@@ -27522,7 +36689,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-049",
+        "id": "if-048",
         "between": [
          "frame",
          "suspension"
@@ -27535,7 +36702,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-050",
+        "id": "if-049",
         "between": [
          "frame",
          "suspension"
@@ -27548,7 +36715,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-051",
+        "id": "if-050",
         "between": [
          "frame",
          "suspension"
@@ -27556,6 +36723,19 @@ export const DEMOS = {
         "via": "bushing",
         "point_mm": [
          -1900.0,
+         196.0,
+         180.0
+        ]
+       },
+       {
+        "id": "if-051",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2140.0,
          196.0,
          180.0
         ]
@@ -27568,26 +36748,13 @@ export const DEMOS = {
         ],
         "via": "bushing",
         "point_mm": [
-         -2140.0,
-         196.0,
-         180.0
-        ]
-       },
-       {
-        "id": "if-053",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
          -1920.0,
          266.8,
          478.0
         ]
        },
        {
-        "id": "if-054",
+        "id": "if-053",
         "between": [
          "frame",
          "suspension"
@@ -27600,7 +36767,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-055",
+        "id": "if-054",
         "between": [
          "frame",
          "suspension"
@@ -27613,7 +36780,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-056",
+        "id": "if-055",
         "between": [
          "frame",
          "suspension"
@@ -27626,7 +36793,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-057",
+        "id": "if-056",
         "between": [
          "frame",
          "suspension"
@@ -27639,7 +36806,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-058",
+        "id": "if-057",
         "between": [
          "frame",
          "suspension"
@@ -27652,7 +36819,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-059",
+        "id": "if-058",
         "between": [
          "frame",
          "suspension"
@@ -27665,7 +36832,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-060",
+        "id": "if-059",
         "between": [
          "frame",
          "suspension"
@@ -27678,7 +36845,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-061",
+        "id": "if-064",
         "between": [
          "powertrain",
          "suspension"
@@ -27691,7 +36858,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-062",
+        "id": "if-065",
         "between": [
          "powertrain",
          "suspension"
@@ -27704,59 +36871,59 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-066",
+        "id": "if-074",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-067",
+        "id": "if-075",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-068",
+        "id": "if-076",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-069",
+        "id": "if-077",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-071",
+        "id": "if-087",
         "between": [
          "steering",
          "suspension"
@@ -27769,7 +36936,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-072",
+        "id": "if-088",
         "between": [
          "steering",
          "suspension"
@@ -27782,163 +36949,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-073",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-074",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-075",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-076",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -50.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-077",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-078",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-079",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-080",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-081",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1960.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-082",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2080.0,
-         -310.5,
-         216.25
-        ]
-       },
-       {
-        "id": "if-083",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -1970.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-084",
-        "between": [
-         "frame",
-         "suspension"
-        ],
-        "via": "bushing",
-        "point_mm": [
-         -2070.0,
-         -328.2,
-         318.25
-        ]
-       },
-       {
-        "id": "if-085",
+        "id": "if-091",
         "between": [
          "frame",
          "suspension"
@@ -27951,7 +36962,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-086",
+        "id": "if-092",
         "between": [
          "frame",
          "suspension"
@@ -27961,6 +36972,266 @@ export const DEMOS = {
          -2140.0,
          -308.0866577448127,
          267.0824073268455
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-094",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-095",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-096",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-097",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-098",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-099",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -77.75,
+         -269.5,
+         172.75
+        ]
+       },
+       {
+        "id": "if-100",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-101",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -75.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-102",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         0.0,
+         -414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-103",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-104",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-105",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-106",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-107",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         414.80000000000007,
+         493.75
+        ]
+       },
+       {
+        "id": "if-108",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1930.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-109",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2110.0,
+         -304.25,
+         216.25
+        ]
+       },
+       {
+        "id": "if-110",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -1945.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-111",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2095.0,
+         -332.15,
+         471.0
+        ]
+       },
+       {
+        "id": "if-112",
+        "between": [
+         "frame",
+         "suspension"
+        ],
+        "via": "bushing",
+        "point_mm": [
+         -2020.0,
+         -414.80000000000007,
+         493.75
         ]
        }
       ],
@@ -27978,6 +37249,42 @@ export const DEMOS = {
       "title": "操作系",
       "owner": "designer.steering",
       "envelope": [
+       {
+        "center_mm": [
+         -285.0,
+         350.0,
+         716.0431784698708
+        ],
+        "size_mm": [
+         80.0,
+         80.0,
+         276.08635693974156
+        ]
+       },
+       {
+        "center_mm": [
+         -285.0,
+         -350.0,
+         716.0431784698708
+        ],
+        "size_mm": [
+         80.0,
+         80.0,
+         276.08635693974156
+        ]
+       },
+       {
+        "center_mm": [
+         -285.0,
+         0.0,
+         829.0863569397414
+        ],
+        "size_mm": [
+         80.0,
+         750.0,
+         80.0
+        ]
+       },
        {
         "center_mm": [
          -389.76882046860203,
@@ -28004,14 +37311,26 @@ export const DEMOS = {
        },
        {
         "center_mm": [
-         -332.29999999999995,
+         -210.0,
          -220.0,
-         697.7183687566543
+         492.03609238561194
         ],
         "size_mm": [
          170.0,
          120.0,
-         120.0
+         120.00000000000006
+        ]
+       },
+       {
+        "center_mm": [
+         -271.15,
+         0.0,
+         622.0431784698708
+        ],
+        "size_mm": [
+         52.299999999999955,
+         790.0,
+         434.0863569397415
         ]
        },
        {
@@ -28085,6 +37404,30 @@ export const DEMOS = {
          315.0766764091637,
          73.09367808103264
         ]
+       },
+       {
+        "center_mm": [
+         -285.0,
+         -300.0,
+         835.0934450716383
+        ],
+        "size_mm": [
+         100.0,
+         120.0,
+         62.014176263793615
+        ]
+       },
+       {
+        "center_mm": [
+         -304.68199399802495,
+         -220.0,
+         495.8881328648239
+        ],
+        "size_mm": [
+         120.46787456109985,
+         60.0,
+         67.64296592865594
+        ]
        }
       ],
       "interfaces": [
@@ -28107,7 +37450,16 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-027",
+        "id": "if-023",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "node": "LAt2"
+       },
+       {
+        "id": "if-024",
         "between": [
          "frame",
          "steering"
@@ -28116,7 +37468,16 @@ export const DEMOS = {
         "node": "LDT"
        },
        {
-        "id": "if-028",
+        "id": "if-025",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "node": "RAt2"
+       },
+       {
+        "id": "if-026",
         "between": [
          "frame",
          "steering"
@@ -28125,7 +37486,16 @@ export const DEMOS = {
         "node": "RDT"
        },
        {
-        "id": "if-029",
+        "id": "if-027",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "node": "LAp2"
+       },
+       {
+        "id": "if-028",
         "between": [
          "frame",
          "steering"
@@ -28134,7 +37504,7 @@ export const DEMOS = {
         "node": "LAu2"
        },
        {
-        "id": "if-030",
+        "id": "if-029",
         "between": [
          "frame",
          "steering"
@@ -28143,7 +37513,7 @@ export const DEMOS = {
         "node": "RAu2"
        },
        {
-        "id": "if-063",
+        "id": "if-071",
         "between": [
          "powertrain",
          "steering"
@@ -28156,98 +37526,111 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-064",
+        "id": "if-072",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -165.0,
-         461.8180461928059
+         -354.7254072333135,
+         -340.0,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-065",
+        "id": "if-073",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -110.0,
-         461.8180461928059
+         -354.7254072333135,
+         -258.75,
+         495.8881328648239
         ]
        },
        {
-        "id": "if-066",
+        "id": "if-074",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-067",
+        "id": "if-075",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -221.14999999999998,
+         -160.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-068",
+        "id": "if-076",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          135.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-069",
+        "id": "if-077",
         "between": [
          "steering",
          "suspension"
         ],
         "via": "hose",
         "point_mm": [
-         -1231.15,
+         -1170.0,
          -355.0,
-         498.85918437832714
+         396.01804619280597
         ]
        },
        {
-        "id": "if-070",
+        "id": "if-085",
         "between": [
-         "body",
+         "frame",
          "steering"
         ],
         "via": "bolt",
         "point_mm": [
-         -301.72499999999997,
-         -110.0,
-         659.8807736132626
+         -120.0,
+         140.33665774481273,
+         287.49722198053644
         ]
        },
        {
-        "id": "if-071",
+        "id": "if-086",
+        "between": [
+         "frame",
+         "steering"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -120.0,
+         -140.33665774481273,
+         287.49722198053644
+        ]
+       },
+       {
+        "id": "if-087",
         "between": [
          "steering",
          "suspension"
@@ -28260,7 +37643,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-072",
+        "id": "if-088",
         "between": [
          "steering",
          "suspension"
@@ -28274,6 +37657,7 @@ export const DEMOS = {
        }
       ],
       "variables": [
+       "bulkhead_t",
        "max_steer_angle",
        "pedal_mount",
        "steering_column_angle",
@@ -28771,7 +38155,7 @@ export const DEMOS = {
       ],
       "interfaces": [
        {
-        "id": "if-031",
+        "id": "if-030",
         "between": [
          "frame",
          "occupant"
@@ -28780,7 +38164,7 @@ export const DEMOS = {
         "node": "RS1"
        },
        {
-        "id": "if-032",
+        "id": "if-031",
         "between": [
          "frame",
          "occupant"
@@ -28789,7 +38173,7 @@ export const DEMOS = {
         "node": "RS2"
        },
        {
-        "id": "if-033",
+        "id": "if-032",
         "between": [
          "frame",
          "occupant"
@@ -28798,7 +38182,7 @@ export const DEMOS = {
         "node": "LS1"
        },
        {
-        "id": "if-034",
+        "id": "if-033",
         "between": [
          "frame",
          "occupant"
@@ -28807,7 +38191,7 @@ export const DEMOS = {
         "node": "LS2"
        },
        {
-        "id": "if-035",
+        "id": "if-034",
         "between": [
          "frame",
          "occupant"
@@ -28816,7 +38200,7 @@ export const DEMOS = {
         "node": "LH"
        },
        {
-        "id": "if-036",
+        "id": "if-035",
         "between": [
          "frame",
          "occupant"
@@ -28825,7 +38209,7 @@ export const DEMOS = {
         "node": "LHO"
        },
        {
-        "id": "if-037",
+        "id": "if-036",
         "between": [
          "frame",
          "occupant"
@@ -28834,7 +38218,7 @@ export const DEMOS = {
         "node": "LHT"
        },
        {
-        "id": "if-038",
+        "id": "if-037",
         "between": [
          "frame",
          "occupant"
@@ -28843,7 +38227,7 @@ export const DEMOS = {
         "node": "RH"
        },
        {
-        "id": "if-039",
+        "id": "if-038",
         "between": [
          "frame",
          "occupant"
@@ -28852,13 +38236,39 @@ export const DEMOS = {
         "node": "RHO"
        },
        {
-        "id": "if-040",
+        "id": "if-039",
         "between": [
          "frame",
          "occupant"
         ],
         "via": "bolt",
         "node": "RHT"
+       },
+       {
+        "id": "if-089",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         -150.0,
+         497.40000000000003
+        ]
+       },
+       {
+        "id": "if-090",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         150.0,
+         497.40000000000003
+        ]
        }
       ],
       "variables": [
@@ -29061,7 +38471,59 @@ export const DEMOS = {
         "node": "RB"
        },
        {
+        "id": "if-060",
+        "between": [
+         "body",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         0.0,
+         380.8
+        ]
+       },
+       {
         "id": "if-061",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -600.0,
+         235.0,
+         320.0
+        ]
+       },
+       {
+        "id": "if-062",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1892.5,
+         0.0,
+         323.0
+        ]
+       },
+       {
+        "id": "if-063",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2020.0,
+         0.0,
+         311.5
+        ]
+       },
+       {
+        "id": "if-064",
         "between": [
          "powertrain",
          "suspension"
@@ -29074,7 +38536,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-062",
+        "id": "if-065",
         "between": [
          "powertrain",
          "suspension"
@@ -29087,7 +38549,33 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-063",
+        "id": "if-066",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1375.0,
+         0.0,
+         325.0
+        ]
+       },
+       {
+        "id": "if-067",
+        "between": [
+         "frame",
+         "powertrain"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -695.0,
+         0.0,
+         327.5
+        ]
+       },
+       {
+        "id": "if-071",
         "between": [
          "powertrain",
          "steering"
@@ -29162,18 +38650,6 @@ export const DEMOS = {
          410.0,
          533.6,
          330.0
-        ]
-       },
-       {
-        "center_mm": [
-         -271.15,
-         0.0,
-         622.0431784698708
-        ],
-        "size_mm": [
-         52.299999999999955,
-         790.0,
-         434.0863569397415
         ]
        },
        {
@@ -29317,83 +38793,176 @@ export const DEMOS = {
         "node": "RAp1"
        },
        {
-        "id": "if-023",
+        "id": "if-060",
         "between": [
          "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "LAt2"
-       },
-       {
-        "id": "if-024",
-        "between": [
-         "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "LDT"
-       },
-       {
-        "id": "if-025",
-        "between": [
-         "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "RAt2"
-       },
-       {
-        "id": "if-026",
-        "between": [
-         "body",
-         "frame"
-        ],
-        "via": "bolt",
-        "node": "RDT"
-       },
-       {
-        "id": "if-064",
-        "between": [
-         "body",
-         "steering"
+         "powertrain"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -165.0,
-         461.8180461928059
+         -1045.0,
+         0.0,
+         380.8
         ]
        },
        {
-        "id": "if-065",
+        "id": "if-068",
         "between": [
          "body",
-         "steering"
+         "frame"
         ],
         "via": "bolt",
         "point_mm": [
-         -465.32882271793034,
-         -110.0,
-         461.8180461928059
+         -534.1944124836293,
+         175.0,
+         428.3
+        ]
+       },
+       {
+        "id": "if-069",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -534.1944124836293,
+         -175.0,
+         428.3
         ]
        },
        {
         "id": "if-070",
         "between": [
          "body",
-         "steering"
+         "frame"
         ],
         "via": "bolt",
         "point_mm": [
-         -301.72499999999997,
-         -110.0,
-         659.8807736132626
+         -655.4444124836293,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-078",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1675.0,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-079",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1982.5,
+         0.0,
+         423.3
+        ]
+       },
+       {
+        "id": "if-080",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-081",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -2082.5,
+         -142.95,
+         428.3
+        ]
+       },
+       {
+        "id": "if-082",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         310.0,
+         0.0,
+         492.5
+        ]
+       },
+       {
+        "id": "if-083",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-084",
+        "between": [
+         "body",
+         "frame"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         252.5,
+         -144.2,
+         530.75
+        ]
+       },
+       {
+        "id": "if-089",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         -150.0,
+         497.40000000000003
+        ]
+       },
+       {
+        "id": "if-090",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1045.0,
+         150.0,
+         497.40000000000003
         ]
        }
       ],
       "variables": [
-       "bulkhead_t",
        "bumper_stroke",
        "crush_stiffness",
        "deck_t",
@@ -29409,7 +38978,99 @@ export const DEMOS = {
        "fenders"
       ]
      }
-    ]
+    ],
+    "variable_names": {
+     "battery_x": "電池の前後の位置",
+     "bulkhead_dx": "前の隔壁の位置 (前の車軸からの後ろへの距離)",
+     "front_overhang": "前の張り出し (前の車軸より前の枠)",
+     "pedal_x": "ペダルの前後の位置",
+     "rail_height": "レールの高さ",
+     "rail_spacing": "レールの左右の間",
+     "rear_overhang": "後ろの張り出し (後ろの車軸より後ろの枠)",
+     "seat_x": "座席の前後の位置",
+     "seat_y": "座席の左右の位置",
+     "steering_x": "ハンドルの前後の位置",
+     "track": "トレッド (左右の車輪の間)",
+     "wheelbase": "軸距 (前と後ろの車軸の間)",
+     "cross_b": "横の部材の管の幅",
+     "cross_h": "横の部材の管の高さ",
+     "cross_members_through": "横の部材がレールを通り抜けるか",
+     "cross_t": "横の部材の管の厚さ",
+     "gusset_leg": "ガセットの辺の長さ",
+     "gusset_thickness": "ガセットの板の厚さ",
+     "lower_b": "下の脚の管の幅",
+     "lower_cross": "下の横の部材 (あり・なし)",
+     "lower_t": "下の脚の管の厚さ",
+     "mount_drive": "モーターと減速機の取付の金具",
+     "mount_electrics": "電池・制御器・配線箱の取付の金具",
+     "mount_floor": "床・荷台・前の囲いの取付の金具",
+     "mount_seats": "座席とベルトの取付の金具",
+     "rail_b": "レールの管の幅",
+     "rail_h": "レールの管の高さ",
+     "rail_t": "レールの管の厚さ",
+     "tower_b": "塔とダッシュの管の幅",
+     "tower_t": "塔とダッシュの管の厚さ",
+     "front_spring_rate": "前のばねの硬さ",
+     "rear_spring_rate": "後ろのばねの硬さ",
+     "suspension_travel": "車輪の上下の動く量",
+     "wheel_radius": "タイヤの半径",
+     "wheel_width": "タイヤの幅",
+     "bulkhead_t": "隔壁の板の厚さ",
+     "max_steer_angle": "ハンドルを切れる角度",
+     "pedal_mount": "ペダルの台",
+     "steering_column_angle": "コラムの傾き",
+     "steering_wheel_height": "ハンドルの高さ (座面から)",
+     "grab_bar": "握り棒 (あり・なし)",
+     "grab_bar_d": "握り棒の太さ",
+     "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
+     "grab_bar_t": "握り棒の管の厚さ",
+     "rollbar": "ロールバー (あり・なし)",
+     "rollbar_b": "ロールバーの角管の幅",
+     "rollbar_d": "ロールバーの丸管の太さ",
+     "rollbar_foot_b": "外へ出す足の管の幅",
+     "rollbar_foot_h": "外へ出す足の管の高さ",
+     "rollbar_foot_t": "外へ出す足の管の厚さ",
+     "rollbar_front_posts": "前の柱 (4 本柱にするか)",
+     "rollbar_height": "ロールバーの高さ (座面から)",
+     "rollbar_offset": "ロールバーの位置 (座席の後ろからの距離)",
+     "rollbar_square": "ロールバーを角管にするか",
+     "rollbar_stay_d": "後ろの支えの管の太さ",
+     "rollbar_stay_t": "後ろの支えの管の厚さ",
+     "rollbar_stays": "ロールバーの後ろの支え (あり・なし)",
+     "rollbar_t": "ロールバーの管の厚さ",
+     "rollbar_width": "ロールバーの左右の柱の間",
+     "seat_depth": "座面の奥行き",
+     "seat_height": "座面の高さ (床から)",
+     "seat_slide": "座席の前後の滑りの量",
+     "side_bar_count": "横の守りの棒の本数",
+     "side_bar_d": "横の守りの管の太さ",
+     "side_bar_high": "横の守りのいちばん上の棒の高さ",
+     "side_bar_low": "横の守りのいちばん下の棒の高さ",
+     "side_bar_reach": "横の守りの前の柱の位置 (肩と腰の点より前へ)",
+     "side_bar_t": "横の守りの管の厚さ",
+     "side_bars": "横の守りの枠 (あり・なし)",
+     "side_net": "横の網 (あり・なし)",
+     "side_net_pitch": "網の目の間隔",
+     "side_net_wire_d": "網の線の太さ",
+     "side_opening": "乗り降りの開口 (なし・網・扉)",
+     "battery_capacity": "電池の容量",
+     "battery_split": "電池を 2 つに分けるか",
+     "driveshafts": "駆動軸 (あり・なし)",
+     "gear_ratio": "減速比",
+     "motor_max_speed": "モーターの最高回転数",
+     "motor_peak_power": "モーターの最大出力",
+     "motor_peak_torque": "モーターの最大トルク",
+     "bumper_stroke": "バンパーのつぶれる量",
+     "crush_stiffness": "前のつぶれる所の硬さ",
+     "deck_t": "荷台の板の厚さ",
+     "fender_front_deg": "フェンダーの前への長さ (角度)",
+     "fender_gap": "フェンダーとタイヤの間",
+     "fender_rear_deg": "フェンダーの後ろへの長さ (角度)",
+     "fender_width": "フェンダーの幅",
+     "fenders": "フェンダー (あり・なし)",
+     "floor_t": "床の板の厚さ",
+     "lamps": "灯火 (あり・なし)"
+    }
    }
   },
   {
@@ -32002,10 +41663,6 @@ export const DEMOS = {
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
-     "susp_FL",
-     "susp_FR",
-     "susp_RL",
-     "susp_RR",
      "rail_L_FA",
      "rail_L_LAp1_LAu1",
      "rail_L_LAu1_LA",
@@ -32058,30 +41715,6 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [
-     {
-      "part_id": "susp_FL",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
-     {
-      "part_id": "susp_FR",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RL",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
-     {
-      "part_id": "susp_RR",
-      "missing": [
-       "closing_gap_mm"
-      ]
-     },
      {
       "part_id": "rail_L_FA",
       "missing": [
@@ -32446,13 +42079,9 @@ export const DEMOS = {
      "seat_R",
      "seat_L",
      "wheel_FL",
-     "susp_FL",
      "wheel_FR",
-     "susp_FR",
      "wheel_RL",
-     "susp_RL",
-     "wheel_RR",
-     "susp_RR"
+     "wheel_RR"
     ],
     "hits": [
      {
@@ -32538,13 +42167,9 @@ export const DEMOS = {
      "occupant_L.hand_R",
      "occupant_L.foot_R",
      "wheel_FL",
-     "susp_FL",
      "wheel_FR",
-     "susp_FR",
      "wheel_RL",
-     "susp_RL",
      "wheel_RR",
-     "susp_RR",
      "knuckle_FL",
      "knuckle_FR",
      "knuckle_RL",
@@ -32555,6 +42180,38 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "lca_FL_f",
+     "lca_FL_r",
+     "lca_FL_x",
+     "uca_FL_f",
+     "uca_FL_r",
+     "bj_lower_FL",
+     "bj_upper_FL",
+     "damper_FL",
+     "lca_FR_f",
+     "lca_FR_r",
+     "lca_FR_x",
+     "uca_FR_f",
+     "uca_FR_r",
+     "bj_lower_FR",
+     "bj_upper_FR",
+     "damper_FR",
+     "lca_RL_f",
+     "lca_RL_r",
+     "lca_RL_x",
+     "uca_RL_f",
+     "uca_RL_r",
+     "bj_lower_RL",
+     "bj_upper_RL",
+     "damper_RL",
+     "lca_RR_f",
+     "lca_RR_r",
+     "lca_RR_x",
+     "uca_RR_f",
+     "uca_RR_r",
+     "bj_lower_RR",
+     "bj_upper_RR",
+     "damper_RR",
      "bracket_uca_FL1",
      "bracket_uca_FL2",
      "bracket_uca_FR1",
@@ -32572,7 +42229,33 @@ export const DEMOS = {
      "bracket_tie_RL",
      "bracket_tie_RR",
      "bracket_column",
-     "rollbar"
+     "rollbar",
+     "bracket_lca_FL1",
+     "bracket_lca_FL2",
+     "bracket_damper_FL",
+     "bracket_lca_FR1",
+     "bracket_lca_FR2",
+     "bracket_damper_FR",
+     "bracket_damper_RL",
+     "bracket_damper_RR",
+     "pushrod_brake",
+     "fit_floor_front_rail_L_AS1",
+     "fit_floor_front_rail_R_AS1",
+     "fit_floor_front_cross_S1",
+     "fit_deck_cross_S2",
+     "fit_deck_cross_B",
+     "fit_deck_rail_L_BE",
+     "fit_deck_rail_R_BE",
+     "fit_front_body_cross_F",
+     "fit_front_body_tower_post_LA1",
+     "fit_front_body_tower_post_RA1",
+     "fit_main_switch_rail_L_AS1",
+     "fit_motor_cross_B",
+     "fit_reducer_cross_B",
+     "fit_controller_cross_S2",
+     "fit_aux_cross_S1",
+     "fit_pedal_accel_tower_post_RA2",
+     "fit_pedal_brake_tower_post_RA2"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -32922,13 +42605,9 @@ export const DEMOS = {
      "seat_L",
      "seat_belt_L",
      "wheel_FL",
-     "susp_FL",
      "wheel_FR",
-     "susp_FR",
      "wheel_RL",
-     "susp_RL",
      "wheel_RR",
-     "susp_RR",
      "knuckle_FL",
      "knuckle_FR",
      "knuckle_RL",
@@ -32939,6 +42618,38 @@ export const DEMOS = {
      "caliper_FR",
      "caliper_RL",
      "caliper_RR",
+     "lca_FL_f",
+     "lca_FL_r",
+     "lca_FL_x",
+     "uca_FL_f",
+     "uca_FL_r",
+     "bj_lower_FL",
+     "bj_upper_FL",
+     "damper_FL",
+     "lca_FR_f",
+     "lca_FR_r",
+     "lca_FR_x",
+     "uca_FR_f",
+     "uca_FR_r",
+     "bj_lower_FR",
+     "bj_upper_FR",
+     "damper_FR",
+     "lca_RL_f",
+     "lca_RL_r",
+     "lca_RL_x",
+     "uca_RL_f",
+     "uca_RL_r",
+     "bj_lower_RL",
+     "bj_upper_RL",
+     "damper_RL",
+     "lca_RR_f",
+     "lca_RR_r",
+     "lca_RR_x",
+     "uca_RR_f",
+     "uca_RR_r",
+     "bj_lower_RR",
+     "bj_upper_RR",
+     "damper_RR",
      "bracket_uca_FL1",
      "bracket_uca_FL2",
      "bracket_uca_FR1",
@@ -32956,7 +42667,33 @@ export const DEMOS = {
      "bracket_tie_RL",
      "bracket_tie_RR",
      "bracket_column",
-     "rollbar"
+     "rollbar",
+     "bracket_lca_FL1",
+     "bracket_lca_FL2",
+     "bracket_damper_FL",
+     "bracket_lca_FR1",
+     "bracket_lca_FR2",
+     "bracket_damper_FR",
+     "bracket_damper_RL",
+     "bracket_damper_RR",
+     "pushrod_brake",
+     "fit_floor_front_rail_L_AS1",
+     "fit_floor_front_rail_R_AS1",
+     "fit_floor_front_cross_S1",
+     "fit_deck_cross_S2",
+     "fit_deck_cross_B",
+     "fit_deck_rail_L_BE",
+     "fit_deck_rail_R_BE",
+     "fit_front_body_cross_F",
+     "fit_front_body_tower_post_LA1",
+     "fit_front_body_tower_post_RA1",
+     "fit_main_switch_rail_L_AS1",
+     "fit_motor_cross_B",
+     "fit_reducer_cross_B",
+     "fit_controller_cross_S2",
+     "fit_aux_cross_S1",
+     "fit_pedal_accel_tower_post_RA2",
+     "fit_pedal_brake_tower_post_RA2"
     ],
     "hits": [],
     "not_evaluable": [],

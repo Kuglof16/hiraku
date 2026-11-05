@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from hiraku import contract
 from hiraku.contract import layout
@@ -1166,6 +1167,22 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._rule_check(knowledge=True, rule_id="SM-99"), "rule_check.rule")
         self.assertIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "gearbox"]), "warn"))
 
+    def _system_red(self, category="system", red_count=1, state="red", hits=True):
+        """The rule_check sample with its rule SM-01 of the given category, then the v1 assembly tile."""
+        ev = self._rule_check(knowledge=True) if hits else self._rule_check(knowledge=True, hits=[], **{"pass": True})
+        by_kind(ev, "knowledge.imported")["data"]["rules"][0]["category"] = category
+        tile = {"design_version": 1, "domain": "assembly", "state": state, "red_count": red_count,
+                "verdict_ids": [], "summary": "系の欠け 1 件"}
+        return self._insert(ev, "rule_check.recorded", "judgement.updated", tile, design_version=1)
+
+    def test_a_system_rule_hitting_a_part_turns_the_assembly_tile_red(self):
+        # hiraku.tools.judge compute_judgement: red_count counts the system rules' misses too
+        self.assertNotIn("judgement.state", self.rules(self._system_red()))
+        self.assertIn("judgement.state", self.rules(self._system_red(category="sheet_metal")))  # not a system rule
+        self.assertIn("judgement.state", self.rules(self._system_red(red_count=0)))
+        self.assertIn("judgement.state", self.rules(self._system_red(state="pending", red_count=1)))
+        self.assertIn("judgement.state", self.rules(self._system_red(hits=False)))  # nothing hits: not red
+
     def test_rule_check_on_the_whole_design(self):
         rc = self._example("rule_check")
         whole = dict(targets=["design"], hits=[dict(rc["hits"][0], part_id="design")], not_evaluable=[])
@@ -1339,6 +1356,39 @@ class Modules(unittest.TestCase):
         self.assertTrue(self.hk6(modular(case_modules=("frame",))))
         self.assertTrue(self.hk6(modular(red=False)))
 
+    def test_a_red_system_rule_lets_a_designer_propose(self):
+        nothing = "chg-0001 proposed while nothing in v1 is red"
+        self.assertIn(nothing, self.hk6(modular(red=False, proposals=[self._no_case()])))
+
+        def with_rule(category):
+            ev = modular(red=False, proposals=[self._no_case()])
+            rc = CheckRun._example("rule_check")
+            rc.update(targets=["battery"], hits=[dict(rc["hits"][0], part_id="battery")], not_evaluable=[])
+            ev = CheckRun._insert(ev, "design.created", "rule_check.recorded", rc, design_version=1)
+            k = CheckRun._example("knowledge_imported")
+            k["rules"][0]["category"] = category
+            return CheckRun._insert(ev, "design.created", "knowledge.imported", k)
+        self.assertEqual(self.hk6(with_rule("system")), set())
+        self.assertIn(nothing, self.hk6(with_rule("sheet_metal")))
+
+    @staticmethod
+    def _no_case():
+        return {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                "reason": "a system rule is red", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
+
+    def test_an_optional_variable_left_out_is_its_default(self):
+        # the generator writes an optional variable only when it differs from its default
+        from unittest import mock
+
+        def warns(default):
+            ev = modular()
+            del [e for e in ev if e["kind"] == "design.created"][-1]["data"]["variables"]["wheel_radius"]
+            spec = [{"name": "wheel_radius", "unit": "mm", "default": default, "value": default}]
+            with mock.patch("hiraku.designgen.variables", lambda d: spec):
+                return {m for m in self.hk6(ev, "warn") if "as chg-0001 set it" in m}
+        self.assertEqual(warns(320.0), set())
+        self.assertEqual(len(warns(300.0)), 1)
+
     def test_only_the_packager_builds_the_round(self):
         for why, build in (("a designer made it", None),
                            ("module_changes missing", {"module_changes": []}),
@@ -1395,6 +1445,33 @@ class Modules(unittest.TestCase):
                               "rpy_deg": [0.0, 0.0, 90.0]}), set())
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [480.0, 420.0, 220.0]})), 2)
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0]})), 2)
+
+    def test_a_module_given_no_room_has_no_place_for_its_parts(self):
+        # as the assembly tool (H1-envelope): a module other than the package with no envelope box
+        ev = modular()
+        for e in ev:
+            if e["kind"] == "design.created":
+                e["data"]["parts"][0]["module"] = "powertrain"
+        said = {f.message for f in self.findings(ev) if f.rule == "module.envelope"}
+        self.assertTrue(said)
+        self.assertTrue(all("which has no envelope box" in m for m in said), said)
+        self.assertTrue(any("part battery is in module powertrain" in m for m in said), said)
+
+    def test_a_member_is_its_tube_not_its_line(self):
+        # the N15 plan's last design with node LS2 raised 60 mm: the assembly tool finds four members out of
+        # their module's room (cross_S2, side_foot_LS2 and two rail pieces whose line stays inside but whose
+        # 80 mm tube does not)
+        from qa.check_run import RunChecker
+
+        d = json.loads((Path(__file__).resolve().parent / "fixtures" / "n15-v005-design.json")
+                       .read_text(encoding="utf-8"))
+        next(n for n in d["nodes"] if n["id"] == "LS2")["xyz_mm"][2] += 60.0
+        said = []
+        probe = mock.Mock(warn=lambda rule, w, text: said.append(text), error=lambda *a: said.append(a))
+        RunChecker._check_envelopes(probe, 5, d, "v005/design.json")
+        self.assertEqual(sorted(said), sorted(f"v5 member {m} leaves the envelope of {mod}" for m, mod in (
+            ("cross_S2", "frame"), ("rail_L_LSG_LS2", "frame"), ("rail_L_S2H", "frame"),
+            ("side_foot_LS2", "occupant"))))
 
 
 

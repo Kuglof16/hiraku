@@ -110,7 +110,7 @@
 .in-badge.must { background: var(--i-ink); color: var(--i-paper); }
 .in-qtext { margin: 6px 0; }
 .in-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
-.in-choice { border: 1.5px solid var(--i-line); border-radius: 8px; padding: 3px 14px; background: var(--i-panel); }
+.in-choice { border: 1.5px solid var(--i-muted); border-radius: 8px; padding: 3px 14px; background: var(--i-panel); }
 .in-choice:hover:not(:disabled) { border-color: var(--i-blue); }
 .in-choice.picked, .in-choice.chosen { border-color: var(--i-ink); background: var(--i-ink); color: var(--i-paper); }
 .in-other { margin: 4px 0; padding: 4px 10px; }

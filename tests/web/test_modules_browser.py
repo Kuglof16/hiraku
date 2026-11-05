@@ -19,7 +19,7 @@ from pathlib import Path
 
 from hiraku import contract
 from hiraku.webserve.server import make_server
-from tests.web.modules_fixture import RUN_ID, module_events, outside_parts
+from tests.web.modules_fixture import RUN_ID, module_design, module_events, outside_parts
 
 try:
     from playwright.sync_api import sync_playwright
@@ -29,7 +29,8 @@ except ImportError:  # pragma: no cover
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 
 PLAIN = "20261104-210100-plain"  # the same run without modules
-FALLBACK = {"frame": "#2b6e40", "suspension": "#8db33a", "steering": "#e2759f", "occupant": "#917430", "powertrain": "#7d2240", "body": "#57b8a0"}
+FALLBACK = {"frame": "#2b6e40", "suspension": "#8db33a", "steering": "#e2759f", "occupant": "#917430", "powertrain": "#8f415b", "body": "#57b8a0"}
+# (powertrain: the pets' #7d2240, made lighter for the 3D by proposals.js readable)
 OUTSIDE = "#e0201a"
 T_PENDING = 4.6  # the three proposals of round 1 are in, version 2 not built yet
 T_BUILT = 6.5  # version 2 built from them
@@ -60,6 +61,16 @@ def plain_events() -> list[dict]:
 
 NAMED = "20261104-210200-named"  # the module record with design.variable_names on every version
 NAMES = {"front_spring_rate": "前輪側コイルばねのレート", "rail_t": "縦レールの肉厚"}
+
+
+def shown_name(page, var: str) -> str:
+    """The name the screen gives a variable of the module record: the base design's own name
+    (design.variable_names, written by the generator), else the screen's table (labels.js
+    variableName), so the expected words follow the design data when its names change."""
+    own = (module_design().get("variable_names") or {}).get(var)
+    if isinstance(own, str) and own.strip():
+        return own
+    return page.evaluate("async (v) => (await import('/js/labels.js')).variableName(v)", var)
 
 
 def named_events() -> list[dict]:
@@ -172,7 +183,7 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual([items.nth(i).get_attribute("data-change") for i in range(items.count())], ["chg-0001", "chg-0002", "chg-0003"])
         text = card.inner_text()
         self.assertIn("足まわりの設計役", text)
-        self.assertIn("前のばねの固さ", text)
+        self.assertIn(shown_name(page, "front_spring_rate"), text)
         self.assertIn("パッケージ役が 1 つの版にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
@@ -180,12 +191,12 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual(card.locator(".rc-list li").count(), 3)
         log = page.locator("#log").inner_text()
         self.assertIn("パッケージ役が 3 つの提案を版 2 にまとめた", log)
-        self.assertIn("車体の設計役: 荷の高さ", log)
+        self.assertIn(f"車体の設計役: {shown_name(page, 'cargo_height')}", log)
         # the grid's head names each module's change
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&pets=0&t=1e6")
         head = page.locator("#grid-head [data-built]").inner_text()
         self.assertIn("2 つの提案", head)
-        self.assertIn("枠 レールの板厚 2.3 → 3.2 mm", head)
+        self.assertIn(f"枠 {shown_name(page, 'rail_t')} 2.3 → 3.2 mm", head)
 
     def test_variable_names_from_the_design(self):
         # design.variable_names (contract b615e2c) first, then the screen's table (labels.js
@@ -193,7 +204,7 @@ class ModulesBrowserTest(unittest.TestCase):
         page = self.open(f"run={NAMED}&tab=bench&pace=0&pets=0&t={T_PENDING}")
         text = page.locator("#roundcard").inner_text()
         self.assertIn(NAMES["front_spring_rate"], text)
-        self.assertNotIn("前のばねの固さ", text)
+        self.assertNotIn("前のばねの硬さ", text)
         page = self.open(f"run={NAMED}&tab=grid&pace=0&pets=0&t=1e6")
         self.assertIn(f"枠 {NAMES['rail_t']} 2.3 → 3.2 mm", page.locator("#grid-head [data-built]").inner_text())
         got = page.evaluate("""async () => {
@@ -247,15 +258,21 @@ class ModulesBrowserTest(unittest.TestCase):
                  if (!had) pets.roles.delete('designer.frame');
                  const m = await import('/js/proposals.js');
                  const keep = window.HirakuPets;
-                 window.HirakuPets = { ROLES: [{ module: 'frame', id: 'designer.frame', color: '#123456' }, { id: 'packager', color: '#654321' }] };
-                 const colours = [m.moduleColor('frame'), m.moduleColor('package'), m.moduleColor('body')];
+                 window.HirakuPets = { ROLES: [{ module: 'frame', id: 'designer.frame', color: '#3a7bd5' }, { id: 'packager', color: '#d5873a' },
+                                               { module: 'steering', id: 'designer.steering', color: '#123456' }] };
+                 const colours = [m.moduleColor('frame'), m.moduleColor('package'), m.moduleColor('body'), m.moduleColor('steering')];
+                 const dark = [m.luminance('#123456'), m.luminance(m.moduleColor('steering'))];
                  window.HirakuPets = keep;
-                 return { role, without: pets.roleOf('designer.steering') === 'designer' || pets.roles.has('designer.steering'), colours };
+                 return { role, without: pets.roleOf('designer.steering') === 'designer' || pets.roles.has('designer.steering'), colours, dark };
                }"""
         )
         self.assertEqual(got["role"], "designer.frame")
         self.assertTrue(got["without"])
-        self.assertEqual(got["colours"], ["#123456", "#654321", FALLBACK["body"]])
+        self.assertEqual(got["colours"][:3], ["#3a7bd5", "#d5873a", FALLBACK["body"]])
+        # a pet colour too dark for the 3D is drawn lighter (proposals.js readable): at least MIN_LUMINANCE 0.1
+        self.assertLess(got["dark"][0], 0.1)
+        self.assertGreaterEqual(got["dark"][1], 0.1)
+        self.assertNotEqual(got["colours"][3], "#123456")
 
     def test_grid_keeps_the_tile_pets(self):
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&t=1e6")

@@ -15,6 +15,8 @@
 //   reaction_{x,y,z}.<ID>, grip_{x,y,z}.<ID> (N)  force vectors on the tyre
 // All positions are in the road frame (x along the road, y left, z up).
 
+import { channelName, channelPartName, quantityName } from "./labels.js";
+
 // Factors to mm, rad and N.
 export const LENGTH = { mm: 1, m: 1000, km: 1e6 };
 export const ANGLE = { deg: Math.PI / 180, rad: 1 };
@@ -92,6 +94,14 @@ export function nearestIndex(s, x) {
 const WHEEL_JA = { FL: "左前", FR: "右前", RL: "左後", RR: "右後", F: "前", R: "後" };
 export function wheelName(id) {
   return WHEEL_JA[id] ?? id;
+}
+
+// A channel's name in a chart's legend: what follows the dot (the wheel, the part, the mount:
+// mount_x.FL.lca_front -> 左前 下アーム前), or for a channel without a dot its own name.
+export function seriesName(channel) {
+  const [base, ...rest] = String(channel).split(".");
+  if (!rest.length) return channelName(base);
+  return rest.map((r) => (WHEEL_JA[r] ? WHEEL_JA[r] : channelPartName(r))).join(" ");
 }
 
 // Seconds of motion in an analysis (without building it), or null when it has none.
@@ -214,16 +224,26 @@ export function chartGroups(channels) {
     const unit = channels.get(list[0]).unit;
     out.push({ key: g.key, ja: g.ja, unit, channels: list.filter((n) => channels.get(n).unit === unit) });
   }
+  // any other channel: with the others of its name before the dot (wheel_camber.FL, .FR, ...)
+  // and its unit in one chart, named from labels.js channelName (else as written)
+  const rest = new Map();
   for (const n of names) {
     if (used.has(n) || NOT_CHARTED.test(n)) continue;
-    out.push({ key: n, ja: n, unit: channels.get(n).unit, channels: [n] });
+    const base = n.includes(".") ? n.slice(0, n.indexOf(".")) : n;
+    const unit = channels.get(n).unit;
+    const key = rest.has(base) && rest.get(base).unit !== unit ? `${base}[${unit}]` : base;
+    if (!rest.has(key)) rest.set(key, { key, ja: channelName(base), unit, channels: [] });
+    rest.get(key).channels.push(n);
   }
+  out.push(...rest.values());
   const against = new Map();
   for (const n of all.filter((m) => channels.get(m).x)) {
     const s = channels.get(n);
     const base = n.includes(".") ? n.slice(0, n.indexOf(".")) : n;
     const key = `${base}@${s.x.quantity}[${s.x.unit}]${s.unit}`;
-    if (!against.has(key)) against.set(key, { key, ja: base, unit: s.unit, x: { quantity: s.x.quantity, unit: s.x.unit }, channels: [] });
+    // named from the quantities' table (labels.js quantityName), else the channels' (channelName)
+    const ja = quantityName(base) !== base ? quantityName(base) : channelName(base);
+    if (!against.has(key)) against.set(key, { key, ja, unit: s.unit, x: { quantity: s.x.quantity, unit: s.x.unit }, channels: [] });
     against.get(key).channels.push(n);
   }
   return [...out, ...against.values()];
