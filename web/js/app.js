@@ -1499,7 +1499,8 @@ function draw() {
   renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
-  if (tab === "bench") {
+  if (tab === "bench" && benchHolds > 0) benchHeld = true; // seekAndDraw: compile first, then render
+  else if (tab === "bench") {
     bench.render();
     if (cmpView && !cmpView.el.hidden) {
       cmpView.bench.animate(player.playhead, false);
@@ -1540,10 +1541,27 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 // event is at 2656.009 shows it finished, as the bar's "2656.0 / 2656.0" says.
 const END_SNAP_S = 0.05;
 
+// seekAndDraw's first draw builds the workbench's scene without rendering it; its shaders are
+// then compiled in the background (three's compileAsync) before the frames are drawn, so the
+// first render does not stop to compile them one by one. (The frames of the loop meanwhile
+// skip the workbench's render too; the picture is the same frozen one.)
+let benchHolds = 0;
+let benchHeld = false;
+
 async function seekAndDraw(t) {
   ui.frozen = true;
   player.pause();
   player.seek(t >= player.duration - END_SNAP_S ? player.duration : t);
+  benchHolds += 1;
+  benchHeld = false;
+  try {
+    draw();
+    if (benchHeld) await bench.renderer.compileAsync(bench.scene, bench.camera);
+  } catch {
+    /* the render compiles them */
+  } finally {
+    benchHolds -= 1;
+  }
   draw();
   await nextFrame();
   draw();
