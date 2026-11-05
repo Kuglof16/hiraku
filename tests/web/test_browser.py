@@ -945,7 +945,9 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         going = tmp / "going.jsonl"
         going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
-        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20,
+        # the child stays until the test kills it (finally below): with other tests beside it, opening
+        # the page took longer than a 30 s hold, the run had ended and the file was refused
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 300.0), reader=fake_reader, wait_s=20,
                        demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -996,7 +998,21 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         (run / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         (run / "project.json").write_text(json.dumps({**events[0]["data"], "status": "running", "driver": "claude_code_plugin"}), encoding="utf-8")
-        (run / PLUGIN_ALIVE_FILE).write_bytes(b"")  # touched now: younger than PLUGIN_ALIVE_S for the test's few seconds
+        # the plugin's session touches plugin.alive while it holds the run (younger than PLUGIN_ALIVE_S):
+        # touched here every second until the test ends, as the session would, so a slow page
+        # (other tests beside it) does not outlast it
+        alive = run / PLUGIN_ALIVE_FILE
+        alive.write_bytes(b"")
+        done = threading.Event()
+
+        def keep_alive():
+            while not done.wait(1.0):
+                try:
+                    os.utime(alive)
+                except OSError:  # the folder is gone (the test's end)
+                    return
+
+        threading.Thread(target=keep_alive, daemon=True).start()
         lau = Launcher(tmp / "runs", tmp / "requirements", env={}, demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -1011,7 +1027,7 @@ class BrowserReplayTest(unittest.TestCase):
             page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /標準の値のまま進める/.test(b.textContent) && !b.disabled)")
             self.assertEqual(page.locator(".stop-btn").count(), 0)  # not started here: no stop
             page.locator(button, has_text="標準の値のまま進める").click()
-            for _ in range(100):
+            for _ in range(600):  # up to 60 s
                 if (run / "hearing.answer.json").exists():
                     break
                 page.wait_for_timeout(100)
@@ -1039,6 +1055,7 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertFalse((run / "knowledge" / "replay.md").exists())
             page.close()
         finally:
+            done.set()
             server.shutdown()
             server.server_close()
             shutil.rmtree(tmp, ignore_errors=True)
