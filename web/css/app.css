@@ -542,6 +542,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
   border-radius: 12px;
   padding: 8px 12px 8px;
 }
+/* comparing two versions (the 3D in halves, each car in the middle of its half): the graph at the
+   top left, under the state's two lines and above the previous version's car, not over it */
+.viewport.compare .graph { top: 108px; bottom: auto; }
 .gr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; }
 .gr-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .gr-chips button { font-size: 12px; border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--muted); }
@@ -657,7 +660,11 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .card.busy { border: 2px solid var(--blue); }
 .card table { border-collapse: collapse; width: 100%; font-size: 17px; margin: 4px 0; }
 .card td { padding: 2px 0; }
-.card td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+/* a value and its unit are never cut or split (2.772 / mm); a long name wraps instead, anywhere
+   (rops_occupant_clearance.side_mirror @ rollbar_post_R has no space to break at) */
+.card td:first-child { overflow-wrap: anywhere; }
+.card td .nw { white-space: nowrap; }
+.card td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); white-space: nowrap; padding-left: 10px; vertical-align: top; }
 .badge { display: inline-block; border-radius: 8px; padding: 2px 12px; color: #fff; font-weight: 700; font-size: 15px; }
 .badge.ok { background: var(--green); }
 .badge.bad { background: var(--red); }

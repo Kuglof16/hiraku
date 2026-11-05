@@ -186,6 +186,20 @@ const QUANTITY_JA = {
   occupant_space_margin: "乗員の空間の余裕",
   battery_inertia_force: "電池の慣性力",
   inertia_acceleration: "慣性の加速度",
+  // roll-over protection (ROPS): tools the CAE agents wrote in the runs (rops_frame_pushover, rops_pushover_frame)
+  rops_occupant_clearance: "ロールバーと乗員の空間の隙間",
+  rops_clearance_side: "横から押したときの乗員の空間との隙間",
+  rops_clearance_rear: "後ろから押したときの乗員の空間との隙間",
+  rops_clearance_top: "上から押したときの乗員の空間との隙間",
+  rops_side_deflection: "横から押した点の動き",
+  rops_rear_deflection: "後ろから押した点の動き",
+  rops_top_deflection: "上から押した点の動き",
+  rops_side_collapse_load: "横から押して崩れる荷重",
+  rops_rear_collapse_load: "後ろから押して崩れる荷重",
+  rops_top_collapse_load: "上から押して崩れる荷重",
+  rops_collapse_load_side: "横から押して崩れる荷重",
+  rops_collapse_load_rear: "後ろから押して崩れる荷重",
+  rops_collapse_load_top: "上から押して崩れる荷重",
   // fatigue
   fatigue_damage: "疲労の損傷度",
   fatigue_life: "疲労寿命",
@@ -558,9 +572,18 @@ export function quantityName(q) {
   if (QUANTITY_JA[q]) return QUANTITY_JA[q];
   // max_stress.rail_L_FA, pedal_deflection.pedal_brake: the base's name, then what it is of
   const dot = String(q).indexOf(".");
-  if (dot > 0 && QUANTITY_JA[q.slice(0, dot)]) return `${QUANTITY_JA[q.slice(0, dot)]} (${q.slice(dot + 1)})`;
+  if (dot > 0 && QUANTITY_JA[q.slice(0, dot)]) {
+    const base = q.slice(0, dot), part = q.slice(dot + 1);
+    return `${QUANTITY_JA[base]} (${QUANTITY_PART_JA[base]?.[part] ?? part})`;
+  }
   return q;
 }
+// The parts after the dot that a tool writes for one quantity, in words (a part not here is shown as written).
+// rops_occupant_clearance.<part>: rops_frame_pushover pushes the roll bar from the left top corner (side),
+// the right one (side_mirror), backwards near the left (rear) or the right (rear_mirror), and down (top).
+const QUANTITY_PART_JA = {
+  rops_occupant_clearance: { side: "横・左の角", side_mirror: "横・右の角", rear: "後ろ・左寄り", rear_mirror: "後ろ・右寄り", top: "上" },
+};
 
 // Load cases that share a test id (R8 x 3, T2 x 2, ...): a short name for each from its title, to
 // tell them apart beside the id. The words their titles share at the start and at the end are
@@ -686,6 +709,15 @@ export function stopShort(code, reason) {
   if (!s) return "";
   const first = s.split(/[。(（]/)[0].trim() || s;
   return [...first].length > 18 ? [...first].slice(0, 18).join("") + "…" : first;
+}
+
+// The run list's state column (for people): how the run ended in one word, from /api/runs' summary
+// (finished, end_status of run.finished). A run that stops after the picks as asked is 完了.
+export const RUN_STATE_JA = { done: "完了", stopped: "途中で止まった", failed: "エラーで止まった", going: "実行中" };
+export function runState(r) {
+  if (!r.finished) return "going";
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return "done";
+  return r.end_status === "stopped" || r.end_status === "failed" ? r.end_status : "done";
 }
 
 // How a run ended, one phrase for its row in the run list, from /api/runs' summary
