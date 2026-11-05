@@ -46,6 +46,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import socket
 import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -671,6 +672,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # On Windows SO_REUSEADDR (HTTPServer's default) lets a second socket bind a port another
+    # server already listens on, so a second HIRAKU would quietly share the port with an old one.
+    # There the port is bound exclusively instead: a port in use fails with OSError.
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
     def handle_error(self, request, client_address) -> None:
         # A page that closes while its request is answered is not an error of the server.
         if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
