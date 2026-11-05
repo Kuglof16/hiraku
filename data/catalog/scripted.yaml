@@ -316,6 +316,9 @@ offroad-4w:
 # 80 mm and 3.2 mm 154.0 MPa against 163.3 (the hand calculation 140.6, -9 %).
 offroad-4w-video:
   extends: offroad-4w
+  # C1 runs on the light tool only until crash_beam (K2) has its hand-calculation pair (the lead, 11/6): said and reported
+  notes:
+    - 衝突 (C1) は、軽いツール (crash、1 方向のばね) だけで回しています。重いツール (crash_beam、枠の梁) はまだ回していません。重いツールは、デモの車で乗員の空間を割る結果を出しているので、ここでの C1 の合格は、乗員の空間が守られることを確かめたものではありません
   # One revision per red stage, as N15 (the shape comes from the requirements' reds)
   revise:
     - *rev_layout
@@ -337,6 +340,7 @@ offroad-4w-n15:
   # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
   notes:
     - この台本の運転は、Claude が作ったツールを使いません。R4 (横転時の保護枠) は回していません (R4 のツールは棚に無く、Claude との運転で作ります)
+    - 衝突 (C1) は、軽いツール (crash、1 方向のばね) だけで回しています。重いツール (crash_beam、枠の梁) はまだ回していません。重いツールは、デモの車で乗員の空間を割る結果を出しているので、ここでの C1 の合格は、乗員の空間が守られることを確かめたものではありません
   revise:
     - *rev_layout
     - *rev_opening
