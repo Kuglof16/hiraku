@@ -215,7 +215,7 @@ class ListRunsTest(unittest.TestCase):
         runs = list_runs(Path(tempfile.gettempdir()) / "hiraku-no-such-runs-dir")
         self.assertEqual([r["run_id"] for r in runs], ["sample"])
         self.assertTrue(runs[0]["finished"])
-        self.assertFalse(runs[0]["default"])  # no saved run: the screen opens on the list
+        self.assertFalse(runs[0]["default"])  # no saved run: the run list recommends none
 
 
 class SavedRunsTest(unittest.TestCase):
