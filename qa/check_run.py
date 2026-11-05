@@ -1653,7 +1653,12 @@ class RunChecker:
                                     f"makes a version")
             mods = {x.get("module_id"): x for x in prev.get("modules") or []}
             pvars = set((mods.get("package") or {}).get("variables") or [])
-            rnd = [p for j, p, _ in self.proposals if pi < j < i]
+            # a module's later proposal in the round replaces its earlier one (docs/contract.md, 8762a06)
+            last: dict = {}
+            for j, p, _ in self.proposals:
+                if pi < j < i:
+                    last[p.get("module_id")] = p
+            rnd = sorted(last.values(), key=lambda p: str(p.get("change_id")))
             listed = d.get("module_changes") or []
             pkg = [x for x in listed if x.get("module_id") == "package"]
             listed = [x for x in listed if x.get("module_id") != "package"]
@@ -1669,9 +1674,10 @@ class RunChecker:
                 if out or x.get("choices"):
                     self.error(rule, w, f"v{v} package change {x.get('change_id')} sets "
                                         f"{', '.join(out + sorted(x.get('choices') or {}))}, not package variables")
+            listed = sorted(listed, key=lambda x: str(x.get("change_id")))
             if [x.get("change_id") for x in listed] != [p.get("change_id") for p in rnd]:
-                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round "
-                                    f"proposed {[p.get('change_id') for p in rnd]}")
+                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round's "
+                                    f"proposals (each module's last) are {[p.get('change_id') for p in rnd]}")
             else:
                 for x, p in zip(listed, rnd):
                     if x != p:

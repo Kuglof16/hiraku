@@ -1406,6 +1406,33 @@ class Modules(unittest.TestCase):
                     v2["data"]["module_changes"][0]["reason"] = "another reason"
                 self.assertTrue(self.hk6(ev), why)
 
+    def test_a_later_proposal_of_a_module_replaces_its_earlier_one(self):
+        # docs/contract.md (8762a06): the same module proposing again in the round replaces its proposal;
+        # build_version lists only the later one
+        first = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                 "reason": "a larger wheel takes the step", "load_case_ids": ["R1-step100"],
+                 "changes": {"wheel_radius": {"value": 340.0, "unit": "mm"}}}
+        again = dict(first, change_id="chg-0002", reason="refused: smaller",
+                     changes={"wheel_radius": {"value": 320.0, "unit": "mm"}})
+        ev = modular(proposals=[first, again])
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"] = [copy.deepcopy(again)]
+        d2["variables"]["wheel_radius"] = again["changes"]["wheel_radius"]
+        self.assertEqual(self.hk6(ev), set())
+        # the two listed (the earlier one not replaced) is wrong, and so is the earlier one alone
+        for listed in ([first, again], [first]):
+            with self.subTest(listed=[x["change_id"] for x in listed]):
+                d2["module_changes"] = copy.deepcopy(listed)
+                self.assertTrue(any("each module's last" in m for m in self.hk6(ev)), self.hk6(ev))
+        # another module's proposal stays
+        other = {"change_id": "chg-0003", "module_id": "frame", "agent_id": "designer.frame", "reason": "x",
+                 "load_case_ids": ["R1-step100"], "changes": {}}
+        ev = modular(case_modules=("suspension", "frame"), proposals=[first, other, again])
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"] = [copy.deepcopy(again), copy.deepcopy(other)]
+        d2["variables"]["wheel_radius"] = again["changes"]["wheel_radius"]
+        self.assertEqual(self.hk6(ev), set())
+
     def test_a_variable_no_module_lists_may_follow_with_a_warning(self):
         ev = modular()
         d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
@@ -1421,7 +1448,17 @@ class Modules(unittest.TestCase):
         one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
                "reason": "r", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
         two = dict(one, change_id="chg-0002", changes={"wheel_radius": {"value": 330.0, "unit": "mm"}})
-        self.assertTrue(any("all change wheel_radius" in m for m in self.hk6(modular(proposals=[one, two]))))
+        # the same module twice: the later proposal replaces the earlier (docs/contract.md, 8762a06), no clash
+        ev = modular(proposals=[one, two])
+        [e for e in ev if e["kind"] == "design.created"][-1]["data"]["module_changes"] = [copy.deepcopy(two)]
+        self.assertFalse(any("all change" in m for m in self.hk6(ev)))
+        # what is left: the packager's change and a module's proposal setting the same layout variable
+        pkg = {"change_id": "chg-0003", "module_id": "package", "agent_id": "packager", "reason": "longer",
+               "design_version": 1, "changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}
+        stray = dict(one, changes={"wheelbase": {"value": 1950.0, "unit": "mm"}})
+        ev = modular(proposals=[stray])
+        [e for e in ev if e["kind"] == "design.created"][-1]["data"]["module_changes"].append(pkg)
+        self.assertTrue(any("all change wheelbase" in m for m in self.hk6(ev)))
 
     def test_no_proposal_without_modules(self):
         ev = modular(modules=False)
