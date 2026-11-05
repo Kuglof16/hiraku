@@ -313,7 +313,7 @@ def _all_boxes(design: dict) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     return out
 
 
-JOINT_GAP_MM = 2.0
+JOINT_GAP_MM = 2.0  # a joint's ends may be this far apart: HIRAKU's choice, an assumption, no source
 NOT_TOUCHING_VIA = ("wire", "hose", "strap")  # strap: a belt's webbing to its seat
 
 

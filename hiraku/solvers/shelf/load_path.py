@@ -1673,6 +1673,9 @@ def plate_strip_known_answer() -> Record:
 
 # ------------------------------------------------------------------ the tool
 
+# Defaults when a load case has none: hand 300 N, foot 500 N and push 725 N are the values of Q66, Q68 and Q77 in
+# data/requirements/offroad-4w.yaml, whose basis gives the sources: Q66 UN R79 (1988 text) steering effort table, an
+# assumption to use it as a load; Q68 UN R13-H Annex 3, 2.1.1 and 2.3.4; Q77 CPSC NPR 79 FR 68964, § 1422.5(c).
 LOAD_KIND = Param("load_kind", None, "which loads: hand (Q66 at the grip), foot (Q68 on the pedals), inertia (m a of "
                   "every part and the occupants), push (Q77 outward at point R)", default="inertia", choices=LOAD_KINDS)
 HAND_FORCE = Param("hand_force", "N", "hand force at the grip of the hand control, in each of three directions (Q66)",

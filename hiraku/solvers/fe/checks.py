@@ -19,7 +19,9 @@ from .model import FEModel, StaticSolver
 from .precheck import equilibrium, rigid_body_energy
 from .solid import Hex8, Hex20, solid_stresses, surface_load
 
-E_ST = 205000.0  # MPa, the round steel of hiraku.solvers.shelf.fixtures.STEEL
+# E 205000 MPa, nu 0.3 (and 7850 kg/m^3 below): the round steel of hiraku.solvers.shelf.fixtures.STEEL, an
+# assumption for the known-answer checks, no source (the expected values use the same numbers)
+E_ST = 205000.0  # MPa
 NU_ST = 0.3
 G_ST = E_ST / (2.0 * (1.0 + NU_ST))
 

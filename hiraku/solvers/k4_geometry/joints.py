@@ -16,7 +16,8 @@ import numpy as np
 from .model import Body, bodies, shape_overlap
 from .obb import from_box
 
-JOINT_GAP_MM = 2.0  # a joint touches when the gap is no more than this (the program management's figure)
+# a joint touches when the gap is no more than this (the program management's figure: HIRAKU's choice, no source)
+JOINT_GAP_MM = 2.0
 NOT_TOUCHING_VIA = ("wire", "hose", "strap")  # strap: a belt's webbing to its seat
 ENVELOPE_TOL_MM = 0.5
 

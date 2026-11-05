@@ -112,6 +112,7 @@ def _scene(extra_parts: tuple = (), members: tuple = ()) -> Record:
         mems.append({"id": mid, "node_a": f"{mid}_a", "node_b": f"{mid}_b", "section": f"ct{d:g}", "material": "steel"})
     return {"design_version": 1, "name": "check", "variables": {},
             "nodes": [{"id": k, "xyz_mm": v} for k, v in nodes.items()], "members": mems, "sections": secs,
+            # round values for steel, test values (no source)
             "materials": {"steel": {"name": "steel", "E_MPa": 205000.0, "nu": 0.3, "density_kg_m3": 7850.0,
                                     "yield_MPa": 235.0}},
             "parts": parts,
@@ -124,6 +125,8 @@ def _box(pid: str, kind: str, lo, hi, carried=("n0",)) -> Record:
             "box": {"center_mm": [(a + b) / 2.0 for a, b in zip(lo, hi)], "size_mm": [b - a for a, b in zip(lo, hi)]}}
 
 
+# The checks' doorway: the values of Q93 to Q96 in data/requirements/offroad-4w.yaml (ISO 4252:1983 Figure 1, ISO 2867:1980
+# 10.1 and AIST I1 male 95th percentile, as their basis says); here test values, any sizes give the checks' answers.
 SIZES = {"width_upper": 450.0, "width_lower": 300.0, "height_seat": 985.2, "height_floor": 1250.0}
 
 
