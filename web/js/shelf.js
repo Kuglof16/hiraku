@@ -18,7 +18,7 @@ import { fill, h } from "./intake/dom.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
 const MODES = [["domain", "分野から"], ["base", "土台から"]];
-const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["checking", "照合中"], ["unusable", "使えない"]];
+const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["checking", "確かめ中"], ["unusable", "使えない"]];
 const POLL_MS = 2000; // asking again while the server builds the shelf
 
 const isClaude = (t) => t.origin === "claude";
@@ -66,6 +66,38 @@ function checkState(t) {
 // ?dev=1: the ids and the English are shown, folded under くわしく; without it, not at all.
 const DEV = new URLSearchParams(globalThis.location?.search ?? "").get("dev") === "1";
 
+// A formula's expression as K0 writes it (plain ASCII), shown with the usual signs: only a sign is put
+// for a sign, the expression is not rewritten. A name written in full (mu, theta) becomes its letter;
+// ^2 ^3 ... become raised digits; sqrt becomes √; * becomes ×; a name with an underscore (t_r,
+// mu_all) is written with what follows the first underscore lowered (<sub>).
+export const EXPR_SIGNS = {
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", Delta: "Δ", epsilon: "ε", zeta: "ζ", eta: "η", theta: "θ",
+  kappa: "κ", lambda: "λ", mu: "μ", nu: "ν", pi: "π", rho: "ρ", sigma: "σ", tau: "τ", phi: "φ", psi: "ψ",
+  omega: "ω", Omega: "Ω", sqrt: "√", "*": "×",
+};
+const RAISED = { "-": "⁻", 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
+
+/** The expression as text nodes and <sub> elements (EXPR_SIGNS, raised powers, lowered parts after "_"). */
+export function exprNodes(expr) {
+  const out = [];
+  for (const [tok] of String(expr ?? "").matchAll(/[A-Za-z][A-Za-z0-9_]*|\^-?\d+|\*|[^A-Za-z^*]+|./g)) {
+    if (tok.startsWith("^") && tok.length > 1) {
+      out.push([...tok.slice(1)].map((ch) => RAISED[ch]).join(""));
+    } else if (tok === "*") {
+      out.push(EXPR_SIGNS["*"]);
+    } else if (/^[A-Za-z]/.test(tok)) {
+      const cut = tok.indexOf("_");
+      const base = cut > 0 ? tok.slice(0, cut) : tok;
+      const low = cut > 0 ? tok.slice(cut + 1) : "";
+      out.push(EXPR_SIGNS[base] ?? base);
+      if (low) out.push(h("sub", {}, EXPR_SIGNS[low] ?? low));
+    } else {
+      out.push(tok);
+    }
+  }
+  return out;
+}
+
 function marks(t) {
   return [
     isClaude(t) ? h("span", { class: "sh-mark claude", title: "実行の中で Claude が作ったツール" }, "Claude が作った") : null,
@@ -80,12 +112,16 @@ export function mountShelf(el, api) {
   const opened = new Set(); // the くわしく left open, by key (they stay open across the redraws)
   let timer = null;
 
-  // A くわしく (only under ?dev=1) holding the ids or the English; key: what keeps it open.
-  function more(key, ...kids) {
-    if (!DEV) return null;
-    return h("details", { class: "more sh-more", open: opened.has(key), dataset: { more: key },
+  // A fold (details, shut at first) that stays open or shut across the redraws; key: what keeps it.
+  function fold(key, cls, label, ...kids) {
+    return h("details", { class: cls, open: opened.has(key), dataset: { fold: key },
         ontoggle: (e) => { if (e.target.open) opened.add(key); else opened.delete(key); } },
-      h("summary", {}, "くわしく"), ...kids);
+      h("summary", {}, label), ...kids);
+  }
+
+  // A くわしく (only under ?dev=1) holding the ids or the English.
+  function more(key, ...kids) {
+    return DEV ? fold(key, "more sh-more", "くわしく", ...kids) : null;
   }
 
   const search = h("input", { class: "sh-search", type: "search", placeholder: "ツールの名前・試験の番号で探す",
@@ -241,11 +277,12 @@ export function mountShelf(el, api) {
           ? t.formulas.map((id) => {
             const f = formulaOf(id);
             return h("div", { class: "sh-fl", dataset: { formula: id } }, formulaName(id),
-              f ? h("code", { class: "sh-expr" }, f.expression) : null, more(k(`f:${id}`), h("code", {}, id)));
+              f?.expression ? fold(k(`x:${id}`), "sh-see", "式を見る", h("div", { class: "sh-expr" }, exprNodes(f.expression))) : null,
+              more(k(`f:${id}`), h("code", {}, id)));
           })
           : "—"),
         h("dt", {}, "CAE の段"), h("dd", {}, `${t.base} ${BASE_JA[t.base] ?? ""}`),
-        h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行の照合の記録)") : null)),
+        h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行で確かめた記録)") : null)),
       h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問)`),
       checks.length
         ? h("table", { class: "sh-checks" },
@@ -254,7 +291,7 @@ export function mountShelf(el, api) {
               h("td", { class: "case" }, words(c.case_ja, c.case, k(`case:${i}`))),
               h("td", { class: "qty" }, quantityName(c.quantity), quantityName(c.quantity) !== c.quantity ? more(k(`q:${i}`), h("code", {}, c.quantity)) : null),
               h("td", { class: "num", title: String(c.expected) }, fmt(c.expected, 6)),
-              h("td", { class: "num", title: String(c.got) }, c.got === null ? "照合中" : fmt(c.got, 6)),
+              h("td", { class: "num", title: String(c.got) }, c.got === null ? "確かめ中" : fmt(c.got, 6)),
               h("td", {}, unitLabel(c.unit)),
               h("td", { class: "num", title: String(c.tolerance_rel) }, fmtPct(c.tolerance_rel, 1)),
               h("td", {}, c.got === null ? "—" : c.pass ? "OK" : "×"),

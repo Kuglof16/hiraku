@@ -51,7 +51,7 @@ FORMULAS = [
     {"formula_id": "frame_static.rail_bending", "title": "レールの曲げ", "domain": "strength", "expression": "sigma = M / Z",
      "inputs": {}, "outputs": {}, "assumptions": [], "source": "beam theory (shape example)"},
     {"formula_id": "step_climb.wheel_force_rigid", "title": "剛い輪が段の角に当たったときの力の比", "domain": "powertrain",
-     "expression": "F/W = d / (r - h)", "inputs": {}, "outputs": {}, "assumptions": [], "source": "statics (shape example)"},
+     "expression": "F_x / W = d / (r - h)^2 + mu_0 * sqrt(theta)", "inputs": {}, "outputs": {}, "assumptions": [], "source": "statics (shape example)"},
 ]
 # the generators' titles for the kinds of design (designgen.ARCHETYPES); space_frame_utv is left out
 # so that a kind without a title shows as its key
@@ -259,7 +259,14 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual(card["th"], ["確かめた場面", "何の値", "正しい値", "ツールの値", "単位", "ずれてよい幅", "結果", "正しい値の出どころ"])
         self.assertIn("手計算の式", card["dt"])
         self.assertNotIn("手計算の段", card["dt"])
-        self.assertEqual(card["fl"], ["レールの曲げsigma = M / Z"])
+        self.assertEqual(card["fl"], ["レールの曲げ式を見るσ = M / Z"])
+        # 式を見る: shut at first; open, the expression with its signs (EXPR_SIGNS), not rewritten
+        see = "#view-shelf .sh-fl[data-formula='frame_static.rail_bending'] details.sh-see"
+        self.assertFalse(page.evaluate(f"document.querySelector(\"{see}\").open"))
+        self.assertFalse(page.is_visible(f"{see} .sh-expr"))
+        page.click(f"{see} > summary")
+        self.assertTrue(page.is_visible(f"{see} .sh-expr"))
+        self.assertEqual(page.text_content(f"{see} .sh-expr"), "σ = M / Z")
         # without ?dev=1 no ids and no くわしく anywhere on the shelf (the tools' names, the formulas' ids,
         # the English beside a Japanese case or source)
         self.assertEqual(card["more"], 0)
@@ -271,7 +278,17 @@ class ShelfBrowserTest(unittest.TestCase):
         # a check still waiting for its value, and a failed one
         page.click('#view-shelf .sh-tool[data-tool="tilt"]')
         rows = page.evaluate("[...document.querySelectorAll('#view-shelf .sh-checks tbody tr')].map((tr) => [tr.className, tr.children[3].textContent])")
-        self.assertEqual(rows, [["ok", "30.1"], ["wait", "照合中"]])
+        self.assertEqual(rows, [["ok", "30.1"], ["wait", "確かめ中"]])
+        self.assertEqual(page.text_content('#view-shelf .sh-filter button[data-filter="checking"]'), "確かめ中")
+
+        # the signs: a name in full to its letter, a power raised, the part after "_" lowered, sqrt and *
+        page.click('#view-shelf .sh-tool[data-tool="step_climb"]')
+        see = "#view-shelf .sh-fl[data-formula='step_climb.wheel_force_rigid'] details.sh-see"
+        page.click(f"{see} > summary")
+        self.assertEqual(page.inner_html(f"{see} .sh-expr"), "F<sub>x</sub> / W = d / (r - h)² + μ<sub>0</sub> × √(θ)")
+        # an open 式を見る stays open when the shelf draws again
+        page.click('#view-shelf .sh-mode button[data-mode="domain"]')
+        self.assertTrue(page.evaluate(f"document.querySelector(\"{see}\").open"))
         page.click('#view-shelf .sh-tool[data-tool="roof_crush"]')
         page.wait_for_function("document.querySelector('#view-shelf .sh-detail')?.dataset.tool === 'roof_crush' && !/読んでいます/.test(document.querySelector('#view-shelf .sh-right').textContent)")
         self.assertEqual(page.evaluate("document.querySelector('#view-shelf .sh-checks tbody tr').className"), "bad")
