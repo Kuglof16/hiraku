@@ -1471,6 +1471,20 @@ class RunChecker:
             return f"{latest[0]} ended with {causes[-1]}"
         return None
 
+    def _ended(self, v: int | None) -> set[str]:
+        """The load cases of version v whose mismatch was ended without a verdict: a cause, as it last stands,
+        with ends_case true and not resolved (hiraku.tools.rules.ended_cases; a -beyond case without a
+        criterion too, which the run's stop names as not judged)."""
+        out = set()
+        for _, c in self.recs["cause"].values():
+            if c.get("ends_case") is not True or c.get("resolved"):
+                continue
+            cmp = self.recs["comparison"].get(c.get("comparison_id"))
+            p = self.recs["prediction"].get((cmp[1] if cmp else {}).get("prediction_id"))
+            if p and p[1].get("design_version") == v:
+                out.add(p[1].get("load_case_id"))
+        return out
+
     def _verdict_tool(self, ver: dict) -> str | None:
         """The tool of the analysis a verdict came from (through its comparison, or its analysis_id)."""
         aid = ver.get("analysis_id")
@@ -1544,9 +1558,9 @@ class RunChecker:
             self.error("run.stop_code", w, f"stop_code {code} with status {status}")
         if (code == "error") != (status == "failed"):
             self.warn("run.stop_code", w, f"stop_code {code} with status {status} (error goes with failed)")
-        if code == "not_judged" and self._unjudged() == {}:
+        if code == "not_judged" and self._unjudged() == {} and not self._ended(max(self.designs, default=None)):
             self.error("run.stop_code", w, "stop_code not_judged but every load case with a criterion in the "
-                                           "picked domains has a verdict")
+                                           "picked domains has a verdict and none was ended without one")
         if code == "round_limit" and self.project and self.designs:
             used, limit = max(self.designs) - 1, self.project.get("round_limit")
             if isinstance(limit, int) and used < limit:
@@ -1653,7 +1667,12 @@ class RunChecker:
                                     f"makes a version")
             mods = {x.get("module_id"): x for x in prev.get("modules") or []}
             pvars = set((mods.get("package") or {}).get("variables") or [])
-            rnd = [p for j, p, _ in self.proposals if pi < j < i]
+            # a module's later proposal in the round replaces its earlier one (docs/contract.md, 8762a06)
+            last: dict = {}
+            for j, p, _ in self.proposals:
+                if pi < j < i:
+                    last[p.get("module_id")] = p
+            rnd = sorted(last.values(), key=lambda p: str(p.get("change_id")))
             listed = d.get("module_changes") or []
             pkg = [x for x in listed if x.get("module_id") == "package"]
             listed = [x for x in listed if x.get("module_id") != "package"]
@@ -1669,9 +1688,10 @@ class RunChecker:
                 if out or x.get("choices"):
                     self.error(rule, w, f"v{v} package change {x.get('change_id')} sets "
                                         f"{', '.join(out + sorted(x.get('choices') or {}))}, not package variables")
+            listed = sorted(listed, key=lambda x: str(x.get("change_id")))
             if [x.get("change_id") for x in listed] != [p.get("change_id") for p in rnd]:
-                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round "
-                                    f"proposed {[p.get('change_id') for p in rnd]}")
+                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round's "
+                                    f"proposals (each module's last) are {[p.get('change_id') for p in rnd]}")
             else:
                 for x, p in zip(listed, rnd):
                     if x != p:
