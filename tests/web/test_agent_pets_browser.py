@@ -154,12 +154,14 @@ class AgentPetsTest(unittest.TestCase):
         self.servers.append(server)
         return f"http://127.0.0.1:{server.server_address[1]}"
 
-    def open(self, base, query, bundles_open=True):
+    def open(self, base, query, bundles_open=True, motion="on"):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         # (one row per agent: the bundles of the agents' list open, ?agents=open; the bundles have their own test)
-        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}&{query}")
+        # (?petmotion=on: the pets move as with a GPU, though this Chromium draws by SwiftShader; None: as detected)
+        pm = f"&petmotion={motion}" if motion else ""
+        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}{pm}&{query}")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -232,7 +234,7 @@ class AgentPetsTest(unittest.TestCase):
         # the judgement's line is the bubble of its domain's agent (the event's agent is system)
         grid = page.evaluate(READ, {"t": 12.2, "tab": "grid"})
         nvh = {s["agent"]: s["text"] for s in grid["says"] if s["on"]}
-        self.assertTrue(nvh["cae.nvh"].startswith("版 2 の判定は緑"), nvh)
+        self.assertTrue(nvh["cae.nvh"].startswith("v2 の判定は緑"), nvh)
         self.assertEqual(errors, [])
         page.close()
 
@@ -261,6 +263,47 @@ class AgentPetsTest(unittest.TestCase):
         self.assertEqual({p["agent"]: p["draws"] for p in still["pets"]}, {p["agent"]: p["draws"] for p in again["pets"]})
         self.assertEqual(errors_b, [])
         b.close()
+
+    def test_no_gpu_still_pictures(self):
+        """WebGL drawn by software (this Chromium's SwiftShader, as detected: no ?petmotion): each pet
+        is one still picture, drawn once and not again while the replay plays on, whatever its motion."""
+        self.need_pets()
+        page, errors = self.open(self.serve(), "tab=bench&t=0", motion=None)
+        got = page.evaluate("() => ({ still: document.documentElement.dataset.petsStill, name: window.hiraku.pets().rendererName })")
+        self.assertEqual(got["still"], "1", got)
+        self.assertRegex(got["name"], r"(?i)swiftshader", got)
+        # (a box is drawn again only when its size changes: the rows settle in the first frames)
+        page.evaluate(READ, {"t": 0.6, "tab": None})
+        first = page.evaluate(READ, {"t": 0.6, "tab": None})
+        self.assertTrue(first["pets"])
+        draws = {p["agent"]: p["draws"] for p in first["pets"]}
+        for t in (2.8, 5.3, 15.7, 1e6):  # waiting, mismatch, blocked, the end
+            later = page.evaluate(READ, {"t": t, "tab": None})
+            for p in later["pets"]:
+                self.assertEqual(p["draws"], draws[p["agent"]], (t, p["agent"]))  # not drawn again
+                self.assertEqual(p["look"], "idle", (t, p["agent"]))
+                self.assertGreater(p["ink"], 0, p["agent"])
+            self.assertEqual({p["agent"]: p["pixels"] for p in later["pets"]}, {p["agent"]: p["pixels"] for p in first["pets"]}, t)
+        # the state is still the record's (the row's words and data-pet-state), only the picture holds
+        self.assertEqual({p["agent"]: p["state"] for p in later["pets"]}["lead"], "idle")
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_which_renderer_is_software(self):
+        """agent_pets.js isSoftwareRenderer on the names drivers give (UNMASKED_RENDERER_WEBGL): software
+        ones (still pictures) and GPUs (moving pets, as before)."""
+        page, errors = self.open(self.serve(), "tab=bench&t=0", motion=None)
+        software = ["ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+                    "Google SwiftShader", "llvmpipe (LLVM 15.0.7, 256 bits)", "Mesa softpipe", "lavapipe",
+                    "ANGLE (Microsoft, Microsoft Basic Render Driver (0x0000008C) Direct3D11 vs_5_0 ps_5_0, D3D11)"]
+        gpu = ["ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+               "ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+               "Apple M2", "Mali-G78", "AMD Radeon RX 6600", "Adreno (TM) 740", ""]
+        got = page.evaluate("""async ([a, b]) => { const m = await import('/js/agent_pets.js');
+            return [a.map(m.isSoftwareRenderer), b.map(m.isSoftwareRenderer)]; }""", [software, gpu])
+        self.assertEqual(got, [[True] * len(software), [False] * len(gpu)])
+        self.assertEqual(errors, [])
+        page.close()
 
     def test_blocked_and_waiting_poses(self):
         """blocked (pet3d.js v9) flinches from the event's time (o.since: the pose time of the block)

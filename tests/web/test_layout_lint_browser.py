@@ -68,10 +68,11 @@ SCREENS = (
     Screen("一覧 (保存なし)", "?list=1", wait="document.querySelector('#launch .pick')", root="#runlist", server="unsaved"),
     Screen("一覧 (dev)", "?list=1&dev=1", wait="document.querySelector('#launch .lreq') && document.querySelector('#runlist table')", root="#runlist"),
     Screen("作業台", f"?run={DOMAINS}&tab=bench&pace=0&t=1e6"),
-    Screen("全分野", f"?run={DOMAINS}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果", f"?run={DOMAINS}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (分野の再生)", f"?run={DOMAINS}&tab=grid&domain=strength&pace=0&t=4.5"),
     # the agents' pets with their bubbles out (js/agent_pets.js): 空力's judgement at 17.0 s, the lead's line at 17.5 s
     Screen("作業台 (吹き出し)", f"?run={DOMAINS}&tab=bench&pace=0&t=17.6"),
-    Screen("全分野 (吹き出し)", f"?run={DOMAINS}&tab=grid&pace=0&t=17.6"),
+    Screen("解析結果 (吹き出し)", f"?run={DOMAINS}&tab=grid&pace=0&t=17.6"),
     Screen("A1", "?new=1", wait="document.querySelector('#view-intake textarea')"),
     Screen("A2", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6"),
     Screen("A5", f"?run={HEARING}&tab=A5&live=0&pace=0&t=1e6"),
@@ -82,17 +83,17 @@ SCREENS = (
     Screen("組み立て (接合)", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6&on=joints"),  # joints: A7's own 接合 switch and legend
     Screen("見せる", f"?run={DOMAINS}&present=1&pace=0&t=1e6"),
     # held: the 保留 bands
-    Screen("全分野 (保留)", f"?run={HELD}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (保留)", f"?run={HELD}&tab=grid&pace=0&t=1e6"),
     Screen("作業台 (保留)", f"?run={HELD}&tab=bench&pace=0&t=1e6"),
     # modules: the sample record of a design in modules (tests.web.modules_fixture)
     Screen("作業台 (モジュール・空間)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=modules,spaces"),
     Screen("作業台 (提案の並び)", f"?run={MODULES}&tab=bench&pace=0&t=4.6"),
-    Screen("全分野 (モジュール)", f"?run={MODULES}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (モジュール)", f"?run={MODULES}&tab=grid&pace=0&t=1e6"),
     # joints and modules: both toggles on the same bench (the two legends side by side)
     Screen("作業台 (接合・モジュール)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=joints,modules,spaces"),
     # the shapes of a real record a first-time viewer opened: the chips' row, the log, the change line
     Screen("作業台 (試験が多い)", f"?run={FIRSTTIME}&tab=bench&pace=0&t=1e6&on=names"),
-    Screen("全分野 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
 )
 
 

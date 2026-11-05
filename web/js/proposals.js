@@ -6,7 +6,7 @@
 //
 // No three.js here: state.js uses proposalText for the log lines.
 
-import { agentName, designNumberName, esc, fmt, moduleName, unitLabel } from "./labels.js";
+import { agentName, designNumberName, esc, fmt, moduleName, unitLabel, verLabel } from "./labels.js";
 
 // The module colours: pet3d.js v10 ROLES (the rows with a module) when the page has them, else
 // the same values here. package is the packager's (its pet's colour, app.js PET_COLORS.packager).
@@ -116,7 +116,7 @@ export function roundCardHtml(s, playhead) {
     const base = s.designs[pending[0].baseVersion] ?? s.designs[s.currentVersion];
     const who = new Set(pending.map((p) => p.agent_id)).size;
     return (
-      `<div class="rc-head" data-round="pending">版 ${esc(pending[0].baseVersion ?? s.currentVersion)} を直す提案: 設計役 ${who} 人が並べて出した</div>` +
+      `<div class="rc-head" data-round="pending">${esc(verLabel(pending[0].baseVersion ?? s.currentVersion))} を直す提案: 設計役 ${who} 人が並べて出した</div>` +
       `<ol class="rc-list">${pending.map((p) => rowHtml(p, base)).join("")}</ol>` +
       `<div class="rc-foot">${esc(agentName("packager"))}が 1 つの版にまとめるのを待っている</div>`
     );
@@ -128,13 +128,13 @@ export function roundCardHtml(s, playhead) {
   if (!list.length || t == null || playhead - t > ROUND_SHOW_S) return "";
   const base = s.designs[d.parent_version];
   return (
-    `<div class="rc-head" data-round="built" data-version="${v}">${esc(agentName("packager"))}が ${list.length} つの提案を版 ${v} にまとめた</div>` +
+    `<div class="rc-head" data-round="built" data-version="${v}">${esc(agentName("packager"))}が ${list.length} つの提案を ${verLabel(v)} にまとめた</div>` +
     `<ol class="rc-list">${list.map((c) => rowHtml(c, base)).join("")}</ol>`
   );
 }
 
 // What a version changed from its parent, in one sentence for viewers, made from the records'
-// values only: "版 6 → 版 7 で、レールの管の厚さを 2.3 → 3.2 mm". The changes are the version's
+// values only: "v6 → v7 で、レールの管の厚さを 2.3 → 3.2 mm". The changes are the version's
 // design.created module_changes[].changes (each variable's new value and unit) and choices; the
 // value before and the name are the parent version's (its variables, its variable_names, else
 // labels.js VARIABLE_JA, else the variable's own name). null when the version has no recorded
@@ -144,14 +144,14 @@ export function versionChangeLine(s, v) {
   if (!d || d.parent_version == null) return null;
   const base = s.designs[d.parent_version];
   const words = (d.module_changes ?? []).flatMap((c) => changeWords(c, base, "を "));
-  return words.length ? `版 ${d.parent_version} → 版 ${v} で、${words.join("・")}` : null;
+  return words.length ? `${verLabel(d.parent_version)} → ${verLabel(v)} で、${words.join("・")}` : null;
 }
 
-// The grid head's line for a version built from proposals: "版 1 → 2: 足まわり 前のばねの硬さ 25 → 30・…".
+// The grid head's line for a version built from proposals: "v1 → v2 で…: 足まわり 前のばねの硬さ 25 → 30・…".
 export function builtLine(s, v) {
   const d = s.designs[v];
   const list = d?.module_changes ?? [];
   if (!list.length) return "";
   const base = s.designs[d.parent_version];
-  return `版 ${d.parent_version} → ${v} で${esc(agentName("packager"))}がまとめた ${list.length} つの提案: ` + list.map((c) => `${esc(moduleName(c.module_id))} ${esc(changeWords(c, base).join("・"))}`).join(" ／ ");
+  return `${verLabel(d.parent_version)} → ${verLabel(v)} で${esc(agentName("packager"))}がまとめた ${list.length} つの提案: ` + list.map((c) => `${esc(moduleName(c.module_id))} ${esc(changeWords(c, base).join("・"))}`).join(" ／ ");
 }

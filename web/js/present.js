@@ -8,7 +8,7 @@
 // The words for the hooks' notices (what happened / what comes next) and whether a stopped
 // action was later done are here too: the workbench uses them as well.
 
-import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, opLabel, quantityName, ruleOf } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
 import { FIELD_JA } from "./fields.js";
 import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
 import { judgedResult, referenceResults } from "./judged.js";
@@ -152,7 +152,7 @@ function judgedNumber(c, verdict) {
   return {
     what: `${JUDGED_JA.number}: ${quantityName(cmp?.quantity ?? verdict.quantity)}`,
     value: fmtQ(verdict.value),
-    src: `${from}${ana?.design_version != null ? `・版 ${ana.design_version}` : ""}`,
+    src: `${from}${ana?.design_version != null ? `・${verLabel(ana.design_version)}` : ""}`,
     tool: ana?.tool ?? null,
   };
 }
@@ -174,7 +174,7 @@ const RECORD_ID = /\b[a-z]+-\d{3,}\b/;
 const SCENES = [
   {
     key: "grid",
-    title: "全分野の格子",
+    title: "解析結果 (分野ごと)",
     when: (c) => c.tab === "grid",
     card(c) {
       const picked = DOMAINS.map((d) => [d, judgementState(c.s, d)]).filter(([, j]) => j.picked);
@@ -184,7 +184,7 @@ const SCENES = [
       const wait = picked.length - green.length - red.length;
       const names = (list) => list.map(([d]) => DOMAIN_JA[d]).join("・");
       return {
-        what: `判定が合格の分野 (版 ${c.s.currentVersion ?? "—"})`,
+        what: `判定が合格の分野 (${verLabel(c.s.currentVersion)})`,
         value: `${green.length} / ${picked.length}`,
         src: "各分野の判定の記録",
         crit: red.length ? `基準を満たさない分野: ${names(red)}` : wait ? `判定を待っている分野: ${wait}` : "",
@@ -222,7 +222,7 @@ const SCENES = [
       const v = ct.compare ? ct.compare.nowVersion : c.chain.shown?.design_version;
       const fieldMax = fmtVU(ct.frameMax ?? ct.fieldMax, ct.field.unit);
       const maxima = ct.compare
-        ? [`補強の前 (版 ${ct.compare.version}): 最大 ${fmtVU(ct.compare.before.fieldMax, ct.field.unit)}`, `補強の後 (版 ${ct.compare.nowVersion}): 最大 ${fmtVU(ct.fieldMax, ct.field.unit)}`]
+        ? [`補強の前 (${verLabel(ct.compare.version)}): 最大 ${fmtVU(ct.compare.before.fieldMax, ct.field.unit)}`, `補強の後 (${verLabel(ct.compare.nowVersion)}): 最大 ${fmtVU(ct.fieldMax, ct.field.unit)}`]
         : [];
       // what the version changed, from the records' values (proposals.js versionChangeLine); the
       // packager's own words (change_reason, with record ids) only under ?dev=1
@@ -230,7 +230,7 @@ const SCENES = [
       // written when it names no record id)
       const said = ct.compare ? c.s.designs?.[ct.compare.nowVersion]?.change_reason : null;
       const why = ct.compare ? versionChangeLine(c.s, ct.compare.nowVersion) ?? (said && !RECORD_ID.test(said) ? said : null) : null;
-      const dev = said && said !== why ? [`版 ${ct.compare.nowVersion} の記録の文: ${said}`] : [];
+      const dev = said && said !== why ? [`${verLabel(ct.compare.nowVersion)} の記録の文: ${said}`] : [];
       // The large number is the judged quantity: the verdict's value, else (no verdict yet) the
       // shown analysis' judged result. The coloured field's largest value goes under 参考 unless
       // the field is the judged quantity itself (judged.js fieldRole).
@@ -239,13 +239,13 @@ const SCENES = [
       const num = verdict
         ? judgedNumber(c, verdict)
         : r
-          ? { what: `${JUDGED_JA.number}: ${quantityName(r.quantity)}`, value: fmtVU(r.value, r.unit), src: `解析の結果・${ct.toolTitle ?? ""}・版 ${v ?? "—"}`, tool: ct.tool }
+          ? { what: `${JUDGED_JA.number}: ${quantityName(r.quantity)}`, value: fmtVU(r.value, r.unit), src: `解析の結果・${ct.toolTitle ?? ""}・${verLabel(v)}`, tool: ct.tool }
           : null;
       if (num && ct.role !== "judged") {
         return { ...num, ...verdictCard(c, num.tool), ref: [`${name} の最大 ${fieldMax}`, ...maxima], extra: why ? [`変えたこと: ${why}`] : [], dev };
       }
       return {
-        ...(num ?? { what: `${name} の最大`, value: fieldMax, src: `解析の結果・${ct.toolTitle ?? ""}・版 ${v ?? "—"}` }),
+        ...(num ?? { what: `${name} の最大`, value: fieldMax, src: `解析の結果・${ct.toolTitle ?? ""}・${verLabel(v)}` }),
         ...verdictCard(c, num?.tool ?? ct.tool),
         extra: [...maxima, ...(why ? [`変えたこと: ${why}`] : [])],
         dev,

@@ -1,5 +1,5 @@
 """The run list's rows (no ?dev=1) each say what replaying the record shows — how it was driven and
-how far the design went, from the record: 「決まった手順で最後まで・4 回目の設計で全部合格」 — with
+how far the design went, from the record: 「決まった手順で最後まで・v4 で全部合格」 — with
 when it started and the want under it, and how it ended in the right column only (完了 / 途中で止まった).
 Saved and local records are one table, newest first; a record without project.driver (older than the
 field) or one that ended at the domain picks is kept under the closed 「この PC の記録」.
@@ -82,11 +82,11 @@ def build(runs: Path) -> None:
 # the right column (state, words), and whether it is in the closed group
 SHORT = "依頼: 林道を走れる 2 人乗りの小さなオフロード車両"
 EXPECTED = {
-    GOING: ["Claude の運転・いま 1 回目の設計", ["11/4 10:00", SHORT], ["going", "実行中"], False],
-    STOPPED: ["Claude の運転・2 回目の設計まで・不合格が残った", ["11/4 09:15", SHORT], ["stopped", "途中で止まった"], False],
-    PASSED: ["決まった手順で最後まで・4 回目の設計で全部合格", ["11/4 08:40", SHORT], ["done", "完了"], False],
+    GOING: ["Claude の運転・いま v1", ["11/4 10:00", SHORT], ["going", "実行中"], False],
+    STOPPED: ["Claude の運転・v2 まで・不合格が残った", ["11/4 09:15", SHORT], ["stopped", "途中で止まった"], False],
+    PASSED: ["決まった手順で最後まで・v4 で全部合格", ["11/4 08:40", SHORT], ["done", "完了"], False],
     PICKS: ["決まった手順・分野を選ぶところまで", ["11/3 12:00", SHORT], ["done", "完了"], True],
-    OLD: ["1 回目の設計まで", ["11/3 01:31", SHORT], ["stopped", "途中で止まった"], True],
+    OLD: ["v1 まで", ["11/3 01:31", SHORT], ["stopped", "途中で止まった"], True],
 }
 
 
@@ -137,7 +137,7 @@ class RunListRowsBrowserTest(unittest.TestCase):
         self.assertEqual(got, [[k, v] for k, v in EXPECTED.items()])  # newest first, the closed group last
         self.assertEqual(heads, {"h3": ["記録を見る"], "older": False, "summary": "この PC の記録 (2)"})
         # the words the list no longer uses: the split by where the record is kept, the stop reasons, 版
-        for w in ("保存した記録", "この PC で実行した記録", "判定の無い分野を残した", "版 "):
+        for w in ("保存した記録", "この PC で実行した記録", "判定の無い分野を残した", "版 ", "回目の設計"):
             self.assertNotIn(w, text)
 
     def test_the_title_does_not_repeat_the_state_column(self):

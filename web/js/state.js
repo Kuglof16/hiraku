@@ -18,6 +18,7 @@ import {
   fmtVU,
   opLabel,
   plainText,
+  verLabel,
   plainToolName,
   quantityName,
   ruleOf,
@@ -192,7 +193,7 @@ export function applyEvent(s, ev) {
       s.project = d;
       for (const a of d.agents ?? []) ensureAgent(s, a.agent_id, { role: a.role, domain: a.domain ?? null, prop: a.prop });
       log(s, ev, "info", `試験と分野を決めた: 荷重条件 ${(d.load_cases ?? []).length}・分野 ${(d.domain_picks ?? []).length}`);
-      setActivity(s, ev, "版 1 から試験と分野を決めた");
+      setActivity(s, ev, `${verLabel(1)} から試験と分野を決めた`);
       break;
     }
     case "domains.picked": {
@@ -266,7 +267,7 @@ export function applyEvent(s, ev) {
       if (hits.length) parts.push(`守れていない部品 ${hits.length} (${hits.map((h) => h.part_id).join("・")})`);
       else if (checked > 0) parts.push(`当てた部品 ${checked} は守れている`);
       if (notEval) parts.push(`値が無くて当てられない部品 ${notEval}`);
-      const txt = `規則 ${d.rule_id} を版 ${d.design_version} に当てた: ${parts.join("・")}`;
+      const txt = `規則 ${d.rule_id} を ${verLabel(d.design_version)} に当てた: ${parts.join("・")}`;
       if (agent) agent.status = "規則を当てた";
       logRecord(s, ev, d.rule_check_id, hits.length ? "bad" : notEval ? "warn" : "ok", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
@@ -277,7 +278,7 @@ export function applyEvent(s, ev) {
       s.reports[d.design_version] = d;
       s.report = d;
       const reds = (d.domains ?? []).filter((x) => x.state === "red").length;
-      log(s, ev, "ok", `版 ${d.design_version} の報告を書いた (分野 ${(d.domains ?? []).length}・赤 ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
+      log(s, ev, "ok", `${verLabel(d.design_version)} の報告を書いた (分野 ${(d.domains ?? []).length}・赤 ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
       setActivity(s, ev, `報告: ${String(d.summary ?? "").split("\n")[0]}`);
       break;
     }
@@ -326,17 +327,17 @@ export function applyEvent(s, ev) {
       if (!s.versions.includes(v)) s.versions.push(v);
       s.currentVersion = Math.max(...s.versions);
       ensureAgent(s, ev.agent ?? "designer");
-      if (agent) agent.status = `版 ${v}`;
+      if (agent) agent.status = verLabel(v);
       // modules: a version built from module designers' proposals says so (modules.js builtLine)
       const n = (d.module_changes ?? []).length;
       if (n) {
         s.builtT[v] = ev.t;
-        log(s, ev, "info", `${who(ev)}が ${n} つの提案を版 ${v} にまとめた`);
-        setActivity(s, ev, `${who(ev)}が ${n} つの提案を版 ${v} にまとめた`);
+        log(s, ev, "info", `${who(ev)}が ${n} つの提案を ${verLabel(v)} にまとめた`);
+        setActivity(s, ev, `${who(ev)}が ${n} つの提案を ${verLabel(v)} にまとめた`);
         break;
       }
-      log(s, ev, "info", `${who(ev)}: 版 ${v} を作った${d.change_reason ? ` (${d.change_reason})` : ""}`);
-      setActivity(s, ev, `版 ${v} の設計を作った`);
+      log(s, ev, "info", `${who(ev)}: ${verLabel(v)} を作った${d.change_reason ? ` (${d.change_reason})` : ""}`);
+      setActivity(s, ev, `${verLabel(v)} の設計を作った`);
       break;
     }
     case "design.change_proposed": {
@@ -353,7 +354,7 @@ export function applyEvent(s, ev) {
       // 39b6a8c). Kept per version; the screen's lookups still read project.load_cases (version 1's).
       const v = d.design_version ?? ev.design_version;
       if (v != null) s.versionLoadCases[v] = d.load_cases ?? [];
-      log(s, ev, "info", `版 ${v} の荷重条件を作り直した: ${(d.load_cases ?? []).length}`);
+      log(s, ev, "info", `${verLabel(v)} の荷重条件を作り直した: ${(d.load_cases ?? []).length}`);
       break;
     }
     case "mesh.created": {
@@ -362,7 +363,7 @@ export function applyEvent(s, ev) {
       const els = d.elements ?? [];
       const kinds = kindCountText({ elements: els, element_kind: d.element_kind });
       const size = d.element_size_mm ? `・要素の大きさ ${fmt(d.element_size_mm, 3)} mm` : "";
-      const txt = `版 ${d.design_version} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length}${kinds ? ` (${kinds})` : ""}${size}`;
+      const txt = `${verLabel(d.design_version)} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length}${kinds ? ` (${kinds})` : ""}${size}`;
       logRecord(s, ev, d.mesh_id, "info", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -444,7 +445,7 @@ export function applyEvent(s, ev) {
       const a = s.agents[`cae.${d.domain}`];
       if (a && d.state === "green") a.status = "✓";
       if (a && d.state === "red") a.status = "赤";
-      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: 版 ${d.design_version} の判定は${state}${d.summary ? ` — ${d.summary}` : ""}`);
+      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: ${verLabel(d.design_version)} の判定は${state}${d.summary ? ` — ${d.summary}` : ""}`);
       break;
     }
     case "tool.checked": {

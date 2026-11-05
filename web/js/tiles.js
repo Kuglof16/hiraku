@@ -5,7 +5,7 @@
 // interferences in red, and a small chart of its first series group. Every
 // number printed is a recorded value.
 
-import { DOMAINS, DOMAIN_JA, JUDGED_JA, esc, fmt, fmtQ, fmtVU, keepAsides, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, esc, fmt, fmtQ, fmtVU, keepAsides, opLabel, quantityName, unitLabel, verLabel } from "./labels.js";
 import { OVER_COLOR, colorOf } from "./colormap.js";
 import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fields.js";
 import { abscissa, channelsOf, chartGroups, extent, seriesName, xSeriesOf } from "./series.js";
@@ -23,6 +23,17 @@ const LINE_COLORS = ["#2b59c3", "#8e6bbf", "#2f7d4f", "#e9893a", "#c8402a", "#2f
 const STATE_WORD = { green: "緑 ✓", red: "赤", pending: "まだ", off: "選んでいない" };
 // Top row: domains drawn as contours; bottom row: as charts, then assembly (interference).
 export const TILE_ORDER = ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"];
+
+// A run whose tests the requirements file chose (its `tests:`, e.g. offroad-4w-n12.yaml: [S1]): the
+// record says so in each pick's reason (「要件のファイルが試験 S1 … を選んだ」). A domain not picked
+// there is not left out by mistake: its tile says which tests this run checks. null otherwise.
+const FILE_CHOSE = /^要件のファイルが/;
+export function onlyTestsLine(s) {
+  const picks = s.project?.domain_picks ?? [];
+  if (!picks.length || !picks.every((p) => FILE_CHOSE.test(p.reason ?? ""))) return null;
+  const ids = [...new Set((s.project?.load_cases ?? []).map((c) => c.test_id).filter(Boolean))];
+  return ids.length ? `この実行は ${ids.join("・")} だけを確かめます (要件のファイルが選んだ試験)` : null;
+}
 
 const caseTitle = (s, id) => (s.project?.load_cases ?? []).find((c) => c.load_case_id === id)?.title ?? "";
 
@@ -250,7 +261,7 @@ export class TileBoard {
         const kept = before ? [...now].filter((x) => before.has(x)) : [];
         const tip = [now.size ? `赤の試験: ${[...now].join("・")}` : "赤の試験なし", fixed.length ? `前の版から直った: ${fixed.join("・")}` : "", kept.length ? `前の版から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
         before = now;
-        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">版 ${ver} 赤 ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
+        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">${verLabel(ver)} 赤 ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
       })
       .join(`<span class="varrow">→</span>`);
     const design = v != null ? s.designs[v] : null;
@@ -258,11 +269,11 @@ export class TileBoard {
     const built = design ? builtLine(s, v) : "";
     const change = built
       ? `<span class="change" data-built="${v}">${built}</span>`
-      : design && design.parent_version != null && design.change_reason ? `<span class="change long" title="${esc(design.change_reason)}">版 ${design.parent_version} → ${v} で変えたこと: ${keepAsides(design.change_reason)}</span>` : "";
+      : design && design.parent_version != null && design.change_reason ? `<span class="change long" title="${esc(design.change_reason)}">${verLabel(design.parent_version)} → ${verLabel(v)} で変えたこと: ${keepAsides(design.change_reason)}</span>` : "";
     const headIds = pets ? pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)) : [];
     const headN = headIds.length;
     this.head.innerHTML =
-      `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
+      `<h2>${verLabel(v)} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
       `<span class="flow">${flow}</span>${change}` +
       (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div", why: s.agents[id]?.stopWhy })).join("")}</div>` : "");
     this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
@@ -297,7 +308,8 @@ export class TileBoard {
         : "";
       // (a tile still まだ with some verdicts: those are the ones judged so far, not the tile's pass)
       const lead = failed.length ? `不合格 ${failed.length} 件: ` : j.state === "green" ? "合格: " : "判定のある分: ";
-      const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why;
+      const only = j.state === "off" && !info.ana ? onlyTestsLine(s) : null;
+      const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why || only || "";
       const nv = j.judgement?.verdict_ids?.length ?? 0;
       const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.

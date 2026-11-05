@@ -249,7 +249,7 @@ class VerdictCardBrowserTest(unittest.TestCase):
         got = page.evaluate(PROBE)
         self.assertEqual(errors, [])
         # version 1's name for the variable, version 1's value, the change's value and unit
-        self.assertRegex(got["extra"], rf"変えたこと: 版 1 → 版 2 で、{re.escape(TRACK_NAME)}を 1,?300 → 1,?350 mm")
+        self.assertRegex(got["extra"], rf"変えたこと: v1 → v2 で、{re.escape(TRACK_NAME)}を 1,?300 → 1,?350 mm")
         # no record id and no English summary on the card for viewers
         self.assertNotRegex(got["cardText"], r"(chg|ver|ana|pred|cmp)-\d")
         self.assertNotIn("frame:", got["cardText"])

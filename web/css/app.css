@@ -781,6 +781,21 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .tile.off { border-style: dashed; color: var(--muted); background: transparent; }
 .tile.pending { border-color: var(--ink); border-style: dashed; }
 .tile .state { font-weight: 700; font-size: 15px; }
+/* ④: a tile that replays its domain in the tab when pressed (app.js renderGrid / openDomain) */
+.tile.can-replay { cursor: pointer; }
+.tile.can-replay:hover { box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.12); }
+.tile .replay-tag { margin: 0 auto 0 10px; font-size: 13px; font-weight: 600; color: var(--ink); border: 1.5px solid var(--line); border-radius: 999px; padding: 0 9px; white-space: nowrap; }
+.tile.can-replay:hover .replay-tag { border-color: var(--ink); }
+body.video .tile .replay-tag { display: none; }
+/* ④ with a domain replaying: the head over the 3D (what replays, and 格子に戻る) */
+.domain-head { display: flex; align-items: baseline; gap: 8px; font-size: 18px; padding: 2px 4px 6px; }
+.domain-head[hidden] { display: none; }
+.domain-head .dh-tab { color: var(--muted); font-weight: 600; }
+.domain-head .dh-sep { color: var(--muted); }
+.domain-head .dh-dom { font-size: 22px; }
+.domain-head .dh-what { color: var(--muted); }
+.domain-head .dh-close { margin-left: auto; font-size: 16px; font-weight: 600; border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 14px; background: var(--panel); cursor: pointer; }
+body.video .domain-head .dh-close { display: none; }
 .tile.green .state { color: var(--green); }
 .tile.red .state { color: var(--red); }
 .tile .draw { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
@@ -989,6 +1004,9 @@ body.video .mode .stop-btn { display: none; }
 .loading-note .ln-sub { font-size: 15px; margin-top: 6px; color: var(--ink-2, #555); }
 .loading-note a { pointer-events: auto; margin-left: 10px; font-weight: 600; }
 .loading-note.failed { border-color: #b3261e; }
+/* while reading: on the 3D only (in #viewport, the stage's own pixels), the tabs and their screens uncovered */
+.loading-note.in-view { position: absolute; top: 40%; font-size: 24px; padding: 16px 26px; white-space: nowrap; }
+.loading-note.in-view .ln-sub { font-size: 19px; }
 body.video .loading-note { display: none; }
 
 /* the verdict in one sentence, then the value beside its criterion */

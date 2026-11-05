@@ -168,7 +168,7 @@ class PresentBrowserTest(unittest.TestCase):
         shell, _, _ = shell_events()
         cases = [
             ("step", "run=sample&pace=0&t=0&present=1", sample_events(), ["反力", "基準を満たした"]),
-            ("shell", "run=sample&pace=0&t=0&present=1", shell, ["の最大", "補強の前 (版 1)", "補強の後 (版 2)", "ガセット"]),
+            ("shell", "run=sample&pace=0&t=0&present=1", shell, ["の最大", "補強の前 (v1)", "補強の後 (v2)", "ガセット"]),
             ("assembly", "run=sample&pace=0&t=0&present=1", assembly_events(focus_a7=True), ["干渉", "1 か所", "手順 3"]),
             ("grid", "run=sample&pace=0&t=0&present=1&tab=grid", domain_events(), ["判定が合格の分野", " / "]),
         ]

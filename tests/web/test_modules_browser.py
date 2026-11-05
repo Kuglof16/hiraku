@@ -214,10 +214,10 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertIn("パッケージ役が 1 つの版にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
-        self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージ役が 3 つの提案を版 2 にまとめた")
+        self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージ役が 3 つの提案を v2 にまとめた")
         self.assertEqual(card.locator(".rc-list li").count(), 3)
         log = page.locator("#log").inner_text()
-        self.assertIn("パッケージ役が 3 つの提案を版 2 にまとめた", log)
+        self.assertIn("パッケージ役が 3 つの提案を v2 にまとめた", log)
         self.assertIn(f"車体の設計役: {shown_name(page, 'cargo_height')}", log)
         # the grid's head names each module's change
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&pets=0&t=1e6")
