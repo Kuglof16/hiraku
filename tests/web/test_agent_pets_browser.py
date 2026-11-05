@@ -62,7 +62,8 @@ LONG_REASON = "解析の道具が入力のファイルを読めずに終わっ�
 # agent.stopped's stop_code and stop_reason (contract a31e520) per agent, and what the screen says:
 # (agent, data, the agents' pane's why line or None, the log line's words in brackets or None, the note or None)
 STOPS = [
-    ("cae.crash", {"stop_code": "done", "stop_reason": "仕事を終えた (形の見本)"}, "自分の仕事を終えた", "自分の仕事を終えた", "仕事を終えた (形の見本)"),
+    # (the pane's line is short: labels.js AGENT_STOP_SHORT_JA; the log keeps AGENT_STOP_JA)
+    ("cae.crash", {"stop_code": "done", "stop_reason": "仕事を終えた (形の見本)"}, "仕事を終えた", "自分の仕事を終えた", "仕事を終えた (形の見本)"),
     ("cae.nvh", {"stop_code": "run_ended"}, "動いている間に実行が終わった", "動いている間に実行が終わった", None),
     ("cae.strength", {"stop_code": "user_stop"}, "人が止めた", "人が止めた", None),
     ("cae.thermal", {"stop_code": "error", "stop_reason": LONG_REASON}, "エラーで終わった", "エラーで終わった", None),
@@ -299,7 +300,8 @@ class AgentPetsTest(unittest.TestCase):
                   why: Object.fromEntries([...document.querySelectorAll('#agents li')].map((li) => {
                     const w = li.querySelector('.why');
                     const id = li.dataset.agent ?? li.textContent;
-                    return [id, w ? { text: w.textContent, title: w.title, code: w.dataset.stopCode, shown: w.offsetParent !== null && getComputedStyle(w).visibility === 'visible' } : null];
+                    return [id, w ? { text: w.textContent, title: w.title, code: w.dataset.stopCode, shown: w.offsetParent !== null && getComputedStyle(w).visibility === 'visible',
+                                      faint: Number(getComputedStyle(w).opacity) < 1, bold: Number(getComputedStyle(w).fontWeight) >= 600 } : null];
                   })),
                   lines: [...document.querySelectorAll('#log li')].filter((li) => li.textContent.includes('が手を止めた')).map((li) => ({
                     text: (() => { const c = li.cloneNode(true); c.querySelectorAll('.tm, .note, details').forEach((x) => x.remove()); return c.textContent.trim(); })(), note: [...li.querySelectorAll(':scope > .note')].map((n) => n.textContent),
@@ -322,11 +324,29 @@ class AgentPetsTest(unittest.TestCase):
                     self.assertEqual(why["code"], data["stop_code"], agent)
                     self.assertEqual(why["title"], data.get("stop_reason", ""), agent)
                     self.assertTrue(why["shown"], agent)
+                    # done faint; run_ended, user_stop and error stand out
+                    self.assertEqual((why["faint"], why["bold"]), (True, False) if data["stop_code"] == "done" else (False, True), agent)
             if got["pets"] != "on":  # the circles' rows carry the same why lines
                 whys = sorted(w["text"] for w in got["why"].values() if w)
                 self.assertEqual(whys, sorted(r for *_, r, _w, _n in STOPS if r))
             self.assertEqual(errors, [])
             page.close()
+
+    def test_no_bubble_for_a_stop(self):
+        """Just after its agent.stopped (cae.crash at 2.0 s) a role has no bubble 「…が手を止めた (…)」:
+        the why line under its name says it, shown."""
+        if not PETS_FILE.is_file():
+            self.skipTest("no pets file")
+        page, errors = self.open(self.serve(PETS_FILE, stopped_agents()), "tab=bench&t=2.05")
+        got = page.evaluate("""() => { const li = document.querySelector('#agents li[data-agent="cae.crash"]');
+            const say = li.querySelector('.say'); const w = li.querySelector('.why');
+            return { say: say ? say.textContent : '', saying: li.classList.contains('saying'), why: w ? w.textContent : null,
+                     shown: !!w && getComputedStyle(w).visibility === 'visible' }; }""")
+        page.close()
+        self.assertEqual(errors, [])
+        self.assertNotIn("手を止めた", got["say"])
+        self.assertFalse(got["saying"])
+        self.assertEqual((got["why"], got["shown"]), ("仕事を終えた", True))
 
     def test_without_the_pets_file_circles_and_names(self):
         """No pet3d.js (404): the list is the circles and names as before, the tiles keep their circles."""

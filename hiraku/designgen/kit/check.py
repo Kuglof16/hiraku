@@ -107,6 +107,7 @@ def check(design: Record, loading: str = "two_cargo") -> Record:
             problems.append(f"{g} is short by {-v:.0f} mm ({where})")
     # hands on the controls: from the seat back to the part ahead within the grip reach of a
     # small person (AIST C3, young female 5th percentile), the arm reaching forward from the back
+    # (k4_geometry.assembly.REACH_MM: its source, the AIST 1991-92 list, and the date it was read are there)
     from hiraku.solvers.k4_geometry.assembly import REACH_MM
 
     space = knee_space(on)

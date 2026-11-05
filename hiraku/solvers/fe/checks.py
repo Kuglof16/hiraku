@@ -12,16 +12,39 @@ import math
 
 import numpy as np
 
-from qa import known_answers as ka
-
 from . import mesh as fm
 from .model import FEModel, StaticSolver
 from .precheck import equilibrium, rigid_body_energy
 from .solid import Hex8, Hex20, solid_stresses, surface_load
 
-E_ST = 205000.0  # MPa, the round steel of hiraku.solvers.shelf.fixtures.STEEL
+# E 205000 MPa, nu 0.3 (and 7850 kg/m^3 below): the round steel of hiraku.solvers.shelf.fixtures.STEEL, an
+# assumption for the known-answer checks, no source (the expected values use the same numbers)
+E_ST = 205000.0  # MPa
 NU_ST = 0.3
 G_ST = E_ST / (2.0 * (1.0 + NU_ST))
+
+
+# The closed forms of the holed plate, written here (the product does not import qa/; the QA dept keeps its own
+# qa.known_answers and its tests compare the two).
+def kirsch_kt() -> float:
+    """Kt of a circular hole in an infinite plate under uniaxial tension: the hoop stress at the side of the hole
+    is 3 times the remote stress (Kirsch 1898, as in Pilkey, Peterson's Stress Concentration Factors, 3rd ed.,
+    Chapter 4; not checked against the book in this repository)."""
+    return 3.0
+
+
+def hole_kt_net(d_over_w: float) -> float:
+    """Kt of a central circular hole in a plate of finite width W under tension, on the net-section stress
+    P / ((W - d) t): Kt_n = 3 - 3.14 (d/W) + 3.667 (d/W)^2 - 1.527 (d/W)^3 (Pilkey, Peterson's Stress
+    Concentration Factors, 3rd ed., Chart 4.1, the curve fit given there; not checked against the book in this
+    repository). 3 at d/W = 0 (Kirsch), 2 at d/W = 1."""
+    r = d_over_w
+    return 3.0 - 3.14 * r + 3.667 * r**2 - 1.527 * r**3
+
+
+def hole_kt_gross(d_over_w: float) -> float:
+    """The same peak on the gross stress P / (W t): Kt_n / (1 - d/W)."""
+    return hole_kt_net(d_over_w) / (1.0 - d_over_w)
 
 SRC_COWPER = ("Timoshenko shear coefficient of a rectangle k = 10 (1 + nu) / (12 + 11 nu): Cowper (1966), The shear "
               "coefficient in Timoshenko's beam theory, J. Appl. Mech. 33, 335-340 (formula as commonly quoted; "
@@ -443,7 +466,7 @@ def holed_plate(W: float = 100.0, d: float = 20.0, length: float = 200.0, T: flo
     """An eighth of a plate W x length x T with a central hole d (x = 0, y = 0 and the mid-plane z = 0 are
     symmetry planes: ux, uy, uz held there). Tension sigma along y on the end y = length/2. Kt = nodal
     sigma_yy at the hole edge on the x axis (x = d/2, y = 0) over the gross stress, at the mid-plane and on
-    the surface z = T/2. Expected: [Pilkey] gross Kt for d/W (qa.known_answers.hole_kt_gross), whose
+    the surface z = T/2. Expected: [Pilkey] gross Kt for d/W (hole_kt_gross), whose
     d/W -> 0 limit is [Kirsch]'s 3 (kirsch_kt). Both are plane-stress results; through the thickness the
     peak is higher at the mid-plane and lower at the surface."""
     m = fm.holed_plate_mesh(W, length, T / 2.0, d, n_quarter, n_radial, n_thick, ratio, order=_order(kind))
@@ -460,7 +483,7 @@ def holed_plate(W: float = 100.0, d: float = 20.0, length: float = 200.0, T: flo
     syy = st[edge, 1]
     mid = syy[np.argmin(z)] / sigma
     surf = syy[np.argmax(z)] / sigma
-    return {"kt_mid": float(mid), "kt_surface": float(surf), "kt_pilkey": ka.hole_kt_gross(d / W),
-            "kt_kirsch": ka.kirsch_kt(), "kt_profile": [(float(zz), float(s / sigma)) for zz, s in
+    return {"kt_mid": float(mid), "kt_surface": float(surf), "kt_pilkey": hole_kt_gross(d / W),
+            "kt_kirsch": kirsch_kt(), "kt_profile": [(float(zz), float(s / sigma)) for zz, s in
                                                         sorted(zip(z, syy))],
             "n_elements": len(m.conn), "equilibrium": equilibrium(sol)["residual"]}

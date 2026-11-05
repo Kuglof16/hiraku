@@ -196,6 +196,10 @@ class K2Tool(ABC):
         for key in ("series", "vectors", "scene"):
             if out.get(key):
                 rec[key] = out[key]
+        if rec["status"] == "ok" and not out.get("error"):
+            hs = hot_spots(out, load_case, predictions)
+            if hs:
+                rec["hot_spots"] = hs
         # the values neither the load case nor the design gave, which K2 took on its own
         assumptions = list(dict.fromkeys(list(out.get("assumptions", [])) + self._assumed))
         if assumptions:
@@ -363,6 +367,68 @@ def _side_ids(sim, left: bool) -> list[int]:
 
 def _wind_world(speed: float, from_left: bool) -> tuple:
     return (0.0, -speed if from_left else speed, 0.0)
+
+
+UTILISATION_CAP = 1000.0  # contract (46306b5): the utilisation written where the ratio is undefined or outside 0..1000
+
+
+def utilisation(value: float, limit: float, op: str) -> float:
+    """The contract's hot_spots utilisation: over 1 exactly when `value op limit` fails. value / limit
+    for an upper limit (<=, <), limit / value for a lower one (>=, >); where that ratio is undefined
+    (a limit or a value at or below 0) or outside 0 to UTILISATION_CAP: UTILISATION_CAP when the row
+    fails, 0 when it passes."""
+    passes = {"<=": value <= limit, "<": value < limit, ">=": value >= limit, ">": value > limit}[op]
+    upper = op in ("<=", "<")
+    ratio = None
+    if upper and limit > 0.0:
+        ratio = value / limit
+    elif not upper and limit > 0.0 and value > 0.0:
+        ratio = limit / value
+    if ratio is None or not 0.0 <= ratio <= UTILISATION_CAP:
+        return UTILISATION_CAP if not passes else 0.0
+    return ratio
+
+
+def hot_spots(out: dict, load_case: dict, predictions: list[dict]) -> list[dict]:
+    """The analysis' hot_spots (contract: CAE の役目), highest utilisation first:
+    - the load case's criterion quantity at each place the tool worked it out (out["places"]:
+      {where, quantity, value, unit, judged}); predicted when the load case judges that place (its
+      result is the one compared with the hand calculation), not for the places it does not name
+      (e.g. the other side), so a place past the limit there makes the load case red;
+    - from the record, per wheel: friction_use (the largest |F| / (mu N) over the run, limit 1) and
+      wheel_unloading (1 - its least road load / its first recorded load, limit 1: the wheel lifts),
+      predicted only when a prediction of this run has that quantity (no K0 formula does now).
+    The suspension mounts have no limit in K2: their forces are judged by the R9 load cases."""
+    crit = load_case.get("criterion") or {}
+    pred_q = {p.get("quantity") for p in predictions}
+    rows = []
+
+    def add(where, quantity, value, unit, limit, limit_unit, op, predicted, note):
+        u = utilisation(value, limit, op)
+        rows.append({"where": where, "quantity": quantity, "value": {"value": float(value), "unit": unit},
+                     "limit": {"value": float(limit), "unit": limit_unit}, "utilisation": float(u),
+                     "predicted": bool(predicted), "note": note})
+
+    for p in out.get("places", []):
+        lim = crit.get("limit") or {}
+        if p["quantity"] == crit.get("quantity") and lim.get("unit") == p["unit"]:
+            add(p["where"], p["quantity"], p["value"], p["unit"], lim["value"], lim["unit"], crit["op"],
+                p["judged"], "the load case's criterion at this place"
+                + ("" if p["judged"] else " (a place the load case does not judge)"))
+    ch = {s["channel"]: s for s in out.get("series", []) if s.get("t_s")}
+    for name, s in ch.items():
+        if not s["values"]:
+            continue
+        kind, _, wid = name.partition(".")
+        if kind == "friction_use":
+            add(wid, "friction_use", max(s["values"]), "1", 1.0, "1", "<=", "friction_use" in pred_q,
+                "the largest share of the tyre's friction circle used over the run (1: at the limit mu N)")
+        elif kind == "wheel_load" and s["values"][0] > 0.0:
+            v = max(0.0, 1.0 - min(s["values"]) / s["values"][0])
+            add(wid, "wheel_unloading", v, "1", 1.0, "1", "<=", "wheel_unloading" in pred_q,
+                f"1 - the least road load / the first recorded {s['values'][0]:.0f} N (1: the wheel lifts)")
+    rows.sort(key=lambda r: -r["utilisation"])
+    return rows
 
 
 def _min_load(series_min: dict) -> tuple[str, float]:

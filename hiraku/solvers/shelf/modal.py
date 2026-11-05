@@ -64,6 +64,7 @@ class Modal(BuiltinTool):
 
     def known_answers(self) -> list[Record]:
         out = []
+        # round values for aluminium (test values: the closed form uses the same numbers; no source)
         mat = dict(fixtures.STEEL, E_MPa=69000.0, density_kg_m3=2700.0, nu=0.33)
         sec = {"shape": "custom", "dims_mm": {"cy": 10.0, "cz": 10.0}, "A_mm2": 400.0, "Iy_mm4": 1e5, "Iz_mm4": 1e5, "J_mm4": 2e5}
         f = _beam_modes(1000.0, sec, mat, {"A": (True, True, True, True, False, False), "B": (False, True, True, False, False, False)})

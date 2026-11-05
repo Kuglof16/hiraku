@@ -1133,10 +1133,11 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(ev, "verdict.values")
 
     # --- a verdict the tool decides after the load path was checked by hand (basis path_checked, 2fc1006) ----
-    def path_checked_flow(self, free_parts=0.0, unsupported=None, predicted=80.0):
+    def path_checked_flow(self, free_parts=0.0, unsupported=0.0, predicted=80.0, tool_free=None):
         """Mismatch (the hand calculation 80 MPa against the analysis 123.6) -> cause with tool_decides and its
         reason -> a load_path prediction of free_parts in the version before the verdict -> verdict from the
-        analysis, on the sample's R1 case."""
+        analysis, on the sample's R1 case. The analysis gives unsupported_load `unsupported` (None: no such result)
+        and free_parts `tool_free` (None: none)."""
         ev = sample_events()
         c = self._predict(ev, predicted)
         self.assertEqual(c["status"], "mismatch")
@@ -1154,9 +1155,11 @@ class CheckRun(unittest.TestCase):
         ev[i:i] = [dict(stamp, kind="cause.recorded", data=cause),
                    dict(stamp, kind="comparison.recorded", data=dict(copy.deepcopy(c), cause_id="cause-0001")),
                    dict(stamp, kind="prediction.recorded", design_version=1, data=path)]
+        results = by_kind(ev, "analysis.finished")["data"]["results"]
         if unsupported is not None:
-            by_kind(ev, "analysis.finished")["data"]["results"].append(
-                {"quantity": "unsupported_load", "value": unsupported, "unit": "1"})
+            results.append({"quantity": "unsupported_load", "value": unsupported, "unit": "1"})
+        if tool_free is not None:
+            results.append({"quantity": "free_parts", "value": tool_free, "unit": "1"})
         by_kind(ev, "verdict.recorded")["data"].update(basis="path_checked", value_from="analysis", cause_id="cause-0001",
                                                         value=dict(c["analyzed"]))
         return renumber(ev)
@@ -1169,6 +1172,11 @@ class CheckRun(unittest.TestCase):
         said = lambda ev: [f.message for f in self.findings(ev) if f.rule == "verdict.path_checked"]
         self.assertTrue(any("are not 0" in m for m in said(self.path_checked_flow(free_parts=1.0))))
         self.assertTrue(any("unsupported_load 2" in m for m in said(self.path_checked_flow(unsupported=2.0))))
+        # design f5e16af (review C2): the tool must say it found a path for every load (unsupported_load 0 given),
+        # and a free_parts result above 0 fails it
+        self.assertTrue(any("gives no unsupported_load" in m for m in said(self.path_checked_flow(unsupported=None))))
+        self.assertTrue(any("free_parts 1" in m for m in said(self.path_checked_flow(tool_free=1.0))))
+        self.assertEqual(said(self.path_checked_flow(tool_free=0.0)), [])
         ev = self.path_checked_flow()
         ev = renumber([e for e in ev if not (e["kind"] == "prediction.recorded"
                                              and e["data"].get("quantity") == "free_parts")])

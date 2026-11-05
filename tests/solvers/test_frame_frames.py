@@ -75,6 +75,18 @@ class SeriesTest(unittest.TestCase):
         self.assertAlmostEqual(abs(inst[2]["gravity_mps2"][0]), STANDARD_GRAVITY * math.sin(math.radians(10.0)),
                                places=12)
 
+    def test_gravity_from_the_series(self):
+        """K2's gravity_x/y/z (world axes, turned on a tilt table or a slope) is read instead of straight down."""
+        d, st = ladder()
+        ana = series_analysis(d, st)
+        tilt = math.radians(30.0)
+        g = [0.0, -STANDARD_GRAVITY * math.sin(tilt), -STANDARD_GRAVITY * math.cos(tilt)]
+        ana["series"] += [{"channel": f"gravity_{a}", "unit": "m/s^2", "t_s": TIMES, "values": [v] * 3}
+                          for a, v in zip("xyz", g)]
+        _, _, inst = upstream_mount_series({"S1-tilt": ana}, d)
+        for i, pitch in zip(inst, PITCH):
+            np.testing.assert_allclose(i["gravity_mps2"], rpy_matrix([0.0, pitch, 0.0]).T @ g, atol=1e-12)
+
     def test_none_and_errors(self):
         d, st = ladder()
         ana = series_analysis(d, st)

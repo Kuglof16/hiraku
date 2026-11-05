@@ -79,11 +79,16 @@ export function proposalText(chg, base) {
   return `${what || "変更"} を提案した${chg.reason ? `。理由: ${chg.reason}` : ""}`;
 }
 
-// The proposals not built into a version yet (design.created's module_changes).
+// The proposals not built into a version yet (design.created's module_changes), on the current
+// version: once a newer version is made, the proposals on an older one that it did not take were
+// left (20261105-094333: chg-0006..0009 on version 2, version 3 built from chg-0010 alone).
 export function pendingProposals(s) {
   const built = new Set(Object.values(s.designs).flatMap((d) => (d.module_changes ?? []).map((c) => c.change_id)));
-  return (s.proposals ?? []).filter((p) => !built.has(p.change_id));
+  return (s.proposals ?? []).filter((p) => !built.has(p.change_id) && (p.baseVersion == null || p.baseVersion === s.currentVersion));
 }
+
+// The run is over (run.finished): nobody builds what waits any more.
+const isOver = (s) => ["done", "stopped", "failed"].includes(s.status);
 
 // One row: the designer (with the module's colour), what it changes and why.
 function rowHtml(chg, base) {
@@ -91,7 +96,8 @@ function rowHtml(chg, base) {
   return (
     `<li data-change="${esc(chg.change_id)}" data-module="${esc(chg.module_id)}"><span class="mdot" style="--mod:${moduleColor(chg.module_id)}"></span>` +
     `<span class="pw"><b>${esc(who)}</b>: ${esc(changeWords(chg, base).join("・") || "変更")}</span>` +
-    (chg.reason ? `<span class="pr">${esc(chg.reason)}</span>` : "") +
+    // (the reason in two lines at most, all of it in the title: a long one hid the 3D)
+    (chg.reason ? `<span class="pr" title="${esc(chg.reason)}">${esc(chg.reason)}</span>` : "") +
     `</li>`
   );
 }
@@ -100,8 +106,11 @@ export const ROUND_SHOW_S = 12; // seconds of replay a built round stays on the 
 
 // The round on the workbench at the replay's time (playhead): the proposals waiting for the
 // packager, else (for ROUND_SHOW_S after it) the version the packager built from them. "" when none.
+// Proposals still waiting when the run is over (20261105-091217: chg-0005/0006 on version 2, then
+// run.finished not_judged) are not shown: the card would say the packager is waiting. A record
+// whose last event is a proposal (cut while running) keeps it: the packager is still to come.
 export function roundCardHtml(s, playhead) {
-  const pending = pendingProposals(s);
+  const pending = isOver(s) ? [] : pendingProposals(s);
   if (pending.length) {
     const base = s.designs[pending[0].baseVersion] ?? s.designs[s.currentVersion];
     const who = new Set(pending.map((p) => p.agent_id)).size;

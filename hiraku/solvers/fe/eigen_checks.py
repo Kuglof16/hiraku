@@ -31,6 +31,8 @@ from .model import FEModel
 from .shell import MITC4
 from .solid import Hex20
 
+# Round values for steel for the known-answer checks (the expected values use the same numbers): an
+# assumption, no source
 E_ST = 205000.0  # MPa
 NU_ST = 0.3
 G_ST = E_ST / (2.0 * (1.0 + NU_ST))
@@ -256,7 +258,7 @@ def plate_buckling(a: float = 300.0, b: float = 200.0, t: float = 2.0, nx: int =
 
 # ------------------------------------------------------------------ buckling under temperature and given displacements
 
-ALPHA = 1.2e-5  # 1/K, a round value for steel (as load_checks.ALPHA_ST; not from a standard)
+ALPHA = 1.2e-5  # 1/K, a round value for steel (as load_checks.ALPHA_ST): an assumption for the checks, no source
 
 
 def thermal_column(kind: str = "beam", n_el: int = 20, L: float = 2000.0, size: float = 40.0, t: float = 2.0,

@@ -150,6 +150,7 @@ PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX
 UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
 PATH_CHECKED = "path_checked"  # the tool's value decides after the load path was checked by hand (contract 2fc1006)
 PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
+FREE_PARTS = "free_parts"  # the version-wide count of the same formula, and a tool result that must be 0 then
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
@@ -1196,22 +1197,41 @@ class RunChecker:
         if v.get("value") != c.get("analyzed"):
             self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
         ver = self.version_of("verdict", v)
-        # by its formula, whatever the quantity: free_parts (every part of the version) or unsupported_load
-        # (the parts the load case's force is on), as hiraku.tools.judge.path_check reads it
+        # as hiraku.tools.judge.path_check reads it (design f5e16af, review C2): (1) a load_path.free_parts
+        # prediction of 0 in the version, of this load case (its loaded parts) or of quantity free_parts (every part);
+        # (2) the newest ok analysis of the load case giving unsupported_load, and the deciding (compared) one, both
+        # give unsupported_load 0, and any free_parts result of theirs is 0
+        lc_id = v.get("load_case_id")
         hand = [p for j, p in self.recs["prediction"].values()
-                if j < i and p.get("design_version") == ver and p.get("formula_id") == PATH_FORMULA]
+                if j < i and p.get("design_version") == ver and p.get("formula_id") == PATH_FORMULA
+                and (p.get("load_case_id") == lc_id or p.get("quantity") == FREE_PARTS)]
         if not hand:
             self.error(rule, w, f"{vid} is path_checked but v{ver} has no {PATH_FORMULA} prediction before it "
                                 f"(the load path checked by hand)")
         elif not any(isinstance(p.get("value"), (int, float)) and p["value"] == 0 for p in hand):
             self.error(rule, w, f"{vid} is path_checked but v{ver}'s {PATH_FORMULA} predictions are not 0 "
                                 f"(the path is not joined)")
-        a = self.recs["analysis"].get(c.get("analysis_id"))
-        loose = [r.get("value") for r in ((a[1] if a else {}).get("results") or [])
-                 if r.get("quantity") == UNSUPPORTED and isinstance(r.get("value"), (int, float)) and r["value"] > 0]
-        if loose:
-            self.error(rule, w, f"{vid} is path_checked but {c.get('analysis_id')} gives unsupported_load "
-                                f"{loose[0]:g} (the verdict is unsupported_load, red)")
+
+        def numbers(a: dict, q: str) -> list[float]:
+            return [r["value"] for r in a.get("results") or []
+                    if r.get("quantity") == q and isinstance(r.get("value"), (int, float))]
+
+        traced = [a for j, a in sorted(self.recs["analysis"].values(), key=lambda x: x[0])
+                  if j < i and a.get("design_version") == ver and a.get("load_case_id") == lc_id
+                  and a.get("status") == "ok" and numbers(a, UNSUPPORTED)]
+        if not traced:
+            self.error(rule, w, f"{vid} is path_checked but no ok analysis of {lc_id} in v{ver} before it gives "
+                                f"{UNSUPPORTED} (the tool's side of the path check)")
+        decided = self.recs["analysis"].get(c.get("analysis_id"))
+        for a in ([traced[-1]] if traced else []) + ([decided[1]] if decided else []):
+            aid, lost, free = a.get("analysis_id"), numbers(a, UNSUPPORTED), numbers(a, FREE_PARTS)
+            if not lost:
+                self.error(rule, w, f"{vid} is path_checked but {aid} ({a.get('tool')}) gives no {UNSUPPORTED}")
+            elif max(lost) > 0:
+                self.error(rule, w, f"{vid} is path_checked but {aid} gives {UNSUPPORTED} {max(lost):g} "
+                                    f"(the verdict is unsupported_load, red)")
+            if free and max(free) > 0:
+                self.error(rule, w, f"{vid} is path_checked but {aid} gives {FREE_PARTS} {max(free):g}")
 
     def _check_verdict_math(self, vid: str, v: dict, w: str) -> None:
         try:

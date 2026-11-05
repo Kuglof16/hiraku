@@ -27,7 +27,8 @@ from .model import FrameModel, build, to_design
 
 MASS_CASE = "mass"
 V0_SEED = 0  # seed of the eigen solver's start vector
-FRAME_DAMPING = 0.02  # damping ratio of the frame's own modes in the frequency response: assumed, not checked
+# damping ratio of the frame's own modes in the frequency response: an assumption, HIRAKU's choice, no source
+FRAME_DAMPING = 0.02
 
 
 def solve_modal(model, num_modes: int) -> None:

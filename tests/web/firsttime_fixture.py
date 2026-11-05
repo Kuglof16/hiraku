@@ -6,6 +6,7 @@ On top of tests.web.domains_fixture (every domain, two versions):
   with titles in the real record's way: the chips' row scrolls and the shared ids get short names
 - a long change reason (the grid's 版 1 → 2 で変えたこと line)
 - log lines with long ids (mass_props.front_wheel_load) and asides in brackets, in the narrow log
+- a result with a long name first in each analysis (LONG_RESULT)
 
 Shape examples: the words and numbers are not results.
 """
@@ -37,6 +38,9 @@ CHANGE_REASON = (
     "R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm にし、"
     "つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする (形の見本)"
 )
+# a result first in every analysis, with a long name that has no words in labels.js and no space to
+# break at (as a tool the agents wrote names them): the bench's 2. 解析 row keeps its value and unit whole
+LONG_RESULT = {"quantity": "pushover_gap_to_the_occupant_envelope.side_mirror", "value": 4.143, "unit": "mm", "where": "rollbar_post_R"}
 SAID = [
     ("cae.powertrain", "予測を記録した: 前輪の荷重 = 1,231 N (mass_props.front_wheel_load)。台本に書いてある原因を記録します (形の見本)"),
     ("lead", "要件のファイルのまま進みます (既定値で足した 4 件: Q57・Q63・Q93・Q94)。この実行の試験 (P1・R1・R1s・R3・S1・F1・S3・S4・S5・P2・P3・P4・T1・T2・C1・N1・R8)"),
@@ -55,6 +59,8 @@ def firsttime_events() -> list[dict]:
         ev["run_id"] = RUN_ID
         if ev["kind"] == "design.created" and ev["data"].get("parent_version") is not None:
             ev["data"]["change_reason"] = CHANGE_REASON
+        if ev["kind"] == "analysis.finished" and ev["data"].get("results"):
+            ev["data"]["results"].insert(0, dict(LONG_RESULT))
     # the agents' lines just after the start
     t0 = events[1]["t"]
     said = [{"run_id": RUN_ID, "ts": run["ts"], "t": t0 + 0.1 * (k + 1), "kind": "agent.said", "agent": who, "text": text}

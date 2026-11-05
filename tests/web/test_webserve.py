@@ -456,6 +456,58 @@ class OpenTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_runs_default_is_the_repositorys(self):
+        from unittest import mock
+
+        from hiraku.webserve import __main__ as entry
+
+        class Fake:
+            server_address = ("127.0.0.1", 8765)
+            RequestHandlerClass = type("H", (), {"launcher": None})
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        with mock.patch.object(entry, "make_server", return_value=Fake()) as made, \
+                mock.patch.object(entry, "list_runs", return_value=[]), mock.patch("sys.stdout", new_callable=io.StringIO):
+            entry.main([])
+        self.assertEqual(made.call_args.args[2], webserver.REPO_DIR / "runs")
+
+
+class PortInUseTest(unittest.TestCase):
+    """A second server on a port in use fails (Windows binds exclusively), and the command says so."""
+
+    def test_second_server_on_the_same_port_fails(self):
+        first = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None, launcher=False)
+        try:
+            port = first.server_address[1]
+            with self.assertRaises(OSError):
+                second = make_server("127.0.0.1", port, "runs-none", quiet=True, saved_dir=None, launcher=False)
+                second.server_close()
+            from hiraku.webserve import __main__ as entry
+
+            err = io.StringIO()
+            with mock_stdio(err):
+                code = entry.main(["--port", str(port), "--runs", tempfile.gettempdir(), "--saved", tempfile.gettempdir()])
+            self.assertEqual(code, 1)
+            self.assertIn(f"port {port}", err.getvalue())
+            self.assertIn("in use", err.getvalue())
+        finally:
+            first.server_close()
+
+
+def mock_stdio(err):
+    from contextlib import ExitStack
+    from unittest import mock
+
+    stack = ExitStack()
+    stack.enter_context(mock.patch("sys.stderr", err))
+    stack.enter_context(mock.patch("sys.stdout", new_callable=io.StringIO))
+    return stack
+
 
 class ShelfTest(unittest.TestCase):
     """GET /api/shelf (the A4 shelf, computed once in the background) and a run's tool files."""
@@ -521,6 +573,26 @@ class ShelfTest(unittest.TestCase):
         for bad in ("rollbar_load-2.py", "rollbar_load-1.txt", "..%2Fevents.jsonl", "Rollbar-1.py"):
             self.assertEqual(self.get(f"/api/runs/{RUN_ID}/tools/{bad}")[0], 404, bad)
         self.assertEqual(self.get("/api/runs/sample/tools/rollbar_load-1.py")[0], 404)
+
+    def test_a_runs_tool_list(self):
+        """GET /api/runs/<id>/tools: the versions of each tools/<name>-<n>.py (not the .check.json)."""
+        status, _, text = self.get(f"/api/runs/{RUN_ID}/tools")
+        self.assertEqual((status, json.loads(text)), (200, {"tools": {"rollbar_load": [1]}}))
+        self.assertEqual(self.get("/api/runs/sample/tools")[0], 404)
+        self.assertEqual(self.get("/api/runs/not-a-run-id/tools")[0], 404)
+        status, _, text = self.get("/api/runs/20261102-203001-none/tools")  # a run id with no folder: nothing
+        self.assertEqual((status, json.loads(text)), (200, {"tools": {}}))
+
+    def test_tool_versions(self):
+        from hiraku.webserve.server import tool_versions
+
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        self.assertEqual(tool_versions(d / "tools"), {})
+        (d / "tools").mkdir()
+        for name in ("rops-1.py", "rops-10.py", "rops-2.py", "rops-1.check.json", "a_b-3.py", "Bad-1.py", "x.py"):
+            (d / "tools" / name).write_text("", encoding="utf-8")
+        self.assertEqual(tool_versions(d / "tools"), {"a_b": [3], "rops": [1, 2, 10]})
 
 
 class LaunchTest(unittest.TestCase):

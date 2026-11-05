@@ -45,8 +45,8 @@ import math
 
 import numpy as np
 
-DRILL_FACTOR = 1.0e-3
-SHEAR_FACTOR = 5.0 / 6.0
+DRILL_FACTOR = 1.0e-3  # a numerical penalty, HIRAKU's choice, no source
+SHEAR_FACTOR = 5.0 / 6.0  # the textbook shear correction of a Reissner-Mindlin plate (homogeneous section)
 
 XI_N = np.array([-1.0, 1.0, 1.0, -1.0])
 ETA_N = np.array([-1.0, -1.0, 1.0, 1.0])

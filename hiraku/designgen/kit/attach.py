@@ -171,10 +171,15 @@ def mount_parts(design: Record, ids, rho: float, always=(), labels: dict | None 
 
     parts = {p["id"]: p for p in design["parts"]}
     rows = []
+    # the loop changes the design only by adding mounts to design.parts: while their count is the same, the contacts
+    # (and so the held parts) are the ones found last
+    held, held_at = set(), None
     for pid in ids:
         if pid not in parts:
             continue
-        held, _ = free_parts(design)
+        if held_at != len(design["parts"]):
+            held, _ = free_parts(design)
+            held_at = len(design["parts"])
         row = {"part": pid, "mounts": [], "held_by": "touch" if pid in held else None, "why": None}
         if pid in held and pid not in always:
             rows.append(row)
