@@ -8,9 +8,10 @@
 // The words for the hooks' notices (what happened / what comes next) and whether a stopped
 // action was later done are here too: the workbench uses them as well.
 
-import { DOMAINS, DOMAIN_JA, agentLongName, esc, fmt, fmtQ, fmtVU, opLabel, quantityName, ruleOf } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, opLabel, quantityName, ruleOf } from "./labels.js";
 import { FIELD_JA } from "./fields.js";
-import { valueFromJa, judgementState } from "./state.js";
+import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
+import { judgedResult } from "./judged.js";
 import { assemblyRecord } from "./assembly.js";
 
 // ---- hooks: what happened, what comes next, resolved or not ---------------------------
@@ -134,10 +135,32 @@ function climbedOf(s, lcId) {
   return null;
 }
 
+// The verdict a scene's load case is judged by in the version shown: the one the domain's
+// judgement lists, else the newest of that version (state.js judgedVerdict), else the chain's.
+function sceneVerdict(c) {
+  const id = c.chain.loadCase?.load_case_id;
+  return (id ? judgedVerdict(c.s, id, c.s.currentVersion) : null) ?? c.chain.verdict ?? null;
+}
+
+// The card's large number when there is a verdict: the verdict's value, named by the quantity
+// its comparison compared (frame_shell: the hot-spot stress for a max_stress criterion).
+function judgedNumber(c, verdict) {
+  const cmp = c.s.comparisons[verdict.comparison_id];
+  const ana = c.s.analyses[cmp?.analysis_id];
+  const from = valueFromJa(verdict) === "予測" ? "予測 (手計算)" : `解析の結果${ana ? `・${c.toolTitle(ana.tool)}` : ""}`;
+  return {
+    what: `${JUDGED_JA.number}: ${quantityName(cmp?.quantity ?? verdict.quantity)}`,
+    value: fmtQ(verdict.value),
+    src: `${from}${ana?.design_version != null ? `・版 ${ana.design_version}` : ""}`,
+    tool: ana?.tool ?? null,
+  };
+}
+
 // The verdict's line, with the tool it was made from when that is not the tool of the
 // number shown (e.g. the beam analysis' verdict beside the shell's largest value).
 function verdictCard(c, numTool = null) {
-  const { verdict, loadCase } = c.chain;
+  const verdict = sceneVerdict(c);
+  const { loadCase } = c.chain;
   if (!verdict) return { crit: criterionLine(loadCase), verdict: null };
   const tool = c.s.analyses[c.s.comparisons[verdict.comparison_id]?.analysis_id]?.tool;
   const from = tool && numTool && tool !== numTool ? `判定 (${c.toolTitle(tool)}): ` : "";
@@ -193,19 +216,28 @@ const SCENES = [
       const ct = c.contour;
       const name = ct.field.label ?? FIELD_JA[ct.kind] ?? ct.kind;
       const v = ct.compare ? ct.compare.nowVersion : c.chain.shown?.design_version;
-      const extra = [];
-      if (ct.compare) {
-        extra.push(`補強の前 (版 ${ct.compare.version}): 最大 ${fmtVU(ct.compare.before.fieldMax, ct.field.unit)}`);
-        extra.push(`補強の後 (版 ${ct.compare.nowVersion}): 最大 ${fmtVU(ct.fieldMax, ct.field.unit)}`);
-        const why = c.s.designs?.[ct.compare.nowVersion]?.change_reason;
-        if (why) extra.push(`変えたこと: ${why}`);
+      const fieldMax = fmtVU(ct.frameMax ?? ct.fieldMax, ct.field.unit);
+      const maxima = ct.compare
+        ? [`補強の前 (版 ${ct.compare.version}): 最大 ${fmtVU(ct.compare.before.fieldMax, ct.field.unit)}`, `補強の後 (版 ${ct.compare.nowVersion}): 最大 ${fmtVU(ct.fieldMax, ct.field.unit)}`]
+        : [];
+      const why = ct.compare ? c.s.designs?.[ct.compare.nowVersion]?.change_reason : null;
+      // The large number is the judged quantity: the verdict's value, else (no verdict yet) the
+      // shown analysis' judged result. The coloured field's largest value goes under 参考 unless
+      // the field is the judged quantity itself (judged.js fieldRole).
+      const verdict = sceneVerdict(c);
+      const r = verdict ? null : judgedResult(c.s.analyses[ct.analysisId], c.chain.loadCase?.criterion);
+      const num = verdict
+        ? judgedNumber(c, verdict)
+        : r
+          ? { what: `${JUDGED_JA.number}: ${quantityName(r.quantity)}`, value: fmtVU(r.value, r.unit), src: `解析の結果・${ct.toolTitle ?? ""}・版 ${v ?? "—"}`, tool: ct.tool }
+          : null;
+      if (num && ct.role !== "judged") {
+        return { ...num, ...verdictCard(c, num.tool), ref: [`${name} の最大 ${fieldMax}`, ...maxima], extra: why ? [`変えたこと: ${why}`] : [] };
       }
       return {
-        what: `${name} の最大`,
-        value: fmtVU(ct.frameMax ?? ct.fieldMax, ct.field.unit),
-        src: `解析の結果・${ct.toolTitle ?? ""}・版 ${v ?? "—"}`,
-        ...verdictCard(c, ct.tool),
-        extra,
+        ...(num ?? { what: `${name} の最大`, value: fieldMax, src: `解析の結果・${ct.toolTitle ?? ""}・版 ${v ?? "—"}` }),
+        ...verdictCard(c, num?.tool ?? ct.tool),
+        extra: [...maxima, ...(why ? [`変えたこと: ${why}`] : [])],
       };
     },
   },
@@ -218,11 +250,14 @@ const SCENES = [
       const h = stepHeightOf(c.chain.loadCase);
       const climbed = climbedOf(c.s, c.chain.loadCase.load_case_id);
       const hText = h.unit === "m" ? `${fmt(h.value * 1000, 4)} mm` : fmtQ(h);
-      const base = verdictCard(c, f?.tool);
+      // a verdict on a number (not a yes / no such as climbed): its value is the large number,
+      // the wheel's force beside it for reference
+      const verdict = sceneVerdict(c);
+      const num = verdict && !isYesNo(verdict.quantity) ? judgedNumber(c, verdict) : null;
+      const base = verdictCard(c, num ? num.tool : f?.tool);
       return {
-        what: f?.what ?? "",
-        value: f?.value ?? "",
-        src: f ? `解析の結果・${c.toolTitle(f.tool)}` : "",
+        ...(num ?? { what: f?.what ?? "", value: f?.value ?? "", src: f ? `解析の結果・${c.toolTitle(f.tool)}` : "" }),
+        ref: num && f ? [`${f.what} ${f.value}`] : [],
         ...base,
         // the climb, when a record says it; otherwise the verdict's sentence
         verdict: climbed === null ? base.verdict : { ok: climbed, text: `段差 ${hText} を${climbed ? "越えられる" : "越えられない"}` },
@@ -235,10 +270,11 @@ const SCENES = [
     title: "結果",
     when: (c) => !!c.chain.loadCase,
     card(c) {
-      const { verdict, shown, pred } = c.chain;
+      const { shown, pred } = c.chain;
+      const verdict = sceneVerdict(c);
       const r = shown?.results?.[0];
       const num = verdict
-        ? { what: quantityName(verdict.quantity), value: fmtQ(verdict.value), src: `${valueFromJa(verdict)}の値` }
+        ? judgedNumber(c, verdict)
         : r
           ? { what: quantityName(r.quantity), value: fmtVU(r.value, r.unit), src: `解析の結果・${c.toolTitle(shown.tool)}` }
           : pred
@@ -270,6 +306,8 @@ export function presentCardHtml(scene, now) {
     num +
     (c.crit ? `<div class="pc-crit">${esc(c.crit)}</div>` : "") +
     (c.verdict ? `<div class="pc-verdict ${c.verdict.ok ? "ok" : "bad"}">${esc(c.verdict.text)}</div>` : "") +
+    // values shown beside the judged one that the verdict does not use, small and under their heading
+    (c.ref?.length ? `<div class="pc-ref" data-role="reference"><div class="pc-ref-h">${esc(JUDGED_JA.ref)}</div><ul>${c.ref.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "") +
     (c.extra?.length ? `<ul class="pc-extra">${c.extra.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "")
   );
 }

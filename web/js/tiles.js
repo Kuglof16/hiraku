@@ -5,7 +5,7 @@
 // interferences in red, and a small chart of its first series group. Every
 // number printed is a recorded value.
 
-import { DOMAINS, DOMAIN_JA, esc, fmt, fmtQ, fmtVU, keepAsides, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, esc, fmt, fmtQ, fmtVU, keepAsides, opLabel, quantityName, unitLabel } from "./labels.js";
 import { OVER_COLOR, colorOf } from "./colormap.js";
 import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fields.js";
 import { abscissa, channelsOf, chartGroups, extent, seriesName, xSeriesOf } from "./series.js";
@@ -13,6 +13,7 @@ import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.
 import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
 import { heldBandHtml, heldCases, referenceCases, referenceRowsHtml } from "./held.js";
 import { builtLine } from "./proposals.js"; // modules:
+import { judgedContour } from "./judged.js";
 
 const W = 300;
 const H = 150;
@@ -194,7 +195,8 @@ function tileSvg(s, domain, design, info) {
   const field = fieldsOf(ana, { mesh: false })[0];
   // a field with frames (a time history): the moment with the largest value, as the workbench
   // shows it when not playing (the caption names the moment)
-  const whole = field ? contourOf(ana, field, loadCase?.criterion) : null;
+  // held to the version's allowable only when the field is the judged quantity (judged.js)
+  const whole = field ? judgedContour(s, ana, field, loadCase?.load_case_id ?? ana?.load_case_id) : null;
   const ct = whole?.frames ? atFrame(whole, frameIndex(whole, null)) : whole;
   const interfering = new Set((ana?.interferences ?? []).flatMap((x) => [x.a, x.b]));
   const view = sideView(design);
@@ -276,7 +278,7 @@ export class TileBoard {
       if (design && (j.state !== "off" || info.ana)) {
         const { body, ct } = tileSvg(s, d, design, info);
         drawing = body;
-        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
+        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.reference ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
         for (const x of info.ana?.interferences ?? []) {
           caption += `${caption ? "・" : ""}${thingName(design, x.a)} × ${thingName(design, x.b)} ${fmt(x.depth_mm, 3)} mm 干渉${x.state === "motion" ? ` (${x.condition ?? "動いたとき"})` : ""}`;
         }

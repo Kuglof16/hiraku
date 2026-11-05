@@ -438,7 +438,7 @@ export function applyEvent(s, ev) {
       break;
     }
     case "judgement.updated": {
-      s.judgements[`${d.design_version}|${d.domain}`] = { ...d, t: ev.t };
+      s.judgements[`${d.design_version}|${d.domain}`] = { ...d, t: ev.t, seq: ev.seq };
       const state = { green: "緑", red: "赤", pending: "まだ" }[d.state] ?? d.state;
       const a = s.agents[`cae.${d.domain}`];
       if (a && d.state === "green") a.status = "✓";
@@ -508,7 +508,7 @@ function list(s, kind) {
 // is the one of the newest comparison, unless predictions came after that
 // comparison: then the first of those, which waits for its analysis.
 export function chainFor(s, loadCaseId, version) {
-  const loadCase = (s.project?.load_cases ?? []).find((c) => c.load_case_id === loadCaseId) ?? null;
+  const loadCase = loadCaseIn(s, loadCaseId, version);
   const sameCase = (r) => r.load_case_id === loadCaseId && (version == null || r.design_version === version);
   const preds = list(s, "predictions").filter(sameCase);
   const predIds = new Set(preds.map((p) => p.prediction_id));
@@ -525,6 +525,32 @@ export function chainFor(s, loadCaseId, version) {
   // The 3D keeps the last finished analysis of this case even when a newer prediction waits for its own.
   const shown = ana ?? anas.at(-1) ?? null;
   return { loadCase, preds, pred, ana, shown, running, cmp, verdict, cause };
+}
+
+// A load case as a design version has it (load_cases.created: its criterion may differ from
+// version 1's, e.g. another material's allowable), else as the project has it (version 1's).
+export function loadCaseIn(s, loadCaseId, version = null) {
+  const own = version != null ? (s.versionLoadCases[version] ?? []).find((c) => c.load_case_id === loadCaseId) : null;
+  return own ?? (s.project?.load_cases ?? []).find((c) => c.load_case_id === loadCaseId) ?? null;
+}
+
+// The design version a verdict belongs to: its comparison's analysis' version.
+export function verdictVersion(s, verdict) {
+  return s.analyses[s.comparisons[verdict?.comparison_id]?.analysis_id]?.design_version ?? null;
+}
+
+// The verdict a load case is judged by in a design version: the one the domain's judgement of
+// that version lists (judgement.updated verdict_ids), unless a verdict of the load case came
+// after that judgement (then the newest: e.g. the shell's fail after the beam's pass); else the
+// newest verdict of the load case in that version (any version when version is null); null
+// when there is none yet.
+export function judgedVerdict(s, loadCaseId, version = null) {
+  const lc = loadCaseIn(s, loadCaseId, version);
+  const j = lc?.domain && version != null ? s.judgements[`${version}|${lc.domain}`] : null;
+  const newest = list(s, "verdicts").filter((v) => v.load_case_id === loadCaseId && (version == null || verdictVersion(s, v) === version)).at(-1) ?? null;
+  const listed = (j?.verdict_ids ?? []).map((id) => s.verdicts[id]).filter((v) => v?.load_case_id === loadCaseId).at(-1);
+  if (listed && !(newest && j.seq != null && s.firstSeqOf[newest.verdict_id] > j.seq)) return listed;
+  return newest;
 }
 
 // A verdict made from an explained safe-side mismatch, not from a match (basis absent = match).

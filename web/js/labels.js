@@ -586,6 +586,16 @@ export function quantityName(q) {
   }
   return q;
 }
+// The words that tell the judged number from a value shown for reference (the present card,
+// the workbench's comparison card, the colour bar and the 3D's largest-value tag).
+export const JUDGED_JA = {
+  number: "判定の量", // before the judged quantity's name, over the card's large number
+  ref: "参考 (判定に使わない)", // over the values shown beside it that the verdict does not use
+  refTag: "参考", // before 最大 on the 3D's tag of a field the verdict does not use
+  refBar: "参考の色", // before a colour bar's title when the field is not the judged quantity
+  otherQuantity: "判定は別の量", // under such a colour bar, before the judged quantity's name
+};
+
 // The parts after the dot that a tool writes for one quantity, in words (a part not here is shown as written).
 // rops_occupant_clearance.<part>: rops_frame_pushover pushes the roll bar from the left top corner (side),
 // the right one (side_mirror), backwards near the left (rear) or the right (rear_mirror), and down (top).
