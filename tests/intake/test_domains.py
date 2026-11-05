@@ -226,5 +226,16 @@ class FlagsTest(unittest.TestCase):
         self.assertEqual(flags_text({}), "なし")
 
 
+class TableWordsTest(unittest.TestCase):
+    def test_a_table_or_a_desk_is_read_as_something_to_sit_at_and_to_stand(self):
+        from hiraku.intake.guess import guess_flags
+
+        for word in ("テーブル", "デスク", "作業台", "机"):
+            flags, why, _ = guess_flags(f"{word}を作りたい")
+            self.assertEqual((flags.get("lean"), flags.get("standing")), (True, True), word)
+            self.assertIn(word, why["standing"])
+        self.assertEqual(guess_flags("台車を作りたい")[0].get("standing"), None)  # a bare 台 is not a word of this list
+
+
 if __name__ == "__main__":
     unittest.main()
