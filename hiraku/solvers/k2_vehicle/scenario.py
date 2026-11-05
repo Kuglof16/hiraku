@@ -91,7 +91,7 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
                slow_rate: float = math.radians(0.25), slow_span: float = math.radians(2.0),
                max_angle: float = math.radians(80.0), settle_s: float = 2.0, record_hz: float = 0.0,
                after_s: float = 1.5, slow_hz: float = 2.0, after_hz: float = 25.0,
-               checkpoint_every: float = math.radians(0.25)) -> dict:
+               checkpoint_every: float = math.radians(0.25), load_log=None) -> dict:
     """Turn gravity slowly (a tilt table) until the upper-side wheels carry no load.
 
     Coarse to fine: the table first turns at fast_rate until the upper wheels lift,
@@ -108,9 +108,16 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
     starting upper-wheel load and slowly from there, about 12 deg of slow turning; the tip
     angles of the check vehicles and offroad-4w-v1 / -tallcargo agree with that sweep to
     5e-4 deg (K2 runs, 2026-11-03), at about a third of the steps.
+
+    load_log: a class made with the sim (shelf.mounts.LoadLog) whose tick() is called after each
+    step of the turn up to the tip (not after it), keep() at the tip, and rewind(t) when the sweep goes back to a
+    checkpoint; returned as "log", with "t_slow" (s, where the last slow turn started) and
+    "t_tip" (s).
     """
     sim = new_sim(veh, dt=dt, settle_s=settle_s)
     rec = Recorder(sim, record_hz) if record_hz > 0 else None
+    log = load_log(sim) if load_log is not None else None
+    t_slow = None
     slow_hz = min(record_hz, slow_hz)
     ctl = hold(sim)
     up = upper_side(sim, left_up)
@@ -126,6 +133,8 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
             theta += rate * dt
             sim.set_gravity(side_gravity(sign * theta))
             sim.step(ctl)
+            if log is not None:
+                log.tick()
             n_up = 0.0
             for i in up:
                 n_up += sim.out["ntot"][i]
@@ -134,6 +143,8 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
             if rec is not None:
                 rec.tick({"table_angle": ("deg", math.degrees(sign * theta))})
             if n_up <= 0.0:
+                if log is not None:
+                    log.keep()
                 return theta, theta
             if checkpoints is not None and theta >= next_cp:
                 checkpoints.append((theta, sim.state(), _rec_mark(rec)))
@@ -150,6 +161,9 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
             start, st, mark = max((c for c in cps if c[0] <= back), key=lambda c: c[0], default=cps[0])
             sim.restore(st)
             _rec_rewind(rec, mark)
+            if log is not None:
+                log.rewind(sim.t)
+            t_slow = sim.t
             if slide is not None and slide > start:
                 slide = None
             if rec is not None:
@@ -159,6 +173,7 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
                 break
             back = start - slow_span
     snap = None
+    t_tip = sim.t
     if rec is not None:
         rec.sample({"table_angle": ("deg", math.degrees(sign * theta))})
         snap = rec.keep_snapshot()
@@ -170,4 +185,5 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
             sim.set_gravity(side_gravity(sign * theta))
             sim.step(ctl)
             rec.tick({"table_angle": ("deg", math.degrees(sign * theta))})
-    return {"tip_angle": tip, "slide_angle": slide, "recorder": rec, "snapshot": snap, "sim": sim}
+    return {"tip_angle": tip, "slide_angle": slide, "recorder": rec, "snapshot": snap, "sim": sim, "log": log,
+            "t_slow": t_slow, "t_tip": t_tip}
