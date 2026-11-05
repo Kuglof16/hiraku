@@ -142,7 +142,8 @@ class ServerTest(unittest.TestCase):
         (cls.web / "index.html").write_text("<!doctype html><title>t</title>", encoding="utf-8")
         (cls.web / "js" / "app.js").write_text("export const x = 1;", encoding="utf-8")
         (cls.tmp / "secret.txt").write_text("outside web/", encoding="utf-8")
-        cls.server = make_server("127.0.0.1", 0, cls.runs, cls.web, quiet=True)
+        # saved_dir=None: the repository's showcase/ runs would be listed before the test's run
+        cls.server = make_server("127.0.0.1", 0, cls.runs, cls.web, quiet=True, saved_dir=None)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
