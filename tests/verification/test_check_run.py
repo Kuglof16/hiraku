@@ -1183,6 +1183,15 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "verdict.recorded")["data"]["value"] = dict(by_kind(ev, "comparison.recorded")["data"]["predicted"])
         self.assertFlags(ev, "verdict.values")
 
+    def test_a_cause_takes_one_way_to_settle_its_mismatch(self):
+        # contract 26de5b8: tool_decides with safe_side is an error (ends_case with either too)
+        for extra in ({"safe_side": True, "safe_side_reason": "x"}, {"ends_case": True}):
+            with self.subTest(extra=sorted(extra)):
+                ev = self.path_checked_flow()
+                by_kind(ev, "cause.recorded")["data"].update(extra)
+                self.assertTrue(any(f.rule == "cause.settled" for f in self.findings(ev) if f.level == "error"))
+        self.assertNotIn("cause.settled", self.rules(self.path_checked_flow()))
+
     # --- the listing of what the hooks did (--effects) -------------------------------
     def effects(self, events):
         return "\n".join(cr.run_effects(write_run(self.root / f"r{len(list(self.root.iterdir()))}", events)))

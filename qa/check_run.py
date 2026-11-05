@@ -1045,6 +1045,10 @@ class RunChecker:
             c = self._before("comparison", k.get("comparison_id"), i, w, "cause.link", "comparison")
             if c is not None and c.get("status") != "mismatch":
                 self.warn("cause.link", w, f"{kid} explains {k.get('comparison_id')}, which matched")
+            # one way to settle a mismatch (contract 26de5b8): the tool decides, safe side, or ended
+            ways = [f for f in ("tool_decides", "safe_side", "ends_case") if k.get(f) is True]
+            if len(ways) > 1:
+                self.error("cause.settled", w, f"{kid} says {' and '.join(ways)}: a cause takes one of them")
             rb = k.get("resolved_by")
             if rb:
                 r = self.recs["comparison"].get(rb)
