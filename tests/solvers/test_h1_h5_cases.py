@@ -59,6 +59,25 @@ class CasesTest(unittest.TestCase):
         self.assertNotIn("H1-envelope", got)
         self.assertTrue(all("modules" not in lc for lc in got.values()))
 
+    def test_the_steer_angle_the_turning_radius_needs(self):
+        # with Q58 the required angle is turning.required_steer's inner wheel angle for that radius (L and t as
+        # the S6 case reads them), else the design's max_steer_angle
+        from hiraku.catalog.builders.k2_tests import turning_inputs
+        d = GEN.build()
+        without = [r for r in REQ["requirements"] if r["key"] != "Q58"]
+        plain = {lc["load_case_id"]: lc for lc in BUILDERS["H1"](SPEC, dict(REQ, requirements=without), d)}
+        self.assertEqual(plain["H1-steer"]["criterion"]["limit"], d["variables"]["max_steer_angle"])
+        req = dict(REQ, requirements=without + [{"key": "Q58", "name": "Q58", "value": 12.0, "unit": "m",
+                                                 "source": "default", "trust": 3, "basis": "test value"}])
+        lc = {x["load_case_id"]: x for x in BUILDERS["H1"](SPEC, req, d)}["H1-steer"]
+        ins = turning_inputs(d, lc)
+        want = FORMULAS.evaluate("turning.required_steer", {"L": ins["L"], "t": ins["t"],
+                                                            "R_max": {"value": 12.0, "unit": "m"}})["outputs"]["delta_i"]
+        self.assertAlmostEqual(lc["criterion"]["limit"]["value"], want["value"], places=9)
+        self.assertIn("Q58", lc["requirement_keys"])
+        self.assertIn("Q58 12 m", lc["criterion"]["basis"])
+        self.assertEqual(contract.errors("load_case", lc), [])
+
 
 class K0AgainstToolTest(unittest.TestCase):
     """The hand counts equal the tool's on version 1 and with gussets (H1-joints within 5 %); a design with the

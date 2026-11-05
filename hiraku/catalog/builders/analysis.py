@@ -650,12 +650,46 @@ def h1_interference(spec: Record, req: Record, design: Record) -> list[Record]:
                                            "envelope, given by the packager)"}})
     steer = design_var(design, "max_steer_angle", "deg")
     if steer:
-        out.append({**base, "load_case_id": "H1-steer",
-                    "title": "ハンドルを止めまで切れるか (前輪がフレームに当たらない)",
-                    "criterion": {"quantity": "free_steer_angle", "op": ">=", "limit": q(steer, "deg"),
-                                  "basis": f"H1: the front wheels turn to the design's max_steer_angle ({steer:g} deg) "
-                                           "without touching the frame"}})
+        need = h1_steer_needed(req, design, {"params": {"loading": load}})
+        if need is None:
+            out.append({**base, "load_case_id": "H1-steer",
+                        "title": "ハンドルを止めまで切れるか (前輪がフレームに当たらない)",
+                        "criterion": {"quantity": "free_steer_angle", "op": ">=", "limit": q(steer, "deg"),
+                                      "basis": f"H1: the front wheels turn to the design's max_steer_angle ({steer:g} deg) "
+                                               "without touching the frame"}})
+        else:
+            angle, basis = need
+            out.append({**base, "load_case_id": "H1-steer", "requirement_keys": keys + ["Q58"],
+                        "title": "小回りに要る角度まで切れるか (前輪がフレームに当たらない)",
+                        "criterion": {"quantity": "free_steer_angle", "op": ">=", "limit": q(angle, "deg"),
+                                      "basis": basis, "requirement_keys": ["Q58"]}})
     return out
+
+
+def h1_steer_needed(req: Record, design: Record, load_case: Record) -> tuple[float, str] | None:
+    """The inner front wheel's angle the turning-radius limit Q58 needs (turning.required_steer: L and t
+    as the S6 case reads them, k2_tests.turning_inputs) and the criterion's basis; None without Q58
+    (H1-steer then asks for the design's max_steer_angle)."""
+    from hiraku import solvers
+
+    from .k2_tests import turning_inputs
+    if entry(req, "Q58") is None:
+        return None
+    r_max = number(req, "Q58", "m")
+    ins = turning_inputs(design, load_case)
+    try:
+        got = solvers.formula_registry().evaluate("turning.required_steer",
+                                                  {"L": ins["L"], "t": ins["t"], "R_max": q(r_max, "m")})
+    except Exception as e:  # the limit cannot be met by steering (R_max at or below L, or the inner wheel past 90 deg)
+        raise BuildError(f"H1-steer: no steer angle gives the turning radius Q58 {r_max:g} m on this layout "
+                         f"(L {ins['L']['value']:.3f} m, t {ins['t']['value']:.3f} m): {e}") from e
+    angle = float(got["outputs"]["delta_i"]["value"])
+    basis = (f"H1: the front wheels turn, without touching the frame, to the inner wheel's angle the turning radius "
+             f"Q58 {r_max:g} m needs: {angle:.2f} deg (turning.required_steer, Ackermann, L {ins['L']['value']:.3f} m "
+             f"from the steered axle to the unsteered one and t {ins['t']['value']:.3f} m the steered axle's track, "
+             "read off the K2 model as the S6 case does; both wheels asked for the inner one's angle). The tool "
+             "turns them at most to max_steer_angle, so a stop short of this angle fails too")
+    return angle, basis
 
 
 def h1_overlap_calc(design: Record, load_case: Record) -> Record:
