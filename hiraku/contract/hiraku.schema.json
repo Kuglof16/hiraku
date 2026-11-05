@@ -806,6 +806,26 @@
               }
             }
           }
+        },
+        "rating": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "working_load_N",
+            "basis"
+          ],
+          "description": "The force a bought part is rated to carry in use (a strap's or a lashing point's working load, e.g. EN 12195-2 LC), written by the code that builds the design; the cargo restraint load case (R10) compares the force it gives the part with it.",
+          "properties": {
+            "working_load_N": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "basis": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Where the rating comes from: a standard or a maker's sheet (edition and table, or 'not checked'), or 'assumption'."
+            }
+          }
         }
       },
       "allOf": [

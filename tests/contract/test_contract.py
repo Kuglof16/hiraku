@@ -173,6 +173,13 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
         self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
 
+    def test_part_rating(self):
+        part = {**dict(load("design.json")["parts"][0]), "kind": "strap"}  # kind is free text
+        ok = {**part, "rating": {"working_load_N": 2500.0, "basis": "EN 12195-2 LC (not checked)"}}
+        self.assertEqual(contract.errors("part", ok), [])
+        self.assertNotEqual(contract.errors("part", {**part, "rating": {"working_load_N": 0, "basis": "x"}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "rating": {"working_load_N": 2500.0}}), [])
+
     def test_scene_circle(self):
         ring = {"kind": "circle", "label": "外側の前輪の円", "position_mm": [0.0, 4900.0, 0.0], "size_mm": [9800.0, 9800.0, 0.0]}
         self.assertEqual(contract.errors("scene_object", ring), [])
