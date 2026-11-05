@@ -29,6 +29,8 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 
 パッケージの層 (下の層は上の層を import しない。`tests/contract/test_layers.py` が見る): `contract` < `solvers` < `designgen` < `store` < `catalog` < `intake` < `tools` < `agent` < `export` < `webserve`・`__main__`。上の層の関数が要るときは、上の層から渡してもらう (引数か登録)
 
+機能ごとの枝と取り込み (2026-11-06、本人「個別で機能開発してマージだろ」→「分けてやる」): 1 つの機能は 1 本の枝 (`claude/<部署>-<機能>`、main から切る) で作り、その機能のファイルだけを触る。品質保証部は、通った機能の枝から 1 本ずつ main の上に重ねて試し (CLAUDE.md の試験)、通れば main を進める。1 本が落ちても、ほかの枝は待たない。多くの機能が同じ大きなファイルを触って並べられなかったので、`web/js/app.js`・`web/js/workbench3d.js` (画面部) と `hiraku/designgen/ladder_4w.py` (解析部) は、動きを変えずに、機能ごとのファイルに分ける (試験はそのまま通り、デモの設計のファイルはバイト単位で同じ)
+
 ## 座標と単位
 
 - 設計 (design) の座標は mm。軸は ISO 8855 (x 前、y 左、z 上)。原点は前の車軸の真ん中の真下の地面。だから前の車軸より後ろは x が負で、後ろの車軸は x = −ホイールベース。前後は x の大小で決め (大きいほど前)、「x が最小 = 前」としない
