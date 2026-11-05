@@ -235,6 +235,18 @@ def pixel_steps(a, b):
     return int((d > 0).sum()), int(d.max())
 
 
+def where_differ(a, b, n=6):
+    """The first n pixels (x, y) where two PNGs differ, with their RGBA in each."""
+    import io
+
+    from PIL import Image
+
+    x = np.asarray(Image.open(io.BytesIO(a)).convert("RGBA"), dtype=int)
+    y = np.asarray(Image.open(io.BytesIO(b)).convert("RGBA"), dtype=int)
+    ys, xs = np.nonzero(np.abs(x - y).max(axis=2))
+    return [((int(i), int(j)), x[j, i].tolist(), y[j, i].tolist()) for i, j in zip(xs[:n], ys[:n])]
+
+
 def asm_events(events):
     """The assembly sample with joints on two parts: the battery bolted to node L1, the seat resting on it."""
     created = next(e for e in events if e["kind"] == "design.created")
@@ -707,13 +719,13 @@ class JointsBrowserTest(unittest.TestCase):
                 shots.append(page.locator("#viewport").screenshot())
                 page.close()
             if look == "zu":
-                # not bit for bit either: with swiftshader a page now and then draws a few pixels
-                # otherwise. Since the weld beads (merge 0f871f7) one pixel, (558,265), sometimes came
-                # out 1 step off; lifting the bead off the faces (WELD_BEAD.lift_mm) with a
-                # polygonOffset did not stop it (199fa3b), so its cause is not found. With the hollow
-                # tubes (e512cc6) 4 pixels in 1 of 5 loads. At most 1 in 10000 pixels; more than that
-                # is a real change of the picture.
-                self.assertLess(differing(shots[0], shots[1]), 1e-4, look)
+                # bit for bit: no pixel differs. (Up to 7871fff a 1 in 10000 pixels was let pass: since
+                # the weld beads one pixel, (558,265), now and then 1 step off, with the hollow tubes 4
+                # pixels in 1 of 5 runs, only seen in runs of the whole suite. Not seen again: 22 loads
+                # of this page alone (12 with the marks opaque as they were, 10 with them in the
+                # see-through pass), 12 more with every core busy, and 5 runs of this class with no
+                # pixel let pass. If it comes back, the message names the pixels.)
+                self.assertEqual(pixel_steps(shots[0], shots[1]), (0, 0), (look, where_differ(shots[0], shots[1])))
             else:
                 # the real look's post (ambient occlusion, antialiasing) is not bit for bit the same
                 # from one page to the next: nearly every pixel the same
