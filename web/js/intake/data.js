@@ -344,6 +344,20 @@ export const ITEM_HELP = {
   }
 };
 
+export const ITEM_CHOICES_ALT = {
+  "Q30": {
+    "labels": {
+      "driver": "1 人だけ"
+    },
+    "on": [
+      "lean"
+    ],
+    "off": [
+      "ride"
+    ]
+  }
+};
+
 export const ITEM_CHOICES = {
   "Q11": {
     "砂利": "砂利",

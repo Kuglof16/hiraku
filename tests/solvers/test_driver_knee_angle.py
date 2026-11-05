@@ -94,7 +94,7 @@ class OneSeatTwoSizesTest(unittest.TestCase):
     def check_search(self, changes, label, slide):
         d = designgen.regenerate(V1, changes) if changes else V1
         variables = driver_fit.VARIABLES if slide else tuple(v for v in driver_fit.VARIABLES if v != "seat_slide")
-        got = driver_fit.best_driver_place(d, variables=variables, names=driver_fit.COMFORT_MARGINS, time_limit_s=280)
+        got = driver_fit.best_driver_place(d, variables=variables, names=driver_fit.COMFORT_MARGINS)
         print(f"\n{label} with knee_angle_room, seat {'sliding' if slide else 'fixed'}: smallest {got['smallest']}, "
               f"{got['evaluations']} designs, {got['seconds']:.0f} s, {got['stopped']}; changes "
               f"{({k: v['value'] for k, v in got['changes'].items()})}; "

@@ -1,7 +1,7 @@
 // A2 - hearing: the missing requirements asked once (left), the requirements and where each came from (right) (N14).
 
 import { fill, h } from "./dom.js";
-import { ITEM_CHOICES, ITEM_HELP } from "./data.js";
+import { ITEM_CHOICES, ITEM_CHOICES_ALT, ITEM_HELP } from "./data.js";
 import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, TRUST_JA } from "./model.js";
 
 const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました", ended: "実行が終わりました" };
@@ -77,17 +77,53 @@ function ruleQuestion(q, api, ui) {
     q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この判断は使われません") : null);
 }
 
-function requirementRow(r) {
+/** The name of a choice as the person reads it for this product (an item's choices_if renames some for some flags). */
+function choiceName(key, value, flags) {
+  const alt = ITEM_CHOICES_ALT[key];
+  if (alt && alt.on.every((f) => flags?.[f]) && alt.off.every((f) => !flags?.[f]) && alt.labels[String(value)]) return alt.labels[String(value)];
+  return ITEM_CHOICES[key]?.[String(value)];
+}
+
+function requirementRow(r, flags) {
   const lowTrust = r.trust === 3;
   return h("tr", { class: `${r.fresh ? "fresh" : ""}${lowTrust ? " low" : ""}`, title: `番号 ${r.key}\n${r.basis || ""}` },
     h("td", {}, r.name),
-    h("td", { class: "val" }, ITEM_CHOICES[r.key]?.[String(r.value)] ?? showValue(r.value, r.unit)), // the name of the choice, the value itself when there is none
+    h("td", { class: "val" }, choiceName(r.key, r.value, flags) ?? showValue(r.value, r.unit)), // the name of the choice, the value itself when there is none
     h("td", {}, h("span", { class: `in-src ${r.source}` }, SOURCE_JA[r.source] || r.source)),
     h("td", { class: "trust" }, h("span", { class: `in-dot t${r.trust}`, title: TRUST_JA[r.trust] }, r.trust)));
 }
 
+/**
+ * The questions that need an answer (and the rule hits), as one panel for the top of A1: the person answers where they
+ * are, without moving to the hearing tab. The answers are the same ones A2 sends (ui.answers).
+ */
+export function askingPanel(m, api, ui) {
+  const rows = hearingRows(m).filter((r) => r.state === "asking");
+  const rules = ruleRows(m).filter((r) => r.state === "asking");
+  if (!rows.length && !rules.length) return null;
+  const must = rows.filter((r) => r.ask === "must");
+  const rest = rows.length - must.length;
+  const canSend = !!api.answerHearing && !ui.sending;
+  const need = must.length + rules.length;
+  const actions = h("div", { class: "in-actions" },
+    h("button", { class: "in-btn", type: "button", disabled: !canSend, onclick: () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true }) }, "標準の値のまま進める"),
+    h("button", { class: "in-btn primary", type: "button", disabled: !canSend,
+      onclick: () => submit(api, ui, { answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true }) },
+    ui.sending ? "送っています…" : "答えて進める"));
+  return h("section", { class: "in-ask-top" },
+    h("div", { class: "in-ask-head" },  // the buttons sit beside the title, so they are in sight however many questions there are
+      h("h2", {}, "HIRAKU からの質問", h("small", {}, need ? `答えが要るもの ${need} 件` : `答えなくても進めます (${rows.length} 件)`)),
+      actions),
+    ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした。${ui.error}`) : null,
+    need ? h("div", { class: "in-ask-list" }, [...must.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui))]) : null,
+    rest && need ? h("p", { class: "in-foot" }, `答えなくても進める質問が、ほかに ${rest} 件あります (答えなければ標準の値を使います)。`,
+      ui.show ? h("button", { class: "in-btn small", type: "button", onclick: () => ui.show("A2") }, "ほかの質問を見る") : null) : null,
+    !need && ui.show ? h("p", { class: "in-foot" }, "答えなければ標準の値を使います。",
+      h("button", { class: "in-btn small", type: "button", onclick: () => ui.show("A2") }, "質問を見る")) : null);
+}
+
 /** Send the answers; a refusal (the host's promise rejects with the reason) is shown under the buttons. */
-async function submit(api, ui, body) {
+export async function submit(api, ui, body) {
   ui.error = "";
   ui.sending = true;
   ui.rerender();
@@ -103,6 +139,12 @@ async function submit(api, ui, body) {
 export function renderA2(el, m, api, ui) {
   const rows = hearingRows(m);
   const rules = ruleRows(m);
+  // another hearing (a new run, other questions): what was picked for the earlier one is not sent with this one
+  const sig = [...rows.map((r) => r.req_key), ...rules.map((r) => r.rule_id)].join(",");
+  if (ui.askedSig !== sig) {
+    if (ui.askedSig !== undefined) { ui.answers = {}; ui.ruleAnswers = {}; }
+    ui.askedSig = sig;
+  }
   const asking = [...rows, ...rules].some((r) => r.state === "asking");
   const answersBody = () => ({ answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true });
   const canSend = asking && !!api.answerHearing && !ui.sending;
@@ -134,7 +176,7 @@ export function renderA2(el, m, api, ui) {
         m.requirements.length
           ? h("table", {},
               h("thead", {}, h("tr", {}, ["項目", "値", "どうやって決めたか", "確かさ"].map((t) => h("th", {}, t)))),
-              h("tbody", {}, [...m.requirements].sort((a, b) => a.key.localeCompare(b.key)).map(requirementRow)))
+              h("tbody", {}, [...m.requirements].sort((a, b) => a.key.localeCompare(b.key)).map((r) => requirementRow(r, m.flags))))
           : h("p", { class: "in-empty" }, "決まったことが入るとここに並びます")),
       h("p", { class: "in-foot" }, `仮の値が ${assumptions(m).length} 件あります。最後の報告に「確かめていないこと」として載ります。行に重ねると、根拠が出ます`),
       h("p", { class: "in-foot in-legend" }, "確かさ: ", [1, 2, 3].map((n) => h("span", {}, h("span", { class: `in-dot t${n}` }, n), ` ${TRUST_JA[n]}  `)))));

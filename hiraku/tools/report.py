@@ -326,14 +326,16 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
         return _report_before_a_design(ctx, args, agent)
     sens = list(computed or []) + sensitivities(ctx, args.get("sensitivity") or [])
     texts = [args.get("summary", "")] + [f"{n.get('change', '')} {n.get('reason', '')}" for n in args.get("next") or []]
+    # every problem in one refusal (run 160725: two write_report calls, each told of one problem only)
+    problems = []
     allowed = recorded_numbers(ctx, sens)
     bad = sorted({b for t in texts for b in unknown_numbers(t, allowed)})
     if bad:
-        raise ToolError("報告の文に、記録に無い数があります: " + "、".join(bad)
+        problems.append("報告の文に、記録に無い数があります: " + "、".join(bad)
                         + "。数は記録 (予測・解析・照合・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
     claimed = unanswered_choices(ctx, texts)
     if claimed:
-        raise ToolError(f"報告の文が、人に聞いていない規則 {', '.join(claimed)} について「人が選んだ」と書いています。"
+        problems.append(f"報告の文が、人に聞いていない規則 {', '.join(claimed)} について「人が選んだ」と書いています。"
                         f"人の答えは ask_user の rule_hits で聞いて答えがあった規則 ({', '.join(sorted(answered_rules(ctx))) or 'なし'}) "
                         "だけです。ほかの当たりは、聞いていないとそのまま書いてください")
     parts = domain_parts(ctx)
@@ -341,12 +343,16 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
     hit = rule_hits(ctx)
     not_hit = [n["rule_id"] for n in args.get("next") or [] if n.get("rule_id") and n["rule_id"] not in hit]
     if not_hit:
-        raise ToolError(f"next の rule_id {not_hit} は、版 {ctx.version} の最後の rule_check で当たった規則ではありません"
-                        f" (当たった規則: {', '.join(hit) or 'なし'})")
+        problems.append(f"next の rule_id {not_hit} は、版 {ctx.version} の最後の rule_check で当たった規則ではありません"
+                        f" (当たった規則: {', '.join(hit) or 'なし'})。前の版で当たって直した規則は next に入れず、"
+                        "summary に、どの版で直したかを書いてください")
     wrong = [n.get("domain") for n in args.get("next") or [] if n.get("domain") not in domains and not n.get("rule_id")]
     if wrong:
-        raise ToolError(f"next の domain {wrong} は、この実行で選んだ分野 ({', '.join(sorted(domains))}) ではありません。"
+        problems.append(f"next の domain {wrong} は、この実行で選んだ分野 ({', '.join(sorted(domains))}) ではありません。"
                         f"rule_check で当たった規則に答える変更なら、その規則の rule_id を付けてください")
+    if problems:
+        raise ToolError(("直すところが " + str(len(problems)) + " つあります。" if len(problems) > 1 else "")
+                        + " / ".join(problems))
     return {
         "design_version": ctx.version,
         "agent": agent,

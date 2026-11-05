@@ -1,0 +1,48 @@
+{
+ "name": "rops_frame_pushover",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "rops_frame_pushover",
+  "title": "横転の保護枠: 車体の骨組全部を塑性ヒンジで押し、動いた形で乗員の空間との隙間を測る",
+  "domain": "strength",
+  "base": "K1",
+  "tests": [
+   "R4"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "fixed-base square portal 1000 x 1000 mm, square tube 40 x 40 x 2.3 mm, f_y 215 MPa: side load at a top corner, collapse load",
+    "quantity": "rops_side_collapse_load",
+    "expected": 4222.199240000001,
+    "got": 4222.199239996705,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form, textbook plastic analysis: sway mechanism of a fixed-base portal H_c = 4 M_p / h, M_p = Z_p f_y, Z_p = (b h^2 - (b - 2t)(h - 2t)^2) / 4 (Neal, The Plastic Methods of Structural Analysis), worked out by hand"
+   },
+   {
+    "case": "the same portal: load down at mid-span of the top beam, collapse load",
+    "quantity": "rops_top_collapse_load",
+    "expected": 8444.398480000002,
+    "got": 8444.398480000003,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form, textbook plastic analysis: beam mechanism with a central load V_c = 8 M_p / L (Neal, The Plastic Methods of Structural Analysis), worked out by hand"
+   }
+  ],
+  "formulas": [
+   "frame_static.rops_occupant_clearance",
+   "frame_static.portal_frame_side",
+   "frame_static.portal_frame_rear",
+   "frame_static.portal_frame_top"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-05T00:28:52+00:00",
+ "reason": "R4 (横転の保護枠、R4-rops) を解析するツールが棚に無い (list_tools(test_id=R4) が空)。手計算はロールバーとレールの切れ端だけの門形の枠なので、車体の骨組全部を車輪の取付点で固定して塑性ヒンジで押し、動いた形で乗員の空間との隙間を測るツールを足す。"
+}

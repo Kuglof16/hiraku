@@ -52,13 +52,16 @@ class CrosswindTool(K2Tool):
     to slide sideways), slides_first (1), side_force (N at wind_speed),
     min_upwind_wheel_load (N, the upwind wheels together, a gust of wind_speed reaching the
     vehicle at `speed` with the steering held straight), lateral_drift (m, drift_time after
-    the gust).
+    the gust). hot_spots: critical_wind_speed with the wind from each side (the load case's
+    wind_from judged, the other side found here) and the wheels' friction use and unloading.
     """
 
     name = "crosswind"
     title = "横風 (K2 に横風の力を入れる)"
     domain = "aero"
     tests = ["F1"]
+    # wind_speed 30 m/s: the default when a load case has none (the catalog's load cases give it from the
+    # requirements); a test value. The gust rises in 0.2 s (in _run): HIRAKU's choice, an assumption
     params = (P("wind_speed", "m/s", 30.0, "the gust (relative to the ground, across the vehicle)"),
               P("speed", "km/h", 0.0, "vehicle speed when the gust arrives"),
               P("cy", "1", 1.0, "side force coefficient (1.0 assumed when neither the load case nor the "
@@ -90,10 +93,15 @@ class CrosswindTool(K2Tool):
         expected = math.sqrt(w * 1.2 / (RHO_AIR * 1.0 * veh.side_area * veh.side_cp[2]))
         src = "moment about the downwind contact line: 1/2 rho C_y A v^2 h_cp = W t / 2"
         return [_check(f"rigid vehicle at rest, side area {veh.side_area:.3f} m^2 at {veh.side_cp[2]:.3f} m",
-                       "critical_wind_speed", expected, got, "m/s", 5e-3, src),
+                       "critical_wind_speed", expected, got, "m/s", 5e-3, src,
+                       case_ja=f"止まっているサスペンションの無い車 (横から見た面積 {veh.side_area:.3f} m²、"
+                               f"風を受ける中心の高さ {veh.side_cp[2]:.3f} m) の風上の輪が浮く風速",
+                       source_ja="風下の輪の接地線まわりの回る力のつり合い: 1/2 ρ C_y A v² × 風の中心の高さ = 車の重さ × 輪の幅 / 2"),
                 _check("wind from the left - wind from the right (bit for bit)", "critical_wind_speed_difference", 0.0,
                        None if got is None or got_r is None else got - got_r, "m/s", 0.0, "symmetry",
-                       passed=got is not None and got == got_r)]
+                       passed=got is not None and got == got_r,
+                       case_ja="左からの風と右からの風で、輪が浮く風速の差",
+                       source_ja="左右で 1 ビットも違わない (形が左右対称なので)")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)
@@ -109,6 +117,12 @@ class CrosswindTool(K2Tool):
         res = []
         if ramp["v_crit"] is not None:
             res.append(_res("critical_wind_speed", ramp["v_crit"], "m/s", side_name))
+        # the other side too (the load case names one, from the CG's offset): a place the hand
+        # calculation does not look at, for the hot_spots (CAE の役目)
+        other_name = "wind from the " + ("right" if from_left else "left")
+        other = wind_ramp(held, self.aero(held, lp), not from_left, dt=self.dt)
+        places = [{"where": n, "quantity": "critical_wind_speed", "value": r_["v_crit"], "unit": "m/s", "judged": j}
+                  for n, r_, j in ((side_name, ramp, True), (other_name, other, False)) if r_["v_crit"] is not None]
         slide = wind_ramp(veh, aero, from_left, dt=self.dt, stop_on_slide=True)
         slide_v = slide["slide_speed"]
         if slide_v is not None:
@@ -159,4 +173,5 @@ class CrosswindTool(K2Tool):
         side = 0.5 * aero.rho * aero.cy * aero.side_area * gust * gust * (-1.0 if from_left else 1.0)
         wind_vec = [{"kind": "wind", "at": "side_cp", "origin_mm": [x * 1000.0 for x in cp_world],
                      "vector_N": [0.0, side, 0.0]}]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1, wind_vec), "assumptions": notes}
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1, wind_vec), "assumptions": notes,
+                "places": places}

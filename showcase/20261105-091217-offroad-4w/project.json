@@ -1,0 +1,1109 @@
+{
+  "run_id": "20261105-091217-offroad-4w",
+  "created_at": "2026-11-05T09:12:17.478+09:00",
+  "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)。横転しても、乗っている人を守りたい",
+  "product": "offroad-4w",
+  "flags": {
+    "ride": true,
+    "lean": true,
+    "self_propelled": true,
+    "outdoor": true,
+    "rough": true,
+    "public_road": false,
+    "battery": true,
+    "electric": true,
+    "pinch": true,
+    "cargo": true,
+    "standing": true,
+    "vibration": true,
+    "continuous": true,
+    "assembly": true
+  },
+  "round_limit": 6,
+  "cost_limit_usd": 20.0,
+  "requirements": [
+    {
+      "key": "Q11",
+      "name": "路面の摩擦係数 (砂利)",
+      "value": 0.6,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (gravel; no public value found)"
+    },
+    {
+      "key": "Q12",
+      "name": "路面の粗さ (ISO 8608 のクラス)",
+      "value": "C",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the forest road taken as ISO 8608 class C. ISO 8608 covers unpaved roads too (https://www.iso.org/standard/71202.html); class C = 128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m from the table in https://link.springer.com/article/10.1007/s12544-013-0127-8 (not checked in this repository)"
+    },
+    {
+      "key": "Q13",
+      "name": "縦の坂 (止まって発進できる一番急な坂)",
+      "value": 14,
+      "unit": "%",
+      "source": "default",
+      "trust": 1,
+      "basis": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+    },
+    {
+      "key": "Q14",
+      "name": "横の傾き",
+      "value": 15,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (no basis found)"
+    },
+    {
+      "key": "Q15",
+      "name": "段差",
+      "value": 100,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q18",
+      "name": "横風 (瞬間)",
+      "value": 30,
+      "unit": "m/s",
+      "source": "default",
+      "trust": 1,
+      "basis": "気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)"
+    },
+    {
+      "key": "Q19",
+      "name": "気温 (範囲の高い端)",
+      "value": 40,
+      "unit": "degC",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the hot end of a -10 to 40 degC range of use)"
+    },
+    {
+      "key": "Q30",
+      "name": "人数と荷重の組 (見る組)",
+      "value": "two_cargo",
+      "source": "user",
+      "trust": 1,
+      "basis": "request (2 人乗り、積載 150 kg)",
+      "note": "MVP は two_cargo (2 人 + 荷) だけを見る。empty・driver・two はまだ見ない。乗員と荷は設計の部品 (kind occupant / cargo)"
+    },
+    {
+      "key": "Q31",
+      "name": "体格の範囲",
+      "value": "若年女性 5 % 〜 若年男性 95 %",
+      "source": "default",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+    },
+    {
+      "key": "Q33",
+      "name": "体重 (強さの不利側)",
+      "value": 76.6,
+      "unit": "kg",
+      "source": "default",
+      "trust": 1,
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+    },
+    {
+      "key": "Q40",
+      "name": "積載",
+      "value": 150,
+      "unit": "kg",
+      "source": "user",
+      "trust": 1,
+      "basis": "request",
+      "note": "乗員とは別の荷として扱う (聞いていない)"
+    },
+    {
+      "key": "Q41",
+      "name": "荷の重心の高さ (荷台の床から)",
+      "value": 150,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "the demo design's cargo: its box centre at 600 mm stands 150 mm above the deck's top at 450 mm (data/designs/offroad-4w-v1.json, parts cargo and deck)"
+    },
+    {
+      "key": "Q44",
+      "name": "足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+    },
+    {
+      "key": "Q45",
+      "name": "足を置く面の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+    },
+    {
+      "key": "Q46",
+      "name": "足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 150,
+      "unit": "mm"
+    },
+    {
+      "key": "Q47",
+      "name": "開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found",
+      "value": "はい"
+    },
+    {
+      "key": "Q48",
+      "name": "乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)",
+      "value": 1600,
+      "unit": "mm"
+    },
+    {
+      "key": "Q49",
+      "name": "手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 16,
+      "unit": "mm"
+    },
+    {
+      "key": "Q50",
+      "name": "最高速度",
+      "value": 40,
+      "unit": "km/h",
+      "source": "user",
+      "trust": 1,
+      "basis": "request"
+    },
+    {
+      "key": "Q51",
+      "name": "0 → 最高速度の時間",
+      "value": 6,
+      "unit": "s",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q52",
+      "name": "停止距離",
+      "value": 14,
+      "unit": "m",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https://www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+    },
+    {
+      "key": "Q53",
+      "name": "止まっていられる坂",
+      "value": 20,
+      "unit": "%",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項, https://www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+    },
+    {
+      "key": "Q54",
+      "name": "航続",
+      "value": 20,
+      "unit": "km",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q57",
+      "name": "最低地上高",
+      "source": "default",
+      "trust": 1,
+      "basis": "EU 規則 168/2013 附属書 I (全地形車 L7e-B の下限), criterion (8) \"ground clearance ≥180 mm\", https://www.legislation.gov.uk/eur/2013/168/annex/I; read 2026-11-03 in a source check",
+      "value": 180,
+      "unit": "mm"
+    },
+    {
+      "key": "Q60",
+      "name": "倒れない角度 (Q30 の組で)",
+      "value": 24,
+      "unit": "deg",
+      "source": "default",
+      "trust": 1,
+      "basis": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+    },
+    {
+      "key": "Q61",
+      "name": "安全率 (降伏に対して)",
+      "value": 1.5,
+      "unit": "1",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q63",
+      "name": "挟み込みの隙間",
+      "source": "default",
+      "trust": 1,
+      "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https://cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
+      "value": "ISO 13854 (指 25 mm)"
+    },
+    {
+      "key": "Q64",
+      "name": "横転したときの保護枠 (ROPS)",
+      "value": "つける",
+      "source": "user",
+      "trust": 1,
+      "basis": "request (横転しても、乗っている人を守りたい)"
+    },
+    {
+      "key": "Q65",
+      "name": "衝突の速さ",
+      "value": 40,
+      "unit": "km/h",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the top speed, Q50)"
+    },
+    {
+      "key": "Q66",
+      "name": "手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)",
+      "value": 300,
+      "unit": "N",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: UN Regulation No. 79 (1988 text), table \"Steering control effort requirements\" (M1, with a failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is the assumption)"
+    },
+    {
+      "key": "Q67",
+      "name": "手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the range where the feel and position of the control do not change; no source)"
+    },
+    {
+      "key": "Q68",
+      "name": "足の操作部に掛かる力 (踏む面、踏む向き)",
+      "value": 500,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "UN Regulation No. 13-H, Annex 3, 2.1.1 and 2.3.4 (50 daN, read by the intake department on 2026-11-03)"
+    },
+    {
+      "key": "Q69",
+      "name": "足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "value": 5,
+      "unit": "mm",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (small against the control's travel; no source)"
+    },
+    {
+      "key": "Q70",
+      "name": "公道を走るか",
+      "value": "私有地 (林道) だけ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption of this fixed file; Q70 is a required question and was not asked"
+    },
+    {
+      "key": "Q75",
+      "name": "乗員と部品に掛かる横の加速度",
+      "value": 0.7,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(e) (0.70 g; read by the intake department on 2026-11-03). The vehicle's own peak from its dynamics tests counts instead when it is larger"
+    },
+    {
+      "key": "Q76",
+      "name": "乗員と部品に掛かる前後の加速度",
+      "value": 0.9,
+      "unit": "g",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.3(b)(1) (peak braking coefficient 0.90; read by the intake department on 2026-11-03). The vehicle's own peak counts instead when it is larger"
+    },
+    {
+      "key": "Q77",
+      "name": "乗員の肩・腰の位置 (点 R) を外へ押す力 (10 s)",
+      "value": 725,
+      "unit": "N",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c)(1)-(5) (read by the intake department on 2026-11-03)"
+    },
+    {
+      "key": "Q78",
+      "name": "Q77 の力を除いたあとの点 R の永久の横の変形の上限",
+      "value": 25,
+      "unit": "mm",
+      "source": "default",
+      "trust": 1,
+      "basis": "CPSC NPR 79 FR 68964, § 1422.5(c) (less than 25 mm; read by the intake department on 2026-11-03)"
+    },
+    {
+      "key": "Q82",
+      "name": "出荷の形",
+      "value": "完成車",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption"
+    },
+    {
+      "key": "Q86",
+      "name": "乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)",
+      "value": 500,
+      "unit": "kg",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract having no unit J/kg or N/kg for them"
+    },
+    {
+      "key": "Q87",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "value": 30,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for other traffic, borrowed: applying it to the occupants is an assumption"
+    },
+    {
+      "key": "Q88",
+      "name": "泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "value": 50,
+      "unit": "deg",
+      "source": "default",
+      "trust": 3,
+      "basis": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
+    },
+    {
+      "key": "Q89",
+      "name": "手でつかむ所の太さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 38,
+      "unit": "mm"
+    },
+    {
+      "key": "Q90",
+      "name": "悪路の走行距離 (疲労)",
+      "value": 5000,
+      "unit": "km",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption (no public basis found)"
+    },
+    {
+      "key": "Q93",
+      "name": "乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked",
+      "value": 450,
+      "unit": "mm"
+    },
+    {
+      "key": "Q94",
+      "name": "乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 300,
+      "unit": "mm"
+    },
+    {
+      "key": "Q95",
+      "name": "乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface",
+      "value": 985.2,
+      "unit": "mm"
+    },
+    {
+      "key": "Q96",
+      "name": "乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 1250,
+      "unit": "mm"
+    },
+    {
+      "key": "Q97",
+      "name": "地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)",
+      "value": 550,
+      "unit": "mm"
+    }
+  ],
+  "domain_picks": [
+    {
+      "domain": "strength",
+      "shown_name": "強度信頼性",
+      "reason": "要件のファイルが試験 R7 操作部の荷重 (手と足の力を枠まで伝え、動かない)・R8 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える)・R1 静的強度・R4 横転時の保護枠 (ROPS) を選んだ"
+    },
+    {
+      "domain": "assembly",
+      "shown_name": "組み立て",
+      "reason": "要件のファイルが試験 H1 干渉・H3 体格・手が届くか を選んだ"
+    }
+  ],
+  "load_cases": [
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-interference",
+      "title": "止まっているときの干渉 (座席を滑りの両端に動かしたときも)",
+      "criterion": {
+        "quantity": "interference_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: no two bodies overlap at rest, the driver's seat at either end of its slide too, beyond what the rule allows (welded joints, bolted mounts up to MOUNT_MM, the rest TOUCH_MM: k4_geometry.model.allowance)"
+      },
+      "modules": [
+        "package"
+      ]
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-motion",
+      "title": "車輪が上下しハンドルを切ったときの干渉",
+      "criterion": {
+        "quantity": "motion_interference_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: through the wheels' travel and the steering's range nothing of a corner meets what it is not mounted to"
+      },
+      "modules": [
+        "suspension",
+        "steering",
+        "package"
+      ]
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-joints",
+      "title": "つながりが形の上で触れているか (つながる点 at_mm が両方の形の上、つながりの無い部品が無い)",
+      "criterion": {
+        "quantity": "joint_gap_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 mm: the program management's figure; wires and hoses not counted), says where (at_mm) on both shapes within 2 mm, and no part is joined to nothing"
+      },
+      "modules": [
+        "frame",
+        "suspension",
+        "steering",
+        "occupant",
+        "powertrain",
+        "body"
+      ]
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-envelope",
+      "title": "部品と部材がモジュールの空間に収まっているか",
+      "criterion": {
+        "quantity": "envelope_outside_count",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "H1: every part and member inside its module's space (design.modules envelope, given by the packager)"
+      },
+      "modules": [
+        "package"
+      ]
+    },
+    {
+      "test_id": "H1",
+      "domain": "assembly",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "tolerance_rel": 0.05,
+      "load_case_id": "H1-steer",
+      "title": "ハンドルを止めまで切れるか (前輪がフレームに当たらない)",
+      "criterion": {
+        "quantity": "free_steer_angle",
+        "op": ">=",
+        "limit": {
+          "value": 30.0,
+          "unit": "deg"
+        },
+        "basis": "H1: the front wheels turn to the design's max_steer_angle (30 deg) without touching the frame"
+      },
+      "modules": [
+        "steering",
+        "suspension",
+        "package"
+      ]
+    },
+    {
+      "load_case_id": "H3-body-size",
+      "test_id": "H3",
+      "domain": "assembly",
+      "title": "体格の範囲の両端で座れるか・膝と頭が当たらないか (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q31",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "knee_room",
+        "op": ">=",
+        "limit": {
+          "value": 0.0,
+          "unit": "mm"
+        },
+        "basis": "H3: the knees of a young male 95th percentile (AIST J5 buttock-knee length) clear the part ahead"
+      },
+      "tolerance_rel": 0.05,
+      "modules": [
+        "occupant",
+        "steering",
+        "package"
+      ]
+    },
+    {
+      "load_case_id": "H3-knee-angle",
+      "test_id": "H3",
+      "domain": "assembly",
+      "title": "運転者のペダルを踏む膝の角度が、体格の両端で楽な範囲にあるか (2 人 + 荷)",
+      "params": {
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q31",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "knee_angle_room",
+        "op": ">=",
+        "limit": {
+          "value": 0.0,
+          "unit": "mm"
+        },
+        "basis": "H3: the pedal knee of a female 5th and a male 95th percentile, each at their best place in the seat's slide, within 99-138 deg (Porter and Gyi 1998, read in Schmidt et al. 2014; the original not checked)"
+      },
+      "tolerance_rel": 0.05,
+      "modules": [
+        "occupant",
+        "steering",
+        "package"
+      ]
+    },
+    {
+      "load_case_id": "R7-hand-300N",
+      "test_id": "R7",
+      "domain": "strength",
+      "title": "手の操作部 (steering_wheel) の握る点を 300 N で前後・上下・回す向きに押す (2 人 + 荷)",
+      "params": {
+        "load_kind": "hand",
+        "hand_force": {
+          "value": 300.0,
+          "unit": "N"
+        },
+        "foot_force": {
+          "value": 500.0,
+          "unit": "N"
+        },
+        "hand_part": "steering_wheel",
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q66",
+        "Q67",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "grip_deflection",
+        "op": "<=",
+        "limit": {
+          "value": 5.0,
+          "unit": "mm"
+        },
+        "basis": "Q67: the grip moves at most 5 mm under Q66 300 N in each of the three directions; a grip on a part joined to nothing has no deflection and shows as free_parts",
+        "requirement_keys": [
+          "Q67"
+        ]
+      },
+      "tolerance_rel": 0.3,
+      "modules": [
+        "steering",
+        "frame"
+      ]
+    },
+    {
+      "load_case_id": "R7-foot-500N",
+      "test_id": "R7",
+      "domain": "strength",
+      "title": "足の操作部 (pedal_accel, pedal_brake) の踏む面を 500 N で踏む (2 人 + 荷)",
+      "params": {
+        "load_kind": "foot",
+        "hand_force": {
+          "value": 300.0,
+          "unit": "N"
+        },
+        "foot_force": {
+          "value": 500.0,
+          "unit": "N"
+        },
+        "foot_parts": "pedal_accel,pedal_brake",
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q68",
+        "Q69",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "pedal_deflection",
+        "op": "<=",
+        "limit": {
+          "value": 5.0,
+          "unit": "mm"
+        },
+        "basis": "Q69: each pedal's face moves at most 5 mm under Q68 500 N; a pedal joined to nothing has no deflection and shows as free_parts",
+        "requirement_keys": [
+          "Q69"
+        ]
+      },
+      "tolerance_rel": 0.3,
+      "modules": [
+        "steering",
+        "frame"
+      ]
+    },
+    {
+      "test_id": "R8",
+      "domain": "strength",
+      "tolerance_rel": 0.05,
+      "load_case_id": "R8-free",
+      "title": "どの部品も、枠まで繋がっている (横 0.7 g・前後 0.9 g・下 1 g を全部の部品と乗員に、2 人 + 荷)",
+      "params": {
+        "load_kind": "inertia",
+        "accel_vertical": {
+          "value": 1.0,
+          "unit": "g"
+        },
+        "accel_lateral": {
+          "value": 0.7,
+          "unit": "g"
+        },
+        "accel_longitudinal": {
+          "value": 0.9,
+          "unit": "g"
+        },
+        "occupant_mass": {
+          "value": 76.6,
+          "unit": "kg"
+        },
+        "occupant_force_lateral": {
+          "value": 525.8325729999999,
+          "unit": "N"
+        },
+        "occupant_force_longitudinal": {
+          "value": 676.0704509999999,
+          "unit": "N"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q75",
+        "Q76",
+        "Q33",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "free_parts",
+        "op": "<=",
+        "limit": {
+          "value": 0.0,
+          "unit": "1"
+        },
+        "basis": "every part with carried_by reaches a frame member through parts its box touches (load_path: a part joined to nothing is a free rigid body, found by fe.precheck.rigid_body_check)",
+        "requirement_keys": [
+          "Q75",
+          "Q76"
+        ]
+      },
+      "modules": [
+        "frame",
+        "occupant",
+        "steering"
+      ]
+    },
+    {
+      "test_id": "R8",
+      "domain": "strength",
+      "tolerance_rel": 0.3,
+      "load_case_id": "R8-stress",
+      "title": "部品と乗員の重さと加速度 (横 0.7 g・前後 0.9 g・下 1 g) で、各部材の応力をその材料の許しと比べる (2 人 + 荷)",
+      "params": {
+        "load_kind": "inertia",
+        "accel_vertical": {
+          "value": 1.0,
+          "unit": "g"
+        },
+        "accel_lateral": {
+          "value": 0.7,
+          "unit": "g"
+        },
+        "accel_longitudinal": {
+          "value": 0.9,
+          "unit": "g"
+        },
+        "occupant_mass": {
+          "value": 76.6,
+          "unit": "kg"
+        },
+        "occupant_force_lateral": {
+          "value": 525.8325729999999,
+          "unit": "N"
+        },
+        "occupant_force_longitudinal": {
+          "value": 676.0704509999999,
+          "unit": "N"
+        },
+        "loading": "two_cargo",
+        "safety_factor": {
+          "value": 1.5,
+          "unit": "1"
+        }
+      },
+      "requirement_keys": [
+        "Q75",
+        "Q76",
+        "Q33",
+        "Q61",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "max_utilisation",
+        "op": "<=",
+        "limit": {
+          "value": 1.0,
+          "unit": "1"
+        },
+        "basis": "each member's von Mises stress over its own material's yield / Q61 1.5 (largest of these ratios): JIS G 3445 STKM13A (carbon steel tube for machine structural purposes) 215 MPa (3 members, not checked); JIS G 3466 STKR400 (square and rectangular steel tube for general structure) 245 MPa (51 members, not checked). Tolerance 0.3: as R7, HIRAKU's choice for the gap between a hand calculation and the frame's analysis (no source)",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "modules": [
+        "frame",
+        "occupant",
+        "steering"
+      ]
+    },
+    {
+      "test_id": "R8",
+      "domain": "strength",
+      "tolerance_rel": 0.3,
+      "load_case_id": "R8-push-725N",
+      "title": "乗員の肩・腰 (点 R) を 725 N で外へ押す (2 人 + 荷)",
+      "params": {
+        "load_kind": "push",
+        "push_force": {
+          "value": 725.0,
+          "unit": "N"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q77",
+        "Q78",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "occupant_push_deflection",
+        "op": "<=",
+        "limit": {
+          "value": 25.0,
+          "unit": "mm"
+        },
+        "basis": "Q78: what stands outboard of point R moves less than 25 mm under Q77 725 N (the elastic movement taken as the bound of the permanent one); a point with nothing outboard counts in occupant_push_open. Nets on quick-release clips and doors are not counted (a barrier the occupant puts in place is taken off before the shoulder and hip tests: the US CPSC's proposed rule for ROVs, 79 FR 68964, sec. 1422.5(c)(4), read by the intake department). Tolerance 0.3: as R7, HIRAKU's choice for the gap between a hand calculation and the frame's analysis (no source)",
+        "requirement_keys": [
+          "Q78"
+        ]
+      },
+      "modules": [
+        "occupant",
+        "frame"
+      ]
+    },
+    {
+      "load_case_id": "P1-step100",
+      "test_id": "P1",
+      "domain": "powertrain",
+      "title": "段差 100 mm を2 人 + 荷で越える",
+      "params": {
+        "step_height": {
+          "value": 100.0,
+          "unit": "mm"
+        },
+        "speed": {
+          "value": 10.0,
+          "unit": "km/h"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q15",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "tolerance_rel": 0.1,
+      "modules": [
+        "powertrain"
+      ],
+      "feeds": [
+        "R1-step100"
+      ]
+    },
+    {
+      "load_case_id": "R1-step100",
+      "test_id": "R1",
+      "domain": "strength",
+      "title": "段差 100 mm を2 人 + 荷で越えるときの前輪の力をフレームに",
+      "params": {
+        "step_height": {
+          "value": 100.0,
+          "unit": "mm"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q15",
+        "Q30",
+        "Q33",
+        "Q40",
+        "Q61"
+      ],
+      "criterion": {
+        "quantity": "max_stress",
+        "op": "<=",
+        "limit": {
+          "value": 163.33333333333334,
+          "unit": "MPa"
+        },
+        "basis": "yield 245 MPa (JIS G 3466 STKR400 (square and rectangular steel tube for general structure), not checked) / Q61 1.5",
+        "requirement_keys": [
+          "Q61"
+        ]
+      },
+      "tolerance_rel": 0.15,
+      "modules": [
+        "frame",
+        "steering"
+      ]
+    },
+    {
+      "load_case_id": "R4-rops",
+      "test_id": "R4",
+      "domain": "strength",
+      "title": "横転の保護枠: 横から 875 J・後ろから 700 J を吸わせ、上から 10 kN で押す (OECD Code 4 の静的試験を借りる、2 人 + 荷)",
+      "params": {
+        "side_energy": {
+          "value": 875.0,
+          "unit": "J"
+        },
+        "rear_energy": {
+          "value": 700.0,
+          "unit": "J"
+        },
+        "crush_force": {
+          "value": 10000.0,
+          "unit": "N"
+        },
+        "rear_fraction": {
+          "value": 0.16666666666666666,
+          "unit": "1"
+        },
+        "loading": "two_cargo"
+      },
+      "requirement_keys": [
+        "Q64",
+        "Q31",
+        "Q30",
+        "Q33",
+        "Q40"
+      ],
+      "criterion": {
+        "quantity": "rops_occupant_clearance",
+        "op": ">=",
+        "limit": {
+          "value": 0.0,
+          "unit": "mm"
+        },
+        "basis": "R4 (OECD Code 4, 3.5.2.2, 3.5.3.2 and 3.8, borrowed): the roll bar, deflected by each loading, must not enter the occupants' space; the smallest gap over the loadings between the roll bar's members and the space of k4_geometry.occupant_spaces (the occupant box, widened to AIST D2 and raised to AIST I1 of a young male 95th percentile) stays at 0 mm or more. The code's second condition (the clearance zone left unprotected under the ground plane) is not in this quantity",
+        "requirement_keys": [
+          "Q64",
+          "Q31"
+        ]
+      },
+      "tolerance_rel": 0.25,
+      "modules": [
+        "occupant",
+        "frame"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "agent_id": "lead",
+      "role": "lead",
+      "prop": "binder"
+    },
+    {
+      "agent_id": "designer.frame",
+      "role": "designer",
+      "module": "frame",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "designer.suspension",
+      "role": "designer",
+      "module": "suspension",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "designer.steering",
+      "role": "designer",
+      "module": "steering",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "designer.occupant",
+      "role": "designer",
+      "module": "occupant",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "designer.powertrain",
+      "role": "designer",
+      "module": "powertrain",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "designer.body",
+      "role": "designer",
+      "module": "body",
+      "prop": "pencil"
+    },
+    {
+      "agent_id": "packager",
+      "role": "packager",
+      "prop": "spanner"
+    },
+    {
+      "agent_id": "cae.strength",
+      "role": "cae",
+      "domain": "strength",
+      "prop": "i_beam"
+    }
+  ],
+  "speed_class": "vehicle",
+  "driver": "claude_code_plugin",
+  "status": "stopped",
+  "cost_usd": null,
+  "design_versions": [
+    1,
+    2
+  ],
+  "stop_reason": "まとめ役が、判定の付いていない分野を残して止まりました (止めるのを 3 回断ったあと、上限で終了)。R4-rops、R7-hand-300N は、食い違いの原因を記録して判定なしで終えたので、この実行では判定していません"
+}

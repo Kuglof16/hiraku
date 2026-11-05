@@ -11,17 +11,19 @@ from ..record import Recorder
 from ..scenario import new_sim
 from ..units import G0
 from .base import MU, TIPPED_ROLL, K2Tool, P, Pair, _box, _half_width, _min_load, _ramp_gravity, _res, _side_ids
+from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
-# Section lengths (m) and lane offset of a double lane change in the layout of
-# ISO 3888-1: 15 / 30 / 25 / 25 / 15 / 15 m, offset 3.5 m. NOT checked against the
-# ISO 3888-1 text; the course here is a smooth centre line, not the cone gates.
+# Section lengths (m) and lane offset of a double lane change: 15 / 30 / 25 / 25 / 15 / 15 m, offset
+# 3.5 m. Source: ISO 3888-1:2018 Table 1 (the public sample,
+# https://cdn.standards.iteh.ai/samples/67973/daa839ed4aca420788d9b4a51cd6cc95/ISO-3888-1-2018.pdf),
+# checked against it on 2026-11-03 (README, the table of values checked). The course here is a smooth
+# centre line, not the cone gates.
 DLC_SECTIONS = (15.0, 30.0, 25.0, 25.0, 15.0, 15.0)
 DLC_OFFSET = 3.5
 
 
-# Lane widths of sections 1, 3 and 5 for a vehicle of width W (m): 1.1 W + 0.25,
-# 1.2 W + 0.25, 1.3 W + 0.25. Source: ISO 3888-1:2018 (the sample pages), as the plan
-# quotes them; not checked in this repository.
+# Lane widths of sections 1, 3 and 5 for a vehicle of width W (m, without mirrors): 1.1 W + 0.25,
+# 1.2 W + 0.25, 1.3 W + 0.25. The same source and check.
 DLC_LANE_WIDTH = ((1.1, 0.25), (1.2, 0.25), (1.3, 0.25))
 
 
@@ -92,6 +94,7 @@ def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz
         start_rolling(sim, speed)
     drv = PathDriver(sim, y_ref)
     ctrl = SpeedController(sim)
+    log = LoadLog(sim) if rec is not None and any(has_mounts(c) for c in veh.corners) else None
     st = {"min_load": {c.id: math.inf for c in veh.corners}, "two_lift_time": 0.0, "any_lift": False,
           "max_ay": 0.0, "max_roll": 0.0, "max_err": 0.0, "max_steer": 0.0, "min_side": {"left": math.inf, "right": math.inf},
           "mean_side": {"left": 0.0, "right": 0.0}, "az": [], "tip_angle": tip}
@@ -102,6 +105,8 @@ def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz
         delta = steer_fn(sim) if steer_fn is not None else drv.steer()
         drive, brake = ctrl.torques(sim, speed)
         sim.step(controls(sim, delta, drive, brake))
+        if log is not None:
+            log.tick()
         o = sim.out
         nt = o["ntot"]
         for i, c in enumerate(veh.corners):
@@ -150,7 +155,21 @@ def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz
     st["finished"] = not tipped and sim.design_origin()[0] >= x_end
     st["recorder"] = rec
     st["sim"] = sim
+    st["states"] = log.states if log is not None else []
     return st
+
+
+def add_mounts(veh, st: dict, out: dict) -> None:
+    """With path_run's load states (K&C corners, recorded), the mount forces into a tool's output:
+    the mount_* series (every SPARSE_EVERY_S and at each mount's largest force), the result
+    mount_force_peak and the joint vectors at its instant."""
+    if not st["states"]:
+        return
+    out["series"] += mount_series(veh, st["states"], [])
+    top = mount_peak(out["series"])
+    if top is not None:
+        out["results"].append(top[0])
+        out["vectors"] += mount_vectors(veh, state_at(st["states"], top[1]))
 
 
 class LaneChangeTool(K2Tool):
@@ -164,16 +183,19 @@ class LaneChangeTool(K2Tool):
     once), max_lateral_accel (m/s^2, body axis), max_lateral_accel_g (g, the same),
     max_roll (deg), max_path_error (m, CG from the centre line), max_steer (deg); and
     max_speed_no_lift (km/h, the highest speed with every wheel on the ground, to about
-    0.6 km/h).
+    0.6 km/h). With K&C corners the run at `speed` also gives the force the body receives at
+    each suspension mount (add_mounts): the mount_* series, mount_force_peak (N, where
+    '<support>.<mount> at t <s> s') and the joint vectors at that instant.
     """
 
     name = "lane_change"
     title = "ダブルレーンチェンジ (K2 + 運転のモデル)"
     domain = "handling"
     tests = ["S3"]
+    # speed 40 km/h: the default when a load case has none (the catalog's load cases give it); a test value
     params = (P("speed", "km/h", 40.0, "held speed"),
               MU,
-              P("offset", "m", DLC_OFFSET, "sideways shift of the lane (ISO 3888-1 layout, not checked)"),
+              P("offset", "m", DLC_OFFSET, "sideways shift of the lane (ISO 3888-1:2018 Table 1, checked 2026-11-03)"),
               P("direction", None, "left", "the first lane change goes toward", choices=("left", "right")),
               P("find_limit", None, True, "also search max_speed_no_lift"),
               P("v_min", "km/h", 10.0, "lowest speed of the search"),
@@ -214,13 +236,21 @@ class LaneChangeTool(K2Tool):
         tf, tr = front[0].mf.trail(front[0].static_load), rear[0].mf.trail(rear[0].static_load)
         big_l = a + b
         expected = delta / (big_l / v + veh.m_total * v / (big_l + tr - tf) * ((b + tr) / cf - (a - tf) / cr))
-        out.append(_check(f"steady cornering 10 m/s, steer 1.5 deg, rigid, cornering stiffness proportional to axle load, "
-                          f"pneumatic trail {tf * 1000:.1f} mm front / {tr * 1000:.1f} mm rear",
+        deg = math.degrees(delta)
+        out.append(_check(f"steady cornering {v:g} m/s, steer {deg:g} deg, rigid, cornering stiffness proportional to "
+                          f"axle load, pneumatic trail {tf * 1000:.1f} mm front / {tr * 1000:.1f} mm rear",
                           "yaw_rate", expected, rates[0], "rad/s", 2e-2,
                           "bicycle model with the side forces acting the trail behind the axles: r = delta / (L / v "
-                          "+ m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))"))
+                          "+ m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))",
+                          case_ja=f"サスペンションの無い車が {v:g} m/s、ハンドル {deg:g}° で回り続けるときの向きの変わる速さ "
+                                  f"(タイヤの曲がる硬さは車軸の荷重に比例。横の力が掛かる点は接地点の前輪 "
+                                  f"{tf * 1000:.1f} mm・後輪 {tr * 1000:.1f} mm 後ろ)",
+                          source_ja="前後 2 輪の自転車モデル (横の力は車軸の少し後ろに掛かる): "
+                                    "r = δ / (L / v + m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))"))
         out.append(_check("steady cornering left + right (bit for bit)", "yaw_rate_mirror_error", 0.0, rates[0] + rates[1],
-                          "rad/s", 0.0, "symmetry", passed=rates[0] == -rates[1]))
+                          "rad/s", 0.0, "symmetry", passed=rates[0] == -rates[1],
+                          case_ja="左に回るときと右に回るときの、向きの変わる速さの和",
+                          source_ja="左右で 1 ビットも違わない (形が左右対称なので)"))
         return out
 
     def _lift(self, veh, speed, y_ref, x_end) -> bool:
@@ -229,8 +259,9 @@ class LaneChangeTool(K2Tool):
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)
-        notes = list(veh.assumptions) + ["double lane change course in the ISO 3888-1 layout (15/30/25/25/15/15 m, "
-                                         "offset 3.5 m); not checked against the ISO text; a centre line, not cone gates"]
+        notes = list(veh.assumptions) + ["double lane change course of ISO 3888-1:2018 Table 1 (15/30/25/25/15/15 m, "
+                                         "offset 3.5 m; checked against the public sample on 2026-11-03); a centre "
+                                         "line, not cone gates"]
         if not any(c.steer for c in veh.corners):
             return {"error": "no support has actuation.steer; a lane change needs a steered wheel"}
         speed = self.q(lp, "speed", "m/s")
@@ -265,6 +296,11 @@ class LaneChangeTool(K2Tool):
                 res.append(_res("max_speed_no_lift", lo * 3.6, "km/h"))
         rec = st["recorder"]
         scene = dlc_scene(2.0 * _half_width(veh), sign, offset=self.q(lp, "offset", "m"))
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-                "assumptions": notes + ["the cones and gates are drawn around the centre line; the driver model "
-                                        "follows the line and the gates are not judged"]}
+        out = {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+               "assumptions": notes + ["the cones and gates are drawn around the centre line; the driver model "
+                                       "follows the line and the gates are not judged"]}
+        add_mounts(veh, st, out)
+        # each side's least load (S3 judges the lighter of the two: both sides are judged places)
+        out["places"] = [{"where": side, "quantity": "min_side_load", "value": st["min_side"][side], "unit": "N",
+                          "judged": True} for side in ("left", "right") if math.isfinite(st["min_side"][side])]
+        return out

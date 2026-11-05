@@ -22,8 +22,9 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
-from hiraku.tools.judge import (OP_JA, STAND_IN_BELOW, failing_end, init_judgements, judged_quantity, make_verdict,
-                                prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
+from hiraku.tools.judge import (HOT_SPOT, OP_JA, PATH_CHECKED, PATH_FORMULA, STAND_IN_BELOW, failing_end,
+                                hot_spot_verdict, init_judgements, unpredicted_over,
+                                judged_quantity, make_verdict, path_check, prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
                                 update_judgement)
 from hiraku.tools.summary import design_summary
 
@@ -63,7 +64,32 @@ def _compact_prediction(p: Record) -> Record:
 
 def _compact_analysis(a: Record) -> Record:
     keys = ("analysis_id", "tool", "design_version", "load_case_id", "prediction_ids", "status", "error", "results")
-    return {k: a[k] for k in keys if k in a}
+    out = {k: a[k] for k in keys if k in a}
+    results = out.get("results") or []
+    if len(results) > RESULTS_SHOWN_MAX:
+        out["results"] = _extreme_results(results)
+        out["results_note"] = (f"結果 {len(results)} 件のうち、量ごとに大きい方と小さい方の {RESULTS_EACH_END} 件ずつ "
+                               f"({len(out['results'])} 件)。照合 (compare) は全部の結果を読む")
+    return out
+
+
+# get_context's records list an analysis's results whole up to this many; beyond it (a shell's per-place results,
+# run 094333: a designer's answer of 80 000 characters went over Claude Code's limit) each quantity's extremes
+RESULTS_SHOWN_MAX = 24
+RESULTS_EACH_END = 3
+
+
+def _extreme_results(results: list[Record]) -> list[Record]:
+    """Of each quantity's results, the RESULTS_EACH_END largest and smallest values, in their first order. A
+    per-place result <q>.<place> counts as q (its places are what is trimmed)."""
+    by: dict[str, list[int]] = {}
+    for i, r in enumerate(results):
+        by.setdefault(r["quantity"].partition(".")[0], []).append(i)
+    keep: set[int] = set()
+    for idx in by.values():
+        ranked = sorted(idx, key=lambda i: results[i]["value"])
+        keep.update(ranked[:RESULTS_EACH_END] + ranked[-RESULTS_EACH_END:])
+    return [results[i] for i in sorted(keep)]
 
 
 # get_context answers with the small parts unless asked for more: every call goes into the
@@ -353,19 +379,53 @@ def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
     values = {x["name"]: x["value"] for x in design_variables(ctx) or []}
     offered = (design_choices(ctx) or {}).get("choices") or {}
 
-    def one(m: Record) -> Record:
+    def one(m: Record, whole: bool) -> Record:
         out: Record = {"module_id": m["module_id"], "owner": m["owner"],
                        "variables": {k: values.get(k) for k in m.get("variables") or []}}
         if m.get("choices"):
             out["choices"] = {k: offered.get(k) for k in m["choices"]}
-        out["envelope"] = m.get("envelope") or []
+        out["envelope"] = (m.get("envelope") or []) if whole else _envelope_outline(m.get("envelope") or [])
         if m.get("interfaces"):
-            out["interfaces"] = m["interfaces"]
+            out["interfaces"] = _interface_groups(m["interfaces"])
         return out
 
-    shown = [mods[mine]] if mine in mods else list(mods.values())
-    return {"design_version": ctx.version, "how": MODULES_HOW, "modules": [one(m) for m in shown],
-            "pending": [_proposal_line(c) for c in ctx.store.pending_proposals()]}
+    whole = mine in mods
+    shown = [mods[mine]] if whole else list(mods.values())
+    out = {"design_version": ctx.version, "how": MODULES_HOW, "modules": [one(m, whole) for m in shown],
+           "pending": [_proposal_line(c) for c in ctx.store.pending_proposals()]}
+    if not whole:
+        out["shown"] = MODULES_OUTLINE_SAID
+    return out
+
+
+# Every module at once (the packager, the lead) is shown in outline: run 094333's packager asked for it six times
+# and each answer (62 000 characters, the boxes and the 115 interfaces) was over Claude Code's limit, saved to a file
+# the role could not read
+MODULES_OUTLINE_SAID = ("全部のモジュールを見るときは、空間 (envelope) を箱の数と全体の範囲 (bounds) で、取付点 (interfaces) を "
+                        "モジュールの組と付け方ごとの節の並びで示す。build_version の regrow は箱を書かずに空間を作り直す")
+
+
+def _envelope_outline(boxes: list[Record]) -> Record:
+    """A module's envelope as the number of boxes and the axis-aligned bounds of all of them (mm)."""
+    if not boxes:
+        return {"boxes": 0}
+    lo = [min(b["center_mm"][i] - b["size_mm"][i] / 2.0 for b in boxes) for i in range(3)]
+    hi = [max(b["center_mm"][i] + b["size_mm"][i] / 2.0 for b in boxes) for i in range(3)]
+    return {"boxes": len(boxes), "bounds_mm": {"min": [round(x, 1) for x in lo], "max": [round(x, 1) for x in hi]}}
+
+
+def _interface_groups(interfaces: list[Record]) -> list[Record]:
+    """Interfaces grouped by the pair of modules and how they join: each group's ids with their node or point
+    ("if-001@RS1"), in the order given."""
+    groups: dict[tuple, Record] = {}
+    for i in interfaces:
+        key = (tuple(i["between"]), i.get("via"))
+        g = groups.setdefault(key, {"between": list(i["between"]), **({"via": i["via"]} if i.get("via") else {}),
+                                    "at": []})
+        where = i.get("node") or ("(" + ", ".join(f"{round(x, 1):g}" for x in i["point_mm"]) + ")"
+                                  if i.get("point_mm") else "")
+        g["at"].append(f"{i['id']}@{where}" if where else i["id"])
+    return list(groups.values())
 
 
 PAIRS_HOW = ("predicts: ツールのどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
@@ -446,8 +506,9 @@ def design_kind(ctx: RunContext) -> str | None:
     gen_of, kinds = getattr(ctx.designgen, "generator_of", None), getattr(ctx.designgen, "ARCHETYPES", None)
     if not ctx.version or gen_of is None or not kinds:
         return None
+    shared = getattr(ctx.store, "design_shared", None)  # read once while the file holds (run 283a934: 8 980 reads)
     try:
-        gen = gen_of(ctx.store.design())
+        gen = gen_of(shared()[1] if shared else ctx.store.design())
     except ValueError:  # DesignGenError: its variables match no generator
         return None
     return next((k for k, m in kinds.items() if m is gen), None)
@@ -544,6 +605,14 @@ def _formula(ctx: RunContext, formula_id: str) -> Record:
     raise ToolError(f"式 {formula_id!r} はありません。{hint}")
 
 
+OTHER_OUTPUTS = "式のほかの出力 (予測にしていないもの): "
+MAX_OTHER_OUTPUTS = 16
+
+
+def _short_number(x: float) -> str:
+    return f"{x:.4g}"
+
+
 def record_prediction(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Evaluate a K0 formula with the given inputs and record the result as a prediction."""
     _check_input("record_prediction", args)
@@ -573,6 +642,13 @@ def record_prediction(ctx: RunContext, args: dict[str, Any], agent: str | None =
 
     assumptions = list(args["assumptions"])
     assumptions += [a for a in formula.get("assumptions", []) if a not in assumptions]
+    rest = [f"{k} {_short_number(q.get('value'))} {q.get('unit', '')}".rstrip() for k, q in outputs.items()
+            if k != name and isinstance(q, dict) and isinstance(q.get("value"), (int, float))]
+    if rest:
+        # run 160725: the R4 clearance formula's travel left (t_side -212, -94, -44 mm on versions 3-5) was in its
+        # outputs only; the designers read the clearance, which stays at contact, and spent two rounds on it
+        assumptions.append(f"{OTHER_OUTPUTS}{'、'.join(rest[:MAX_OTHER_OUTPUTS])}"
+                           + (f" ほか {len(rest) - MAX_OTHER_OUTPUTS} 個" if len(rest) > MAX_OTHER_OUTPUTS else ""))
     pred = {
         "prediction_id": ctx.store.next_id("prediction"),
         "design_version": ctx.version,
@@ -715,6 +791,11 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if ver is not None:
         ver["verdict_id"] = ctx.store.next_id("verdict")
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=lc["domain"])
+    # docs/contract.md CAE の役目: a place the hand calculation did not predict, over the limit, makes the load case
+    # red (one verdict per place)
+    for row in unpredicted_over(ctx, out, lc):
+        ctx.store.add_record("verdict", hot_spot_verdict(ctx.store.next_id("verdict"), out, lc, row),
+                             design_version=v, agent=agent, domain=lc["domain"])
     if out["status"] == "ok" and lc["domain"] in ctx.picked:  # a result beyond the criterion holds the tile back
         update_judgement(ctx, lc["domain"], v)
     return out
@@ -755,7 +836,7 @@ def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> N
     """A later match for the same load case and quantity resolves earlier causes (resolved_by is
     always a match; a safe-side verdict settles them for the tile instead, judge.unresolved_mismatches)."""
     for cause in ctx.store.records("cause"):
-        if cause["resolved"]:
+        if cause["resolved"] or not cause.get("comparison_id"):  # a hot_spot cause is settled by a version, not a match
             continue
         old = ctx.store.get("comparison", cause["comparison_id"])
         old_pred = ctx.prediction(old["prediction_id"]) if old else None
@@ -773,7 +854,7 @@ def revised_after_cause(ctx: RunContext, pred: Record, ana: Record) -> bool:
         return False
     on_it = {c["comparison_id"] for c in ctx.store.records("comparison")
              if c["analysis_id"] == ana["analysis_id"] and c["status"] == "mismatch"}
-    causes = {c["cause_id"] for c in ctx.store.records("cause") if c["comparison_id"] in on_it}
+    causes = {c["cause_id"] for c in ctx.store.records("cause") if c.get("comparison_id") in on_it}
     if not causes:
         return False
     first_cause, pred_seq = None, None
@@ -912,13 +993,10 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     return out
 
 
-def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
-                     pred_quantity: str | None = None) -> None:
-    """Refuse safe_side unless the load case has a criterion on this quantity and the
-    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
-    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
-    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
-    criterion's quantity."""
+def _check_on_criterion(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None, pred_quantity: str | None,
+                        flag: str) -> Record:
+    """The load case's criterion, refusing flag (safe_side, tool_decides: both make a verdict from this comparison)
+    unless the comparison is of the quantity the criterion judges (see _check_safe_side)."""
     crit = (lc or {}).get("criterion")
     judged = judged_quantity(ctx, tool, crit["quantity"]) if crit else None
     on_criterion = bool(crit) and (cmp["quantity"] == judged
@@ -926,9 +1004,30 @@ def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str 
     if not crit or not on_criterion or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
         what = f"{crit['quantity']} ({crit['limit']['unit']})" if crit else "なし"
         raise ToolError(
-            f"safe_side は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
-            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。safe_side を外して原因と直し方だけ書いてください"
+            f"{flag} は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
+            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。{flag} を外して原因と直し方だけ書いてください"
         )
+    return crit
+
+
+def _on_criterion(ctx: RunContext, cmp: Record, lc: Record, pred: Record | None) -> bool:
+    """True when _check_on_criterion passes for the comparison (it is of the quantity the load case is judged on)."""
+    ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
+    try:
+        _check_on_criterion(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None, "tool_decides")
+    except ToolError:
+        return False
+    return True
+
+
+def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
+                     pred_quantity: str | None = None) -> None:
+    """Refuse safe_side unless the load case has a criterion on this quantity and the
+    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
+    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
+    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
+    criterion's quantity."""
+    crit = _check_on_criterion(ctx, cmp, lc, tool, pred_quantity, "safe_side")
     if prediction_is_unfavourable(cmp, crit["op"]):
         return
     side = "大きい" if unfavourable_side(crit["op"]) == "larger" else "小さい"
@@ -941,6 +1040,38 @@ def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str 
     )
 
 
+def _cause_of_hot_spot(ctx: RunContext, args: dict[str, Any], agent: str | None) -> Record:
+    """record_cause for a hot_spot verdict (docs/contract.md CAE の役目): the cause of a red the tool found where
+    the hand calculation predicted nothing. No comparison, so no safe_side, ends_case or tool_decides (the red
+    stands until a revised version keeps that place within its limit); the cause carries the verdict and its place."""
+    hit = ctx.store.find("verdict", args["verdict_id"])
+    if hit is None:
+        raise ToolError(f"合否 {args['verdict_id']!r} はありません")
+    v, ver = hit
+    if ver.get("basis") != HOT_SPOT:
+        raise ToolError(f"合否 {ver['verdict_id']} は basis {ver.get('basis') or 'match'} です。verdict_id で指せるのは、"
+                        "手計算が予測していない場所の赤 (basis hot_spot) だけです。食い違いの原因は comparison_id で書いてください")
+    flags = [k for k in ("safe_side", "ends_case", "tool_decides") if args.get(k)]
+    if flags:
+        raise ToolError(f"{'・'.join(flags)} は、照合のある食い違いにだけ付けます。手計算が予測していない場所の赤は、"
+                        "直した版でその場所が許しの内になるまで赤のままです。印を外して、原因と直し方だけを書いてください")
+    if args.get("where") and args["where"] != ver["where"]:
+        raise ToolError(f"合否 {ver['verdict_id']} の場所は {ver['where']} です (where {args['where']!r} と違います)")
+    done = next((c for c in ctx.store.records("cause") if c.get("verdict_id") == ver["verdict_id"]), None)
+    if done:
+        raise ToolError(f"合否 {ver['verdict_id']} の原因は {done['cause_id']} にもう書かれています。書いた原因のまま進めてください")
+    if not args["cause"].strip() or not args["fix"].strip():
+        raise ToolError("cause と fix の両方に中身を書いてください")
+    lc = ctx.load_case(ver["load_case_id"])
+    cause = {"cause_id": ctx.store.next_id("cause"), "verdict_id": ver["verdict_id"], "where": ver["where"],
+             "cause": args["cause"].strip(), "fix": args["fix"].strip(), "resolved": False}
+    who = agent or ctx.owner(lc["load_case_id"])
+    ctx.store.add_record("cause", cause, design_version=v, agent=who, domain=lc["domain"])
+    if lc["domain"] in ctx.picked:
+        update_judgement(ctx, lc["domain"], v)
+    return {"cause": cause, "verdict": None}
+
+
 def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Write the cause of a mismatch and how to fix it (this unblocks the domain).
 
@@ -951,6 +1082,11 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     in this run reaches the quantity: the load case ends not judged (not with safe_side).
     """
     _check_input("record_cause", args)
+    if bool(args.get("comparison_id")) == bool(args.get("verdict_id")):
+        raise ToolError("comparison_id (食い違った照合) か verdict_id (手計算が予測していない場所の赤、basis hot_spot) の、"
+                        "どちらか一方を付けてください")
+    if args.get("verdict_id"):
+        return _cause_of_hot_spot(ctx, args, agent)
     hit = ctx.store.find("comparison", args["comparison_id"])
     if hit is None:
         raise ToolError(f"照合 {args['comparison_id']!r} はありません")
@@ -959,20 +1095,42 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         raise ToolError(f"照合 {cmp['comparison_id']} は一致しているので、原因を書く必要はありません")
     existing = ctx.causes_by_comparison().get(cmp["comparison_id"])
     if existing:
-        raise ToolError(f"照合 {cmp['comparison_id']} の原因は {existing['cause_id']} にもう書かれています")
+        raise ToolError(f"照合 {cmp['comparison_id']} の原因は {existing['cause_id']} にもう書かれています。原因の記録は"
+                        "書き換えられないので、書いた原因のまま進めてください (直した式で予測し直して照合すれば、"
+                        "あとの照合が前の食い違いを置き換えます)")
     if not args["cause"].strip() or not args["fix"].strip():
         raise ToolError("cause と fix の両方に中身を書いてください")
     pred = ctx.prediction(cmp["prediction_id"])
     lc = ctx.load_case(pred["load_case_id"]) if pred else None
     safe = bool(args.get("safe_side"))
     ends = bool(args.get("ends_case"))
+    decides = bool(args.get("tool_decides"))
     if safe and ends:
         raise ToolError("safe_side と ends_case は一緒に付けられません (safe_side は予測で合否を出し、ends_case は合否を出さずに終えます)")
+    if decides and (safe or ends):
+        raise ToolError("tool_decides は safe_side とも ends_case とも一緒に付けられません (tool_decides はツールの値で合否を"
+                        "出し、safe_side は予測の値で合否を出し、ends_case は合否を出さずに終えます)")
     if safe:
         if not (args.get("safe_side_reason") or "").strip():
             raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
         ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
         _check_safe_side(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None)
+    if decides:  # docs/contract.md 手計算の役目: the hand calculation does not reach the value, the path was checked
+        if not (args.get("tool_decides_reason") or "").strip():
+            raise ToolError("tool_decides を付けるときは、手計算が値に届かない理由を tool_decides_reason に書いてください")
+        ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
+        _check_on_criterion(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None, "tool_decides")
+        gap = path_check(ctx, lc, v, ana)
+        if gap:
+            raise ToolError(f"tool_decides は、力の道を手計算で確かめてあるときだけ付けられます。いまは{gap}。"
+                            f"{PATH_FORMULA} で部品から部材までの道を予測して記録し、道をたどるツール (load_path) で解析して"
+                            "つながりを確かめてから、もう一度書いてください")
+    if ends and lc is not None and lc.get("criterion") and _on_criterion(ctx, cmp, lc, pred) \
+            and path_check(ctx, lc, v) is None:
+        # only where tool_decides could be put instead (a comparison of the judged quantity), so the two refusals
+        # never point at each other
+        raise ToolError(f"{lc['load_case_id']} は、この版で力の道を手計算で確かめてあります。手計算が値に届かないときは、"
+                        "ends_case ではなく tool_decides と tool_decides_reason を付けてください (ツールの値で合否を出します)")
     domain = pred["domain"] if pred else None
     agent = agent or (ctx.owner(pred["load_case_id"]) if pred else "lead")
     cause = {
@@ -986,12 +1144,15 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         cause.update(safe_side=True, safe_side_reason=args["safe_side_reason"].strip())
     if ends:
         cause["ends_case"] = True  # the load case ends not judged (rules.ended_cases: HK4 and HK5 do not wait for it)
+    if decides:
+        cause.update(tool_decides=True, tool_decides_reason=args["tool_decides_reason"].strip())
     ctx.store.add_record("cause", cause, design_version=v, agent=agent, domain=domain)
     ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]), design_version=v, agent=agent,
                          domain=domain)
     out: Record = {"cause": cause, "verdict": None}
-    if safe:
-        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"])
+    if safe or decides:
+        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"],
+                           basis=PATH_CHECKED if decides else None)
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=domain)
         out["verdict"] = ver
     if domain in ctx.picked:
@@ -1254,7 +1415,29 @@ def _regenerate(ctx: RunContext, design: Record, merged: Record, tool: str) -> R
     try:
         return dict(ctx.designgen.regenerate(copy.deepcopy(design), merged))
     except ValueError as e:
-        raise ToolError(f"この変数では設計を組めません: {e}。値を変えて {tool} を呼び直してください") from None
+        raise ToolError(f"この変数では設計を組めません: {e}。{_who_changes(design, str(e), tool)}") from None
+
+
+def _who_changes(design: Record, said: str, tool: str) -> str:
+    """The next step after the generator refused: on a design with modules, who changes the variables its words
+    name (run 094333: the packager was told to call build_version again over an occupant variable it cannot
+    change, and spent its rounds on it)."""
+    mods = {m["module_id"]: m for m in design.get("modules") or []}
+    named = [(k, mid) for mid, m in mods.items() for k in list(m.get("variables") or []) + list(m.get("choices") or [])
+             if re.search(rf"\b{re.escape(k)}\b", said)]
+    if not named:
+        return f"値を変えて {tool} を呼び直してください"
+    by: dict[str, list[str]] = {}
+    for k, mid in named:
+        by.setdefault(mid, []).append(k)
+    steps = []
+    for mid, keys in by.items():
+        if mid == "package":
+            steps.append(f"{'・'.join(keys)} はレイアウトの変数: パッケージ役が build_version の changes で変える")
+        else:
+            steps.append(f"{'・'.join(keys)} は{contract.MODULE_NAMES_JA.get(mid, mid)}の変数: designer.{mid} が "
+                         f"revise_design (module={mid}) で出し直す (前の提案は置き換わる。パッケージ役はまとめ役に返す)")
+    return "次にすること: " + "。".join(steps) + f"。そのあと {tool} を呼び直す"
 
 
 def _moved(ctx: RunContext, spec: dict, revisable: list[str], new: Record, changes: Record) -> tuple[list[str], dict]:
@@ -1342,6 +1525,34 @@ def _proposal_line(c: Record) -> Record:
     return out
 
 
+def _proposal_builds(ctx: RunContext, design: Record, module: str, changes: Record, choices: Record) -> None:
+    """Refuse a module proposal the generator cannot build, to the designer who made it (run 160725: an occupant
+    proposal of rollbar_width 1200 mm was refused only at build_version, and went packager -> lead -> designer
+    -> packager before version 3 was made). Tried on the version with this proposal alone, then with the round's
+    other pending proposals too (another module's change may be what makes it fit); refused only when neither
+    builds. A design the generator builds is not kept: build_version builds the round's proposals again."""
+    if ctx.designgen is None or not (changes or choices):
+        return
+    others: Record = {}
+    for c in ctx.store.pending_proposals(ctx.version):
+        if c["module_id"] != module:
+            others.update({**(c.get("changes") or {}), **(c.get("choices") or {})})
+    said = None
+    for merged in ([{**changes, **choices}] + ([{**others, **changes, **choices}] if others else [])):
+        try:
+            ctx.designgen.regenerate(copy.deepcopy(design), merged)
+            return
+        except ValueError as e:
+            said = said or str(e)
+    mine = set((rules.design_modules(ctx) or {}).get(module, {}).get("variables") or [])
+    named_others = [k for m in design.get("modules") or [] if m["module_id"] != module
+                    for k in m.get("variables") or [] if re.search(rf"\b{re.escape(k)}\b", said)]
+    nxt = (_who_changes(design, said, "build_version") if named_others and not any(
+        re.search(rf"\b{re.escape(k)}\b", said) for k in mine)
+        else "文の示す値に直して、revise_design を呼び直してください")
+    raise ToolError(f"この提案では設計を組めません (提案は記録していません): {said}。{nxt}")
+
+
 def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """revise_design on a design with modules (HK6): a proposal of one module's designer (designer.<module>)
     that changes only that module's variables and choices (design.modules[].variables and choices), checked
@@ -1365,6 +1576,7 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     design = ctx.store.design()
     choices = dict(args.get("choices") or {})
     _, _, changes = _checked_changes(ctx, design, args.get("changes") or {}, choices)
+    _proposal_builds(ctx, design, module, changes, choices)
     if args.get("load_case_ids"):
         # the contract's module_change.load_case_ids: "The red load cases this change answers" (red on version v)
         from hiraku.tools.judge import latest_verdicts
@@ -1387,9 +1599,11 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     errs = contract.errors("module_change", change)
     if errs:
         raise ToolError("提案が契約の形に合いません: " + "; ".join(errs))
+    before_ids = [c["change_id"] for c in ctx.store.pending_proposals(v) if c["module_id"] == module]
     ctx.store.propose_change(change, design_version=v, agent=agent,
                              text=f"{contract.MODULE_NAMES_JA.get(module, module)}の提案 {change['change_id']}: {reason}")
     pending = ctx.store.pending_proposals(v)
+    replaced = [c for c in ctx.store.superseded_change_ids(v) if c in before_ids]
     return {
         "change_id": change["change_id"],
         "module": module,
@@ -1397,8 +1611,11 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
         **({"changes": changes} if changes else {}),
         **({"choices": choices} if choices else {}),
         "pending": [c["change_id"] for c in pending],
-        "note": (f"提案として記録しました (版はまだ作っていません)。パッケージ役が build_version で、"
-                 f"版 {v} への提案を全部まとめて版 {v + 1} を作ります"),
+        **({"replaced": replaced} if replaced else {}),
+        "note": (f"提案として記録しました (版はまだ作っていません)。"
+                 + (f"同じモジュールの前の提案 {'、'.join(replaced)} は、この提案に置き換わりました (1 回の直しで、"
+                    "モジュールの提案は 1 つ)。" if replaced else "")
+                 + f"パッケージ役が build_version で、版 {v} への提案を全部まとめて版 {v + 1} を作ります"),
     }
 
 
@@ -1594,8 +1811,13 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
             by_module.setdefault(c["module_id"], []).append(c["change_id"])
         lines = [f"{contract.MODULE_NAMES_JA.get(m, m)} ({m}) の {pid} が空間から {far:.1f} mm はみ出す"
                  + (f" (提案 {', '.join(by_module[m])})" if m in by_module else "") for m, pid, far in breaches]
-        raise ToolError("部品がモジュールの空間 (envelope) からはみ出すので、版を作れません: " + "; ".join(lines)
-                        + "。その設計役に収まる値で出し直してもらうか、regrow (モジュールの並び) か envelopes で空間を配り直してください")
+        # run 160725: an occupant proposal moved the frame's rail pieces; the packager found regrow frame on its
+        # second call. A module with no proposal of its own moved because of another's: name it
+        carried = [m for m in dict.fromkeys(m for m, _, _ in breaches) if m not in by_module and m not in regrow]
+        hint = (f"。{'・'.join(carried)} には自分の提案が無く、ほかのモジュールの変更で部品が動いたので、"
+                f"regrow に {'・'.join(carried)} を足して呼び直すのが近道です (空間を動いた部品に合わせる)" if carried else "")
+        raise ToolError("部品がモジュールの空間 (envelope) からはみ出すので、版を作れません: " + "; ".join(lines) + hint
+                        + "。ほかには、その設計役に収まる値で出し直してもらうか、envelopes で空間を配り直してください")
     used = [copy.deepcopy(c) for c in pending]
     if own_moved:
         used.append({"change_id": ctx.store.next_id("module_change"), "module_id": "package", "agent_id": "packager",

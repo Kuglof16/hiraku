@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SLOW = unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "K2 runs and the shell: set HIRAKU_SLOW_TESTS=1")
 PRED = [{"prediction_id": "pred-0001"}]
 COARSE = {"element_size": {"value": 40.0, "unit": "mm"}}
+QUICK = dict(COARSE, hot_spot_facets={"value": 8, "unit": "1"})  # a quick model: names and fields, not stresses
 
 
 def results(rec):
@@ -158,12 +159,18 @@ class MeshFlowTest(unittest.TestCase):
         self.assertLess(times[1], 0.5 * times[0])
         self.assertIn(ft._digest(mesh), ft._PREPARED)
 
+
+@SLOW
+class ForeignMeshTest(unittest.TestCase):
+    """A mesh another mesher made is not drawn on (its own class, so it runs beside MeshFlowTest; on the quick
+    model, hot_spot_facets 8: it checks the fields and the effect, not the stresses)."""
+
     def test_another_mesh_is_not_drawn_on(self):
         tool = FrameTubes()
         d = sf.build()
         other = {"mesh_id": "mesh-0001", "design_version": 1, "mesher": "frame_mesh", "element_type": "shell",
                  "nodes_mm": [], "elements": [], "element_member": []}
-        out = tool.run(d, {"load_case_id": "a", "params": {}}, PRED, dict(COARSE, mesh=other))
+        out = tool.run(d, {"load_case_id": "a", "params": {}}, PRED, dict(QUICK, mesh=other))
         self.assertEqual(out["status"], "ok", out.get("error"))
         self.assertFalse(any(f.get("mesh_id") for f in out["fields"]))
         self.assertTrue(any("not by frame_tubes" in e["name"] for e in out["effects"]))

@@ -206,6 +206,7 @@ export class EventFeed {
   }
 
   async readOnce() {
+    // (fetchEvents throws "<status> <path>" with .status on a failed request, as main's read did)
     const body = await fetchEvents(this.runId, this.offset);
     const moved = body.next_offset !== this.offset || !!body.reset;
     this.offset = body.next_offset;

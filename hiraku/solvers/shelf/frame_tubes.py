@@ -37,13 +37,21 @@ from ..fe import tubes
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, mesh_of,
                    on_board, param_list, param_text, param_value, result, run_param)
-from .frame_static import STEP_HEIGHT, STEP_SUPPORTS, add_frames, front_supports, g_factor, upstream_mount_series
+from .frame_static import (PATH_FORMULA, PATH_PREDICTS, STEP_HEIGHT, STEP_SUPPORTS, add_frames, front_supports,
+                           g_factor, lost_load_outputs, upstream_mount_series)
 
 STANDARD_GRAVITY = 9.80665
 ELEMENT_SIZE_RANGE_MM = (5.0, 40.0)  # HIRAKU's choice: past 40 mm a 34 mm tube has the fewest facets (8)
 ELEMENT_SIZE = Param("element_size", "mm", f"target edge of the shell elements; {ELEMENT_SIZE_RANGE_MM[0]:g} to "
                      f"{ELEMENT_SIZE_RANGE_MM[1]:g} mm (the weld strips beside the tie lines are one wall thick "
                      "whatever the size)", default=tubes.ELEMENT_SIZE_MM)
+HOT_SPOT_FACETS_RANGE = (tubes.MIN_ROUND_FACETS, 96)
+HOT_SPOT_FACETS = Param("hot_spot_facets", "1", "the least facet count of a round tube, which the rows round each "
+                        f"joint are spaced at too; a multiple of 4, {HOT_SPOT_FACETS_RANGE[0]} to "
+                        f"{HOT_SPOT_FACETS_RANGE[1]}. Leave it at {tubes.HOT_SPOT_MIN_FACETS} (the hot spots are read "
+                        "at that count): fewer only for a quick model whose values are not judged (a test that needs "
+                        "the results' names); the hot spots then come out lower by an amount not measured",
+                        default=float(tubes.HOT_SPOT_MIN_FACETS))
 LOAD_SOURCE = Param("load_source", None, "'k0': K0 rigid-body statics carried through the suspension to its mounts; "
                     "'k2': K2's load state on this design (standing still, or at the step's lift-off with "
                     "step_height). An upstream analysis with K2's mount forces is used first in either case",
@@ -70,6 +78,9 @@ HOT_SPOT_ASSUMPTION = (
     "frame_shell (k1_shell.stress.hot_spots) と同じ決まり。出典: A. F. Hobbacher, Recommendations for Fatigue Design of "
     "Welded Joints and Components, 2nd ed., Springer 2016 (このリポジトリでは確かめていない)。疲労のための構造応力を"
     "静的な強さの判定に使う (局所の降伏を許さない、安全側の扱い)")
+QUICK_FACET_ASSUMPTION = (
+    "丸い管を {n} 角の多角形にした速い模型 (実行の入力 hot_spot_facets)。ホットスポット応力は {n0} 角の読みより低く出る。"
+    "どれだけ低いかは測っていないので、この値で判定しない")
 FACET_ASSUMPTION = (
     "丸い管は、要素の大きさにかかわらず {n} 角 (以上) の多角形の管にした。鞍と冠のホットスポットは角の数で決まり、丸い T "
     "(42.7×2.3 に 34×2.3、要素 14 mm) で測ると、{n} 角の値は 96 角より最大 6.6 % 低い (90° の枝の側。90° の相手の管の側 "
@@ -153,14 +164,15 @@ class FrameTubes(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R1"]
-    formulas = ["frame_static.bending_stress", "mass_props.static_wheel_loads"]
+    formulas = ["frame_static.bending_stress", "mass_props.static_wheel_loads", PATH_FORMULA]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS, LOAD_SOURCE)
-    run_params = (ELEMENT_SIZE,)
+    run_params = (ELEMENT_SIZE, HOT_SPOT_FACETS)
     predicts = (
         Predicts("max_hot_spot_stress", "frame_static.bending_stress", "max_stress",
                  "M / Z of the member with the largest beam moment at a joint (a rect tube's formula; a round tube's "
                  "Z = pi (D^4 - d^4) / (32 D)); the shell adds the joint's stress concentration, which the formula "
                  "does not"),
+        PATH_PREDICTS,
     )
     upstream = ("an analysis with K2's mount forces as joint vectors at every suspension mount (step_climb_dynamic): "
                 "those forces load the frame; with its mount force series, the frame is solved at each instant")
@@ -252,6 +264,11 @@ class FrameTubes(BuiltinTool):
         lo, hi = ELEMENT_SIZE_RANGE_MM
         if not lo <= size <= hi:
             raise LoadCaseError(f"run parameter element_size must be {lo:g} to {hi:g} mm, got {size:g} mm")
+        nf = run_param(params, HOT_SPOT_FACETS)
+        flo, fhi = HOT_SPOT_FACETS_RANGE
+        if not (flo <= nf <= fhi and nf == int(nf) and int(nf) % 4 == 0):
+            raise LoadCaseError(f"run parameter hot_spot_facets must be a multiple of 4 from {flo} to {fhi}, got {nf:g}")
+        facets = None if int(nf) == tubes.HOT_SPOT_MIN_FACETS else int(nf)
         step = param_value(load_case, "step_height", "mm")
         sup = None
         if step is not None:
@@ -277,8 +294,19 @@ class FrameTubes(BuiltinTool):
                 src = SOURCES[source].format(step=step or 0.0, sup=",".join(sup or []))
                 assumptions.append(K0_ASSUMPTION)
                 t_s = None
-            mesh, prepared, why = self._mesh_to_solve_on(design, params, size)
-            r = tubes.analyse_loads(design, {"case": loads}, size, prepared=prepared or _prepared_for(design, size))
+            if facets is None:
+                mesh, prepared, why = self._mesh_to_solve_on(design, params, size)
+                prepared = prepared or _prepared_for(design, size)
+            else:  # the version's mesh is at the default facet count: solved on a mesh of its own, not drawn on
+                given, why = mesh_of(design, params)
+                if given is not None and given.get("mesher") != self.name:
+                    why = (f"mesh {given.get('mesh_id')} was made by {given.get('mesher') or 'frame_mesh'}, not by "
+                           f"{self.name}; the stresses are given per member")
+                elif given is not None:
+                    why = (f"solved on a quick mesh with {facets} facets per round tube (hot_spot_facets), not drawn "
+                           f"on {given.get('mesh_id')}")
+                mesh, prepared = None, _prepared_for(design, size, facets)
+            r = tubes.analyse_loads(design, {"case": loads}, size, prepared=prepared)
         except (tubes.TubeMeshError, ValueError) as e:
             raise LoadCaseError(str(e)) from None
         c = r["cases"]["case"]
@@ -286,7 +314,8 @@ class FrameTubes(BuiltinTool):
             raise LoadCaseError("the shell model was not solved: " + "; ".join(c["reasons"]))
         out = outputs(design, r, loads, src)
         out["assumptions"] = (assumptions + out.get("assumptions", [])
-                              + [FACET_ASSUMPTION.format(n=tubes.HOT_SPOT_MIN_FACETS)])
+                              + [FACET_ASSUMPTION.format(n=tubes.HOT_SPOT_MIN_FACETS) if facets is None
+                                 else QUICK_FACET_ASSUMPTION.format(n=facets, n0=tubes.HOT_SPOT_MIN_FACETS)])
         if mesh is not None:
             out["fields"] += tube_mesh_fields(r, mesh)
         if why:
@@ -316,13 +345,15 @@ def _digest(mesh: Record) -> str:
 _BY_DESIGN: "OrderedDict[str, dict]" = OrderedDict()  # design content + element size -> tubes.prepare() record
 
 
-def _prepared_for(design: Record, size: float) -> dict:
+def _prepared_for(design: Record, size: float, facets: int | None = None) -> dict:
     """tubes.prepare(design, size), kept in this process by the design's content and the size (CACHE_SIZE of
-    them): a version's load cases, and a run without the version's mesh, do not mesh the frame again."""
-    key = tubes._content_key(design, float(size))
+    them): a version's load cases, and a run without the version's mesh, do not mesh the frame again. facets:
+    tubes.prepare's hot_spot_facets (None: the default)."""
+    key = tubes._content_key(design, float(size)) if facets is None else tubes._content_key(design, float(size),
+                                                                                              int(facets))
     p = _BY_DESIGN.get(key)
     if p is None:
-        p = tubes.prepare(design, size)
+        p = tubes.prepare(design, size, hot_spot_facets=facets)
         _BY_DESIGN[key] = p
     _BY_DESIGN.move_to_end(key)
     while len(_BY_DESIGN) > CACHE_SIZE:
@@ -415,6 +446,9 @@ def outputs(design: Record, r: dict, loads: list, src: str) -> Record:
                        "per_member": {m: round(v, 2) for m, v in hot_member.items()}})
     vectors = [{"kind": "joint", "at": l.where, "origin_mm": _vec(l.point_mm, 3), "vector_N": _vec(l.force_N, 3)}
                for l in loads if l.kind == "mount"]
+    lost, said = lost_load_outputs()
+    results.append(lost)
+    effects.append(said)
     return {"results": results, "fields": fields, "vectors": vectors, "effects": effects, "assumptions": assumptions}
 
 

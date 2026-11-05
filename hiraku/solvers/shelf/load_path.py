@@ -586,24 +586,27 @@ def _closest_in(obb: OBB, x: np.ndarray) -> np.ndarray:
 def member_slices(design: Record) -> dict[str, list[tuple[float, k4.Body]]]:
     """Each member cut into slices of at most SLICE_MM: [(t of the slice's middle, its body)]."""
     bs = k4.bodies(design)
-    out = {}
-    for mid, mp in member_props(design).items():
-        whole = bs[f"member:{mid}"].obb
-        w, h = 2.0 * whole.half[2], 2.0 * whole.half[1]
-        n = max(1, int(math.ceil(mp["length"] / SLICE_MM)))
-        a, b = mp["a"], mp["b"]
-        out[mid] = [((k + 0.5) / n, k4.Body(f"member:{mid}", from_member(a + (b - a) * k / n, a + (b - a) * (k + 1) / n,
-                                                                        w, h, mid), "member"))
-                    for k in range(n)]
-    return out
+    return {mid: _slices_of(bs, mid, mp) for mid, mp in member_props(design).items()}
+
+
+def _slices_of(bs: dict, mid: str, mp: Record) -> list[tuple[float, k4.Body]]:
+    """One member's slices (member_slices)."""
+    whole = bs[f"member:{mid}"].obb
+    w, h = 2.0 * whole.half[2], 2.0 * whole.half[1]
+    n = max(1, int(math.ceil(mp["length"] / SLICE_MM)))
+    a, b = mp["a"], mp["b"]
+    return [((k + 0.5) / n, k4.Body(f"member:{mid}", from_member(a + (b - a) * k / n, a + (b - a) * (k + 1) / n,
+                                                                 w, h, mid), "member"))
+            for k in range(n)]
 
 
 def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
     """Every contact between a modelled part and a member or another modelled part."""
     bs = k4.bodies(design)
     parts = [f"part:{p['id']}" for p in modelled_parts(design)]
-    slices = member_slices(design)
     props = member_props(design)
+    # a member's slices are made when a part first comes near the whole member (the same slices member_slices gives)
+    slices: dict[str, list[tuple[float, k4.Body]] | None] = dict.fromkeys(props)
     pinned: dict[str, set[str]] = {}
     for p in design.get("parts", []):
         for c in p.get("connects_to", []):
@@ -618,19 +621,24 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
         return True
 
     out: list[Contact] = []
+    rad = {k: _radius(b.obb) for k, b in bs.items()}  # each body's radius once (the tests below compare many pairs)
+    slice_rad: dict[str, list[float]] = {}
     for i, pk in enumerate(parts):
         P = bs[pk]
-        rp = _radius(P.obb)
+        rp = rad[pk]
         for mid, sl in slices.items():
             if not bears(pk, f"member:{mid}"):
                 continue
             M = bs[f"member:{mid}"]
-            if np.linalg.norm(P.obb.center - M.obb.center) > rp + _radius(M.obb) + touch:
+            if np.linalg.norm(P.obb.center - M.obb.center) > rp + rad[f"member:{mid}"] + touch:
                 continue
             if k4.shape_overlap(P, M) < -touch:
                 continue
-            hit = [(t, s) for t, s in sl if np.linalg.norm(P.obb.center - s.obb.center) <= rp + _radius(s.obb) + touch
-                   and k4.shape_overlap(P, s) >= -touch]
+            if sl is None:
+                sl = slices[mid] = _slices_of(bs, mid, props[mid])
+                slice_rad[mid] = [_radius(s.obb) for _, s in sl]
+            hit = [(t, s) for (t, s), rs in zip(sl, slice_rad[mid])
+                   if np.linalg.norm(P.obb.center - s.obb.center) <= rp + rs + touch and k4.shape_overlap(P, s) >= -touch]
             if not hit:
                 continue
             t = float(np.mean([t for t, _ in hit]))
@@ -644,7 +652,7 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
             if not bears(pk, qk):
                 continue
             Q = bs[qk]
-            if np.linalg.norm(P.obb.center - Q.obb.center) > rp + _radius(Q.obb) + touch:
+            if np.linalg.norm(P.obb.center - Q.obb.center) > rp + rad[qk] + touch:
                 continue
             if k4.shape_overlap(P, Q) < -touch:
                 continue
@@ -1289,8 +1297,8 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
                                     + ", ".join(unsupported), "value": float(len(unsupported)), "unit": "1"})
     else:
         unsupported = []
-    if unsupported:
-        results.append(result("unsupported_load", len(unsupported), "1", _where(unsupported)))
+    # given at 0 too: the analysis then counts as one that looked for the path (docs/contract.md 手計算の役目)
+    results.append(result("unsupported_load", len(unsupported), "1", _where(unsupported) if unsupported else None))
     loaded = [pid for pid in dict.fromkeys(lost) if pid in free]  # the free parts this load case loads, named first
     results.insert(0, result("free_parts", len(free), "1", _where(loaded + [p for p in free if p not in loaded])))
     for pid in dict.fromkeys(lost):
@@ -1704,15 +1712,18 @@ class LoadPath(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R7", "R8"]
-    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.free_parts"]
+    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.grip_bound", "load_path.free_parts"]
     load_case_params = (LOAD_KIND, HAND_FORCE, FOOT_FORCE, ACCEL_V, ACCEL_LON, ACCEL_LAT, OCC_MASS, OCC_LAT, OCC_LON,
                         PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
     run_params = (TOUCH, NET_PRESTRESS)
     # Every load kind gives free_parts. grip_deflection (load_kind hand) and pedal_deflection (foot) are predicted
-    # by load_path.control_deflection (output delta) with the inputs of hiraku.catalog.builders.load_path.
-    # control_inputs; they are not listed here because a load case of the default kind (inertia) has neither.
+    # by load_path.grip_bound (output delta) with the inputs of hiraku.catalog.builders.load_path (grip_bound_inputs,
+    # pedal_bound_inputs); they are not listed here because a load case of the default kind (inertia) has neither.
     predicts = (
         Predicts("free_parts", "load_path.free_parts", "n", "the contacts followed from the members (a graph search)"),
+        Predicts("unsupported_load", "load_path.free_parts", "n",
+                 "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the same search over the parts "
+                 "the load case loads"),
     )
 
     def known_answers(self) -> list[Record]:

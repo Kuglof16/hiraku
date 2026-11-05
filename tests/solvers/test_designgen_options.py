@@ -228,7 +228,7 @@ class LoadPathTest(unittest.TestCase):
             got = results(rec).get(lc["criterion"]["quantity"])
             self.assertTrue(judged(lc, rec), f"{k}: {got}")
             self.assertEqual(results(rec)["free_parts"]["value"], 0.0)
-            self.assertNotIn("unsupported_load", results(rec))
+            self.assertEqual(results(rec)["unsupported_load"]["value"], 0.0)
         contract.validate("design", self.d)
 
     def test_bulkhead_stands_move_more_than_q69(self):

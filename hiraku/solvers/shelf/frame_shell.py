@@ -67,7 +67,9 @@ from . import scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
                    param_value, result, run_param)
 from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, add_frames,
-                           front_supports, g_factor, member_effect, member_results, upstream_ground_forces,
+                           PATH_FORMULA, PATH_PREDICTS, front_supports, g_factor, lost_load_outputs, member_effect,
+                           member_results,
+                           upstream_ground_forces,
                            upstream_mount_series)
 
 WALL_INPUTS = ("inputs from hiraku.solvers.k0_handcalc.frame_inputs.joint_wall_inputs(design, loading=..., "
@@ -362,6 +364,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     if res.get("shell_parts"):
         assumptions.append(MASS_ASSUMPTION)
     assumptions.append(solver_assumption(res.get("linear_solver", "superlu")))
+    lost, said = lost_load_outputs()
+    results.append(lost)
+    effects.append(said)
     out = {"results": results, "fields": fields, "vectors": vectors, "effects": effects}
     if assumptions:
         out["assumptions"] = assumptions
@@ -830,6 +835,7 @@ class FrameShell(BuiltinTool):
         "frame_static.rail_bending",
         "frame_static.bending_stress",
         "mass_props.static_wheel_loads",
+        PATH_FORMULA,
     ]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
     run_params = (ELEMENT_SIZE, MESH_CONVERGENCE)
@@ -843,6 +849,7 @@ class FrameShell(BuiltinTool):
                  STEP_BENDING + "; the shell includes the stress concentration at the joints, which the formula does not"),
         Predicts("wheel_load_<support>", "mass_props.static_wheel_loads", "wheel_load_<support>",
                  "at rest only (no step_height, no upstream forces)"),
+        PATH_PREDICTS,
     )
     upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
                 "its ground forces load the frame instead of step_height")

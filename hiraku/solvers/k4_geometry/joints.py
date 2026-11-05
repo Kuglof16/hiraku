@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 
 from .model import Body, bodies, shape_overlap
+from .obb import from_box
 
 JOINT_GAP_MM = 2.0  # a joint touches when the gap is no more than this (the program management's figure)
 NOT_TOUCHING_VIA = ("wire", "hose", "strap")  # strap: a belt's webbing to its seat
@@ -100,6 +101,11 @@ def outside_envelopes(design: dict, bs: dict[str, Body] | None = None,
         best = np.inf
         for e in envelopes.get(m, []):
             ec, eh = np.asarray(e["center_mm"], float), np.asarray(e["size_mm"], float) / 2.0
+            if e.get("rpy_deg") and any(e["rpy_deg"]):  # a turned box: the corners in its own axes
+                box = from_box(e["center_mm"], e["size_mm"], e["rpy_deg"])
+                local = (c - box.center) @ box.axes.T
+                best = min(best, float(max(np.max(np.abs(local) - box.half), 0.0)))
+                continue
             best = min(best, float(max(np.max((ec - eh) - lo), np.max(hi - (ec + eh)), 0.0)))
         if best > ENVELOPE_TOL_MM:
             out.append((k, m, best))

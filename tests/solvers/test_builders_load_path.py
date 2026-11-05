@@ -174,8 +174,9 @@ class DemoV1Test(unittest.TestCase):
                 # the plan records this mismatch's cause and ends the step without a verdict (R7's grip: the tool's
                 # grip moves with the plated frame, which the hand calculation takes as rigid): smaller here
                 self.assertLess(pred[q], got[q]["value"], k)
-            elif q in pred and q in got and exp.get("quantity") == q and exp.get("safe_side"):
-                # the plan names this mismatch as safe side: the prediction must be the unfavourable value
+            elif q in pred and q in got and exp.get("quantity") == q and (exp.get("safe_side") or exp.get("tool_decides")):
+                # the plan names this mismatch as safe side, or as the tool's to decide on a bound (R7's grip): the
+                # prediction must be the unfavourable value
                 self.assertGreaterEqual(pred[q], got[q]["value"], f"{k}: {q} predicted {pred[q]}, got {got[q]['value']}")
             elif q in pred and q in got:
                 # as compare: a prediction of 0 divides by |analysed| (0 when both are 0; R8-free on the joined v1)

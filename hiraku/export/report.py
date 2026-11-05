@@ -44,11 +44,21 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
     for v in sorted(store.project.get("design_versions") or []):
         cmps = {c["comparison_id"]: c for c in store.records("comparison", v)}
         for c in store.records("cause", v):
+            if c.get("verdict_id"):  # a red the tool found where nothing was predicted (basis hot_spot)
+                ver = store.get("verdict", c["verdict_id"]) or {}
+                if not in_domains(store, ver.get("load_case_id"), domains):
+                    continue
+                rows.append([c["cause_id"], str(v), f"{c['verdict_id']} ({c.get('where', '')})", ver.get("load_case_id", ""),
+                             ver.get("quantity", ""), "予測していない場所", " ".join(c["cause"].split()),
+                             " ".join(c["fix"].split()), ""])
+                continue
             cmp = cmps.get(c["comparison_id"], {})
             pred = store.get("prediction", cmp.get("prediction_id", "")) or {}
             if not in_domains(store, pred.get("load_case_id"), domains):
                 continue
-            safe = (f"はい: {c.get('safe_side_reason', '')}" if c.get("safe_side") else "")
+            safe = (f"はい: {c.get('safe_side_reason', '')}" if c.get("safe_side")
+                    else f"ツールの値で判定 (道は手計算で確かめた): {c.get('tool_decides_reason', '')}" if c.get("tool_decides")
+                    else "")
             rows.append([c["cause_id"], str(v), c["comparison_id"], pred.get("load_case_id", ""), cmp.get("quantity", ""),
                          f"{cmp['diff_rel'] * 100:+.1f} %" if "diff_rel" in cmp else "", " ".join(c["cause"].split()),
                          " ".join(c["fix"].split()), safe])

@@ -424,6 +424,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 LEVEL_CHILD = "HIRAKU_TUBE_LEVEL_CHILD"  # set in a level's process: it never starts more of them
 
 
+class HotSpotFacetsTest(unittest.TestCase):
+    """frame_shells' hot_spot_facets: by default the mesh is the one it always was; fewer facets make a smaller
+    model that still has its weld strips (the hot spots are read); a count not a multiple of 4 is refused."""
+
+    def test_default_quick_and_refused(self):
+        # the round T of round_t_hot_spots at 90 deg (42.7 x 2.3 through tube, 34 x 2.3 branch)
+        d = design({"A": (-300, 0, 0), "O": (0, 0, 0), "B": (300, 0, 0), "C": (0, 250, 0)},
+                   [("h1", "A", "O", "h"), ("h2", "O", "B", "h"), ("br", "O", "C", "b")],
+                   {"h": round_sec(42.7, 2.3), "b": round_sec(34.0, 2.3)})
+        base = tubes.frame_shells(d, 10.0)
+        same = tubes.frame_shells(d, 10.0, hot_spot_facets=tubes.HOT_SPOT_MIN_FACETS)
+        np.testing.assert_array_equal(base.model.nodes, same.model.nodes)
+        quick = tubes.frame_shells(d, 10.0, hot_spot_facets=8)
+        self.assertTrue(quick.weld_strips)
+        self.assertLess(len(quick.model.nodes), len(base.model.nodes) / 2)
+        for bad in (6, 4, 10):
+            with self.assertRaises(ValueError):
+                tubes.frame_shells(d, 10.0, hot_spot_facets=bad)
+
+
 class ConvergenceLevelsGuardTest(unittest.TestCase):
     """The parallel levels cannot nest: inside a level's process, starting levels is refused at once."""
 
@@ -433,6 +453,55 @@ class ConvergenceLevelsGuardTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {LEVEL_CHILD: "1"}):
             with self.assertRaisesRegex(RuntimeError, "inside a tube_level process"):
                 convergence_levels((40.0,), 1)
+
+
+# Each level's peak (MB, tube_level.peak_memory_mb), measured one level at a time with one BLAS thread:
+# on the development PC (Windows peak working set, 2026-11-05 02:26, commit 86e05ac) and on the EC2 machine
+# (Linux peak resident size, 2026-11-05 10:55, commit e53f7d1). The larger of the two is taken.
+LEVEL_PEAK_MB = {40.0: (9608, 13371), 30.0: (10509, 11064), 20.0: (12365, 12998), 14.0: (14380, 15714)}
+LEVEL_PEAK_GB = {s: max(mb) / 1024.0 for s, mb in LEVEL_PEAK_MB.items()}  # GiB, as free_memory_gb
+KEEP_FREE_GB = 15.0  # memory left free for the rest of the machine while the levels run
+
+
+def convergence_jobs(sizes, free_gb: float, env: dict | None = None) -> int:
+    """How many levels to solve at once: HIRAKU_CONVERGENCE_JOBS when set; else the most levels whose peaks
+    (LEVEL_PEAK_GB, the heaviest together, as the finest start first) fit in free_gb - KEEP_FREE_GB; at least 1
+    (and 1 when the free memory is not known)."""
+    env = os.environ if env is None else env
+    if env.get("HIRAKU_CONVERGENCE_JOBS"):
+        return max(1, int(env["HIRAKU_CONVERGENCE_JOBS"]))
+    if not free_gb == free_gb:  # nan
+        return 1
+    budget = free_gb - KEEP_FREE_GB
+    peaks = sorted((LEVEL_PEAK_GB.get(float(s), max(LEVEL_PEAK_GB.values())) for s in sizes), reverse=True)
+    jobs, used = 0, 0.0
+    for p in peaks:
+        if used + p > budget + 1e-9:  # a sum that is the budget to rounding still fits
+            break
+        jobs, used = jobs + 1, used + p
+    return max(1, jobs)
+
+
+class ConvergenceJobsTest(unittest.TestCase):
+    """The levels side by side as many as the free memory holds with KEEP_FREE_GB left; the switch wins."""
+
+    def test_jobs_by_free_memory(self):
+        sizes = (40.0, 30.0, 20.0, 14.0)
+        heavy_first = sorted(LEVEL_PEAK_GB.values(), reverse=True)
+        self.assertEqual(convergence_jobs(sizes, 20.0, {}), 1)  # not even one fits: still one
+        for n in (1, 2, 3, 4):
+            just = KEEP_FREE_GB + sum(heavy_first[:n])
+            self.assertEqual(convergence_jobs(sizes, just, {}), n)  # the n heaviest just fit
+            if n < 4:
+                self.assertEqual(convergence_jobs(sizes, just + heavy_first[n] - 0.01, {}), n)  # one more does not
+        self.assertEqual(convergence_jobs(sizes, float("nan"), {}), 1)
+        self.assertEqual(convergence_jobs(sizes, 62.0, {"HIRAKU_CONVERGENCE_JOBS": "1"}), 1)
+        self.assertEqual(convergence_jobs(sizes, 20.0, {"HIRAKU_CONVERGENCE_JOBS": "3"}), 3)
+
+    def test_free_memory_is_read(self):
+        from tests.solvers.tube_level import free_memory_gb
+
+        self.assertGreater(free_memory_gb(), 0.0)
 
 
 def convergence_levels(sizes, jobs: int) -> list[dict]:
@@ -470,11 +539,14 @@ class SpaceFrameConvergenceTest(unittest.TestCase):
         # standing still D0 129.40 / 129.80 / 130.18 / 130.34, largest (RQ1) 132.17 / 132.46 / 132.64 / 132.74;
         # lift-off D0 97.62 / 97.87 / 98.08 / 98.11, largest (RQ3) 231.24 / 232.27 / 233.17 / 233.65 MPa.
         # The levels are solved side by side, each in a process of its own (tests/solvers/tube_level.py, one BLAS
-        # thread each), the finest first: HIRAKU_CONVERGENCE_JOBS at a time, 1 by default (one after another, the
-        # memory of one level) until the levels' peaks are measured; all four at once took about 25 GB within
-        # two minutes, and 2 beside a suite's other workers went under 15 GB free (2026-11-04).
-        jobs = int(os.environ.get("HIRAKU_CONVERGENCE_JOBS", "1"))
-        levels = convergence_levels((40.0, 30.0, 20.0, 14.0), jobs)
+        # thread each), the finest first: as many at a time as the free memory holds with 15 GB left
+        # (convergence_jobs, the levels' measured peaks), or HIRAKU_CONVERGENCE_JOBS when set.
+        from tests.solvers.tube_level import free_memory_gb
+
+        sizes = (40.0, 30.0, 20.0, 14.0)
+        jobs = convergence_jobs(sizes, free_memory_gb())
+        print(f"  {jobs} level(s) at a time")
+        levels = convergence_levels(sizes, jobs)
         series = {k: [lv["series"][k] for lv in levels] for k in ("D0 static", "max static", "D0 lift", "max lift")}
         print("  " + "; ".join(f"{lv['size']:g} mm {lv['seconds']:.0f} s, peak {lv['peak_mb']:.0f} MB" for lv in levels))
         print("  " + "; ".join(f"{k} {[round(v, 2) for v in vals]}" for k, vals in series.items()))

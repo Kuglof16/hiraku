@@ -37,8 +37,8 @@ Standard library only. Routes:
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
-opens the default run when the URL names none: the run given as default_run,
-else the newest saved run.
+opens on the run list when the URL names no run; the list recommends the
+default run (おすすめ): the run given as default_run, else the newest saved run.
 
 The screen draws only from events, so the server never interprets them beyond
 parsing JSON lines. A line still being written (no trailing newline) is left
@@ -50,6 +50,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import socket
 import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -371,7 +372,7 @@ def list_runs(runs_dir: Path, saved_dir: Path | None = None, default_run: str | 
     """Saved runs, then runs under runs_dir (both newest id first), then the contract sample.
 
     A run in both places is listed once, from runs_dir (the same id is the same run).
-    The default (what the screen opens when the URL names no run) is default_run when
+    The default (the run the run list recommends, おすすめ) is default_run when
     it is listed, else the newest saved run, else none.
     """
     local = _run_dirs(Path(runs_dir))
@@ -706,6 +707,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # On Windows SO_REUSEADDR (HTTPServer's default) lets a second socket bind a port another
+    # server already listens on, so a second HIRAKU would quietly share the port with an old one.
+    # There the port is bound exclusively instead: a port in use fails with OSError.
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
     def handle_error(self, request, client_address) -> None:
         # A page that closes while its request is answered is not an error of the server.
         if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
