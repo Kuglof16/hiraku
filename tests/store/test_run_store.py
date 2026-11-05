@@ -181,6 +181,43 @@ class RunStoreTest(unittest.TestCase):
         with self.assertRaises(ValueError):  # the record's own check still sees the large parts
             self.store.add_record("analysis", bad, design_version=1, agent="cae.strength", domain="strength")
 
+    def test_events_are_read_from_where_the_last_read_stopped(self):
+        """Run 283a934: events() read the whole events.jsonl on every call (213 calls, 251 s)."""
+        first = self.store.events()
+        self.assertEqual(first[-1]["kind"], "run.started")
+        with self.store.events_path.open("a", encoding="utf-8", newline="\n") as f:  # another process appends
+            f.write(json.dumps({**first[-1], "seq": 99, "kind": "agent.said"}) + "\n")
+            f.write('{"seq": 100, "kind": "agent.said"')  # a line still being written
+        got = self.store.events()
+        self.assertEqual([e["seq"] for e in got[-1:]], [99])
+        self.assertEqual(len(got), len(first) + 1)
+        with self.store.events_path.open("a", encoding="utf-8", newline="\n") as f:
+            f.write(', "t": 1.0}\n')
+        self.assertEqual(self.store.events()[-1]["seq"], 100)  # the line read once whole
+        self.store.events_path.write_text(json.dumps(first[0]) + "\n", encoding="utf-8")  # shorter: read again
+        self.assertEqual(len(self.store.events()), 1)
+
+    def test_a_listing_is_made_once_per_reading_stretch(self):
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        with self.store.reading():
+            one = self.store.records("prediction", 1)
+            path = layout.record_path(self.store.path, 1, "prediction", "pred-0002")
+            path.write_text(json.dumps(dict(pred, prediction_id="pred-0002")), encoding="utf-8")
+            self.assertEqual(self.store.records("prediction", 1), one)  # same stretch: the same listing
+        self.assertEqual(len(self.store.records("prediction", 1)), 2)  # outside: listed again
+
+    def test_a_mesh_is_validated_on_a_sample_of_its_long_arrays(self):
+        from hiraku.store.run_store import MESH_SAMPLE, _sampled
+
+        mesh = {"nodes_mm": [[0.0, 0.0, float(i)] for i in range(3 * MESH_SAMPLE)], "mesh_id": "mesh-0001"}
+        cut = _sampled(mesh)
+        self.assertEqual(len(cut["nodes_mm"]), 2 * MESH_SAMPLE)
+        self.assertEqual(cut["nodes_mm"][-1], mesh["nodes_mm"][-1])
+        self.assertEqual(_sampled({"nodes_mm": [[1.0, 2.0, 3.0]]}), {"nodes_mm": [[1.0, 2.0, 3.0]]})
+
     def test_invalid_record_is_not_written(self):
         self.store.write_design(example("design.json"))
         bad = example("prediction.json")
