@@ -13,6 +13,7 @@ from ...contract import loading
 from ...contract.protocols import DEFAULT_LOADING, LOADINGS
 from ..k0_handcalc import units
 from ..k0_handcalc.vehicle import DesignError
+from .hot_spots import mark_predicted
 
 Record = dict[str, Any]
 
@@ -330,6 +331,8 @@ class BuiltinTool(ABC):
                 rec["status"] = "failed"
                 rec["error"] = str(e)
                 rec["results"] = []
+        if rec.get("hot_spots"):  # predicted: from this run's predictions (hot_spots.mark_predicted)
+            mark_predicted(rec["hot_spots"], predictions, self)
         dropped = [r["quantity"] for r in rec["results"] if not math.isfinite(r["value"])]
         if dropped:  # JSON has no infinity; say what was left out instead
             rec["results"] = [r for r in rec["results"] if math.isfinite(r["value"])]

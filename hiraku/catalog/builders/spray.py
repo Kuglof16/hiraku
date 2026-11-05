@@ -20,6 +20,9 @@ from hiraku.catalog.loading import LOADING_JA
 # is 18 %. The count of lines: K0 has fewer things in the way than the tool, so it is never smaller; measured
 # (2026-11-04) on ladder_4w version 1 (37 against 37) and with fenders: wheel (0 against 0). 20 %.
 H6_TOL = 0.2
+# Q87, Q88: the requirements' values (data/requirements/offroad-4w*.yaml); their basis says 第178条 第2項 第1号 was
+# read by the intake department. Not in the README's table of values checked. REACH_DEG, ARC_STEP_DEG, LINES_ACROSS
+# and LINE_LENGTH_MM are k0_handcalc.spray_inputs' assumptions.
 KEY_NAMES = {"Q87": "泥や石を放す踏面の範囲 (前へ)", "Q88": "泥や石を放す踏面の範囲 (後ろへ)"}
 BORROWED = ("Q87 and Q88 are 道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 as the "
             "intake department read it: a public-road rule for other traffic, borrowed; applying it to the occupants "

@@ -96,6 +96,8 @@ VARIABLE_NAMES_JA = {
     "mount_seats": "座席とベルトの取付の金具", "mount_drive": "モーターと減速機の取付の金具",
     "wheel_radius": "タイヤの半径", "wheel_width": "タイヤの幅", "front_spring_rate": "前のばねの硬さ",
     "rear_spring_rate": "後ろのばねの硬さ", "suspension_travel": "車輪の上下の動く量",
+    "mount_plate_t": "サスペンションの取付の金具の板厚", "mount_bolt_d": "サスペンションの取付の金具のピンの径",
+    "mount_weld_leg": "サスペンションの取付の金具の溶接の脚長",
     "steering_column_angle": "コラムの傾き", "steering_wheel_height": "ハンドルの高さ (座面から)",
     "max_steer_angle": "ハンドルを切れる角度", "pedal_mount": "ペダルの台",
     "seat_height": "座面の高さ (床から)", "seat_slide": "座席の前後の滑りの量", "seat_depth": "座面の奥行き",

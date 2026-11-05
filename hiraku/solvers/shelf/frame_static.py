@@ -25,7 +25,7 @@ from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import analyze, build, stress_terms
 from ..k1_frame.model import COMBO
 from ..k1_frame.surface import surface_field
-from . import fixtures, scene
+from . import fixtures, hot_spots, scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, mesh_of, on_board, param_list,
                    param_value, result)
 
@@ -256,6 +256,9 @@ class FrameStatic(BuiltinTool):
         per_member = {m: s["max"] for m, s in res["stresses"].items()}  # the same values as the stress field
         out["results"] += member_results("max_stress", per_member)
         out["effects"].append(member_effect("max_stress", per_member))
+        hot = beam_hot_spots(self, load_case, per_member)
+        if hot is not None:
+            out["hot_spots"] = hot
         series = upstream_mount_series(params.get("upstream_analyses"), design)
         if series:
             add_frames(out, beam_frames(design, series))
@@ -271,6 +274,18 @@ class FrameStatic(BuiltinTool):
         if up is None and step is not None:
             out["scene"] = scene.steps(design, sup, step)
         return out
+
+
+def beam_hot_spots(tool, load_case: Record, per_member: dict[str, float]) -> list[Record] | None:
+    """analysis.hot_spots of the beam model (hot_spots module): one row per member, its largest von Mises
+    (the per-member max_stress, as max_stress is judged), against the criterion's limit. None (no rows) when
+    the load case's criterion is not a "<=" stress, or when it is judged on a quantity the beam has no
+    per-member values of (only max_stress is)."""
+    judged = hot_spots.judged_limit(tool, load_case)
+    if judged is None or judged[0] != "max_stress":
+        return None
+    q, limit = judged
+    return hot_spots.top([hot_spots.row(m, q, v, limit) for m, v in per_member.items()])
 
 
 def upstream_mount_series(upstream: dict | None, design: Record):
