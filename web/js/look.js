@@ -283,29 +283,83 @@ function hazardTexture() {
   return tex;
 }
 
-// Tyre tread height: blocks around the tyre (u) in a chevron across its width (v).
+// Tyre tread: an off-road tyre's blocks (knobs), as a height (1 = the top of a block, 0 = the
+// bottom of a groove, 0.5 = the smooth sidewall) per pixel of one repeat (TREAD.repeat round
+// the tyre). The tyre's uv (shapes.js wheelPieces, a LatheGeometry of 16 profile points) runs
+// round it in u and along its profile in v by point index: the sidewall (segments 0 and 14),
+// six segments over each rounded shoulder (1-6, 8-13) and one over the flat face (7). With the
+// shoulder's round at 0.3 of the width, a shoulder segment is 0.3 * (pi / 2) / 6 of the width
+// across and the face 0.4: the pattern is laid out in that across distance (width units), so
+// its blocks are square on the tyre and not stretched over the face. Look values (the knobs
+// are drawn, not the design's): two staggered rows of centre blocks and a row of shoulder
+// blocks on each side, 24 pitches round the tyre.
+const TREAD = { repeat: 6, pitches: 4, w: 256, rows: 16 };
+function treadAcross() {
+  // the across distance (width units, 0 at the centre) at each profile point 0..15
+  const seg = [0, ...Array(6).fill((0.3 * Math.PI) / 2 / 6), 0.4, ...Array(6).fill((0.3 * Math.PI) / 2 / 6), 0];
+  const at = [0];
+  for (const s of seg) at.push(at[at.length - 1] + s);
+  const mid = at[at.length - 1] / 2;
+  return at.map((a) => a - mid);
+}
+function treadValue(u, c, half) {
+  // u: round the tyre within one repeat, width units; c: across, width units; half: the face's half-span
+  const pitch = ((Math.PI * 2 * 1.7) / (TREAD.repeat * TREAD.pitches)); // circumference ~ 2 pi 1.7 widths
+  const side = c < 0 ? -1 : 1;
+  const ac = Math.abs(c);
+  const soft = (d) => Math.max(0, Math.min(1, d / 0.03)); // a bevel 0.03 widths wide
+  // within a block along u: from its start, `len` long; across: from lo to hi
+  const block = (shift, len, lo, hi) => {
+    const p = (((u / pitch + shift) % 1) + 1) % 1;
+    const along = Math.min(p * pitch, len - p * pitch);
+    if (p * pitch > len) return 0;
+    return Math.min(soft(along), soft(ac - lo), soft(hi - ac));
+  };
+  const centre = block(side < 0 ? 0 : 0.5, 0.62 * pitch, 0.035, 0.3);
+  const shoulder = block(side < 0 ? 0.5 : 0, 0.68 * pitch, 0.36, half);
+  return Math.max(centre, shoulder);
+}
 function treadHeight() {
-  return drawCanvas(256, 128, (g, w, h) => {
-    g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, w, h);
-    g.fillStyle = "#000000";
-    const blocks = 8;
-    for (let k = 0; k < blocks; k += 1) {
-      const x = (k / blocks) * w;
-      const gap = w / blocks;
-      // a groove from each shoulder to the centre line, leaning the way the tyre turns
-      for (const side of [-1, 1]) {
-        g.beginPath();
-        g.moveTo(x, h / 2 + side * h * 0.5);
-        g.lineTo(x + gap * 0.45, h / 2 + side * h * 0.04);
-        g.lineTo(x + gap * 0.62, h / 2 + side * h * 0.04);
-        g.lineTo(x + gap * 0.17, h / 2 + side * h * 0.5);
-        g.closePath();
-        g.fill();
+  const across = treadAcross();
+  const half = across[across.length - 2]; // the shoulder's outer edge (point 14)
+  const h = TREAD.rows * 15;
+  return drawCanvas(TREAD.w, h, (g, w) => {
+    const img = g.createImageData(w, h);
+    const pitchUnits = (Math.PI * 2 * 1.7) / TREAD.repeat; // one repeat round the tyre, width units
+    for (let y = 0; y < h; y += 1) {
+      // v runs up while canvas rows run down; the pattern is symmetric across, so either way
+      const k = Math.floor(y / TREAD.rows);
+      const f = (y % TREAD.rows + 0.5) / TREAD.rows;
+      const c = across[k] + (across[k + 1] - across[k]) * f;
+      const sidewall = k === 0 || k === 14;
+      for (let x = 0; x < w; x += 1) {
+        const v = sidewall ? 0.5 : treadValue((x / w) * pitchUnits, c, half);
+        const i = (y * w + x) * 4;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(v * 255);
+        img.data[i + 3] = 255;
       }
     }
-    g.fillRect(0, h / 2 - 2, w, 4); // the centre groove
+    g.putImageData(img, 0, 0);
   });
+}
+// The tread's shade (the colour map): the grooves darker than the tops of the blocks (the light
+// that reaches the bottom of a groove), the sidewall as the tops.
+function treadShade() {
+  const height = treadHeight();
+  const src = height.getContext("2d").getImageData(0, 0, height.width, height.height).data;
+  const out = drawCanvas(height.width, height.height, () => {});
+  const g = out.getContext("2d");
+  const img = g.createImageData(height.width, height.height);
+  for (let i = 0; i < src.length; i += 4) {
+    const v = src[i] / 255;
+    const s = Math.round(255 * (v >= 0.5 ? 1 : 0.45 + 1.1 * v));
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = s;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const tex = canvasTexture(out, TREAD.repeat, 1);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 // Woven fabric height: over-under threads.
@@ -387,7 +441,8 @@ const TEXTURES = {
   hazard: () => hazardTexture(),
   concrete: () => concreteTexture(),
   wood: () => woodTexture(),
-  tread: () => canvasTexture(normalMapFrom(treadHeight(), 6), 6, 1), // 48 blocks round the tyre
+  tread: () => canvasTexture(normalMapFrom(treadHeight(), 3), TREAD.repeat, 1), // 24 pitches round the tyre
+  treadShade: () => treadShade(),
   fabric: () => canvasTexture(normalMapFrom(fabricHeight(), 3), 8),
   plate: () => canvasTexture(normalMapFrom(plateHeight(), 4), 8),
 };
@@ -464,7 +519,8 @@ const FINISH = {
 // `kind.frame`, then its material (design.materials[m.material]) as in 1 and 3.
 export const MATERIAL_OF = {
   sub: {
-    tyre: { finish: "rubber" },
+    // the tyre: the rubber with its blocks' shade (treadShade), a dusty dark grey rather than black
+    tyre: { finish: "rubber", map: "treadShade", color: "#2c2d2f" },
     rim: { finish: "aluminium" },
     hub: { finish: "galvanized", color: "#7e8489" },
     spring: { finish: "painted_steel", color: "#8e2f22" },
@@ -1013,7 +1069,8 @@ export class Look {
     } else {
       m = new THREE.MeshStandardMaterial(params);
     }
-    if (f.map) m.map = this.texture(f.map);
+    const map = entry.map ?? f.map;
+    if (map) m.map = this.texture(map);
     const normal = entry.normal ?? f.normal;
     if (normal) {
       m.normalMap = this.texture(normal);
