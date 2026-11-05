@@ -75,6 +75,43 @@ def occupant_room(run: CrashRun, parts: list[dict], shares: dict[str, dict[int, 
     return best
 
 
+def occupant_room_by_member(run: CrashRun, parts: list[dict], shares: dict[str, dict[int, float]]) -> dict:
+    """occupant_room per frame member: {member: {"room" (m, the least over the run), "part", "row"}} for every
+    member some point of which (its elements' ends and middles, not broken by then) comes ahead of an
+    occupant part box within the box's (y, z) extent; the same reading as occupant_room."""
+    boxes = []
+    for p in parts:
+        sh = shares.get(p["id"])
+        if not sh:
+            continue
+        idx = np.array(list(sh.keys()))
+        wts = np.array(list(sh.values()))
+        boxes.append((p["id"], idx, wts / wts.sum(), np.asarray(p["box"]["center_mm"], float) / 1000.0,
+                      np.asarray(p["box"]["size_mm"], float) / 2000.0))
+    out: dict[str, dict] = {}
+    con = run.mesh.con
+    for k in range(len(run.t_all)):
+        p = run.positions[k]
+        t = run.t_all[k]
+        alive = [e for e in range(run.mesh.ne) if run.broken_at.get(e, np.inf) > t + 1e-12]
+        if not alive:
+            continue
+        ends_a, ends_b = p[con[alive, 0]], p[con[alive, 1]]
+        pts = np.stack([ends_a, 0.5 * (ends_a + ends_b), ends_b], axis=1)  # (elements, 3, xyz)
+        for pid, idx, wts, c, h in boxes:
+            cc = c + (p[idx] - run.mesh.x0[idx]).T @ wts
+            inside = ((np.abs(pts[..., 1] - cc[1]) <= h[1]) & (np.abs(pts[..., 2] - cc[2]) <= h[2])
+                      & (pts[..., 0] > cc[0] - h[0]))
+            if not inside.any():
+                continue
+            room = np.where(inside, pts[..., 0] - (cc[0] + h[0]), np.inf).min(axis=1)
+            for j in np.flatnonzero(np.isfinite(room)):
+                mid = run.mesh.member_of[alive[j]]
+                if mid not in out or room[j] < out[mid]["room"]:
+                    out[mid] = {"room": float(room[j]), "part": pid, "row": k}
+    return out
+
+
 def mount_force(run: CrashRun, share: dict[int, float], window: float = WINDOW) -> tuple[float, int, int]:
     """The largest force (N) between a part and one of its carried_by nodes: the part's share on the node
     times the node's acceleration, averaged over the window (its velocity change over it). (force, node, row)."""

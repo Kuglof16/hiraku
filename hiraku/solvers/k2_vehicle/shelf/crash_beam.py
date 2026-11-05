@@ -99,6 +99,7 @@ class CrashBeamTool(K2Tool):
         return rec
 
     def _run(self, design: dict, lp: dict) -> dict:
+        self._places = []
         speed = self.q(lp, "speed", "m/s")
         if speed is None or speed <= 0.0:
             raise DesignError("the crash needs a positive speed")
@@ -145,6 +146,11 @@ class CrashBeamTool(K2Tool):
                          "front-most occupant part box, along x, at the start) less max_crush; the hand calculation "
                          "crash_beam.occupant_margin reads the same")
         room = measure.occupant_room(run, occ, mesh.node_parts)
+        # hot_spots: each frame member's least room to an occupant box, a place the hand calculation (the crush
+        # from the front) does not look at (e.g. a side rail bending into the foot box)
+        self._places = [{"where": mid, "quantity": "occupant_space_left", "value": r_["room"] * 1000.0, "unit": "mm",
+                         "judged": False}
+                        for mid, r_ in sorted(measure.occupant_room_by_member(run, occ, mesh.node_parts).items())]
         if room is not None:
             res.append(_res("occupant_space_left", room["room"] * 1000.0, "mm", room["part"]))
         elif occ:
@@ -218,4 +224,5 @@ class CrashBeamTool(K2Tool):
         if broken:
             notes.append(f"first break at {min(run.broken_at.values()) * 1000:.2f} ms ({broken[0]})")
         notes.append(f"the largest crush at {tt[k_crush] * 1000:.1f} ms")
-        return {"results": res, "series": series, "scene": scene, "assumptions": notes}
+        return {"results": res, "series": series, "scene": scene, "assumptions": notes,
+                "places": getattr(self, "_places", [])}
