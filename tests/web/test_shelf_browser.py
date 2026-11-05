@@ -184,7 +184,7 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual(row["fsName"], "フレームの静的")
         self.assertEqual(row["rbK0"], "rollbar.portal_sway")  # not in the shelf's formulas: no title, the id as it is
         self.assertEqual(row["fsChk"], "OK 2 / 2")
-        self.assertIn("wait", row["tiltChk"])
+        self.assertIn("noval", row["tiltChk"])  # a check the tool gave no value for
         self.assertTrue(row["tiltOff"])
         self.assertIn("Claude が作った", row["rb"])
         self.assertNotIn("使えない", row["rb"])
@@ -225,7 +225,10 @@ class ShelfBrowserTest(unittest.TestCase):
             return self.shown_tools(page)
 
         self.assertEqual(filtered("claude"), ["rollbar", "roof_crush"])
-        self.assertEqual(filtered("checking"), ["tilt"])
+        # OK でない: a check that did not pass (roof_crush) or gave no value (tilt)
+        self.assertEqual(filtered("notok"), ["roof_crush", "tilt"])
+        self.assertEqual([b.text_content() for b in page.query_selector_all("#view-shelf .sh-filter button")],
+                         ["すべて", "Claude が作った", "OK でない", "使えない"])
         self.assertEqual(filtered("unusable"), ["roof_crush", "tilt"])
         self.assertEqual(len(filtered("all")), 5)
 
@@ -255,8 +258,10 @@ class ShelfBrowserTest(unittest.TestCase):
                      text: document.getElementById('view-shelf').textContent,
                      more: d.querySelectorAll('.sh-more').length }; }""")
         self.assertEqual(card["head"], "フレームの静的OK 2 / 2")
-        self.assertEqual(card["h4"], "答えの分かっている問題で確かめた結果 (2 問)")
-        self.assertEqual(card["th"], ["確かめた場面", "何の値", "正しい値", "ツールの値", "単位", "ずれてよい幅", "結果", "正しい値の出どころ"])
+        self.assertEqual(card["h4"], "答えの分かっている問題で確かめた結果 (2 問、OK 2)")
+        self.assertEqual(page.text_content("#view-shelf .sh-detail .sh-what"),
+                         "ツールを使う前に、式で答えが出る簡単な問題を解かせ、答えと合うかを確かめた結果です。設計を確かめる手計算とは別のものです。")
+        self.assertEqual(card["th"], ["確かめに使った問題", "比べた値", "式で出した答え", "ツールの答え", "単位", "ずれてよい幅", "結果", "答えの出し方"])
         self.assertIn("手計算の式", card["dt"])
         self.assertNotIn("手計算の段", card["dt"])
         self.assertEqual(card["fl"], ["レールの曲げ式を見るσ = M / Z"])
@@ -275,11 +280,13 @@ class ShelfBrowserTest(unittest.TestCase):
             self.assertNotIn(word, card["text"], word)
         self.assertIsNone(page.query_selector("#view-shelf .sh-code"))  # no code for a builtin tool
 
-        # a check still waiting for its value, and a failed one
+        # a check the tool gave no value for (got null, pass false: 値が出ない, ×), and a failed one
         page.click('#view-shelf .sh-tool[data-tool="tilt"]')
-        rows = page.evaluate("[...document.querySelectorAll('#view-shelf .sh-checks tbody tr')].map((tr) => [tr.className, tr.children[3].textContent])")
-        self.assertEqual(rows, [["ok", "30.1"], ["wait", "確かめ中"]])
-        self.assertEqual(page.text_content('#view-shelf .sh-filter button[data-filter="checking"]'), "確かめ中")
+        rows = page.evaluate("[...document.querySelectorAll('#view-shelf .sh-checks tbody tr')].map((tr) => [tr.className, tr.children[3].textContent, tr.children[6].textContent])")
+        self.assertEqual(rows, [["ok", "30.1", "OK"], ["noval", "値が出ない", "×"]])
+        self.assertEqual(page.text_content("#view-shelf .sh-detail h4"), "答えの分かっている問題で確かめた結果 (2 問、OK 1、OK でない 1)")
+        self.assertEqual(page.get_attribute("#view-shelf .sh-detail .sh-chk", "title"), "ツールの値が出ない問題がある")
+        self.assertNotIn("確かめ中", page.text_content("#view-shelf"))
 
         # the signs: a name in full to its letter, a power raised, the part after "_" lowered, sqrt and *
         page.click('#view-shelf .sh-tool[data-tool="step_climb"]')

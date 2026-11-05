@@ -18,15 +18,20 @@ import { fill, h } from "./intake/dom.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
 const MODES = [["domain", "分野から"], ["base", "土台から"]];
-const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["checking", "確かめ中"], ["unusable", "使えない"]];
+const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["notok", "OK でない"], ["unusable", "使えない"]];
 const POLL_MS = 2000; // asking again while the server builds the shelf
 
+// A check's got is null when the tool could not give that value (e.g. tilt.py finds no tipping angle);
+// its pass is then false. Not "still checking": the record is final.
+const noValue = (c) => c.got === null;
 const isClaude = (t) => t.origin === "claude";
-const isChecking = (t) => (t.checks ?? []).some((c) => c.got === null);
+const hasNoValue = (t) => (t.checks ?? []).some(noValue);
+// OK でない: at least one check that did not pass or gave no value (a tool without checks is not counted)
+const isNotOk = (t) => (t.checks ?? []).some((c) => !c.pass || noValue(c));
 const isUnusable = (t) => t.usable === false;
-const passed = (t) => (t.checks ?? []).filter((c) => c.pass).length;
+const passed = (t) => (t.checks ?? []).filter((c) => c.pass && !noValue(c)).length;
 const allPassed = (t) => (t.checks ?? []).length > 0 && passed(t) === t.checks.length;
-const FILTER_FN = { all: () => true, claude: isClaude, checking: isChecking, unusable: isUnusable };
+const FILTER_FN = { all: () => true, claude: isClaude, notok: isNotOk, unusable: isUnusable };
 
 /** The shelf's tools with the run's tool.checked records laid over them by name (run's first wins). */
 export function mergeTools(shelfTools, runTools) {
@@ -57,8 +62,8 @@ export function shelfTree(tools, { mode = "domain", filter = "all", query = "" }
 function checkState(t) {
   const n = (t.checks ?? []).length;
   const p = passed(t);
-  const cls = !n ? "none" : isChecking(t) ? "wait" : p === n ? "ok" : "bad";
-  const title = !n ? "答えの分かっている問題が無い" : isChecking(t) ? "確かめている途中 (まだ値の無い問題がある)"
+  const cls = !n ? "none" : hasNoValue(t) ? "noval" : p === n ? "ok" : "bad";
+  const title = !n ? "答えの分かっている問題が無い" : hasNoValue(t) ? "ツールの値が出ない問題がある"
     : p === n ? "答えの分かっている問題で全部 OK" : "OK でない問題がある";
   return h("span", { class: `sh-chk ${cls}`, title }, `OK ${p} / ${n}`);
 }
@@ -283,18 +288,19 @@ export function mountShelf(el, api) {
           : "—"),
         h("dt", {}, "CAE の段"), h("dd", {}, `${t.base} ${BASE_JA[t.base] ?? ""}`),
         h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行で確かめた記録)") : null)),
-      h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問)`),
+      h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問、OK ${passed(t)}${checks.length - passed(t) ? `、OK でない ${checks.length - passed(t)}` : ""})`),
+      h("p", { class: "sh-what" }, "ツールを使う前に、式で答えが出る簡単な問題を解かせ、答えと合うかを確かめた結果です。設計を確かめる手計算とは別のものです。"),
       checks.length
         ? h("table", { class: "sh-checks" },
-            h("thead", {}, h("tr", {}, ["確かめた場面", "何の値", "正しい値", "ツールの値", "単位", "ずれてよい幅", "結果", "正しい値の出どころ"].map((x) => h("th", {}, x)))),
-            h("tbody", {}, checks.map((c, i) => h("tr", { class: c.got === null ? "wait" : c.pass ? "ok" : "bad" },
+            h("thead", {}, h("tr", {}, ["確かめに使った問題", "比べた値", "式で出した答え", "ツールの答え", "単位", "ずれてよい幅", "結果", "答えの出し方"].map((x) => h("th", {}, x)))),
+            h("tbody", {}, checks.map((c, i) => h("tr", { class: noValue(c) ? "noval" : c.pass ? "ok" : "bad" },
               h("td", { class: "case" }, words(c.case_ja, c.case, k(`case:${i}`))),
               h("td", { class: "qty" }, quantityName(c.quantity), quantityName(c.quantity) !== c.quantity ? more(k(`q:${i}`), h("code", {}, c.quantity)) : null),
               h("td", { class: "num", title: String(c.expected) }, fmt(c.expected, 6)),
-              h("td", { class: "num", title: String(c.got) }, c.got === null ? "確かめ中" : fmt(c.got, 6)),
+              h("td", { class: "num", title: noValue(c) ? "ツールがこの問題の値を出せなかった" : String(c.got) }, noValue(c) ? "値が出ない" : fmt(c.got, 6)),
               h("td", {}, unitLabel(c.unit)),
               h("td", { class: "num", title: String(c.tolerance_rel) }, fmtPct(c.tolerance_rel, 1)),
-              h("td", {}, c.got === null ? "—" : c.pass ? "OK" : "×"),
+              h("td", {}, c.pass && !noValue(c) ? "OK" : "×"),
               h("td", { class: "src" }, words(c.source_ja, c.source, k(`src:${i}`)))))))
         : h("p", { class: "sh-dim" }, "答えの分かっている問題がありません"),
       isClaude(t) ? codeBlock(t) : null);

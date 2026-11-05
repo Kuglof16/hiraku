@@ -46,7 +46,7 @@
 .sh-chk { font-size: 13px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--line); white-space: nowrap; justify-self: start; }
 .sh-chk.ok { color: var(--green); border-color: var(--green); }
 .sh-chk.bad { color: var(--red); border-color: var(--red); background: var(--red-pale); }
-.sh-chk.wait { border-style: dashed; border-color: var(--ink); background: var(--orange-pale); }
+.sh-chk.noval { border-style: dashed; border-color: var(--red); color: var(--red); background: var(--orange-pale); }
 .sh-chk.none { color: var(--muted); }
 
 .sh-detail header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1.5px solid var(--ink); padding-bottom: 8px; }
@@ -72,7 +72,8 @@
 .sh-checks td.src { color: var(--muted); font-size: 13px; }
 .sh-checks td.qty { min-width: 8em; }
 .sh-checks tr.bad td { background: var(--red-pale); }
-.sh-checks tr.wait td { background: var(--orange-pale); }
+.sh-checks tr.noval td { background: var(--orange-pale); }
+.sh-what { margin: 0 0 8px; font-size: 14px; color: var(--ink-2); }
 
 /* ?dev=1 only: the ids and the English folded under くわしく */
 .sh-more summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 400; }
