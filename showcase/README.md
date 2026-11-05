@@ -1,7 +1,8 @@
 # showcase: runs kept for replay
 
-Run folders the screen replays without running anything (`python -m hiraku.webserve`, then
-`http://127.0.0.1:8765/`). With no `?run=` in the URL the screen opens the newest run here by id; today that is
+Run folders the screen replays without running anything (`python -m hiraku.webserve` from the repository with
+the Python that has `requirements.txt` installed, then `http://127.0.0.1:8765/`; a Python without them shows no
+tool shelf). With no `?run=` in the URL the screen opens the newest run here by id; today that is
 the N15 scripted run. Others: `?run=<run_id>`, or the run list `?list=1`.
 
 Each folder holds what the screen reads: `events.jsonl`, `project.json`, `report.json` and, for a run where
