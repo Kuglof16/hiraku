@@ -6,6 +6,7 @@
 #               confirm  = asked once with a default, the default is used when there is no answer
 #               default  = not asked; the default is used and shown, the person can change it
 #   question    what the hearing says (must and confirm)
+#   question_if {when, text}: what it says instead when the flags satisfy `when` (the same expression as applies_if)
 #   why         one line for a first-time reader: why the question is needed (shown on the screen with the question)
 #   example     an example answer (shown on the screen)
 #   unit        the unit a number typed as text ("150") is kept in, when the item has no numeric default (Q40, Q50)
@@ -171,7 +172,8 @@ items:
     why: 荷の重さで、骨組みにかかる力が決まるためです。
     example: 150 kg
     unit: kg
-    question: 載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。
+    question: 載せる荷の重さの上限は。
+    question_if: {when: ride or lean, text: 載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。}
 
   - key: Q41
     name: 荷の位置

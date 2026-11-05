@@ -83,6 +83,13 @@ class Plan:
     present: list[str] = field(default_factory=list)  # keys the file already has
 
 
+def _question_text(it: Record, flags: dict[str, bool]) -> str:
+    """The item's question; `question_if: {when, text}` replaces it when the flags say so (a question about the people
+    on a vehicle or a bed is not asked of a table)."""
+    alt = it.get("question_if")
+    return alt["text"] if alt and applies(alt["when"], flags) else it["question"]
+
+
 def plan_hearing(
     req: Record,
     *,
@@ -123,7 +130,7 @@ def plan_hearing(
         q: Record = {
             "req_key": key,
             "name": it["name"],
-            "text": (wording.get(key) or it["question"]).strip(),
+            "text": (wording.get(key) or _question_text(it, flags)).strip(),
             "ask": it["ask"],
             "allow_other": True,
         }

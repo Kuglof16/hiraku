@@ -24671,7 +24671,7 @@ export const DEMOS = {
      {
       "req_key": "Q40",
       "name": "積載",
-      "text": "載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。",
+      "text": "載せる荷の重さの上限は。",
       "ask": "must",
       "allow_other": true
      },

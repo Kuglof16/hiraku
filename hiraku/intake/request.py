@@ -109,7 +109,7 @@ def begin(
         draft.update(flags=guessed, flags_from="words", flag_reasons=why)
         draft["speed_class"] = speed_class or guessed_speed
         if not guessed:
-            warnings.append("文から製品の性質を読み取れませんでした。性質 (チップ) を選んでください")
+            warnings.append("文から製品の性質を読み取れませんでした。「読み取ったこと」の印から選んでください")
     return _look(draft, warnings=warnings, cost_usd=cost)
 
 
