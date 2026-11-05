@@ -2375,7 +2375,9 @@
               },
               "utilisation": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "The ratio that goes over 1 exactly when the row fails the load case's criterion: value / limit for <= and <, limit / value for >= and >. Where that ratio is undefined or outside 0 to 1000 (a limit or a value at or below 0, or a very small limit), it is written as 1000 when the row fails the criterion and 0 when it passes."
               },
               "predicted": {
                 "type": "boolean",

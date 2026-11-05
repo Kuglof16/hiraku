@@ -127,6 +127,8 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": -1}]}), [])
         self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "at_mm": [1200.0, -310.0, 420.0]}]}), [])
         self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "at_mm": [1200.0, -310.0]}]}), [])
+        self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": 1000}]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": 1000.5}]}), [])
 
     def test_hot_spot_red_and_its_cause(self):
         v = load("verdict.json")
