@@ -645,6 +645,37 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(status, 500)
         self.assertIn("ended before it started", out["error"])
 
+    def test_a_child_silent_past_the_wait_is_ended_and_the_next_start_runs(self):
+        # a child (with a child of its own) that stays silent past wait_s: 504, it is ended, and
+        # the place is free again; while it was starting, a second start said so (409, no id)
+        code = ("import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                "time.sleep(60)")
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=lambda req, mode, runs: [sys.executable, "-c", code],
+                       reader=fake_reader, wait_s=2, demo_runs_file=self.demo_file)
+        self.launchers = [lau]
+        answers = []
+        first = threading.Thread(target=lambda: answers.append(self._start(lau)))
+        first.start()
+        time.sleep(0.8)
+        second = self._start(lau)
+        first.join(30)
+        self.assertEqual(second[0], 409)
+        self.assertIn("still starting", second[1])
+        self.assertIsNone(second[2]["running_run_id"])
+        self.assertEqual(answers[0][0], 504)
+        self.assertIn("it was stopped", answers[0][1])
+        self.assertIsNone(lau.proc)
+        lau.command = fake_command(SAMPLE_EVENTS, self.RUN, 3.0)
+        lau.wait_s = 20
+        self.assertEqual(lau.start("offroad-4w.yaml", "scripted")["run_id"], self.RUN)
+
+    @staticmethod
+    def _start(lau):
+        try:
+            return 200, lau.start("offroad-4w.yaml", "scripted"), {}
+        except LaunchError as e:
+            return e.status, str(e), e.extra
+
     def test_hearing_answer_goes_to_the_started_run_only(self):
         base = self.serve({})
         _, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
