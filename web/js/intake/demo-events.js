@@ -791,7 +791,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「人の決まり」から 7 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-HU",
@@ -842,6 +842,66 @@ export const DEMOS = {
        "kinds": [
         "suspension",
         "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "人が乗る座席は、頭を後ろから受け止める上端が、座席の基準点から胴の線に沿って 800 mm 以上の高さにある",
+      "check": "headrest_height_mm >= req_Q35",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.6.2 (front seats not less than 800 mm) and 6.5.4 (from the R point to the tangent at the top, along the torso reference line), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.1(a)(1) (800 mm, from the H-point parallel to the torso reference line, S3), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles. A seat with no head support has no value and is reported as not given, not as passing",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "頭を受け止める面の左右の幅は、上端から 65 mm 下で 170 mm 以上",
+      "check": "headrest_width_mm >= req_Q36",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (85 mm to each side of the median plane, 170 mm computed) and 6.6.1 (plane 65 mm below the top), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座った人の頭の後ろと、頭を受け止める面との水平のすき間は 55 mm 以下",
+      "check": "headrest_backset_mm <= req_Q37",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) and S3 (backset measured from the rear of the head of a seated 50th percentile male, SAE J826 manikin with the head restraint measurement device), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06, for passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less. UN R17 08 series has no backset limit (read 2026-11-06)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-04",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "背もたれと頭を受け止める部分のあいだのすき間は、165 mm の球で測って 60 mm 以下",
+      "check": "headrest_gap_mm <= req_Q38",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (not more than 60 mm for a head restraint not adjustable for height) and 6.7.1 (165 mm sphere), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm, 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
        ]
       }
      }
@@ -903,7 +963,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 12 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-AS",
@@ -943,6 +1003,156 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     },
+     {
+      "rule_id": "CS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定 (荷の上を越える帯) の張りと床の摩擦で、荷が横へ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q75 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 (top-over lashing against sliding, m = n · 2 · μ · sin α · FT / (g · (cx,y − μ · cz) · fs)), as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46, https:\/\/www.hsa.ie/eng/Vehicles_at_Work/Load_Securing/Guidance_and_Publications/2014_European_Best_Practice.pdf); EN 12195-1 itself not checked (paid). The same balance without a safety factor is the CTU Code (MSC.1/Circ.1497) Annex 7 4.2.7-4.2.8, read 2026-11-06 (p. 113-114). Borrowed from goods road vehicles (assumption). The guidelines (top-over lashing section, PDF p. 43) take FT as the STF and say the tension can fall to 50 % on deformable goods",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷が前へ滑らない (荷台の前の壁で止まるか、上から押さえる固定と摩擦で止まる)",
+      "check": "cargo_blocked_forward >= 1 or 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.25",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.25 forward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46); blocking counts as securing (guidelines 1.4, PDF p. 14; CTU Code Annex 7 4.2.8, read 2026-11-06). Whether the front wall itself is strong enough is not checked by this rule (the CTU Code 6.6 gives front wall strengths for goods vehicles only). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-03",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定の張りと床の摩擦で、荷が後ろへ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.1 rearward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46). A rear gate that blocks the load is not counted here. Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-04",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "摩擦が十分でも、荷は少なくとも 1 本の固定で止め、前で止まらない 1.52 m を超えるか 500 kg を超える荷は 2 本以上で止める",
+      "check": "lashing_count >= 1 and (lashing_count >= 2 or cargo_blocked_forward >= 1 or (size_x_mm <= 1520 and mass_kg <= 500))",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.110(b)-(c) (not blocked forward: 1 tiedown for an article of 1.52 m or less and 500 kg or less, 2 for a heavier one or one up to 3.04 m; blocked: 1 per 3.04 m), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.110); CTU Code (MSC.1/Circ.1497) 5.4 and Annex 7 4.2.8 (mass and friction alone do not secure a load against vibration; a minimum number of top-over lashings is needed, no number given), read 2026-11-06 (p. 21, p. 114). The check covers loads up to 3.04 m long only (a longer one needs more). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-05",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の使ってよい力の合計 (荷の向こう側へ回すものは全部、そうでないものは半分で数える) が、荷の重さの決めた割合以上",
+      "check": "lashing_wll_sum_N >= 0.5 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.106(d) (aggregate working load limit at least one-half the weight; counting by (d)(1)-(3)) and 393.108(a) (a tiedown's WLL is the lowest of its parts and its anchor points), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.106). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-06",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定が荷を床へ押さえつける力が、荷の重さの決めた割合以上 (でこぼこ道で荷が浮かない)",
+      "check": "2 * topover_count * lashing_pretension_N * lashing_angle_sin >= 0.2 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.102(b) (downward force at least 20 percent of the weight when the article is not fully contained), read 2026-11-06 (LII copy); the vertical force of a top-over lashing 2 · FT · sin α from EN 12195-1 equation 10 as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary). The CTU Code Annex 7 4.2.7 takes 1.8 times the pre-tension for a vertical lashing instead of 2, read 2026-11-06 (p. 113). Borrowed from road vehicles (assumption); no rough-road value was found",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-07",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の最初の張りは、その固定の使ってよい力の半分以下",
+      "check": "lashing_pretension_N <= 0.5 * lashing_wll_min_N",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 2.4.4 (initial pre-tension never more than 50 % of the MSL) and 2.4.1 (the LC of national standards corresponds to the MSL), read 2026-11-06 (p. 99-100). For lashings in cargo transport units; taking the US WLL as the MSL is an assumption",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-08",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷台の固定点は、どの 1 か所も決めた力に耐える",
+      "check": "anchor_strength_min_N >= req_Q21",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12640 as quoted in the EU Best Practice Guidelines (2014) 2.6, Table 3 (3.5 to 7.5 t: 800 daN per lashing point), read 2026-11-06 (secondary, PDF p. 23); EN 12640 not checked. 49 CFR 393.104(c) asks anchor points to meet the 393.102 criteria and gives no number, read 2026-11-06. Borrowed for a lighter vehicle (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-09",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "横へ倒れやすい荷 (重心の高さが幅の半分に比べて高い荷) は、上から押さえる固定で止める",
+      "check": "0.6 * (center_z_mm - bottom_z_mm) < 1 * size_y_mm / 2 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1: securing against tipping is needed when cx,y · d ≥ cz · b, read 2026-11-06 (p. 114); the box centre is taken as the centre of gravity (assumption). Only that tipping is addressed is checked, not the size of the lashing (the EN 12195-1 tipping equation was not read). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-10",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "前へ倒れやすい荷は、荷台の前の壁で止めるか、上から押さえる固定で止める",
+      "check": "req_Q76 * (center_z_mm - bottom_z_mm) < 1 * size_x_mm / 2 or cargo_blocked_forward >= 1 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1 (tipping when cx,y · d ≥ cz · b), read 2026-11-06 (p. 114); box centre taken as the centre of gravity, and a front wall at least as high as the centre of gravity is assumed when cargo_blocked_forward is 1 (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
      }
     ]
    }
@@ -954,7 +1164,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「サスの決まり」から 6 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SU",
@@ -989,6 +1199,66 @@ export const DEMOS = {
       "applies_to": {
        "kinds": [
         "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を折る所の折れ角は、どの 1 か所でも上限 (要件) 以下",
+      "check": "uj_angle_max_deg <= req_Q83",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the limit is the requirement item R1-01 (35 deg by default, the maximum operating angle of Borgeson single steering universal joints, \"U-Joint & Shaft General Instructions\" item 1), read 2026-11-06, https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). Going past it can make the joint bind (same item). The angle of a joint is the angle between the axes of the two shafts it joins",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの折れ角の差は 1 度以下",
+      "check": "uj_count < 2 or uj_angle_diff_deg <= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The two angles must be equal for an even output: Huco Universal Joints catalogue section 2, PDF p. 2, rule 1, read 2026-11-06 (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); NSK US 8,965,743 B2 (joint angle at the upper joint equal to that at the lower joint), read 2026-11-06 (https:\/\/patents.google.com/patent/US8965743B2/en). The allowed difference is the requirement item R1-03 (1 deg by default, borrowed from Spicer's rule 2 for vehicle propeller shafts, https:\/\/spicerparts.com/node/202, read 2026-11-06): an assumption for a steering shaft",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-03",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの継手の向き合わせ (位相) の正しい向きからのずれは 7 度以下",
+      "check": "uj_count < 2 or uj_phase_error_deg <= 7",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The right phase (inner forks in line when the shaft is bent in one plane): Huco Universal Joints catalogue section 2, PDF p. 2, rule 2, read 2026-11-06; ididit instructions 8000000021, PDF p. 5 step 4, read 2026-11-06 (https:\/\/static.speedwaymotors.com/pdf/4461216-INS.pdf), which adds that a wrong phase can give early wear or binding. The allowed error is the requirement item R1-04 (7 deg by default, the example of NSK US 8,965,743 B2, read 2026-11-06): an assumption",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-04",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "ハンドルを一定に回したときの、車輪の側の回転の速さのむらは上限 (要件) 以下",
+      "check": "steer_speed_variation_pct <= req_Q84",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The fluctuation of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary, https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); output between w cos a and w sec a, at 5 deg +/-0.4 %, 7 deg +/-0.8 %, 10 deg +/-1.5 %: Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. The limit is the requirement item R1-02 (10 % by default, the example allowable torque variation rate of NSK US 8,965,743 B2, read 2026-11-06): an assumption. This rule covers one joint as well, where UJ-02 and UJ-03 do not apply",
+      "applies_to": {
+       "kinds": [
+        "steering"
        ]
       }
      }
@@ -1153,7 +1423,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 7 件あります。まとめて聞きます",
+   "text": "足りない要件が 10 件あります。まとめて聞きます",
    "data": {
     "questions": [
      {
@@ -1214,6 +1484,58 @@ export const DEMOS = {
       ]
      },
      {
+      "req_key": "Q35",
+      "name": "頭を後ろから受け止める高さの下限 (座席の基準点から、胴の線に沿って上へ)",
+      "text": "座った人の頭を後ろから受け止める高さは、座席の基準点 (腰のあたり) から胴の傾きに沿って、いくつ以上にしますか。",
+      "ask": "confirm",
+      "allow_other": true,
+      "default": {
+       "value": 800,
+       "unit": "mm",
+       "trust": 3,
+       "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf), para. 5.6.2 and 5.6.3.1 (front seats not less than 800 mm, other seats 750 mm) and para. 6.5.4 (the height is from the R point, the seating reference point of para. 2.13, to the tangent at the top, measured along the manikin's torso reference line), read 2026-11-06; R17 applies to M1 and N1 (para. 1). 49 CFR 571.202a (FMVSS 202a, eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a) S4.2.1(a)(1) (front outboard not less than 800 mm in at least one position) with S3 (height from the H-point parallel to the torso reference line), read 2026-11-06; it applies to passenger cars and to MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R25 was not checked (not reachable). No text read requires this for an off-road utility or recreational vehicle; ANSI/ROHVA 1, ANSI/OPEI B71.9 and SAE J2258 were not checked"
+      }
+     },
+     {
+      "req_key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "text": "荷台の床と荷の材料は何ですか。分からなければ、滑りにくい値は使わずに 0.3 とします。",
+      "ask": "confirm",
+      "allow_other": true,
+      "choices": [
+       {
+        "label": "分からない (0.3)",
+        "value": 0.3
+       },
+       {
+        "label": "ゴムのマットを敷く (0.6)",
+        "value": 0.6
+       },
+       {
+        "label": "木の荷と合板の床 (0.45)",
+        "value": 0.45
+       },
+       {
+        "label": "樹脂のパレットとステンレス板・溝付きアルミの床 (0.15)",
+        "value": 0.15
+       },
+       {
+        "label": "雪・氷・霜がつく (0.2)",
+        "value": 0.2
+       },
+       {
+        "label": "油や脂がつく (0.1)",
+        "value": 0.1
+       }
+      ],
+      "default": {
+       "value": 0.3,
+       "unit": "1",
+       "trust": 3,
+       "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction"
+      }
+     },
+     {
       "req_key": "Q64",
       "name": "横転したときの保護枠 (ROPS)",
       "text": "横転したときの保護枠 (ROPS) をつけますか。",
@@ -1263,6 +1585,19 @@ export const DEMOS = {
       ]
      },
      {
+      "req_key": "Q83",
+      "name": "操舵の回転を折って伝える所の、1 か所あたりの折れ角の上限",
+      "text": "ハンドルの回転を、軸を折り曲げて車輪の側へ伝えるとき、1 か所で折ってよい角度はいくつまでにしますか。使う部品の決まった値があれば、それを書いてください。",
+      "ask": "confirm",
+      "allow_other": true,
+      "default": {
+       "value": 35,
+       "unit": "deg",
+       "trust": 3,
+       "basis": "assumption: the maximum operating angle of one maker's single steering universal joints, applied to the joints of this vehicle, whose maker is not chosen. Borgeson Universal, \"U-Joint & Shaft General Instructions\" (sheet dated 3/20/2018), item 1): single joints 35 degrees, double joints 70 degrees, beyond which the joint can bind and be damaged; read 2026-11-06 (https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). These are aftermarket steering joints of cars. Industrial joints are rated otherwise (read 2026-11-06): Huco Universal Joints catalogue section 2, PDF p. 8, needle roller T series 40 deg single, 80 deg double; PDF p. 9, plain bearing DIN 808 joints 45 deg single, 90 deg double; PDF p. 6, plain T series sizes 50 and up 30 deg (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); Timken NB10-UJ needle bearing type, max operating angle for power transmission 25 deg (https:\/\/cad.timken.com/printitem/needle-bearing-type-universal-joints/eedle-bearing-type-universal-solid-joints-imperial/68514415607). Borgeson's web page (https:\/\/www.borgeson.com/joints.html) was not checked (403). The joint actually chosen and its catalogue win over this value"
+      }
+     },
+     {
       "req_key": "Q91",
       "name": "運転時間",
       "text": "1 日に何時間、何年動かしますか。",
@@ -1279,9 +1614,45 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 7 件、答え 7 件、既定値 2 件",
+   "text": "質問 10 件、答え 7 件、既定値 10 件",
    "data": {
     "answers": [
+     {
+      "key": "Q21",
+      "name": "荷台の固定点 1 か所が受けられる力の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
+      "value": 8000,
+      "unit": "N"
+     },
+     {
+      "key": "Q36",
+      "name": "頭を後ろから受け止める面の左右の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (not less than 85 mm to each side of the seat's vertical median plane; 2 x 85 = 170 mm computed) and para. 6.6.1 (measured in a plane 65 mm below the top, perpendicular to the torso reference line), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top; 254 mm for a front outboard seat when a front centre seat exists), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles (S2)",
+      "value": 170,
+      "unit": "mm"
+     },
+     {
+      "key": "Q37",
+      "name": "頭の後ろと、それを受け止める面との前後のすき間の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) with S3 (backset = the minimum horizontal distance from the rear of the head of a seated 50th percentile male, head restraint measurement device on the SAE J826 manikin, to the head restraint) and S5.2.3 (top set between 750 and 800 mm, seat back at the design angle), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06; applies to passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R17 08 series has no backset limit (the word does not occur in the MLIT text, read 2026-11-06); later R17 series and UN R25 were not checked",
+      "value": 55,
+      "unit": "mm"
+     },
+     {
+      "key": "Q38",
+      "name": "背もたれと、頭を受け止める部分のあいだのすき間の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1 (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "value": 60,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -1298,6 +1669,15 @@ export const DEMOS = {
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q84",
+      "name": "ハンドルから車輪の側へ伝わる回転のむらの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the example value of an allowable torque variation rate in a passenger-car steering design tool, applied to this vehicle. NSK Ltd, US 8,965,743 B2 (granted 2015-02-24), description of FIG. 21-27: the allowable torque variation rate is \"for example, 10%\" (FIG. 23-27 compare 10 % down to 3 %); the torque variation rate is the ratio of input to output torque, the inverse of the angular velocity ratio (its Equation (5) is an image and was not read); read 2026-11-06 in the Google Patents text (https:\/\/patents.google.com/patent/US8965743B2/en). HIRAKU takes the rate as the largest deviation of the output-to-input speed ratio from 1 over one turn (an assumption about the patent's definition). The ratio of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a) (a = angle between the shafts, t = turn of the input from the position where its arm of the cross lies in the plane of the two shafts), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary) (https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); the same range w cos a to w sec a in Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. No standard for steering was read",
+      "value": 10,
+      "unit": "%"
      },
      {
       "key": "Q03",
@@ -1324,6 +1704,24 @@ export const DEMOS = {
       "basis": "assumption (a sample answer)"
      },
      {
+      "key": "Q35",
+      "name": "頭を後ろから受け止める高さの下限 (座席の基準点から、胴の線に沿って上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf), para. 5.6.2 and 5.6.3.1 (front seats not less than 800 mm, other seats 750 mm) and para. 6.5.4 (the height is from the R point, the seating reference point of para. 2.13, to the tangent at the top, measured along the manikin's torso reference line), read 2026-11-06; R17 applies to M1 and N1 (para. 1). 49 CFR 571.202a (FMVSS 202a, eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a) S4.2.1(a)(1) (front outboard not less than 800 mm in at least one position) with S3 (height from the H-point parallel to the torso reference line), read 2026-11-06; it applies to passenger cars and to MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R25 was not checked (not reachable). No text read requires this for an off-road utility or recreational vehicle; ANSI/ROHVA 1, ANSI/OPEI B71.9 and SAE J2258 were not checked",
+      "value": 800,
+      "unit": "mm"
+     },
+     {
+      "key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction",
+      "value": 0.3,
+      "unit": "1"
+     },
+     {
       "key": "Q64",
       "name": "横転したときの保護枠 (ROPS)",
       "value": "あり",
@@ -1347,6 +1745,15 @@ export const DEMOS = {
       "source": "hearing",
       "trust": 3,
       "basis": "assumption (steel tube frame)"
+     },
+     {
+      "key": "Q83",
+      "name": "操舵の回転を折って伝える所の、1 か所あたりの折れ角の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the maximum operating angle of one maker's single steering universal joints, applied to the joints of this vehicle, whose maker is not chosen. Borgeson Universal, \"U-Joint & Shaft General Instructions\" (sheet dated 3/20/2018), item 1): single joints 35 degrees, double joints 70 degrees, beyond which the joint can bind and be damaged; read 2026-11-06 (https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). These are aftermarket steering joints of cars. Industrial joints are rated otherwise (read 2026-11-06): Huco Universal Joints catalogue section 2, PDF p. 8, needle roller T series 40 deg single, 80 deg double; PDF p. 9, plain bearing DIN 808 joints 45 deg single, 90 deg double; PDF p. 6, plain T series sizes 50 and up 30 deg (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); Timken NB10-UJ needle bearing type, max operating angle for power transmission 25 deg (https:\/\/cad.timken.com/printitem/needle-bearing-type-universal-joints/eedle-bearing-type-universal-solid-joints-imperial/68514415607). Borgeson's web page (https:\/\/www.borgeson.com/joints.html) was not checked (403). The joint actually chosen and its catalogue win over this value",
+      "value": 35,
+      "unit": "deg"
      },
      {
       "key": "Q91",
@@ -20382,6 +20789,142 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0013",
     "design_version": 1,
+    "rule_id": "HR-01",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_height_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_height_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0014",
+    "design_version": 1,
+    "rule_id": "HR-02",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_width_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_width_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0015",
+    "design_version": 1,
+    "rule_id": "HR-03",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_backset_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_backset_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0016",
+    "design_version": 1,
+    "rule_id": "HR-04",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_gap_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_gap_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0017",
+    "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
      "battery"
@@ -20400,15 +20943,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -20428,15 +20971,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0015",
+    "rule_check_id": "rchk-0019",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -20569,15 +21112,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.500+09:00",
-   "t": 15.5,
+   "seq": 35,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0016",
+    "rule_check_id": "rchk-0020",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -21619,15 +22162,297 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "CS-01",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "CS-02",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "cargo_blocked_forward",
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "CS-03",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "CS-04",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "lashing_count",
+       "cargo_blocked_forward"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "CS-05",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "lashing_wll_sum_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "CS-06",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_pretension_N",
+       "lashing_angle_sin"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "CS-07",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "lashing_pretension_N",
+       "lashing_wll_min_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
+    "design_version": 1,
+    "rule_id": "CS-08",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "anchor_strength_min_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "CS-09",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
+    "rule_id": "CS-10",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "cargo_blocked_forward",
+       "topover_count"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -21672,15 +22497,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0018",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -21729,15 +22554,125 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.800+09:00",
-   "t": 15.8,
+   "seq": 48,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0019",
+    "rule_check_id": "rchk-0033",
+    "design_version": 1,
+    "rule_id": "UJ-01",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "uj_angle_max_deg"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 49,
+   "ts": "2026-11-03T10:00:17.300+09:00",
+   "t": 17.3,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0034",
+    "design_version": 1,
+    "rule_id": "UJ-02",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "uj_count",
+       "uj_angle_diff_deg"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 50,
+   "ts": "2026-11-03T10:00:17.400+09:00",
+   "t": 17.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0035",
+    "design_version": 1,
+    "rule_id": "UJ-03",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "uj_count",
+       "uj_phase_error_deg"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 51,
+   "ts": "2026-11-03T10:00:17.500+09:00",
+   "t": 17.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0036",
+    "design_version": 1,
+    "rule_id": "UJ-04",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "steer_speed_variation_pct"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 52,
+   "ts": "2026-11-03T10:00:17.600+09:00",
+   "t": 17.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0037",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -22093,15 +23028,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 53,
+   "ts": "2026-11-03T10:00:17.700+09:00",
+   "t": 17.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0038",
     "design_version": 1,
     "rule_id": "SY-01",
     "targets": [
@@ -22115,15 +23050,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
+   "seq": 54,
+   "ts": "2026-11-03T10:00:17.800+09:00",
+   "t": 17.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0021",
+    "rule_check_id": "rchk-0039",
     "design_version": 1,
     "rule_id": "SY-02",
     "targets": [
@@ -22137,15 +23072,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 37,
-   "ts": "2026-11-03T10:00:16.100+09:00",
-   "t": 16.1,
+   "seq": 55,
+   "ts": "2026-11-03T10:00:17.900+09:00",
+   "t": 17.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0022",
+    "rule_check_id": "rchk-0040",
     "design_version": 1,
     "rule_id": "SY-03",
     "targets": [
@@ -22161,15 +23096,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 38,
-   "ts": "2026-11-03T10:00:16.200+09:00",
-   "t": 16.2,
+   "seq": 56,
+   "ts": "2026-11-03T10:00:18.000+09:00",
+   "t": 18.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0023",
+    "rule_check_id": "rchk-0041",
     "design_version": 1,
     "rule_id": "SY-04",
     "targets": [
@@ -22182,15 +23117,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 39,
-   "ts": "2026-11-03T10:00:16.300+09:00",
-   "t": 16.3,
+   "seq": 57,
+   "ts": "2026-11-03T10:00:18.100+09:00",
+   "t": 18.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0024",
+    "rule_check_id": "rchk-0042",
     "design_version": 1,
     "rule_id": "SY-05",
     "targets": [
@@ -22203,15 +23138,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 40,
-   "ts": "2026-11-03T10:00:16.400+09:00",
-   "t": 16.4,
+   "seq": 58,
+   "ts": "2026-11-03T10:00:18.200+09:00",
+   "t": 18.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0025",
+    "rule_check_id": "rchk-0043",
     "design_version": 1,
     "rule_id": "SY-06",
     "targets": [
@@ -22223,15 +23158,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 41,
-   "ts": "2026-11-03T10:00:16.500+09:00",
-   "t": 16.5,
+   "seq": 59,
+   "ts": "2026-11-03T10:00:18.300+09:00",
+   "t": 18.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0026",
+    "rule_check_id": "rchk-0044",
     "design_version": 1,
     "rule_id": "SY-07",
     "targets": [],
@@ -22241,15 +23176,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 42,
-   "ts": "2026-11-03T10:00:16.600+09:00",
-   "t": 16.6,
+   "seq": 60,
+   "ts": "2026-11-03T10:00:18.400+09:00",
+   "t": 18.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0027",
+    "rule_check_id": "rchk-0045",
     "design_version": 1,
     "rule_id": "SY-08",
     "targets": [
@@ -22262,15 +23197,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 43,
-   "ts": "2026-11-03T10:00:16.700+09:00",
-   "t": 16.7,
+   "seq": 61,
+   "ts": "2026-11-03T10:00:18.500+09:00",
+   "t": 18.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0028",
+    "rule_check_id": "rchk-0046",
     "design_version": 1,
     "rule_id": "SY-09",
     "targets": [
@@ -22282,15 +23217,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.800+09:00",
-   "t": 16.8,
+   "seq": 62,
+   "ts": "2026-11-03T10:00:18.600+09:00",
+   "t": 18.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0029",
+    "rule_check_id": "rchk-0047",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -22417,15 +23352,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 63,
+   "ts": "2026-11-03T10:00:18.700+09:00",
+   "t": 18.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0048",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -22472,15 +23407,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 46,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 64,
+   "ts": "2026-11-03T10:00:18.800+09:00",
+   "t": 18.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0049",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -22850,7 +23785,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「人の決まり」から 7 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-HU",
@@ -22901,6 +23836,66 @@ export const DEMOS = {
        "kinds": [
         "suspension",
         "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "人が乗る座席は、頭を後ろから受け止める上端が、座席の基準点から胴の線に沿って 800 mm 以上の高さにある",
+      "check": "headrest_height_mm >= req_Q35",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.6.2 (front seats not less than 800 mm) and 6.5.4 (from the R point to the tangent at the top, along the torso reference line), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.1(a)(1) (800 mm, from the H-point parallel to the torso reference line, S3), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles. A seat with no head support has no value and is reported as not given, not as passing",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "頭を受け止める面の左右の幅は、上端から 65 mm 下で 170 mm 以上",
+      "check": "headrest_width_mm >= req_Q36",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (85 mm to each side of the median plane, 170 mm computed) and 6.6.1 (plane 65 mm below the top), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座った人の頭の後ろと、頭を受け止める面との水平のすき間は 55 mm 以下",
+      "check": "headrest_backset_mm <= req_Q37",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) and S3 (backset measured from the rear of the head of a seated 50th percentile male, SAE J826 manikin with the head restraint measurement device), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06, for passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less. UN R17 08 series has no backset limit (read 2026-11-06)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-04",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "背もたれと頭を受け止める部分のあいだのすき間は、165 mm の球で測って 60 mm 以下",
+      "check": "headrest_gap_mm <= req_Q38",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (not more than 60 mm for a head restraint not adjustable for height) and 6.7.1 (165 mm sphere), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm, 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
        ]
       }
      }
@@ -22962,7 +23957,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 12 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-AS",
@@ -23002,6 +23997,156 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     },
+     {
+      "rule_id": "CS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定 (荷の上を越える帯) の張りと床の摩擦で、荷が横へ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q75 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 (top-over lashing against sliding, m = n · 2 · μ · sin α · FT / (g · (cx,y − μ · cz) · fs)), as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46, https:\/\/www.hsa.ie/eng/Vehicles_at_Work/Load_Securing/Guidance_and_Publications/2014_European_Best_Practice.pdf); EN 12195-1 itself not checked (paid). The same balance without a safety factor is the CTU Code (MSC.1/Circ.1497) Annex 7 4.2.7-4.2.8, read 2026-11-06 (p. 113-114). Borrowed from goods road vehicles (assumption). The guidelines (top-over lashing section, PDF p. 43) take FT as the STF and say the tension can fall to 50 % on deformable goods",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷が前へ滑らない (荷台の前の壁で止まるか、上から押さえる固定と摩擦で止まる)",
+      "check": "cargo_blocked_forward >= 1 or 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.25",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.25 forward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46); blocking counts as securing (guidelines 1.4, PDF p. 14; CTU Code Annex 7 4.2.8, read 2026-11-06). Whether the front wall itself is strong enough is not checked by this rule (the CTU Code 6.6 gives front wall strengths for goods vehicles only). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-03",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定の張りと床の摩擦で、荷が後ろへ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.1 rearward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46). A rear gate that blocks the load is not counted here. Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-04",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "摩擦が十分でも、荷は少なくとも 1 本の固定で止め、前で止まらない 1.52 m を超えるか 500 kg を超える荷は 2 本以上で止める",
+      "check": "lashing_count >= 1 and (lashing_count >= 2 or cargo_blocked_forward >= 1 or (size_x_mm <= 1520 and mass_kg <= 500))",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.110(b)-(c) (not blocked forward: 1 tiedown for an article of 1.52 m or less and 500 kg or less, 2 for a heavier one or one up to 3.04 m; blocked: 1 per 3.04 m), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.110); CTU Code (MSC.1/Circ.1497) 5.4 and Annex 7 4.2.8 (mass and friction alone do not secure a load against vibration; a minimum number of top-over lashings is needed, no number given), read 2026-11-06 (p. 21, p. 114). The check covers loads up to 3.04 m long only (a longer one needs more). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-05",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の使ってよい力の合計 (荷の向こう側へ回すものは全部、そうでないものは半分で数える) が、荷の重さの決めた割合以上",
+      "check": "lashing_wll_sum_N >= 0.5 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.106(d) (aggregate working load limit at least one-half the weight; counting by (d)(1)-(3)) and 393.108(a) (a tiedown's WLL is the lowest of its parts and its anchor points), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.106). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-06",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定が荷を床へ押さえつける力が、荷の重さの決めた割合以上 (でこぼこ道で荷が浮かない)",
+      "check": "2 * topover_count * lashing_pretension_N * lashing_angle_sin >= 0.2 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.102(b) (downward force at least 20 percent of the weight when the article is not fully contained), read 2026-11-06 (LII copy); the vertical force of a top-over lashing 2 · FT · sin α from EN 12195-1 equation 10 as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary). The CTU Code Annex 7 4.2.7 takes 1.8 times the pre-tension for a vertical lashing instead of 2, read 2026-11-06 (p. 113). Borrowed from road vehicles (assumption); no rough-road value was found",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-07",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の最初の張りは、その固定の使ってよい力の半分以下",
+      "check": "lashing_pretension_N <= 0.5 * lashing_wll_min_N",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 2.4.4 (initial pre-tension never more than 50 % of the MSL) and 2.4.1 (the LC of national standards corresponds to the MSL), read 2026-11-06 (p. 99-100). For lashings in cargo transport units; taking the US WLL as the MSL is an assumption",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-08",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷台の固定点は、どの 1 か所も決めた力に耐える",
+      "check": "anchor_strength_min_N >= req_Q21",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12640 as quoted in the EU Best Practice Guidelines (2014) 2.6, Table 3 (3.5 to 7.5 t: 800 daN per lashing point), read 2026-11-06 (secondary, PDF p. 23); EN 12640 not checked. 49 CFR 393.104(c) asks anchor points to meet the 393.102 criteria and gives no number, read 2026-11-06. Borrowed for a lighter vehicle (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-09",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "横へ倒れやすい荷 (重心の高さが幅の半分に比べて高い荷) は、上から押さえる固定で止める",
+      "check": "0.6 * (center_z_mm - bottom_z_mm) < 1 * size_y_mm / 2 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1: securing against tipping is needed when cx,y · d ≥ cz · b, read 2026-11-06 (p. 114); the box centre is taken as the centre of gravity (assumption). Only that tipping is addressed is checked, not the size of the lashing (the EN 12195-1 tipping equation was not read). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-10",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "前へ倒れやすい荷は、荷台の前の壁で止めるか、上から押さえる固定で止める",
+      "check": "req_Q76 * (center_z_mm - bottom_z_mm) < 1 * size_x_mm / 2 or cargo_blocked_forward >= 1 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1 (tipping when cx,y · d ≥ cz · b), read 2026-11-06 (p. 114); box centre taken as the centre of gravity, and a front wall at least as high as the centre of gravity is assumed when cargo_blocked_forward is 1 (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
      }
     ]
    }
@@ -23013,7 +24158,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「サスの決まり」から 6 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SU",
@@ -23048,6 +24193,66 @@ export const DEMOS = {
       "applies_to": {
        "kinds": [
         "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を折る所の折れ角は、どの 1 か所でも上限 (要件) 以下",
+      "check": "uj_angle_max_deg <= req_Q83",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the limit is the requirement item R1-01 (35 deg by default, the maximum operating angle of Borgeson single steering universal joints, \"U-Joint & Shaft General Instructions\" item 1), read 2026-11-06, https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). Going past it can make the joint bind (same item). The angle of a joint is the angle between the axes of the two shafts it joins",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの折れ角の差は 1 度以下",
+      "check": "uj_count < 2 or uj_angle_diff_deg <= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The two angles must be equal for an even output: Huco Universal Joints catalogue section 2, PDF p. 2, rule 1, read 2026-11-06 (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); NSK US 8,965,743 B2 (joint angle at the upper joint equal to that at the lower joint), read 2026-11-06 (https:\/\/patents.google.com/patent/US8965743B2/en). The allowed difference is the requirement item R1-03 (1 deg by default, borrowed from Spicer's rule 2 for vehicle propeller shafts, https:\/\/spicerparts.com/node/202, read 2026-11-06): an assumption for a steering shaft",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-03",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの継手の向き合わせ (位相) の正しい向きからのずれは 7 度以下",
+      "check": "uj_count < 2 or uj_phase_error_deg <= 7",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The right phase (inner forks in line when the shaft is bent in one plane): Huco Universal Joints catalogue section 2, PDF p. 2, rule 2, read 2026-11-06; ididit instructions 8000000021, PDF p. 5 step 4, read 2026-11-06 (https:\/\/static.speedwaymotors.com/pdf/4461216-INS.pdf), which adds that a wrong phase can give early wear or binding. The allowed error is the requirement item R1-04 (7 deg by default, the example of NSK US 8,965,743 B2, read 2026-11-06): an assumption",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-04",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "ハンドルを一定に回したときの、車輪の側の回転の速さのむらは上限 (要件) 以下",
+      "check": "steer_speed_variation_pct <= req_Q84",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The fluctuation of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary, https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); output between w cos a and w sec a, at 5 deg +/-0.4 %, 7 deg +/-0.8 %, 10 deg +/-1.5 %: Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. The limit is the requirement item R1-02 (10 % by default, the example allowable torque variation rate of NSK US 8,965,743 B2, read 2026-11-06): an assumption. This rule covers one joint as well, where UJ-02 and UJ-03 do not apply",
+      "applies_to": {
+       "kinds": [
+        "steering"
        ]
       }
      }
@@ -23212,7 +24417,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 10 件あります。まとめて聞きます",
+   "text": "足りない要件が 11 件あります。まとめて聞きます",
    "data": {
     "questions": [
      {
@@ -23371,6 +24576,45 @@ export const DEMOS = {
       }
      },
      {
+      "req_key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "text": "荷台の床と荷の材料は何ですか。分からなければ、滑りにくい値は使わずに 0.3 とします。",
+      "ask": "confirm",
+      "allow_other": true,
+      "choices": [
+       {
+        "label": "分からない (0.3)",
+        "value": 0.3
+       },
+       {
+        "label": "ゴムのマットを敷く (0.6)",
+        "value": 0.6
+       },
+       {
+        "label": "木の荷と合板の床 (0.45)",
+        "value": 0.45
+       },
+       {
+        "label": "樹脂のパレットとステンレス板・溝付きアルミの床 (0.15)",
+        "value": 0.15
+       },
+       {
+        "label": "雪・氷・霜がつく (0.2)",
+        "value": 0.2
+       },
+       {
+        "label": "油や脂がつく (0.1)",
+        "value": 0.1
+       }
+      ],
+      "default": {
+       "value": 0.3,
+       "unit": "1",
+       "trust": 3,
+       "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction"
+      }
+     },
+     {
       "req_key": "Q61",
       "name": "安全率 (降伏に対して)",
       "text": "部材の安全率 (降伏に対する余裕) はいくつにしますか。",
@@ -23423,9 +24667,18 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 10 件、答え 3 件、既定値 15 件",
+   "text": "質問 11 件、答え 3 件、既定値 17 件",
    "data": {
     "answers": [
+     {
+      "key": "Q21",
+      "name": "荷台の固定点 1 か所が受けられる力の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
+      "value": 8000,
+      "unit": "N"
+     },
      {
       "key": "Q31",
       "name": "体格の範囲",
@@ -23558,6 +24811,15 @@ export const DEMOS = {
       "basis": "JIS T 9254 (copy): 背上げ 0〜70° 以上が推奨, 7.4 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 70,
       "unit": "deg"
+     },
+     {
+      "key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction",
+      "value": 0.3,
+      "unit": "1"
      },
      {
       "key": "Q61",
@@ -23912,7 +25174,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「人の決まり」から 7 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-HU",
@@ -23963,6 +25225,66 @@ export const DEMOS = {
        "kinds": [
         "suspension",
         "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "人が乗る座席は、頭を後ろから受け止める上端が、座席の基準点から胴の線に沿って 800 mm 以上の高さにある",
+      "check": "headrest_height_mm >= req_Q35",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.6.2 (front seats not less than 800 mm) and 6.5.4 (from the R point to the tangent at the top, along the torso reference line), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.1(a)(1) (800 mm, from the H-point parallel to the torso reference line, S3), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles. A seat with no head support has no value and is reported as not given, not as passing",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "頭を受け止める面の左右の幅は、上端から 65 mm 下で 170 mm 以上",
+      "check": "headrest_width_mm >= req_Q36",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (85 mm to each side of the median plane, 170 mm computed) and 6.6.1 (plane 65 mm below the top), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座った人の頭の後ろと、頭を受け止める面との水平のすき間は 55 mm 以下",
+      "check": "headrest_backset_mm <= req_Q37",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) and S3 (backset measured from the rear of the head of a seated 50th percentile male, SAE J826 manikin with the head restraint measurement device), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06, for passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less. UN R17 08 series has no backset limit (read 2026-11-06)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-04",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "背もたれと頭を受け止める部分のあいだのすき間は、165 mm の球で測って 60 mm 以下",
+      "check": "headrest_gap_mm <= req_Q38",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (not more than 60 mm for a head restraint not adjustable for height) and 6.7.1 (165 mm sphere), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm, 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
        ]
       }
      }
@@ -24024,7 +25346,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 12 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-AS",
@@ -24064,6 +25386,156 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     },
+     {
+      "rule_id": "CS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定 (荷の上を越える帯) の張りと床の摩擦で、荷が横へ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q75 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 (top-over lashing against sliding, m = n · 2 · μ · sin α · FT / (g · (cx,y − μ · cz) · fs)), as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46, https:\/\/www.hsa.ie/eng/Vehicles_at_Work/Load_Securing/Guidance_and_Publications/2014_European_Best_Practice.pdf); EN 12195-1 itself not checked (paid). The same balance without a safety factor is the CTU Code (MSC.1/Circ.1497) Annex 7 4.2.7-4.2.8, read 2026-11-06 (p. 113-114). Borrowed from goods road vehicles (assumption). The guidelines (top-over lashing section, PDF p. 43) take FT as the STF and say the tension can fall to 50 % on deformable goods",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷が前へ滑らない (荷台の前の壁で止まるか、上から押さえる固定と摩擦で止まる)",
+      "check": "cargo_blocked_forward >= 1 or 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.25",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.25 forward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46); blocking counts as securing (guidelines 1.4, PDF p. 14; CTU Code Annex 7 4.2.8, read 2026-11-06). Whether the front wall itself is strong enough is not checked by this rule (the CTU Code 6.6 gives front wall strengths for goods vehicles only). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-03",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定の張りと床の摩擦で、荷が後ろへ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.1 rearward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46). A rear gate that blocks the load is not counted here. Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-04",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "摩擦が十分でも、荷は少なくとも 1 本の固定で止め、前で止まらない 1.52 m を超えるか 500 kg を超える荷は 2 本以上で止める",
+      "check": "lashing_count >= 1 and (lashing_count >= 2 or cargo_blocked_forward >= 1 or (size_x_mm <= 1520 and mass_kg <= 500))",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.110(b)-(c) (not blocked forward: 1 tiedown for an article of 1.52 m or less and 500 kg or less, 2 for a heavier one or one up to 3.04 m; blocked: 1 per 3.04 m), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.110); CTU Code (MSC.1/Circ.1497) 5.4 and Annex 7 4.2.8 (mass and friction alone do not secure a load against vibration; a minimum number of top-over lashings is needed, no number given), read 2026-11-06 (p. 21, p. 114). The check covers loads up to 3.04 m long only (a longer one needs more). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-05",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の使ってよい力の合計 (荷の向こう側へ回すものは全部、そうでないものは半分で数える) が、荷の重さの決めた割合以上",
+      "check": "lashing_wll_sum_N >= 0.5 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.106(d) (aggregate working load limit at least one-half the weight; counting by (d)(1)-(3)) and 393.108(a) (a tiedown's WLL is the lowest of its parts and its anchor points), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.106). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-06",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定が荷を床へ押さえつける力が、荷の重さの決めた割合以上 (でこぼこ道で荷が浮かない)",
+      "check": "2 * topover_count * lashing_pretension_N * lashing_angle_sin >= 0.2 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.102(b) (downward force at least 20 percent of the weight when the article is not fully contained), read 2026-11-06 (LII copy); the vertical force of a top-over lashing 2 · FT · sin α from EN 12195-1 equation 10 as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary). The CTU Code Annex 7 4.2.7 takes 1.8 times the pre-tension for a vertical lashing instead of 2, read 2026-11-06 (p. 113). Borrowed from road vehicles (assumption); no rough-road value was found",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-07",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の最初の張りは、その固定の使ってよい力の半分以下",
+      "check": "lashing_pretension_N <= 0.5 * lashing_wll_min_N",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 2.4.4 (initial pre-tension never more than 50 % of the MSL) and 2.4.1 (the LC of national standards corresponds to the MSL), read 2026-11-06 (p. 99-100). For lashings in cargo transport units; taking the US WLL as the MSL is an assumption",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-08",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷台の固定点は、どの 1 か所も決めた力に耐える",
+      "check": "anchor_strength_min_N >= req_Q21",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12640 as quoted in the EU Best Practice Guidelines (2014) 2.6, Table 3 (3.5 to 7.5 t: 800 daN per lashing point), read 2026-11-06 (secondary, PDF p. 23); EN 12640 not checked. 49 CFR 393.104(c) asks anchor points to meet the 393.102 criteria and gives no number, read 2026-11-06. Borrowed for a lighter vehicle (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-09",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "横へ倒れやすい荷 (重心の高さが幅の半分に比べて高い荷) は、上から押さえる固定で止める",
+      "check": "0.6 * (center_z_mm - bottom_z_mm) < 1 * size_y_mm / 2 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1: securing against tipping is needed when cx,y · d ≥ cz · b, read 2026-11-06 (p. 114); the box centre is taken as the centre of gravity (assumption). Only that tipping is addressed is checked, not the size of the lashing (the EN 12195-1 tipping equation was not read). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-10",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "前へ倒れやすい荷は、荷台の前の壁で止めるか、上から押さえる固定で止める",
+      "check": "req_Q76 * (center_z_mm - bottom_z_mm) < 1 * size_x_mm / 2 or cargo_blocked_forward >= 1 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1 (tipping when cx,y · d ≥ cz · b), read 2026-11-06 (p. 114); box centre taken as the centre of gravity, and a front wall at least as high as the centre of gravity is assumed when cargo_blocked_forward is 1 (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
      }
     ]
    }
@@ -24075,7 +25547,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「サスの決まり」から 6 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SU",
@@ -24110,6 +25582,66 @@ export const DEMOS = {
       "applies_to": {
        "kinds": [
         "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を折る所の折れ角は、どの 1 か所でも上限 (要件) 以下",
+      "check": "uj_angle_max_deg <= req_Q83",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the limit is the requirement item R1-01 (35 deg by default, the maximum operating angle of Borgeson single steering universal joints, \"U-Joint & Shaft General Instructions\" item 1), read 2026-11-06, https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). Going past it can make the joint bind (same item). The angle of a joint is the angle between the axes of the two shafts it joins",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの折れ角の差は 1 度以下",
+      "check": "uj_count < 2 or uj_angle_diff_deg <= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The two angles must be equal for an even output: Huco Universal Joints catalogue section 2, PDF p. 2, rule 1, read 2026-11-06 (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); NSK US 8,965,743 B2 (joint angle at the upper joint equal to that at the lower joint), read 2026-11-06 (https:\/\/patents.google.com/patent/US8965743B2/en). The allowed difference is the requirement item R1-03 (1 deg by default, borrowed from Spicer's rule 2 for vehicle propeller shafts, https:\/\/spicerparts.com/node/202, read 2026-11-06): an assumption for a steering shaft",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-03",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの継手の向き合わせ (位相) の正しい向きからのずれは 7 度以下",
+      "check": "uj_count < 2 or uj_phase_error_deg <= 7",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The right phase (inner forks in line when the shaft is bent in one plane): Huco Universal Joints catalogue section 2, PDF p. 2, rule 2, read 2026-11-06; ididit instructions 8000000021, PDF p. 5 step 4, read 2026-11-06 (https:\/\/static.speedwaymotors.com/pdf/4461216-INS.pdf), which adds that a wrong phase can give early wear or binding. The allowed error is the requirement item R1-04 (7 deg by default, the example of NSK US 8,965,743 B2, read 2026-11-06): an assumption",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-04",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "ハンドルを一定に回したときの、車輪の側の回転の速さのむらは上限 (要件) 以下",
+      "check": "steer_speed_variation_pct <= req_Q84",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The fluctuation of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary, https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); output between w cos a and w sec a, at 5 deg +/-0.4 %, 7 deg +/-0.8 %, 10 deg +/-1.5 %: Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. The limit is the requirement item R1-02 (10 % by default, the example allowable torque variation rate of NSK US 8,965,743 B2, read 2026-11-06): an assumption. This rule covers one joint as well, where UJ-02 and UJ-03 do not apply",
+      "applies_to": {
+       "kinds": [
+        "steering"
        ]
       }
      }
@@ -24747,7 +26279,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「人の決まり」から 7 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-HU",
@@ -24798,6 +26330,66 @@ export const DEMOS = {
        "kinds": [
         "suspension",
         "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "人が乗る座席は、頭を後ろから受け止める上端が、座席の基準点から胴の線に沿って 800 mm 以上の高さにある",
+      "check": "headrest_height_mm >= req_Q35",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.6.2 (front seats not less than 800 mm) and 6.5.4 (from the R point to the tangent at the top, along the torso reference line), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.1(a)(1) (800 mm, from the H-point parallel to the torso reference line, S3), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles. A seat with no head support has no value and is reported as not given, not as passing",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "頭を受け止める面の左右の幅は、上端から 65 mm 下で 170 mm 以上",
+      "check": "headrest_width_mm >= req_Q36",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (85 mm to each side of the median plane, 170 mm computed) and 6.6.1 (plane 65 mm below the top), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座った人の頭の後ろと、頭を受け止める面との水平のすき間は 55 mm 以下",
+      "check": "headrest_backset_mm <= req_Q37",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) and S3 (backset measured from the rear of the head of a seated 50th percentile male, SAE J826 manikin with the head restraint measurement device), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06, for passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less. UN R17 08 series has no backset limit (read 2026-11-06)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-04",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "背もたれと頭を受け止める部分のあいだのすき間は、165 mm の球で測って 60 mm 以下",
+      "check": "headrest_gap_mm <= req_Q38",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (not more than 60 mm for a head restraint not adjustable for height) and 6.7.1 (165 mm sphere), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm, 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
        ]
       }
      }
@@ -24859,7 +26451,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 12 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-AS",
@@ -24899,6 +26491,156 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     },
+     {
+      "rule_id": "CS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定 (荷の上を越える帯) の張りと床の摩擦で、荷が横へ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q75 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 (top-over lashing against sliding, m = n · 2 · μ · sin α · FT / (g · (cx,y − μ · cz) · fs)), as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46, https:\/\/www.hsa.ie/eng/Vehicles_at_Work/Load_Securing/Guidance_and_Publications/2014_European_Best_Practice.pdf); EN 12195-1 itself not checked (paid). The same balance without a safety factor is the CTU Code (MSC.1/Circ.1497) Annex 7 4.2.7-4.2.8, read 2026-11-06 (p. 113-114). Borrowed from goods road vehicles (assumption). The guidelines (top-over lashing section, PDF p. 43) take FT as the STF and say the tension can fall to 50 % on deformable goods",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷が前へ滑らない (荷台の前の壁で止まるか、上から押さえる固定と摩擦で止まる)",
+      "check": "cargo_blocked_forward >= 1 or 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.25",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.25 forward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46); blocking counts as securing (guidelines 1.4, PDF p. 14; CTU Code Annex 7 4.2.8, read 2026-11-06). Whether the front wall itself is strong enough is not checked by this rule (the CTU Code 6.6 gives front wall strengths for goods vehicles only). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-03",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定の張りと床の摩擦で、荷が後ろへ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.1 rearward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46). A rear gate that blocks the load is not counted here. Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-04",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "摩擦が十分でも、荷は少なくとも 1 本の固定で止め、前で止まらない 1.52 m を超えるか 500 kg を超える荷は 2 本以上で止める",
+      "check": "lashing_count >= 1 and (lashing_count >= 2 or cargo_blocked_forward >= 1 or (size_x_mm <= 1520 and mass_kg <= 500))",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.110(b)-(c) (not blocked forward: 1 tiedown for an article of 1.52 m or less and 500 kg or less, 2 for a heavier one or one up to 3.04 m; blocked: 1 per 3.04 m), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.110); CTU Code (MSC.1/Circ.1497) 5.4 and Annex 7 4.2.8 (mass and friction alone do not secure a load against vibration; a minimum number of top-over lashings is needed, no number given), read 2026-11-06 (p. 21, p. 114). The check covers loads up to 3.04 m long only (a longer one needs more). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-05",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の使ってよい力の合計 (荷の向こう側へ回すものは全部、そうでないものは半分で数える) が、荷の重さの決めた割合以上",
+      "check": "lashing_wll_sum_N >= 0.5 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.106(d) (aggregate working load limit at least one-half the weight; counting by (d)(1)-(3)) and 393.108(a) (a tiedown's WLL is the lowest of its parts and its anchor points), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.106). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-06",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定が荷を床へ押さえつける力が、荷の重さの決めた割合以上 (でこぼこ道で荷が浮かない)",
+      "check": "2 * topover_count * lashing_pretension_N * lashing_angle_sin >= 0.2 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.102(b) (downward force at least 20 percent of the weight when the article is not fully contained), read 2026-11-06 (LII copy); the vertical force of a top-over lashing 2 · FT · sin α from EN 12195-1 equation 10 as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary). The CTU Code Annex 7 4.2.7 takes 1.8 times the pre-tension for a vertical lashing instead of 2, read 2026-11-06 (p. 113). Borrowed from road vehicles (assumption); no rough-road value was found",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-07",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の最初の張りは、その固定の使ってよい力の半分以下",
+      "check": "lashing_pretension_N <= 0.5 * lashing_wll_min_N",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 2.4.4 (initial pre-tension never more than 50 % of the MSL) and 2.4.1 (the LC of national standards corresponds to the MSL), read 2026-11-06 (p. 99-100). For lashings in cargo transport units; taking the US WLL as the MSL is an assumption",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-08",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷台の固定点は、どの 1 か所も決めた力に耐える",
+      "check": "anchor_strength_min_N >= req_Q21",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12640 as quoted in the EU Best Practice Guidelines (2014) 2.6, Table 3 (3.5 to 7.5 t: 800 daN per lashing point), read 2026-11-06 (secondary, PDF p. 23); EN 12640 not checked. 49 CFR 393.104(c) asks anchor points to meet the 393.102 criteria and gives no number, read 2026-11-06. Borrowed for a lighter vehicle (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-09",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "横へ倒れやすい荷 (重心の高さが幅の半分に比べて高い荷) は、上から押さえる固定で止める",
+      "check": "0.6 * (center_z_mm - bottom_z_mm) < 1 * size_y_mm / 2 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1: securing against tipping is needed when cx,y · d ≥ cz · b, read 2026-11-06 (p. 114); the box centre is taken as the centre of gravity (assumption). Only that tipping is addressed is checked, not the size of the lashing (the EN 12195-1 tipping equation was not read). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-10",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "前へ倒れやすい荷は、荷台の前の壁で止めるか、上から押さえる固定で止める",
+      "check": "req_Q76 * (center_z_mm - bottom_z_mm) < 1 * size_x_mm / 2 or cargo_blocked_forward >= 1 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1 (tipping when cx,y · d ≥ cz · b), read 2026-11-06 (p. 114); box centre taken as the centre of gravity, and a front wall at least as high as the centre of gravity is assumed when cargo_blocked_forward is 1 (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
      }
     ]
    }
@@ -24910,7 +26652,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「サスの決まり」から 6 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SU",
@@ -24945,6 +26687,66 @@ export const DEMOS = {
       "applies_to": {
        "kinds": [
         "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を折る所の折れ角は、どの 1 か所でも上限 (要件) 以下",
+      "check": "uj_angle_max_deg <= req_Q83",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the limit is the requirement item R1-01 (35 deg by default, the maximum operating angle of Borgeson single steering universal joints, \"U-Joint & Shaft General Instructions\" item 1), read 2026-11-06, https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). Going past it can make the joint bind (same item). The angle of a joint is the angle between the axes of the two shafts it joins",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの折れ角の差は 1 度以下",
+      "check": "uj_count < 2 or uj_angle_diff_deg <= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The two angles must be equal for an even output: Huco Universal Joints catalogue section 2, PDF p. 2, rule 1, read 2026-11-06 (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); NSK US 8,965,743 B2 (joint angle at the upper joint equal to that at the lower joint), read 2026-11-06 (https:\/\/patents.google.com/patent/US8965743B2/en). The allowed difference is the requirement item R1-03 (1 deg by default, borrowed from Spicer's rule 2 for vehicle propeller shafts, https:\/\/spicerparts.com/node/202, read 2026-11-06): an assumption for a steering shaft",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-03",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの継手の向き合わせ (位相) の正しい向きからのずれは 7 度以下",
+      "check": "uj_count < 2 or uj_phase_error_deg <= 7",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The right phase (inner forks in line when the shaft is bent in one plane): Huco Universal Joints catalogue section 2, PDF p. 2, rule 2, read 2026-11-06; ididit instructions 8000000021, PDF p. 5 step 4, read 2026-11-06 (https:\/\/static.speedwaymotors.com/pdf/4461216-INS.pdf), which adds that a wrong phase can give early wear or binding. The allowed error is the requirement item R1-04 (7 deg by default, the example of NSK US 8,965,743 B2, read 2026-11-06): an assumption",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-04",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "ハンドルを一定に回したときの、車輪の側の回転の速さのむらは上限 (要件) 以下",
+      "check": "steer_speed_variation_pct <= req_Q84",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The fluctuation of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary, https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); output between w cos a and w sec a, at 5 deg +/-0.4 %, 7 deg +/-0.8 %, 10 deg +/-1.5 %: Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. The limit is the requirement item R1-02 (10 % by default, the example allowable torque variation rate of NSK US 8,965,743 B2, read 2026-11-06): an assumption. This rule covers one joint as well, where UJ-02 and UJ-03 do not apply",
+      "applies_to": {
+       "kinds": [
+        "steering"
        ]
       }
      }
@@ -25109,7 +26911,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 16 件あります。まとめて聞きます",
+   "text": "足りない要件が 17 件あります。まとめて聞きます",
    "data": {
     "questions": [
      {
@@ -25290,6 +27092,45 @@ export const DEMOS = {
       }
      },
      {
+      "req_key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "text": "荷台の床と荷の材料は何ですか。分からなければ、滑りにくい値は使わずに 0.3 とします。",
+      "ask": "confirm",
+      "allow_other": true,
+      "choices": [
+       {
+        "label": "分からない (0.3)",
+        "value": 0.3
+       },
+       {
+        "label": "ゴムのマットを敷く (0.6)",
+        "value": 0.6
+       },
+       {
+        "label": "木の荷と合板の床 (0.45)",
+        "value": 0.45
+       },
+       {
+        "label": "樹脂のパレットとステンレス板・溝付きアルミの床 (0.15)",
+        "value": 0.15
+       },
+       {
+        "label": "雪・氷・霜がつく (0.2)",
+        "value": 0.2
+       },
+       {
+        "label": "油や脂がつく (0.1)",
+        "value": 0.1
+       }
+      ],
+      "default": {
+       "value": 0.3,
+       "unit": "1",
+       "trust": 3,
+       "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction"
+      }
+     },
+     {
       "req_key": "Q61",
       "name": "安全率 (降伏に対して)",
       "text": "部材の安全率 (降伏に対する余裕) はいくつにしますか。",
@@ -25361,7 +27202,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 16 件、答え 2 件、既定値 22 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "質問 17 件、答え 2 件、既定値 24 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {
@@ -25390,6 +27231,15 @@ export const DEMOS = {
       "trust": 3,
       "basis": "assumption",
       "value": "その場で旋回"
+     },
+     {
+      "key": "Q21",
+      "name": "荷台の固定点 1 か所が受けられる力の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
+      "value": 8000,
+      "unit": "N"
      },
      {
       "key": "Q31",
@@ -25544,6 +27394,15 @@ export const DEMOS = {
       "unit": "m"
      },
      {
+      "key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction",
+      "value": 0.3,
+      "unit": "1"
+     },
+     {
       "key": "Q61",
       "name": "安全率 (降伏に対して)",
       "source": "default",
@@ -25669,6 +27528,15 @@ export const DEMOS = {
       "basis": "assumption (the hot end of a -10 to 40 degC range of use)"
      },
      {
+      "key": "Q21",
+      "name": "荷台の固定点 1 か所が受けられる力の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
+      "value": 8000,
+      "unit": "N"
+     },
+     {
       "key": "Q30",
       "name": "人数と荷重の組 (見る組)",
       "value": "two_cargo",
@@ -25693,6 +27561,42 @@ export const DEMOS = {
       "source": "default",
       "trust": 1,
       "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+     },
+     {
+      "key": "Q35",
+      "name": "頭を後ろから受け止める高さの下限 (座席の基準点から、胴の線に沿って上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf), para. 5.6.2 and 5.6.3.1 (front seats not less than 800 mm, other seats 750 mm) and para. 6.5.4 (the height is from the R point, the seating reference point of para. 2.13, to the tangent at the top, measured along the manikin's torso reference line), read 2026-11-06; R17 applies to M1 and N1 (para. 1). 49 CFR 571.202a (FMVSS 202a, eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a) S4.2.1(a)(1) (front outboard not less than 800 mm in at least one position) with S3 (height from the H-point parallel to the torso reference line), read 2026-11-06; it applies to passenger cars and to MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R25 was not checked (not reachable). No text read requires this for an off-road utility or recreational vehicle; ANSI/ROHVA 1, ANSI/OPEI B71.9 and SAE J2258 were not checked",
+      "value": 800,
+      "unit": "mm"
+     },
+     {
+      "key": "Q36",
+      "name": "頭を後ろから受け止める面の左右の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (not less than 85 mm to each side of the seat's vertical median plane; 2 x 85 = 170 mm computed) and para. 6.6.1 (measured in a plane 65 mm below the top, perpendicular to the torso reference line), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top; 254 mm for a front outboard seat when a front centre seat exists), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles (S2)",
+      "value": 170,
+      "unit": "mm"
+     },
+     {
+      "key": "Q37",
+      "name": "頭の後ろと、それを受け止める面との前後のすき間の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) with S3 (backset = the minimum horizontal distance from the rear of the head of a seated 50th percentile male, head restraint measurement device on the SAE J826 manikin, to the head restraint) and S5.2.3 (top set between 750 and 800 mm, seat back at the design angle), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06; applies to passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R17 08 series has no backset limit (the word does not occur in the MLIT text, read 2026-11-06); later R17 series and UN R25 were not checked",
+      "value": 55,
+      "unit": "mm"
+     },
+     {
+      "key": "Q38",
+      "name": "背もたれと、頭を受け止める部分のあいだのすき間の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1 (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "value": 60,
+      "unit": "mm"
      },
      {
       "key": "Q40",
@@ -25830,6 +27734,15 @@ export const DEMOS = {
       "basis": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https:\/\/laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https:\/\/www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https:\/\/www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked"
      },
      {
+      "key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction",
+      "value": 0.3,
+      "unit": "1"
+     },
+     {
       "key": "Q60",
       "name": "倒れない角度 (Q30 の組で)",
       "value": 24,
@@ -25951,6 +27864,24 @@ export const DEMOS = {
       "source": "default",
       "trust": 3,
       "basis": "assumption"
+     },
+     {
+      "key": "Q83",
+      "name": "操舵の回転を折って伝える所の、1 か所あたりの折れ角の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the maximum operating angle of one maker's single steering universal joints, applied to the joints of this vehicle, whose maker is not chosen. Borgeson Universal, \"U-Joint & Shaft General Instructions\" (sheet dated 3/20/2018), item 1): single joints 35 degrees, double joints 70 degrees, beyond which the joint can bind and be damaged; read 2026-11-06 (https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). These are aftermarket steering joints of cars. Industrial joints are rated otherwise (read 2026-11-06): Huco Universal Joints catalogue section 2, PDF p. 8, needle roller T series 40 deg single, 80 deg double; PDF p. 9, plain bearing DIN 808 joints 45 deg single, 90 deg double; PDF p. 6, plain T series sizes 50 and up 30 deg (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); Timken NB10-UJ needle bearing type, max operating angle for power transmission 25 deg (https:\/\/cad.timken.com/printitem/needle-bearing-type-universal-joints/eedle-bearing-type-universal-solid-joints-imperial/68514415607). Borgeson's web page (https:\/\/www.borgeson.com/joints.html) was not checked (403). The joint actually chosen and its catalogue win over this value",
+      "value": 35,
+      "unit": "deg"
+     },
+     {
+      "key": "Q84",
+      "name": "ハンドルから車輪の側へ伝わる回転のむらの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the example value of an allowable torque variation rate in a passenger-car steering design tool, applied to this vehicle. NSK Ltd, US 8,965,743 B2 (granted 2015-02-24), description of FIG. 21-27: the allowable torque variation rate is \"for example, 10%\" (FIG. 23-27 compare 10 % down to 3 %); the torque variation rate is the ratio of input to output torque, the inverse of the angular velocity ratio (its Equation (5) is an image and was not read); read 2026-11-06 in the Google Patents text (https:\/\/patents.google.com/patent/US8965743B2/en). HIRAKU takes the rate as the largest deviation of the output-to-input speed ratio from 1 over one turn (an assumption about the patent's definition). The ratio of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a) (a = angle between the shafts, t = turn of the input from the position where its arm of the cross lies in the plane of the two shafts), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary) (https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); the same range w cos a to w sec a in Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. No standard for steering was read",
+      "value": 10,
+      "unit": "%"
      },
      {
       "key": "Q86",
@@ -26379,7 +28310,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「人の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「人の決まり」から 7 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-HU",
@@ -26430,6 +28361,66 @@ export const DEMOS = {
        "kinds": [
         "suspension",
         "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-01",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "人が乗る座席は、頭を後ろから受け止める上端が、座席の基準点から胴の線に沿って 800 mm 以上の高さにある",
+      "check": "headrest_height_mm >= req_Q35",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.6.2 (front seats not less than 800 mm) and 6.5.4 (from the R point to the tangent at the top, along the torso reference line), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.1(a)(1) (800 mm, from the H-point parallel to the torso reference line, S3), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles. A seat with no head support has no value and is reported as not given, not as passing",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-02",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "頭を受け止める面の左右の幅は、上端から 65 mm 下で 170 mm 以上",
+      "check": "headrest_width_mm >= req_Q36",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (85 mm to each side of the median plane, 170 mm computed) and 6.6.1 (plane 65 mm below the top), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-03",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "座った人の頭の後ろと、頭を受け止める面との水平のすき間は 55 mm 以下",
+      "check": "headrest_backset_mm <= req_Q37",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) and S3 (backset measured from the rear of the head of a seated 50th percentile male, SAE J826 manikin with the head restraint measurement device), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06, for passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less. UN R17 08 series has no backset limit (read 2026-11-06)",
+      "applies_to": {
+       "kinds": [
+        "seat"
+       ]
+      }
+     },
+     {
+      "rule_id": "HR-04",
+      "doc_id": "KN-HU",
+      "category": "human",
+      "text": "背もたれと頭を受け止める部分のあいだのすき間は、165 mm の球で測って 60 mm 以下",
+      "check": "headrest_gap_mm <= req_Q38",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (not more than 60 mm for a head restraint not adjustable for height) and 6.7.1 (165 mm sphere), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm, 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "applies_to": {
+       "kinds": [
+        "seat"
        ]
       }
      }
@@ -26491,7 +28482,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「組み立ての決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「組み立ての決まり」から 12 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-AS",
@@ -26531,6 +28522,156 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 3,
       "basis": "a check of the geometry (the origin is on the ground), not taken from a source (assumption)"
+     },
+     {
+      "rule_id": "CS-01",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定 (荷の上を越える帯) の張りと床の摩擦で、荷が横へ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q75 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 (top-over lashing against sliding, m = n · 2 · μ · sin α · FT / (g · (cx,y − μ · cz) · fs)), as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46, https:\/\/www.hsa.ie/eng/Vehicles_at_Work/Load_Securing/Guidance_and_Publications/2014_European_Best_Practice.pdf); EN 12195-1 itself not checked (paid). The same balance without a safety factor is the CTU Code (MSC.1/Circ.1497) Annex 7 4.2.7-4.2.8, read 2026-11-06 (p. 113-114). Borrowed from goods road vehicles (assumption). The guidelines (top-over lashing section, PDF p. 43) take FT as the STF and say the tension can fall to 50 % on deformable goods",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-02",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷が前へ滑らない (荷台の前の壁で止まるか、上から押さえる固定と摩擦で止まる)",
+      "check": "cargo_blocked_forward >= 1 or 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.25",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.25 forward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46); blocking counts as securing (guidelines 1.4, PDF p. 14; CTU Code Annex 7 4.2.8, read 2026-11-06). Whether the front wall itself is strong enough is not checked by this rule (the CTU Code 6.6 gives front wall strengths for goods vehicles only). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-03",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "上から押さえる固定の張りと床の摩擦で、荷が後ろへ滑らない",
+      "check": "2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12195-1:2010 equation 10 with fs = 1.1 rearward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary, PDF p. 46). A rear gate that blocks the load is not counted here. Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-04",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "摩擦が十分でも、荷は少なくとも 1 本の固定で止め、前で止まらない 1.52 m を超えるか 500 kg を超える荷は 2 本以上で止める",
+      "check": "lashing_count >= 1 and (lashing_count >= 2 or cargo_blocked_forward >= 1 or (size_x_mm <= 1520 and mass_kg <= 500))",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.110(b)-(c) (not blocked forward: 1 tiedown for an article of 1.52 m or less and 500 kg or less, 2 for a heavier one or one up to 3.04 m; blocked: 1 per 3.04 m), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.110); CTU Code (MSC.1/Circ.1497) 5.4 and Annex 7 4.2.8 (mass and friction alone do not secure a load against vibration; a minimum number of top-over lashings is needed, no number given), read 2026-11-06 (p. 21, p. 114). The check covers loads up to 3.04 m long only (a longer one needs more). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-05",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の使ってよい力の合計 (荷の向こう側へ回すものは全部、そうでないものは半分で数える) が、荷の重さの決めた割合以上",
+      "check": "lashing_wll_sum_N >= 0.5 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.106(d) (aggregate working load limit at least one-half the weight; counting by (d)(1)-(3)) and 393.108(a) (a tiedown's WLL is the lowest of its parts and its anchor points), read 2026-11-06 in the Cornell LII copy (https:\/\/www.law.cornell.edu/cfr/text/49/393.106). For commercial motor vehicles on public roads, borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-06",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定が荷を床へ押さえつける力が、荷の重さの決めた割合以上 (でこぼこ道で荷が浮かない)",
+      "check": "2 * topover_count * lashing_pretension_N * lashing_angle_sin >= 0.2 * mass_kg * 9.80665",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "49 CFR 393.102(b) (downward force at least 20 percent of the weight when the article is not fully contained), read 2026-11-06 (LII copy); the vertical force of a top-over lashing 2 · FT · sin α from EN 12195-1 equation 10 as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary). The CTU Code Annex 7 4.2.7 takes 1.8 times the pre-tension for a vertical lashing instead of 2, read 2026-11-06 (p. 113). Borrowed from road vehicles (assumption); no rough-road value was found",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-07",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "固定の最初の張りは、その固定の使ってよい力の半分以下",
+      "check": "lashing_pretension_N <= 0.5 * lashing_wll_min_N",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 2.4.4 (initial pre-tension never more than 50 % of the MSL) and 2.4.1 (the LC of national standards corresponds to the MSL), read 2026-11-06 (p. 99-100). For lashings in cargo transport units; taking the US WLL as the MSL is an assumption",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-08",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "荷台の固定点は、どの 1 か所も決めた力に耐える",
+      "check": "anchor_strength_min_N >= req_Q21",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "EN 12640 as quoted in the EU Best Practice Guidelines (2014) 2.6, Table 3 (3.5 to 7.5 t: 800 daN per lashing point), read 2026-11-06 (secondary, PDF p. 23); EN 12640 not checked. 49 CFR 393.104(c) asks anchor points to meet the 393.102 criteria and gives no number, read 2026-11-06. Borrowed for a lighter vehicle (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-09",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "横へ倒れやすい荷 (重心の高さが幅の半分に比べて高い荷) は、上から押さえる固定で止める",
+      "check": "0.6 * (center_z_mm - bottom_z_mm) < 1 * size_y_mm / 2 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1: securing against tipping is needed when cx,y · d ≥ cz · b, read 2026-11-06 (p. 114); the box centre is taken as the centre of gravity (assumption). Only that tipping is addressed is checked, not the size of the lashing (the EN 12195-1 tipping equation was not read). Borrowed (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
+     },
+     {
+      "rule_id": "CS-10",
+      "doc_id": "KN-AS",
+      "category": "assembly",
+      "text": "前へ倒れやすい荷は、荷台の前の壁で止めるか、上から押さえる固定で止める",
+      "check": "req_Q76 * (center_z_mm - bottom_z_mm) < 1 * size_x_mm / 2 or cargo_blocked_forward >= 1 or topover_count >= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1 (tipping when cx,y · d ≥ cz · b), read 2026-11-06 (p. 114); box centre taken as the centre of gravity, and a front wall at least as high as the centre of gravity is assumed when cargo_blocked_forward is 1 (assumption)",
+      "applies_to": {
+       "kinds": [
+        "cargo"
+       ]
+      }
      }
     ]
    }
@@ -26542,7 +28683,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「サスの決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「サスの決まり」から 6 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-SU",
@@ -26577,6 +28718,66 @@ export const DEMOS = {
       "applies_to": {
        "kinds": [
         "support"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-01",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を折る所の折れ角は、どの 1 か所でも上限 (要件) 以下",
+      "check": "uj_angle_max_deg <= req_Q83",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the limit is the requirement item R1-01 (35 deg by default, the maximum operating angle of Borgeson single steering universal joints, \"U-Joint & Shaft General Instructions\" item 1), read 2026-11-06, https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). Going past it can make the joint bind (same item). The angle of a joint is the angle between the axes of the two shafts it joins",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-02",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの折れ角の差は 1 度以下",
+      "check": "uj_count < 2 or uj_angle_diff_deg <= 1",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The two angles must be equal for an even output: Huco Universal Joints catalogue section 2, PDF p. 2, rule 1, read 2026-11-06 (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); NSK US 8,965,743 B2 (joint angle at the upper joint equal to that at the lower joint), read 2026-11-06 (https:\/\/patents.google.com/patent/US8965743B2/en). The allowed difference is the requirement item R1-03 (1 deg by default, borrowed from Spicer's rule 2 for vehicle propeller shafts, https:\/\/spicerparts.com/node/202, read 2026-11-06): an assumption for a steering shaft",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-03",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "操舵の軸を 2 か所で折るなら、2 つの継手の向き合わせ (位相) の正しい向きからのずれは 7 度以下",
+      "check": "uj_count < 2 or uj_phase_error_deg <= 7",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The right phase (inner forks in line when the shaft is bent in one plane): Huco Universal Joints catalogue section 2, PDF p. 2, rule 2, read 2026-11-06; ididit instructions 8000000021, PDF p. 5 step 4, read 2026-11-06 (https:\/\/static.speedwaymotors.com/pdf/4461216-INS.pdf), which adds that a wrong phase can give early wear or binding. The allowed error is the requirement item R1-04 (7 deg by default, the example of NSK US 8,965,743 B2, read 2026-11-06): an assumption",
+      "applies_to": {
+       "kinds": [
+        "steering"
+       ]
+      }
+     },
+     {
+      "rule_id": "UJ-04",
+      "doc_id": "KN-SU",
+      "category": "suspension",
+      "text": "ハンドルを一定に回したときの、車輪の側の回転の速さのむらは上限 (要件) 以下",
+      "check": "steer_speed_variation_pct <= req_Q84",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The fluctuation of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary, https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); output between w cos a and w sec a, at 5 deg +/-0.4 %, 7 deg +/-0.8 %, 10 deg +/-1.5 %: Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. The limit is the requirement item R1-02 (10 % by default, the example allowable torque variation rate of NSK US 8,965,743 B2, read 2026-11-06): an assumption. This rule covers one joint as well, where UJ-02 and UJ-03 do not apply",
+      "applies_to": {
+       "kinds": [
+        "steering"
        ]
       }
      }
@@ -26741,9 +28942,54 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 2 件: Q57・Q63)",
+   "text": "要件のファイルのまま進みます (既定値で足した 10 件: Q21・Q35・Q36・Q37・Q38・Q57・Q59・Q63・Q83・Q84)",
    "data": {
     "answers": [
+     {
+      "key": "Q21",
+      "name": "荷台の固定点 1 か所が受けられる力の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
+      "value": 8000,
+      "unit": "N"
+     },
+     {
+      "key": "Q35",
+      "name": "頭を後ろから受け止める高さの下限 (座席の基準点から、胴の線に沿って上へ)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (MLIT English/Japanese text, https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf), para. 5.6.2 and 5.6.3.1 (front seats not less than 800 mm, other seats 750 mm) and para. 6.5.4 (the height is from the R point, the seating reference point of para. 2.13, to the tangent at the top, measured along the manikin's torso reference line), read 2026-11-06; R17 applies to M1 and N1 (para. 1). 49 CFR 571.202a (FMVSS 202a, eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a) S4.2.1(a)(1) (front outboard not less than 800 mm in at least one position) with S3 (height from the H-point parallel to the torso reference line), read 2026-11-06; it applies to passenger cars and to MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R25 was not checked (not reachable). No text read requires this for an off-road utility or recreational vehicle; ANSI/ROHVA 1, ANSI/OPEI B71.9 and SAE J2258 were not checked",
+      "value": 800,
+      "unit": "mm"
+     },
+     {
+      "key": "Q36",
+      "name": "頭を後ろから受け止める面の左右の幅の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (not less than 85 mm to each side of the seat's vertical median plane; 2 x 85 = 170 mm computed) and para. 6.6.1 (measured in a plane 65 mm below the top, perpendicular to the torso reference line), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.2 (not less than 170 mm at 65 ±3 mm below the top; 254 mm for a front outboard seat when a front centre seat exists), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles (S2)",
+      "value": 170,
+      "unit": "mm"
+     },
+     {
+      "key": "Q37",
+      "name": "頭の後ろと、それを受け止める面との前後のすき間の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3 (front outboard backset not more than 55 mm) with S3 (backset = the minimum horizontal distance from the rear of the head of a seated 50th percentile male, head restraint measurement device on the SAE J826 manikin, to the head restraint) and S5.2.3 (top set between 750 and 800 mm, seat back at the design angle), eCFR current text, https:\/\/www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read 2026-11-06; applies to passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R17 08 series has no backset limit (the word does not occur in the MLIT text, read 2026-11-06); later R17 series and UN R25 were not checked",
+      "value": 55,
+      "unit": "mm"
+     },
+     {
+      "key": "Q38",
+      "name": "背もたれと、頭を受け止める部分のあいだのすき間の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1 (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
+      "value": 60,
+      "unit": "mm"
+     },
      {
       "key": "Q57",
       "name": "最低地上高",
@@ -26754,12 +29000,39 @@ export const DEMOS = {
       "unit": "mm"
      },
      {
+      "key": "Q59",
+      "name": "荷と荷台の床のあいだの摩擦係数 (止まっているときの値)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy 0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction",
+      "value": 0.3,
+      "unit": "1"
+     },
+     {
       "key": "Q63",
       "name": "挟み込みの隙間",
       "source": "default",
       "trust": 1,
       "basis": "ISO 13854:1996 の試し読み, Table 1, PDF p.7, https:\/\/cdn.standards.iteh.ai/samples/22598/44d1054ccf4f41e1adefb8020dbaaa13/ISO-13854-1996.pdf; read 2026-11-03 in a source check",
       "value": "ISO 13854 (指 25 mm)"
+     },
+     {
+      "key": "Q83",
+      "name": "操舵の回転を折って伝える所の、1 か所あたりの折れ角の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the maximum operating angle of one maker's single steering universal joints, applied to the joints of this vehicle, whose maker is not chosen. Borgeson Universal, \"U-Joint & Shaft General Instructions\" (sheet dated 3/20/2018), item 1): single joints 35 degrees, double joints 70 degrees, beyond which the joint can bind and be damaged; read 2026-11-06 (https:\/\/sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). These are aftermarket steering joints of cars. Industrial joints are rated otherwise (read 2026-11-06): Huco Universal Joints catalogue section 2, PDF p. 8, needle roller T series 40 deg single, 80 deg double; PDF p. 9, plain bearing DIN 808 joints 45 deg single, 90 deg double; PDF p. 6, plain T series sizes 50 and up 30 deg (https:\/\/theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); Timken NB10-UJ needle bearing type, max operating angle for power transmission 25 deg (https:\/\/cad.timken.com/printitem/needle-bearing-type-universal-joints/eedle-bearing-type-universal-solid-joints-imperial/68514415607). Borgeson's web page (https:\/\/www.borgeson.com/joints.html) was not checked (403). The joint actually chosen and its catalogue win over this value",
+      "value": 35,
+      "unit": "deg"
+     },
+     {
+      "key": "Q84",
+      "name": "ハンドルから車輪の側へ伝わる回転のむらの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the example value of an allowable torque variation rate in a passenger-car steering design tool, applied to this vehicle. NSK Ltd, US 8,965,743 B2 (granted 2015-02-24), description of FIG. 21-27: the allowable torque variation rate is \"for example, 10%\" (FIG. 23-27 compare 10 % down to 3 %); the torque variation rate is the ratio of input to output torque, the inverse of the angular velocity ratio (its Equation (5) is an image and was not read); read 2026-11-06 in the Google Patents text (https:\/\/patents.google.com/patent/US8965743B2/en). HIRAKU takes the rate as the largest deviation of the output-to-input speed ratio from 1 over one turn (an assumption about the patent's definition). The ratio of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a) (a = angle between the shafts, t = turn of the input from the position where its arm of the cross lies in the plane of the two shafts), max 1/cos a, min cos a: Mustansiriyah University lecture note \"universal joint\", PDF p. 7-8, read 2026-11-06 (secondary) (https:\/\/uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); the same range w cos a to w sec a in Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. No standard for steering was read",
+      "value": 10,
+      "unit": "%"
      }
     ]
    }
@@ -45786,6 +48059,142 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0013",
     "design_version": 1,
+    "rule_id": "HR-01",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_height_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_height_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0014",
+    "design_version": 1,
+    "rule_id": "HR-02",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_width_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_width_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0015",
+    "design_version": 1,
+    "rule_id": "HR-03",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_backset_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_backset_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0016",
+    "design_version": 1,
+    "rule_id": "HR-04",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "seat_R",
+      "missing": [
+       "headrest_gap_mm"
+      ]
+     },
+     {
+      "part_id": "seat_L",
+      "missing": [
+       "headrest_gap_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0017",
+    "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
      "battery"
@@ -45804,15 +48213,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -45832,15 +48241,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0015",
+    "rule_check_id": "rchk-0019",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -45973,15 +48382,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.500+09:00",
-   "t": 15.5,
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0016",
+    "rule_check_id": "rchk-0020",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -47023,15 +49432,297 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 35,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "CS-01",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "CS-02",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "cargo_blocked_forward",
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "CS-03",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "CS-04",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "lashing_count",
+       "cargo_blocked_forward"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "CS-05",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "lashing_wll_sum_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "CS-06",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_pretension_N",
+       "lashing_angle_sin"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "CS-07",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "lashing_pretension_N",
+       "lashing_wll_min_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
+    "design_version": 1,
+    "rule_id": "CS-08",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "anchor_strength_min_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "CS-09",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
+    "rule_id": "CS-10",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "cargo_blocked_forward",
+       "topover_count"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -47076,15 +49767,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0018",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -47133,15 +49824,125 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.800+09:00",
-   "t": 15.8,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0019",
+    "rule_check_id": "rchk-0033",
+    "design_version": 1,
+    "rule_id": "UJ-01",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "uj_angle_max_deg"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 48,
+   "ts": "2026-11-03T10:00:17.300+09:00",
+   "t": 17.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0034",
+    "design_version": 1,
+    "rule_id": "UJ-02",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "uj_count",
+       "uj_angle_diff_deg"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 49,
+   "ts": "2026-11-03T10:00:17.400+09:00",
+   "t": 17.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0035",
+    "design_version": 1,
+    "rule_id": "UJ-03",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "uj_count",
+       "uj_phase_error_deg"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 50,
+   "ts": "2026-11-03T10:00:17.500+09:00",
+   "t": 17.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0036",
+    "design_version": 1,
+    "rule_id": "UJ-04",
+    "targets": [
+     "steering_wheel"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "steering_wheel",
+      "missing": [
+       "steer_speed_variation_pct"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 51,
+   "ts": "2026-11-03T10:00:17.600+09:00",
+   "t": 17.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0037",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -47497,15 +50298,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 52,
+   "ts": "2026-11-03T10:00:17.700+09:00",
+   "t": 17.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0038",
     "design_version": 1,
     "rule_id": "SY-01",
     "targets": [
@@ -47519,15 +50320,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
+   "seq": 53,
+   "ts": "2026-11-03T10:00:17.800+09:00",
+   "t": 17.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0021",
+    "rule_check_id": "rchk-0039",
     "design_version": 1,
     "rule_id": "SY-02",
     "targets": [
@@ -47541,15 +50342,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.100+09:00",
-   "t": 16.1,
+   "seq": 54,
+   "ts": "2026-11-03T10:00:17.900+09:00",
+   "t": 17.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0022",
+    "rule_check_id": "rchk-0040",
     "design_version": 1,
     "rule_id": "SY-03",
     "targets": [
@@ -47565,15 +50366,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 37,
-   "ts": "2026-11-03T10:00:16.200+09:00",
-   "t": 16.2,
+   "seq": 55,
+   "ts": "2026-11-03T10:00:18.000+09:00",
+   "t": 18.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0023",
+    "rule_check_id": "rchk-0041",
     "design_version": 1,
     "rule_id": "SY-04",
     "targets": [
@@ -47586,15 +50387,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 38,
-   "ts": "2026-11-03T10:00:16.300+09:00",
-   "t": 16.3,
+   "seq": 56,
+   "ts": "2026-11-03T10:00:18.100+09:00",
+   "t": 18.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0024",
+    "rule_check_id": "rchk-0042",
     "design_version": 1,
     "rule_id": "SY-05",
     "targets": [
@@ -47607,15 +50408,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 39,
-   "ts": "2026-11-03T10:00:16.400+09:00",
-   "t": 16.4,
+   "seq": 57,
+   "ts": "2026-11-03T10:00:18.200+09:00",
+   "t": 18.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0025",
+    "rule_check_id": "rchk-0043",
     "design_version": 1,
     "rule_id": "SY-06",
     "targets": [
@@ -47627,15 +50428,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 40,
-   "ts": "2026-11-03T10:00:16.500+09:00",
-   "t": 16.5,
+   "seq": 58,
+   "ts": "2026-11-03T10:00:18.300+09:00",
+   "t": 18.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0026",
+    "rule_check_id": "rchk-0044",
     "design_version": 1,
     "rule_id": "SY-07",
     "targets": [],
@@ -47645,15 +50446,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 41,
-   "ts": "2026-11-03T10:00:16.600+09:00",
-   "t": 16.6,
+   "seq": 59,
+   "ts": "2026-11-03T10:00:18.400+09:00",
+   "t": 18.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0027",
+    "rule_check_id": "rchk-0045",
     "design_version": 1,
     "rule_id": "SY-08",
     "targets": [
@@ -47666,15 +50467,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 42,
-   "ts": "2026-11-03T10:00:16.700+09:00",
-   "t": 16.7,
+   "seq": 60,
+   "ts": "2026-11-03T10:00:18.500+09:00",
+   "t": 18.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0028",
+    "rule_check_id": "rchk-0046",
     "design_version": 1,
     "rule_id": "SY-09",
     "targets": [
@@ -47686,15 +50487,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 43,
-   "ts": "2026-11-03T10:00:16.800+09:00",
-   "t": 16.8,
+   "seq": 61,
+   "ts": "2026-11-03T10:00:18.600+09:00",
+   "t": 18.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0029",
+    "rule_check_id": "rchk-0047",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -47821,15 +50622,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 62,
+   "ts": "2026-11-03T10:00:18.700+09:00",
+   "t": 18.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0048",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -47876,15 +50677,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 63,
+   "ts": "2026-11-03T10:00:18.800+09:00",
+   "t": 18.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0049",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
