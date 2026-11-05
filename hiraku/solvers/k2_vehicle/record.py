@@ -20,11 +20,12 @@ Channel names (the screen draws the driving animation from these):
   wheel_camber.<ID>, wheel_toe.<ID>  deg  camber (top out +) and toe (toe-in +) to the body,
                                     only when a corner runs on a K&C table
   friction_limit.<ID> N, friction_use.<ID> 1, sliding.<ID> 1   the friction circle (mu N, |F| / mu N, 0 or 1)
-  slip_angle.<ID> deg, slip_ratio.<ID> 1   the slips the tyre model takes (tan alpha = d_y / sigma,
+  slip_angle.<ID> deg, slip_ratio.<ID> %   the slips the tyre model takes (tan alpha = d_y / sigma,
                                     kappa = -d_x / sigma; wheels with a deflection-state tyre)
   plus scenario channels (table_angle deg, wind_speed m/s, steer deg, ...).
-  Against slip angle, not time (series(): x = slip_angle deg): tyre_fy_curve.<ID>.<Fz N> N, the
-  tyre model's side force at 0.5, 1, 1.5 and 2 times the wheel's static load (tyre_curves).
+  Against slip, not time (series(), tyre_curves): tyre_fy_curve.<ID>.<Fz N> N against slip_angle (deg)
+  and tyre_fx_curve.<ID>.<Fz N> N against slip_ratio (%), the tyre model's pure-slip forces at 0.5, 1,
+  1.5 and 2 times the wheel's static load.
 
 World axes are the road's (x along the road, y left, z up). On a tilt table
 or a slope the road frame is the table; gravity is turned instead.
@@ -124,7 +125,7 @@ class Recorder:
             sig = getattr(sim.tyres[i], "sigma", None)
             if sig:
                 self._put(f"slip_angle.{cid}", "deg", math.degrees(math.atan(sim.dy[i] / sig)))
-                self._put(f"slip_ratio.{cid}", "1", -sim.dx[i] / sig)
+                self._put(f"slip_ratio.{cid}", "%", -100.0 * sim.dx[i] / sig)
             self._put(f"wheel_stroke.{cid}", "mm", sim.s[i] * 1000.0)
             self._put(f"wheel_steer.{cid}", "deg", math.degrees(o["steer"][i]))
             self._put(f"wheel_spin.{cid}", "deg", math.degrees(self.spin_angle[i]))
@@ -244,4 +245,11 @@ def tyre_curves(sim: Sim) -> list[dict]:
                 ys.append(_round(fy))
             out.append({"channel": f"tyre_fy_curve.{c.id}.{fz:.0f}", "unit": "N",
                         "x": {"quantity": "slip_angle", "unit": "deg", "values": list(TYRE_CURVE_DEG)}, "values": ys})
+            # the driving force against slip ratio (pure slip): the same for a right wheel (its mirror is in y)
+            xs = [_round(mf.forces(fz, k_ / 100.0, 0.0)[0]) for k_ in TYRE_CURVE_PCT]
+            out.append({"channel": f"tyre_fx_curve.{c.id}.{fz:.0f}", "unit": "N",
+                        "x": {"quantity": "slip_ratio", "unit": "%", "values": list(TYRE_CURVE_PCT)}, "values": xs})
     return out
+
+
+TYRE_CURVE_PCT = [float(x) for x in range(-50, 51, 2)]  # slip ratios of the Fx curves, %
