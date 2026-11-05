@@ -89,7 +89,7 @@ class LaunchWaitBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/?new=1")
+        page.goto(f"{base}/?new=1", wait_until="domcontentloaded")
         page.wait_for_selector("#draftbar")
         page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
         page.click("#view-intake button:has-text('送る')")

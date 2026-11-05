@@ -85,7 +85,7 @@ class LogWordsBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate(LINES, events)
@@ -126,7 +126,7 @@ class LogWordsBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate("""async (events) => {

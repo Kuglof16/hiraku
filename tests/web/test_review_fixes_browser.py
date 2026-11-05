@@ -133,7 +133,7 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         if events is not None:
@@ -312,7 +312,7 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://127.0.0.1:{server.server_address[1]}/?list=1")
+        page.goto(f"http://127.0.0.1:{server.server_address[1]}/?list=1", wait_until="domcontentloaded")
         page.wait_for_selector("#runlist table")
         got = page.evaluate(
             """() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")]

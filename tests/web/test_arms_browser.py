@@ -132,7 +132,7 @@ class ArmsBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{cls.base}/?run=sample&pace=0&t=0&look={look}")
+        page.goto(f"{cls.base}/?run=sample&pace=0&t=0&look={look}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate(script, [events_with(design), list(KINDS)])
@@ -246,7 +246,7 @@ class ArmsBrowserTest(unittest.TestCase):
         self.assertGreater(by_part, 0)
         script = "async ([events]) => { await window.hiraku.load(events, 1); const j = window.hiraku.bench.joints; j.setOn(true); return j.summary(); }"
         page = self.browser.new_page(viewport={"width": 1280, "height": 800})
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look=zu")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look=zu", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate(script, [events_with(d)])

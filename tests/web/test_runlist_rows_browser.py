@@ -113,7 +113,7 @@ class RunListRowsBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": width, "height": height})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.bases[key]}/{query}")
+        page.goto(f"{self.bases[key]}/{query}", wait_until="domcontentloaded")
         page.wait_for_selector("#runlist table")
         page.wait_for_function(LAUNCH_FILLED, timeout=60000)
         page.evaluate("document.fonts.ready")

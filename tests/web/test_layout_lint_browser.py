@@ -165,7 +165,7 @@ def start_servers(tmp: Path, repo: Path = REPO_DIR):
 
 def open_screen(browser, bases: dict, screen: Screen, size: tuple[int, int]):
     page = browser.new_page(viewport={"width": size[0], "height": size[1]})
-    page.goto(f"{bases[screen.server]}/{screen.path}")
+    page.goto(f"{bases[screen.server]}/{screen.path}", wait_until="domcontentloaded")
     page.wait_for_function(screen.wait, timeout=60000)
     if screen.wait == READY:  # (the list and A1 never resolve it: they play nothing)
         page.evaluate("window.hiraku.ready")

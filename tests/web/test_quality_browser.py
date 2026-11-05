@@ -112,7 +112,7 @@ class QualityBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events or self.events)

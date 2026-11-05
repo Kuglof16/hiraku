@@ -154,7 +154,7 @@ class _ModulesPage(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": size[0], "height": size[1]})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         # drawn: the fonts in, and two frames of the screen's own loop after the replay reached t

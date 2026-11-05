@@ -159,7 +159,7 @@ class BrowserReplayTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -404,7 +404,7 @@ class BrowserReplayTest(unittest.TestCase):
                 page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
                 errors = []
                 page.on("pageerror", lambda e: errors.append(str(e)))
-                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}")
+                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}", wait_until="domcontentloaded")
                 page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
                 page.evaluate("window.hiraku.ready")
                 page.click('#tests button[data-lc="P1-step100"]')
@@ -484,7 +484,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .lreq")
             ask = page.locator("#launch button[data-launch-ask]")
             self.assertIn("$2", ask.text_content())  # the cost limit shows before anything starts
@@ -558,7 +558,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             got = page.evaluate("""() => ({
                 first: document.querySelector('#launch h3').textContent,
@@ -630,7 +630,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             row = "#launch .lreq.demo[data-demo='n12']"
             self.assertTrue(page.is_disabled(f"{row} button:has-text('Claude で走らせる')"))
@@ -655,7 +655,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             text = page.inner_text("#runlist")
             for w in self.DEV_WORDS:
@@ -679,7 +679,7 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertIn(w, more)
             # ?dev=1: all there (the demo rows' files and tags inside their closed くわしく: the text, not
             # only what is drawn)
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             text = page.text_content("#runlist")
             for w in self.DEV_WORDS:
@@ -698,7 +698,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             text = page.inner_text("#runlist")
             self.assertEqual(page.locator("#runlist .keyless").count(), 0)
@@ -903,7 +903,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?new=1")
+            page.goto(f"{base}/?new=1", wait_until="domcontentloaded")
             page.wait_for_selector("#draftbar")
             self.assertIn("作りたいものを書いて", page.text_content("#draftbar"))
             page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
@@ -957,7 +957,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?run={run_id}&tab=A5")
+            page.goto(f"{base}/?run={run_id}&tab=A5", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_selector(".stop-btn")  # the screen knows the run is its own
             note = tmp / "曲げの決まり.md"
@@ -1021,7 +1021,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?run={run_id}&tab=A2")
+            page.goto(f"{base}/?run={run_id}&tab=A2", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             button = "#view-intake .in-pane[data-screen=A2] button.in-btn"
             page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /標準の値のまま進める/.test(b.textContent) && !b.disabled)")
@@ -1043,7 +1043,7 @@ class BrowserReplayTest(unittest.TestCase):
             page.close()
             # the same run opened as a replay (?live=0) stays read-only
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/?run={run_id}&tab=A2&live=0&pace=0")
+            page.goto(f"{base}/?run={run_id}&tab=A2&live=0&pace=0", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_selector(button)
             self.assertTrue(all(page.eval_on_selector_all(button, "(bs) => bs.map((b) => b.disabled)")))
@@ -1264,7 +1264,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/cut.html?cut=n05&run={run}&t=0.5")
+            page.goto(f"{base}/cut.html?cut=n05&run={run}&t=0.5", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             js = """async (t) => {
@@ -1316,7 +1316,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=dpr)
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/cut.html?cut=n05&run=sample&{query}")
+            page.goto(f"{base}/cut.html?cut=n05&run=sample&{query}", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             return page, errors
@@ -1386,7 +1386,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n01&run={run}&t=2")
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n01&run={run}&t=2", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             got = page.evaluate(
@@ -1440,7 +1440,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             got = page.evaluate(
@@ -1484,7 +1484,7 @@ class BrowserReplayTest(unittest.TestCase):
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/?pace=0&t=9")
+            page.goto(f"{base}/?pace=0&t=9", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.evaluate("window.hiraku.ready")
             got = page.evaluate(
@@ -1492,14 +1492,14 @@ class BrowserReplayTest(unittest.TestCase):
                            link: document.querySelector("#mode a.runid").getAttribute("href") })"""
             )
             self.assertEqual(got, {"applied": 15, "list": False, "link": "?list=1"})
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .pick")
             # the recommendation comes first after 「＋ 新しく依頼する」 (the list's first line, test_runlist_order_browser)
             pick = page.evaluate("""() => { const p = document.querySelector("#launch .pick");
                 return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > .fresh-top + *"),
                          run: p.dataset.run, href: p.querySelector("a.go").getAttribute("href"), verb: p.querySelector("a.go").textContent }; }""")
             self.assertEqual(pick, {"n": 1, "first": True, "run": run_id, "href": f"?run={run_id}", "verb": "見る"})
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#runlist h3")
             listing = page.evaluate(
                 """() => ({ heads: [...document.querySelectorAll("#runlist > h3")].map((h) => h.textContent),

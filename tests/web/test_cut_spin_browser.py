@@ -166,7 +166,7 @@ class _CutSpinPage(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/cut.html?cut={cut}&{query}&t=0")
+        page.goto(f"{base}/cut.html?cut={cut}&{query}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=180000)
         page.evaluate("window.hiraku.ready")
         self.assertIsNone(page.evaluate("document.querySelector('.err')?.textContent ?? null"), cut)

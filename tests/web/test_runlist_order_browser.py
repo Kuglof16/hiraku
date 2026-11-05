@@ -69,7 +69,7 @@ class RunListOrderBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.bases[key]}/?{query}")
+        page.goto(f"{self.bases[key]}/?{query}", wait_until="domcontentloaded")
         page.wait_for_selector("#launch .demo-runs")
         got = page.evaluate(PROBE)
         page.close()

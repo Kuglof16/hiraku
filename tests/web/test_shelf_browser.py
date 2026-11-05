@@ -114,7 +114,7 @@ class ShelfBrowserTest(unittest.TestCase):
         page.not_found = []
         page.on("response", lambda r: r.status == 404 and page.not_found.append(r.url.split("/api/", 1)[-1]))
         page.on("console", lambda m: m.type == "error" and "status of 404" not in m.text and errors.append(m.text))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)

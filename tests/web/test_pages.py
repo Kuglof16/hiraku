@@ -154,7 +154,7 @@ class PagesBrowserTest(unittest.TestCase):
         out = self.tmp / "map"
         with mock.patch.dict(os.environ, {"HIRAKU_WEB_MAP": str(out)}):
             page = self.browser.new_page()
-            page.goto(f"{self.base}/?run=sample&pace=0&t=1e6")
+            page.goto(f"{self.base}/?run=sample&pace=0&t=1e6", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             page.close()
