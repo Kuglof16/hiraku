@@ -345,14 +345,13 @@ export class CutN07 {
 
   // Boxes round what the version after added or changed (the diff's ids), drawn from that
   // design's own data: a part by its box, a member by its drawn tube; an id with no shape in
-  // the design gets none. In the highlight's colour, an outline seen through the plates and a
-  // light fill.
+  // the design gets none. In the highlight's colour, an outline seen through the plates only
+  // (no fill: the plates' colours stay as the legend reads them).
   diffMarks(v, design, diff) {
     const group = new THREE.Group();
-    const fill = new THREE.MeshBasicMaterial({ color: DIFF_COLOR, transparent: true, opacity: 0.3, depthWrite: false, depthTest: false });
     const line = new THREE.LineBasicMaterial({ color: DIFF_COLOR, depthTest: false, transparent: true });
     const add = (geo, matrix) => {
-      for (const obj of [new THREE.Mesh(geo, fill), new THREE.LineSegments(new THREE.EdgesGeometry(geo), line)]) {
+      for (const obj of [new THREE.LineSegments(new THREE.EdgesGeometry(geo), line)]) {
         obj.matrixAutoUpdate = false;
         obj.matrix.copy(matrix);
         obj.renderOrder = 10;
@@ -375,6 +374,7 @@ export class CutN07 {
       add(new THREE.BoxGeometry(m.length, k, k), m.mesh.matrix);
     }
     v.body.add(group);
+    v.diffMarks = group; // laid over everything, as the view's centre-of-gravity mark
     return group;
   }
 

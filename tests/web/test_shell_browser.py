@@ -302,8 +302,8 @@ class ShellBrowserTest(unittest.TestCase):
         # after the zoom the camera stays
         for t in (T["swap_to_s"], sp["duration_s"]):
             self.assertAlmostEqual(at[t]["dist"], at[T["zoom_to_s"]]["dist"], places=6)
-        # the highlight boxes on the version after: one outline and one fill per gusset plate
-        self.assertEqual(page.evaluate("() => window.hiraku.cut.cases[1].marks.children.length"), 4)
+        # the highlight boxes on the version after: one outline per gusset plate (no fill)
+        self.assertEqual(page.evaluate("() => window.hiraku.cut.cases[1].marks.children.map((o) => o.type)"), ["LineSegments", "LineSegments"])
         self.assertIsNone(page.evaluate("() => window.hiraku.cut.cases[0].marks ?? null"))
         # no word names the kind of analysis
         for t in times:
