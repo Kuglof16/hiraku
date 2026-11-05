@@ -52,6 +52,7 @@ R1_RETRY_SAFE_SIDE = {
 def stand_in_plan(product, requirements=None):
     """The scripted plan as the stand-in design and tools of RunCase need it (see R1_RETRY_SAFE_SIDE)."""
     plan = copy.deepcopy(_REAL_LOAD_PLAN(product, requirements))
+    plan["rule_check"] = False  # the stand-in design has no systems or real parts: the knowledge's rules would hit it
     for step in plan.get("steps") or []:
         retry = (step.get("expected_mismatch") or {}).get("retry")
         if step.get("load_case") in ("R1-step100", "R1-step250-beyond") and retry is not None:

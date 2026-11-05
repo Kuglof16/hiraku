@@ -287,6 +287,7 @@ class ScriptedReviseTest(BuildersCase, unittest.TestCase):
         """The offroad steps, with this test's revision (the stand-in designgen has only track) or none."""
         plan = dict(load_plan("offroad-4w"))
         plan["revise"] = REVISE if revise else []
+        plan["rule_check"] = False  # the stand-in design has no systems: the knowledge's system rules would hit
         return plan
 
     def test_compose_adds_builder_steps_upstream_first(self):
