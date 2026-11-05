@@ -91,7 +91,10 @@ def along_line(centres: np.ndarray, values: np.ndarray, p0, p1, radius: float):
     return t[idx], idx, np.asarray(values)[idx]
 
 
+# The read points 0.5 t / 1.5 t and the extrapolation 1.5 sigma(0.5 t) - 0.5 sigma(1.5 t): IIW, as
+# HOT_SPOT_SOURCE cites; not checked in this repository (README, the table of values not checked).
 HOT_SPOT_READ_T = (0.5, 1.5)  # read points, in wall thicknesses from the weld line (centres of the strip elements)
+# CORNER_SKIP_T: HIRAKU's choice, an assumption, no source
 CORNER_SKIP_T = 2.0  # read points closer than this many t to a footprint corner along the weld line are not read
 HOT_SPOT_SOURCE = ("IIW structural hot-spot stress with shell elements of size t x t: the surface stress square to "
                    "the weld line read at 0.5 t and 1.5 t from it and extrapolated linearly to the line (A. F. "
