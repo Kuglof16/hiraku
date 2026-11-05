@@ -125,6 +125,40 @@ class RunStoreTest(unittest.TestCase):
             self.assertEqual(again["assumptions"], ["again"])
         self.assertIsNone(self.store._read_cache)
 
+    def test_reading_keeps_files_across_stretches_until_they_change(self):
+        """Contract-neutral speed: a later reading() stretch reads only files written since (stat changed), and
+        keeps analyses without READING_DROPS; records outside reading() are whole and fresh."""
+        from hiraku.store import run_store as RS
+
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        with self.store.reading():
+            first = self.store.get("prediction", "pred-0001")
+        reads = []
+        orig = RS._read_json
+        RS._read_json = lambda p: reads.append(p) or orig(p)
+        try:
+            with self.store.reading():
+                self.assertIs(self.store.get("prediction", "pred-0001"), first)  # kept: not read again
+                self.assertIsNone(self.store.get("prediction", "pred-9999"))
+            self.assertEqual(reads, [])
+            path = layout.record_path(self.store.path, 1, "prediction", "pred-0001")
+            path.write_text(json.dumps(dict(pred, assumptions=["by hand", "longer than before"])), encoding="utf-8")
+            with self.store.reading():  # written by someone else: the stat changed
+                self.assertEqual(self.store.get("prediction", "pred-0001")["assumptions"][0], "by hand")
+            self.assertEqual(len(reads), 1)
+        finally:
+            RS._read_json = orig
+        ana = {"analysis_id": "ana-0001", "fields": [1, 2], "series": {"t": [0]}, "results": []}
+        apath = layout.record_path(self.store.path, 1, "analysis", "ana-0001")
+        apath.parent.mkdir(parents=True, exist_ok=True)
+        apath.write_text(json.dumps(ana), encoding="utf-8")
+        with self.store.reading():
+            self.assertEqual(self.store.records("analysis", 1), [{"analysis_id": "ana-0001", "results": []}])
+        self.assertEqual(self.store.records("analysis", 1), [ana])  # outside reading(): the whole record
+
     def test_invalid_record_is_not_written(self):
         self.store.write_design(example("design.json"))
         bad = example("prediction.json")
