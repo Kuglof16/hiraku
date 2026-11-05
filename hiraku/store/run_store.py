@@ -47,6 +47,11 @@ def _now() -> datetime:
     return datetime.now().astimezone()
 
 
+def _change_number(change: Record) -> int:
+    """chg-0012 -> 12: proposals are numbered run-wide in the order they were made."""
+    return int(change["change_id"].rsplit("-", 1)[1])
+
+
 def _iso(dt: datetime) -> str:
     return dt.isoformat(timespec="milliseconds")
 
@@ -426,12 +431,26 @@ class RunStore:
 
     def proposals(self, design_version: int | None = None, *, pending: bool = False) -> list[Record]:
         """The module designers' proposals, in id order: those based on one version (or all); with pending,
-        only those no version was built from yet."""
+        only those no version was built from yet, and of those only each module's latest on its version (a module
+        has one proposal per round: a new one replaces the module's earlier proposal that was not built,
+        superseded_change_ids)."""
         with self._lock:  # tools run in threads: no read while another thread appends or replaces
             got = self._proposals(self.events())
             built = self.built_change_ids() if pending else set()
-            out = [c for v, c in got if (design_version is None or v == design_version) and c["change_id"] not in built]
-            return sorted(out, key=lambda c: int(c["change_id"].rsplit("-", 1)[1]))
+            out = sorted(((v, c) for v, c in got if (design_version is None or v == design_version)
+                          and c["change_id"] not in built), key=lambda vc: _change_number(vc[1]))
+            if pending:
+                last = {(v, c["module_id"]): c["change_id"] for v, c in out}
+                out = [(v, c) for v, c in out if last[(v, c["module_id"])] == c["change_id"]]
+            return [c for _, c in out]
+
+    def superseded_change_ids(self, design_version: int | None = None) -> list[str]:
+        """Proposals based on the version (default: the current) that no version was built from and that a later
+        proposal of the same module replaced, in id order."""
+        with self._lock:
+            v = design_version or self.design_version
+            built, kept = self.built_change_ids(), {c["change_id"] for c in self.pending_proposals(v)}
+            return [c["change_id"] for c in self.proposals(v) if c["change_id"] not in built | kept]
 
     def pending_proposals(self, design_version: int | None = None) -> list[Record]:
         """The proposals based on the current version (or the one given) that no version was built from yet."""
