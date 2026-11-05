@@ -139,6 +139,7 @@ def step_body_log(design: dict, step_height_mm: float, step_supports: list[str] 
 
 DENSE_BEFORE_S, DENSE_AFTER_S = 0.2, 0.2  # around lift-off to the wheels on the step
 CLIMB_BEFORE_S = 0.6  # a following wheel's climb: from this long before its centre passes the corner
+HIT_HALF_S = 0.1  # s each side of a wheel's hit kept at every load state in run 2's mount series
 CRAWL_SPEED = 0.5  # m/s after the lift-off (K2's choice: slow, so the record stays nearly quasi-static)
 CRAWL_MAX_S = 20.0
 
@@ -326,6 +327,7 @@ class StepClimbTool(K2Tool):
         driven = [i for i, c in enumerate(veh.corners) if c.drive]
         peak, peak_id, peak_z, slow_t, t_climb, t_peak = 0.0, None, 0.0, 0.0, None, None
         peak_inertia = None
+        own_peak = [(0.0, None)] * len(veh.corners)  # each wheel's largest |F| and its time (its own hit)
         reason = None
         # climbed: the hindmost wheel centre (world x) is 0.6 m past the step's corner
         x_done = crawl["x_step"] + 0.6
@@ -344,6 +346,8 @@ class StepClimbTool(K2Tool):
             new_peak = False
             for i, c in enumerate(veh.corners):
                 fmag = math.sqrt(sum(x * x for x in o["f"][i]))
+                if fmag > own_peak[i][0]:
+                    own_peak[i] = (fmag, sim.t)
                 if fmag > peak:
                     peak, peak_id, new_peak = fmag, c.id, True
                 peak_z = max(peak_z, o["f"][i][2])
@@ -384,7 +388,12 @@ class StepClimbTool(K2Tool):
                 vectors.append({"kind": "inertia", "at": "cg", "origin_mm": [x * 1000.0 for x in peak_inertia[1]],
                                 "vector_N": [float(x) for x in peak_inertia[0]]})
             if log2 is not None and log2.states:
-                series += mount_series(veh, log2.states, [] if t_peak is None else [(t_peak - 0.2, t_peak + 0.2)])
+                # every kept load state (LOAD_EVERY_S) for HIT_HALF_S each side of each wheel's own hit:
+                # the front and the rear wheels meet the step at different times and the frame's worst
+                # instant may be either; a hit lasts tens of ms (offroad-4w-v1 at 10 km/h: the force over
+                # half its peak for 51 ms at a 100 mm step, 82 ms at 250 mm)
+                hits = sorted({round(t, 3) for _, t in own_peak if t is not None})
+                series += mount_series(veh, log2.states, [(t - HIT_HALF_S, t + HIT_HALF_S) for t in hits])
                 top = mount_peak(series)
                 if top is not None:
                     res.append(top[0])
