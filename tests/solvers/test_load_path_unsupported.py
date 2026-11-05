@@ -38,7 +38,8 @@ class UnsupportedLoadTest(unittest.TestCase):
 
     def test_a_held_control_has_none(self):
         rec, r = run("hand", hand_force=300)
-        self.assertNotIn("unsupported_load", r)
+        self.assertEqual(r["unsupported_load"]["value"], 0.0)  # given at 0: the analysis looked for the path
+        self.assertNotIn("where", r["unsupported_load"])
         self.assertIn("grip_deflection", r)
 
 

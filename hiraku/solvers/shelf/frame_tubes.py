@@ -37,7 +37,8 @@ from ..fe import tubes
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, mesh_of,
                    on_board, param_list, param_text, param_value, result, run_param)
-from .frame_static import STEP_HEIGHT, STEP_SUPPORTS, add_frames, front_supports, g_factor, upstream_mount_series
+from .frame_static import (PATH_FORMULA, PATH_PREDICTS, STEP_HEIGHT, STEP_SUPPORTS, add_frames, front_supports,
+                           g_factor, lost_load_outputs, upstream_mount_series)
 
 STANDARD_GRAVITY = 9.80665
 ELEMENT_SIZE_RANGE_MM = (5.0, 40.0)  # HIRAKU's choice: past 40 mm a 34 mm tube has the fewest facets (8)
@@ -153,7 +154,7 @@ class FrameTubes(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R1"]
-    formulas = ["frame_static.bending_stress", "mass_props.static_wheel_loads"]
+    formulas = ["frame_static.bending_stress", "mass_props.static_wheel_loads", PATH_FORMULA]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS, LOAD_SOURCE)
     run_params = (ELEMENT_SIZE,)
     predicts = (
@@ -161,6 +162,7 @@ class FrameTubes(BuiltinTool):
                  "M / Z of the member with the largest beam moment at a joint (a rect tube's formula; a round tube's "
                  "Z = pi (D^4 - d^4) / (32 D)); the shell adds the joint's stress concentration, which the formula "
                  "does not"),
+        PATH_PREDICTS,
     )
     upstream = ("an analysis with K2's mount forces as joint vectors at every suspension mount (step_climb_dynamic): "
                 "those forces load the frame; with its mount force series, the frame is solved at each instant")
@@ -398,6 +400,9 @@ def outputs(design: Record, r: dict, loads: list, src: str) -> Record:
                        "per_member": {m: round(v, 2) for m, v in hot_member.items()}})
     vectors = [{"kind": "joint", "at": l.where, "origin_mm": _vec(l.point_mm, 3), "vector_N": _vec(l.force_N, 3)}
                for l in loads if l.kind == "mount"]
+    lost, said = lost_load_outputs()
+    results.append(lost)
+    effects.append(said)
     return {"results": results, "fields": fields, "vectors": vectors, "effects": effects, "assumptions": assumptions}
 
 
