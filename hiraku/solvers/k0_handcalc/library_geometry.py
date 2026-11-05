@@ -24,10 +24,25 @@ def _free_steer(v: dict) -> dict:
     return {"theta": math.degrees(math.asin((w + c) / reach) - math.atan2(w, l))}
 
 
+def _hip_ankle(l1: float, l2: float, angle_deg: float) -> float:
+    return math.sqrt(l1 * l1 + l2 * l2 - 2.0 * l1 * l2 * math.cos(math.radians(angle_deg)))
+
+
+def _knee_angle_room(v: dict) -> dict:
+    rooms = []
+    for k in ("big", "small"):
+        l1, l2, th = v[f"l1_{k}"], v[f"l2_{k}"], v[f"theta_{k}"]
+        now = _hip_ankle(l1, l2, th)
+        rooms.append(min(now - _hip_ankle(l1, l2, v["theta_lo"]), _hip_ankle(l1, l2, v["theta_hi"]) - now))
+    return {"room": min(rooms), "room_big": rooms[0], "room_small": rooms[1]}
+
+
 def all_formulas() -> list[Formula]:
     s = {k: sp.Symbol(k, real=True) for k in ("L", "L_bk")}
     L, L_bk = s["L"], s["L_bk"]
     c = {k: sp.Symbol(k, real=True) for k in ("n", "n_out")}
+    k = {n: sp.Symbol(n, real=True) for n in ("n_rest", "n_slide", "n_wheel", "n_rod", "n_blocked", "n_gap", "n_none",
+                                              "n_out")}
     return [
         Formula(
             formula_id="assembly.part_count",
@@ -40,6 +55,89 @@ def all_formulas() -> list[Formula]:
             assumptions=["one step per part", "every part can be put in along some direction"],
             source="counting",
             symbols=c,
+        ),
+        Formula(
+            formula_id="assembly.overlap_count",
+            title="止まっているときに重なっている物の組の数 (軸に揃えた箱で数える)",
+            domain="assembly",
+            expression="n = n_rest + n_slide",
+            inputs={"n_rest": _in("1", "pairs of boxes overlapping at rest by more than the rule allows", min=0),
+                    "n_slide": _in("1", "pairs with the driver's seat moved to either end of its slide", min=0)},
+            outputs={"n": ("1", "overlapping pairs", k["n_rest"] + k["n_slide"])},
+            assumptions=["parts not turned (no rpy_deg) as their boxes, members along x, y or z as the box of their "
+                         "length and section; turned parts and slanted members left out (their axis-aligned box is far "
+                         "bigger than they are), so an overlap of one of them can be missed, never added",
+                         "two boxes overlap by the smallest of their overlaps along x, y and z",
+                         "what may overlap how far is the tool's rule (k4_geometry.model.allowance): the definition of "
+                         "an interference, not a calculation"],
+            source="counting (assembly_inputs.overlap_inputs)",
+            symbols=k,
+        ),
+        Formula(
+            formula_id="assembly.motion_count",
+            title="車輪が上下しハンドルを切ったときに当たる物の組の数 (車輪の箱とタイロッドの棒で数える)",
+            domain="assembly",
+            expression="n = n_wheel + n_rod",
+            inputs={"n_wheel": _in("1", "pairs of a wheel (its box turned through the steering's range every 1 deg, "
+                                        "its height range grown by the travel) and a box", min=0),
+                    "n_rod": _in("1", "pairs of a tie rod (a straight rod of its section's radius, the inner end in "
+                                      "place, the outer end with the wheel) and a box", min=0)},
+            outputs={"n": ("1", "pairs that meet in motion", k["n_wheel"] + k["n_rod"])},
+            assumptions=["only the wheels and the tie rods move (the tool also moves the knuckle, the brake and the "
+                         "other links of the corner)",
+                         "the wheel turns about the vertical axis through the support's position, through "
+                         "-max_steer_angle to +max_steer_angle; it moves up and down by half the travel each way",
+                         "the other bodies as in assembly.overlap_count (turned parts and slanted members left out); "
+                         "what is mounted to the moving part is the tool's rule (k4_geometry.model.mounted)"],
+            source="plane geometry of a turned rectangle and of a line (assembly_inputs.motion_inputs)",
+            symbols=k,
+        ),
+        Formula(
+            formula_id="assembly.blocked_count",
+            title="6 方向のどれからも入らない部品の数 (枠と溶接の物だけを相手に)",
+            domain="assembly",
+            expression="n = n_blocked",
+            inputs={"n_blocked": _in("1", "parts whose box pushed along +-x, +-y and +-z meets the frame every way",
+                                     min=0)},
+            outputs={"n": ("1", "parts that cannot go in", k["n_blocked"])},
+            assumptions=["only the frame stops a part: its members and the welded pieces (kinds frame, gusset, "
+                         "rollbar, bracket), there before any part; parts put in earlier are not counted (the tool "
+                         "also tries orders, and slides a part first)",
+                         "a part goes straight along one axis; a piece already overlapping it at rest is "
+                         "H1-interference's and does not stop it",
+                         "boxes as in assembly.overlap_count; turned parts are not counted"],
+            source="counting (assembly_inputs.blocked_inputs)",
+            symbols=k,
+        ),
+        Formula(
+            formula_id="assembly.joint_count",
+            title="触れていないつながりと、どこにもつながらない部品の数 (箱で測る)",
+            domain="assembly",
+            expression="n = n_gap + n_none",
+            inputs={"n_gap": _in("1", "mechanical connects_to (not wire or hose) whose ends are more than 2 mm apart",
+                                 min=0),
+                    "n_none": _in("1", "parts with no mechanical connects_to", min=0)},
+            outputs={"n": ("1", "joints that do not touch, and parts joined to nothing", k["n_gap"] + k["n_none"])},
+            assumptions=["the gap between the axis-aligned boxes round the two (a node's or a support's point for "
+                         "those): never more than the gap between the shapes, so a joint can be missed, never added",
+                         "a joint touches when the gap is at most 2 mm; wires and hoses run between the two and are "
+                         "not counted"],
+            source="counting (assembly_inputs.joint_inputs)",
+            symbols=k,
+        ),
+        Formula(
+            formula_id="assembly.envelope_count",
+            title="モジュールの空間からはみ出した部品と部材の数 (軸に揃えた箱で)",
+            domain="assembly",
+            expression="n = n_out",
+            inputs={"n_out": _in("1", "parts and members whose box is not inside one box of their module's envelope",
+                                 min=0)},
+            outputs={"n": ("1", "bodies outside their module's space", k["n_out"])},
+            assumptions=["each body as the axis-aligned box round it (turned parts round their turned corners, "
+                         "slanted members round their ends widened by half the section's largest side)",
+                         "inside means inside one box of the envelope, more than 0.5 mm out counts"],
+            source="counting (assembly_inputs.envelope_inputs)",
+            symbols=k,
         ),
         Formula(
             formula_id="geometry.free_steer_angle",
@@ -70,6 +168,29 @@ def all_formulas() -> list[Formula]:
                          "is not larger than it"],
             source="definition (the smaller of two angles)",
             fn=lambda v: {"theta": min(v["theta_free"], v["theta_stop"])},
+        ),
+        Formula(
+            formula_id="occupant.knee_angle_room",
+            title="ペダルを踏む脚の膝の角度が、運転の姿勢の楽な範囲にあるか (腰から足首までの長さで)",
+            domain="assembly",
+            expression=("d(theta) = sqrt(l1^2 + l2^2 - 2 l1 l2 cos theta); for each body size: "
+                        "min(d(theta) - d(theta_lo), d(theta_hi) - d(theta)); room = the smaller of the two"),
+            inputs={**{f"{n}_{k}": _in(u, f"{what} of the {who} person's leg", min=0)
+                       for k, who in (("big", "large (male 95th percentile)"), ("small", "small (female 5th percentile)"))
+                       for n, u, what in (("l1", "mm", "hip to knee (thigh)"), ("l2", "mm", "knee to ankle (shank)"),
+                                          ("theta", "deg", "knee angle (between thigh and shank) as seated"))},
+                    "theta_lo": _in("deg", "comfortable knee angle, lower end", min=0),
+                    "theta_hi": _in("deg", "comfortable knee angle, upper end", min=0)},
+            outputs={"room": ("mm", "the smaller margin of the two people (negative: a knee out of the range)", None),
+                     "room_big": ("mm", "the large person's margin", None),
+                     "room_small": ("mm", "the small person's margin", None)},
+            assumptions=["the leg is two straight links hinged at the knee (side view); the hip-ankle distance grows "
+                         "with the knee angle, so a margin is negative exactly when the angle is out of the range",
+                         "the knee angles are those of K4's seated poses (each person at their best place in the "
+                         "seat's slide): not an independent estimate of the angle, only of its margin"],
+            source="law of cosines (geometry); the range from Porter and Gyi 1998 as k4_geometry.people.KNEE_COMFORT_DEG",
+            requires=[(lambda v: v["theta_lo"] < v["theta_hi"], "theta_lo must be below theta_hi")],
+            fn=_knee_angle_room,
         ),
         Formula(
             formula_id="occupant.knee_room",

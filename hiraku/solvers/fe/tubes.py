@@ -66,6 +66,7 @@ with the RBE3 weights (fe.connect.rbe3_forces), which keep each item's force and
 from __future__ import annotations
 
 import math
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -1004,7 +1005,35 @@ def member_tube_map(fs: FrameShells) -> dict:
 
 def k2_states(design: dict, step_height_mm: float = 100.0, rec_hz: float = 25.0) -> dict:
     """K2's vehicle, its load state standing still on flat ground (1 g) and at the step's lift-off (the
-    state of step_push's records nearest the snapshot time). Returns {"veh", "static", "lift", "push"}."""
+    state of step_push's records nearest the snapshot time). Returns {"veh", "static", "lift", "push"}.
+    The result is kept in this process by the design's content and the arguments (K2_STATES_KEPT), so a
+    version's load cases and the tests that ask again do not run K2 again; treat it as read-only."""
+    key = _content_key(design, step_height_mm, rec_hz)
+    if key in _K2_STATES:
+        _K2_STATES.move_to_end(key)
+        return dict(_K2_STATES[key])
+    out = _k2_states(design, step_height_mm, rec_hz)
+    _K2_STATES[key] = out
+    while len(_K2_STATES) > K2_STATES_KEPT:
+        _K2_STATES.popitem(last=False)
+    return dict(out)
+
+
+K2_STATES_KEPT = 4
+_K2_STATES: "OrderedDict[str, dict]" = OrderedDict()
+
+
+def _content_key(design: dict, *args) -> str:
+    """A digest of a design's content and the other arguments of a call."""
+    import hashlib
+    import json
+
+    h = hashlib.sha1(json.dumps(design, sort_keys=True, default=str).encode())
+    h.update(repr(args).encode())
+    return h.hexdigest()
+
+
+def _k2_states(design: dict, step_height_mm: float, rec_hz: float) -> dict:
     from ..k2_vehicle.drive import controls
     from ..k2_vehicle.model import build_vehicle
     from ..k2_vehicle.scenario import new_sim

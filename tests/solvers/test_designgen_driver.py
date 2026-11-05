@@ -83,12 +83,14 @@ def column_height_to_clear_knees(design, angle):
 class DefaultsTest(unittest.TestCase):
     def test_v1_keeps_its_parts(self):
         """The four variables at their defaults build v1; a v1 saved without them rebuilds to the same parts."""
-        self.assertEqual(ladder_4w.build(), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, ladder_4w.build(), V1)
         old = json.loads(json.dumps(V1))
         for k in NEW:
             del old["variables"][k]
         again = designgen.regenerate(old, {})
-        self.assertEqual(again, V1)
+        assert_same_design(self, again, V1)
         self.assertEqual({k: V1["variables"][k]["value"] for k in NEW}, {k: VAR[k].default for k in NEW})
 
     def test_defaults_are_the_earlier_placement(self):
@@ -138,7 +140,7 @@ class RangesTest(unittest.TestCase):
     def test_steepest_column_closes_at_the_default_steering(self):
         for a in VAR["steering_column_angle"].lo, VAR["steering_column_angle"].hi:
             contract.validate("design", ladder_4w.build({"steering_column_angle": a}))
-        with self.assertRaisesRegex(designgen.DesignGenError, "outside 20 to 50 deg"):
+        with self.assertRaisesRegex(designgen.DesignGenError, "outside 20 to 49 deg"):
             ladder_4w.build({"steering_column_angle": 55.0})
 
 
@@ -208,7 +210,7 @@ class PartsFromTheVariablesTest(unittest.TestCase):
         self.assertEqual(knee_space(d)["occupant_R"][1], where)
         self.assertAlmostEqual(knee_space(d)["occupant_R"][0] - J5, room, places=6)
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
-        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)
+        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)[0]  # H3-body-size (knee_room); [1] is H3-knee-angle
         got = h3_calc(d, lc)
         self.assertAlmostEqual(got["knee_length"]["value"] - got["buttock_knee"]["value"], room, places=6)
 
@@ -224,9 +226,10 @@ class KneeRoomClosedFormTest(unittest.TestCase):
     def test_run10_is_the_columns_box(self):
         d = build()
         self.assertAlmostEqual(self.check(d), -39.25, delta=0.005)
-        # what the experiment read off its run 10: knee room -39.25 mm at the column, pedal reach -22.36 mm
+        # what the experiment read off its run 10: knee room -39.25 mm at the column, pedal reach -22.36 mm (then
+        # against a 150 deg knee); pedal reach is now against the straight leg: the small person reaches, 2.93 mm
         f = people.fit(d)
-        self.assertAlmostEqual(f["pedal_reach.occupant_R"][0], -22.36, delta=0.005)
+        self.assertAlmostEqual(f["pedal_reach.occupant_R"][0], 2.93, delta=0.005)
 
     def test_along_x_and_the_angle(self):
         """While the column is the part at knee height: +1 mm per mm of steering_x, -1 per mm of seat_x, and
@@ -235,7 +238,7 @@ class KneeRoomClosedFormTest(unittest.TestCase):
         for sx in (-560.0, -470.0):
             self.assertAlmostEqual(self.check(build(steering_x=sx)) - base, sx - RUN10["steering_x"], places=6)
         self.assertAlmostEqual(self.check(build(seat_x=-1045.0, battery_x=-1045.0)) - base, 30.0, places=6)
-        for a in (20.0, 50.0):
+        for a in ladder_4w.COLUMN_ANGLE_RANGE_DEG:
             t = math.radians(a)
             want = -RC * (math.cos(t) + math.sin(t)) + RC * (math.cos(math.radians(35)) + math.sin(math.radians(35)))
             self.assertAlmostEqual(self.check(build(steering_column_angle=a)) - base, want, places=6)
@@ -268,7 +271,7 @@ class Run10H3Test(unittest.TestCase):
     def h3(self, d):
         tool = {t.name: t for t in solvers.builtin_tools()}["assembly"]
         req = load_requirements(ROOT / "data" / "requirements" / "offroad-4w.yaml")
-        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)
+        lc = BUILDERS["H3"](load_catalog().test("H3"), req, d)[0]  # H3-body-size (knee_room); [1] is H3-knee-angle
         rec = tool.run(d, lc, [{"prediction_id": "pred-0001"}], {})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         got = {r["quantity"]: r for r in rec["results"]}

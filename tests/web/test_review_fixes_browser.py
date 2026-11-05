@@ -311,11 +311,12 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         page.goto(f"http://127.0.0.1:{server.server_address[1]}/?list=1")
         page.wait_for_selector("#runlist table")
         got = page.evaluate(
-            """() => Object.fromEntries([...document.querySelectorAll("#runlist tr")].filter((tr) => tr.querySelector(".rid"))
-                 .map((tr) => { const d = tr.querySelector(".drv"); return [tr.querySelector(".rid").firstChild.textContent.trim(), d ? [d.dataset.driver, d.textContent] : null]; }))"""
+            """() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")]
+                 .map((tr) => { const d = tr.querySelector(".rmeta .how"); return [tr.dataset.run, d ? [d.dataset.driver, d.textContent] : null]; }))"""
         )
         self.assertEqual(errors, [])
-        words = {"claude_code_plugin": "Claude Code", "agent_sdk": "API キー", "scripted": "台本"}
+        # the run list's words (test_runlist_rows_browser has the rest of the row's line)
+        words = {"claude_code_plugin": "Claude で実行", "agent_sdk": "Claude で実行", "scripted": "決まった手順で再現"}
         for rid, drv in drivers.items():
             self.assertEqual(got[rid], [drv, words[drv]] if drv else None, rid)
         page.close()

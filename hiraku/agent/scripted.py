@@ -25,13 +25,14 @@ from typing import Any
 from hiraku import contract
 from hiraku.agent import inbox
 from hiraku.contract import layout
+from hiraku.agent.hooks import stopped_data
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.catalog import REPO_ROOT, is_beyond
 from hiraku.tools import RunContext, ToolError, rules
-from hiraku.tools.functions import (analyze, archetypes, compare, propose_design, record_cause, record_prediction,
-                                    revise_design, rule_check, write_report)
+from hiraku.tools.functions import (analyze, archetypes, build_version, compare, propose_design, record_cause,
+                                    record_prediction, revise_design, rule_check, write_report)
 from hiraku.tools.judge import latest_verdicts, verdict_line
-from hiraku.tools.plan import (READERS, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
+from hiraku.tools.plan import (READERS, ReaderError, ScriptError, _load_case_of, _reader, compose_plan, given_inputs, has_plan,  # noqa: F401
                                load_plan, plan_of, resolve)
 from hiraku.tools.report import scripted_next
 from hiraku.tools.shelf import STAGE_NAMES_JA, tool_stage
@@ -40,23 +41,92 @@ Record = dict[str, Any]
 
 SCRIPTED_SLUG_SUFFIX = "-scripted"
 NO_MODEL = {"model": None, "effort": None}  # agent.started of a scripted run: no model is called
-FIT_TIME_S = 120.0  # the driver fit's time limit when the plan gives none
+FIT_TIME_S = 900.0  # the driver fit's time limit when the plan gives none (a guard; fit_evals ends it first)
+FIT_EVALS = 150  # designs the driver fit measures when the plan gives no fit_evals
 
 
-def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None) -> tuple[dict, str]:
+def range_ends(design: Record, changes: dict[str, Record]) -> list[str]:
+    """The changes that sit on the lower or upper bound of their variable's range (designgen.variables),
+    as 'name value unit (下限|上限)'."""
+    from hiraku import designgen
+
+    spec = {s["name"]: s for s in designgen.variables(design)}
+    out = []
+    for k, q in changes.items():
+        s = spec.get(k) or {}
+        for bound, word in (("min", "下限"), ("max", "上限")):
+            if bound in s and abs(q["value"] - s[bound]) < 1e-9:
+                out.append(f"{k} {q['value']:g} {q['unit']} ({word})")
+    return out
+
+
+def fit_driver(ctx: RunContext, changes: dict[str, Record], reason: str, time_s: Any = None,
+               evals: Any = None) -> tuple[dict, str]:
     """A revision with `fit: driver`: the plan's own changes, then the driver's place found by code on the design
     with them (hiraku.designgen.driver_fit.best_driver_place: the smallest of the H3 margins made the largest).
     Returns the changes with the fit's added (the fit's win for its variables) and the reason with the margins."""
     from hiraku import designgen
     from hiraku.designgen import driver_fit
 
+    # measured on the design with the entry's variable changes (its choices, the mounts, do not move the driver;
+    # with them every design takes longer to build). A fixed number of evaluations (`fit_evals`) makes the answer
+    # the same on every machine; the time limit only guards against a fit that does not end.
     base = designgen.regenerate(ctx.store.design(), changes) if changes else ctx.store.design()
-    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S))
+    got = driver_fit.best_driver_place(base, time_limit_s=float(time_s or FIT_TIME_S),
+                                       max_evals=int(evals or FIT_EVALS))
     small = got["smallest"]
     found = "、".join(f"{k} {v['value']:g} {v['unit']}" for k, v in got["changes"].items()) or "変えるものなし"
     text = (f"{reason}。運転席の位置はコードで探した (driver_fit: いちばん小さい余裕を最大に): {found}。"
             f"いちばん小さい余裕は {small['name']} {small['value']:.1f} {small['unit']} ({small.get('where') or '-'})")
+    ends = range_ends(base, got["changes"])
+    if ends:  # the answer sits on a bound of the variable's range, and those bounds are not checked
+        text += f"。範囲の端 (確かめていない値) で決まった: {'、'.join(ends)}"
     return {**changes, **got["changes"]}, text
+
+
+def split_by_module(design: Record, changes: Record, choices: Record) -> tuple[dict[str, Record], Record, list[str]]:
+    """A revision's changes and choices on a design with modules (contract d9631a5): ({module: {changes, choices}}
+    for each module designer, the package variables for the packager, names no module owns). The owner of a
+    variable or choice is the module that lists it (design.modules variables and choices)."""
+    var_of, choice_of = {}, {}
+    for m in design.get("modules") or []:
+        for k in m.get("variables") or []:
+            var_of[k] = m["module_id"]
+        for k in m.get("choices") or []:
+            choice_of[k] = m["module_id"]
+    by: dict[str, Record] = {}
+    package: Record = {}
+    stray = []
+    for k, q in changes.items():
+        m = var_of.get(k)
+        if m == "package":
+            package[k] = q
+        elif m:
+            by.setdefault(m, {}).setdefault("changes", {})[k] = q
+        else:
+            stray.append(k)
+    for k, v in choices.items():
+        m = choice_of.get(k)
+        if m and m != "package":
+            by.setdefault(m, {}).setdefault("choices", {})[k] = v
+        else:
+            stray.append(k)
+    order = [m for m in contract.MODULES if m in by]
+    return {m: by[m] for m in order}, package, stray
+
+
+def room_for(previous: Record, merged: Record) -> dict[str, list[Record]]:
+    """The packager's room for a round: for each module whose parts or members would leave its envelope on the
+    design with the round's changes, that module's envelope made again from the new design
+    (hiraku.designgen.modules.envelopes); computed by code, never guessed."""
+    from hiraku import designgen
+    from hiraku.designgen import modules
+
+    new = designgen.regenerate(previous, merged) if merged else previous
+    envs = {m["module_id"]: m.get("envelope") or [] for m in previous.get("modules") or []}
+    out_mods = {m for _, m, _ in modules.outside(new, envs)}
+    fresh = modules.envelopes(new)
+    return {m: fresh[m] for m in contract.MODULES if m in out_mods and m in fresh}
 
 
 REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
@@ -114,7 +184,15 @@ def _check_stop(ctx: RunContext) -> None:
 def _predict(ctx: RunContext, lc: Record, agent: str, specs: list[Record]) -> list[str]:
     ids = []
     for p in specs:
-        given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
+        try:
+            given = given_inputs(ctx, p, lc)  # the builder's reader of this formula's inputs off the design
+        except ReaderError as e:  # the formula does not apply to this design (e.g. nothing outside point R for R8-push)
+            ctx.store.emit("agent.said", agent="system", domain=lc["domain"],
+                           text=f"{lc['load_case_id']} の {p['quantity']} は、この設計では式 {p['formula_id']} の入力が作れないので"
+                                f"予測しません ({e})",
+                           data={"skipped_prediction": p["formula_id"], "load_case_id": lc["load_case_id"],
+                                 "quantity": p["quantity"], "reason": str(e)})
+            continue
         args = {
             "load_case_id": lc["load_case_id"],
             "quantity": p["quantity"],
@@ -149,6 +227,11 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
     if ana["status"] != "ok":
         _say(ctx, agent, lc, f"解析が失敗しました: {ana.get('error', '')}")
         raise Stop(f"analysis {ana['analysis_id']} failed")
+    decided = [v for v in ctx.store.records("verdict", ctx.version) if v.get("analysis_id") == ana["analysis_id"]]
+    if decided:  # the analysis judged the load case itself (unsupported_load: a load with no path): nothing to compare
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、荷重の通り道が無いので不合格です ({decided[-1]['verdict_id']})。"
+                             f"予測との照合はしません")
+        return None
     names = {r["quantity"] for r in ana["results"]}
     hit = None
     for pid in pred_ids:
@@ -163,13 +246,26 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         cmp = compare(ctx, cargs, agent)["comparison"]
         if cmp["status"] == "match":
             continue
-        if expected and hit is None and cmp["quantity"] == expected["quantity"]:
+        if hit is None and expected_for(expected, cmp) is not None:
             hit = cmp
             continue
         _say(ctx, agent, lc, f"{cmp['quantity']} が食い違いました (差 {cmp['diff_rel'] * 100:.1f} %)。"
                              f"台本にこの食い違いの原因は書かれていないので、ここで止めます")
         raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (the plan has none for it)")
     return hit
+
+
+def expected_for(expected: Any, cmp: Record) -> Record | None:
+    """The plan's expected_mismatch entry for a comparison: one entry, or a list of them, each for a quantity
+    and optionally a side (`when`: "high" when the prediction is above the analysis, "low" when below), so
+    one step can say why the hand calculation is off either way (e.g. R7-hand: low on a version whose
+    parts are not mounted, end; high on a stiffer frame, safe side)."""
+    entries = expected if isinstance(expected, list) else [expected] if expected else []
+    side = "high" if cmp["predicted"]["value"] > cmp["analyzed"]["value"] else "low"
+    for e in entries:
+        if e["quantity"] == cmp["quantity"] and e.get("when", side) == side:
+            return e
+    return None
 
 
 def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) -> None:
@@ -181,15 +277,23 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if step.get("say"):
         _say(ctx, agent, lc, step["say"])
     expected = step.get("expected_mismatch")
-    hit = _analyze_and_compare(ctx, lc, agent, tool, _predict(ctx, lc, agent, step["predictions"]), expected)
+    pred_ids = _predict(ctx, lc, agent, step["predictions"])
+    if not pred_ids:  # every formula of the step was skipped: no prediction, so no analysis (HK1)
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、この設計で使える予測の式が無いので、解析しません")
+        return
+    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected)
     if hit is None:
         return  # matched; the plan's retry is not needed
+    expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)
     _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録します")
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
         args.update(safe_side=True, safe_side_reason=expected["safe_side_reason"])
-    ver = record_cause(ctx, args, agent)["verdict"]
+    if expected.get("end"):
+        args["ends_case"] = True  # rules.ended_cases reads it: the load case holds no heavier stage nor the stop
+    recorded = record_cause(ctx, args, agent)
+    ver = recorded["verdict"]
     retry = expected.get("retry")
     if ver is not None:
         if retry is not None:
@@ -330,8 +434,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     s.emit("agent.said", agent="lead", text="台本の運転です (Claude は呼びません)。決まった順にツールを呼びます")
     if rules.picks_done(ctx):  # docs/contract.md 早めに終わる運転: the picks are the whole run
         s.emit("agent.said", agent="lead", text="分野選びまでの運転なので、ここで終わります")
-        s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
         status, reason, code = rules.judged_end(ctx)
+        s.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
         s.finish(status, stop_reason=reason, stop_code=code)
         return status
     if not ctx.version and not s.stop_requested():  # building the first version's load cases takes a while
@@ -346,13 +450,14 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                                        "reason": first.get("reason") or "要件に合う型を、既定の変数で組んだ"}, "designer")
         except ToolError as e:
             s.emit("agent.said", agent="designer", text=f"最初の版を作れませんでした: {e}")
-            s.emit("agent.stopped", agent="designer", data={"agent_id": "designer"})
-            s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+            s.emit("agent.stopped", agent="designer", data={**stopped_data("designer"), "stop_code": "error",
+                                                             "stop_reason": f"propose_design refused: {e}"})
+            s.emit("agent.stopped", agent="lead", data=stopped_data("lead", "not_judged"))
             s.finish("stopped", stop_reason=f"propose_design refused: {e}", stop_code="not_judged")
             return "stopped"
         s.emit("agent.said", agent="designer", text=f"版 1 ができました。試験: "
                                                     + "、".join(lc["load_case_id"] for lc in out["load_cases"]))
-        s.emit("agent.stopped", agent="designer", data={"agent_id": "designer"})
+        s.emit("agent.stopped", agent="designer", data=stopped_data("designer"))
     plan = compose_plan(ctx, plan)
     revisions = list(plan.get("revise") or [])
     if plan["missing"]:
@@ -378,14 +483,82 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
         changes, reason = dict(rev.get("changes") or {}), rev["reason"]
+        choices = dict(rev.get("choices") or {})  # the generator's short ways (revise_design choices)
         if rev.get("fit") == "driver":  # the seat, steering and pedals searched by code (designgen.driver_fit)
-            changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"))
-        try:
-            out = revise_design(ctx, {"changes": changes, "reason": reason}, "designer")
-        except ToolError as e:
-            s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
-            raise Stop(f"revise_design refused: {e}") from None
+            try:
+                changes, reason = fit_driver(ctx, changes, reason, rev.get("fit_time_s"), rev.get("fit_evals"))
+            except ValueError as e:  # the generator refuses the entry's own changes (designgen.DesignGenError)
+                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+                raise Stop(f"revise_design refused: {e}") from None
+        if ctx.store.design().get("modules"):
+            out = revise_modules(rev, changes, choices, reason)
+        else:
+            try:
+                out = revise_design(ctx, {**({"changes": changes} if changes else {}),
+                                          **({"choices": choices} if choices else {}), "reason": reason}, "designer")
+            except ToolError as e:
+                s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
+                raise Stop(f"revise_design refused: {e}") from None
         s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、段 0 から全部の荷重条件をやり直します")
+
+    def revise_modules(rev: Record, changes: Record, choices: Record, reason: str) -> Record:
+        """One round on a design with modules (HK6): each module designer proposes its own variables and choices
+        (revise_design with module), then the packager builds the version (build_version) with the package
+        variables, giving room to a module whose parts would leave its space."""
+        from hiraku.agent.roles import route_reds
+
+        design = ctx.store.design()
+        by, package, stray = split_by_module(design, changes, choices)
+        if stray:
+            raise Stop(f"the plan changes {', '.join(stray)}, which no module of the design owns")
+        reasons = rev.get("reasons") or {}  # module (or packager) -> the plan's own words for that part
+        routed = route_reds(ctx, ctx.version)
+        # only the parts of the plan's revision whose module the version's reds go to (HK6: a red goes to the
+        # designers of the modules its load case names); the rest of the entry answers no red of this version
+        skipped = [m for m in by if f"designer.{m}" not in routed] + (["package"] if package and "packager" not in routed else [])
+        by = {m: part for m, part in by.items() if f"designer.{m}" in routed}
+        package = package if "packager" in routed else {}
+        reds = sorted({lc for ids_ in routed.values() for lc in ids_})
+        if not by and not package:
+            names = "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped) or "なし"
+            s.emit("agent.said", agent="lead",
+                   text=f"台本の次の直し ({names}) は、版 {ctx.version} の赤 ({'、'.join(reds)}) を直すモジュールのものではないので、使いません")
+            raise Stop(f"版 {ctx.version} の赤 ({'、'.join(reds)}) を直す直しが台本にありません (次の直しは {names} のもの)。"
+                       f"その赤のまま終えます。それより重い段の荷重条件は、低い段の赤が残るので判定していない (HK5)")
+        if skipped:
+            s.emit("agent.said", agent="lead", text="台本の直しのうち、この版の赤に関わらないモジュールの分は使いません: "
+                   + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped))
+            merged_keep = {k: q for m in by for k, q in (by[m].get("changes") or {}).items()}
+            changes = {**merged_keep, **package}
+            choices = {k: c for m in by for k, c in (by[m].get("choices") or {}).items()}
+        ids = []
+        s.emit("agent.said", agent="lead", text="赤の荷重条件を、直せるモジュールの設計役に渡します: "
+               + "、".join(f"{contract.MODULE_NAMES_JA.get(m, m)}" for m in by)
+               + ("、パッケージ役" if package else "") + "。版はパッケージ役がまとめます")
+        for m, part in by.items():
+            agent = f"designer.{m}"
+            start(agent)
+            args = {"module": m, **part, "reason": reasons.get(m) or reason, "load_case_ids": routed[agent]}
+            try:
+                ids.append(revise_design(ctx, args, agent)["change_id"])
+            except ToolError as e:
+                s.emit("agent.said", agent=agent, text=f"提案できませんでした: {e}")
+                raise Stop(f"revise_design ({m}) refused: {e}") from None
+        start("packager")
+        merged = {**changes, **choices}
+        args = {"reason": reasons.get("packager") or reason, **({"changes": package} if package else {})}
+        room = list(room_for(design, merged))
+        if room:  # build_version regrow (contract 6f56356): the packager names each module and says why
+            args["regrow"] = room
+            why = ("提案の部品がいまの空間からはみ出すので、" + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in room)
+                   + " の空間を新しい版の部品の形から作り直す (モジュールどうしの重なりは H1-interference で確かめる)")
+            args["reason"] = f"{args['reason']}。{why}"
+            s.emit("agent.said", agent="packager", text=why)
+        try:
+            return build_version(ctx, args, "packager")
+        except ToolError as e:
+            s.emit("agent.said", agent="packager", text=f"版を作れませんでした: {e}")
+            raise Stop(f"build_version refused: {e}") from None
 
     def can_revise() -> bool:
         return bool(revisions) and ctx.version - 1 < ctx.project["round_limit"]
@@ -463,8 +636,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         why = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました" if used_up
                else "台本に設計の直しが残っていません")
         status, code = "stopped", "round_limit" if used_up else "not_judged"
-        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。軽い段の赤が残るので、"
-                  f"それより重い段の荷重条件は確かめていません (HK5)")
+        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。それより重い段の荷重条件は、"
+                  f"低い段の赤が残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)
     if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
         nxt, computed = list(rep.get("next") or []), []
@@ -475,15 +648,15 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             summary = summary + " " + " ".join(plan["notes"])
         write_report(ctx, {"summary": summary, "next": nxt}, "lead",
                      computed=computed)
-    for agent in started:
-        s.emit("agent.stopped", agent=agent, data={"agent_id": agent})
-    s.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
     if status == "done":
         left = rules.unjudged_reason(ctx)
         if left:
             status, reason, code = "stopped", left, "not_judged"
         else:
             status, reason, code = rules.judged_end(ctx)
+    for agent in started:  # the script's roles did their parts; the stop button cuts them
+        s.emit("agent.stopped", agent=agent, data=stopped_data(agent, code))
+    s.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
     s.finish(status, stop_reason=reason, stop_code=code)
     if reason == STOPPED_BY_BUTTON:
         s.clear_stop_request()

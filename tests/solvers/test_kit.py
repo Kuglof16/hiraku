@@ -96,7 +96,10 @@ class FrameKitTest(unittest.TestCase):
         for n in part["nodes"]:
             self.assertEqual(v1_nodes[n["id"]], n["xyz_mm"])
         crosses = [m for m in part["members"] if m["id"].startswith("cross_")]
-        self.assertEqual(crosses, [m for m in V1["members"] if m["id"].startswith("cross_")])
+        # the generator writes module (and name) on the members after the kit has made them (ladder_4w_modules)
+        added = ("module", "name")
+        self.assertEqual(crosses, [{k: v for k, v in m.items() if k not in added}
+                                   for m in V1["members"] if m["id"].startswith("cross_")])
         rail_len = sum(abs(v1_nodes[m["node_a"]][0] - v1_nodes[m["node_b"]][0]) for m in V1["members"]
                        if m["id"].startswith("rail_L_"))
         self.assertAlmostEqual(rail_len, STATIONS["F"] - STATIONS["E"], places=9)
@@ -149,10 +152,16 @@ class CheckTest(unittest.TestCase):
     def test_v1(self):
         r = check.check(V1)
         q = r["quantities"]
-        # 602.14 kg before the suspension's mounts, the dash and bulkhead and the 320 mm longer front
-        self.assertAlmostEqual(q["mass"]["value"], 631.15, delta=0.01)
-        self.assertEqual(q["ground_clearance"]["value"], 150.0)  # the arms' box, 30 mm below the lower arm
-        self.assertEqual(q["ground_clearance"]["where"], "susp_FL")
+        # 602.14 kg before the suspension's mounts, the dash and bulkhead and the 320 mm longer front; 631.15 kg
+        # before the plates weighed their own sheets (ladder_4w.PLATE_T_MM); 642.00 kg while a sheet weighed area x
+        # thickness x density, before the catalogue's unit mass with the checkers (ladder_4w.PLATE_KG_M2); 644.95 kg
+        # before the clevis brackets at the front lower arms' pivots and the dampers' tops (kit/arms.pivot_brackets);
+        # 645.24 kg before the joints' struts and the brake pushrod (kit/joints.py)
+        self.assertAlmostEqual(q["mass"]["value"], 646.16, delta=0.01)
+        # the front lower arm's clevis bracket (kit/arms.pivot_brackets), 30 mm below its pivot, at the height
+        # the suspension box had (30 mm below the lower arm) before the arms were parts
+        self.assertEqual(q["ground_clearance"]["value"], 150.0)
+        self.assertEqual(q["ground_clearance"]["where"], "bracket_lca_FL1")
         self.assertAlmostEqual(q["free_steer_angle"]["value"], 16.48, delta=0.01)
         self.assertAlmostEqual(q["knee_room"]["value"], -69.3, delta=0.1)  # the steering column's turned box
         self.assertEqual(q["knee_room"]["where"], "steering_column")

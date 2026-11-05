@@ -59,7 +59,8 @@ def comparison_rows(store: RunStore, versions: Iterable[int] | None = None,
     load_cases = {lc["load_case_id"]: lc for lc in store.project.get("load_cases", [])}
     rows = []
     for v in _versions(store, versions):
-        verdicts = {x["comparison_id"]: x for x in store.records("verdict", v)}
+        # a verdict without a comparison (unsupported_load) has no row here
+        verdicts = {x["comparison_id"]: x for x in store.records("verdict", v) if x.get("comparison_id")}
         causes = {c["cause_id"]: c for c in store.records("cause", v)}
         for c in store.records("comparison", v):
             pred = store.get("prediction", c["prediction_id"]) or {}

@@ -2,7 +2,7 @@ import math
 import unittest
 
 from hiraku.intake import facts, knowledge, rulecheck
-from tests.intake.designs import changed, mini_design, requirements
+from tests.intake.designs import box, changed, mini_design, requirements
 
 
 def by_id(targets):
@@ -45,6 +45,19 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(pick("m2"), (25.0, 0.0))
         self.assertEqual(pick("m3"), (0.0, 30.0))
         self.assertEqual(t["m3"]["facts"]["section_ratio_max"], 30.0)
+
+    def test_a_part_without_members_takes_the_section_of_the_members_it_names(self):
+        d = mini_design()
+        d["materials"]["steel2"] = {"yield_MPa": 355}
+        d["parts"].append({"id": "through_cross_1", "kind": "frame", "name": "cross", "material": "steel2", "box": box((0, 0, 600), (100, 100, 100)), "mass_kg": 1.0,
+                           "connects_to": [{"to": "m1", "via": "weld", "carries": "load"}]})
+        t = by_id(facts.targets(d, []))["through_cross_1"]["facts"]
+        self.assertAlmostEqual(t["section_ratio_max"], 80 / 2.3)
+        self.assertEqual((t["wall_mm"], t["outer_mm"]), (2.3, 80.0))
+        self.assertNotIn("member_count", t)  # they are not its own members
+        lone = {"id": "lone", "kind": "frame", "name": "lone", "box": box((0, 0, 900), (100, 100, 100)), "mass_kg": 1.0, "connects_to": []}
+        d["parts"].append(lone)
+        self.assertNotIn("wall_mm", by_id(facts.targets(d, []))["lone"]["facts"])  # nothing named: not evaluable, as before
 
     def test_support_facts(self):
         total = 50 + 12 + 8 + 150

@@ -25,6 +25,9 @@ Standard library only. Routes:
                                         the K0 formulas ({"ready": false} while computed, shelf.py)
     GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
                                         (tools/<name>-<n>.check.json)
+    GET /api/formulas                   the K0 formulas' ids and Japanese titles (formula_titles)
+    GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
+                                        module designers (web/js/modules.js)
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
@@ -49,7 +52,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from hiraku.contract import EXAMPLES_DIR
-from hiraku.contract.layout import EVENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
+from hiraku.contract.layout import EVENTS_FILE, JUDGEMENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
 from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
 from hiraku.webserve.shelf import Shelf
 
@@ -185,25 +188,105 @@ def _first_event(path: Path) -> dict[str, Any] | None:
         return None
 
 
-def _last_kind(path: Path) -> str | None:
-    """Kind of the last complete line (reads only the tail of the file)."""
+TAIL_BYTES = 65536  # how much of the end of events.jsonl the run list reads (a big record is not read whole)
+
+
+def _tail_events(path: Path) -> list[dict[str, Any] | None]:
+    """The lines in the last TAIL_BYTES of the file, parsed, oldest first (a line cut by the start
+    of the tail is left out; a line that does not parse, the last one still being written, is None)."""
     try:
         size = path.stat().st_size
         with path.open("rb") as f:
-            f.seek(max(0, size - 65536))
+            f.seek(max(0, size - TAIL_BYTES))
             tail = f.read()
     except OSError:
-        return None
-    for raw in reversed(tail.splitlines()):
+        return []
+    lines = tail.splitlines()
+    if size > TAIL_BYTES and lines:
+        lines = lines[1:]
+    out: list[dict[str, Any] | None] = []
+    for raw in lines:
         raw = raw.strip()
         if not raw:
             continue
         try:
             obj = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            return None
-        return obj.get("kind") if isinstance(obj, dict) else None
-    return None
+            obj = None
+        out.append(obj if isinstance(obj, dict) else None)
+    return out
+
+
+def _last_kind(path: Path) -> str | None:
+    """Kind of the last complete line (reads only the tail of the file)."""
+    tail = _tail_events(path)
+    return tail[-1].get("kind") if tail and tail[-1] is not None else None
+
+
+def _when(created_at: str, run_id: str) -> str:
+    """A short date and time for the list, "11/4 08:40": the clock written in created_at (as it is
+    written, no time zone turned), else the one in the run id (YYYYMMDD-HHMMSS-...); "" if neither."""
+    m = re.match(r"^\d{4}-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})", created_at or "")
+    if m:
+        mo, d, h, mi = m.groups()
+    else:
+        m = re.match(r"^\d{4}(\d{2})(\d{2})-(\d{2})(\d{2})\d{2}-", run_id)
+        if not m:
+            return ""
+        mo, d, h, mi = m.groups()
+    return f"{int(mo)}/{int(d)} {h}:{mi}"
+
+
+def _judged(run_dir: Path, version: int | None, tail: list[dict[str, Any] | None]) -> dict[str, int] | None:
+    """How the domains of the last version were judged: {"green", "red", "pending"} counts, from
+    v<NNN>/judgements.json, else from the judgement.updated events of that version in the tail
+    (the last one per domain); None when neither has any."""
+    if version is None:
+        return None
+    judgements: list[dict[str, Any]] = []
+    jf = run_dir / f"v{version:03d}" / JUDGEMENTS_FILE
+    if jf.is_file():
+        try:
+            got = json.loads(jf.read_text(encoding="utf-8"))
+            judgements = [j for j in got if isinstance(j, dict)] if isinstance(got, list) else []
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            judgements = []
+    if not judgements:
+        last: dict[str, dict[str, Any]] = {}
+        for ev in tail:
+            if ev and ev.get("kind") == "judgement.updated" and isinstance(ev.get("data"), dict):
+                d = ev["data"]
+                if d.get("design_version") == version and d.get("domain"):
+                    last[d["domain"]] = d
+        judgements = list(last.values())
+    if not judgements:
+        return None
+    out = {"green": 0, "red": 0, "pending": 0}
+    for j in judgements:
+        state = j.get("state")
+        out[state if state in out else "pending"] += 1
+    return out
+
+
+def _ending(run_dir: Path, project: dict[str, Any], tail: list[dict[str, Any] | None]) -> dict[str, Any]:
+    """How the run ended, from the tail of events.jsonl and project.json: the run.finished event's
+    status, stop_code and stop_reason (the last line; none while the run goes on), the last design
+    version (project design_versions, else the highest design_version in the tail) and how its
+    domains were judged."""
+    last = tail[-1] if tail else None
+    fin = last.get("data") if last and last.get("kind") == "run.finished" and isinstance(last.get("data"), dict) else None
+    versions = [v for v in project.get("design_versions") or [] if isinstance(v, int)]
+    if not versions:
+        versions = [ev["design_version"] for ev in tail if ev and isinstance(ev.get("design_version"), int)]
+    version = max(versions) if versions else None
+    return {
+        "end_status": fin.get("status") if fin else None,
+        "stop_code": fin.get("stop_code") if fin else None,
+        "stop_reason": (fin.get("stop_reason") or project.get("stop_reason") or "") if fin else "",
+        "stop_after": project.get("stop_after"),
+        "last_version": version,
+        "judged": _judged(run_dir, version, tail),
+    }
 
 
 def _run_summary(run_id: str, events_file: Path, project_file: Path | None) -> dict[str, Any]:
@@ -218,15 +301,19 @@ def _run_summary(run_id: str, events_file: Path, project_file: Path | None) -> d
         if first and first.get("kind") == "run.started" and isinstance(first.get("data"), dict):
             project = first["data"]
     stat = events_file.stat() if events_file.exists() else None
+    tail = _tail_events(events_file) if stat else []
+    last = tail[-1] if tail else None
     return {
         "run_id": run_id,
         "want": project.get("want", ""),
         "product": project.get("product", ""),
         "status": project.get("status", "unknown"),
         "created_at": project.get("created_at", ""),
+        "when": _when(project.get("created_at", ""), run_id),
         # what drove the run (contract project.driver); None for records older than the field
         "driver": project.get("driver") if project.get("driver") in DRIVERS else None,
-        "finished": _last_kind(events_file) == "run.finished" if stat else False,
+        "finished": bool(last and last.get("kind") == "run.finished"),
+        **_ending(events_file.parent, project, tail),
         "events_bytes": stat.st_size if stat else 0,
         "mtime": stat.st_mtime if stat else 0,
         "sample": run_id == SAMPLE_ID,
@@ -282,6 +369,30 @@ class _NullWriter:
 
     def flush(self) -> None:
         self._raw.flush()
+
+
+def modules_info() -> dict:
+    """GET /api/modules: the contract's module ids, their names and the module designers' agent ids."""
+    from hiraku import contract
+
+    return {"modules": list(contract.MODULES), "names": dict(contract.MODULE_NAMES_JA), "designers": list(contract.MODULE_DESIGNERS)}
+
+
+_FORMULA_TITLES: dict | None = None
+
+
+def formula_titles() -> dict:
+    """GET /api/formulas: each K0 formula's id and Japanese title (the solvers' registry; listed
+    once, without the shelf's known-answer checks). On an error: none, with the reason."""
+    global _FORMULA_TITLES
+    if _FORMULA_TITLES is None:
+        try:
+            from hiraku import solvers
+
+            _FORMULA_TITLES = {"formulas": [{"formula_id": f["formula_id"], "title": f["title"]} for f in solvers.formula_registry().list_formulas()]}
+        except Exception as e:  # noqa: BLE001 - the screen then shows the formula as written
+            _FORMULA_TITLES = {"formulas": [], "error": f"{type(e).__name__}: {e}"}
+    return _FORMULA_TITLES
 
 
 ASSET_DIR = "assets/polyhaven"  # web/js/look.js ASSET_DIR: Poly Haven files the user put there
@@ -345,6 +456,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/assets":
             self._send_json({"files": list_assets(self.web_dir) if self.assets else []})
+            return
+        if path == "/api/modules":
+            self._send_json(modules_info())
+            return
+        if path == "/api/formulas":
+            self._send_json(formula_titles())
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:

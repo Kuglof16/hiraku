@@ -253,11 +253,14 @@ class SampleAnswersTest(unittest.TestCase):
                     self.assertIn(r["source"], ("hearing", "default"))
                     self.assertEqual(contract.errors("requirement", r), [])
 
-    def test_the_demo_vehicle_keeps_some_questions_open_on_purpose(self):
+    def test_the_demo_vehicle_answers_every_question_of_the_hearing(self):
         req = load_product("offroad-4w")
         answers, note = load_answers(answers_file("offroad-4w"))
         p = prepare(req, answers, note)
-        self.assertEqual(p.unresolved, ["Q03", "Q20", "Q91"])
+        self.assertEqual(p.unresolved, [])
+        by = {a["key"]: a["source"] for a in p.answered["answers"]}
+        for key in ("Q03", "Q20", "Q91"):
+            self.assertEqual(by[key], "hearing", key)
         self.assertEqual(p.answered["note"], note)
 
     def test_answers_file_with_a_stray_key_is_refused(self):
@@ -269,6 +272,68 @@ class SampleAnswersTest(unittest.TestCase):
             path.write_text("answers: {}\nstuff: 1\n", encoding="utf-8")
             with self.assertRaises(IntakeError):
                 load_answers(path)
+
+
+class EntryExitItemsTest(unittest.TestCase):
+    """The items for getting in and out: a rider's vehicle only, borrowed numbers are assumptions that say where they were read."""
+
+    OPENING = ["Q93", "Q94", "Q95", "Q96"]
+    KEYS = OPENING + ["Q97", "Q44", "Q45", "Q46", "Q47", "Q48", "Q49", "Q89"]
+
+    def test_they_apply_to_a_vehicle_people_ride_that_is_rough(self):
+        keys = {i["key"] for i in applicable_items({"ride": True, "rough": True, "self_propelled": True})}
+        self.assertTrue(set(self.KEYS) <= keys)
+        for flags in ({"ride": True}, {"rough": True}, {"lean": True}):
+            self.assertFalse(set(self.KEYS) & {i["key"] for i in applicable_items(flags)}, flags)
+
+    def test_each_has_a_value_a_basis_that_says_what_was_read_and_trust_3(self):
+        for key in self.KEYS:
+            it = item(key)
+            with self.subTest(key=key):
+                self.assertEqual(it["ask"], "default")  # not asked: the default is used and shown
+                self.assertEqual(it["default"]["trust"], 3)
+                basis = it["default"]["basis"]
+                self.assertTrue("not checked" in basis or "read 2026-11-04" in basis, basis)
+                self.assertTrue(it["why"] and it["example"])
+
+    def test_the_opening_items_say_that_a_net_does_not_count_as_the_side_guard(self):
+        for key in self.OPENING + ["Q47"]:
+            self.assertIn("付けて働く網", item(key)["why"], key)
+
+
+class TypedNumberTest(unittest.TestCase):
+    """A person types a number into a box: '150 kg' must reach the run as 150 with the unit kg (the run once stopped at its
+    start with 'requirement Q40 must be in kg, got None')."""
+
+    def answer(self, key, value):
+        from hiraku.intake.hearing import _answer_requirement
+        return _answer_requirement(item(key), value)
+
+    def test_a_number_with_its_unit_in_words_becomes_a_value_and_a_unit(self):
+        got = self.answer("Q40", "150 kg")
+        self.assertEqual((got["value"], got["unit"]), (150, "kg"))
+        got = self.answer("Q50", "40km/h")
+        self.assertEqual((got["value"], got["unit"]), (40, "km/h"))
+
+    def test_a_number_alone_takes_the_unit_of_the_item_and_a_known_other_unit_is_converted(self):
+        self.assertEqual(self.answer("Q40", "150")["unit"], "kg")
+        self.assertEqual(self.answer("Q40", 150)["unit"], "kg")
+        self.assertEqual(self.answer("Q14", "12")["unit"], "deg")  # the unit comes from the choices
+        got = self.answer("Q50", "10 m/s")
+        self.assertEqual((got["value"], got["unit"]), (36, "km/h"))
+        got = self.answer("Q40", "0.2 t")
+        self.assertEqual((got["value"], got["unit"]), (200, "kg"))
+
+    def test_text_that_is_not_a_number_or_a_unit_that_cannot_be_read_is_refused_in_plain_words(self):
+        for bad in ("たくさん", "150 lbf", "kg 150"):
+            with self.assertRaises(IntakeError, msg=bad) as ctx:
+                self.answer("Q40", bad)
+            self.assertIn("積載", str(ctx.exception))
+            self.assertIn("kg", str(ctx.exception))
+
+    def test_an_answer_that_names_its_unit_and_an_item_without_a_unit_are_left_alone(self):
+        self.assertEqual(self.answer("Q40", {"value": 150, "unit": "kg"})["unit"], "kg")
+        self.assertNotIn("unit", self.answer("Q11", "砂利"))  # a surface is a word, not a number
 
 
 if __name__ == "__main__":

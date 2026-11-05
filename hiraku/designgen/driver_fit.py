@@ -1,6 +1,6 @@
 """The driver's place that gives the most room: a search over the ladder_4w variables that place the driver,
-the pedals, the steering wheel and the front bulkhead, for the set whose smallest occupant margin (K4,
-hiraku.solvers.k4_geometry.people.fit) is the largest.
+the seat's fore-and-aft travel (seat_slide), the pedals, the steering wheel and the front bulkhead, for the set
+whose smallest occupant margin (K4, hiraku.solvers.k4_geometry.people.fit) is the largest.
 
     from hiraku.designgen import driver_fit
     got = driver_fit.best_driver_place(design)              # design: a ladder_4w design record
@@ -9,7 +9,8 @@ hiraku.solvers.k4_geometry.people.fit) is the largest.
 
 The margins are the ones the assembly tool reports for H3 (hiraku.solvers.shelf.assembly: each is the
 smallest over the occupants, `where` the part it is measured to): knee_room, pedal_reach, wheel_reach,
-foot_room, foot_support and leg_clearance (names=COMFORT_MARGINS adds knee_angle_room). No lower limit is put on any of them beyond what K4 measures
+foot_room, foot_support, leg_clearance and knee_angle_room (MARGINS = COMFORT_MARGINS; names=REACH_MARGINS leaves
+knee_angle_room out). No lower limit is put on any of them beyond what K4 measures
 (all are in mm; 0 is where the body touches or does not reach). The other variables (track, battery_x, ...)
 stay as the design has them.
 
@@ -40,12 +41,14 @@ from hiraku.designgen.ladder_4w import DesignGenError
 Record = dict[str, Any]
 
 VARIABLES = ("seat_x", "seat_height", "steering_x", "steering_column_angle", "steering_wheel_height", "pedal_x",
-             "bulkhead_dx")
-MARGINS = ("knee_room", "pedal_reach", "wheel_reach", "foot_room", "foot_support", "leg_clearance")
-# MARGINS and K4's knee_angle_room (the pedal foot's knee angle inside the comfortable range, for the big and the
-# small person on the one seat). Not the default: with it, the search on run 10 and N15 finds no set with every
-# margin at least 0 (tests/solvers/test_driver_knee_angle.py).
-COMFORT_MARGINS = MARGINS + ("knee_angle_room",)
+             "bulkhead_dx", "seat_slide")
+REACH_MARGINS = ("knee_room", "pedal_reach", "wheel_reach", "foot_room", "foot_support", "leg_clearance")
+# REACH_MARGINS and K4's knee_angle_room (the pedal foot's knee angle inside the comfortable range, for the big and
+# the small person). With the seat fixed (seat_slide 0) the search on run 10 and N15 finds no set with every margin
+# at least 0; with seat_slide among the variables it does on v1, run 10 and N15 (tests/solvers/
+# test_driver_knee_angle.py), so these are the default.
+COMFORT_MARGINS = REACH_MARGINS + ("knee_angle_room",)
+MARGINS = COMFORT_MARGINS
 RESOLUTION = {"deg": 0.25, "mm": 0.5}  # the lattice the values are on (by unit)
 SCAN_LEVELS = 9  # levels across each variable's range in step 2
 FIRST_STEP_SHARE = 1.0 / 8.0  # the compass search's first step: this share of the range
@@ -75,6 +78,30 @@ def smallest(m: dict[str, tuple[float, str]] | None) -> float:
     if m is None:
         return float("-inf")
     return min((v for v, _ in m.values()), default=float("inf"))
+
+
+def _pairs(design: Record) -> set[tuple[str, str]]:
+    """The pairs of bodies that overlap at rest by more than they may (k4_geometry.model's allowance and
+    shape_overlap: the tool's H1-interference at rest), found fast: the axis-aligned boxes round all bodies compared
+    at once, the exact test only for the pairs whose boxes meet."""
+    import numpy as np
+
+    from hiraku.solvers.k4_geometry import model as k4
+
+    bs = k4.bodies(design)
+    keys = sorted(bs)
+    corners = [bs[k].obb.corners() for k in keys]
+    lo = np.array([c.min(axis=0) for c in corners])
+    hi = np.array([c.max(axis=0) for c in corners])
+    meet = np.all((lo[:, None, :] <= hi[None, :, :] + k4.TOUCH_MM) & (lo[None, :, :] <= hi[:, None, :] + k4.TOUCH_MM),
+                  axis=2)
+    out = set()
+    for i, j in zip(*np.nonzero(np.triu(meet, 1))):
+        a, b = bs[keys[i]], bs[keys[j]]
+        allowed = k4.allowance(a, b, design)
+        if allowed != float("inf") and k4.shape_overlap(a, b) > allowed:
+            out.add((keys[i], keys[j]))
+    return out
 
 
 def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES, names: tuple[str, ...] = MARGINS,
@@ -114,6 +141,16 @@ def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES,
 
     cache: dict[tuple, dict | None] = {}
     count = {"evals": 0, "not_built": 0}
+    start_pairs = _pairs(design)
+
+    def with_battery(changes: dict) -> dict:
+        """The battery hangs between the seat's cross members (ladder_4w: seat_x moves them): it goes with the seat,
+        by the same shift (unless the search moves battery_x itself)."""
+        if "seat_x" in changes and "battery_x" in gen.VARIABLES and "battery_x" not in variables:
+            b0 = float((design.get("variables", {}).get("battery_x")
+                        or {"value": gen.VARIABLES["battery_x"].default})["value"])
+            changes["battery_x"] = {"value": b0 + changes["seat_x"]["value"] - start["seat_x"], "unit": "mm"}
+        return changes
 
     def measure(x: dict[str, float]) -> dict | None:
         key = tuple(x[k] for k in variables)
@@ -123,10 +160,16 @@ def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES,
         if over or (max_evals is not None and count["evals"] >= max_evals):
             raise _Stop("time" if over else "evaluations")
         count["evals"] += 1
-        changes = {k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]}
+        changes = with_battery({k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]})
         try:
             d = designgen.regenerate(design, changes) if changes else design
         except (DesignGenError, ValueError):
+            count["not_built"] += 1
+            cache[key] = None
+            return None
+        # a place that makes parts overlap that did not before (the seat's cross member into the battery, say) is
+        # refused as a design the generator refused: the driver's margins do not see the other parts
+        if changes and _pairs(d) - start_pairs:
             count["not_built"] += 1
             cache[key] = None
             return None
@@ -243,7 +286,7 @@ def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES,
         return out
 
     got = report(x)
-    got["changes"] = {k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]}
+    got["changes"] = with_battery({k: {"value": x[k], "unit": var[k].unit} for k in variables if x[k] != start[k]})
     got["start"] = report(start)
     got.update(evaluations=count["evals"], not_built=count["not_built"], seconds=time.monotonic() - t0,
                stopped=stopped, time_limit_s=time_limit_s)

@@ -207,13 +207,47 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
     earlier safe-side verdict). Empty when nothing holds it back."""
     out = []
     for c, cause in unresolved_mismatches(ctx, load_case, version):
-        why = "原因がまだ書かれていない" if cause is None else f"原因 {cause['cause_id']} がまだ解けていない"
+        if cause is None:
+            why = "原因がまだ書かれていない"
+        elif cause.get("ends_case"):  # contract 08cf4d6: the load case ends not judged
+            why = f"原因 {cause['cause_id']} が、この実行の手計算では届かないとして、判定なしで終えた"
+        else:
+            why = f"原因 {cause['cause_id']} がまだ解けていない"
         out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
     crit = load_case.get("criterion")
     for a, r in beyond_results(ctx, load_case, version):
         out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"
                    f"基準 {OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超えている")
     return out
+
+
+def beyond_text(ctx: RunContext, load_case: Record, version: int) -> str | None:
+    """A load case that ends not judged, said with the tool's numbers when a tool's result is beyond the
+    criterion (beyond_results): "ツールでは <where> の <quantity> が <value> で、基準 <op> <limit> を超える
+    (the other results at the same place)". No verdict comes of it (HK4: no verdict without a prediction);
+    None when no tool result is beyond."""
+    crit = load_case.get("criterion")
+    lines = []
+    for a, r in beyond_results(ctx, load_case, version):
+        at = f"{r['where']} の " if r.get("where") else ""
+        same = [x for x in a.get("results", []) if r.get("where") and x.get("where") == r["where"] and x is not r]
+        more = f" ({'、'.join(x['quantity'] + ' ' + _amount(x['value'], x['unit']) for x in same)})" if same else ""
+        lines.append(f"ツール {a['tool']} では {at}{r['quantity']} が {_amount(r['value'], r['unit'])} で、基準 "
+                     f"{OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超える{more}")
+    return "; ".join(lines) or None
+
+
+NO_FORMULA_NOTE = "手計算 (K0) の式が無いので判定していない"
+
+
+def no_formula_cases(ctx: RunContext) -> dict[str, str]:
+    """rules.unpredictable_cases: the load cases no K0 formula can predict (no verdict can come)."""
+    from hiraku.tools.rules import unpredictable_cases  # rules reads this module
+
+    try:
+        return unpredictable_cases(ctx)
+    except Exception:  # a context without a registry or shelf: nothing said
+        return {}
 
 
 def held_cases(ctx: RunContext, domain: str, version: int) -> dict[str, list[str]]:
@@ -298,6 +332,9 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     reds = [x for x in got if not x["pass"]]
     misses = system_misses(ctx, v) if domain == SYSTEM_DOMAIN and v else []
     held = held_cases(ctx, domain, v) if v else {}
+    if held:  # a result past the limit on a case no formula predicts: said, not hidden (it gets no verdict)
+        cannot = no_formula_cases(ctx)
+        held = {k: why + [NO_FORMULA_NOTE] if k in cannot else why for k, why in held.items()}
     held_line = "まだ合格にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
         lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \

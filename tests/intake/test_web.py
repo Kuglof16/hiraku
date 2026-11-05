@@ -65,7 +65,7 @@ import {{ DEMOS }} from "{url('demo-events.js')}";
 import {{ buildModel, domainCards, hearingRows, allRules, ruleTree }} from "{url('model.js')}";
 const out = {{}};
 for (const slug of Object.keys(DEMOS)) {{
-  const m = buildModel(DEMOS[slug]);
+  const m = buildModel(DEMOS[slug], {{ picksFinal: true }});
   out[slug] = {{
     lit: domainCards(m).filter((c) => c.state === 'lit').length,
     cards: domainCards(m).length,
@@ -99,7 +99,7 @@ console.log(JSON.stringify(out));
         self.assertEqual(got["offroad-4w"]["checks"], 31)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
         self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
-        self.assertEqual(got["offroad-4w"]["open"], 3)  # Q03, Q20, Q91: no answer and no default
+        self.assertEqual(got["offroad-4w"]["open"], 0)  # the sample answers cover every question
         self.assertEqual(got["care-bed"]["open"], 0)
         self.assertGreater(got["care-bed"]["reqs"], 15)
 
@@ -109,9 +109,9 @@ import {{ DEMOS }} from "{url('demo-events.js')}";
 import {{ buildModel, hearingRows, domainCards }} from "{url('model.js')}";
 const ev = DEMOS['serving-robot'];
 const upTo = (kind) => ev.slice(0, ev.findIndex((e) => e.kind === kind) + 1);
-const before = buildModel(upTo('hearing.asked'));
-const after = buildModel(upTo('hearing.answered'));
-const start = buildModel(ev.slice(0, 1));
+const before = buildModel(upTo('hearing.asked'), {{ picksFinal: true }});
+const after = buildModel(upTo('hearing.answered'), {{ picksFinal: true }});
+const start = buildModel(ev.slice(0, 1), {{ picksFinal: true }});
 console.log(JSON.stringify({{
   startLit: domainCards(start).filter((c) => c.state === 'lit').length,
   startWait: domainCards(start).filter((c) => c.state === 'wait').length,
@@ -228,7 +228,7 @@ class RuleDetailTest(unittest.TestCase):
 import {{ DEMOS }} from "{url('demo-events.js')}";
 import {{ buildModel, allRules }} from "{url('model.js')}";
 import {{ renderA5 }} from "{url('a5.js')}";
-const m = buildModel(DEMOS[Object.keys(DEMOS)[0]]);
+const m = buildModel(DEMOS[Object.keys(DEMOS)[0]], {{ picksFinal: true }});
 const show = (id) => {{
   const el = new El("div");
   const ui = {{ screen: "A5", mode: "category", filter: "all", query: "", selected: id, collapsed: new Set(), disabled: new Set(),
@@ -237,8 +237,8 @@ const show = (id) => {{
   return el.text();
 }};
 const sm = show("SM-02"), sy = show("SY-01");
-console.log(JSON.stringify({{ sm: [sm.includes("要る値"), sm.includes("穴の中心から縁までの距離 (hole_edge_mm)"), sm.includes("今の設計は持っていない値")],
-                              sy: /要る値(?!が)/.test(sy) }}));
+console.log(JSON.stringify({{ sm: [sm.includes("判定に必要なデータ"), sm.includes("穴の中心から縁までの距離 (hole_edge_mm)"), sm.includes("今の設計には無いデータ")],
+                              sy: /判定に必要なデータ(?!が)/.test(sy) }}));
 """)
         self.assertEqual(got, {"sm": [True, True, True], "sy": False})  # a system rule's check is a function, not a list of values
 
@@ -285,14 +285,14 @@ const buttons = (id) => card(id).all('button').map((b) => b.text());
 const shown = { u1: buttons('U1-04'), sm: buttons('SM-01'), parts: card('U1-04').text().includes('battery') };
 card('U1-04').listeners.mouseenter[0]();
 card('U1-04').listeners.mouseleave[0]();
-card('U1-04').all('button').find((b) => b.text() === 'この規則を外す').listeners.click[0]();
+card('U1-04').all('button').find((b) => b.text() === 'このルールを使わない').listeners.click[0]();
 const send = el.all('button').find((b) => b.text() === '答えて進める');
 send.listeners.click[0]();
 await new Promise((r) => setTimeout(r, 20));
 console.log(JSON.stringify({ shown, focused, sent }));
 """)
-        self.assertEqual(got["shown"]["u1"], ["設計を直す", "この規則を外す"])
-        self.assertEqual(got["shown"]["sm"], ["この規則を外す"])  # only the choices that were offered
+        self.assertEqual(got["shown"]["u1"], ["設計を直す", "このルールを使わない"])
+        self.assertEqual(got["shown"]["sm"], ["このルールを使わない"])  # only the choices that were offered
         self.assertTrue(got["shown"]["parts"])
         self.assertEqual(got["focused"], [["battery"], []])  # the host is told which parts to light, then to stop
         self.assertEqual(got["sent"][0]["ruleAnswers"], [{"rule_id": "U1-04", "choice": "drop_rule"}])
@@ -303,7 +303,224 @@ events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: '
 intake.update();
 console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
 """)
-        self.assertEqual(got, [["U1-04", "asking"]])
+        self.assertEqual(got, [["U1-04", "asking"], ["SM-01", "asking"]])  # SM-01 was not answered: it stays, U1-04 is asked again
+
+    def test_the_answered_hits_go_and_the_unanswered_stay_when_others_are_asked_later(self):
+        got = self.run_body("""
+events = [asked, answered, e(3, 'hearing.asked', { rule_questions: [{ rule_id: 'MF-01', parts: ['m1'], text: '薄い' }] })];
+intake.update();
+console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state])));
+""")
+        self.assertEqual(got, [["MF-01", "asking"], ["SM-01", "asking"]])  # U1-04 was answered: gone
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class FirstTimeTroubleTest(unittest.TestCase):
+    """What a person new to the screens can trip on: sending with nothing filled in, a refused answer, a run that ended
+    while a question was open, a file of the wrong shape."""
+
+    A2 = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const asked = e(1, 1, 'hearing.asked', {{ questions: [
+    {{ req_key: 'Q40', name: '積載', text: '載せる荷の重さの上限は。', ask: 'must' }},
+    {{ req_key: 'Q34', name: '弱い人', text: 'いますか', ask: 'confirm', choices: [{{ value: 'none', label: 'いない' }}] }}],
+  rule_questions: [{{ rule_id: 'U1-04', parts: ['battery'], text: '電池が重い' }}] }});
+let events = [asked];
+const sent = [];
+let reject = null;
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => {{ sent.push(b); if (reject) throw new Error(reject); }} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2' }});
+const button = (t) => el.all('button').find((b) => b.text() === t);
+const wait = () => new Promise((r) => setTimeout(r, 20));
+{{BODY}}
+"""
+
+    A5 = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const files = (...fs) => ({{ dataTransfer: {{ files: fs }}, preventDefault() {{}} }});
+const file = (name, text, size) => ({{ name, size: size ?? text?.length ?? 0, text: async () => {{ if (text instanceof Error) throw text; return text; }} }});
+const wait = () => new Promise((r) => setTimeout(r, 20));
+const mount = (api) => {{ const el = new El('div'); mountIntake(el, {{ events: () => [], onEvent: () => () => {{}}, ...api }}, {{ screen: 'A5' }}); return [el, el.children[0]]; }};
+{{BODY}}
+"""
+
+    def a2(self, body: str) -> dict:
+        return node(self.A2.replace("{BODY}", body))
+
+    def a5(self, body: str) -> dict:
+        return node(self.A5.replace("{BODY}", body))
+
+    def test_sending_with_nothing_filled_in_sends_empty_answers_and_asks_for_the_defaults(self):
+        got = self.a2("""
+const before = { must: el.text().includes('この質問に答えるまで先へ進めません') };
+button('答えて進める').listeners.click[0]();
+await wait();
+console.log(JSON.stringify({ before, sent }));
+""")
+        self.assertTrue(got["before"]["must"])
+        self.assertEqual(got["sent"], [{"answers": {}, "ruleAnswers": [], "note": "", "useDefaults": True}])
+
+    def test_blank_text_is_not_an_answer(self):
+        got = self.a2("""
+const input = el.all('input').find((i) => i.className === 'in-other');
+input.value = '   '; input.listeners.input[0]({ target: input });
+button('答えて進める').listeners.click[0]();
+await wait();
+console.log(JSON.stringify(sent));
+""")
+        self.assertEqual(got[0]["answers"], {})
+
+    def test_a_refused_answer_is_explained_and_the_person_can_press_again(self):
+        got = self.a2("""
+reject = 'Q40 の単位 lbf は使えません';
+button('答えて進める').listeners.click[0]();
+await wait();
+const again = button('答えて進める');
+console.log(JSON.stringify({ shown: el.text().includes('受け付けられませんでした。Q40 の単位 lbf は使えません'), enabled: !again.disabled, sentCount: sent.length }));
+""")
+        self.assertEqual(got, {"shown": True, "enabled": True, "sentCount": 1})
+
+    def test_a_run_that_ended_with_a_question_open_stops_asking(self):
+        got = self.a2("""
+const open = button('答えて進める').disabled;
+events = [asked, e(2, 9, 'run.finished', { status: 'stopped', stop_code: 'user_stop', stop_reason: '止めました' })];
+intake.update();
+const text = el.text();
+console.log(JSON.stringify({ open, sendDisabled: button('答えて進める').disabled, defaultsDisabled: button('標準の値のまま進める').disabled,
+  ended: text.includes('実行が終わりました'), noMust: !text.includes('この質問に答えるまで先へ進めません'), noBlock: !text.includes('先へ進めません'),
+  choiceDisabled: el.all('button').filter((b) => ['いない', '設計を直す', 'このルールを使わない'].includes(b.text())).every((b) => b.disabled) }));
+""")
+        self.assertEqual(got, {"open": False, "sendDisabled": True, "defaultsDisabled": True, "ended": True, "noMust": True, "noBlock": True,
+                               "choiceDisabled": True})
+
+    def test_a_question_answered_before_the_run_ended_keeps_its_answer(self):
+        got = self.a2("""
+events = [asked, e(2, 5, 'hearing.answered', { answers: [{ key: 'Q40', name: '積載', value: 150, unit: 'kg', source: 'hearing', trust: 1 }], rule_answers: [] }),
+  e(3, 9, 'run.finished', { status: 'done', stop_code: 'done' })];
+intake.update();
+const t = el.text();
+console.log(JSON.stringify({ kept: t.includes('答えました'), skipped: t.includes('答えなしで進みました'), ended: t.includes('実行が終わりました') }));
+""")
+        self.assertEqual(got, {"kept": True, "skipped": True, "ended": False})  # the answer skipped Q34 and the rule hit: they were left open, not ended
+
+    def test_a_file_the_host_cannot_read_is_reported_under_its_name_and_a_good_one_is_accepted(self):
+        got = self.a5("""
+const seen = [];
+const [el, root] = mount({ dropFile: async (name, text) => { seen.push([name, text]); if (!text.trim()) throw new Error('ルールが 1 つも見つかりません'); return name.endsWith('.csv') ? '3 件のルールを読みました' : ''; } });
+root.listeners.drop[0](files(file('empty.md', '  '), file('rules.csv', 'a,b'), file('plain.txt', 'x')));
+await wait();
+const text = el.text();
+console.log(JSON.stringify({ seen, bad: text.includes('empty.md') && text.includes('読めませんでした: ルールが 1 つも見つかりません'),
+  good: text.includes('3 件のルールを読みました'), plain: text.includes('受け取りました') }));
+""")
+        self.assertEqual([n for n, _ in got["seen"]], ["empty.md", "rules.csv", "plain.txt"])
+        self.assertTrue(got["bad"] and got["good"] and got["plain"])
+
+    def test_a_file_that_cannot_be_read_as_text_does_not_stop_the_next_file(self):
+        got = self.a5("""
+const seen = [];
+const [el, root] = mount({ dropFile: async (name, text) => { seen.push(name); return 'ok ' + name; } });
+root.listeners.drop[0](files(file('photo.png', new Error('not text')), file('rules.md', 'x')));
+await wait();
+const text = el.text();
+console.log(JSON.stringify({ seen, bad: text.includes('photo.png') && text.includes('読めませんでした: not text'), next: text.includes('ok rules.md') }));
+""")
+        self.assertEqual(got, {"seen": ["rules.md"], "bad": True, "next": True})
+
+    def test_values_are_shown_in_japanese_units_and_the_trust_marks_have_a_key(self):
+        got = self.a2("""
+import { showValue } from "%s";
+events = [asked, e(2, 5, 'hearing.answered', { answers: [{ key: 'Q19', name: '気温', value: 40, unit: 'degC', source: 'default', trust: 3, basis: 'x' }], rule_answers: [] })];
+intake.update();
+console.log(JSON.stringify({ deg: showValue(15, 'deg'), temp: showValue(40, 'degC'), sec: showValue(6, 's'), kg: showValue(150, 'kg'), none: showValue(1.5, '1'),
+  table: el.text().includes('40 ℃'), legend: el.text().includes('確かさ: ') && el.text().includes('仮の値 (確かめていない)') }));
+""" % url('model.js'))
+        self.assertEqual(got, {"deg": "15 度", "temp": "40 ℃", "sec": "6 秒", "kg": "150 kg", "none": "1.5", "table": True, "legend": True})
+
+    def test_a_replay_that_cannot_take_files_says_so(self):
+        got = self.a5("""
+const [el, root] = mount({});
+root.listeners.drop[0](files(file('rules.md', 'x')));
+await wait();
+console.log(JSON.stringify({ said: el.text().includes('この画面では受け取れません') }));
+""")
+        self.assertEqual(got, {"said": True})
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class DraftAndGlowTest(unittest.TestCase):
+    """The code's first picks are pale candidates; Claude's choice lights the cards, and the glow follows the playback time."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ domainCards }} from "{url('model.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const pick = (d) => ({{ domain: d, shown_name: d, reason: 'r', test_ids: ['T1'] }});
+const first = e(1, 0.03, 'hearing.none', {{}});
+const code = e(1, 0.03, 'domains.picked', {{ want: 'w', flags: {{}}, picks: [pick('strength'), pick('nvh')], off: [], assembly_test_ids: [] }});
+const claude = e(2, 34.0, 'domains.picked', {{ want: 'w', flags: {{}}, flag_reasons: {{ ride: 'x' }}, picks: [pick('strength')], off: [{{ domain: 'nvh', reason: 'no' }}], assembly_test_ids: [] }});
+let events = [code];
+const api = {{ events: () => events, onEvent: () => () => {{}} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A1' }});
+const states = () => domainCards(intake.model).filter((c) => ['strength', 'nvh'].includes(c.domain)).map((c) => c.state);
+const shadow = (d) => el.all('article').find((a) => a.dataset.domain === d).style.boxShadow || '';
+{{BODY}}
+"""
+
+    def run_body(self, body: str) -> dict:
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_codes_first_picks_are_candidates_until_claude_picks(self):
+        got = self.run_body("""
+const a = states(), text = el.text().includes('製品の性質から当てた候補');
+events = [code, claude]; intake.update();
+console.log(JSON.stringify({ a, b: states(), text, gone: !el.text().includes('製品の性質から当てた候補') }));
+""")
+        self.assertEqual(got["a"], ["draft", "draft"])
+        self.assertEqual(got["b"], ["lit", "off"])
+        self.assertTrue(got["text"])
+        self.assertTrue(got["gone"])
+
+    def test_a_sample_made_by_the_code_alone_can_say_its_picks_are_final(self):
+        got = self.run_body("""
+const el2 = new El('div');
+const i2 = mountIntake(el2, api, { screen: 'A1', picksFinal: true });
+console.log(JSON.stringify(domainCards(i2.model).filter((c) => c.domain === 'strength').map((c) => c.state)));
+""")
+        self.assertEqual(got, ["lit"])
+
+    def test_the_glow_is_a_function_of_the_playback_time(self):
+        got = self.run_body("""
+events = [code, claude]; intake.update();
+const at = {};
+for (const t of [33.9, 34.0, 34.25, 34.5, 40]) { intake.setTime(t); at[t] = shadow('strength'); }
+intake.setTime(34.25); const again = shadow('strength');
+console.log(JSON.stringify({ at, again }));
+""")
+        self.assertEqual(got["at"]["33.9"].split("px")[0].split(" ")[-1], "6.00")  # before it is lit the glow is full, as at the pick
+        self.assertIn("6.00px", got["at"]["34"])
+        self.assertIn("3.00px", got["at"]["34.25"])
+        self.assertEqual((got["at"]["34.5"], got["at"]["40"]), ("", ""))
+        self.assertEqual(got["again"], got["at"]["34.25"])  # the same time, the same picture
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class ChoiceNameTest(unittest.TestCase):
+    def test_the_requirements_table_shows_the_name_of_a_choice_and_the_value_when_there_is_no_name(self):
+        got = node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const e = (seq, kind, data) => ({{ seq, t: seq, ts: 'x', run_id: 'r', kind, data }});
+const row = (key, value) => ({{ key, name: key, value, source: 'user', trust: 1, basis: '' }});
+const events = [e(0, 'run.started', {{ run_id: 'r', want: 'w', flags: {{}}, requirements: [row('Q30', 'two_cargo'), row('Q30x', 'two_cargo'), row('Q34', 'いない'), row('Q50', 40)] }})];
+const el = new El('div');
+mountIntake(el, {{ events: () => events, onEvent: () => () => {{}} }}, {{ screen: 'A2' }});
+const cells = el.all('td').map((c) => c.text());
+console.log(JSON.stringify({{ named: cells.includes('2 人 + 荷'), raw: cells.includes('two_cargo'), plain: cells.includes('40') }}));
+""")
+        self.assertEqual(got, {"named": True, "raw": True, "plain": True})  # Q30 has a name for two_cargo; Q30x has none, so its value stays
 
 
 class StaticTest(unittest.TestCase):

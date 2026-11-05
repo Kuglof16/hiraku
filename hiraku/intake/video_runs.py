@@ -48,7 +48,7 @@ N09_PRODUCTS = ("electric-guitar", "care-bed", "serving-robot", "offroad-4w")
 # The sentence a person would say, with what the flags say (the file's flags are what the product is): Claude reads the
 # properties from the sentence, so a sentence that leaves out the battery makes it drop the thermal domain.
 N09_WANTS = {
-    "offroad-4w": "林道を走れる 2 人乗りの小さな電動のオフロード車両 (電池で走る 4 輪、最高 40 km/h、500 kg まで、積載 150 kg)",
+    "offroad-4w": "林道を走れる 2 人乗りの小さな電動のオフロード車両 (電池で走る 4 輪、最高 40 km/h、積載 150 kg)",
 }
 N14_FILE = REPO_ROOT / "data" / "requirements" / "offroad-4w-n14.yaml"
 N14_NAME = "offroad-4w-n14.yaml"  # the scripted plan is looked up by the file's name

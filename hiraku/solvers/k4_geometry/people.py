@@ -37,6 +37,11 @@ AIST = {
 SOURCE = ("AIST anthropometric database 1991-92 (Kouchi and Mochimaru 2005, AIST H16PRO 287), young adults; items I1, D2, "
           "J2, J5, J7, J9, I3, I11, I13, C3, C7, C12, C16, D15, D17, M4, M15, M16, M20, M24 read from "
           "https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03")
+# The items for the body's segments (head, neck, forearm, hand, the arms' girths), same database and percentiles,
+# read from the item tables (gif/<ID>.gif) linked from the same list on 2026-11-04.
+BODY_SOURCE = ("AIST anthropometric database 1991-92 (Kouchi and Mochimaru 2005, AIST H16PRO 287), young adults; items A1, "
+               "A2, A36, C8, F1, F25, F26, I4, L1, L10, L16 read from https://www.airc.aist.go.jp/dhrt/91-92/data/list.html "
+               "on 2026-11-04")
 
 # Body sizes for the seated body: young adult male 95th percentile (the large person: room,
 # clearance) and young adult female 5th percentile (the small person: reach). Same source as AIST.
@@ -60,6 +65,18 @@ SIZES: dict[str, dict[str, float]] = {
         "upper_arm": 336.4,  # source: C7 Upper arm length
         "elbow_grip": 358.0,  # source: C12 Elbow-grip length
         "sitting_height": 985.2,  # source: I1 Sitting height
+        # the body's segments (designgen kit/body.py), read 2026-11-04 (BODY_SOURCE)
+        "head_length": 201.0,  # source: A1 Head length
+        "head_breadth": 171.0,  # source: A2 Head breadth
+        "head_height": 251.5,  # source: A36 Total head height (gnathion to vertex)
+        "cervicale_height": 714.0,  # source: I4 Cervicale height, sitting (over the seat)
+        "neck_circumference": 386.2,  # source: F1 Neck circumference
+        "forearm_length": 271.2,  # source: C8 Forearm length (radiale to stylion)
+        "upper_arm_circumference": 324.0,  # source: F25 Upper arm circumference
+        "forearm_circumference": 287.0,  # source: F26 Forearm circumference (maximum)
+        "hand_length": 204.2,  # source: L1 Hand length, tip to wrist crease
+        "hand_breadth": 88.3,  # source: L10 Hand breadth, diagonal (metacarpale radiale to ulnare)
+        "hand_thickness": 32.0,  # source: L16 Hand thickness
     },
     "f5": {
         "buttock_trochanter": 65.9,
@@ -80,16 +97,28 @@ SIZES: dict[str, dict[str, float]] = {
         "upper_arm": 265.0,
         "elbow_grip": 283.0,
         "sitting_height": 824.1,
+        "head_length": 170.0,
+        "head_breadth": 145.0,
+        "head_height": 218.0,
+        "cervicale_height": 586.0,
+        "neck_circumference": 287.0,
+        "forearm_length": 211.0,
+        "upper_arm_circumference": 223.1,
+        "forearm_circumference": 212.0,
+        "hand_length": 163.0,
+        "hand_breadth": 68.0,
+        "hand_thickness": 22.0,
     },
 }
 BIG, SMALL = "m95", "f5"
 # Posture (assumptions, no source): the sole tilted up toward the toe, resting on the pedals and the
 # toe board; the knee angle (between thigh and shank) of a person sitting with the feet forward on
-# the floor, used to place the pedals and the feet of a seat without pedals; the largest knee angle
-# a person reaches a pedal with.
+# the floor, used to place the pedals and the feet of a seat without pedals. pedal_reach measures
+# against the straight leg (180 deg, the links' geometry): whether the foot reaches the pedal at all;
+# how comfortable the knee is, is knee_angle_room's (KNEE_COMFORT_DEG).
 FOOT_ANGLE_DEG = 20.0
 KNEE_ANGLE_DEG = 100.0
-KNEE_MAX_DEG = 150.0
+KNEE_MAX_DEG = 180.0
 # The comfortable range of the knee angle (between thigh and shank) in the driving posture: 99-138 deg,
 # Porter and Gyi 1998 (Int. J. Vehicle Design 19(3) 255-266; 55 drivers' preferred postures, goniometer on the
 # right side), as Schmidt et al. 2014 reproduce it (Applied Ergonomics 45, 247-260, Table 1, p. 251). Read in
@@ -98,6 +127,12 @@ KNEE_MAX_DEG = 150.0
 KNEE_COMFORT_DEG = (99.0, 138.0)
 KNEE_COMFORT_SOURCE = ("knee angle 99-138 deg: Porter and Gyi 1998 (IJVD 19(3) 255-266), read in Schmidt et al. 2014, "
                        "Applied Ergonomics 45 247-260, Table 1 p. 251; the original not verified")
+# The driver's seat slides along x (design variable SLIDE_VARIABLE, mm, the whole travel; the seat's box at its
+# middle): each body size sits at its own best place in it (poses, best_offset). SLIDE_LEVELS levels across the
+# travel, then a golden-section search to SLIDE_RESOLUTION_MM (design choices of this search).
+SLIDE_VARIABLE = "seat_slide"
+SLIDE_LEVELS = 13
+SLIDE_RESOLUTION_MM = 0.5
 PEDAL_KINDS = ("pedal", "accelerator_pedal", "brake_pedal")
 WHEEL_KINDS = ("steering", "steering_wheel")  # the steering wheel (designs with pedals only, see body_fit)
 # Bodies the legs and feet are not checked against: the person's own seat, the occupants' mass
@@ -323,9 +358,10 @@ def fit(design: dict) -> dict:
         if above:
             roof = min(_box(p)[0][2] for p in above)
             out[f"head_clearance.{o['id']}"] = (roof - head, o["id"])
-    for oid, (length, obstacle) in knee_space(design).items():
+    ps = poses(design) if any(p["kind"] in PEDAL_KINDS for p in parts) or seat_slide(design) > 0.0 else None
+    for oid, (length, obstacle) in knee_space(design, ps).items():
         out[f"knee_room.{oid}"] = (length - AIST["buttock_knee_m95"], obstacle)
-    out.update(body_fit(design))
+    out.update(body_fit(design, ps))
     return out
 
 
@@ -378,14 +414,154 @@ def feet_floor(design: dict, seat_back_x: float, seat_top_z: float, y: float) ->
     return None
 
 
+def seat_slide(design: dict) -> float:
+    """The driver's seat's fore-and-aft travel (mm): design variable SLIDE_VARIABLE, 0 when the design has none.
+    The seat's box is at the middle of the travel; each person sits where suits them best within it (poses)."""
+    q = design.get("variables", {}).get(SLIDE_VARIABLE)
+    if not q:
+        return 0.0
+    if q.get("unit") != "mm":
+        raise ValueError(f"{SLIDE_VARIABLE} must be in mm, got {q.get('unit')!r}")
+    v = float(q["value"])
+    if v < 0.0:
+        raise ValueError(f"{SLIDE_VARIABLE} must not be negative, got {v:g} mm")
+    return v
+
+
+def best_offset(score, slide: float) -> float:
+    """The offset s (mm, along x from the middle of the travel, -slide/2 to slide/2) with the largest score(s):
+    SLIDE_LEVELS levels across the travel, then a golden-section search between the best level's neighbours
+    down to SLIDE_RESOLUTION_MM; equal scores (within 1e-9 mm): the one nearer the middle. 0 without travel."""
+    if slide <= 0.0:
+        return 0.0
+    half = slide / 2.0
+    seen: dict[float, float] = {}
+
+    def f(s: float) -> float:
+        s = float(min(max(s, -half), half))
+        if s not in seen:
+            seen[s] = float(score(s))
+        return seen[s]
+
+    xs = [-half + slide * i / (SLIDE_LEVELS - 1) for i in range(SLIDE_LEVELS)]
+    k = max(range(SLIDE_LEVELS), key=lambda i: (f(xs[i]), -abs(xs[i])))
+    a, b = xs[max(k - 1, 0)], xs[min(k + 1, SLIDE_LEVELS - 1)]
+    g = (math.sqrt(5.0) - 1.0) / 2.0
+    c, d = b - g * (b - a), a + g * (b - a)
+    while b - a > SLIDE_RESOLUTION_MM:
+        if f(c) >= f(d):
+            b, d = d, c
+            c = b - g * (b - a)
+        else:
+            a, c = c, d
+            d = a + g * (b - a)
+    return max(seen, key=lambda s: (round(seen[s], 9), -abs(s)))
+
+
+def _aabb(b) -> tuple[np.ndarray, np.ndarray]:
+    """The axis-aligned box around a K4 body's shape (its capsule when it has one, else its box)."""
+    if b.capsule is not None:
+        c = b.capsule
+        return np.minimum(c.a, c.b) - c.r, np.maximum(c.a, c.b) + c.r
+    pts = b.obb.corners()
+    return pts.min(axis=0), pts.max(axis=0)
+
+
+def _aabbs(bs: dict) -> tuple[list[str], np.ndarray, np.ndarray]:
+    """The keys of `bs` in order and the axis-aligned boxes round their shapes (_aabb) as two arrays (n, 3)."""
+    keys = list(bs)
+    boxes = [_aabb(bs[k]) for k in keys]
+    return keys, np.array([b[0] for b in boxes]).reshape(-1, 3), np.array([b[1] for b in boxes]).reshape(-1, 3)
+
+
+def _leg_checks(pose: Pose, oid: str, ctx: dict, bs: dict, legs: bool = True,
+                feet: bool = True, boxes: tuple | None = None) -> dict[str, tuple[float, str]]:
+    """The big person's legs and feet against the vehicle: with legs leg_clearance, with feet foot_room and
+    foot_support (mm). The thighs and shanks are capsules, whose overlap with any body is the negative of the exact
+    distance between the two shapes when apart, so a body whose axis-aligned box is farther from the leg's than
+    the nearest body found so far is not measured (it cannot be nearer); equal overlaps keep the body first in
+    `bs`, as measuring them all in that order does. boxes: _aabbs(bs), when the caller measures many poses."""
+    from .model import shape_overlap
+
+    seat_key = f"part:{ctx['seat']['id']}"
+    floor_key = f"part:{ctx['floor']['id']}"
+    order = {kb: i for i, kb in enumerate(bs)}
+    worst_leg, worst_foot = (-math.inf, -1, ""), (-math.inf, -1, "")
+    for k, lb in leg_bodies(pose, oid).items():
+        foot = ".foot_" in k
+        if not (feet if foot else legs):
+            continue
+        cands = [(kb, b) for kb, b in bs.items()
+                 if not (kb == seat_key or b.kind in (FOOT_SKIP_KINDS if foot else LEG_SKIP_KINDS)
+                         or (foot and kb == floor_key))]
+        if not foot:
+            lo_a, hi_a = _aabb(lb)
+            if boxes is None:
+                boxes = _aabbs(bs)
+            _, lo_all, hi_all = boxes
+            idx = np.array([order[kb] for kb, _ in cands], dtype=int)
+            lo_b, hi_b = lo_all[idx], hi_all[idx]
+            gaps = np.linalg.norm(np.maximum(0.0, np.maximum(lo_b - hi_a, lo_a - hi_b)), axis=1)
+            # the same order as sorting (gap, then the order in bs): a stable sort of the gaps
+            cands = [(float(gaps[i]), *cands[i]) for i in np.argsort(gaps, kind="stable")]
+        else:
+            cands = [(None, kb, b) for kb, b in cands]
+        for g, kb, b in cands:
+            cur = worst_foot if foot else worst_leg
+            if g is not None and g > 0.0 and -g < cur[0]:
+                break  # apart by at least g, sorted by it: no body from here on can be nearer
+            o = shape_overlap(lb, b)
+            if o > cur[0] or (o == cur[0] and order[kb] < cur[1]):
+                cur = (o, order[kb], kb.split(":", 1)[1])
+            if foot:
+                worst_foot = cur
+            else:
+                worst_leg = cur
+    out: dict[str, tuple[float, str]] = {}
+    if worst_foot[2]:
+        out["foot_room"] = (-worst_foot[0], worst_foot[2])
+    if worst_leg[2]:
+        out["leg_clearance"] = (-worst_leg[0], worst_leg[2])
+    if not feet:
+        return out
+    lo, hi = _extent(ctx["floor"])
+    s = SIZES[BIG]
+    margins = []
+    for g in pose.legs.values():
+        for p in (g.heel, g.toe):
+            for sy in (-1.0, 1.0):
+                yy = p[1] + sy * s["foot_breadth"] / 2.0
+                margins.append(min(p[0] - lo[0], hi[0] - p[0], yy - lo[1], hi[1] - yy))
+    out["foot_support"] = (float(min(margins)), ctx["floor"]["id"])
+    return out
+
+
+def _small_checks(pose: Pose, ctx: dict, wheel: dict | None) -> dict[str, tuple[float, str]]:
+    """The small person on the pedal: pedal_reach and wheel_reach (mm)."""
+    out = {"pedal_reach": (pedal_margin(pose), ctx["pedal"]["id"])}
+    if wheel is not None:
+        out["wheel_reach"] = (wheel_margin(pose, wheel), wheel["id"])
+    return out
+
+
 def poses(design: dict) -> dict[str, dict]:
     """For each occupant with a seat: {"big": Pose (m95), "small": Pose (f5) or None, "pedal": part or None,
-    "floor": part}. The first occupant drives: the big and the small person's right foot on the pedal
-    under it. The others sit with the knee at KNEE_ANGLE_DEG. Occupants without a floor ahead are left out."""
+    "floor": part, "seat": part, "offset": {"big": mm, "small": mm or None}}. The first occupant drives: the
+    big and the small person's right foot on the pedal under it. The others sit with the knee at
+    KNEE_ANGLE_DEG. Occupants without a floor ahead are left out.
+
+    The driver's seat slides (seat_slide): each of the two sits at the offset along x from the middle of the
+    travel (the seat's box) where the smallest of their own H3 margins is the largest (best_offset), the big
+    person's: knee_room, foot_room, leg_clearance, foot_support and the two sides of knee_angle_margins; the
+    small person's: pedal_reach, wheel_reach and the two sides of knee_angle_margins. The other occupants sit
+    at the middle."""
+    from .model import bodies
+
     parts = design.get("parts", [])
     seats = [p for p in parts if p["kind"] == "seat"]
     occ = occupants(design)
     out = {}
+    bs = None
     for i, o in enumerate(occ):
         seat = _seat_of(o, seats)
         if seat is None:
@@ -400,78 +576,80 @@ def poses(design: dict) -> dict[str, dict]:
         if floor is None:
             continue
         fz = float(_extent(floor)[1][2])
-        if pedal is not None:
-            ball_xz = (float(face[0]), float(face[2]))
-            big = seated(lo[0], hi[2], y, fz, BIG, right_ball=ball_xz)
-            small = seated(lo[0], hi[2], y, fz, SMALL, right_ball=ball_xz)
-        else:
-            big, small = seated(lo[0], hi[2], y, fz, BIG), None
-        out[o["id"]] = {"big": big, "small": small, "pedal": pedal, "floor": floor, "seat": seat}
+        if pedal is None:
+            out[o["id"]] = {"big": seated(lo[0], hi[2], y, fz, BIG), "small": None, "pedal": None, "floor": floor,
+                            "seat": seat, "offset": {"big": 0.0, "small": None}}
+            continue
+        ball_xz = (float(face[0]), float(face[2]))
+        ctx = {"seat": seat, "floor": floor, "pedal": pedal}
+        slide = seat_slide(design)
+
+        def at(size: str, s: float) -> Pose:
+            return seated(lo[0] + s, hi[2], y, fz, size, right_ball=ball_xz)
+
+        s_big = s_small = 0.0
+        if slide > 0.0:
+            bs = bs if bs is not None else bodies(design)
+            boxes = _aabbs(bs)
+            extents = [_extent(p) for p in parts]
+            wheel = steering_wheel_of(design, seat)
+
+            # the feet stay on the pedal and the floor wherever the seat is: their margins once
+            fixed = [v for v, _ in _leg_checks(at(BIG, 0.0), o["id"], ctx, bs, legs=False).values()]
+
+            def big_score(s: float, boxes=boxes, bs=bs, ctx=ctx, o=o) -> float:
+                p = at(BIG, s)
+                vals = fixed + [v for v, _ in _leg_checks(p, o["id"], ctx, bs, feet=False, boxes=boxes).values()]
+                vals += list(knee_angle_margins(p))
+                knee = _knee_length(design, o, seat, lo[0] + s, extents)
+                if knee is not None:
+                    vals.append(knee[0] - AIST["buttock_knee_m95"])
+                return min(vals)
+
+            def small_score(s: float) -> float:
+                p = at(SMALL, s)
+                return min([v for v, _ in _small_checks(p, ctx, wheel).values()] + list(knee_angle_margins(p)))
+
+            s_big, s_small = best_offset(big_score, slide), best_offset(small_score, slide)
+        out[o["id"]] = {"big": at(BIG, s_big), "small": at(SMALL, s_small), "pedal": pedal, "floor": floor,
+                        "seat": seat, "offset": {"big": s_big, "small": s_small}}
     return out
 
 
-def body_fit(design: dict) -> dict[str, tuple[float, str]]:
+def body_fit(design: dict, ps: dict | None = None) -> dict[str, tuple[float, str]]:
     """The seated body against the vehicle (mm, negative = does not fit), for designs with pedals:
     foot_room (the big person's feet to the nearest body other than what they rest on), foot_support
     (how far inside the floor's edge in plan the feet are), leg_clearance (the big person's thighs and
     shanks to the nearest body, as capsules), pedal_reach (the small person's ball of the foot onto the
-    pedal: the hip-ankle distance with the knee at KNEE_MAX_DEG less the distance needed), knee_angle_room (the
+    pedal: the hip-ankle distance of the straight leg less the distance needed; negative only when the foot
+    does not reach), knee_angle_room (the
     smaller of knee_angle_margins over the big and the small person: the pedal foot's knee angle inside
     KNEE_COMFORT_DEG, as mm of the hip-ankle distance) and wheel_reach
     (the small person's arm reach, C3 - C16, less the distance from the shoulder to the grip on the
-    steering wheel's rim beside its centre)."""
-    from .model import bodies, shape_overlap
+    steering wheel's rim beside its centre). Each person where poses() seats them (ps: its result, when the
+    caller has it)."""
+    from .model import bodies
 
     if not any(p["kind"] in PEDAL_KINDS for p in design.get("parts", [])):
         return {}
     bs = bodies(design)
     out: dict[str, tuple[float, str]] = {}
-    for oid, ps in poses(design).items():
-        legs = leg_bodies(ps["big"], oid)
-        seat_key = f"part:{ps['seat']['id']}"
-        floor_key = f"part:{ps['floor']['id']}"
-        worst_leg, worst_foot = (-math.inf, ""), (-math.inf, "")
-        for k, lb in legs.items():
-            foot = ".foot_" in k
-            for kb, b in bs.items():
-                if kb == seat_key or b.kind in (FOOT_SKIP_KINDS if foot else LEG_SKIP_KINDS):
-                    continue
-                if foot and kb == floor_key:
-                    continue
-                o = shape_overlap(lb, b)
-                cur = worst_foot if foot else worst_leg
-                if o > cur[0]:
-                    cur = (o, kb.split(":", 1)[1])
-                if foot:
-                    worst_foot = cur
-                else:
-                    worst_leg = cur
-        if worst_foot[1]:
-            out[f"foot_room.{oid}"] = (-worst_foot[0], worst_foot[1])
-        if worst_leg[1]:
-            out[f"leg_clearance.{oid}"] = (-worst_leg[0], worst_leg[1])
-        lo, hi = _extent(ps["floor"])
-        s = SIZES[BIG]
-        margins = []
-        for g in ps["big"].legs.values():
-            for p in (g.heel, g.toe):
-                for sy in (-1.0, 1.0):
-                    yy = p[1] + sy * s["foot_breadth"] / 2.0
-                    margins.append(min(p[0] - lo[0], hi[0] - p[0], yy - lo[1], hi[1] - yy))
-        out[f"foot_support.{oid}"] = (float(min(margins)), ps["floor"]["id"])
-        if ps["small"] is not None:
-            out[f"pedal_reach.{oid}"] = (pedal_margin(ps["small"]), ps["pedal"]["id"])
-            out[f"knee_angle_room.{oid}"] = (min(min(knee_angle_margins(ps[k])) for k in ("big", "small")),
-                                             ps["pedal"]["id"])
-            wheel = steering_wheel_of(design, ps["seat"])
-            if wheel is not None:
-                out[f"wheel_reach.{oid}"] = (wheel_margin(ps["small"], wheel), wheel["id"])
+    for oid, p in (poses(design) if ps is None else ps).items():
+        for k, v in _leg_checks(p["big"], oid, p, bs).items():
+            out[f"{k}.{oid}"] = v
+        if p["small"] is not None:
+            small = _small_checks(p["small"], p, steering_wheel_of(design, p["seat"]))
+            out[f"pedal_reach.{oid}"] = small["pedal_reach"]
+            out[f"knee_angle_room.{oid}"] = (min(min(knee_angle_margins(p[k])) for k in ("big", "small")),
+                                             p["pedal"]["id"])
+            if "wheel_reach" in small:
+                out[f"wheel_reach.{oid}"] = small["wheel_reach"]
     return out
 
 
 def pedal_margin(pose: Pose, knee_max: float = KNEE_MAX_DEG) -> float:
     """How much closer (mm, negative: farther) the right ankle is to the hip than the leg reaches
-    with the knee at knee_max."""
+    with the knee at knee_max (default: straight, so negative only when the foot does not reach)."""
     s = SIZES[pose.size]
     l1, l2 = _links(s)
     g = pose.legs["R"]
@@ -536,24 +714,83 @@ def _seat_of(o: dict, seats: list[dict]) -> dict | None:
     return min(seats, key=lambda s: abs(s["box"]["center_mm"][1] - o["box"]["center_mm"][1])) if seats else None
 
 
-def knee_space(design: dict) -> dict[str, tuple[float, str]]:
+def _knee_length(design: dict, o: dict, seat: dict | None, seat_back: float,
+                 extents: list | None = None) -> tuple[float, str] | None:
+    """(length mm from seat_back to the nearest part ahead at knee height, that part's id), None with nothing ahead.
+    extents: [_extent(p) for p in the design's parts], when the caller measures many seat_back."""
+    parts = design.get("parts", [])
+    ext = extents if extents is not None else [_extent(p) for p in parts]
+    lo, _ = _box(o)
+    seat_top = _box(seat)[1][2] if seat else lo[2]
+    ahead = [(p, e) for p, e in zip(parts, ext) if p is not o and p is not seat
+             and p["kind"] not in ("occupant", "seat")
+             and e[0][0] > seat_back and e[0][2] < seat_top + KNEE_BAND_MM and e[1][2] > seat_top and _overlaps_y(p, o)]
+    if not ahead:
+        return None
+    first, e = min(ahead, key=lambda pe: pe[1][0][0])
+    return float(e[0][0] - seat_back), first["id"]
+
+
+def slide_ends(design: dict) -> list[tuple[str, dict, set[str]]]:
+    """The design with the driver's seat (the seat of each occupant with a pedal) at each end of its slide:
+    [("front" | "rear", design copy, {seat part ids moved})]; [] without a slide. The seat's box is at the middle
+    of the travel in the design itself, so the interference at rest there does not see its ends."""
+    import copy
+
+    slide = seat_slide(design)
+    parts = design.get("parts", [])
+    if slide <= 0.0 or not any(p["kind"] in PEDAL_KINDS for p in parts):
+        return []
+    seats = [p for p in parts if p["kind"] == "seat"]
+    moved = {s["id"] for o in occupants(design) for s in [_seat_of(o, seats)]
+             if s is not None and _drives(design, o)}
+    out = []
+    for label, dx in (("front", slide / 2.0), ("rear", -slide / 2.0)):
+        d = copy.deepcopy(design)
+        for p in d["parts"]:
+            if p["id"] in moved:
+                p["box"]["center_mm"][0] = float(p["box"]["center_mm"][0]) + dx
+        out.append((label, d, moved))
+    return out
+
+
+def _drives(design: dict, occupant: dict) -> bool:
+    """Whether the occupant has a pedal in front of them (the driver): poses' rule (the first occupant, with a seat,
+    a pedal and a floor under the feet), without placing the people (the same as `occupant["id"] in
+    knee_angles(design)`)."""
+    occ = occupants(design)
+    if not occ or occ[0]["id"] != occupant["id"]:
+        return False
+    seat = _seat_of(occupant, [p for p in design.get("parts", []) if p["kind"] == "seat"])
+    if seat is None:
+        return False
+    pedal = driver_pedal(design, occupant)
+    if pedal is None:
+        return False
+    lo, hi = _box(seat)
+    face = pedal_face(pedal)
+    floor = (floor_under(design, float(face[0]), float(face[1]), float(face[2]))
+             or feet_floor(design, lo[0], hi[2], float(seat["box"]["center_mm"][1])))
+    return floor is not None
+
+
+def knee_space(design: dict, ps: dict | None = None) -> dict[str, tuple[float, str]]:
     """For each occupant: (length mm from the seat back to the nearest part ahead at knee
     height, that part's id). Occupants with nothing ahead are left out. Parts turned by
-    rpy_deg are taken at the box around their turned box."""
+    rpy_deg are taken at the box around their turned box. On a sliding driver's seat (seat_slide) the seat
+    back is where poses() seats the big person (ps: its result, when the caller has it)."""
     parts = design.get("parts", [])
     seats = [p for p in parts if p["kind"] == "seat"]
+    offsets = {}
+    if seat_slide(design) > 0.0:
+        offsets = {k: p["offset"]["big"] for k, p in (poses(design) if ps is None else ps).items()}
     out = {}
     for o in occupants(design):
-        lo, _ = _box(o)
         seat = _seat_of(o, seats)
-        seat_top = _box(seat)[1][2] if seat else lo[2]
-        seat_back = _box(seat)[0][0] if seat else lo[0]
-        ahead = [p for p in parts if p is not o and p is not seat and p["kind"] not in ("occupant", "seat")
-                 and _extent(p)[0][0] > seat_back and _extent(p)[0][2] < seat_top + KNEE_BAND_MM
-                 and _extent(p)[1][2] > seat_top and _overlaps_y(p, o)]
-        if ahead:
-            first = min(ahead, key=lambda p: _extent(p)[0][0])
-            out[o["id"]] = (float(_extent(first)[0][0] - seat_back), first["id"])
+        seat_back = (_box(seat)[0][0] if seat else _box(o)[0][0]) + offsets.get(o["id"], 0.0)
+        got = _knee_length(design, o, seat, seat_back)
+        if got is not None:
+            out[o["id"]] = got
     return out
 
 

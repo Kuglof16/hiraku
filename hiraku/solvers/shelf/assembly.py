@@ -10,9 +10,11 @@ from scipy.optimize import brentq
 
 from ..k4_geometry import bodies, disassemble, fit, interferences, steps, sweep
 from ..k4_geometry.assembly import is_attach
+from ..k4_geometry.joints import joint_gaps, outside_envelopes
 from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_points
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
+from ..k4_geometry.people import slide_ends
 from ..k4_geometry.obb import from_box, overlap
 from ..k4_geometry.people import KNEE_COMFORT_SOURCE, PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
@@ -31,6 +33,10 @@ def _plain(parts, nodes=(), members=(), supports=()):
             "nodes": list(nodes), "members": list(members), "sections": {}, "materials": {}}
 
 
+CACHE_SIZE = 8  # designs (with their occupants on board) whose results are kept in the process
+_CACHE: dict[str, Record] = {}
+
+
 class Assembly(BuiltinTool):
     name = "assembly"
     stage = 0  # layout: interference, occupant fit, assembly order
@@ -39,7 +45,9 @@ class Assembly(BuiltinTool):
     base = "K4"
     tests = ["H1", "H3", "H5"]
     formulas = ["geometry.free_steer_angle", "geometry.free_steer_angle_limited", "occupant.knee_room",
-                "assembly.part_count"]
+                "occupant.knee_angle_room",
+                "assembly.part_count", "assembly.overlap_count", "assembly.motion_count", "assembly.blocked_count",
+                "assembly.joint_count", "assembly.envelope_count"]
     load_case_params = (LOADING,)
     predicts = (
         Predicts("free_steer_angle", "geometry.free_steer_angle_limited", "theta",
@@ -49,7 +57,22 @@ class Assembly(BuiltinTool):
         Predicts("knee_room", "occupant.knee_room", "room",
                  "L from hiraku.solvers.k4_geometry.knee_space(design) (the smallest), "
                  "L_bk = AIST J5 buttock-knee length, male 95th percentile (k4_geometry.AIST)"),
+        Predicts("knee_angle_room", "occupant.knee_angle_room", "room",
+                 "both body sizes' leg links and their knee angles as K4 seats them (k0_handcalc.scene_inputs."
+                 "knee_angle_inputs), against 99-138 deg"),
         Predicts("assembly_steps", "assembly.part_count", "steps", "n = parts in the design, n_out = occupants and cargo"),
+        Predicts("interference_count", "assembly.overlap_count", "n",
+                 "n_rest, n_slide from hiraku.solvers.k0_handcalc.assembly_inputs.overlap_inputs (axis-aligned boxes, "
+                 "turned parts and slanted members left out, this tool's allowance)"),
+        Predicts("motion_interference_count", "assembly.motion_count", "n",
+                 "n_wheel, n_rod from assembly_inputs.motion_inputs (the wheels' boxes and the tie rods swept)"),
+        Predicts("blocked_parts", "assembly.blocked_count", "n",
+                 "n_blocked from assembly_inputs.blocked_inputs (each part pushed along +-x, +-y, +-z against the frame)"),
+        Predicts("joint_gap_count", "assembly.joint_count", "n",
+                 "n_gap, n_none from assembly_inputs.joint_inputs (box to box gaps of the connects_to, parts joined to "
+                 "nothing)"),
+        Predicts("envelope_outside_count", "assembly.envelope_count", "n",
+                 "n_out from assembly_inputs.envelope_inputs (boxes against the modules' envelopes)"),
     )
 
     def known_answers(self) -> list[Record]:
@@ -119,10 +142,32 @@ class Assembly(BuiltinTool):
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
-        """Load case params: load_case_params. Design variable max_steer_angle (deg) turns on the steering sweep."""
-        design = on_board(design, load_case)
+        """Load case params: load_case_params. Design variable max_steer_angle (deg) turns on the steering sweep.
+        The result depends on the design with its occupants and load on board (params.loading) only, not on the rest
+        of the load case nor on the run params: it is kept in this process by a hash of that design (CACHE_SIZE
+        designs), so the cases of one version (H1's five, H3's, H5's) measure it once."""
+        import copy
+        import hashlib
+        import json
+
+        on = on_board(design, load_case)
+        key = hashlib.sha256(json.dumps(on, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        if key not in _CACHE:
+            _CACHE[key] = self._analyse(on)
+            while len(_CACHE) > CACHE_SIZE:
+                _CACHE.pop(next(iter(_CACHE)))
+        return copy.deepcopy(_CACHE[key])
+
+    def _analyse(self, design: Record) -> Record:
         bs = bodies(design)
         static = interferences(design, bs)
+        # the driver's seat at both ends of its slide (its box is at the middle): the overlaps of the moved seat
+        ends = []
+        for label, d_end, moved in slide_ends(design):
+            keys = {f"part:{pid}" for pid in moved}
+            ends += [(a, b, o, f"seat at the slide's {label} end") for a, b, o in interferences(d_end, bodies(d_end))
+                     if a in keys or b in keys]
+        static = sorted(static + [(a, b, o) for a, b, o, _ in ends], key=lambda t: -t[2])
         sw = sweep(design, bs)
         seq = steps(design, bs)
         people = fit(design)
@@ -140,6 +185,24 @@ class Assembly(BuiltinTool):
             result("steps_without_tool_clearance", float(sum(not s["tool_clearance"] for s in seq)), "1"),
             result("steps_out_of_reach", float(sum(not s["hand_reach"] for s in seq)), "1"),
         ]
+        joints = joint_gaps(design, bs)
+        results += [
+            # joints that do not touch (or whose at_mm is off either shape), joints that do not say where (no at_mm),
+            # and parts joined to nothing
+            result("joint_gap_count", float(len(joints["gaps"]) + len(joints["no_at"]) + len(joints["unjoined"])), "1",
+                   ", ".join(joints["unjoined"][:5]) or None),
+            result("joints_without_at", float(len(joints["no_at"])), "1"),
+            result("joint_gaps", float(len(joints["gaps"])), "1"),
+            result("unjoined_parts", float(len(joints["unjoined"])), "1"),
+            result("worst_joint_gap", joints["gaps"][0][3] if joints["gaps"] else 0.0, "mm",
+                   f"{joints['gaps'][0][0]} -> {joints['gaps'][0][1]}" if joints["gaps"] else None),
+        ]
+        if design.get("modules"):
+            out_env = outside_envelopes(design, bs)
+            results += [result("envelope_outside_count", float(len(out_env)), "1",
+                               _name(out_env[0][0]) if out_env else None),
+                        result("worst_envelope_outside", out_env[0][2] if out_env else 0.0, "mm",
+                               _name(out_env[0][0]) if out_env else None)]
         if sw["free_steer"]:
             sid = min(sw["free_steer"], key=sw["free_steer"].get)
             results.append(result("free_steer_angle", sw["free_steer"][sid], "deg", sid))
@@ -151,8 +214,9 @@ class Assembly(BuiltinTool):
                 groups[g] = (float(v), where)
         for g, (v, where) in groups.items():
             results.append(result(g, v, "mm", where))
-        found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest", "condition": "at rest"}
-                 for a, b, o in static]
+        at_ends = {(a, b, o): c for a, b, o, c in ends}
+        found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest",
+                  "condition": at_ends.get((a, b, o), "at rest")} for a, b, o in static]
         found += [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "motion", "condition": c}
                   for a, b, o, c in sw["hits"]]
         out = {"results": results, "assembly": seq, "interferences": found, "assumptions": [HAND_WAY_RULE]}

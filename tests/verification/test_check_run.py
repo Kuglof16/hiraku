@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from hiraku import contract
 from hiraku.contract import layout
@@ -49,13 +50,18 @@ def write_run(root: Path, events: list[dict]) -> Path:
         elif e["kind"] in FILE_KINDS:
             kind = FILE_KINDS[e["kind"]]
             rid = d[f"{kind}_id"]
-            v = d.get("design_version") or version.get(d.get("prediction_id")) or version.get(d.get("comparison_id"))
+            v = (d.get("design_version") or version.get(d.get("prediction_id")) or version.get(d.get("comparison_id"))
+                 or version.get(d.get("analysis_id")) or 1)  # an unsupported_load verdict names its analysis
             version[rid] = v
             p = layout.record_path(run, v, kind, rid)
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         elif e["kind"] == "judgement.updated":
             judgements.setdefault(d["design_version"], {})[d["domain"]] = d
+        elif e["kind"] == "load_cases.created":
+            p = layout.version_dir(run, d["design_version"]) / layout.VERSION_LOAD_CASES_FILE
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
         elif e["kind"] == "report.written":
             (run / layout.REPORT_FILE).write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
     for v, js in judgements.items():
@@ -219,6 +225,13 @@ class CheckRun(unittest.TestCase):
             ("files.request", "warn", f"{layout.INBOX_DIR}/0001-user.said.json"),  # the run has finished
             ("files.unknown", "warn", f"{layout.INBOX_DIR}/note.txt"),
             ("files.unknown", "warn", f"{layout.KNOWLEDGE_DIR}/other.md")])
+
+    def test_plugin_files_and_the_tool_error_log_are_part_of_the_layout(self):
+        run = write_run(self.root / "p", sample_events())
+        for name in (layout.PLUGIN_HOOKS_FILE, layout.PLUGIN_OUTBOX_FILE, layout.TOOL_ERRORS_FILE):
+            (run / name).write_text("", encoding="utf-8")
+        (run / "other.log").write_text("", encoding="utf-8")
+        self.assertEqual([f.where for f in cr.check_run(run) if f.rule == "files.unknown"], ["other.log"])
 
     # --- the report (report.json and report.written) ---------------------------------
     @staticmethod
@@ -659,6 +672,49 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._zero_limit(sample_events(), margin_pct=0.0), "verdict.math")
         self.assertIn("verdict.margin", self.rules(self._zero_limit(sample_events(), margin=False), "warn"))
 
+    @staticmethod
+    def _unsupported(ev, result=4.0, **change):
+        """The sample's verdict as an unsupported_load one (contract, 荷重の通り道が無いとき): ana-0001 reports
+        unsupported_load `result` (None: not at all), the verdict names the analysis instead of a comparison."""
+        if result is not None:
+            by_kind(ev, "analysis.finished")["data"]["results"].append(
+                {"quantity": "unsupported_load", "value": result, "unit": "1", "where": "occupant.hip"})
+        v = by_kind(ev, "verdict.recorded")["data"]
+        v.pop("comparison_id")
+        v.update(analysis_id="ana-0001", quantity="unsupported_load", value={"value": 4.0, "unit": "1"}, op="<=",
+                 limit={"value": 0.0, "unit": "1"}, pass_=None, margin={"value": -4.0, "unit": "1"}, margin_pct=None,
+                 basis="unsupported_load", value_from="analysis")
+        v["pass"] = v.pop("pass_") or False
+        v.update(change)
+        return ev
+
+    @staticmethod
+    def _past_limit_without_formula(state="pending", status="stopped", code="not_judged"):
+        """HK4 (contract, 67c3e74): a case no K0 formula predicts, with an analysis result past its criterion
+        (R1 at 200 MPa against 156.7) and no comparison or verdict, does not hold the stop: the run ends
+        not judged and the tile stays off green."""
+        ev = [e for e in sample_events() if e["kind"] not in ("comparison.recorded", "verdict.recorded")]
+        by_kind(ev, "analysis.finished")["data"]["results"][0]["value"] = 200.0
+        by_kind(ev, "judgement.updated")["data"].update(state=state, verdict_ids=[], red_count=0)
+        by_kind(ev, "run.finished")["data"].update(
+            status=status, stop_code=code,
+            stop_reason="R1-step100: 基準を超えた結果があるが、手計算 (K0) の式が無いので判定していない")
+        return renumber(ev)
+
+    def test_h4_a_past_limit_case_without_a_formula_ends_not_judged(self):
+        self.assertEqual(self.rules(self._past_limit_without_formula()), set())
+        self.assertFlags(self._past_limit_without_formula(state="green"), "judgement.state")  # never green
+        self.assertFlags(self._past_limit_without_formula(status="done", code="done"), "HK4_no_stop_before_judged")
+
+    def test_unsupported_load_verdict_comes_from_the_analysis(self):
+        verdict_rules = lambda ev: {r for r in self.rules(ev) if r.startswith("verdict.")}
+        self.assertEqual(verdict_rules(self._unsupported(sample_events())), set())
+        self.assertFlags(self._unsupported(sample_events(), result=None), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), result=2.0), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), comparison_id="cmp-0001"), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), analysis_id="ana-0009"), "verdict.unsupported_load")
+        self.assertFlags(self._unsupported(sample_events(), **{"pass": True}), "verdict.unsupported_load")
+
     def test_verdict_limit_comes_from_the_criterion(self):
         ev = sample_events()
         v = by_kind(ev, "verdict.recorded")["data"]
@@ -741,6 +797,40 @@ class CheckRun(unittest.TestCase):
             self._shell_after_green(sample_events(), 100.0, after="analysis.finished"), frame_static=1, frame_shell=1)))
         self.assertNotIn("HK5_light_first", self.rules(self._shell_after_green(sample_events(), 100.0,
                                                                                 after="analysis.finished")))
+
+    def _shell_on_r2_while_r1_waits(self, ev, after):
+        """frame_shell (stage 3) on R2 started right after the first `after` event, while R1 (frame_static,
+        stage 1) has no verdict."""
+        ev = self._stages(self._shell_after_green(ev, 100.0, after=after), frame_static=1, frame_shell=3)
+        for e in ev:
+            if e["kind"].startswith("analysis.") and e["data"].get("analysis_id") == "ana-0002":
+                e["data"]["load_case_id"] = "R2-step100"
+        return ev
+
+    def test_h5_a_case_that_cannot_be_judged_does_not_hold_the_heavier_tools(self):
+        # contract 110b991: no K0 formula predicts R1's max_stress (its prediction is of another quantity)
+        ev = sample_events()
+        by_kind(ev, "prediction.recorded")["data"]["quantity"] = "max_deflection"
+        self.assertNotIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "analysis.finished")))
+        # R1's mismatch ended with its cause (contract 08cf4d6: ends_case; a plan's expected_mismatch with end)
+        base = [e for e in sample_events() if e["kind"] != "verdict.recorded"]
+        by_kind(base, "comparison.recorded")["data"]["status"] = "mismatch"
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "parts not mounted",
+                 "fix": "none in this run", "resolved": False}
+        ev = self._insert(base, "comparison.recorded", "cause.recorded", dict(cause, ends_case=True))
+        self.assertNotIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "cause.recorded")))
+        # before the cause is written, R1 still waits
+        self.assertIn("HK5_light_first", self.rules(self._shell_on_r2_while_r1_waits(ev, "comparison.recorded")))
+        # a cause without ends_case (or with it false) waits for its fix: R1 still holds the heavier tools
+        for mark in ({}, {"ends_case": False}):
+            with self.subTest(mark=mark):
+                ev = self._insert(base, "comparison.recorded", "cause.recorded", dict(cause, **mark))
+                self.assertIn("HK5_light_first",
+                              self.rules(self._shell_on_r2_while_r1_waits(ev, "cause.recorded")))
+        # ends_case goes without safe_side (the schema's rule)
+        ev = self._insert(base, "comparison.recorded", "cause.recorded",
+                          dict(cause, ends_case=True, safe_side=True, safe_side_reason="the beam model bounds it"))
+        self.assertIn("schema", self.rules(ev))
 
     @staticmethod
     def _compare_again(ev, n, analyzed, cause=None):
@@ -1077,6 +1167,22 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._rule_check(knowledge=True, rule_id="SM-99"), "rule_check.rule")
         self.assertIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "gearbox"]), "warn"))
 
+    def _system_red(self, category="system", red_count=1, state="red", hits=True):
+        """The rule_check sample with its rule SM-01 of the given category, then the v1 assembly tile."""
+        ev = self._rule_check(knowledge=True) if hits else self._rule_check(knowledge=True, hits=[], **{"pass": True})
+        by_kind(ev, "knowledge.imported")["data"]["rules"][0]["category"] = category
+        tile = {"design_version": 1, "domain": "assembly", "state": state, "red_count": red_count,
+                "verdict_ids": [], "summary": "系の欠け 1 件"}
+        return self._insert(ev, "rule_check.recorded", "judgement.updated", tile, design_version=1)
+
+    def test_a_system_rule_hitting_a_part_turns_the_assembly_tile_red(self):
+        # hiraku.tools.judge compute_judgement: red_count counts the system rules' misses too
+        self.assertNotIn("judgement.state", self.rules(self._system_red()))
+        self.assertIn("judgement.state", self.rules(self._system_red(category="sheet_metal")))  # not a system rule
+        self.assertIn("judgement.state", self.rules(self._system_red(red_count=0)))
+        self.assertIn("judgement.state", self.rules(self._system_red(state="pending", red_count=1)))
+        self.assertIn("judgement.state", self.rules(self._system_red(hits=False)))  # nothing hits: not red
+
     def test_rule_check_on_the_whole_design(self):
         rc = self._example("rule_check")
         whole = dict(targets=["design"], hits=[dict(rc["hits"][0], part_id="design")], not_evaluable=[])
@@ -1169,6 +1275,240 @@ class CheckRun(unittest.TestCase):
                          "analysis.series")
         self.assertFlags(with_series({"channel": "camber", "unit": "deg", "values": [0.0, 1.0],
                                       "x": {"quantity": "wheel_travel", "unit": "mm", "values": [0.0]}}), "analysis.series")
+
+
+
+def modular(red=True, case_modules=("suspension",), proposals=None, build=None, modules=True):
+    """The sample run split into modules (contract d9631a5): R1 red in v1 (when red), the suspension
+    designer proposes wheel_radius 320 mm, the packager builds v2 from it. proposals: the
+    module_change data to propose instead; build: changes to v2's design data."""
+    ev = sample_events()
+    d1 = by_kind(ev, "design.created")["data"]
+    if modules:
+        d1["modules"] = [
+            {"module_id": "package", "owner": "packager", "envelope": [], "variables": ["wheelbase", "track"]},
+            {"module_id": "frame", "owner": "designer.frame", "envelope": [], "variables": []},
+            {"module_id": "suspension", "owner": "designer.suspension", "envelope": [],
+             "variables": ["wheel_radius"], "choices": ["tyre"]},
+            {"module_id": "powertrain", "owner": "designer.powertrain", "envelope": [], "variables": []}]
+    for e in ev:
+        if e["kind"] in ("run.started", "project.updated"):
+            for lc in e["data"]["load_cases"]:
+                lc["modules"] = list(case_modules)
+    if red:
+        by_kind(ev, "verdict.recorded")["data"]["pass"] = False
+    if proposals is None:
+        proposals = [{"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                      "reason": "a larger wheel takes the step", "load_case_ids": ["R1-step100"],
+                      "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}]
+    at = next(k for k, e in enumerate(ev) if e["kind"] == "agent.stopped")
+    stamp = {"seq": 0, "ts": ev[at]["ts"], "t": ev[at]["t"], "run_id": RUN_ID}
+    new = [dict(stamp, kind="design.change_proposed", agent=x.get("agent_id"), data=x) for x in proposals]
+    d2 = copy.deepcopy(d1)
+    d2.update(design_version=2, parent_version=1, change_reason="the round's proposals: chg-0001",
+              module_changes=copy.deepcopy(proposals) if modules else [])
+    for x in proposals:
+        d2["variables"].update(x.get("changes") or {})
+    d2.update(build or {})
+    new.append(dict(stamp, kind="design.created", agent="packager", data=d2))
+    ev[at + 1:at + 1] = new
+    return renumber(ev)
+
+
+class Modules(unittest.TestCase):
+    """HK6_module_scope (contract d9631a5): module designers propose, the packager builds."""
+
+    setUp, tearDown, findings = CheckRun.setUp, CheckRun.tearDown, CheckRun.findings
+
+    def hk6(self, ev, level="error"):
+        return {f.message for f in self.findings(ev) if f.rule == "HK6_module_scope" and f.level == level}
+
+    def test_a_round_by_the_rules(self):
+        ev = modular()
+        self.assertEqual(self.hk6(ev), set())
+        self.assertEqual(self.hk6(ev, "warn"), set())
+        # the packager's own change of a package variable, listed once in module_changes
+        pkg = {"change_id": "chg-0002", "module_id": "package", "agent_id": "packager", "reason": "longer",
+               "design_version": 1,
+               "changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}
+        ev = modular()
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"].append(pkg)
+        d2["variables"]["wheelbase"] = pkg["changes"]["wheelbase"]
+        self.assertEqual(self.hk6(ev), set())
+        pkg["design_version"] = 2  # the package change is made on the version before
+        self.assertTrue(any("package change chg-0002 says design_version 2" in m for m in self.hk6(ev)))
+
+    def test_a_proposal_stays_in_its_module(self):
+        base = modular(proposals=None)
+        good = [e for e in base if e["kind"] == "design.change_proposed"][0]["data"]
+        for why, change in (("another designer", {"agent_id": "designer.frame"}),
+                            ("a package variable", {"changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}),
+                            ("a choice not its own", {"choices": {"frame_type": "spaceframe"}}),
+                            ("the package itself", {"module_id": "package", "agent_id": "packager"}),
+                            ("made on another version", {"design_version": 2})):
+            with self.subTest(why):
+                self.assertTrue(self.hk6(modular(proposals=[dict(good, **change)])), why)
+        self.assertEqual(self.hk6(modular(proposals=[dict(good, choices={"tyre": "wide"})])), set())
+        self.assertEqual(self.hk6(modular(proposals=[dict(good, design_version=1)])), set())  # contract 18c2679
+
+    def test_a_red_goes_to_the_modules_its_load_case_names(self):
+        self.assertTrue(self.hk6(modular(case_modules=("frame",))))
+        self.assertTrue(self.hk6(modular(red=False)))
+
+    def test_a_red_system_rule_lets_a_designer_propose(self):
+        nothing = "chg-0001 proposed while nothing in v1 is red"
+        self.assertIn(nothing, self.hk6(modular(red=False, proposals=[self._no_case()])))
+
+        def with_rule(category):
+            ev = modular(red=False, proposals=[self._no_case()])
+            rc = CheckRun._example("rule_check")
+            rc.update(targets=["battery"], hits=[dict(rc["hits"][0], part_id="battery")], not_evaluable=[])
+            ev = CheckRun._insert(ev, "design.created", "rule_check.recorded", rc, design_version=1)
+            k = CheckRun._example("knowledge_imported")
+            k["rules"][0]["category"] = category
+            return CheckRun._insert(ev, "design.created", "knowledge.imported", k)
+        self.assertEqual(self.hk6(with_rule("system")), set())
+        self.assertIn(nothing, self.hk6(with_rule("sheet_metal")))
+
+    @staticmethod
+    def _no_case():
+        return {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                "reason": "a system rule is red", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
+
+    def test_an_optional_variable_left_out_is_its_default(self):
+        # the generator writes an optional variable only when it differs from its default
+        from unittest import mock
+
+        def warns(default):
+            ev = modular()
+            del [e for e in ev if e["kind"] == "design.created"][-1]["data"]["variables"]["wheel_radius"]
+            spec = [{"name": "wheel_radius", "unit": "mm", "default": default, "value": default}]
+            with mock.patch("hiraku.designgen.variables", lambda d: spec):
+                return {m for m in self.hk6(ev, "warn") if "as chg-0001 set it" in m}
+        self.assertEqual(warns(320.0), set())
+        self.assertEqual(len(warns(300.0)), 1)
+
+    def test_only_the_packager_builds_the_round(self):
+        for why, build in (("a designer made it", None),
+                           ("module_changes missing", {"module_changes": []}),
+                           ("module_changes unlike the proposal", "unlike"),
+                           ("a package variable moved without a package change",
+                            {"variables": {"wheelbase": {"value": 1900.0, "unit": "mm"},
+                                           "track": {"value": 1300.0, "unit": "mm"},
+                                           "wheel_radius": {"value": 320.0, "unit": "mm"}}})):
+            with self.subTest(why):
+                ev = modular(build=build if isinstance(build, dict) else None)
+                v2 = [e for e in ev if e["kind"] == "design.created"][-1]
+                if build is None:
+                    v2["agent"] = "designer"
+                elif build == "unlike":
+                    v2["data"]["module_changes"][0]["reason"] = "another reason"
+                self.assertTrue(self.hk6(ev), why)
+
+    def test_a_variable_no_module_lists_may_follow_with_a_warning(self):
+        ev = modular()
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["variables"]["wheel_inertia"] = {"value": 2.0, "unit": "kg*m^2"}  # worked out from wheel_radius
+        self.assertEqual(self.hk6(ev), set())
+        self.assertTrue(any("wheel_inertia, which no module lists" in m for m in self.hk6(ev, "warn")))
+        # one the generator marks derived (spec derived: True) follows without a word
+        from unittest import mock
+        with mock.patch.object(cr.RunChecker, "_derived", staticmethod(lambda d: {"wheel_inertia"})):
+            self.assertEqual(self.hk6(ev, "warn"), set())
+
+    def test_one_variable_is_changed_once_a_round(self):
+        one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+               "reason": "r", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
+        two = dict(one, change_id="chg-0002", changes={"wheel_radius": {"value": 330.0, "unit": "mm"}})
+        self.assertTrue(any("all change wheel_radius" in m for m in self.hk6(modular(proposals=[one, two]))))
+
+    def test_no_proposal_without_modules(self):
+        ev = modular(modules=False)
+        for e in ev:
+            if e["kind"] == "design.created":
+                e["agent"] = "designer"
+        self.assertTrue(any("without modules" in m for m in self.hk6(ev)))
+
+    def test_parts_stay_in_their_envelope(self):
+        def run(box):
+            ev = modular()
+            for e in ev:
+                if e["kind"] == "design.created":
+                    d = e["data"]
+                    d["parts"][0]["module"] = "powertrain"  # the battery: centre (-900, 0, 300), 500 x 400 x 200
+                    next(m for m in d["modules"] if m["module_id"] == "powertrain")["envelope"] = [box]
+            return {f.message for f in self.findings(ev) if f.rule == "module.envelope"}
+        self.assertEqual(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [520.0, 420.0, 220.0]}), set())
+        # the same space turned 90 degrees about z holds it only with x and y swapped
+        self.assertEqual(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0],
+                              "rpy_deg": [0.0, 0.0, 90.0]}), set())
+        self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [480.0, 420.0, 220.0]})), 2)
+        self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0]})), 2)
+
+    def test_a_module_given_no_room_has_no_place_for_its_parts(self):
+        # as the assembly tool (H1-envelope): a module other than the package with no envelope box
+        ev = modular()
+        for e in ev:
+            if e["kind"] == "design.created":
+                e["data"]["parts"][0]["module"] = "powertrain"
+        said = {f.message for f in self.findings(ev) if f.rule == "module.envelope"}
+        self.assertTrue(said)
+        self.assertTrue(all("which has no envelope box" in m for m in said), said)
+        self.assertTrue(any("part battery is in module powertrain" in m for m in said), said)
+
+    def test_a_member_is_its_tube_not_its_line(self):
+        # the N15 plan's last design with node LS2 raised 60 mm: the assembly tool finds four members out of
+        # their module's room (cross_S2, side_foot_LS2 and two rail pieces whose line stays inside but whose
+        # 80 mm tube does not)
+        from qa.check_run import RunChecker
+
+        d = json.loads((Path(__file__).resolve().parent / "fixtures" / "n15-v005-design.json")
+                       .read_text(encoding="utf-8"))
+        next(n for n in d["nodes"] if n["id"] == "LS2")["xyz_mm"][2] += 60.0
+        said = []
+        probe = mock.Mock(warn=lambda rule, w, text: said.append(text), error=lambda *a: said.append(a))
+        RunChecker._check_envelopes(probe, 5, d, "v005/design.json")
+        self.assertEqual(sorted(said), sorted(f"v5 member {m} leaves the envelope of {mod}" for m, mod in (
+            ("cross_S2", "frame"), ("rail_L_LSG_LS2", "frame"), ("rail_L_S2H", "frame"),
+            ("side_foot_LS2", "occupant"))))
+
+
+
+class VersionLoadCases(unittest.TestCase):
+    """Load cases built per version (contract 39b6a8c): load_cases.created and v00N/load_cases.json."""
+
+    setUp, tearDown, findings = CheckRun.setUp, CheckRun.tearDown, CheckRun.findings
+
+    @staticmethod
+    def with_v2_cases(load_cases):
+        ev = modular()
+        v2 = [k for k, e in enumerate(ev) if e["kind"] == "design.created"][-1]
+        ev.insert(v2 + 1, dict(copy.deepcopy(ev[v2]), kind="load_cases.created", agent="system",
+                               data={"design_version": 2, "load_cases": load_cases}))
+        return renumber(ev)
+
+    def test_the_last_version_is_judged_by_its_own_load_cases(self):
+        r1 = copy.deepcopy(sample_events()[0]["data"]["load_cases"])
+        hk4 = [f.message for f in self.findings(self.with_v2_cases(r1)) if f.rule == "HK4_no_stop_before_judged"]
+        self.assertTrue(any("no verdict for R1-step100 in version 2" in m for m in hk4), hk4)
+        # version 2 builds no load case with a criterion: nothing of it is left to judge
+        for lc in r1:
+            lc.pop("criterion", None)
+        found = self.findings(self.with_v2_cases(r1))
+        self.assertEqual([f.message for f in found if "no verdict for" in f.message], [])  # (v2 has no tile yet)
+        self.assertEqual([str(f) for f in found if f.rule.startswith(("files.", "load_cases."))], [])
+
+    def test_the_file_is_the_event(self):
+        ev = self.with_v2_cases(copy.deepcopy(sample_events()[0]["data"]["load_cases"]))
+        run = write_run(self.root / "r", ev)
+        f = layout.version_dir(run, 2) / layout.VERSION_LOAD_CASES_FILE
+        d = json.loads(f.read_text(encoding="utf-8"))
+        d["load_cases"][0]["tolerance_rel"] = 0.5
+        f.write_text(json.dumps(d), encoding="utf-8")
+        self.assertIn("files.event_data", {x.rule for x in cr.check_run(run) if x.level == "error"})
+        f.unlink()
+        self.assertIn("files.missing", {x.rule for x in cr.check_run(run) if x.level == "error"})
 
 
 if __name__ == "__main__":

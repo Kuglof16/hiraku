@@ -27,6 +27,20 @@ class FrameError(ValueError):
     pass
 
 
+def _overlapping(part: Record, others: list[Record]) -> str | None:
+    """The id of the first of `others` whose box overlaps the part's box by more than a touch (K4's
+    TOUCH_MM), else None."""
+    from hiraku.solvers.k4_geometry.model import TOUCH_MM
+    from hiraku.solvers.k4_geometry.obb import from_box, overlap
+
+    a = from_box(part["box"]["center_mm"], part["box"]["size_mm"], part["box"].get("rpy_deg"), part["id"])
+    for o in others:
+        b = from_box(o["box"]["center_mm"], o["box"]["size_mm"], o["box"].get("rpy_deg"), o["id"])
+        if overlap(a, b) > TOUCH_MM:
+            return o["id"]
+    return None
+
+
 class Frame:
     def __init__(self, material: str, merge_mm: float = 1.0):
         self.material = material
@@ -160,7 +174,8 @@ class Frame:
                 out.append(x)
         return out
 
-    def gussets(self, node: str, branch: str, leg: float, thickness: float, density_kg_m3: float) -> list[Record]:
+    def gussets(self, node: str, branch: str, leg: float, thickness: float, density_kg_m3: float,
+                avoid: list[Record] | None = None) -> list[Record]:
         """Four triangular gusset parts at the T joint where member `branch` ends on the side of the
         rect tube that passes through `node` (ahead of and behind the branch, on its upper and lower
         wall): each a right triangle with legs `leg` along the through tube and along the branch,
@@ -168,7 +183,13 @@ class Frame:
         plane of the branch's upper (lower) wall mid-surface. box.center_mm is the triangle's
         centroid, box.size_mm [leg along the through tube, leg along the branch, thickness] (the
         shell mesher's convention), mass = density x leg^2 / 2 x thickness, carried_by [node].
-        The through tube must run along x and the branch along y (a ladder's rail and cross member)."""
+        The through tube must run along x and the branch along y (a ladder's rail and cross member).
+        Each gusset lies on the side wall of the through tube's piece on its own side (front or rear),
+        so a joint between two rail pieces of different widths puts each on its own piece's wall.
+        avoid: parts (contract records with a box) the gussets keep out of; a gusset whose box would
+        overlap one of them is left off, and the joint's other gussets say which side was left off
+        and why in their name (the parts of other systems are placed first, the gussets go where
+        there is room)."""
         m = next((x for x in self.members if x["id"] == branch), None)
         if m is None or node not in (m["node_a"], m["node_b"]):
             raise FrameError(f"member {branch!r} does not end at node {node!r}")
@@ -181,20 +202,33 @@ class Frame:
         hosts = self._along_x_at(node, branch)
         if len(hosts) != 2:
             raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
-        host, br = (self.sections[x["section"]]["dims_mm"] for x in (hosts[0], m))
-        y_wall = p[1] + u_in[1] * (host["b"] - host["t"]) / 2.0
+        br = self.sections[m["section"]]["dims_mm"]
+
+        def piece(sx: float) -> dict:  # the through tube's piece on the front (sx 1) or rear (sx -1) side
+            ahead = [x for x in hosts if sx * (self.nodes[x["node_b"] if x["node_a"] == node else x["node_a"]][0] - p[0]) > 0]
+            return self.sections[(ahead or hosts)[0]["section"]]["dims_mm"]
+
         mass = density_kg_m3 * 1e-9 * leg * leg / 2.0 * thickness
-        out = []
+        out, off = [], []
         for sx, fb in ((1.0, "front"), (-1.0, "rear")):
+            host = piece(sx)
+            y_wall = p[1] + u_in[1] * (host["b"] - host["t"]) / 2.0
             for sz, ul in ((1.0, "upper"), (-1.0, "lower")):
                 ox = p[0] + sx * (br["b"] - br["t"]) / 2.0
                 oz = p[2] + sz * (br["h"] - br["t"]) / 2.0
                 c = [ox + sx * leg / 3.0, y_wall + u_in[1] * leg / 3.0, oz]
-                out.append({"id": f"gusset_{node}_{fb}_{ul}",
-                            "name": f"{node} のつなぎ目のガセット ({'前' if sx > 0 else '後'}・{'上' if sz > 0 else '下'})",
-                            "kind": "gusset",
-                            "box": {"center_mm": [float(v) for v in c], "size_mm": [float(leg), float(leg), float(thickness)]},
-                            "mass_kg": float(mass), "carried_by": [node]})
+                where = f"{'前' if sx > 0 else '後'}・{'上' if sz > 0 else '下'}"
+                g = {"id": f"gusset_{node}_{fb}_{ul}", "name": f"{node} のつなぎ目のガセット ({where})", "kind": "gusset",
+                     "box": {"center_mm": [float(v) for v in c], "size_mm": [float(leg), float(leg), float(thickness)]},
+                     "mass_kg": float(mass), "carried_by": [node]}
+                hit = _overlapping(g, avoid or [])
+                if hit:
+                    off.append(f"{where}は {hit} があるので付けない")
+                else:
+                    out.append(g)
+        if off:
+            for g in out:
+                g["name"] += f" ({'、'.join(off)})"
         return out
 
     def through_part(self, node: str, branch: str, density_kg_m3: float) -> Record:
@@ -221,11 +255,16 @@ class Frame:
         area = 2.0 * br["t"] * (br["b"] + br["h"] - 2.0 * br["t"])
         hole = host["t"] * (br["b"] - br["t"]) * (br["h"] - br["t"])
         mass = density_kg_m3 * 1e-9 * (area * run - hole)
+        # the member it continues (welded) and that member's material: the tube's section is the branch's, so a
+        # rule about walls and section ratios can read it there
         return {"id": f"through_{branch}_{node}",
                 "name": f"{node} で {branch} がレールの中を通る分 (手前の壁の穴の分を引いた正味)",
                 "kind": "frame",
                 "box": {"center_mm": [float(x) for x in p], "size_mm": [float(br["b"]), float(run), float(br["h"])]},
-                "mass_kg": float(mass), "carried_by": [node]}
+                "mass_kg": float(mass), "carried_by": [node],
+                "connects_to": [{"to": node, "via": "weld", "carries": "load"},
+                                {"to": branch, "via": "weld", "carries": "load"}],
+                **({"material": m["material"]} if m.get("material") else {})}
 
     # ---------------------------------------------------------------- out
     def part(self) -> Record:

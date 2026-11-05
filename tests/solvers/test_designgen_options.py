@@ -21,8 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 MOUNTS = {k: 1 for k in GEN.MOUNT_GROUPS}
 # the set the design department's version 2 may use (the report's table): every part held, the pedals on a
-# bracket from the bulkhead, the side frame outboard of point R
-VERSION_2 = {**MOUNTS, "pedal_mount": 2, "side_bars": 1}
+# beam out from the front tower's rear post (pedal_mount 3; on the bulkhead, a 2.3 mm sheet, the brake pedal moved
+# 49.5 mm), the side frame outboard of point R
+VERSION_2 = {**MOUNTS, "pedal_mount": 3, "side_bars": 1}
 
 
 def _touch(design, a: str, b: str) -> float:
@@ -64,9 +65,12 @@ class SpanTest(unittest.TestCase):
 
 class DefaultsTest(unittest.TestCase):
     def test_off_by_default(self):
-        self.assertEqual(GEN.build(), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build(), V1)
         self.assertEqual(GEN.choices_of(V1), {"joints": "butt", "part_mounts": "none", "pedal_mount": "none",
-                                              "side_guard": "none", "rops": "hoop", "fenders": "none"})
+                                              "side_guard": "none", "rops": "hoop", "fenders": "none",
+                                              "side_opening": "none", "grab_bar": "none"})
         for k in ("mount_floor", "pedal_mount", "side_bars", "rollbar_stays", "rollbar_front_posts", "fenders",
                   "rollbar_foot_b"):
             self.assertTrue(GEN.VARIABLES[k].revisable, k)
@@ -100,10 +104,12 @@ class MountsTest(unittest.TestCase):
             self.assertGreater(p["mass_kg"], 0.0)
 
     def test_every_part_but_the_pedals_is_held(self):
+        # every part is held since designgen joins them in shape (kit/joints.py: the pedals on struts or stands);
+        # before, the pedals floated here and 16 parts on version 1
         held, free = attach.free_parts(self.d)
-        self.assertEqual(free, {"pedal_accel", "pedal_brake"})
+        self.assertEqual(free, set())
         _, free_v1 = attach.free_parts(V1)
-        self.assertEqual(len(free_v1), 16)
+        self.assertEqual(len(free_v1), 0)
 
     def test_each_mount_touches_its_part_and_member(self):
         for p in self.mounts:
@@ -212,16 +218,33 @@ class LoadPathTest(unittest.TestCase):
         tool = LoadPath()
         cls.runs = {k: tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {}) for k, lc in cls.cases.items()}
 
-    def test_version_2_passes(self):
+    def test_version_2_judged(self):
+        """R8-free, R7-foot and R8-push pass, with the pedals' stands on the beam from the post (pedal_mount 3)."""
         from tests.solvers.test_builders_load_path import judged, results
 
         for k, lc in self.cases.items():
             rec = self.runs[k]
             self.assertEqual(rec["status"], "ok", rec.get("error"))
-            self.assertTrue(judged(lc, rec), f"{k}: {results(rec).get(lc['criterion']['quantity'])}")
+            got = results(rec).get(lc["criterion"]["quantity"])
+            self.assertTrue(judged(lc, rec), f"{k}: {got}")
             self.assertEqual(results(rec)["free_parts"]["value"], 0.0)
             self.assertNotIn("unsupported_load", results(rec))
         contract.validate("design", self.d)
+
+    def test_bulkhead_stands_move_more_than_q69(self):
+        """With the stands on the bulkhead (pedal_mount 2), a 2.3 mm sheet (ladder_4w.PLATE_T_MM) and not a 20 mm
+        solid box, the brake pedal moves more than Q69; the accelerator's, near the post, passes."""
+        from hiraku.catalog.builders import BUILDERS
+        from hiraku.solvers.shelf import LoadPath
+        from tests.solvers.test_builders_load_path import REQ, SPECS, judged, results
+
+        d = GEN.build({**VERSION_2, "pedal_mount": 2})
+        lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, d) if c["load_case_id"] == "R7-foot-500N")
+        rec = LoadPath().run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        foot = results(rec)
+        self.assertFalse(judged(lc, rec))
+        self.assertEqual(foot["pedal_deflection"]["where"], "pedal_brake")
+        self.assertLessEqual(foot["pedal_deflection.pedal_accel"]["value"], lc["criterion"]["limit"]["value"])
 
 
 if __name__ == "__main__":

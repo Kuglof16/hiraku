@@ -33,7 +33,10 @@ class BoxMeshTest(unittest.TestCase):
         q = quality.check_mesh(m.nodes, solids=m.conn)
         self.assertEqual(q["quality"]["topology"]["unconnected_groups"], 0)
         self.assertEqual(q["quality"]["topology"]["coincident_nodes"], 0)
-        self.assertEqual(q["quality"]["verdict"], "ok")
+        # the floors are sheets 3.2 mm thick in one layer of 50 mm elements: the aspect ratio warns, nothing else
+        metrics = q["quality"]["metrics"]
+        self.assertIn(q["quality"]["verdict"], ("ok", "warn"))
+        self.assertEqual([k for k, v in metrics.items() if v["over_limit"] and k != "aspect_ratio"], [])
         self.assertEqual(set(m.part), set(ids))
         # every node on the common face belongs to elements of both parts
         lo = [np.asarray(boxes[i]["center_mm"]) - np.asarray(boxes[i]["size_mm"]) / 2 for i in ids]

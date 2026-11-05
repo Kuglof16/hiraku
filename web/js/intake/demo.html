@@ -50,7 +50,7 @@ const api = {
   },
   dropFile: async (name, text) => `${text.split(/\r?\n/).filter(Boolean).length} 行を読みました (見本のページでは規則にしません)`,
 };
-const intake = mountIntake(document.getElementById("host"), api, { screen: params.get("screen") || "A1", want: params.get("want") || undefined }); // ?want=... fills the request box
+const intake = mountIntake(document.getElementById("host"), api, { picksFinal: true, screen: params.get("screen") || "A1", want: params.get("want") || undefined }); // ?want=... fills the request box
 
 function sync() {
   step.max = all.length;

@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from hiraku.catalog import CATALOG_DIR, beyond_plans, external_builders, is_beyond, loading_of, read_data
-from hiraku.catalog.build import product_step
+from hiraku.catalog.build import product_step, recipe_for
 from hiraku.tools.context import RunContext
 from hiraku.tools.summary import design_summary
 
@@ -89,11 +89,19 @@ def _reader(name: str) -> Any:
         raise ScriptError(f"inputs_from {name!r} is not in hiraku.catalog.builders: {e}") from None
 
 
+def _unpredictable(ctx: RunContext, lc: Record) -> bool:
+    """True when the load case has a criterion whose quantity no K0 formula of the run's registry predicts."""
+    from hiraku.tools.rules import predicted_quantities
+
+    crit = lc.get("criterion")
+    return bool(crit and ctx.formulas is not None and crit["quantity"] not in predicted_quantities(ctx, lc))
+
+
 def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     """The product's plan plus a step from the builders for each load case it lacks: the product's own
     (PRODUCT_STEPS, e.g. the care bed's step_for), else PLANS_BEYOND for a case past the limit, else
     PLANS; ordered upstream first. A builders' step whose tool is not on the shelf goes to `unshelved`. `missing` lists
-    the load cases nobody gave a step for. A product step whose load case this run did not
+    the load cases nobody gave a step for; `not_judged` those of them no K0 formula predicts (left not judged). A product step whose load case this run did not
     build (another step height, say) is left out: its causes were written for that load case.
     So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
     out = copy.deepcopy(plan if plan is not None else plan_of(ctx))
@@ -103,15 +111,17 @@ def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     out["unshelved"] = [(s["load_case"], s["tool"]) for s in built if s["tool"] not in ctx.tools]
     have = {s["load_case"] for s in out["steps"]}
     recipes, past = external_builders()[2], beyond_plans()
-    out["missing"] = []
+    out["missing"], out["not_judged"] = [], []
     for lc in ctx.load_cases:
         if lc["load_case_id"] in have:
             continue
         # the product's own step first (hiraku.catalog.build.plan_steps keeps the same order)
-        recipe = (product_step(ctx.project["product"], lc) or (is_beyond(lc) and past.get(lc["test_id"]))
-                  or recipes.get(lc["test_id"]))
+        # a load case's own step before its test's (recipe_for: R8-stress apart from R8-free and R8-push)
+        recipe = (product_step(ctx.project["product"], lc) or (is_beyond(lc) and recipe_for(past, lc))
+                  or recipe_for(recipes, lc))
         if recipe is None:
-            out["missing"].append(lc["load_case_id"])
+            # a load case no K0 formula predicts has no step on purpose: it stays not judged (HK4, HK5)
+            out["not_judged" if _unpredictable(ctx, lc) else "missing"].append(lc["load_case_id"])
         elif ctx.tools and recipe["tool"] not in ctx.tools:
             out["unshelved"].append((lc["load_case_id"], recipe["tool"]))
         else:
@@ -346,12 +356,23 @@ def _entry(ctx: RunContext, lc: Record, tool: str, spec: Record, when: str | Non
     return out
 
 
+def expected_entries(step: Record) -> list[Record]:
+    """A step's expected_mismatch as a list (one entry, or several by quantity and side: scripted.expected_for)."""
+    exp = step.get("expected_mismatch")
+    return list(exp) if isinstance(exp, list) else [exp] if exp else []
+
+
+def _with_retry(step: Record) -> Record:
+    """The first expected_mismatch entry of the step that has a retry ({} when none has)."""
+    return next((e for e in expected_entries(step) if e.get("retry")), {})
+
+
 def _specs(step: Record, when: str | None = None) -> list[tuple[Record, str | None]]:
     """A step's predictions, then those of its retries (after the expected mismatch's cause)."""
     out = [(p, when) for p in step.get("predictions") or []]
-    exp = step.get("expected_mismatch") or {}
-    if exp.get("retry"):
-        out += _specs(exp["retry"], f"{exp.get('quantity')} が食い違って原因を書いたあとの予測")
+    for exp in expected_entries(step):
+        if exp.get("retry"):
+            out += _specs(exp["retry"], f"{exp.get('quantity')} が食い違って原因を書いたあとの予測")
     return out
 
 
@@ -359,8 +380,8 @@ def _specs_for_roles(step: Record) -> list[tuple[Record, str | None]]:
     """A step's predictions in the order a role should try them: a scripted scene that predicts with one
     formula on purpose, misses (expected_mismatch) and predicts again (retry) lists the retry's first;
     the first try follows with what the scene found (its cause), so the role sees why it misses."""
-    exp = step.get("expected_mismatch") or {}
-    if not exp.get("retry"):
+    exp = _with_retry(step)
+    if not exp:
         return _specs(step)
     cause = " ".join(str(exp.get("cause") or "").split())
     missed = f"台本の場面でわざと先に使い、{exp.get('quantity')} が食い違った式 (原因: {cause})"

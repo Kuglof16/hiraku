@@ -12,6 +12,7 @@ runs/<run_id>/
     v001/rule_checks/rchk-0001.json   RULE_CHECK (a knowledge rule checked on this version's parts)
     v001/meshes/mesh-0001.json        MESH (shell mesh of this version's frame; fields name it by mesh_id)
     v001/judgements.json              list of JUDGEMENT for this version (rewritten as tiles change)
+    v001/load_cases.json              the load cases built for this version (load_cases.created; from version 2 on)
     report.json                       REPORT (later)
     stop.request                      present only while someone asks the run to stop
     tools/<name>-<n>.py               a tool Claude wrote during the run (attempt n)
@@ -25,6 +26,8 @@ runs/<run_id>/
     plugin.outbox.jsonl               claude_code_plugin runs only: hook notes waiting for the MCP server to emit
     plugin.lock                       claude_code_plugin runs only: a short lock around reading or writing the plugin state and outbox (not a sign that a session holds the run)
     plugin.alive                      claude_code_plugin runs only: touched by the MCP server every poll while a Claude Code session serves the run
+    tool.errors.log                   present only when a tool let an exception out: its traceback, appended per error
+                                      (the run also says it in an agent.said of system with data.tool_error)
 
 IDs are unique within a run (not per version): pred-0001, ana-0001, ...
 Only the run process appends to events.jsonl (seq has no gaps and one writer);
@@ -51,6 +54,7 @@ PROJECT_FILE = "project.json"
 EVENTS_FILE = "events.jsonl"
 DESIGN_FILE = "design.json"
 JUDGEMENTS_FILE = "judgements.json"
+VERSION_LOAD_CASES_FILE = "load_cases.json"  # v00N/: the load cases built for that version (load_cases.created)
 REPORT_FILE = "report.json"
 TOOLS_DIR = "tools"  # tools written during the run and their checks
 STOP_REQUEST_FILE = "stop.request"  # put by the screen to ask a running run to stop (stop_code user_stop)
@@ -63,6 +67,7 @@ PLUGIN_OUTBOX_FILE = "plugin.outbox.jsonl"  # claude_code_plugin runs: hook note
 PLUGIN_LOCK_FILE = "plugin.lock"  # claude_code_plugin runs: held only while the plugin state or the outbox is read or written
 PLUGIN_ALIVE_FILE = "plugin.alive"  # claude_code_plugin runs: the MCP server touches it every poll while it serves the run
 PLUGIN_ALIVE_S = 10.0  # a plugin run is held by a session while plugin.alive is younger than this (seconds)
+TOOL_ERRORS_FILE = "tool.errors.log"  # tracebacks of exceptions a tool let out (only when there was one)
 
 RECORD_DIRS = {
     "prediction": "predictions",

@@ -1,7 +1,7 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
 H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). R7 and R8 (load_path)
-are in load_path.py and joined to BUILDERS and PLANS here.
+are in load_path.py, H6 (spray_reach) in spray.py, joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
 predict). A prediction's inputs_from works out by code the values its from.<name>
@@ -10,6 +10,7 @@ refs need that are not plain reads of the design.
 
 from __future__ import annotations
 
+import copy
 import math
 
 from hiraku.catalog.builders.common import BuildError, Record, design_var, entry, loading, number, q, text, tolerance
@@ -604,26 +605,85 @@ T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output)
 H_TOL = 0.05
 
 
-def h1_interference(spec: Record, req: Record, design: Record) -> Record:
+H1_JOINTS_TITLE = "つながりが形の上で触れているか (つながる点 at_mm が両方の形の上、つながりの無い部品が無い)"
+H1_JOINTS_CRITERION = {"quantity": "joint_gap_count", "op": "<=", "limit": {"value": 0.0, "unit": "1"},
+                       "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 mm: the "
+                                "program management's figure; wires and hoses not counted), says where (at_mm) on both "
+                                "shapes within 2 mm, and no part is joined to nothing"}
+
+
+def h1_interference(spec: Record, req: Record, design: Record) -> list[Record]:
+    """Stage-0 cases, each judged on its own: at rest (the driver's seat also at both ends of its slide), in motion
+    (the wheels' travel and the steering's range), the joints touching, the modules' spaces (a design split into
+    modules) and the steering's free angle (a design with max_steer_angle)."""
     load, keys = loading(req, design)
+    base = {"test_id": "H1", "domain": spec["domain"], "params": {"loading": load}, "requirement_keys": keys,
+            "tolerance_rel": tolerance(spec, H_TOL)}
+    out = [
+        {**base, "load_case_id": "H1-interference",
+         "title": "止まっているときの干渉 (座席を滑りの両端に動かしたときも)",
+         "criterion": {"quantity": "interference_count", "op": "<=", "limit": q(0.0, "1"),
+                       "basis": "H1: no two bodies overlap at rest, the driver's seat at either end of its slide too, "
+                                "beyond what the rule allows (welded joints, bolted mounts up to MOUNT_MM, the rest "
+                                "TOUCH_MM: k4_geometry.model.allowance)"}},
+        {**base, "load_case_id": "H1-motion",
+         "title": "車輪が上下しハンドルを切ったときの干渉",
+         "criterion": {"quantity": "motion_interference_count", "op": "<=", "limit": q(0.0, "1"),
+                       "basis": "H1: through the wheels' travel and the steering's range nothing of a corner meets "
+                                "what it is not mounted to"}},
+    ]
+    # judged again since the generator joins every part in shape (designgen kit/joints.py, kit/arms.py)
+    out.append({**base, "load_case_id": "H1-joints", "title": H1_JOINTS_TITLE,
+                "criterion": copy.deepcopy(H1_JOINTS_CRITERION)})
+    if design.get("modules"):
+        out.append({**base, "load_case_id": "H1-envelope",
+                    "title": "部品と部材がモジュールの空間に収まっているか",
+                    "criterion": {"quantity": "envelope_outside_count", "op": "<=", "limit": q(0.0, "1"),
+                                  "basis": "H1: every part and member inside its module's space (design.modules "
+                                           "envelope, given by the packager)"}})
     steer = design_var(design, "max_steer_angle", "deg")
     if steer:
-        criterion = {"quantity": "free_steer_angle", "op": ">=", "limit": q(steer, "deg"),
-                     "basis": f"H1: the front wheels turn to the design's max_steer_angle ({steer:g} deg) "
-                              "without touching the frame"}
-    else:
-        criterion = {"quantity": "interference_count", "op": "<=", "limit": q(0.0, "1"),
-                     "basis": "H1: no two parts overlap at rest"}
-    return {
-        "load_case_id": "H1-interference",
-        "test_id": "H1",
-        "domain": spec["domain"],
-        "title": "止まっているときと、車輪が上下しハンドルを切ったときの干渉",
-        "params": {"loading": load},
-        "requirement_keys": keys,
-        "criterion": criterion,
-        "tolerance_rel": tolerance(spec, H_TOL),
-    }
+        out.append({**base, "load_case_id": "H1-steer",
+                    "title": "ハンドルを止めまで切れるか (前輪がフレームに当たらない)",
+                    "criterion": {"quantity": "free_steer_angle", "op": ">=", "limit": q(steer, "deg"),
+                                  "basis": f"H1: the front wheels turn to the design's max_steer_angle ({steer:g} deg) "
+                                           "without touching the frame"}})
+    return out
+
+
+def h1_overlap_calc(design: Record, load_case: Record) -> Record:
+    """assembly.overlap_count's inputs: hiraku.solvers.k0_handcalc.assembly_inputs.overlap_inputs."""
+    from hiraku.solvers.k0_handcalc.assembly_inputs import overlap_inputs
+    from hiraku.solvers.shelf.base import on_board
+
+    got = overlap_inputs(on_board(design, load_case))
+    return {"n_rest": q(got["n_rest"], "1"), "n_slide": q(got["n_slide"], "1")}
+
+
+def h1_joint_calc(design: Record, load_case: Record) -> Record:
+    """assembly.joint_count's inputs: hiraku.solvers.k0_handcalc.assembly_inputs.joint_inputs."""
+    from hiraku.solvers.k0_handcalc.assembly_inputs import joint_inputs
+    from hiraku.solvers.shelf.base import on_board
+
+    got = joint_inputs(on_board(design, load_case))
+    return {"n_gap": q(got["n_gap"], "1"), "n_none": q(got["n_none"], "1")}
+
+
+def h1_envelope_calc(design: Record, load_case: Record) -> Record:
+    """assembly.envelope_count's input: hiraku.solvers.k0_handcalc.assembly_inputs.envelope_inputs."""
+    from hiraku.solvers.k0_handcalc.assembly_inputs import envelope_inputs
+    from hiraku.solvers.shelf.base import on_board
+
+    return {"n_out": q(envelope_inputs(on_board(design, load_case))["n_out"], "1")}
+
+
+def h1_motion_calc(design: Record, load_case: Record) -> Record:
+    """assembly.motion_count's inputs: hiraku.solvers.k0_handcalc.assembly_inputs.motion_inputs."""
+    from hiraku.solvers.k0_handcalc.assembly_inputs import motion_inputs
+    from hiraku.solvers.shelf.base import on_board
+
+    got = motion_inputs(on_board(design, load_case))
+    return {"n_wheel": q(got["n_wheel"], "1"), "n_rod": q(got["n_rod"], "1")}
 
 
 def h1_calc(design: Record, load_case: Record) -> Record:
@@ -650,11 +710,52 @@ H1_PLAN = {
          "inputs": {"theta_free": "pred.free_steer_angle_geometric", "theta_stop": "design.var.max_steer_angle"}},
     ],
 }
+H1_OVERLAP_PLAN = {
+    "tool": "assembly",
+    "say": "部品と部材を軸に揃えた箱とみて、止まっているときに重なる組を先に数えます",
+    "predictions": [
+        {"quantity": "interference_count", "formula_id": "assembly.overlap_count", "output": "n",
+         "assumptions": ["回してある部品と斜めの部材は数えない (軸に揃えた箱が実物よりずっと大きくなるため。見落とすことはあっても、余分には数えない)",
+                         "重なってよい深さは、ツールと同じ決まり (溶接の継ぎ目、ボルトの取付は MOUNT_MM まで、ほかは TOUCH_MM)"],
+         "inputs": {"n_rest": "from.n_rest", "n_slide": "from.n_slide"}, "inputs_from": h1_overlap_calc},
+    ],
+}
+H1_JOINT_PLAN = {
+    "tool": "assembly",
+    "say": "部品と相手を軸に揃えた箱とみて、connects_to の相手と 2 mm より離れているつながりと、つながりの無い部品を先に数えます",
+    "predictions": [
+        {"quantity": "joint_gap_count", "formula_id": "assembly.joint_count", "output": "n",
+         "assumptions": ["箱どうしの離れは形どうしの離れより大きくならない (見落とすことはあっても、余分には数えない)",
+                         "電線とホースは間を通るので数えない"],
+         "inputs": {"n_gap": "from.n_gap", "n_none": "from.n_none"}, "inputs_from": h1_joint_calc},
+    ],
+}
+H1_ENVELOPE_PLAN = {
+    "tool": "assembly",
+    "say": "部品と部材を軸に揃えた箱とみて、自分のモジュールの空間の箱に収まらない物を先に数えます",
+    "predictions": [
+        {"quantity": "envelope_outside_count", "formula_id": "assembly.envelope_count", "output": "n",
+         "assumptions": ["回してある部品は回した角を囲む箱、斜めの部材は両端を断面の大きい辺の半分だけ広げた箱"],
+         "inputs": {"n_out": "from.n_out"}, "inputs_from": h1_envelope_calc},
+    ],
+}
+H1_MOTION_PLAN = {
+    "tool": "assembly",
+    "say": "車輪の箱とタイロッドの棒を、ハンドルの範囲で 1 度ずつ回し上下に動かして、当たる組を先に数えます",
+    "predictions": [
+        {"quantity": "motion_interference_count", "formula_id": "assembly.motion_count", "output": "n",
+         "assumptions": ["動くのは車輪とタイロッドだけ (ツールはナックルやブレーキも動かす)",
+                         "車輪は支えの位置を通る縦の軸で回り、上下に行程の半分ずつ動く"],
+         "inputs": {"n_wheel": "from.n_wheel", "n_rod": "from.n_rod"}, "inputs_from": h1_motion_calc},
+    ],
+}
 
 
-def h3_people(spec: Record, req: Record, design: Record) -> Record:
+def h3_people(spec: Record, req: Record, design: Record) -> list[Record]:
+    """Two cases: the large person's knees clear the part ahead (knee_room), and the driver's pedal knee in the
+    comfortable range for both body sizes (knee_angle_room), each seated at their best place in the slide."""
     load, keys = loading(req, design)
-    return {
+    body = {
         "load_case_id": "H3-body-size",
         "test_id": "H3",
         "domain": spec["domain"],
@@ -666,6 +767,13 @@ def h3_people(spec: Record, req: Record, design: Record) -> Record:
                                "clear the part ahead"},
         "tolerance_rel": tolerance(spec, H_TOL),
     }
+    knee = dict(body, load_case_id="H3-knee-angle",
+                title=f"運転者のペダルを踏む膝の角度が、体格の両端で楽な範囲にあるか ({LOADING_JA[load]})",
+                criterion={"quantity": "knee_angle_room", "op": ">=", "limit": q(0.0, "mm"),
+                           "basis": ("H3: the pedal knee of a female 5th and a male 95th percentile, each at their best "
+                                     "place in the seat's slide, within 99-138 deg (Porter and Gyi 1998, read in "
+                                     "Schmidt et al. 2014; the original not checked)")})
+    return [body, knee]
 
 
 def h3_calc(design: Record, load_case: Record) -> Record:
@@ -681,10 +789,27 @@ def h3_calc(design: Record, load_case: Record) -> Record:
     return {"knee_length": got["L"], "buttock_knee": got["L_bk"]}
 
 
+def h3_knee_calc(design: Record, load_case: Record) -> Record:
+    """occupant.knee_angle_room's inputs: hiraku.solvers.k0_handcalc.scene_inputs.knee_angle_inputs."""
+    from hiraku.contract.loading import loading_of
+    from hiraku.solvers.k0_handcalc.scene_inputs import knee_angle_inputs
+    from hiraku.solvers.k0_handcalc.vehicle import DesignError
+
+    try:
+        return knee_angle_inputs(design, loading=loading_of(load_case))["inputs"]
+    except DesignError as e:
+        raise BuildError(str(e)) from None
+
+
 H3_PLAN = {
     "tool": "assembly",
     "say": "座席の背から前の部品までの長さから、膝の長さを引いて、膝の前の余裕を先に出します",
     "predictions": [
+        {"quantity": "knee_angle_room", "formula_id": "occupant.knee_angle_room", "output": "room",
+         "assumptions": ["脚は膝で曲がる 2 本の棒 (横から見て)", "膝の角度は K4 の座らせ方 (スライドの中のいちばん良い位置) から"],
+         "inputs": {k: f"from.{k}" for k in ("l1_big", "l2_big", "theta_big", "l1_small", "l2_small", "theta_small",
+                                              "theta_lo", "theta_hi")},
+         "inputs_from": h3_knee_calc},
         {"quantity": "knee_room", "formula_id": "occupant.knee_room", "output": "room",
          "assumptions": ["背もたれに付けて座る", "膝の長さは AIST の若年男性 95 パーセンタイル (J5)"],
          "inputs": {"L": "from.knee_length", "L_bk": "from.buttock_knee"}, "inputs_from": h3_calc},
@@ -702,34 +827,44 @@ def _assembled(design: Record) -> int:
     return sum(1 for p in design.get("parts", []) if p["kind"] not in NOT_ASSEMBLED)
 
 
-def h5_assembly(spec: Record, req: Record, design: Record) -> Record:
+# The assembly tool's hands' way (two hands and a short tool straight in from outside to the fastening, within
+# REACH_MM) is its own rule with no source, so the steps it finds without that way are shown, not judged: every
+# assembly analysis has steps_without_tool_clearance and steps_out_of_reach among its results, and no load case
+# judges them until the rule is checked against a source (a load case would need a prediction for the tool to run,
+# and there is no K0 formula for them).
+H5_HANDS_NOTE = ("the steps without the hands' way and out of reach (steps_without_tool_clearance, steps_out_of_reach) "
+                 "are shown in the results, not judged: the assembly tool's hands' way is its own rule with no source")
+
+
+def h5_assembly(spec: Record, req: Record, design: Record) -> list[Record]:
+    """H5-order: no part is shut in, judged on blocked_parts (a count of the version itself; a part count taken
+    from the version the load cases were built on stayed at that version's number)."""
     load, keys = loading(req, design)
-    n = _assembled(design)
-    return {
-        "load_case_id": "H5-order",
-        "test_id": "H5",
-        "domain": spec["domain"],
-        "title": "部品を付ける順番があるか (先に付けないと入らない部品)",
-        "params": {"loading": load},
-        "requirement_keys": (["Q82"] if entry(req, "Q82") else []) + keys,
-        "criterion": {"quantity": "assembly_steps", "op": ">=", "limit": q(float(n), "1"),
-                      "basis": f"H5: all {n} parts of the design go in, each along some direction in some order"},
-        "tolerance_rel": tolerance(spec, H_TOL),
-    }
+    return [{"load_case_id": "H5-order", "test_id": "H5", "domain": spec["domain"],
+             "title": "どの部品も、どこかの向きから入れられるか", "params": {"loading": load},
+             "requirement_keys": (["Q82"] if entry(req, "Q82") else []) + keys,
+             "criterion": {"quantity": "blocked_parts", "op": "<=", "limit": q(0.0, "1"),
+                           "basis": "H5: every part of the design goes in, along some direction in some order (none "
+                                    "shut in by what is there before it); " + H5_HANDS_NOTE},
+             "tolerance_rel": tolerance(spec, H_TOL)}]
 
 
 def h5_calc(design: Record, load_case: Record) -> Record:
-    n_all = len(design.get("parts", []))
-    return {"parts": q(float(n_all), "1"), "not_assembled": q(float(n_all - _assembled(design)), "1")}
+    """assembly.blocked_count's inputs: hiraku.solvers.k0_handcalc.assembly_inputs.blocked_inputs."""
+    from hiraku.solvers.k0_handcalc.assembly_inputs import blocked_inputs
+    from hiraku.solvers.shelf.base import on_board
+
+    return {"n_blocked": q(blocked_inputs(on_board(design, load_case))["n_blocked"], "1")}
 
 
 H5_PLAN = {
     "tool": "assembly",
-    "say": "どの部品もどこかの向きから入れられるとみて、組み立ての手順の数を先に数えます",
+    "say": "部品を箱とみて、枠と溶接の物だけを相手に、6 方向のどれからも入らない部品を先に数えます",
     "predictions": [
-        {"quantity": "assembly_steps", "formula_id": "assembly.part_count", "output": "steps",
-         "assumptions": ["部品 1 つに手順 1 つ", "どの部品もどこかの向きから入れられる", "乗員と荷は組み立てない"],
-         "inputs": {"n": "from.parts", "n_out": "from.not_assembled"}, "inputs_from": h5_calc},
+        {"quantity": "blocked_parts", "formula_id": "assembly.blocked_count", "output": "n",
+         "assumptions": ["部品を止めるのは枠 (部材と溶接の物) だけ。先に入れた部品は数えない (ツールは順番も、先に滑らせることも試す)",
+                         "部品は 1 つの軸に沿ってまっすぐ入る。止まっているときに既に重なっている物は H1-interference のもので、止めには数えない"],
+         "inputs": {"n_blocked": "from.n_blocked"}, "inputs_from": h5_calc},
     ],
 }
 
@@ -814,7 +949,8 @@ def r4_inputs(design: Record, load_case: Record) -> Record:
 
 _R4_ASSUME = ["ロールバーは柱 2 本と上の梁の骨組で、足は張り出しとレール (車輪の所まで) に立つ。塑性ヒンジを一つずつ入れて押し、"
               "横と後ろはエネルギーを吸うまで、上は力まで (力の前に崩れれば柱の長さ)",
-              "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)"]
+              "横・後ろ・上の荷重はそれぞれ組み立てたままの枠から (前の荷重の残ったたわみは入れない)",
+              "運転席が前後にスライドする設計 (seat_slide) では、運転者の体の部分の箱は、H3 が大きい人 (AIST の若年男性 95 パーセンタイル) を座らせたスライドの中の位置にある。その位置で数が決まる"]
 R4_PREDICTIONS = [
     {"quantity": f"rops_{d}_deflection", "formula_id": fid, "output": out, "assumptions": list(_R4_ASSUME),
      "inputs": {**{k: f"from.{d}_{k}" for k in R4_PORTAL_INPUTS[d]}, **extra}, "inputs_from": r4_inputs}
@@ -883,9 +1019,15 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
 
 from hiraku.catalog.builders.load_path import BUILDERS as _LOAD_PATH_BUILDERS  # noqa: E402  (R7, R8: load_path.py)
 from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa: E402
+from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E402  (H6: spray.py)
+from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
+from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)
+from hiraku.catalog.builders.entry import PLANS as _ENTRY_PLANS  # noqa: E402
 
 BUILDERS = {
     **_LOAD_PATH_BUILDERS,
+    **_SPRAY_BUILDERS,
+    **_ENTRY_BUILDERS,
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
@@ -897,6 +1039,9 @@ BUILDERS = {
     "H3": h3_people,
     "H5": h5_assembly,
 }
-PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN, "H1": H1_PLAN,
-         "H3": H3_PLAN, "H5": H5_PLAN, **_LOAD_PATH_PLANS}
+# H1 and H5 by load case (a test's own key would serve its other cases too)
+PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
+         "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
+         "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
+         "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS}
 FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
