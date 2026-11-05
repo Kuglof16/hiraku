@@ -233,13 +233,32 @@ def joined(a: Body, b: Body) -> bool:
     return False
 
 
+def reach(bs: dict[str, Body], keys: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    """(centres (n, 3), radii (n,)): a sphere about each body's box centre holding its shape (the box's half diagonal,
+    or its capsule's farther end plus the capsule's radius when that is larger)."""
+    C = np.array([bs[k].obb.center for k in keys], float).reshape(-1, 3)
+    R = np.empty(len(keys))
+    for i, k in enumerate(keys):
+        b = bs[k]
+        r = float(np.linalg.norm(b.obb.half))
+        if b.capsule is not None:
+            r = max(r, max(float(np.linalg.norm(b.capsule.a - C[i])), float(np.linalg.norm(b.capsule.b - C[i])))
+                    + b.capsule.r)
+        R[i] = r
+    return C, R
+
+
 def interferences(design: dict, items: dict[str, Body] | None = None) -> list[tuple[str, str, float]]:
     """Pairs whose shapes overlap by more than they are allowed to: (a, b, overlap mm)."""
     bs = items or bodies(design)
     keys = sorted(bs)
+    C, R = reach(bs, keys)
+    # shapes whose bounding spheres are apart overlap by a negative amount, never more than an allowance (>= TOUCH_MM)
+    near = np.sqrt(((C[:, None, :] - C[None, :, :]) ** 2).sum(axis=2)) <= R[:, None] + R[None, :]
     out = []
     for i, ka in enumerate(keys):
-        for kb in keys[i + 1:]:
+        for j in np.nonzero(near[i, i + 1:])[0] + i + 1:
+            kb = keys[j]
             a, b = bs[ka], bs[kb]
             allowed = allowance(a, b, design)
             if allowed == float("inf"):
