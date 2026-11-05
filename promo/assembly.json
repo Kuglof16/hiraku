@@ -15,7 +15,7 @@
     "N00"
    ],
    "video": {
-    "1080": "${WORK}/clips/n00_everywhere_1080p.mp4",
+    "1080": "${WORK}/clips/n00_aroundname_1080p.mp4",
     "2160": "${WORK}/clips/n00_2160p.mp4"
    },
    "join": {
@@ -146,7 +146,7 @@
    "cuts": [
     "N10"
    ],
-   "video": "${WORK}/clips/n10_1080p.mp4"
+   "video": "${WORK}/clips/n10_60mpa_1080p.mp4"
   },
   {
    "cuts": [
@@ -182,7 +182,7 @@
    "cuts": [
     "N15"
    ],
-   "video": "${WORK}/clips/n15_app_1080p.mp4"
+   "video": "${WORK}/clips/n15_v5run_1080p.mp4"
   },
   {
    "cuts": [
@@ -194,7 +194,7 @@
    "cuts": [
     "N17"
    ],
-   "video": "${WORK}/clips/real/n17_real_1080p.mp4",
+   "video": "${WORK}/clips/real/n17_next_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5

@@ -15,7 +15,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -37,11 +37,15 @@ import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, v
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
 import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
+import { TabContent, mountTabs } from "./tabs.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 // ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
+// (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
+const tabs = mountTabs($("tabs"), { dev: DEV });
+const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
 const STAGE_H = 1080;
@@ -373,15 +377,16 @@ function renderDraft() {
       : "";
     body = `<b>要件がそろいました</b>${scripted}${claude}${starting}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
-  else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、標準の値のまま進めてください</span>`;
+  else if (draft.state) body = `<span>分野が決まりました。${tabWord("A2")}のタブで答えるか、標準の値のまま進めてください</span>`;
   else
     body =
       (draft.demoTitle
         ? `<span>デモ「${esc(draft.demoTitle)}」の依頼の文を入れました。直してもかまいません。送ると分野を選びます</span>`
-        : `<span>依頼のタブで、作りたいものを書いて送ってください</span>`) +
+        : `<span>${tabWord("A1")}のタブで、作りたいものを書いて送ってください</span>`) +
       (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
   bar.innerHTML = body + (draft.errorHtml || (draft.error ? `<span class="err">${esc(draft.error)}</span>` : ""));
   bar.classList.toggle("starting", !!draft.starting);
+  markTabs(player.state);
   intake?.update();
   fillPrefill();
 }
@@ -507,6 +512,15 @@ function drawRulePeek(s, shown) {
   b.setToggles({ ...ui.toggles, names: false, arrows: false, contour: false });
   b.animate(player.playhead, false);
   b.render();
+}
+
+// The tabs with nothing in this run drawn faint (tabs.js TAB_NEEDS): on the events applied so far,
+// or in a new request on the draft's (where ① is the box to write in, so it always has something).
+function markTabs(s) {
+  if (draft) {
+    const evs = draftEvents();
+    tabs.mark(new TabContent().has(s, evs, evs.length, ["A1"]));
+  } else tabs.mark(tabContent.has(s, player.events, player.applied));
 }
 
 // A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
@@ -1354,6 +1368,7 @@ function draw() {
     $("view-asm").hidden = tab !== "A7";
     $("main").classList.toggle("wide", tab === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
+    markTabs(s);
     if (tab === "grid") renderGrid(s);
     if (intakeTab) renderIntake(tab);
     if (tab === "A4") renderShelf();
@@ -1791,7 +1806,7 @@ async function renderLaunch(message = "") {
     ? ""
     : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは決まった手順の再現と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
   // a new request first: the way in for someone who brings their own product
-  const fresh = `<p class="fresh-top"><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+  const fresh = `<p class="fresh-top"><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">${TAB_JA.A1.name}を書く → 分野 → ${TAB_JA.A2.name}に答える → 始める</span></p>`;
   box.innerHTML =
     fresh +
     demoSection(info, busy) +

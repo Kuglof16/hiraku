@@ -185,7 +185,8 @@
   // Claude Code's `claude -p` with no tools (--tools ""), asked three times
   // per question on 2026-11-03. Step force: about 1,090 N all three times.
   // Tilt angle: about 39, 38 and 39 deg. Frame stress: only one of the three
-  // runs gave a figure (about 61 MPa); the other two gave none.
+  // runs gave a figure (about 60 MPa in its first line; its last step gives
+  // an equivalent stress of about 61 MPa); the other two gave none.
   // HIRAKU's values: the video run 20261103-041110-offroad-4w-scripted,
   // version 1 (hand calculation; analysis by team K1 or K2), as listed in the
   // same record. Stress has two hand values (simple beam 40.0 MPa, joint
@@ -204,7 +205,7 @@
         "hand": [{ "v": 39.85, "dp": 2 }],
         "cae": { "v": 38.27, "dp": 2, "by": "K2" }, "tol_pct": 10 },
       { "key": "stress", "q": "段差 100 mm", "sub": "フレームの最大応力", "unit": "MPa",
-        "claude": [61],
+        "claude": [60],
         "hand": [{ "v": 40.0, "dp": 1, "note": "単純はり" }, { "v": 77.09, "dp": 2, "note": "つなぎ目、安全側" }],
         "cae": { "v": 61.15, "dp": 2, "by": "K1" }, "tol_pct": 15 }
     ]
