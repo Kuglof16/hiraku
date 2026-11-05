@@ -286,7 +286,10 @@ const STYLE = `
 .roundcard .rc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .roundcard .rc-list li { display: grid; grid-template-columns: 16px 1fr; column-gap: 4px; }
 .roundcard .rc-list .mdot { grid-row: span 2; margin-top: 4px; }
-.roundcard .pr { color: var(--muted, #6b665c); font-size: 13px; }
+.roundcard .pr { color: var(--muted, #6b665c); font-size: 13px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* the present mode: the 3D first; the card narrower, the reasons left to the workbench */
+body.present .roundcard { max-width: 400px; }
+body.present .roundcard .pr { display: none; }
 .roundcard .rc-foot { margin-top: 4px; color: var(--muted, #6b665c); font-size: 13px; }
 .asm-3d .modtoggles { top: 60px; }
 .asm-3d .modlegend { bottom: 80px; }
