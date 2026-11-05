@@ -315,7 +315,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
             v, ee = res["excluded_max"]
             effects.append({"name": (f"largest element stress inside the wheel mounts (left out of max_stress; in the "
                                      f"stress fields, whose largest it is when above max_stress): element {ee} of "
-                                     f"{ms.element_member[ee]}"), "value": v, "unit": "MPa"})
+                                     f"{ms.element_member[ee]} (so until the bracket plates are meshed into the shell "
+                                     f"and judged by R9, which shows only the hand calculation of the pins, plates and "
+                                     f"welds now)"), "value": v, "unit": "MPa"})
     effects.append(member_effect("max_stress", member_peak))
     effects += [
         {"name": src},

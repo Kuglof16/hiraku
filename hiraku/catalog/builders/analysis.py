@@ -1023,11 +1023,15 @@ from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E
 from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)
 from hiraku.catalog.builders.entry import PLANS as _ENTRY_PLANS  # noqa: E402
+from hiraku.catalog.builders.mounts_r9 import BUILDERS as _R9_BUILDERS  # noqa: E402  (R9: mounts_r9.py)
+from hiraku.catalog.builders.mounts_r9 import FEEDS as _R9_FEEDS  # noqa: E402
+from hiraku.catalog.builders.mounts_r9 import PLANS as _R9_PLANS  # noqa: E402
 
 BUILDERS = {
     **_LOAD_PATH_BUILDERS,
     **_SPRAY_BUILDERS,
     **_ENTRY_BUILDERS,
+    **_R9_BUILDERS,
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
@@ -1043,5 +1047,6 @@ BUILDERS = {
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
          "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
          "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
-         "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS}
-FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
+         "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS,
+         **_R9_PLANS}
+FEEDS: dict[str, list[str]] = dict(_R9_FEEDS)  # R9 takes the K2 load cases' mount series (mounts_r9.py)
