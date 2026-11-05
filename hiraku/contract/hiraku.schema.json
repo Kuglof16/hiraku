@@ -1357,6 +1357,16 @@
           "type": "string",
           "description": "Where the expected value comes from (closed form, textbook, ...)."
         },
+        "case_ja": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The case in plain Japanese for the screen, built by the same code as case (its numbers from the same values)."
+        },
+        "source_ja": {
+          "type": "string",
+          "minLength": 1,
+          "description": "source in plain Japanese for the screen, built by the same code as source."
+        },
         "code_hash": {
           "type": "string",
           "description": "Hash of the hiraku package's source the check ran on (every .py file). A check may be reused by a later run only while this hash is unchanged."
