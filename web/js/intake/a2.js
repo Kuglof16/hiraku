@@ -86,8 +86,37 @@ function requirementRow(r) {
     h("td", { class: "trust" }, h("span", { class: `in-dot t${r.trust}`, title: TRUST_JA[r.trust] }, r.trust)));
 }
 
+/**
+ * The questions that need an answer (and the rule hits), as one panel for the top of A1: the person answers where they
+ * are, without moving to the hearing tab. The answers are the same ones A2 sends (ui.answers).
+ */
+export function askingPanel(m, api, ui) {
+  const rows = hearingRows(m).filter((r) => r.state === "asking");
+  const rules = ruleRows(m).filter((r) => r.state === "asking");
+  if (!rows.length && !rules.length) return null;
+  const must = rows.filter((r) => r.ask === "must");
+  const rest = rows.length - must.length;
+  const canSend = !!api.answerHearing && !ui.sending;
+  const need = must.length + rules.length;
+  const actions = h("div", { class: "in-actions" },
+    h("button", { class: "in-btn", type: "button", disabled: !canSend, onclick: () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true }) }, "標準の値のまま進める"),
+    h("button", { class: "in-btn primary", type: "button", disabled: !canSend,
+      onclick: () => submit(api, ui, { answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true }) },
+    ui.sending ? "送っています…" : "答えて進める"));
+  return h("section", { class: "in-ask-top" },
+    h("div", { class: "in-ask-head" },  // the buttons sit beside the title, so they are in sight however many questions there are
+      h("h2", {}, "HIRAKU からの質問", h("small", {}, need ? `答えが要るもの ${need} 件` : `答えなくても進めます (${rows.length} 件)`)),
+      actions),
+    ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした。${ui.error}`) : null,
+    need ? h("div", { class: "in-ask-list" }, [...must.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui))]) : null,
+    rest && need ? h("p", { class: "in-foot" }, `答えなくても進める質問が、ほかに ${rest} 件あります (答えなければ標準の値を使います)。`,
+      ui.show ? h("button", { class: "in-btn small", type: "button", onclick: () => ui.show("A2") }, "ほかの質問を見る") : null) : null,
+    !need && ui.show ? h("p", { class: "in-foot" }, "答えなければ標準の値を使います。",
+      h("button", { class: "in-btn small", type: "button", onclick: () => ui.show("A2") }, "質問を見る")) : null);
+}
+
 /** Send the answers; a refusal (the host's promise rejects with the reason) is shown under the buttons. */
-async function submit(api, ui, body) {
+export async function submit(api, ui, body) {
   ui.error = "";
   ui.sending = true;
   ui.rerender();

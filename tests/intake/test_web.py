@@ -178,7 +178,7 @@ console.log(JSON.stringify(out));
         by = dict(got)
         self.assertIn("mountIntake", by["index.js"])
         self.assertEqual(by["a1.js"], ["renderA1"])
-        self.assertEqual(by["a2.js"], ["renderA2"])
+        self.assertEqual(by["a2.js"], ["askingPanel", "renderA2", "submit"])
         self.assertEqual(by["a5.js"], ["renderA5"])
 
 
@@ -500,6 +500,38 @@ await wait();
 console.log(JSON.stringify(sent.map((b) => b.answers)));
 """.replace("choiceq('Q34', 'いない');", "el.all('article').find((a) => a.dataset.key === 'Q34').all('button').find((b) => b.text() === 'いない').listeners.click[0]();"))
         self.assertEqual(got, [{"Q34": {"value": "none"}}, {}])  # the second hearing does not carry the first one's answer
+
+    def test_the_questions_that_need_an_answer_are_on_top_of_a1_and_can_be_answered_there(self):
+        got = node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const e = (seq, t, kind, data) => ({{ seq, t, ts: 'x', run_id: 'r', kind, data }});
+const events = [
+  e(1, 0.1, 'user.said', {{ text: 'テーブル' }}),
+  e(2, 0.2, 'domains.picked', {{ want: 'テーブル', flags: {{}}, picks: [], off: [], assembly_test_ids: [] }}),
+  e(3, 0.3, 'hearing.asked', {{ questions: [
+    {{ req_key: 'Q40', name: '積載', text: '載せる荷の重さの上限は。', ask: 'must' }},
+    {{ req_key: 'Q34', name: '弱い人', text: 'いますか', ask: 'confirm', choices: [{{ value: 'none', label: 'いない' }}] }}] }})];
+const sent = [];
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => sent.push(b) }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A1' }});
+const pane = el.all('div').find((d) => d.dataset.screen === 'A1');
+const first = pane.children[0];
+const top = {{ isPanel: first.className === 'in-ask-top', must: first.text().includes('載せる荷の重さの上限は'), notMust: !first.text().includes('いますか'),
+  count: first.text().includes('答えが要るもの 1 件'), rest: first.text().includes('答えなくても進める質問が、ほかに 1 件') }};
+const input = first.all('input').find((i) => i.className === 'in-other');
+input.value = '150 kg'; input.listeners.input[0]({{ target: input }});
+first.all('button').find((b) => b.text() === '答えて進める').listeners.click[0]();
+await new Promise((r) => setTimeout(r, 20));
+await intake.useDefaults();
+console.log(JSON.stringify({{ top, sent: sent.map((b) => b.answers), defaults: sent[1], nothing: pane.text().includes('言葉から読み取れたことがありません'),
+  note: pane.text().includes('「テーブル」からは読み取れなかった'), noDash: !pane.text().includes('—') }}));
+""")
+        self.assertTrue(all(got["top"].values()), got["top"])
+        self.assertEqual(got["sent"][0], {"Q40": {"value": "150 kg"}})
+        self.assertEqual(got["defaults"], {"answers": {}, "note": "", "useDefaults": True})
+        self.assertTrue(got["nothing"] and got["note"])  # nothing was read from the words: it says so and why
+        self.assertTrue(got["noDash"])  # limits that are not decided are not shown as "—"
 
     def test_a_replay_that_cannot_take_files_says_so(self):
         got = self.a5("""
