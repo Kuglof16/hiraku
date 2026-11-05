@@ -59,7 +59,7 @@ function checkState(t) {
 function marks(t) {
   return [
     isClaude(t) ? h("span", { class: "sh-mark claude", title: "実行の中で Claude が作ったツール" }, "Claude が作った") : null,
-    isUnusable(t) ? h("span", { class: "sh-mark off", title: "照合が通っていないので使えない (HK2)" }, "使えない") : null,
+    isUnusable(t) ? h("span", { class: "sh-mark off", title: "確かめが OK でないので使えない" }, "使えない") : null,
   ];
 }
 
@@ -143,7 +143,7 @@ export function mountShelf(el, api) {
       h("button", { class: "sh-head", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); render(); } },
         h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), h("b", {}, b.label),
         h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`),
-        h("span", { class: "sh-nok", title: "照合が全部通ったツールの数" }, `照合が通った ${ok}`)),
+        h("span", { class: "sh-nok", title: "確かめが全部 OK のツールの数" }, `OK ${ok}`)),
       closed ? null : h("ul", {}, b.tools.map(row)));
   }
 
@@ -220,7 +220,7 @@ export function mountShelf(el, api) {
     fill(modeSeg, MODES.map(([k, label]) => h("button", { type: "button", class: ui.mode === k ? "on" : "", dataset: { mode: k }, onclick: () => { ui.mode = k; render(); } }, label)));
     fill(filterSeg, FILTERS.map(([k, label]) => h("button", { type: "button", class: ui.filter === k ? "on" : "", dataset: { filter: k }, onclick: () => { ui.filter = k; render(); } }, label)));
     const ok = tools.filter(allPassed).length;
-    sum.textContent = `${tools.length} ツール・照合が通った ${ok}`;
+    sum.textContent = `${tools.length} ツール・OK ${ok}`;
     note.hidden = shelf.ready && !shelf.error && !shelf.failed;
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
     note.textContent = shelf.error ? `棚を読めませんでした: ${shelf.error}`

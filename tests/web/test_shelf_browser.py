@@ -149,12 +149,12 @@ class ShelfBrowserTest(unittest.TestCase):
         heads = {b["key"]: b["head"] for b in tree}
         self.assertIn("操安", heads["handling"])
         self.assertIn("1 ツール", heads["handling"])
-        self.assertIn("照合が通った 0", heads["handling"])
+        self.assertIn("OK 0", heads["handling"])
         self.assertIn("衝突", heads["crash"])
         self.assertIn("2 ツール", heads["crash"])
-        self.assertIn("照合が通った 1", heads["crash"])
+        self.assertIn("OK 1", heads["crash"])
         self.assertEqual({b["key"]: b["tools"] for b in tree}["crash"], ["rollbar", "roof_crush"])
-        self.assertEqual(page.text_content("#view-shelf .sh-sum"), "5 ツール・照合が通った 3")
+        self.assertEqual(page.text_content("#view-shelf .sh-sum"), "5 ツール・OK 3")
 
         # one row: name, tests, the formula's title with its id, the base, the checks; marks
         row = page.evaluate("""() => { const r = (n) => document.querySelector(`#view-shelf .sh-tool[data-tool=${n}]`);
@@ -192,7 +192,7 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual([b["key"] for b in tree], ["K1", "K2"])
         self.assertIn("3D の梁", tree[0]["head"])
         self.assertIn("4 ツール", tree[0]["head"])
-        self.assertIn("照合が通った 3", tree[0]["head"])
+        self.assertIn("OK 3", tree[0]["head"])
         self.assertEqual(tree[1]["tools"], ["tilt"])
 
         # a branch closes and opens
