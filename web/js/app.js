@@ -32,6 +32,7 @@ import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
+import { reportNextHtml } from "./report_next.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
@@ -1138,6 +1139,15 @@ function renderGrid(s) {
     const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
     banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
   }
+  // the newest report's next changes (none written yet, or no next: no block)
+  const nx = $("report-next");
+  const html = reportNextHtml(s.report);
+  if (nx.dataset.html !== html) {
+    nx.dataset.html = html;
+    nx.innerHTML = html;
+    keepOpen(nx);
+  }
+  nx.hidden = !html;
 }
 
 function renderStatus(s) {
