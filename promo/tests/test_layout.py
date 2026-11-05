@@ -1007,7 +1007,11 @@ class N08(unittest.TestCase):
         self.assertIn("お見積もりはお問い合わせください", self.html)
         self.assertIn("ノード数の上限", self.html)
         self.assertIn("ライセンスの有効期限", self.html)
-        self.assertIsNone(re.search(r"[¥€￥]|円|ドル", self.html))
+        # the application shows no prices; the one price the voice gives is in the source line, with its source
+        src = re.search(r'<p class="src" data-box="n08.src"[^>]*>(.*?)</p>', self.html).group(1)
+        self.assertIn("SOLIDWORKS Simulation", src)
+        self.assertIn("2024 年 2 月現在", src)
+        self.assertIsNone(re.search(r"[¥€￥]|円|ドル", self.html.replace(src, "")))
         # the warnings carry words only, no counts
         for m1, m2 in re.findall(r'msg\((?:WARN|ERR), "([^"]+)", "([^"]+)"\)', self.html):
             self.assertIsNone(re.search(r"[0-9０-９]", m1 + m2), m1)
