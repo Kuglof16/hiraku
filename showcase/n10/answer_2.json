@@ -1,0 +1,27 @@
+{
+ "result": "# 約 1,090 N(前輪 1 輪あたり)\n\n## 根拠\n\n**1. 段の角での前輪の力のつり合い**\n\n前輪が地面から離れる瞬間、前輪に地面からの力はなく、段の角からの反力だけがかかります。駆動していない前輪には軸まわりのトルクがないので、この反力は角から車軸の中心へ向かいます。\n\n- 車軸から角までの高さの差: 300 − 100 = 200 mm\n- 車軸から角までの水平距離: √(300² − 200²) = 223.6 mm\n\nしたがって、1 輪あたりの垂直反力 V と水平反力 F の関係は次のとおりです。\n\n- V = F × 200 / 223.6 = 0.894 F\n\n**2. 車両全体のモーメントのつり合い(後輪の接地点まわり)**\n\n- 重量: W = 591.5 × 9.81 = 5,803 N\n- 重心は後軸から 1700 − 1014 = 686 mm 前\n- 後輪の駆動力は接地点で働くので、この点まわりのモーメントはゼロです。\n- 前輪の反力(2 輪分)は車軸の中心 (1700, 300) を通ります。\n\nこれより次の式が成り立ちます。\n\n- 2V × 1700 + 2F × 300 = W × 686\n- (0.894 × 3400 + 600) F = 3,980,600 N·mm\n- **F ≈ 1,093 N**\n\n## 補足\n\n- 静止時の前輪荷重 1,171 N/輪 をそのまま使って F = 1,171 × 223.6/200 と計算すると、約 1,309 N になります。ただしこの計算は、押す力が前軸の荷重を減らす効果を無視しています。押す力は前軸の高さに、後輪の駆動力は地面にかかるので、その差のモーメントで前軸の荷重は約 978 N/輪 まで下がります。\n- ゆっくり乗り上げる(準静的)ので、重心の高さ 593.5 mm はこの結果に影響しません。\n- 段を越えるのに要る後輪の駆動力は、合計で約 2,190 N です。",
+ "total_cost_usd": 0.046163800000000005,
+ "modelUsage": {
+  "claude-opus-5-5": {
+   "inputTokens": 2,
+   "outputTokens": 2026,
+   "cacheReadInputTokens": 2699,
+   "cacheCreationInputTokens": 637,
+   "webSearchRequests": 0,
+   "costUSD": 0.046163800000000005,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 128000,
+   "thinkingTokens": 1296,
+   "cacheCreationEphemeral5mInputTokens": 0,
+   "cacheCreationEphemeral1hInputTokens": 637,
+   "canonicalModel": "claude-opus-5-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "num_turns": 1,
+ "permission_denials": [],
+ "duration_ms": 24185,
+ "is_error": false,
+ "stop_reason": "end_turn"
+}
