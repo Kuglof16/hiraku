@@ -6,7 +6,7 @@ The screen (hiraku.webserve) reads a saved run's events.jsonl, project.json, jud
 report.json and tools/ only; the record folders v00N/ are not copied (every record is also in
 its event). Each analysis' time series (data.series) is thinned to at most --points samples per
 channel, keeping the first, the last and each channel's smallest and largest value, so a curve
-keeps its ends and its peaks; nothing else in an event changes (results, predictions,
+keeps its ends and its peaks; events are written without the spaces after ',' and ':'; nothing else in an event changes (results, predictions,
 comparisons and verdicts stay exactly as recorded). --check only prints the sizes.
 """
 
@@ -44,7 +44,8 @@ def thin(series: list[dict], points: int) -> list[dict]:
 
 
 def trimmed_events(path: Path, points: int) -> tuple[bytes, int]:
-    """The events file with each analysis' series thinned, as bytes, and the number of events."""
+    """The events file with each analysis' series thinned, as bytes, and the number of events. Every event is
+    written without the spaces after ',' and ':' (the same JSON values; a run with meshes is about a tenth smaller)."""
     lines, n = [], 0
     for raw in path.read_text(encoding="utf-8").splitlines():
         if not raw.strip():
@@ -54,8 +55,7 @@ def trimmed_events(path: Path, points: int) -> tuple[bytes, int]:
         d = e.get("data")
         if e.get("kind") == "analysis.finished" and isinstance(d, dict) and d.get("series"):
             e["data"] = {**d, "series": thin(d["series"], points)}
-            raw = json.dumps(e, ensure_ascii=False)
-        lines.append(raw)
+        lines.append(json.dumps(e, ensure_ascii=False, separators=(",", ":")))
     return ("\n".join(lines) + "\n").encode("utf-8"), n
 
 
