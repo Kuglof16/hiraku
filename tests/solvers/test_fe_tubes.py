@@ -424,6 +424,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 LEVEL_CHILD = "HIRAKU_TUBE_LEVEL_CHILD"  # set in a level's process: it never starts more of them
 
 
+class HotSpotFacetsTest(unittest.TestCase):
+    """frame_shells' hot_spot_facets: by default the mesh is the one it always was; fewer facets make a smaller
+    model that still has its weld strips (the hot spots are read); a count not a multiple of 4 is refused."""
+
+    def test_default_quick_and_refused(self):
+        # the round T of round_t_hot_spots at 90 deg (42.7 x 2.3 through tube, 34 x 2.3 branch)
+        d = design({"A": (-300, 0, 0), "O": (0, 0, 0), "B": (300, 0, 0), "C": (0, 250, 0)},
+                   [("h1", "A", "O", "h"), ("h2", "O", "B", "h"), ("br", "O", "C", "b")],
+                   {"h": round_sec(42.7, 2.3), "b": round_sec(34.0, 2.3)})
+        base = tubes.frame_shells(d, 10.0)
+        same = tubes.frame_shells(d, 10.0, hot_spot_facets=tubes.HOT_SPOT_MIN_FACETS)
+        np.testing.assert_array_equal(base.model.nodes, same.model.nodes)
+        quick = tubes.frame_shells(d, 10.0, hot_spot_facets=8)
+        self.assertTrue(quick.weld_strips)
+        self.assertLess(len(quick.model.nodes), len(base.model.nodes) / 2)
+        for bad in (6, 4, 10):
+            with self.assertRaises(ValueError):
+                tubes.frame_shells(d, 10.0, hot_spot_facets=bad)
+
+
 class ConvergenceLevelsGuardTest(unittest.TestCase):
     """The parallel levels cannot nest: inside a level's process, starting levels is refused at once."""
 
