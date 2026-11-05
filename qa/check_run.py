@@ -1255,9 +1255,38 @@ class RunChecker:
                     worst = max(vals) if op in ("<=", "<") else min(vals)
                     if not OPS[op](worst, limit["value"]):
                         why.append(f"{a.get('analysis_id')} {q} {worst:.4g} {limit.get('unit')} beyond {op} {limit['value']}")
+            # (d) (contract 460043d): an earlier version's analysis beyond the criterion asks for an analysis of
+            # the same or a heavier stage in this version giving the judged quantity; a lighter tool's pass
+            # does not clear it
+            beyond = [(self._stage(a.get("tool")), aid) for aid, (j, a) in self.recs["analysis"].items()
+                      if j < i and a.get("load_case_id") == lc_id and isinstance(a.get("design_version"), int)
+                      and isinstance(v, int) and a["design_version"] < v and self._beyond(a, crit)]
+            if beyond:
+                need, first = max(beyond)
+                gives = [aid for aid, (j, a) in self.recs["analysis"].items()
+                         if j < i and a.get("load_case_id") == lc_id and a.get("design_version") == v
+                         and a.get("status") == "ok" and self._stage(a.get("tool")) >= need
+                         and self._judged_values(a, crit)]
+                if not gives:
+                    why.append(f"{first} (stage {need}) was beyond the criterion in an earlier version and no "
+                               f"analysis of stage {need} or more gives {crit.get('quantity')} in v{v} (contract (d))")
             if why:
                 out[lc_id] = why
         return out
+
+    def _judged_values(self, a: dict, crit: dict) -> list[float]:
+        """The analysis's values of the criterion's judged quantity (JUDGED_AS for its tool), in its unit."""
+        q = JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
+        unit = (crit.get("limit") or {}).get("unit")
+        return [r["value"] for r in a.get("results", [])
+                if r.get("quantity") == q and r.get("unit") == unit and isinstance(r.get("value"), (int, float))]
+
+    def _beyond(self, a: dict, crit: dict) -> bool:
+        """An ok analysis whose worst judged value fails the criterion."""
+        vals, op, lim = self._judged_values(a, crit), crit.get("op"), (crit.get("limit") or {}).get("value")
+        if a.get("status") != "ok" or not vals or op not in OPS or not isinstance(lim, (int, float)):
+            return False
+        return not OPS[op](max(vals) if op in ("<=", "<") else min(vals), lim)
 
     def check_judgements(self) -> None:
         """A tile is red when a listed verdict fails (even with load cases left without one), else
@@ -1600,6 +1629,26 @@ class RunChecker:
                 last[rc["rule_id"]] = rc
         return {rid for rid, rc in last.items() if rc.get("hits")}
 
+    def _rule_answered_modules(self, v: int, d: dict, i: int) -> set[str]:
+        """The modules whose parts a person said to fix for a rule hit (docs/contract.md, 規則の当たりを人に
+        聞く): a hearing.asked rule_question and its hearing.answered rule_answer revise_design, both after
+        version v was made and before event i; the modules of the question's parts in v."""
+        made = self.designs[v][0]
+        asked: dict[str, list] = {}
+        out: set[str] = set()
+        mod_of = {p.get("id"): p.get("module") for p in d.get("parts") or []}
+        for j in range(made + 1, min(i, len(self.events))):
+            e = self.events[j]
+            data = e.get("data") or {}
+            if e.get("kind") == "hearing.asked":
+                for q in data.get("rule_questions") or []:
+                    asked[q.get("rule_id")] = q.get("parts") or []
+            elif e.get("kind") == "hearing.answered":
+                for a in data.get("rule_answers") or []:
+                    if a.get("choice") == "revise_design":
+                        out |= {mod_of.get(p) for p in asked.get(a.get("rule_id"), [])} - {None}
+        return out
+
     def check_modules(self) -> None:
         """HK6_module_scope (contract d9631a5): the module designers propose, the packager builds."""
         rule = "HK6_module_scope"
@@ -1635,12 +1684,15 @@ class RunChecker:
                     self.error(rule, w, f"{cid} {what} {', '.join(out)}, not among {m}'s {allowed} in v{v}")
             reds = self._red_cases(v, i)
             named = {x for lc in reds for x in (self.lc(lc, v) or {}).get("modules") or []}
+            ruled = m in self._rule_answered_modules(v, d, i)  # a person said to fix its part for a rule hit
             for lc in p.get("load_case_ids") or []:
                 if lc not in reds:
                     self.error(rule, w, f"{cid} answers {lc}, which is not red in v{v}")
                 elif m not in ((self.lc(lc, v) or {}).get("modules") or []):
                     self.error(rule, w, f"{cid} from {m} answers {lc}, whose modules do not name {m}")
-            if not reds and not self._system_misses(v, i):
+            if ruled:
+                pass
+            elif not reds and not self._system_misses(v, i):
                 self.error(rule, w, f"{cid} proposed while nothing in v{v} is red")
             elif not reds:
                 pass  # only a system rule is red (assembly tile); it names no module
