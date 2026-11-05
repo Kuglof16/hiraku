@@ -190,6 +190,32 @@ export function ruleState(m, rule) {
   return { checked: true, targets: c.targets.length, hits: c.hits, notEvaluable: c.not_evaluable || [], pass: c.pass, designVersion: c.design_version };
 }
 
+const OP_JA = { "<=": "以下", ">=": "以上", "<": "より小さい", ">": "より大きい" };
+
+/** The one limit a simple check states ("bend_radius_mm >= 1" -> {name, op, limit}); null for any other expression. */
+export function simpleLimit(check) {
+  const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(<=|>=|<|>)\s*(-?\d+(?:\.\d+)?)\s*$/.exec(check || "");
+  return m ? { name: m[1], op: m[2], limit: Number(m[3]) } : null;
+}
+
+/**
+ * What a check measured, part by part (the rule_check's `checked`): [{part_id, hit, values: [{name, value, unchecked}],
+ * need}]. need: the limit and what the part has ("今 1.5 → 要る 2 以上") when the check is one simple comparison.
+ */
+export function checkedRows(m, rule) {
+  const c = m.checks.get(rule.rule_id);
+  if (!c || !c.checked) return [];
+  const hitIds = new Set((c.hits || []).map((h) => h.part_id));
+  const lim = simpleLimit(rule.check);
+  return c.checked.map((row) => {
+    const values = Object.entries(row.values).map(([name, value]) => ({ name, value, unchecked: (row.unchecked || []).includes(name) }));
+    const own = lim && row.values[lim.name] !== undefined ? row.values[lim.name] : null;
+    return { part_id: row.part_id, hit: hitIds.has(row.part_id), values,
+      need: lim && own !== null ? { name: lim.name, now: own, op: lim.op, opJa: OP_JA[lim.op], limit: lim.limit } : null,
+      unchecked: (row.unchecked || []).length > 0 };
+  });
+}
+
 /**
  * The tree of A5. mode "category": category -> rules. mode "source": origin -> document -> category -> rules.
  * filter: "all" | "builtin" | "dropped" | "hit"; query: text to find in the rule or its formula;

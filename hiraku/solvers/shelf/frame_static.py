@@ -43,6 +43,23 @@ FRAMES_ASSUMPTION = (
     "返すトルク (body_torque) は、その支持の節にかけた。判定はこれまでどおり上流の vectors の瞬間の値で、時刻ごとの最大は参考")
 
 
+NO_LOST_LOAD = ("どの部品の重さと慣性も、carried_by の節 (無ければいちばん近い支え) に載せた: 支えのない荷重は 0 "
+                "(部品の形が枠に触れているかは見ていない。それは手計算の道の確かめ load_path.free_parts が見る)")
+
+
+PATH_FORMULA = "load_path.free_parts"
+PATH_PREDICTS = Predicts("unsupported_load", PATH_FORMULA, "n",
+                         "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the parts the load case "
+                         "loads, followed by their contacts to the members; the tool itself loses no load (0)")
+
+
+def lost_load_outputs() -> tuple[Record, Record]:
+    """The contract's unsupported_load of a frame tool, always 0, and the effect saying why (docs/contract.md
+    手計算の役目): every part's load goes on its carried_by nodes or the nearest support (k0_handcalc.vehicle
+    .mass_items; a carried_by node no member uses is refused before the solve)."""
+    return result("unsupported_load", 0.0, "1"), {"name": NO_LOST_LOAD, "value": 0.0, "unit": "1"}
+
+
 def frame_outputs(res: dict) -> Record:
     """results / fields / vectors / effects shared by the K1-based tools."""
     fm = res["model"]
@@ -77,7 +94,9 @@ def frame_outputs(res: dict) -> Record:
     for t in terms:  # the worst member's stress split into axial, the bendings and torsion (MPa each)
         part = t["name"].split(" (", 1)[0]
         results.append(result(f"max_stress_{part}", t["value"], "MPa", worst))
-    return {"results": results, "fields": fields, "vectors": vectors, "effects": terms}
+    lost, said = lost_load_outputs()
+    results.append(lost)
+    return {"results": results, "fields": fields, "vectors": vectors, "effects": terms + [said]}
 
 
 def member_results(quantity: str, per_member: dict[str, float], unit: str = "MPa") -> list[Record]:
@@ -197,6 +216,7 @@ class FrameStatic(BuiltinTool):
         "frame_static.cantilever_tip_load",
         "frame_static.bending_stress",
         "mass_props.static_wheel_loads",
+        PATH_FORMULA,
     ]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
     predicts = (
@@ -205,6 +225,7 @@ class FrameStatic(BuiltinTool):
         Predicts("max_stress", "frame_static.rail_bending", "sigma", "one rail as a simply supported beam, one wheel force"),
         Predicts("wheel_load_<support>", "mass_props.static_wheel_loads", "wheel_load_<support>",
                  "at rest only (no step_height, no upstream forces)"),
+        PATH_PREDICTS,
     )
     upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
                 "its ground forces load the frame instead of step_height")
@@ -257,7 +278,8 @@ def upstream_mount_series(upstream: dict | None, design: Record):
     forces (mount_x/y/z.<support>.<mount>, N, world axes) for every support and the sprung body's attitude
     (sprung_roll/pitch/yaw, deg); None when none does. Each instant: {"t_s", "mount_loads" (k1_frame.analyze's,
     (mount, point, force) at the design's suspension hardpoints_mm and each support's body_torque_x/y/z, in
-    the body's axes), "gravity_mps2" (body axes), "inertia_N" (inertia_force_x/y/z in the body's axes, or None)}."""
+    the body's axes), "gravity_mps2" (body axes; from the series gravity_x/y/z, world axes, when given, else
+    straight down), "inertia_N" (inertia_force_x/y/z in the body's axes, or None)}."""
     ids = [s["id"] for s in design.get("supports", [])]
     hp = {s["id"]: (s.get("suspension") or {}).get("hardpoints_mm") or {} for s in design.get("supports", [])}
     for lc_id, ana in (upstream or {}).items():
@@ -290,6 +312,10 @@ def upstream_mount_series(upstream: dict | None, design: Record):
         force = {(sid, m): [values(f"mount_{a}.{sid}.{m}", "N") for a in "xyz"] for sid in ids for m in mounts[sid]}
         torque = {sid: [values(f"body_torque_{a}.{sid}", "N*mm") for a in "xyz"] for sid in ids}
         inertia = [values(f"inertia_force_{a}", "N") for a in "xyz"]
+        # gravity in world axes as K2 gives it (turned on a slope or a tilt table); straight down without it
+        grav = [values(f"gravity_{a}", "m/s^2") for a in "xyz"]
+        if not all(grav):
+            grav = [[0.0] * len(t), [0.0] * len(t), [-STANDARD_GRAVITY] * len(t)]
         instants = []
         for k, tk in enumerate(t):
             Rt = rpy_matrix([att[0][k], att[1][k], att[2][k]]).T  # world -> body
@@ -300,7 +326,7 @@ def upstream_mount_series(upstream: dict | None, design: Record):
                 tq = np.array([c[k] if c else 0.0 for c in torque[sid]])
                 loads[sid] = {"vectors": vs, "moment_Nmm": Rt @ tq}
             instants.append({"t_s": float(tk), "mount_loads": loads,
-                             "gravity_mps2": Rt @ np.array([0.0, 0.0, -STANDARD_GRAVITY]),
+                             "gravity_mps2": Rt @ np.array([g[k] for g in grav]),
                              "inertia_N": Rt @ np.array([c[k] for c in inertia]) if all(inertia) else None})
         return lc_id, ana.get("analysis_id"), instants
     return None

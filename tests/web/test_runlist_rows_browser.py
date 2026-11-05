@@ -1,10 +1,13 @@
-"""The run list's rows (no ?dev=1) each say, in one line under the want, when the run started, how
-it ended and how it was driven: 「11/4 08:40 · 全部合格・版 4 · 決まった手順で再現」.
+"""The run list's rows (no ?dev=1) each say what replaying the record shows — how it was driven and
+how far the design went, from the record: 「決まった手順で最後まで・4 回目の設計で全部合格」 — with
+when it started and the want under it, and how it ended in the right column only (完了 / 途中で止まった).
+Saved and local records are one table, newest first; a record without project.driver (older than the
+field) or one that ended at the domain picks is kept under the closed 「この PC の記録」.
 
 The runs are made here: one that passed everything (project.json and its last version's
-judgements.json), one stopped at its cost limit, one still going, and one older record stopped
-without a stop_code. The line is checked word for word, and the list goes through the layout lint
-at 1280 and 900 (no wrap, nothing running out).
+judgements.json), one stopped at its cost limit, one still going, one older record stopped
+without a stop_code, and one that ended at the picks. The lines are checked word for word, and the
+list goes through the layout lint at 1280 and 900 (no wrap, nothing running out).
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed.
 """
@@ -35,6 +38,7 @@ PASSED = "20261104-084012-passed"
 STOPPED = "20261104-091500-stopped"
 GOING = "20261104-100000-going"
 OLD = "20261103-013120-old"
+PICKS = "20261103-120000-picks"
 
 
 def _ev(seq, kind, run_id, data=None, **extra):
@@ -70,13 +74,20 @@ def build(runs: Path) -> None:
     # an older record: no driver, no stop_code; the reason's opening says which stop it was
     folder(OLD, [start(OLD), _judged(1, OLD, 1, "strength", "green"),
                  _ev(2, "run.finished", OLD, {"status": "stopped", "stop_reason": "まだ判定の無い分野があるので終われません。強度信頼性: R1-step100 (…)"})])
+    # a run asked to stop after the domain picks (stop_after "picks"): no design version
+    folder(PICKS, [start(PICKS, driver="scripted", stop_after="picks"),
+                   _ev(1, "run.finished", PICKS, {"status": "stopped", "stop_code": "not_judged", "stop_reason": "分野を選ぶところまでの記録です"})])
 
 
+# the row's title, the line under it (the want short: its first sentence without the bracketed asides),
+# the right column (state, words), and whether it is in the closed group
+SHORT = "依頼: 林道を走れる 2 人乗りの小さなオフロード車両"
 EXPECTED = {
-    PASSED: ["11/4 08:40", "全部合格・版 4", "決まった手順で再現"],
-    STOPPED: ["11/4 09:15", "途中で止まった (上限の費用に達した)・版 2", "Claude で実行"],
-    GOING: ["11/4 10:00", "実行中", "Claude で実行"],
-    OLD: ["11/3 01:31", "途中で止まった (判定の無い分野を残した)・版 1"],
+    GOING: ["Claude の運転・いま 1 回目の設計", ["11/4 10:00", SHORT], ["going", "実行中"], False],
+    STOPPED: ["Claude の運転・2 回目の設計まで・不合格が残った", ["11/4 09:15", SHORT], ["stopped", "途中で止まった"], False],
+    PASSED: ["決まった手順で最後まで・4 回目の設計で全部合格", ["11/4 08:40", SHORT], ["done", "完了"], False],
+    PICKS: ["決まった手順・分野を選ぶところまで", ["11/3 12:00", SHORT], ["done", "完了"], True],
+    OLD: ["1 回目の設計まで", ["11/3 01:31", SHORT], ["stopped", "途中で止まった"], True],
 }
 
 
@@ -119,27 +130,31 @@ class RunListRowsBrowserTest(unittest.TestCase):
         page.evaluate("document.fonts.ready")
         return page, errors
 
-    def test_each_row_says_when_how_it_ended_and_how_it_was_driven(self):
+    def test_each_row_says_what_it_shows_and_how_it_ended(self):
         page, errors = self.open(1280, 720)
         got = page.evaluate(
-            """() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")].map((tr) =>
-                 [tr.dataset.run, [...tr.querySelectorAll(".rmeta > span:not(.sep)")].map((s) => s.textContent)]))"""
+            """() => [...document.querySelectorAll("#runlist tr[data-run]")].map((tr) => [tr.dataset.run, [
+                 tr.querySelector(".rsum").textContent,
+                 [...tr.querySelectorAll(".rmeta > span:not(.sep)")].map((s) => s.textContent),
+                 [tr.querySelector("td.state").dataset.state, tr.querySelector("td.state").textContent],
+                 !!tr.closest("details.older")]])"""
         )
-        line = page.evaluate("""(id) => document.querySelector(`#runlist tr[data-run="${id}"] .rmeta`).textContent""", PASSED)
+        heads = page.evaluate("""() => ({ h3: [...document.querySelectorAll("#runlist > h3")].map((h) => h.textContent),
+                                         older: document.querySelector("#runlist details.older")?.open,
+                                         summary: document.querySelector("#runlist details.older summary")?.textContent })""")
+        text = page.inner_text("#runlist")
         page.close()
         self.assertEqual(errors, [])
-        self.assertEqual(got, EXPECTED)
-        self.assertEqual(line, "11/4 08:40 · 全部合格・版 4 · 決まった手順で再現")
+        self.assertEqual(got, [[k, v] for k, v in EXPECTED.items()])  # newest first, the closed group last
+        self.assertEqual(heads, {"h3": ["記録を見る"], "older": False, "summary": "この PC の記録 (2)"})
+        # the words the list no longer uses: the split by where the record is kept, the stop reasons, 版
+        for w in ("保存した記録", "この PC で実行した記録", "判定の無い分野を残した", "版 "):
+            self.assertNotIn(w, text)
 
-    def test_the_state_column_follows_how_the_run_ended(self):
-        """The right column: 完了 / 途中で止まった / 実行中 (labels.js RUN_STATE_JA), not 完了 for every finished run."""
-        page, errors = self.open(1280, 720)
-        got = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")].map((tr) =>
-                 [tr.dataset.run, [tr.querySelector("td.state").dataset.state, tr.querySelector("td.state").textContent]]))""")
-        page.close()
-        self.assertEqual(errors, [])
-        self.assertEqual(got, {PASSED: ["done", "完了"], STOPPED: ["stopped", "途中で止まった"],
-                               GOING: ["going", "実行中"], OLD: ["stopped", "途中で止まった"]})
+    def test_the_title_does_not_repeat_the_state_column(self):
+        """The right column says 完了 / 途中で止まった / 実行中 (labels.js RUN_STATE_JA); the title does not say it again."""
+        for rsum, _, (_, state), _ in EXPECTED.values():
+            self.assertNotIn(state, rsum)
 
     def test_the_rows_pass_the_layout_lint(self):
         for key in self.bases:

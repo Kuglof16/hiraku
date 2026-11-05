@@ -110,6 +110,8 @@ class Tube:
     ids: np.ndarray | None = None  # (rows + 1, n_c) global node ids
     quads: np.ndarray | None = None
     group: object = None
+    zone_facets: int = HOT_SPOT_MIN_FACETS  # weld strips: a joint zone's row spacing is a facet at this count
+    # (frame_shells sets it from hot_spot_facets)
 
     @property
     def d(self) -> np.ndarray:
@@ -590,10 +592,11 @@ ZONE_BRANCH_R = 0.5  # joint zone on a round branch: this many of its radii beyo
 
 
 def zone_step(tb: Tube) -> float:
-    """Row spacing in a joint zone (weld strips): a round tube's facet width at HOT_SPOT_MIN_FACETS, a rect tube's
-    side over 8 (assumption: about square elements round the joint)."""
+    """Row spacing in a joint zone (weld strips): a round tube's facet width at its zone_facets (frame_shells'
+    hot_spot_facets, HOT_SPOT_MIN_FACETS by default), a rect tube's side over 8 (assumption: about square elements
+    round the joint)."""
     if tb.shape == "round_tube":
-        return perimeter(tb) / HOT_SPOT_MIN_FACETS
+        return perimeter(tb) / tb.zone_facets
     return min(tb.dims["b"], tb.dims["h"]) / 8.0
 
 
@@ -707,10 +710,19 @@ class FrameShells:
 
 
 def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True, members: list | None = None,
-                 max_gap: float | None = None, weld_strips: bool = True) -> FrameShells:
+                 max_gap: float | None = None, weld_strips: bool = True,
+                 hot_spot_facets: int | None = None) -> FrameShells:
     """The shell model of the frame's tubes (see the module docstring): MITC4 group per tube, ties at the
-    joints. No supports, loads or mounts yet. weld_strips: grid lines for the hot-spot read-out (hot_spots)."""
+    joints. No supports, loads or mounts yet. weld_strips: grid lines for the hot-spot read-out (hot_spots).
+    hot_spot_facets: with weld strips, the least facet count of a round tube and the one its joint zones' rows
+    are spaced at (None: HOT_SPOT_MIN_FACETS; fewer only to make a quick model, e.g. a test that needs the
+    results' names and not their values)."""
+    hot_spot_facets = HOT_SPOT_MIN_FACETS if hot_spot_facets is None else int(hot_spot_facets)
+    if hot_spot_facets < MIN_ROUND_FACETS or hot_spot_facets % 4:
+        raise ValueError(f"hot_spot_facets must be a multiple of 4, at least {MIN_ROUND_FACETS}; got {hot_spot_facets}")
     tubes, joints = tubes_of(design, members)
+    for tb in tubes.values():
+        tb.zone_facets = hot_spot_facets
     hosts = resolve_joints(tubes, joints)
     forced_cols: dict[str, list] = {}
     forced_rows: dict[str, list] = {}
@@ -718,7 +730,7 @@ def frame_shells(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True
         offsets, cuts = {}, {}
         for tb in tubes.values():
             offsets[tb.id], _n = section_points(tb, size, facet, forced_cols.get(tb.id),
-                                                HOT_SPOT_MIN_FACETS if weld_strips else MIN_ROUND_FACETS)
+                                                hot_spot_facets if weld_strips else MIN_ROUND_FACETS)
             for end in ("a", "b"):
                 if tb.ends[end]["kind"] == "host":
                     tb.ends[end]["ext"] = 0.0
@@ -1110,14 +1122,15 @@ def _static_checks(model: FEModel, Fs: dict) -> dict:
     if q["fail"]:
         rec = dict(base, reasons=[f"mesh check: {r}" for r in q["fail"]], results=precheck.result_items(mass=mass))
         return {"solve": lambda F: dict(rec)}
-    rb = precheck.rigid_body_check(model, lay)
+    K = model.stiffness(lay)  # assembled once for the rigid-body check and the solver
+    rb = precheck.rigid_body_check(model, lay, K=K)
     base["rigid"] = rb
     if rb["free_rigid_modes"]:
         rec = dict(base, reasons=[f"the model can move as a rigid body ({', '.join(rb['free_motions'])}); add supports"],
                    results=precheck.result_items(mass=mass, rigid=rb))
         return {"solve": lambda F: dict(rec)}
     try:
-        solver = StaticSolver(model, method="eliminate", check_rigid=False)
+        solver = StaticSolver(model, method="eliminate", check_rigid=False, K=K)
     except ModelError as e:
         rec = dict(base, reasons=[str(e)], results=precheck.result_items(mass=mass, rigid=rb))
         return {"solve": lambda F: dict(rec)}
@@ -1170,11 +1183,12 @@ def element_values(fs: FrameShells, per_tube: dict) -> list:
     return [float(v) for tb in fs.tubes.values() for v in per_tube[tb.id]]
 
 
-def prepare(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True, weld_strips: bool = True) -> dict:
+def prepare(design: dict, size: float = ELEMENT_SIZE_MM, facet: bool = True, weld_strips: bool = True,
+            hot_spot_facets: int | None = None) -> dict:
     """What every load case of a design shares: the shell (frame_shells), a reference node with its distributing
     link at each suspension pickup (add_mount), the 3-2-1 holds (hold_321) and, after the first solve, the
     factorisation. {"fs", "mounts", "held", "mt", "excluded", "size", "solver"}."""
-    fs = frame_shells(design, size, facet, weld_strips=weld_strips)
+    fs = frame_shells(design, size, facet, weld_strips=weld_strips, hot_spot_facets=hot_spot_facets)
     mounts = sorted({n for s in design["supports"] for n in _mount_nodes(design, s).values()})
     for n in mounts:
         add_mount(fs, n)

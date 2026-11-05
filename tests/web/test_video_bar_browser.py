@@ -79,21 +79,24 @@ class VideoBarBrowserTest(unittest.TestCase):
             self.assertTrue(view, query)
             self.assertEqual(got, {sel: shown for sel in got}, query)
 
-    def test_a7_bar_only_without_video(self):
-        for query, shown in ((A7, True), (f"{A7}&video=1", False)):
+    def test_a7_bar_stays_its_play_button_only_without_video(self):
+        """A7's assembly bar (track and 手順 n / N) shows in the video too; only its ▶ goes."""
+        for query, play in ((A7, True), (f"{A7}&video=1", False)):
             page, errors = self.open(query)
-            got = page.evaluate(SHOWN, "#view-asm .asm-bar")
-            caption = page.evaluate("() => document.querySelector('#view-asm .asm-caption').textContent")
+            got = {sel: page.evaluate(SHOWN, sel) for sel in ("#view-asm .asm-bar", "#view-asm .as-track", "#view-asm .as-label", "#view-asm .as-play")}
+            label = page.evaluate("() => document.querySelector('#view-asm .as-label').textContent")
             page.close()
             self.assertEqual(errors, [], query)
-            self.assertEqual(got, shown, query)
-            self.assertTrue(caption.startswith("手順"), query)  # the step is still told, in the caption
+            self.assertEqual(got, {"#view-asm .asm-bar": True, "#view-asm .as-track": True, "#view-asm .as-label": True,
+                                   "#view-asm .as-play": play}, query)
+            self.assertIn("手順", label, query)
 
     def test_what_stood_above_the_bar_comes_down(self):
         """The colour legend: 76 px over the bench's bottom with the bar, 12 px without (video=1).
-        A7's 接合 switch: 66 px, 12 px. (The CSS bottom: the legend is hidden on some pages.)"""
+        A7's 接合 switch stays 66 px over its bar, which the video keeps. (The CSS bottom: the
+        legend is hidden on some pages.)"""
         for query, sel, gap in ((f"{BENCH}&t=1e6", "#legend", 76), (f"{BENCH}&t=1e6&video=1", "#legend", 12),
-                                (A7, ".asm-joints-btn", 66), (f"{A7}&video=1", ".asm-joints-btn", 12)):
+                                (A7, ".asm-joints-btn", 66), (f"{A7}&video=1", ".asm-joints-btn", 66)):
             page, errors = self.open(query)
             got = page.evaluate(GAP, sel)
             page.close()

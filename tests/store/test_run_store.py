@@ -125,6 +125,110 @@ class RunStoreTest(unittest.TestCase):
             self.assertEqual(again["assumptions"], ["again"])
         self.assertIsNone(self.store._read_cache)
 
+    def test_reading_keeps_files_across_stretches_until_they_change(self):
+        """Contract-neutral speed: a later reading() stretch reads only files written since (stat changed), and
+        keeps analyses without READING_DROPS; records outside reading() are whole and fresh."""
+        from hiraku.store import run_store as RS
+
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        with self.store.reading():
+            first = self.store.get("prediction", "pred-0001")
+        reads = []
+        orig = RS._read_json
+        RS._read_json = lambda p: reads.append(p) or orig(p)
+        try:
+            with self.store.reading():
+                self.assertIs(self.store.get("prediction", "pred-0001"), first)  # kept: not read again
+                self.assertIsNone(self.store.get("prediction", "pred-9999"))
+            self.assertEqual(reads, [])
+            path = layout.record_path(self.store.path, 1, "prediction", "pred-0001")
+            path.write_text(json.dumps(dict(pred, assumptions=["by hand", "longer than before"])), encoding="utf-8")
+            with self.store.reading():  # written by someone else: the stat changed
+                self.assertEqual(self.store.get("prediction", "pred-0001")["assumptions"][0], "by hand")
+            self.assertEqual(len(reads), 1)
+        finally:
+            RS._read_json = orig
+        ana = {"analysis_id": "ana-0001", "fields": [1, 2], "series": {"t": [0]}, "results": []}
+        apath = layout.record_path(self.store.path, 1, "analysis", "ana-0001")
+        apath.parent.mkdir(parents=True, exist_ok=True)
+        apath.write_text(json.dumps(ana), encoding="utf-8")
+        with self.store.reading():
+            self.assertEqual(self.store.records("analysis", 1), [{"analysis_id": "ana-0001", "results": []}])
+        self.assertEqual(self.store.records("analysis", 1), [ana])  # outside reading(): the whole record
+
+    def test_a_record_with_large_arrays_is_validated_once_whole_and_its_event_is_whole(self):
+        """The event of a record add_record validated is checked without READING_DROPS (speed); what is written
+        is the whole record, and it fits the event schema whole."""
+        from unittest import mock
+
+        self.store.write_design(example("design.json"))
+        ana = example("analysis.json")
+        self.assertIn("fields", ana)
+        seen = []
+        orig = contract.validate
+        with mock.patch.object(contract, "validate", side_effect=lambda k, o: (seen.append((k, o)), orig(k, o))[1]):
+            self.store.add_record("analysis", ana, design_version=1, agent="cae.strength", domain="strength")
+        self.assertEqual([k for k, _ in seen], ["analysis", "event"])
+        self.assertIn("fields", seen[0][1])
+        self.assertNotIn("fields", seen[1][1]["data"])
+        last = self.store.events()[-1]
+        self.assertEqual(last["data"], ana)
+        self.assertEqual(contract.errors("event", last), [])
+        bad = dict(ana, fields="not a list")
+        with self.assertRaises(ValueError):  # the record's own check still sees the large parts
+            self.store.add_record("analysis", bad, design_version=1, agent="cae.strength", domain="strength")
+
+    def test_events_are_read_from_where_the_last_read_stopped(self):
+        """Run 283a934: events() read the whole events.jsonl on every call (213 calls, 251 s)."""
+        first = self.store.events()
+        self.assertEqual(first[-1]["kind"], "run.started")
+        with self.store.events_path.open("a", encoding="utf-8", newline="\n") as f:  # another process appends
+            f.write(json.dumps({**first[-1], "seq": 99, "kind": "agent.said"}) + "\n")
+            f.write('{"seq": 100, "kind": "agent.said"')  # a line still being written
+        got = self.store.events()
+        self.assertEqual([e["seq"] for e in got[-1:]], [99])
+        self.assertEqual(len(got), len(first) + 1)
+        with self.store.events_path.open("a", encoding="utf-8", newline="\n") as f:
+            f.write(', "t": 1.0}\n')
+        self.assertEqual(self.store.events()[-1]["seq"], 100)  # the line read once whole
+        self.store.events_path.write_text(json.dumps(first[0]) + "\n", encoding="utf-8")  # shorter: read again
+        self.assertEqual(len(self.store.events()), 1)
+
+    def test_a_listing_is_made_once_per_reading_stretch(self):
+        self.store.write_design(example("design.json"))
+        pred = example("prediction.json")
+        pred["prediction_id"] = self.store.next_id("prediction")
+        self.store.add_record("prediction", pred, design_version=1, agent="cae.strength", domain="strength")
+        with self.store.reading():
+            one = self.store.records("prediction", 1)
+            path = layout.record_path(self.store.path, 1, "prediction", "pred-0002")
+            path.write_text(json.dumps(dict(pred, prediction_id="pred-0002")), encoding="utf-8")
+            self.assertEqual(self.store.records("prediction", 1), one)  # same stretch: the same listing
+        self.assertEqual(len(self.store.records("prediction", 1)), 2)  # outside: listed again
+
+    def test_the_shared_design_is_read_once_while_its_file_holds(self):
+        self.store.write_design(example("design.json"))
+        stamp, one = self.store.design_shared()
+        self.assertIs(self.store.design_shared()[1], one)
+        self.assertIsNot(self.store.design(), one)  # design() is a copy of one's own
+        path = layout.version_dir(self.store.path, 1) / layout.DESIGN_FILE
+        path.write_text(json.dumps(dict(one, notes_for_test="x")), encoding="utf-8")
+        again = self.store.design_shared()
+        self.assertNotEqual(again[0], stamp)
+        self.assertEqual(again[1]["notes_for_test"], "x")
+
+    def test_a_mesh_is_validated_on_a_sample_of_its_long_arrays(self):
+        from hiraku.store.run_store import MESH_SAMPLE, _sampled
+
+        mesh = {"nodes_mm": [[0.0, 0.0, float(i)] for i in range(3 * MESH_SAMPLE)], "mesh_id": "mesh-0001"}
+        cut = _sampled(mesh)
+        self.assertEqual(len(cut["nodes_mm"]), 2 * MESH_SAMPLE)
+        self.assertEqual(cut["nodes_mm"][-1], mesh["nodes_mm"][-1])
+        self.assertEqual(_sampled({"nodes_mm": [[1.0, 2.0, 3.0]]}), {"nodes_mm": [[1.0, 2.0, 3.0]]})
+
     def test_invalid_record_is_not_written(self):
         self.store.write_design(example("design.json"))
         bad = example("prediction.json")

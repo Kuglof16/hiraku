@@ -11,6 +11,7 @@ from ..record import Recorder
 from ..scenario import HOLD_TORQUE, new_sim, slope_gravity
 from ..units import G0
 from .base import FRONT_AREA, MU, RHO, K2Tool, P, Pair, _length, _min_load, _ramp_gravity, _res, _slope
+from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
 
 def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | None = None, grade: float = 0.0,
@@ -26,6 +27,7 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
     if grade:
         _ramp_gravity(sim, slope_gravity, math.atan(grade))
     rec = Recorder(sim, rec_hz) if rec_hz > 0 else None
+    log = LoadLog(sim) if rec is not None and any(has_mounts(c) for c in veh.corners) else None
     start_rolling(sim, v0)
     ctrl = SpeedController(sim)
     n = sim.n
@@ -62,6 +64,8 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
             x_brake = float(sim.design_origin()[0])
         if rec is not None:
             rec.tick()
+        if log is not None:
+            log.tick()
         if t >= t_brake:
             peak_dec = max(peak_dec, -float(sim.out["acc"][0]))
             for i, c in enumerate(veh.corners):
@@ -75,13 +79,17 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
         if t > t_brake + 60.0:
             raise DesignError("the vehicle did not stop within 60 s of braking; check the brakes and mu")
     x_stop = float(sim.design_origin()[0])
+    t_stop = sim.t
     if rec is not None:
         rec.keep_snapshot()
         for _ in range(int(0.8 / dt)):
             sim.step(controls(sim, 0.0, [0.0] * n, brake_on))
             rec.tick()
+            if log is not None:
+                log.tick()
     return {"stopping": x_stop - x_cmd, "braking": x_stop - x_brake, "peak_decel": peak_dec, "min_load": min_load,
-            "min_rear_axle": min_rear if rear else None, "max_pitch": max_pitch, "recorder": rec, "sim": sim}
+            "min_rear_axle": min_rear if rear else None, "max_pitch": max_pitch, "recorder": rec, "sim": sim,
+            "states": log.states if log is not None else [], "t_brake": t_brake, "t_stop": t_stop}
 
 
 class BrakingTool(K2Tool):
@@ -96,12 +104,17 @@ class BrakingTool(K2Tool):
     behind the CG: 0 = the rear lifts), min_rear_axle_load (N, those supports together),
     max_pitch (deg, nose down +); with parking_slope: parking_drift (mm in 60 s, facing uphill,
     brakes on) and parking_friction_demand (1, the largest |F_road| / F_z of a braked wheel).
+    With K&C corners the stop also gives the force the body receives at each suspension mount:
+    the mount_* series of mounts.mount_series (closer from the brakes coming on to the stop, and
+    at each mount's largest force), mount_force_peak (N, the largest of all the mounts, where
+    '<support>.<mount> at t <s> s') and the joint vectors at that instant.
     """
 
     name = "braking"
     title = "急制動 (K2 で急ブレーキ)"
     domain = "handling"
     tests = ["S4", "S4b"]
+    # speed 35 km/h: the default when a load case has none (S4's 35 km/h is cited in catalog/builders/k2_tests.py)
     params = (P("speed", "km/h", 35.0, "speed when the brake command comes"),
               MU,
               P("reaction_time", "s", 0.0, "coasting from the command until the brakes come on"),
@@ -131,20 +144,25 @@ class BrakingTool(K2Tool):
                   "only the front wheels braked"))
 
     def own_checks(self) -> list[dict]:
+        mu_peak, kmh = 0.7, 40.0
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="braking check",
-                       variables={"tire_mu": {"value": 0.7, "unit": "1"},
+                       variables={"tire_mu": {"value": mu_peak, "unit": "1"},
                                   "rolling_resistance": {"value": 0.0, "unit": "1"}})
         veh = build_vehicle(d)
-        v0 = 40.0 / 3.6
+        v0 = kmh / 3.6
         r = brake_stop(veh, v0)
         # a locked wheel slides at kappa = -1, past the peak of the Magic Formula
         mu_lock = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in veh.corners) / sum(
             c.static_load for c in veh.corners)
         expected = v0 * v0 / (2.0 * mu_lock * G0)
-        return [_check(f"locked wheels from 40 km/h, peak mu 0.7, locked-wheel mu {mu_lock:.3f} (the tyre at kappa -1), "
-                       "no air drag or rolling resistance", "braking_distance", expected, r["braking"], "m", 2e-2,
+        return [_check(f"locked wheels from {kmh:g} km/h, peak mu {mu_peak:g}, locked-wheel mu {mu_lock:.3f} (the tyre at "
+                       "kappa -1), no air drag or rolling resistance", "braking_distance", expected, r["braking"], "m", 2e-2,
                        "s = v^2 / (2 mu_lock g), mu_lock = sum |Fx(kappa = -1)| / W at the static loads (the load moving "
-                       "to the front while braking is not in it)")]
+                       "to the front while braking is not in it)",
+                       case_ja=f"{kmh:g} km/h から輪をロックして止まるまでの距離 (摩擦係数のいちばん大きい値 {mu_peak:g}、"
+                               f"ロックして滑っているときは {mu_lock:.3f}。空気の抵抗と転がりの抵抗はなし)",
+                       source_ja="止まるまでの距離 s = v² / (2 μ g)。μ は、ロックした輪の前後の力の合計 / 車の重さ "
+                                 "(止まっているときの荷重で。ブレーキで荷重が前に移る分は入れていない)")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)
@@ -179,5 +197,14 @@ class BrakingTool(K2Tool):
         # the recorded run is the stop (on the grade); the parking run is not recorded
         scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)", veh, -_length(veh) - 1.0,
                         r["stopping"] + v0 * 0.5 + _length(veh) + 2.0, front_up=math.atan(grade))] if grade else []
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-                "assumptions": notes}
+        series, vectors = rec.series(), rec.vectors(-1)
+        if r["states"]:
+            # the body's loads at the mounts: closer from the brakes coming on to just after the stop
+            series += mount_series(veh, r["states"], [(r["t_brake"] - 0.1, r["t_stop"] + 0.2)])
+            top = mount_peak(series)
+            if top is not None:
+                res.append(top[0])
+                # joint vectors: every mount at the instant of mount_force_peak (each mount's own
+                # largest is in the series)
+                vectors += mount_vectors(veh, state_at(r["states"], top[1]))
+        return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}

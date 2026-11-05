@@ -45,12 +45,10 @@ CLAUDE_ONLY = ".claude.yaml"  # requirements only Claude can run (no scripted wa
 NO_SCRIPT = "台本の予測のしかたが無いので回せない荷重条件"  # what the scripted run says for them
 VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice and compared
 # load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
-# so the run stops not_judged with every other tile of the last version green. R7-hand: the grip's movement
-# with the frame has no hand calculation; R7-foot: the pedal on a rail strut, the ladder's twist is not in the
-# hand calculation (R7_PLAN expected_mismatch in hiraku/catalog/builders/load_path.py). The N15 plan's last
-# version has no red (tests/agent/test_scene_n15.py ENDED_CASES).
-_R7_ENDED = {"R7-hand-300N", "R7-foot-500N"}
-ENDED = {"offroad-4w.yaml": _R7_ENDED, "offroad-4w-n15.yaml": _R7_ENDED}
+# so the run stops not_judged with every other tile of the last version green. None at present: R7-hand and
+# R7-foot are both judged on their hand bounds (load_path.grip_bound, pedal_bound_inputs; safe side), the plans'
+# rev_controls answers R7-hand, and the demo and N15 runs end done (tests/agent/test_scene_n15.py).
+ENDED: dict[str, set[str]] = {}
 # requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
 # the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
 BEHIND_RED: set[str] = set()
@@ -212,6 +210,31 @@ class _ScriptedRunTests:
         held = {lcs[k].get("domain") for k in ended}
         self.assertEqual({d: s for d, s in tiles.items() if d in held}, {d: "pending" for d in held}, str(tiles))
         self.assertEqual({d: s for d, s in tiles.items() if d not in held and s != "green"}, {}, str(tiles))
+
+    def test_each_version_has_its_rule_check(self):
+        # every scripted plan extends offroad-4w, whose rule_check: true applies the knowledge rules once on each
+        # design version, also on one a red stage revises (design 69408272): every version made has its
+        # rule_check.recorded (one per rule), none before its version's design.created, and no rule twice
+        name, run, proc = self.REQ.name, self.run_dir, self.proc
+        if name.endswith(CLAUDE_ONLY):
+            self.skipTest("a Claude-only scene stops before any version is checked")
+        with self._where():
+            self.assertMadeRun(run, proc)
+            with (run / layout.EVENTS_FILE).open(encoding="utf-8") as f:
+                events = [json.loads(s) for s in f if s.strip()]
+            made = {e["data"].get("design_version"): n for n, e in enumerate(events) if e["kind"] == "design.created"}
+            checked = {}
+            for n, e in enumerate(events):
+                if e["kind"] == "rule_check.recorded":
+                    checked.setdefault(e["data"].get("design_version", e.get("design_version")), []).append(n)
+            self.assertEqual(sorted(v for v in made if v not in checked), [], f"versions without a rule check: "
+                                                                              f"{sorted(checked)}")
+            self.assertEqual(sorted(v for v in checked if v not in made), [], "a rule check of a version never made")
+            rules = [(e["data"].get("design_version", e.get("design_version")), e["data"].get("rule_id"))
+                     for e in events if e["kind"] == "rule_check.recorded"]
+            self.assertEqual(sorted({r for r in rules if rules.count(r) > 1}), [], "a rule checked twice on one version")
+            self.assertEqual([v for v, ns in checked.items() if v in made and min(ns) < made[v]], [],
+                             "a rule check before its version's design.created")
 
     def test_each_denial_is_followed_as_the_hook_asks(self):
         name, run, proc = self.REQ.name, self.run_dir, self.proc
@@ -439,12 +462,15 @@ else:
 
 class SavedRuns(unittest.TestCase):
     """The example runs committed under showcase/<run_id>/. runs/ is local and not
-    committed, so it is not checked here (python -m qa.check_run --all does that by hand)."""
+    committed, so it is not checked here (python -m qa.check_run --all does that by hand).
+    A showcase run keeps events.jsonl, project.json, report.json and tools/ only (showcase/prepare.py:
+    every record is in its event, the version folders are left out), so check_run's files.missing is
+    set aside; every other check runs on the events."""
 
     def test_showcase_runs_follow_the_contract(self):
-        runs = sorted(p for p in (ROOT / layout.SHOWCASE_DIR).glob("*/") if p.is_dir())
+        runs = sorted(p for p in (ROOT / layout.SHOWCASE_DIR).glob("*/") if p.is_dir() and (p / "events.jsonl").exists())
         if not runs:
             self.skipTest(f"no runs under {layout.SHOWCASE_DIR.as_posix()}/ yet")
         for run in runs:
             with self.subTest(run=run.name):
-                self.assertEqual(_errors(run), [])
+                self.assertEqual([e for e in _errors(run) if "files.missing" not in e], [])

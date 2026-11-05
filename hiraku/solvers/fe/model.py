@@ -552,18 +552,19 @@ class StaticSolver:
     """
 
     def __init__(self, model: FEModel, method: str = "eliminate", penalty_scale: float = 1.0e2,
-                 check_rigid: bool = True) -> None:
+                 check_rigid: bool = True, K=None) -> None:
+        """K: the model's stiffness on model.layout(), when the caller has assembled it already."""
         self.model = model
         self.method = method
         self.layout = lay = model.layout()
-        self.K = model.stiffness(lay)
+        self.K = model.stiffness(lay) if K is None else K
         self.fixed = model.fixed_dofs(lay)
         eqs = model.equations(lay.counts)
         t0 = time.perf_counter()
         if check_rigid:
             from .precheck import rigid_body_check  # local import: precheck uses this module
 
-            rb = rigid_body_check(model, lay, self.fixed)
+            rb = rigid_body_check(model, lay, self.fixed, K=self.K)
             self.rigid = rb
             if rb["free_rigid_modes"] > 0:
                 raise ModelError(f"the model can move as a rigid body ({rb['free_rigid_modes']} free motion(s): "

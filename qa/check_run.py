@@ -148,6 +148,28 @@ SYSTEM_CATEGORY, SYSTEM_DOMAIN = "system", "assembly"
 PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX_FILE", "PLUGIN_LOCK_FILE",
                                               "PLUGIN_ALIVE_FILE") if hasattr(layout, k)}
 UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
+PATH_CHECKED = "path_checked"  # the tool's value decides after the load path was checked by hand (contract 2fc1006)
+HOT_SPOT = "hot_spot"  # a place the hand calculation did not predict, over the limit (contract d761e77)
+SPIKE = "尖り"  # a hot_spots note on a point that keeps rising with the mesh: listed, not red (contract cc6f396)
+UTIL_CAP = 1000.0  # a hot_spots utilisation is written within 0 to 1000 (contract 46306b5)
+
+
+def utilisation(value, limit, op) -> float | None:
+    """A hot_spots row's utilisation (contract 46306b5): the ratio that goes over 1 exactly when the row fails
+    the criterion, value / limit for <= and <, limit / value for >= and >; where it is undefined (a limit or a
+    value at or below 0) or outside 0 to 1000, 1000 when failing and 0 when passing. None: not numbers or no op."""
+    if not isinstance(value, (int, float)) or not isinstance(limit, (int, float)) or op not in OPS:
+        return None
+    num, den = (value, limit) if op in ("<=", "<") else (limit, value)
+    ratio = num / den if den > 0 and num >= 0 else None
+    if ratio is None or not 0 <= ratio <= UTIL_CAP:
+        return 0.0 if OPS[op](value, limit) else UTIL_CAP
+    return ratio
+MOUNT_TEST = "R9"  # suspension mounts (contract 40645e0): a bracket's bolts, plate and weld at the mount force
+MOUNT_QUANTITIES = ("bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
+                    "weld_utilisation")
+PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
+FREE_PARTS = "free_parts"  # the version-wide count of the same formula, and a tool result that must be 0 then
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
@@ -1040,9 +1062,16 @@ class RunChecker:
     def check_causes(self) -> None:
         for kid, (i, k) in self.recs["cause"].items():
             w = self.where_of[i]
+            if k.get("verdict_id") is not None or k.get("comparison_id") is None:
+                self._check_verdict_cause(kid, k, i, w)
+                continue
             c = self._before("comparison", k.get("comparison_id"), i, w, "cause.link", "comparison")
             if c is not None and c.get("status") != "mismatch":
                 self.warn("cause.link", w, f"{kid} explains {k.get('comparison_id')}, which matched")
+            # one way to settle a mismatch (contract 26de5b8): the tool decides, safe side, or ended
+            ways = [f for f in ("tool_decides", "safe_side", "ends_case") if k.get(f) is True]
+            if len(ways) > 1:
+                self.error("cause.settled", w, f"{kid} says {' and '.join(ways)}: a cause takes one of them")
             rb = k.get("resolved_by")
             if rb:
                 r = self.recs["comparison"].get(rb)
@@ -1060,11 +1089,133 @@ class RunChecker:
             elif k.get("resolved"):
                 self.warn("cause.resolved", w, f"{kid} says resolved but names no matching comparison")
 
+    def _check_verdict_cause(self, kid: str, k: dict, i: int, w: str) -> None:
+        """A cause that answers a hot_spot verdict instead of a comparison (contract d761e77): verdict_id
+        names a hot_spot verdict recorded before it, where (when given) is that verdict's, and it takes
+        none of tool_decides, safe_side or ends_case. Either comparison_id or verdict_id, not both."""
+        rule = "cause.link"
+        if k.get("verdict_id") is None:
+            self.error(rule, w, f"{kid} names neither a comparison nor a verdict")
+            return
+        if k.get("comparison_id") is not None:
+            self.error(rule, w, f"{kid} names both comparison {k['comparison_id']} and verdict {k['verdict_id']}")
+        v = self._before("verdict", k["verdict_id"], i, w, rule, "verdict")
+        if v is None:
+            return
+        if v.get("basis") != HOT_SPOT:
+            self.error(rule, w, f"{kid} answers {k['verdict_id']}, a {v.get('basis', 'match')} verdict, not a hot_spot one")
+        if k.get("where") is not None and k["where"] != v.get("where"):
+            self.error(rule, w, f"{kid} is about {k['where']} but {k['verdict_id']} is about {v.get('where')}")
+        ways = [f for f in ("tool_decides", "safe_side", "ends_case") if k.get(f) is True]
+        if ways:
+            self.error("cause.settled", w, f"{kid} answers a hot_spot verdict and says {' and '.join(ways)}")
+
+    def check_hot_spots(self) -> None:
+        """analysis.hot_spots (contract a3669aa): utilisation = value / limit, highest first; and each ok
+        analysis' row that makes its load case red (not predicted, utilisation > 1, on the judged quantity,
+        not a spike) has a hot_spot verdict (analysis_id, where) made from it (contract d761e77)."""
+        made = {(r.get("analysis_id"), r.get("where")) for _, r in self.recs["verdict"].values()
+                if r.get("basis") == HOT_SPOT}
+        for aid, (i, a) in self.recs["analysis"].items():
+            rows = a.get("hot_spots") or []
+            w = self.where_of[i]
+            utils = [r.get("utilisation") for r in rows]
+            if all(isinstance(u, (int, float)) for u in utils) and utils != sorted(utils, reverse=True):
+                self.error("analysis.hot_spots", w, f"{aid} hot_spots are not highest utilisation first")
+            crit = (self.lc(a.get("load_case_id"), a.get("design_version")) or {}).get("criterion")
+            q = (JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
+                 if isinstance(crit, dict) else None)
+            for r in rows:
+                u = r.get("utilisation")
+                if isinstance(u, (int, float)) and not 0 <= u <= UTIL_CAP:
+                    self.error("analysis.hot_spots", w, f"{aid} {r.get('where')} utilisation {u} is outside 0 to {UTIL_CAP:g}")
+                val, lim = (r.get("value") or {}).get("value"), (r.get("limit") or {}).get("value")
+                if (q is None or r.get("quantity") not in (q, crit.get("quantity")) or not isinstance(u, (int, float))
+                        or (r.get("value") or {}).get("unit") != (r.get("limit") or {}).get("unit")):
+                    continue
+                want = utilisation(val, lim, crit.get("op"))
+                if want is not None and not _close(u, want):
+                    self.error("analysis.hot_spots", w, f"{aid} {r.get('where')} utilisation {u} but {want:.6g} "
+                                                        f"({val} {crit.get('op')} {lim}, contract 46306b5)")
+            if a.get("status") != "ok" or q is None:
+                continue
+            for r in rows:
+                if (r.get("quantity") == q and r.get("predicted") is False and SPIKE not in (r.get("note") or "")
+                        and isinstance(r.get("utilisation"), (int, float)) and r["utilisation"] > 1
+                        and (aid, r.get("where")) not in made):
+                    self.error("verdict.hot_spot", w, f"{aid} {r.get('where')} is unpredicted and over its limit "
+                                                      f"({r['utilisation']:.3g}) but no hot_spot verdict was made")
+
+    def _check_hot_spot_verdict(self, vid: str, v: dict, i: int, w: str) -> None:
+        """basis hot_spot (contract d761e77): no comparison; made from an ok analysis of the same load case
+        recorded before it, from its hot_spots row at the verdict's where on the judged quantity (JUDGED_AS),
+        not predicted, utilisation > 1, not a spike; the row's value and limit, the criterion's quantity
+        and op, value_from analysis, pass false."""
+        rule = "verdict.hot_spot"
+        if v.get("comparison_id") is not None:
+            self.error(rule, w, f"{vid} is hot_spot but names comparison {v.get('comparison_id')}")
+        a = self._before("analysis", v.get("analysis_id"), i, w, rule, "analysis")
+        if a is None:
+            return
+        if a.get("status") != "ok":
+            self.error(rule, w, f"{vid} made from {v.get('analysis_id')}, a {a.get('status')} analysis")
+        if a.get("load_case_id") != v.get("load_case_id"):
+            self.error(rule, w, f"{vid} is for {v.get('load_case_id')} but {v.get('analysis_id')} "
+                                f"analyzed {a.get('load_case_id')}")
+        lc = self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}
+        crit = lc.get("criterion")
+        if not isinstance(crit, dict):
+            self.error("verdict.criterion", w, f"{vid}: load case {v.get('load_case_id')} has no criterion")
+            return
+        for f in ("op", "quantity"):
+            if v.get(f) != crit.get(f):
+                self.error("verdict.criterion", w, f"{vid} {f} {v.get(f)} but the criterion says {crit.get(f)}")
+        for f in ("test_id", "domain"):
+            if v.get(f) != lc.get(f):
+                self.error("verdict.values", w, f"{vid} {f} {v.get(f)} but the load case says {lc.get(f)}")
+        q = JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
+        rows = [r for r in a.get("hot_spots") or [] if r.get("where") == v.get("where") and r.get("quantity") == q]
+        if not rows:
+            self.error(rule, w, f"{vid}: {v.get('analysis_id')} has no hot_spots row of {q} at {v.get('where')}")
+        else:
+            r = rows[0]
+            if r.get("predicted") is not False:
+                self.error(rule, w, f"{vid}: the hand calculation predicted {v.get('where')}")
+            if not (isinstance(r.get("utilisation"), (int, float)) and r["utilisation"] > 1):
+                self.error(rule, w, f"{vid}: {v.get('where')} utilisation {r.get('utilisation')} is not over 1")
+            if SPIKE in (r.get("note") or ""):
+                self.error(rule, w, f"{vid}: {v.get('where')} is a spike ({r.get('note')}), listed but not red")
+            if v.get("value") != r.get("value") or v.get("limit") != r.get("limit"):
+                self.error("verdict.values", w, f"{vid} value {v.get('value')} / limit {v.get('limit')} are not "
+                                                f"the row's {r.get('value')} / {r.get('limit')}")
+        if v.get("value_from", "analysis") != "analysis":
+            self.error("verdict.values", w, f"{vid} hot_spot has value_from {v.get('value_from')!r}, not 'analysis'")
+        if v.get("pass") is not False:
+            self.error(rule, w, f"{vid} is hot_spot but pass is {v.get('pass')}")
+        self._check_verdict_math(vid, v, w)
+
+    def _standing_hot_spots(self, i: int, domain: str, v: int | None) -> list[str]:
+        """The hot_spot verdicts that still stand at event i in a domain and version: per load case,
+        quantity and place (the compared result's where, or the verdict's own), the newest verdict
+        (as hiraku's latest_verdicts keys them; a later match at another place does not clear one)."""
+        newest: dict[tuple, tuple[str, dict]] = {}
+        for vid, (j, r) in self.recs["verdict"].items():
+            if j >= i or r.get("domain") != domain or self.version_of("verdict", r) != v:
+                continue
+            cmp = self.recs["comparison"].get(r.get("comparison_id")) if r.get("comparison_id") else None
+            key = (r.get("load_case_id"), r.get("quantity"), (cmp[1] if cmp else {}).get("where") or r.get("where"))
+            newest.pop(key, None)
+            newest[key] = (vid, r)
+        return [vid for vid, r in newest.values() if r.get("basis") == HOT_SPOT and r.get("pass") is False]
+
     def check_verdicts(self) -> None:
         for vid, (i, v) in self.recs["verdict"].items():
             w = self.where_of[i]
             if v.get("basis") == UNSUPPORTED:
                 self._check_unsupported_verdict(vid, v, i, w)
+                continue
+            if v.get("basis") == HOT_SPOT:
+                self._check_hot_spot_verdict(vid, v, i, w)
                 continue
             c = self._before("comparison", v.get("comparison_id"), i, w, "verdict.from_match", "comparison")
             if c is None:
@@ -1072,6 +1223,8 @@ class RunChecker:
             crit = (self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}).get("criterion")
             if v.get("basis", "match") == "explained_safe_side":
                 self._check_safe_side_verdict(vid, v, c, crit, i, w)
+            elif v.get("basis") == PATH_CHECKED:
+                self._check_path_checked_verdict(vid, v, c, i, w)
             else:
                 if c.get("status") != "match":
                     self.error("verdict.from_match", w, f"{vid} made from {v.get('comparison_id')}, a {c.get('status')}")
@@ -1160,6 +1313,70 @@ class RunChecker:
             self.error("verdict.safe_side", w, f"{vid}: criterion {op} but the prediction {pv} is on the favourable "
                                                f"side of the analysis {av}")
 
+    def _check_path_checked_verdict(self, vid: str, v: dict, c: dict, i: int, w: str) -> None:
+        """basis path_checked (contract 2fc1006, 手計算の役目): a mismatch whose own cause, recorded before the
+        verdict, says tool_decides (with a reason, not ends_case); the version's load path checked by hand
+        before it: a load_path prediction of free_parts 0 in that version, and the compared analysis gives no
+        unsupported load above 0. The value is the analysis' (pass or fail by the criterion)."""
+        rule = "verdict.path_checked"
+        cid = v.get("comparison_id")
+        if c.get("status") != "mismatch":
+            self.error(rule, w, f"{vid} is path_checked but {cid} is a {c.get('status')}")
+        if not v.get("cause_id"):
+            self.error(rule, w, f"{vid} is path_checked but names no cause")
+        else:
+            k = self._before("cause", v["cause_id"], i, w, rule, "cause")
+            if k is not None:
+                if k.get("comparison_id") != cid:
+                    self.error(rule, w, f"{vid}: {v['cause_id']} explains {k.get('comparison_id')}, not {cid}")
+                if k.get("tool_decides") is not True:
+                    self.error(rule, w, f"{vid}: {v['cause_id']} does not say tool_decides true")
+                elif not str(k.get("tool_decides_reason") or "").strip():
+                    self.error(rule, w, f"{vid}: {v['cause_id']} gives no tool_decides_reason")
+                if k.get("ends_case") is True:
+                    self.error(rule, w, f"{vid}: {v['cause_id']} says ends_case, which gives no verdict")
+        if v.get("value_from", "analysis") != "analysis":
+            self.error("verdict.values", w, f"{vid} is path_checked but value_from is {v.get('value_from')!r}, "
+                                            f"not 'analysis'")
+        if v.get("value") != c.get("analyzed"):
+            self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
+        ver = self.version_of("verdict", v)
+        # as hiraku.tools.judge.path_check reads it (design f5e16af, review C2): (1) a load_path.free_parts
+        # prediction of 0 in the version, of this load case (its loaded parts) or of quantity free_parts (every part);
+        # (2) the newest ok analysis of the load case giving unsupported_load, and the deciding (compared) one, both
+        # give unsupported_load 0, and any free_parts result of theirs is 0
+        lc_id = v.get("load_case_id")
+        hand = [p for j, p in self.recs["prediction"].values()
+                if j < i and p.get("design_version") == ver and p.get("formula_id") == PATH_FORMULA
+                and (p.get("load_case_id") == lc_id or p.get("quantity") == FREE_PARTS)]
+        if not hand:
+            self.error(rule, w, f"{vid} is path_checked but v{ver} has no {PATH_FORMULA} prediction before it "
+                                f"(the load path checked by hand)")
+        elif not any(isinstance(p.get("value"), (int, float)) and p["value"] == 0 for p in hand):
+            self.error(rule, w, f"{vid} is path_checked but v{ver}'s {PATH_FORMULA} predictions are not 0 "
+                                f"(the path is not joined)")
+
+        def numbers(a: dict, q: str) -> list[float]:
+            return [r["value"] for r in a.get("results") or []
+                    if r.get("quantity") == q and isinstance(r.get("value"), (int, float))]
+
+        traced = [a for j, a in sorted(self.recs["analysis"].values(), key=lambda x: x[0])
+                  if j < i and a.get("design_version") == ver and a.get("load_case_id") == lc_id
+                  and a.get("status") == "ok" and numbers(a, UNSUPPORTED)]
+        if not traced:
+            self.error(rule, w, f"{vid} is path_checked but no ok analysis of {lc_id} in v{ver} before it gives "
+                                f"{UNSUPPORTED} (the tool's side of the path check)")
+        decided = self.recs["analysis"].get(c.get("analysis_id"))
+        for a in ([traced[-1]] if traced else []) + ([decided[1]] if decided else []):
+            aid, lost, free = a.get("analysis_id"), numbers(a, UNSUPPORTED), numbers(a, FREE_PARTS)
+            if not lost:
+                self.error(rule, w, f"{vid} is path_checked but {aid} ({a.get('tool')}) gives no {UNSUPPORTED}")
+            elif max(lost) > 0:
+                self.error(rule, w, f"{vid} is path_checked but {aid} gives {UNSUPPORTED} {max(lost):g} "
+                                    f"(the verdict is unsupported_load, red)")
+            if free and max(free) > 0:
+                self.error(rule, w, f"{vid} is path_checked but {aid} gives {FREE_PARTS} {max(free):g}")
+
     def _check_verdict_math(self, vid: str, v: dict, w: str) -> None:
         try:
             val, lim, op = float(v["value"]["value"]), float(v["limit"]["value"]), v["op"]
@@ -1237,7 +1454,11 @@ class RunChecker:
                     continue
                 causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == cid]
                 cause = self._state_at("cause", causes[-1], i) if causes else None
-                if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
+                # (b): resolved, safe-side, or the tool decides with the path checked (a path_checked verdict of it)
+                decided = cause is not None and cause.get("tool_decides") is True and any(
+                    r.get("basis") == PATH_CHECKED and r.get("comparison_id") == cid
+                    for j, r in self.recs["verdict"].values() if j < i)
+                if cause is None or not (cause.get("resolved") or cause.get("safe_side") or decided):
                     out_why = "no cause" if cause is None else f"{causes[-1]} not resolved, not safe-side"
                     why.append(f"latest comparison {cid} of {c.get('quantity')} is a mismatch ({out_why})")
             newest: dict[str, dict] = {}
@@ -1255,9 +1476,38 @@ class RunChecker:
                     worst = max(vals) if op in ("<=", "<") else min(vals)
                     if not OPS[op](worst, limit["value"]):
                         why.append(f"{a.get('analysis_id')} {q} {worst:.4g} {limit.get('unit')} beyond {op} {limit['value']}")
+            # (d) (contract 460043d): an earlier version's analysis beyond the criterion asks for an analysis of
+            # the same or a heavier stage in this version giving the judged quantity; a lighter tool's pass
+            # does not clear it
+            beyond = [(self._stage(a.get("tool")), aid) for aid, (j, a) in self.recs["analysis"].items()
+                      if j < i and a.get("load_case_id") == lc_id and isinstance(a.get("design_version"), int)
+                      and isinstance(v, int) and a["design_version"] < v and self._beyond(a, crit)]
+            if beyond:
+                need, first = max(beyond)
+                gives = [aid for aid, (j, a) in self.recs["analysis"].items()
+                         if j < i and a.get("load_case_id") == lc_id and a.get("design_version") == v
+                         and a.get("status") == "ok" and self._stage(a.get("tool")) >= need
+                         and self._judged_values(a, crit)]
+                if not gives:
+                    why.append(f"{first} (stage {need}) was beyond the criterion in an earlier version and no "
+                               f"analysis of stage {need} or more gives {crit.get('quantity')} in v{v} (contract (d))")
             if why:
                 out[lc_id] = why
         return out
+
+    def _judged_values(self, a: dict, crit: dict) -> list[float]:
+        """The analysis's values of the criterion's judged quantity (JUDGED_AS for its tool), in its unit."""
+        q = JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
+        unit = (crit.get("limit") or {}).get("unit")
+        return [r["value"] for r in a.get("results", [])
+                if r.get("quantity") == q and r.get("unit") == unit and isinstance(r.get("value"), (int, float))]
+
+    def _beyond(self, a: dict, crit: dict) -> bool:
+        """An ok analysis whose worst judged value fails the criterion."""
+        vals, op, lim = self._judged_values(a, crit), crit.get("op"), (crit.get("limit") or {}).get("value")
+        if a.get("status") != "ok" or not vals or op not in OPS or not isinstance(lim, (int, float)):
+            return False
+        return not OPS[op](max(vals) if op in ("<=", "<") else min(vals), lim)
 
     def check_judgements(self) -> None:
         """A tile is red when a listed verdict fails (even with load cases left without one), else
@@ -1288,6 +1538,11 @@ class RunChecker:
                                                  f"{len(misses)} system rules hitting a part")
             if state == "green" and not j.get("verdict_ids"):
                 self.error("judgement.state", w, "green without any verdict")
+            unlisted = [x for x in self._standing_hot_spots(i, j.get("domain"), j.get("design_version"))
+                        if x not in j.get("verdict_ids", [])]
+            if unlisted:
+                self.error("judgement.hot_spot", w, f"{', '.join(unlisted)} (hot_spot, red) still stand in "
+                                                    f"{j.get('domain')} v{j.get('design_version')} but are not listed")
             missing = [lc_id for lc_id, lc in self.lcs(j.get("design_version")).items()
                        if lc.get("domain") == j.get("domain") and "criterion" in lc and lc_id not in judged]
             if state == "green" and missing:
@@ -1382,6 +1637,30 @@ class RunChecker:
                     and "criterion" in lc and self.version_of("comparison", c) == v):
                 self.warn("report.differences", w, f"{dom} leaves out the mismatch {cid} ({lc.get('load_case_id')})")
 
+    def check_mounts(self) -> None:
+        """R9 suspension mounts (contract 40645e0): every R9 load case judges one of R9_QUANTITIES, unit 1,
+        <= 1 (rule R9.criterion); a part with joint sizes (part.joint) is a bracket (warning part.joint)."""
+        seen = [(layout.PROJECT_FILE, self.load_cases)]
+        seen += [(self.where_of[i], lcs) for _, (i, lcs) in sorted(self.version_lcs.items(), key=lambda kv: str(kv[0]))]
+        for w, lcs in seen:
+            for lc_id, lc in lcs.items():
+                if lc.get("test_id") != MOUNT_TEST or not isinstance(lc.get("criterion"), dict):
+                    continue
+                c = lc["criterion"]
+                limit = c.get("limit") or {}
+                if c.get("quantity") not in MOUNT_QUANTITIES:
+                    self.error("R9.criterion", w, f"{lc_id} judges {c.get('quantity')}, not one of "
+                                                  f"{', '.join(MOUNT_QUANTITIES)}")
+                if not (c.get("op") == "<=" and limit.get("unit") == "1" and isinstance(limit.get("value"), (int, float))
+                        and abs(limit["value"] - 1.0) < 1e-12):
+                    self.error("R9.criterion", w, f"{lc_id}: criterion {c.get('op')} {limit.get('value')} "
+                                                  f"{limit.get('unit')}, not <= 1 (unit 1)")
+        for v, (i, d) in self.designs.items():
+            for p in d.get("parts") or []:
+                if p.get("joint") and p.get("kind") != "bracket":
+                    self.warn("part.joint", self.where_of[i], f"v{v} part {p.get('id')} ({p.get('kind')}) has joint "
+                                                              f"sizes; they are a bracket's (contract 40645e0)")
+
     def check_h3(self) -> None:
         open_mismatch: dict[str, set[str]] = {}
         for i, e in enumerate(self.events):
@@ -1471,6 +1750,20 @@ class RunChecker:
             return f"{latest[0]} ended with {causes[-1]}"
         return None
 
+    def _ended(self, v: int | None) -> set[str]:
+        """The load cases of version v whose mismatch was ended without a verdict: a cause, as it last stands,
+        with ends_case true and not resolved (hiraku.tools.rules.ended_cases; a -beyond case without a
+        criterion too, which the run's stop names as not judged)."""
+        out = set()
+        for _, c in self.recs["cause"].values():
+            if c.get("ends_case") is not True or c.get("resolved"):
+                continue
+            cmp = self.recs["comparison"].get(c.get("comparison_id"))
+            p = self.recs["prediction"].get((cmp[1] if cmp else {}).get("prediction_id"))
+            if p and p[1].get("design_version") == v:
+                out.add(p[1].get("load_case_id"))
+        return out
+
     def _verdict_tool(self, ver: dict) -> str | None:
         """The tool of the analysis a verdict came from (through its comparison, or its analysis_id)."""
         aid = ver.get("analysis_id")
@@ -1544,9 +1837,9 @@ class RunChecker:
             self.error("run.stop_code", w, f"stop_code {code} with status {status}")
         if (code == "error") != (status == "failed"):
             self.warn("run.stop_code", w, f"stop_code {code} with status {status} (error goes with failed)")
-        if code == "not_judged" and self._unjudged() == {}:
+        if code == "not_judged" and self._unjudged() == {} and not self._ended(max(self.designs, default=None)):
             self.error("run.stop_code", w, "stop_code not_judged but every load case with a criterion in the "
-                                           "picked domains has a verdict")
+                                           "picked domains has a verdict and none was ended without one")
         if code == "round_limit" and self.project and self.designs:
             used, limit = max(self.designs) - 1, self.project.get("round_limit")
             if isinstance(limit, int) and used < limit:
@@ -1586,6 +1879,26 @@ class RunChecker:
                 last[rc["rule_id"]] = rc
         return {rid for rid, rc in last.items() if rc.get("hits")}
 
+    def _rule_answered_modules(self, v: int, d: dict, i: int) -> set[str]:
+        """The modules whose parts a person said to fix for a rule hit (docs/contract.md, 規則の当たりを人に
+        聞く): a hearing.asked rule_question and its hearing.answered rule_answer revise_design, both after
+        version v was made and before event i; the modules of the question's parts in v."""
+        made = self.designs[v][0]
+        asked: dict[str, list] = {}
+        out: set[str] = set()
+        mod_of = {p.get("id"): p.get("module") for p in d.get("parts") or []}
+        for j in range(made + 1, min(i, len(self.events))):
+            e = self.events[j]
+            data = e.get("data") or {}
+            if e.get("kind") == "hearing.asked":
+                for q in data.get("rule_questions") or []:
+                    asked[q.get("rule_id")] = q.get("parts") or []
+            elif e.get("kind") == "hearing.answered":
+                for a in data.get("rule_answers") or []:
+                    if a.get("choice") == "revise_design":
+                        out |= {mod_of.get(p) for p in asked.get(a.get("rule_id"), [])} - {None}
+        return out
+
     def check_modules(self) -> None:
         """HK6_module_scope (contract d9631a5): the module designers propose, the packager builds."""
         rule = "HK6_module_scope"
@@ -1621,12 +1934,15 @@ class RunChecker:
                     self.error(rule, w, f"{cid} {what} {', '.join(out)}, not among {m}'s {allowed} in v{v}")
             reds = self._red_cases(v, i)
             named = {x for lc in reds for x in (self.lc(lc, v) or {}).get("modules") or []}
+            ruled = m in self._rule_answered_modules(v, d, i)  # a person said to fix its part for a rule hit
             for lc in p.get("load_case_ids") or []:
                 if lc not in reds:
                     self.error(rule, w, f"{cid} answers {lc}, which is not red in v{v}")
                 elif m not in ((self.lc(lc, v) or {}).get("modules") or []):
                     self.error(rule, w, f"{cid} from {m} answers {lc}, whose modules do not name {m}")
-            if not reds and not self._system_misses(v, i):
+            if ruled:
+                pass
+            elif not reds and not self._system_misses(v, i):
                 self.error(rule, w, f"{cid} proposed while nothing in v{v} is red")
             elif not reds:
                 pass  # only a system rule is red (assembly tile); it names no module
@@ -1653,7 +1969,12 @@ class RunChecker:
                                     f"makes a version")
             mods = {x.get("module_id"): x for x in prev.get("modules") or []}
             pvars = set((mods.get("package") or {}).get("variables") or [])
-            rnd = [p for j, p, _ in self.proposals if pi < j < i]
+            # a module's later proposal in the round replaces its earlier one (docs/contract.md, 8762a06)
+            last: dict = {}
+            for j, p, _ in self.proposals:
+                if pi < j < i:
+                    last[p.get("module_id")] = p
+            rnd = sorted(last.values(), key=lambda p: str(p.get("change_id")))
             listed = d.get("module_changes") or []
             pkg = [x for x in listed if x.get("module_id") == "package"]
             listed = [x for x in listed if x.get("module_id") != "package"]
@@ -1669,9 +1990,10 @@ class RunChecker:
                 if out or x.get("choices"):
                     self.error(rule, w, f"v{v} package change {x.get('change_id')} sets "
                                         f"{', '.join(out + sorted(x.get('choices') or {}))}, not package variables")
+            listed = sorted(listed, key=lambda x: str(x.get("change_id")))
             if [x.get("change_id") for x in listed] != [p.get("change_id") for p in rnd]:
-                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round "
-                                    f"proposed {[p.get('change_id') for p in rnd]}")
+                self.error(rule, w, f"v{v} module_changes {[x.get('change_id') for x in listed]} but the round's "
+                                    f"proposals (each module's last) are {[p.get('change_id') for p in rnd]}")
             else:
                 for x, p in zip(listed, rnd):
                     if x != p:
@@ -1903,6 +2225,8 @@ class RunChecker:
                 out.append(f"    {kid}: {k.get('cause', '')[:80]}")
                 if k.get("safe_side"):
                     out.append(f"    safe side: {k.get('safe_side_reason', '')[:80]}")
+                if k.get("tool_decides"):
+                    out.append(f"    the tool decides (path checked by hand): {k.get('tool_decides_reason', '')[:80]}")
                 if k.get("resolved_by"):
                     out.append(f"    resolved by {k['resolved_by']}")
         out.append(f"verdicts: {len(self.recs['verdict'])}")
@@ -1948,8 +2272,10 @@ class RunChecker:
         self.check_comparisons()
         self.check_causes()
         self.check_verdicts()
+        self.check_hot_spots()
         self.check_judgements()
         self.check_report()
+        self.check_mounts()
         self.check_h3()
         self.check_light_first()
         self.check_hooks()

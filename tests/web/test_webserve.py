@@ -215,7 +215,7 @@ class ListRunsTest(unittest.TestCase):
         runs = list_runs(Path(tempfile.gettempdir()) / "hiraku-no-such-runs-dir")
         self.assertEqual([r["run_id"] for r in runs], ["sample"])
         self.assertTrue(runs[0]["finished"])
-        self.assertFalse(runs[0]["default"])  # no saved run: the screen opens on the list
+        self.assertFalse(runs[0]["default"])  # no saved run: the run list recommends none
 
 
 class SavedRunsTest(unittest.TestCase):
@@ -456,6 +456,58 @@ class OpenTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_runs_default_is_the_repositorys(self):
+        from unittest import mock
+
+        from hiraku.webserve import __main__ as entry
+
+        class Fake:
+            server_address = ("127.0.0.1", 8765)
+            RequestHandlerClass = type("H", (), {"launcher": None})
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        with mock.patch.object(entry, "make_server", return_value=Fake()) as made, \
+                mock.patch.object(entry, "list_runs", return_value=[]), mock.patch("sys.stdout", new_callable=io.StringIO):
+            entry.main([])
+        self.assertEqual(made.call_args.args[2], webserver.REPO_DIR / "runs")
+
+
+class PortInUseTest(unittest.TestCase):
+    """A second server on a port in use fails (Windows binds exclusively), and the command says so."""
+
+    def test_second_server_on_the_same_port_fails(self):
+        first = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None, launcher=False)
+        try:
+            port = first.server_address[1]
+            with self.assertRaises(OSError):
+                second = make_server("127.0.0.1", port, "runs-none", quiet=True, saved_dir=None, launcher=False)
+                second.server_close()
+            from hiraku.webserve import __main__ as entry
+
+            err = io.StringIO()
+            with mock_stdio(err):
+                code = entry.main(["--port", str(port), "--runs", tempfile.gettempdir(), "--saved", tempfile.gettempdir()])
+            self.assertEqual(code, 1)
+            self.assertIn(f"port {port}", err.getvalue())
+            self.assertIn("in use", err.getvalue())
+        finally:
+            first.server_close()
+
+
+def mock_stdio(err):
+    from contextlib import ExitStack
+    from unittest import mock
+
+    stack = ExitStack()
+    stack.enter_context(mock.patch("sys.stderr", err))
+    stack.enter_context(mock.patch("sys.stdout", new_callable=io.StringIO))
+    return stack
+
 
 class ShelfTest(unittest.TestCase):
     """GET /api/shelf (the A4 shelf, computed once in the background) and a run's tool files."""
@@ -645,6 +697,37 @@ class LaunchTest(unittest.TestCase):
         status, out = self.post(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
         self.assertEqual(status, 500)
         self.assertIn("ended before it started", out["error"])
+
+    def test_a_child_silent_past_the_wait_is_ended_and_the_next_start_runs(self):
+        # a child (with a child of its own) that stays silent past wait_s: 504, it is ended, and
+        # the place is free again; while it was starting, a second start said so (409, no id)
+        code = ("import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                "time.sleep(60)")
+        lau = Launcher(self.runs, self.tmp / "requirements", env={}, command=lambda req, mode, runs: [sys.executable, "-c", code],
+                       reader=fake_reader, wait_s=2, demo_runs_file=self.demo_file)
+        self.launchers = [lau]
+        answers = []
+        first = threading.Thread(target=lambda: answers.append(self._start(lau)))
+        first.start()
+        time.sleep(0.8)
+        second = self._start(lau)
+        first.join(30)
+        self.assertEqual(second[0], 409)
+        self.assertIn("still starting", second[1])
+        self.assertIsNone(second[2]["running_run_id"])
+        self.assertEqual(answers[0][0], 504)
+        self.assertIn("it was stopped", answers[0][1])
+        self.assertIsNone(lau.proc)
+        lau.command = fake_command(SAMPLE_EVENTS, self.RUN, 3.0)
+        lau.wait_s = 20
+        self.assertEqual(lau.start("offroad-4w.yaml", "scripted")["run_id"], self.RUN)
+
+    @staticmethod
+    def _start(lau):
+        try:
+            return 200, lau.start("offroad-4w.yaml", "scripted"), {}
+        except LaunchError as e:
+            return e.status, str(e), e.extra
 
     def test_hearing_answer_goes_to_the_started_run_only(self):
         base = self.serve({})

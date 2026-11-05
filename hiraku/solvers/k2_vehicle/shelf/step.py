@@ -6,7 +6,6 @@ import math
 
 import numpy as np
 
-from .. import kinematics
 from ..checks import _check
 from ..drive import SpeedController, controls, start_rolling
 from ..model import DesignError, box_design, build_vehicle
@@ -15,6 +14,8 @@ from ..road import step as step_road
 from ..scenario import new_sim
 from ..units import G0
 from .base import MOTOR, MU, K2Tool, P, Pair, _box, _half_width, _length, _res
+from .mounts import corner_mounts  # noqa: F401  (moved to mounts.py; other modules import it from here)
+from .mounts import LOAD_EVERY_S, load_state, mount_peak, mount_series, mount_vectors
 
 
 def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=None, ramp_s: float = 4.0,
@@ -136,47 +137,10 @@ def step_body_log(design: dict, step_height_mm: float, step_supports: list[str] 
     return step_push(veh, step_height_mm / 1000.0, stepping, dt=dt, after_s=after_s, log=True)["body_log"]
 
 
-LOAD_EVERY_S = 0.01  # s between the body's loads kept during the push
-DENSE_BEFORE_S, DENSE_AFTER_S, DENSE_MAX = 0.2, 0.2, 30  # around lift-off to the wheels on the step
+DENSE_BEFORE_S, DENSE_AFTER_S = 0.2, 0.2  # around lift-off to the wheels on the step
 CLIMB_BEFORE_S = 0.6  # a following wheel's climb: from this long before its centre passes the corner
-SPARSE_EVERY_S = 0.25
 CRAWL_SPEED = 0.5  # m/s after the lift-off (K2's choice: slow, so the record stays nearly quasi-static)
 CRAWL_MAX_S = 20.0
-
-
-def load_state(sim) -> dict:
-    """Sim.loads of the last step with its time and the world position of the design origin."""
-    out = sim.loads()
-    out["t"] = sim.t
-    out["origin"] = out["cg"] - out["rot"] @ np.asarray(sim.veh.cg_s, dtype=float)
-    return out
-
-
-def corner_mounts(veh, st: dict, i: int) -> dict | None:
-    """The forces corner i's double wishbone puts on the body at its mounts in the load state st:
-    kinematics.corner_mount_forces of the knuckle's load (force at the wheel centre and moment,
-    Sim.loads) at its travel. {mount: (point, force)}, world axes, m and N; None for a corner
-    off a K&C table or without damper points."""
-    c = veh.corners[i]
-    if c.table is None or "damper_lower" not in c.table["hardpoints_mm"]:
-        return None
-    rot, origin, ld = st["rot"], st["origin"], st["corners"][i]
-    got = kinematics.corner_mount_forces(c.table, c.side, ld["travel"], rot.T @ ld["force"],
-                                         rot.T @ (ld["point"] - origin), rot.T @ ld["moment"])
-    return {m: (origin + rot @ p, rot @ f) for m, (p, f) in got.items()}
-
-
-def mount_vectors(veh, snap: dict) -> list:
-    """The forces each K&C corner puts on the body at its mounts at the snapshot (corner_mounts),
-    as joint vectors at '<support>.<hardpoint key>': the mount's point and the force the body
-    receives, world axes. A corner whose hardpoints have no damper points gives none."""
-    out = []
-    for i, c in enumerate(veh.corners):
-        got = corner_mounts(veh, snap["loads"], i)
-        for mount, (point, force) in (got or {}).items():
-            out.append({"kind": "joint", "at": f"{c.id}.{mount}", "origin_mm": [float(x) * 1000.0 for x in point],
-                        "vector_N": [float(x) for x in force]})
-    return out
 
 
 def climb_windows(t_lift: float, crossed: dict[int, float], stepping: list[int]) -> list[tuple[float, float]]:
@@ -189,63 +153,6 @@ def climb_windows(t_lift: float, crossed: dict[int, float], stepping: list[int])
     out = [(t_lift - DENSE_BEFORE_S, t_on + DENSE_AFTER_S)]
     out += [(t - CLIMB_BEFORE_S, t + DENSE_AFTER_S) for i, t in sorted(crossed.items()) if i not in stepping]
     return out
-
-
-def mount_times(ts: list[float], windows: list[tuple[float, float]]) -> list[int]:
-    """Indices into the load states' times ts: every SPARSE_EVERY_S, and at most DENSE_MAX evenly
-    in each window (lo, hi)."""
-    keep: set[int] = set()
-    for lo, hi in windows:
-        dense = [k for k, t in enumerate(ts) if lo <= t <= hi]
-        stride = max(1, math.ceil(len(dense) / DENSE_MAX))
-        keep.update(dense[::stride])
-        if dense:
-            keep.add(dense[-1])
-    sparse = max(1, int(round(SPARSE_EVERY_S / LOAD_EVERY_S)))
-    keep.update(k for k in range(0, len(ts), sparse))
-    keep.add(len(ts) - 1)
-    return sorted(keep)
-
-
-def mount_series(veh, states: list[dict], windows: list[tuple[float, float]]) -> list:
-    """Time series of the body's loads at mount_times (windows: climb_windows): per K&C corner and mount
-    mount_x/y/z.<support>.<mount> (N, the force the body receives, world axes); per corner whose
-    drive or brake reacts on the body body_torque_x/y/z.<support> (N*m, world); and the sprung
-    body's sprung_cg_x/y/z (m), sprung_accel_x/y/z (m/s^2), sprung_ang_vel_x/y/z (rad/s),
-    sprung_roll/pitch/yaw (deg, as roll, pitch, yaw), inertia_force_x/y/z (N, -m_s a, at the
-    sprung CG) and inertia_moment_x/y/z (N*m, about the sprung CG). With the sprung weight they
-    balance: sum of the mount forces + weight + inertia force = 0, and the same for the moments
-    about the sprung CG with the body torques and the inertia moment."""
-    from ..record import _round
-    from ..sim import euler_from_r
-    if not states:
-        return []
-    idx = mount_times([st["t"] for st in states], windows)
-    ts = [_round(states[k]["t"]) for k in idx]
-    ch: dict[str, tuple[str, list]] = {}
-
-    def put(name: str, unit: str, value: float) -> None:
-        ch.setdefault(name, (unit, []))[1].append(_round(float(value)))
-
-    for k in idx:
-        st = states[k]
-        for i, c in enumerate(veh.corners):
-            got = corner_mounts(veh, st, i)
-            for mount, (_, f) in (got or {}).items():
-                for a, v in zip("xyz", f):
-                    put(f"mount_{a}.{c.id}.{mount}", "N", v)
-            for a, v in zip("xyz", st["corners"][i]["body_torque"]):
-                put(f"body_torque_{a}.{c.id}", "N*m", v)
-        for name, unit, vec in (("sprung_cg", "m", st["cg"]), ("sprung_accel", "m/s^2", st["acc"]),
-                                ("sprung_ang_vel", "rad/s", st["omega"]),
-                                ("inertia_force", "N", st["inertia_force"]),
-                                ("inertia_moment", "N*m", st["inertia_moment"])):
-            for a, v in zip("xyz", vec):
-                put(f"{name}_{a}", unit, v)
-        for name, v in zip(("roll", "pitch", "yaw"), euler_from_r(st["rot"])):
-            put(f"sprung_{name}", "deg", math.degrees(v))
-    return [{"channel": name, "unit": unit, "t_s": ts, "values": vals} for name, (unit, vals) in ch.items()
-            if not (name.startswith("body_torque_") and not any(vals))]
 
 
 class StepClimbTool(K2Tool):
@@ -276,8 +183,9 @@ class StepClimbTool(K2Tool):
     With K&C corners, run 1 also gives the force the body receives at each suspension mount
     (joint vectors at lift-off, and the mount_* series of mount_series: tens of instants from
     the standstill against the step until the end of the record, closer around each climb,
-    climb_windows), with the sprung body's motion and d'Alembert force and moment that
-    balance them.
+    climb_windows, and the instant of each mount's largest force), with the sprung body's motion
+    and d'Alembert force and moment that balance them, and the result mount_force_peak (N, the
+    largest |F| of all the mounts, where '<support>.<mount> at t <s> s'; mounts.mount_peak).
     """
 
     name = "step_climb_dynamic"
@@ -307,19 +215,26 @@ class StepClimbTool(K2Tool):
                                   "rolling_resistance": {"value": 0.0, "unit": "1"}}, name="step check, rigid")
         veh = build_vehicle(d)
         front = [i for i, c in enumerate(veh.corners) if c.steer]
-        r = step_push(veh, 0.10, front)
-        dd = math.sqrt(2 * 0.3 * 0.1 - 0.1 ** 2)
-        k = dd / (0.3 - 0.1)
-        out = [_check("stiff wheel r = 300 mm on a 100 mm step", "force_ratio", k, r["ratio"], "1", 2e-2,
-                      "rigid wheel on a step corner: d = sqrt(2 r h - h^2), F/W = d / (r - h)")]
+        rad, hh, big_l = 0.3, 0.10, 2.0
+        r = step_push(veh, hh, front)
+        dd = math.sqrt(2 * rad * hh - hh ** 2)
+        k = dd / (rad - hh)
+        out = [_check(f"stiff wheel r = {rad * 1e3:g} mm on a {hh * 1e3:g} mm step", "force_ratio", k, r["ratio"], "1", 2e-2,
+                      "rigid wheel on a step corner: d = sqrt(2 r h - h^2), F/W = d / (r - h)",
+                      case_ja=f"硬い輪 (半径 {rad * 1e3:g} mm) が {hh * 1e3:g} mm の段差に乗り上がり始めるときの、"
+                              "押す力 / 輪の荷重",
+                      source_ja="段差の角に当たった硬い輪: 角までの前後の距離 d = √(2 r h - h²)、押す力 / 荷重 = d / (r - h)")]
         snap = r["snap"]
         wf = sum(snap["f"][i][2] for i in front)
         w = veh.m_total * G0
         a = 1.0
-        expected = w * (2.0 - a) / 2.0 / (1.0 + k * 0.3 / 2.0)
-        out.append(_check("both front wheels on a 100 mm step, pushed by the rear: front axle load at lift-off",
+        expected = w * (big_l - a) / big_l / (1.0 + k * rad / big_l)
+        out.append(_check(f"both front wheels on a {hh * 1e3:g} mm step, pushed by the rear: front axle load at lift-off",
                           "front_axle_load", expected, wf, "N", 3e-2,
-                          "moment balance with the push at axle height: W_f = m g (L - a) / L / (1 + k r / L)"))
+                          "moment balance with the push at axle height: W_f = m g (L - a) / L / (1 + k r / L)",
+                          case_ja=f"前の 2 輪が {hh * 1e3:g} mm の段差に当たり、後ろから押されて浮く瞬間の、前の車軸の荷重",
+                          source_ja="車軸の高さで押されるときの回る力のつり合い: "
+                                    "前の荷重 = 車の重さ × (L - a) / L / (1 + 押す力の比 × 輪の半径 / L)"))
         return out
 
     def _run(self, design: dict, lp: dict) -> dict:
@@ -378,7 +293,7 @@ class StepClimbTool(K2Tool):
             inertia = [-(sum(snap["f"][i][k] for i in range(len(snap["f"]))) + m * snap["g"][k]) for k in range(3)]
             vectors.append({"kind": "inertia", "at": "cg", "origin_mm": [x * 1000.0 for x in snap["cg"]],
                             "vector_N": [float(x) for x in inertia]})
-            vectors += mount_vectors(veh, snap)
+            vectors += mount_vectors(veh, snap["loads"])
         if not crawl["lifted"]:
             notes.append("pushing with a growing torque did not lift the stepping wheels"
                          + (" (the driven wheels spun: grip)" if crawl["slip"] else ""))
@@ -439,5 +354,8 @@ class StepClimbTool(K2Tool):
         series = rec.series()
         if crawl["states"] and snap is not None:
             series += mount_series(veh, crawl["states"], climb_windows(snap["t"], crawl["crossed"], stepping))
+            top = mount_peak(series)
+            if top is not None:
+                res.append(top[0])
         return {"results": res, "series": series, "vectors": vectors or rec.vectors(-1), "scene": scene,
                 "assumptions": notes}

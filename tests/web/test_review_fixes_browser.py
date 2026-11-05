@@ -316,13 +316,14 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         page.wait_for_selector("#runlist table")
         got = page.evaluate(
             """() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")]
-                 .map((tr) => { const d = tr.querySelector(".rmeta .how"); return [tr.dataset.run, d ? [d.dataset.driver, d.textContent] : null]; }))"""
+                 .map((tr) => [tr.dataset.run, [tr.querySelector(".rsum").textContent, !!tr.closest("details.older")]]))"""
         )
         self.assertEqual(errors, [])
-        # the run list's words (test_runlist_rows_browser has the rest of the row's line)
-        words = {"claude_code_plugin": "Claude で実行", "agent_sdk": "Claude で実行", "scripted": "決まった手順で再現"}
+        # the row's title starts with how it was driven (test_runlist_rows_browser has the rest of it);
+        # a record without the driver is kept under the closed 「この PC の記録」
+        words = {"claude_code_plugin": "Claude の運転", "agent_sdk": "Claude の運転", "scripted": "決まった手順", None: "記録"}
         for rid, drv in drivers.items():
-            self.assertEqual(got[rid], [drv, words[drv]] if drv else None, rid)
+            self.assertEqual(got[rid], [words[drv], drv is None], rid)
         page.close()
 
     def test_the_feed_does_not_ask_again_at_once_when_a_read_does_not_move_on(self):

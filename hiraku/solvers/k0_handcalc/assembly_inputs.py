@@ -114,6 +114,7 @@ def overlap_inputs(design: dict) -> dict:
 
 
 STEER_STEP_DEG = 1.0  # the turned wheel checked every this many degrees
+PRUNE_MM = 1.0  # room for round-off when boxes that cannot be reached are left out before the exact checks
 
 
 def _plan_overlap(c, R, half_xy, lo, hi) -> float:
@@ -155,11 +156,16 @@ def motion_inputs(design: dict) -> dict:
         th = steer_max if s["actuation"]["steer"] and steer_max > 0 else 0.0
         n = max(1, int(math.ceil(2.0 * th / STEER_STEP_DEG)))
         angles = np.linspace(-th, th, n + 1) if th > 0 else [0.0]
+        # the turned wheel's corners stay within reach of the support's axis (plus PRUNE_MM for round-off): a box
+        # apart from that square along x or y has a negative plan overlap at every angle (_plan_overlap's x or y term)
+        reach = float(np.linalg.norm(wc[:2] - c[:2])) + float(np.linalg.norm(half[:2])) + PRUNE_MM
         for k, other in bx.items():
             if bs[k].support == s["id"] or mounted(bs[wk], bs[k], design):
                 continue
             dz = min(z_hi, other[1][2]) - max(z_lo, other[0][2])
             if dz <= TOUCH_MM:
+                continue
+            if any(other[0][i] > c[i] + reach or other[1][i] < c[i] - reach for i in (0, 1)):
                 continue
             for a in angles:
                 r = math.radians(float(a))
@@ -210,16 +216,31 @@ def _rod_hits(design, bs, bx, s, rod, c, th, travel) -> dict[str, float]:
     rk = f"part:{rod['id']}"
     others = {k: v for k, v in bx.items() if bs[k].support != s["id"] and not mounted(bs[rk], bs[k], design)}
     out: dict[str, float] = {}
+    if not others:
+        return out
+    # a box apart by more than the radius (plus PRUNE_MM) from the box round every place of the rod (the inner end,
+    # and the outer end anywhere on its circle about the support's axis, up and down by half the travel) is never
+    # reached: its depths are below 0 at every angle and height
+    rho = float(np.linalg.norm(outer[:2] - c[:2]))
+    lo_all = np.minimum(inner, [c[0] - rho, c[1] - rho, outer[2] - travel / 2.0]) - radius - PRUNE_MM
+    hi_all = np.maximum(inner, [c[0] + rho, c[1] + rho, outer[2] + travel / 2.0]) + radius + PRUNE_MM
+    others = {k: v for k, v in others.items()
+              if all(v[0][i] <= hi_all[i] and v[1][i] >= lo_all[i] for i in range(3))}
+    if not others:
+        return out
+    keys = list(others)
+    LO = np.array([np.asarray(others[k][0], float) for k in keys])[None, :, :]  # (1, boxes, 3)
+    HI = np.array([np.asarray(others[k][1], float) for k in keys])[None, :, :]
     for a in angles:
         ra = math.radians(float(a))
         R = np.array([[math.cos(ra), -math.sin(ra), 0.0], [math.sin(ra), math.cos(ra), 0.0], [0.0, 0.0, 1.0]])
         for dz in dzs:
             o = c + R @ (outer - c) + np.array([0.0, 0.0, float(dz)])
-            pts = inner + t * (o - inner)
-            for k, (lo, hi) in others.items():
-                d_out = np.linalg.norm(np.maximum(lo - pts, 0.0) + np.maximum(pts - hi, 0.0), axis=1)
-                d_in = np.min(np.minimum(pts - lo, hi - pts), axis=1)
-                depth = float(np.max(np.where(d_out > 0.0, radius - d_out, radius + d_in)))
+            P = (inner + t * (o - inner))[:, None, :]  # (points, 1, 3): every box at once, the same arithmetic
+            d_out = np.linalg.norm(np.maximum(LO - P, 0.0) + np.maximum(P - HI, 0.0), axis=2)
+            d_in = np.min(np.minimum(P - LO, HI - P), axis=2)
+            depths = np.max(np.where(d_out > 0.0, radius - d_out, radius + d_in), axis=0)
+            for k, depth in zip(keys, depths.tolist()):
                 if depth > TOUCH_MM and depth > out.get(k, 0.0):
                     out[k] = depth
     return out

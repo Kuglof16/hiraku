@@ -25,7 +25,8 @@ was HEAVY_GB or more (or one of KNOWN_HEAVY_GB, whose value is a floor) is heavy
 --max-heavy (default 2) heavy classes run at once, and a heavy class waits while another
 runs and free memory is under its peak plus RESERVE_GB ("waiting for memory: ..."); the
 lighter classes after it go first meanwhile. A scripted run's own process is not in its
-class's peak on Windows.
+class's peak on Windows. Each worker gets HIRAKU_CONVERGENCE_JOBS=1 unless it is set: the
+convergence test's mesh levels run one at a time, as its KNOWN_HEAVY_GB value counts them.
 
 A class that failed for lack of memory (MemoryError, numpy's _ArrayMemoryError,
 Windows' "paging file too small" WinError 1455: the machine was full, often
@@ -53,6 +54,7 @@ import atexit
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -69,11 +71,17 @@ HEAVY_GB = 4.0  # a class whose peak was this much or more is "heavy": at most -
 RESERVE_GB = 4.0  # a heavy class starts only when free memory is its last peak plus this (unless none runs)
 # heavy whatever their own process's peak says (the floor of memory_of): measured on 11/5 00:32 (four
 # at once took about 34 GB). SpaceFrameConvergenceTest runs each mesh level in a child process (one at a
-# time by default), whose memory is not in the worker's peak: 14.4 GB is the 14 mm level's (11/5 02:26).
+# time by default), whose memory is not in the worker's peak: 15.7 GB is the 14 mm level's on Linux (EC2, 11/5
+# 11:30; 14.4 GB on Windows, 11/5 02:26).
 KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
-                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 14.4,
+                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 15.7,
                   "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
                   "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
+CONVERGENCE_JOBS = "HIRAKU_CONVERGENCE_JOBS"  # mesh levels the convergence test runs side by side (worker_env)
+CONVERGENCE = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
+# its levels' peaks (GB), largest first: 14, 20, 40, 30 mm on Linux (EC2 m7a.4xlarge, 87619d5, 11/5 12:15).
+# With HIRAKU_CONVERGENCE_JOBS=n set for the suite, n levels may be at their peaks at once.
+CONVERGENCE_LEVEL_GB = (16.0, 13.7, 13.5, 11.3)
 # started first when there are no times yet
 HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verification.test_tools_protocol",
          "tests.solvers.test_frame_shell", "tests.solvers.test_k1_shell", "tests.tools.test_made_tools")
@@ -141,6 +149,13 @@ def _take_lock(jobs: int) -> None:
     atexit.register(path.unlink, missing_ok=True)
 
 
+BROWSER_SWITCH = "HIRAKU_WEB_BROWSER"  # the screen's browser tests run only with it set (tests/web/browser.py)
+BROWSER_PREFIX = "tests.web"
+BROWSER_JOBS = 2  # Chromium and a server per class; at 4 beside other heavy work, 38 of 368 waits timed out (t22)
+# --map (with --browser): what each browser test used, to pick the tests a change touches (qa.browser_pick)
+PY_MAP = "HIRAKU_PY_MAP"  # "1": a worker records the repository files it opens or imports (_watch_files)
+WEB_MAP = "HIRAKU_WEB_MAP"  # a folder: the screen's test helper writes each page's JS coverage there
+MAP_DIR = ROOT / "runs" / "browser-map"  # local; py.json (files by class) and js/ (the pages' coverage)
 QUEUE_FILE = "suite.lock"  # in LOCK_DIR: one full suite at a time, an OS lock on its first byte
 QUEUE_INFO = "suite.json"  # in LOCK_DIR: who holds the lock (pid, root, since)
 POLL_S = 5.0
@@ -161,19 +176,22 @@ def _lock_byte(f) -> bool:
         return False
 
 
-def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_tests"):
+def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_tests", queue: str = "suite"):
     """The machine-wide suite lock: the open lock file (keep it open while the suite runs; the OS frees
     the lock when the process ends), or None when another run holds it and wait is False. what: the
-    holder's job, shown to those waiting (qa.slot takes the same lock for other heavy jobs)."""
+    holder's job, shown to those waiting (qa.slot takes the same lock for other heavy jobs). queue: the
+    lock's name ("suite": the test suite and heavy jobs; "browser": the browser suite, which may run
+    beside the plain suite but not beside another browser suite)."""
     LOCK_DIR.mkdir(exist_ok=True)
-    f = open(LOCK_DIR / QUEUE_FILE, "a+b")
+    lock_file, info_file = f"{queue}.lock", f"{queue}.json"
+    f = open(LOCK_DIR / lock_file, "a+b")
     shown = None
     while not _lock_byte(f):
         if not wait:
             f.close()
             return None
         try:
-            holder = json.loads((LOCK_DIR / QUEUE_INFO).read_text(encoding="utf-8"))
+            holder = json.loads((LOCK_DIR / info_file).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             holder = {}
         if holder.get("pid") != shown:
@@ -181,8 +199,8 @@ def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_test
             say(f"waiting for {holder.get('pid', '?')} ({holder.get('what', 'qa.run_tests')}, {holder.get('root', '?')}, "
                 f"since {holder.get('started', '?')})", flush=True)
         time.sleep(POLL_S)
-    (LOCK_DIR / QUEUE_INFO).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs, "what": what,
-                                                   "started": time.strftime("%H:%M")}), encoding="utf-8")
+    (LOCK_DIR / info_file).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs, "what": what,
+                                                  "started": time.strftime("%H:%M")}), encoding="utf-8")
     return f
 
 
@@ -313,9 +331,37 @@ def free_gb() -> float | None:
     return None
 
 
+def _watch_files() -> set[str]:
+    """With PY_MAP set: an audit hook that collects the repository files this process opens or imports from
+    now on (the tests' own server threads too), as paths relative to ROOT. Returns the set it fills."""
+    used: set[str] = set()
+    if os.environ.get(PY_MAP) != "1":
+        return used
+    root = str(ROOT.resolve()).lower()
+
+    def note(path) -> None:
+        try:
+            p = os.path.abspath(os.fspath(path))
+        except TypeError:
+            return
+        if p.lower().startswith(root + os.sep) and os.path.isfile(p):
+            used.add(Path(p).resolve().relative_to(ROOT.resolve()).as_posix())
+
+    def hook(event: str, args) -> None:
+        if event == "open" and args and isinstance(args[0], (str, bytes, os.PathLike)):
+            note(args[0])
+        elif event == "import" and len(args) > 1 and args[1]:
+            note(args[1])
+
+    sys.addaudithook(hook)
+    return used
+
+
 def worker(out: Path, names: list[str]) -> int:
-    """Run the named tests with unittest; write what ran, failed and was skipped to out (JSON)."""
+    """Run the named tests with unittest; write what ran, failed and was skipped to out (JSON). With PY_MAP
+    set, also the repository files the tests opened or imported (py_files), for the browser test map."""
     sys.path.insert(0, str(ROOT))
+    used = _watch_files()
     suite = unittest.defaultTestLoader.loadTestsFromNames(names)
     # utf-8: unittest writes each failure's text here, and the console's code page (cp932) cannot hold every character
     with open(os.devnull, "w", encoding="utf-8", errors="replace") as null:
@@ -332,6 +378,11 @@ def worker(out: Path, names: list[str]) -> int:
         "skipped": [{"test": str(t), "why": why} for t, why in res.skipped],
         "expected_failures": len(res.expectedFailures), "unexpected_successes": len(res.unexpectedSuccesses),
         "peak_gb": peak_gb(),
+        **({"py_files": sorted(used | {Path(m.__file__).resolve().relative_to(ROOT.resolve()).as_posix()
+                                       for m in list(sys.modules.values())
+                                       if getattr(m, "__file__", None)
+                                       and str(Path(m.__file__).resolve()).lower().startswith(str(ROOT.resolve()).lower())})}
+           if os.environ.get(PY_MAP) == "1" else {}),
     }, ensure_ascii=False), encoding="utf-8")
     return 0
 
@@ -370,6 +421,13 @@ def memory_of(name: str, last: dict[str, float]) -> float | None:
     """The last peak (GB) of a class or method (a method that never ran alone: its class's), and never less
     than the known one (KNOWN_HEAVY_GB: a class whose heavy work runs in child processes)."""
     known = next((KNOWN_HEAVY_GB[k] for k in (name, name.rsplit(".", 1)[0]) if k in KNOWN_HEAVY_GB), None)
+    if CONVERGENCE in (name, name.rsplit(".", 1)[0]):  # levels side by side: their peaks add up
+        try:
+            n = max(1, int(os.environ.get(CONVERGENCE_JOBS) or 1))
+        except ValueError:
+            n = 1
+        if n > 1:
+            known = max(known or 0.0, round(sum(CONVERGENCE_LEVEL_GB[:n]), 1))
     for k in (name, name.rsplit(".", 1)[0]):
         if k in last:
             return max(float(last[k]), known or 0.0)
@@ -441,12 +499,21 @@ def schedule(names: list[str], jobs: int, run, memory: dict, max_heavy: int = 2,
     return results
 
 
+def worker_env() -> dict:
+    """A worker's environment: one BLAS thread (qa.procs), and one mesh level at a time in the convergence
+    test (HIRAKU_CONVERGENCE_JOBS=1 unless set): KNOWN_HEAVY_GB counts that class as one level, and levels
+    side by side (up to 46.9 GB for four) would not be seen by the heavy classes started after it."""
+    env = procs.one_blas_thread()
+    env.setdefault(CONVERGENCE_JOBS, "1")
+    return env
+
+
 def _run_one(name: str, tmp: Path, timeout: float, tag: str = "") -> dict:
     out = tmp / f"{name}{tag}.json"
     t0 = time.perf_counter()
     try:  # on timeout the worker and the runs it started are stopped; one BLAS thread each (qa.procs)
         proc = procs.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out), name], cwd=ROOT,
-                         env=procs.one_blas_thread(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
+                         env=worker_env(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"name": name, "s": time.perf_counter() - t0, "crash": f"no result within {timeout:g} s"}
     s = time.perf_counter() - t0
@@ -506,11 +573,30 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"classes whose last peak was {HEAVY_GB:g} GB or more that may run at once (default 2)")
     ap.add_argument("--no-wait", action="store_true",
                     help="run at once, without waiting for the machine-wide suite lock (emergencies only)")
+    ap.add_argument("--browser", action="store_true",
+                    help=f"the screen's tests with the browser on ({BROWSER_SWITCH}=1, as python -m tests.web.browser): "
+                         f"tests.web only, {BROWSER_JOBS} processes unless --jobs, with a lock of its own (it may "
+                         f"run beside the plain suite, not beside another browser suite). Needs Playwright")
+    ap.add_argument("--map", action="store_true",
+                    help="with --browser: record what each test used (the repository files its process opened or "
+                         "imported, and the JS functions its pages ran) under runs/browser-map/, for qa.browser_pick")
     args = ap.parse_args(argv)
+    if args.map and not args.browser:
+        ap.error("--map goes with --browser")
+    if args.browser:
+        os.environ[BROWSER_SWITCH] = "1"  # before discovery imports the test modules; the workers inherit it
+        args.only = args.only or [BROWSER_PREFIX]
+    if args.map:
+        js = MAP_DIR / "js"
+        shutil.rmtree(js, ignore_errors=True)  # this run's map replaces the last one
+        js.mkdir(parents=True, exist_ok=True)
+        os.environ[PY_MAP], os.environ[WEB_MAP] = "1", str(js)
     if args.jobs is None:
-        args.jobs = 8 if args.no_wait else max(8, (os.cpu_count() or 8) - 4)
+        args.jobs = BROWSER_JOBS if args.browser else 8 if args.no_wait else max(8, (os.cpu_count() or 8) - 4)
     # kept open for the whole run: the lock is held while this file is open (the OS frees it at exit)
-    queue = None if args.no_wait else take_queue(args.jobs, say=lambda *a, **k: print(*a, file=sys.stderr, **k))
+    queue = None if args.no_wait else take_queue(args.jobs, say=lambda *a, **k: print(*a, file=sys.stderr, **k),
+                                                 what="qa.run_tests --browser" if args.browser else "qa.run_tests",
+                                                 queue="browser" if args.browser else "suite")
 
     start = time.perf_counter()
     before = _others()
@@ -579,7 +665,31 @@ def main(argv: list[str] | None = None) -> int:
         MEMORY.write_text(json.dumps(mem_last, indent=1), encoding="utf-8")
     except OSError:
         pass
+    if args.map:
+        write_py_map(results)
     return 1 if failed else 0
+
+
+def _tree_now() -> dict:
+    """The tree the map is made on: HEAD's tree and whether tracked files differ from it."""
+    def git(*a):
+        try:
+            return subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True, timeout=60).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    return {"commit": git("rev-parse", "HEAD"), "tree": git("rev-parse", "HEAD^{tree}"),
+            "dirty": bool(git("status", "--porcelain", "--untracked-files=no"))}
+
+
+def write_py_map(results: list[dict]) -> Path:
+    """runs/browser-map/py.json: each class's (or method's) repository files, with the tree they were made on."""
+    MAP_DIR.mkdir(parents=True, exist_ok=True)
+    out = MAP_DIR / "py.json"
+    out.write_text(json.dumps({"made": time.strftime("%Y-%m-%dT%H:%M:%S"), **_tree_now(),
+                               "classes": {r["name"]: r.get("py_files", []) for r in results if "crash" not in r}},
+                              indent=1), encoding="utf-8")
+    print(f"browser map: {out} ({len(results)} classes; JS coverage in {MAP_DIR / 'js'})")
+    return out
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from ..model import box_design, build_vehicle
 from ..scenario import new_sim, side_gravity
 from ..units import G0
 from .base import MU, K2Tool, P, Pair, _length, _min_load, _ramp_gravity, _res, _side_ids, _slope
-from .lane_change import path_run
+from .lane_change import add_mounts, path_run
 
 
 class OffroadRollTool(K2Tool):
@@ -25,12 +25,18 @@ class OffroadRollTool(K2Tool):
     mean_uphill_load (N, its mean over the run), max_roll (deg, against the slope),
     rms_vertical_accel (m/s^2, body axis), tipped (1), and tip_slope_angle (deg, the slope
     at which the uphill wheels all left the ground while it was made, when they did).
+    With K&C corners the drive also gives the force the body receives at each suspension mount
+    (lane_change.add_mounts: mount_* series with gravity_x/y/z, mount_force_peak, joint vectors).
+    hot_spots: tip_slope_angle on each side up where the wheels lift while the slope is made (the
+    load case's slope_up judged; the other side by the same turn, brakes held, without the drive).
     """
 
     name = "offroad_roll"
     title = "凸凹の横斜面 (K2 で ISO 8608 の路面)"
     domain = "handling"
     tests = ["S5"]
+    # side_slope 15 deg and speed 20 km/h: the defaults when a load case has none (the catalog's load cases give
+    # them; S5's 20 km/h is cited in catalog/builders/k2_tests.py); test values
     params = (P("road_class", None, "C", "ISO 8608 road class (values not checked against the ISO text)",
                 choices=tuple("ABCDEFGH")),
               P("side_slope", "deg", 15.0, "side slope"),
@@ -63,22 +69,31 @@ class OffroadRollTool(K2Tool):
         f, pxx = welch(z, fs=1.0 / dx, nperseg=4096)
         band = (f >= 0.05) & (f <= 2.0)
         ratio = float(np.mean(pxx[band] / iso8608_psd(f[band], "C")))
+        gd = ISO8608_GD_N0["C"]
         out = [_check("generated ISO 8608 class C track, Welch PSD / G_d(n0)(n/n0)^-2 over 0.05-2 cycle/m", "psd_ratio",
                       1.0, ratio, "1", 0.10, "G_d(n) = G_d(n0) (n / n0)^-w, n0 = 0.1 cycle/m, w = 2, "
-                      f"G_d(n0) = {ISO8608_GD_N0['C']:g} m^3 (class C, not checked against the ISO text)")]
+                      f"G_d(n0) = {gd:g} m^3 (class C, not checked against the ISO text)",
+                      case_ja="作った ISO 8608 クラス C の凸凹の路面: 凸凹の細かさごとの強さ (Welch の方法で測る) が、"
+                              "決めた形と合うか (0.05〜2 回/m の平均の比)",
+                      source_ja=f"ISO 8608 の路面の形 G_d(n) = G_d(n0) (n / n0)^-2、n0 = 0.1 回/m、"
+                                f"クラス C は G_d(n0) = {gd:g} m³ (ISO の本文で確かめていない)")]
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, susp="rigid",
                        variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="side slope check, rigid")
         veh = build_vehicle(d)
         sim = new_sim(veh, settle_s=1.0)
-        beta = math.radians(15.0)
+        deg, t = 15.0, 1.2
+        beta = math.radians(deg)
         _ramp_gravity(sim, side_gravity, beta)
         up = sum(sim.out["ntot"][i] for i in _side_ids(sim, True))
         w = veh.m_total * G0
         h = float(veh.cg_total[2])
-        expected = w * (math.cos(beta) * 0.6 - math.sin(beta) * h) / 1.2
-        out.append(_check("rigid vehicle at rest on a 15 deg side slope: uphill wheel loads", "uphill_load", expected, up,
-                          "N", 5e-3, "moment about the downhill contact line: W (cos b t/2 - sin b h) / t"))
+        expected = w * (math.cos(beta) * t / 2.0 - math.sin(beta) * h) / t
+        out.append(_check(f"rigid vehicle at rest on a {deg:g} deg side slope: uphill wheel loads", "uphill_load", expected,
+                          up, "N", 5e-3, "moment about the downhill contact line: W (cos b t/2 - sin b h) / t",
+                          case_ja=f"サスペンションの無い車が {deg:g}° の横の斜面に止まっているときの、上の側の輪の荷重の合計",
+                          source_ja="下の側の輪の接地線まわりの回る力のつり合い: "
+                                    "車の重さ × (cos β × 輪の幅 / 2 - sin β × 重心の高さ) / 輪の幅"))
         return out
 
     def _run(self, design: dict, lp: dict) -> dict:
@@ -110,6 +125,15 @@ class OffroadRollTool(K2Tool):
                _res("tipped", 1.0 if st["tipped"] else 0.0, "1")]
         if st["tip_angle"] is not None:
             res.append(_res("tip_slope_angle", math.degrees(st["tip_angle"]), "deg"))
+        # the slope the other way up as well (the load case names one side, from the CG's offset): only
+        # its making, brakes held, for the tip angle; a place the hand calculation does not look at
+        other = new_sim(veh, road=road, dt=self.dt, settle_s=1.0)
+        tip_other = _ramp_gravity(other, side_gravity, -beta if left_up else beta, self.q(lp, "slope_ramp_time", "s"),
+                                  up=_side_ids(other, not left_up))
+        side_name = {True: "left side up", False: "right side up"}
+        places = [{"where": side_name[up_], "quantity": "tip_slope_angle", "value": math.degrees(a), "unit": "deg",
+                   "judged": j} for up_, a, j in ((left_up, st["tip_angle"], True), (not left_up, tip_other, False))
+                  if a is not None]
         if st["tipped"]:
             notes.append("the vehicle tipped over; the run stops there (K2 has no body-ground contact)")
         rec = st["recorder"]
@@ -127,5 +151,7 @@ class OffroadRollTool(K2Tool):
                            "通り道の高さ。その間は直線、外は近い方の通り道と同じ"},
                  dict(_slope(f"横 {math.degrees(beta):g}° の斜面 ({side}が上)。slope_angle の通りに水平から傾く", veh,
                              float(x[0]), float(x[-1]), roll=beta if left_up else -beta), angle_channel="slope_angle")]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-                "assumptions": notes}
+        out = {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+               "assumptions": notes, "places": places}
+        add_mounts(veh, st, out)  # the drive over the rough slope (the slope's making is not in it)
+        return out

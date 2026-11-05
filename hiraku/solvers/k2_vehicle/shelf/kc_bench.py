@@ -51,16 +51,29 @@ def _mount_checks() -> list[dict]:
     f = a([300.0, -900.0, 2500.0])
     r = kinematics.mount_forces(gen, kinematics.solve_at_travel(gen, 0.03), f)
     total = sum(r[m] for m in kinematics.MOUNTS)
+    fz, lever, d_arm = 2000.0, 0.4, 0.3
+    fy, below, h_bj = 800.0, 0.2, 0.3
+    fs = ", ".join(f"{v:g}" for v in f)
     return [
-        _check("vertical 2 kN at the contact, level parallel arms: the damper carries it by the lever", "damper_force",
-               -2000.0 * 0.4 / 0.3, up["damper_tension"], "N", 1e-9,
-               "moment about the lower arm's axis: F_z L = D a (L = 400 mm to the ball joint, a = 300 mm to the damper)"),
-        _check("lateral 800 N at the contact 200 mm below the lower ball joint: the upper arm's pull", "upper_arm_force",
-               800.0 * 0.2 / 0.3, float(side["ball_joint_upper"][1]), "N", 1e-9,
-               "moment about the lower ball joint: F_y c = F_u h (c = 200 mm, h = 300 mm between the ball joints)"),
-        _check("generic layout at 30 mm bump, tyre force (300, -900, 2500) N: the forces on the body add up to it",
+        _check(f"vertical {fz / 1e3:g} kN at the contact, level parallel arms: the damper carries it by the lever",
+               "damper_force", -fz * lever / d_arm, up["damper_tension"], "N", 1e-9,
+               f"moment about the lower arm's axis: F_z L = D a (L = {lever * 1e3:g} mm to the ball joint, "
+               f"a = {d_arm * 1e3:g} mm to the damper)",
+               case_ja=f"接地点に上向き {fz / 1e3:g} kN (腕は水平で平行): ダンパーがてこで受ける力",
+               source_ja=f"下の腕の付け根の軸まわりの回る力のつり合い: 上の力 × {lever * 1e3:g} mm (玉継手まで) = "
+                         f"ダンパーの力 × {d_arm * 1e3:g} mm (ダンパーまで)"),
+        _check(f"lateral {fy:g} N at the contact {below * 1e3:g} mm below the lower ball joint: the upper arm's pull",
+               "upper_arm_force", fy * below / h_bj, float(side["ball_joint_upper"][1]), "N", 1e-9,
+               f"moment about the lower ball joint: F_y c = F_u h (c = {below * 1e3:g} mm, h = {h_bj * 1e3:g} mm between "
+               "the ball joints)",
+               case_ja=f"下の玉継手より {below * 1e3:g} mm 下の接地点に横向き {fy:g} N: 上の腕が引く力",
+               source_ja=f"下の玉継手まわりの回る力のつり合い: 横の力 × {below * 1e3:g} mm = 上の腕の力 × "
+                         f"{h_bj * 1e3:g} mm (上下の玉継手の間)"),
+        _check(f"generic layout at 30 mm bump, tyre force ({fs}) N: the forces on the body add up to it",
                "mount_force_sum_error", 0.0, float(np.linalg.norm(total - f)), "N", 1e-6,
-               "balance of the whole corner: the body takes what the road gives"),
+               "balance of the whole corner: the body takes what the road gives",
+               case_ja=f"よくある形のサスペンションを 30 mm 縮め、タイヤに ({fs}) N: 車体の取付点の力の合計がタイヤの力と同じか",
+               source_ja="隅全体の力のつり合い: 路面から受けた力を、車体がそのまま受ける"),
     ]
 
 
@@ -119,7 +132,9 @@ class KcBenchTool(K2Tool):
         expected = (cz + (0.0 - cy) * (ic[1] - cz) / (ic[0] - cy)) * 1000.0
         out.append(_check("generic short-long-arm corner at design travel: roll centre height", "roll_center_height",
                           expected, rc, "mm", 1e-3, "front-view instant centre: the line from the contact point "
-                          "through the arms' instant centre crosses the centre line at the roll centre"))
+                          "through the arms' instant centre crosses the centre line at the roll centre",
+                          case_ja="よくある形の上下の腕のサスペンション (上が短い) で、縮みが 0 のときのロールセンターの高さ",
+                          source_ja="前から見た上下の腕の延長の交点 (瞬間中心) と接地点を結ぶ線が、車の真ん中の線と交わる点"))
         # 2. aligning-moment steer with stiff bushings: only the tie rod gives way, about the kingpin axis
         k_t = 10e6
         stiff = kinematics.Bushings(1e13, 1e13, k_t)
@@ -130,16 +145,23 @@ class KcBenchTool(K2Tool):
         arm = float(np.cross(tro - sol["lbj"], nt) @ axis)
         kz = float(axis[2])
         expected = -kz * kz / (k_t * arm * arm)  # toe-in +: a +z moment turns a left wheel's nose out
-        out.append(_check("aligning moment on the generic corner, arm bushings stiff, tie rod 10 kN/mm: toe per N m",
-                          "toe_per_aligning_moment", expected, c["toe_per_mz"], "rad", 2e-3,
+        out.append(_check(f"aligning moment on the generic corner, arm bushings stiff, tie rod {k_t / 1e6:g} kN/mm: "
+                          "toe per N m", "toe_per_aligning_moment", expected, c["toe_per_mz"], "rad", 2e-3,
                           "rotation about the kingpin axis k: theta = M (k . z) / (k_t a^2), a = the tie rod's arm "
-                          "about k; toe change = theta (k . z)"))
+                          "about k; toe change = theta (k . z)",
+                          case_ja=f"同じサスペンションで、腕のゴムは硬く、タイロッドだけ {k_t / 1e6:g} kN/mm でたわむとき、"
+                                  "タイヤを戻す回る力 1 N·m あたりのトー (向き) の変わり",
+                          source_ja="キングピン (タイヤの向きが変わる軸) まわりに回る: 角度 = 回る力 × (軸の上下の向き) / "
+                                    "(タイロッドの硬さ × 腕の長さ²)。トーの変わり = 角度 × (軸の上下の向き)"))
         # 3. linear springs: twice the stiffness, half the compliance
         b1, b2 = kinematics.Bushings(3e6, 0.5e6, 10e6), kinematics.Bushings(6e6, 1e6, 20e6)
         c1, c2 = kinematics.compliance(hp, sol, b1), kinematics.compliance(hp, sol, b2)
         worst = max(abs(c2[k] / c1[k] - 0.5) for k in kinematics.COMPLIANCE_KEYS if abs(c1[k]) > 0.0)
         out.append(_check("all joint stiffnesses doubled: compliance halves", "compliance_ratio_error", 0.0, worst, "1",
-                          2e-3, "linear springs; the stiff ball joints and wheel pad stay the same, so a little off"))
+                          2e-3, "linear springs; the stiff ball joints and wheel pad stay the same, so a little off",
+                          case_ja="腕のゴムとタイロッドの硬さを全部 2 倍にすると、力によるタイヤの向きの変わりが半分になるか",
+                          source_ja="ばねは力に比例してたわむので半分になる。硬い玉継手と輪の台は 2 倍にしないので、"
+                                    "少しずれてよい"))
         out += _mount_checks()
         return out
 

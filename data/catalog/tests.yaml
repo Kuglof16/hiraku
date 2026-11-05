@@ -8,9 +8,10 @@
 # their tool exists.
 #
 # tolerance_rel: allowed |analyzed - predicted| / |predicted| for a match.
-# No standard publishes such a width (ISO 19364 and ISO 19365 check vehicle
-# dynamics software against tests, but the width is not in their public
-# parts), so HIRAKU chooses it and writes the reason in tolerance_basis.
+# No standard we found publishes such a width (ISO 19364 and ISO 19365 check
+# vehicle dynamics software against tests; their full texts were not read in
+# this repository, only the public parts, which give no width), so HIRAKU
+# chooses it and writes the reason in tolerance_basis.
 
 tests:
   - {id: S1, domain: handling, title: 静的な転倒 (傾斜台・縁の荷重), applies_if: standing, requirement_keys: [Q30, Q33, Q40, Q41, Q60]}
@@ -41,12 +42,13 @@ tests:
     title: 航続・稼働時間
     applies_if: self_propelled and battery
     requirement_keys: [Q54]
-    # The forest loop: grades from gentle to the sustained steepest (林道規程: 縦断勾配は続けて
-    # 12 % まで, https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf,
-    # not checked in this repository; Q13 is the short 14 %), speeds up to Q50. T1 and T2 drive the same loop.
+    # The forest loop: grades from gentle to the sustained steepest (林道規程 第 20 条 第 1 項のただし書: 縦断勾配
+    # 12 %, https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf, read for
+    # this repository as written in data/requirements/offroad-4w.yaml Q13; Q13 is the short 14 % of 第 4 項),
+    # speeds up to Q50. T1 and T2 drive the same loop.
     params: &forest_loop
       grade_low: {value: 7, unit: "%", basis: assumption}
-      grade_high: {value: 12, unit: "%", basis: "林道規程, sustained grade (not checked in this repository)"}
+      grade_high: {value: 12, unit: "%", basis: "林道規程 第 20 条 第 1 項ただし書, sustained grade (read: offroad-4w.yaml Q13)"}
       speed_low: {value: 20, unit: km/h, basis: assumption}
   - {id: P5, domain: powertrain, title: アクチュエータの力と速さ, applies_if: electric and not self_propelled, requirement_keys: [Q40, Q56]}
   - {id: C1, domain: crash, title: 壁への正面衝突, applies_if: ride and self_propelled and speed_vehicle, requirement_keys: [Q31, Q65]}

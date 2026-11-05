@@ -21,6 +21,10 @@ Sources used below:
 - [thin]   thin-walled sections on their mid-line (what a shell model of the walls
            represents): Bredt's shear flow for a closed cell, derived in the
            docstring, and the webs carrying the shear force
+- [clevis] a two-plate bracket with a pin through both and fillet welds at the plates'
+           roots: statics of the split force, pin shear on two planes, bearing on d t,
+           a cantilever plate (6 M / (b t^2)), a weld throat of 0.7 x leg; derived in
+           the docstrings; the allowable stresses are inputs
 """
 
 from __future__ import annotations
@@ -366,6 +370,84 @@ def inverted_hex(size: float = 1.0) -> list[list[float]]:
     volume are -size^3."""
     h = unit_hex(size)
     return h[4:] + h[:4]
+
+
+# --- a clevis bracket at a suspension mount [clevis] ------------------------------------------
+# Load case R9 (contract 40645e0). Written here apart from the analysis department's K0 so the two can be
+# compared: two plates standing on the frame face, the arm's end between them, a pin (bolt) through both
+# plates, each plate's root welded along both sides. The force split, the stresses and the utilisations are
+# derived below from that shape; the allowable stresses are inputs (their values and sources are the
+# analysis department's: EN 1993-1-8, 確かめていない until they confirm the text).
+
+def _dot(a, b) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _unit(a):
+    n = math.sqrt(_dot(a, a))
+    if n == 0.0:
+        raise ValueError("a direction of length 0")
+    return (a[0] / n, a[1] / n, a[2] / n)
+
+
+def mount_force_split(F, pin_axis, root_line) -> dict[str, float]:
+    """[clevis] The mount force F (N, a vector) split for the bracket: F_n along the pin axis (bends the
+    plates out of their plane), and in the plates' plane F_t along the root line (bends them in their plane)
+    and F_v across it (peels them off the frame face). The pin axis is normal to the plates; the root line
+    lies in a plate, so the in-plane frame is (root, pin x root). Returns the magnitudes and |F_p|, |F|."""
+    u, r = _unit(pin_axis), _unit(root_line)
+    if abs(_dot(u, r)) > 1e-9:
+        raise ValueError("the root line must lie in the plate (normal to the pin axis)")
+    v = (u[1] * r[2] - u[2] * r[1], u[2] * r[0] - u[0] * r[2], u[0] * r[1] - u[1] * r[0])  # in-plane, across the root
+    Fn, Ft, Fv = _dot(F, u), _dot(F, r), _dot(F, v)
+    return {"F": math.sqrt(_dot(F, F)), "F_n": abs(Fn), "F_t": abs(Ft), "F_v": abs(Fv), "F_p": math.hypot(Ft, Fv)}
+
+
+def clevis_pin_shear(F_p: float, d: float, n: int) -> float:
+    """[clevis] Shear stress in the pins: each of the n pins is cut in two planes (one at each plate),
+    on its full shank area pi d^2 / 4."""
+    return F_p / (2 * n * math.pi * d * d / 4.0)
+
+
+def clevis_bearing(F_p: float, d: float, t: float, n: int) -> float:
+    """[clevis] Bearing stress of the pins on the bracket plates: each plate takes half the in-plane force,
+    on the projected area d t of each of the n holes."""
+    return (F_p / 2.0) / (n * d * t)
+
+
+def clevis_plate_root_stress(F_n: float, F_t: float, F_v: float, e: float, b: float, t: float) -> float:
+    """[clevis] The plate's stress at its root, one plate taking half of each part: a cantilever of height e
+    (pin centre to the weld) on a root section b x t. Out of plane 6 M / (b t^2), in plane 6 M / (t b^2),
+    peel F / (b t); the three added at the root's corner (they meet there; the safe side)."""
+    oop = 6.0 * (F_n / 2.0) * e / (b * t * t)
+    ip = 6.0 * (F_t / 2.0) * e / (t * b * b)
+    peel = (F_v / 2.0) / (b * t)
+    return oop + ip + peel
+
+
+def clevis_weld_stress(F: float, F_n: float, F_t: float, e: float, b: float, t: float, s: float) -> float:
+    """[clevis] Shear stress on the fillet welds' throat a = 0.7 s, one plate taking half: two weld lines of
+    length b, one each side of the plate's root, a distance t apart. Line forces (N/mm), added by magnitude
+    (the safe side): the force itself spread on 2 b; the out-of-plane moment (F_n/2) e as a couple of the two
+    lines, (F_n/2) e / t on each, spread on b; the in-plane moment (F_t/2) e on two lines of length b, whose
+    section modulus per line is b^2 / 6, shared by two: 6 M / (2 b^2) = 3 M / b^2."""
+    a = 0.7 * s
+    w_force = (F / 2.0) / (2.0 * b)
+    w_out = (F_n / 2.0) * e / t / b
+    w_in = 3.0 * (F_t / 2.0) * e / (b * b)
+    return (w_force + w_out + w_in) / a
+
+
+def clevis_utilisations(F, pin_axis, root_line, d: float, n: int, t: float, s: float, b: float, e: float,
+                        f_v: float, f_b: float, f_plate: float, f_vw: float) -> dict[str, float]:
+    """[clevis] R9's four quantities (contract 40645e0) for one mount: each stress over its allowable."""
+    p = mount_force_split(F, pin_axis, root_line)
+    return {
+        "bolt_shear_utilisation": clevis_pin_shear(p["F_p"], d, n) / f_v,
+        "bolt_bearing_utilisation": clevis_bearing(p["F_p"], d, t, n) / f_b,
+        "plate_bending_utilisation": clevis_plate_root_stress(p["F_n"], p["F_t"], p["F_v"], e, b, t) / f_plate,
+        "weld_utilisation": clevis_weld_stress(p["F"], p["F_n"], p["F_t"], e, b, t, s) / f_vw,
+    }
 
 
 # --- units [SI] --------------------------------------------------------------------------

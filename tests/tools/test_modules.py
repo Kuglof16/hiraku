@@ -100,11 +100,25 @@ class ProposalTest(ModuleCase, unittest.TestCase):
         self.assertEqual(mine["variables"], {"seat_x": {"value": -900.0, "unit": "mm"}})
         self.assertEqual(mine["choices"], {"seat_kind": ["fixed", "slide"]})
         self.assertEqual(len(mine["envelope"]), 1)
-        self.assertEqual(mine["interfaces"][0]["id"], "seat_mount")
+        self.assertTrue(mine["interfaces"][0]["at"][0].startswith("seat_mount"))  # grouped: "<id>@<node or point>"
         self.assertEqual([c["change_id"] for c in got["pending"]], ["chg-0001"])
         self.assertEqual(got["pending"][0]["changes"], {"battery_x": "-950 mm"})
         every = get_context(self.ctx, {"sections": ["modules"]}, "packager")["modules"]
         self.assertEqual(len(every["modules"]), 6 - 1)  # package, frame, occupant, powertrain, body
+        # every module at once: the spaces in outline (run 094333: the whole answer went over Claude Code's limit)
+        occ = next(m for m in every["modules"] if m["module_id"] == "occupant")
+        self.assertEqual(occ["envelope"]["boxes"], 1)
+        self.assertEqual(set(occ["envelope"]["bounds_mm"]), {"min", "max"})
+        self.assertIn("shown", every)
+
+    def test_a_generator_refusal_says_who_changes_the_named_variable(self):
+        from hiraku.tools.functions import _who_changes
+
+        design = self.ctx.store.design()
+        said = _who_changes(design, "seat_x goes 21 mm into the floor; make seat_x larger", "build_version")
+        self.assertIn("designer.occupant が revise_design (module=occupant) で出し直す", said)
+        self.assertIn("track", _who_changes(design, "make track wider", "build_version"))
+        self.assertEqual(_who_changes(design, "no variable here", "build_version"), "値を変えて build_version を呼び直してください")
 
 
 class BuildVersionTest(ModuleCase, unittest.TestCase):
@@ -153,13 +167,33 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
         with self.assertRaises(ToolError):
             build_version(self.ctx, {"reason": "もう一度"}, "packager")
 
-    def test_the_same_variable_twice_is_refused_naming_both(self):
+    def test_a_modules_new_proposal_replaces_its_earlier_one(self):
+        """Run 20261105-091217: build_version refused chg-0005, the designer proposed chg-0006 again, and the two
+        clashed with no way to take chg-0005 back. A module has one proposal per round: the new one replaces it."""
+        self.propose("powertrain", choices={"battery_pack": "big"})
         self.propose("occupant", changes={"seat_x": self.mm(-1000)})
-        self.propose("occupant", changes={"seat_x": self.mm(-950)})
-        with self.assertRaises(ToolError) as e:
+        out = self.propose("occupant", changes={"seat_x": self.mm(-950)})
+        self.assertEqual(out["replaced"], ["chg-0002"])
+        self.assertIn("chg-0002 は、この提案に置き換わりました", out["note"])
+        self.assertEqual(out["pending"], ["chg-0001", "chg-0003"])
+        self.assertEqual(self.ctx.store.superseded_change_ids(), ["chg-0002"])
+        built = build_version(self.ctx, {"reason": "x"}, "packager")
+        self.assertEqual(built["module_changes"], ["chg-0001", "chg-0003"])
+        self.assertEqual(self.ctx.store.design(2)["variables"]["seat_x"]["value"], -950.0)
+        self.assertEqual(self.ctx.store.pending_proposals(), [])
+
+    def test_a_proposal_refused_by_build_version_is_replaced_and_the_version_is_built(self):
+        """The N13 flow (contract 8762a06): build_version refuses a proposal (here the battery past its space), the
+        module's designer proposes again, and the packager builds the version from the new proposal alone."""
+        self.propose("powertrain", changes={"battery_x": self.mm(-700)})  # 100 mm past the envelope's end
+        with self.assertRaises(ToolError):
             build_version(self.ctx, {"reason": "x"}, "packager")
-        self.assertIn("chg-0001 と chg-0002", str(e.exception))
-        self.assertEqual(self.ctx.version, 1)
+        again = self.propose("powertrain", changes={"battery_x": self.mm(-850)})
+        self.assertEqual(again["replaced"], ["chg-0001"])
+        out = build_version(self.ctx, {"reason": "出し直しの提案で"}, "packager")
+        self.assertEqual(out["module_changes"], ["chg-0002"])
+        self.assertEqual(self.ctx.store.design(2)["variables"]["battery_x"]["value"], -850.0)
+        self.assert_events_fit()
 
     def test_a_proposal_and_the_packager_on_the_same_variable_is_refused(self):
         # a variable listed by two modules (stand-in: the packager's own track and a frame entry for it)
@@ -206,6 +240,43 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
             build_version(self.ctx, {"reason": "x"}, "packager")
         self.assertIn("(body) の cargo が空間から", str(e.exception))
         self.assertEqual(self.ctx.version, 1)
+
+    def test_the_carried_module_is_named_for_regrow(self):
+        """Run 160725: an occupant proposal moved the frame's pieces; the refusal names the module to add to regrow."""
+        plain = ModuleDesigngen.regenerate
+
+        def carried(gen, design, changes):
+            out = plain(gen, design, changes)
+            if "seat_x" in changes:
+                next(p for p in out["parts"] if p["id"] == "cargo")["box"]["center_mm"][0] += 300.0
+            return out
+
+        with mock.patch.object(ModuleDesigngen, "regenerate", carried):
+            self.propose("occupant", changes={"seat_x": self.mm(-1000)})
+            with self.assertRaises(ToolError) as e:
+                build_version(self.ctx, {"reason": "x"}, "packager")
+            self.assertIn("regrow に body を足して", str(e.exception))
+            self.assertNotIn("regrow に occupant", str(e.exception))  # the proposing module is not named for it
+
+    def test_a_proposal_the_generator_cannot_build_is_refused_to_its_designer(self):
+        """Run 160725: rollbar_width 1200 mm was refused only at build_version; now revise_design says it."""
+        plain = ModuleDesigngen.regenerate
+
+        def floor(gen, design, changes):
+            if changes.get("seat_x", {}).get("value", -900.0) > -700.0:
+                raise ValueError("seat_x goes 21.4 mm into floor; make seat_x at most -700 mm")
+            return plain(gen, design, changes)
+
+        with mock.patch.object(ModuleDesigngen, "regenerate", floor):
+            with self.assertRaises(ToolError) as e:
+                self.propose("occupant", changes={"seat_x": self.mm(-650)})
+            msg = str(e.exception)
+            self.assertIn("提案は記録していません", msg)
+            self.assertIn("21.4 mm into floor", msg)
+            self.assertIn("revise_design を呼び直して", msg)
+            self.assertEqual(self.ctx.store.pending_proposals(), [])
+            self.propose("occupant", changes={"seat_x": self.mm(-750)})
+        self.assertEqual(len(self.ctx.store.pending_proposals()), 1)
 
     def test_regrow_names_modules_of_the_design(self):
         self.propose("powertrain", changes={"battery_x": self.mm(-700)})

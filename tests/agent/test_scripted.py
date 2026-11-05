@@ -110,6 +110,45 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
 
+    def test_with_rule_check_every_version_gets_its_rules_once(self):
+        """QA, the video run on 6d86a75e: rule_check.recorded on version 5 only; a version a red stage revised
+        before the last stage had none."""
+        from hiraku.agent import scripted as S
+
+        plan = dict(copy.deepcopy(load_plan("offroad-4w")), rule_check=True)
+        plan["revise"] = [{"say": "段の赤を直します (試験)", "changes": {"track": {"value": 1400.0, "unit": "mm"}},
+                           "reason": "P1: 赤 (試験)"}]
+        real = S.stage_reds
+        red = {"verdict_id": "ver-9999", "test_id": "P1", "load_case_id": "P1-step100", "domain": "powertrain",
+               "pass": False}
+
+        def first_stage_red(ctx, group):  # version 1's first stage is red once, so the plan revises mid-stages
+            return [red] if ctx.version == 1 else real(ctx, group)
+
+        seen: list[int] = []
+        with mock.patch.object(S, "_check_rules", side_effect=lambda ctx, agent: seen.append(ctx.version) or {"hits": []}), \
+                mock.patch.object(S, "stage_reds", side_effect=first_stage_red):
+            run_scripted(self.ctx, plan)
+        self.assertEqual(self.ctx.project["design_versions"], [1, 2])
+        self.assertEqual(seen, [1, 2])  # version 1, left by the red stage, has its rules too
+
+    def test_the_shared_design_and_its_summary_are_not_written_into(self):
+        """RunStore.design_shared and the plan's design_summary are shared between callers: after a whole scripted
+        run, every version's shared design is still its file, and the kept summary is still design_summary's."""
+        from hiraku.contract import layout
+        from hiraku.tools import plan as plan_mod
+
+        self.assertEqual(run_scripted(self.ctx), "done")
+        for v in self.ctx.project["design_versions"]:
+            with self.subTest(version=v):
+                stamp, shared = self.ctx.store.design_shared(v)
+                on_disk = json.loads((layout.version_dir(self.ctx.store.path, v) / layout.DESIGN_FILE)
+                                     .read_text(encoding="utf-8"))
+                self.assertEqual(shared, on_disk)
+                kept = plan_mod._SUMMARIES.get((str(self.ctx.store.path), stamp))
+                if kept is not None:
+                    self.assertEqual(kept, design_summary(on_disk))
+
     def test_a_fit_driver_revision_takes_the_values_found_by_code(self):
         from unittest import mock
 
@@ -289,6 +328,23 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
 
+    def test_a_revision_for_an_ended_case_is_used_only_when_no_red_is_left(self):
+        """answers_ended: with no red tile and R1 ended without a verdict, the plan's entry for R1 makes the next
+        version (the designer's change, the ended case in the reason, no load_case_ids); it is never used for a red."""
+        plan = plan_without_safe_side()
+        r1_second(plan)["expected_mismatch"]["end"] = True
+        plan["revise"] = [{"say": "R1 が判定なしで終わったので直します (試験)", "answers_ended": ["R1-step100"],
+                           "changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "R1: 判定なしで終わった (試験)"}]
+        run_scripted(self.ctx, plan)
+        designs = [e for e in self.ctx.store.events() if e["kind"] == "design.created"]
+        self.assertEqual([e["data"]["design_version"] for e in designs], [1, 2])
+        self.assertIn("R1: 判定なしで終わった (試験)", designs[1]["data"]["change_reason"])
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("版 1 に赤はありません。R1-step100 は判定なしで終わりました" in t for t in said))
+        self.assertIn("R1 が判定なしで終わったので直します (試験)", said)
+        self.assertEqual(len([t for t in said if "判定なしで終わりました (食い違いの原因の記録)" in t]), 1)  # used once
+        self.assert_events_fit()
+
     def test_end_and_retry_together_are_a_plan_error(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
         plan["steps"][0]["expected_mismatch"]["end"] = True
@@ -436,9 +492,11 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
         own = {"extends": "offroad-4w", "rule_check": True,
                "steps": [{"load_case": "R1-step100", "tool": "frame_static", "say": "B"},
                          {"load_case": "R1-step100", "tool": "frame_shell", "say": "C"}]}
+        from hiraku.tools.plan import load_plan as real_load_plan  # not the stand-in (it turns rule_check off)
+
         with self.plans({"offroad-4w": self.BASE, "offroad-4w-n14": own}):
-            plan = load_plan("offroad-4w", "offroad-4w-n14")
-            self.assertEqual(load_plan("offroad-4w", "offroad-4w-video"), self.BASE)  # no entry: the product's
+            plan = real_load_plan("offroad-4w", "offroad-4w-n14")
+            self.assertEqual(real_load_plan("offroad-4w", "offroad-4w-video"), self.BASE)  # no entry: the product's
         self.assertEqual([s["say"] for s in plan["steps"]], ["a", "B", "C"])  # replaced in place, then the new one
         self.assertEqual((plan["show_hk1"], plan["revise"], plan["rule_check"]), (True, ["r"], True))
         self.assertNotIn("extends", plan)
@@ -527,6 +585,25 @@ class SplitByModuleTest(unittest.TestCase):
 
         self.assertEqual(split_by_module(self.DESIGN, {"wheelbase": {"value": 1, "unit": "mm"}}, {"roof": "x"})[2],
                          ["wheelbase", "roof"])
+
+    def test_an_entry_hits_only_the_reds_of_its_modules(self):
+        """Run 142135 (the tests picked without H7): version 2's only red, R7-hand, goes to the steering designer;
+        the plan's next entry, the occupant's opening, hits none, the controls' entry after it does."""
+        from hiraku.agent.scripted import revision_hits
+
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        routed = {"designer.steering": ["R7-hand"]}
+        opening = {"choices": {"side_guard": "bars_net"}, "reason": "H7"}
+        controls = {"changes": {"steering_column_angle": {"value": 20, "unit": "deg"}}, "reason": "R7"}
+        layout = {"changes": {"track": mm(1220)}, "reason": "P1"}
+        self.assertFalse(revision_hits(self.DESIGN, routed, opening))
+        self.assertTrue(revision_hits(self.DESIGN, routed, controls))
+        self.assertFalse(revision_hits(self.DESIGN, routed, layout))
+        self.assertTrue(revision_hits(self.DESIGN, {"packager": ["P1-step100"]}, layout))
+        # as before the check: no routed red (a rule's red tile), a name no module owns, a driver fit
+        self.assertTrue(revision_hits(self.DESIGN, {}, opening))
+        self.assertTrue(revision_hits(self.DESIGN, routed, {"changes": {"wheelbase": mm(1)}, "reason": "x"}))
+        self.assertTrue(revision_hits(self.DESIGN, routed, {"fit": "driver", "reason": "x"}))
 
 
 if __name__ == "__main__":

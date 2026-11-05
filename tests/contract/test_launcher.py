@@ -15,6 +15,7 @@ class LauncherTest(unittest.TestCase):
     def test_no_bare_parenthesis_inside_a_block(self):
         # cmd.exe ends an if ( ... ) block at the first ")" it meets, even inside an echo line.
         depth = 0
+        # ascii: cmd.exe misreads a batch file's lines after any multi-byte character
         for n, line in enumerate(LAUNCHER.read_text(encoding="ascii").splitlines(), 1):
             text = line.strip()
             if depth and text.lower().startswith("echo"):
