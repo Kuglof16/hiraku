@@ -139,7 +139,7 @@ def n05_layout():
 class BrowserReplayTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True)
+        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
