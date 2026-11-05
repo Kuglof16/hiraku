@@ -15,7 +15,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
    - Skill の hiraku:<名前> は、このプラグインの skill です。
    - 役を裏で動かしたまま番を終えません (Claude Code が役を打ち切ることがあります)。役の結果を待つときは mcp__plugin_hiraku_hiraku__wait_for_roles を呼びます。
    - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
-3. 画面 (python -m hiraku.webserve) で、返った run_id の実行を見られます。
+3. start_run の答えの screen に、画面で見る手順と URL があります。人にそのまま伝えます。
 
 まとめ役の決まり:
 

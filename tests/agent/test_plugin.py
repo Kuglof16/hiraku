@@ -114,6 +114,16 @@ class LauncherTest(unittest.TestCase):
         self.assertTrue(self.cli.same_file(printed, sys.executable))
         self.assertEqual(child, "1")
 
+    def test_what_it_says_on_stderr_is_utf8_and_the_child_runs_in_utf8_mode(self):
+        """On a Japanese Windows a pipe's default is cp932; Claude Code reads the plugin's stderr as UTF-8."""
+        code = ("import sys; sys.path.insert(0, sys.argv[1]); import hiraku_cli; hiraku_cli.say('ペダルの Python'); "
+                "sys.exit(hiraku_cli.relaunch(__import__('pathlib').Path(sys.executable), "
+                "['-c', 'import os; print(os.environ.get(\"PYTHONUTF8\"))']))")
+        env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+        got = subprocess.run([sys.executable, "-c", code, str(PLUGIN_DIR / "scripts")], capture_output=True, env=env)
+        self.assertEqual(got.stderr.decode("utf-8").strip(), "ペダルの Python")
+        self.assertEqual(got.stdout.decode("utf-8").strip(), "1")
+
     def test_main_runs_the_chosen_interpreter_and_says_what_to_do_without_one(self):
         with mock.patch.object(self.cli, "choose_python", return_value=Path(sys.executable).with_name("other.exe")), \
                 mock.patch.object(Path, "is_file", return_value=True), \
