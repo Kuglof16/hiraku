@@ -729,6 +729,70 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._unsupported(sample_events(), analysis_id="ana-0009"), "verdict.unsupported_load")
         self.assertFlags(self._unsupported(sample_events(), **{"pass": True}), "verdict.unsupported_load")
 
+    LIMIT = 156.66666666666666
+
+    def _hot_spot(self, row=None, listed=True, cause=None, **change):
+        """The sample with a place the hand calculation did not predict over the limit (contract d761e77):
+        ana-0001's hot_spots has a row at joint_FL of 200 MPa against R1's limit, and ver-0002 (basis hot_spot)
+        is made from it after the sample's match; the tile lists both and is red. cause: a cause.recorded
+        after it."""
+        ev = sample_events()
+        r = {"where": "joint_FL", "quantity": "max_stress", "value": {"value": 200.0, "unit": "MPa"},
+             "limit": {"value": self.LIMIT, "unit": "MPa"}, "utilisation": 200.0 / self.LIMIT, "predicted": False}
+        r.update(row or {})
+        by_kind(ev, "analysis.finished")["data"]["hot_spots"] = [r]
+        room = self.LIMIT - 200.0
+        v = {"verdict_id": "ver-0002", "analysis_id": "ana-0001", "load_case_id": "R1-step100", "test_id": "R1",
+             "domain": "strength", "quantity": "max_stress", "value": {"value": 200.0, "unit": "MPa"}, "op": "<=",
+             "limit": {"value": self.LIMIT, "unit": "MPa"}, "pass": False, "margin": {"value": room, "unit": "MPa"},
+             "margin_pct": 100.0 * room / self.LIMIT, "requirement_keys": ["Q61"], "basis": "hot_spot",
+             "value_from": "analysis", "where": "joint_FL"}
+        v.update(change)
+        ev = self._insert(ev, "verdict.recorded", "verdict.recorded", v, design_version=1, domain="strength")
+        by_kind(ev, "judgement.updated")["data"].update(
+            state="red", red_count=1, verdict_ids=["ver-0001", "ver-0002"] if listed else ["ver-0001"])
+        if cause is not None:
+            ev = self._insert(ev, "judgement.updated", "cause.recorded", cause)
+        return ev
+
+    def test_hot_spot_verdict_comes_from_an_unpredicted_row_over_the_limit(self):
+        mine = lambda ev: {r for r in self.rules(ev) if r.startswith(("verdict.", "cause.", "analysis.hot_spots",
+                                                                       "judgement."))}
+        self.assertEqual(mine(self._hot_spot()), set())
+        self.assertFlags(self._hot_spot(row={"predicted": True}), "verdict.hot_spot")
+        self.assertFlags(self._hot_spot(row={"note": "入りの角の尖り"}), "verdict.hot_spot")
+        self.assertFlags(self._hot_spot(where="joint_FR"), "verdict.hot_spot")  # no row there
+        self.assertFlags(self._hot_spot(comparison_id="cmp-0001"), "verdict.hot_spot")
+        self.assertFlags(self._hot_spot(**{"pass": True}), "verdict.hot_spot")
+        self.assertFlags(self._hot_spot(value={"value": 190.0, "unit": "MPa"}), "verdict.values")
+        self.assertFlags(self._hot_spot(row={"utilisation": 1.1}), "analysis.hot_spots")  # not 200 / limit
+
+    def test_an_unpredicted_row_over_the_limit_needs_its_verdict(self):
+        ev = self._hot_spot()
+        ev = [e for e in ev if not (e["kind"] == "verdict.recorded" and e["data"]["verdict_id"] == "ver-0002")]
+        by_kind(ev, "judgement.updated")["data"].update(state="green", red_count=0, verdict_ids=["ver-0001"])
+        self.assertFlags(renumber(ev), "verdict.hot_spot")
+        # a spike is listed but makes no red: no verdict asked for
+        ev = self._hot_spot(row={"note": "尖り"})
+        ev = [e for e in ev if not (e["kind"] == "verdict.recorded" and e["data"]["verdict_id"] == "ver-0002")]
+        by_kind(ev, "judgement.updated")["data"].update(state="green", red_count=0, verdict_ids=["ver-0001"])
+        self.assertNotIn("verdict.hot_spot", self.rules(renumber(ev)))
+
+    def test_a_hot_spot_red_stands_beside_a_later_match(self):
+        # the match (ver-0001) is the newest verdict of R1 at its own place; the hot_spot red stands at joint_FL
+        self.assertFlags(self._hot_spot(listed=False), "judgement.hot_spot")
+
+    def test_a_cause_answers_a_hot_spot_verdict(self):
+        base = {"cause_id": "cause-0001", "verdict_id": "ver-0002", "where": "joint_FL",
+                "cause": "the bracket root was not in the hand calculation", "fix": "a gusset", "resolved": False}
+        causes = lambda ev: {r for r in self.rules(ev) if r.startswith("cause.")}
+        self.assertEqual(causes(self._hot_spot(cause=base)), set())
+        self.assertFlags(self._hot_spot(cause=dict(base, where="joint_FR")), "cause.link")
+        self.assertFlags(self._hot_spot(cause=dict(base, verdict_id="ver-0001")), "cause.link")  # a match
+        self.assertFlags(self._hot_spot(cause=dict(base, comparison_id="cmp-0001")), "cause.link")  # both
+        self.assertFlags(self._hot_spot(cause={k: x for k, x in base.items() if k != "verdict_id"}), "cause.link")
+        self.assertFlags(self._hot_spot(cause=dict(base, safe_side=True)), "cause.settled")
+
     def test_verdict_limit_comes_from_the_criterion(self):
         ev = sample_events()
         v = by_kind(ev, "verdict.recorded")["data"]
