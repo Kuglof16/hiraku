@@ -874,7 +874,7 @@ export const DEMO_LINE_JA = {
   n13: "手元に無い計算を作る — 横転したときの計算のツールを Claude がその場で書き、確かめてから使います",
   n14: "メモを渡して決まりにする — 途中で渡した設計のメモが決まりになり、当てはまる部品について聞き返します",
   video: "小さなオフロード車を試験して直す — 不合格の所を直してもう一度確かめます。限界を超える試験も入っています",
-  demo: "小さなオフロード車の 6 つの試験 — 不合格の所を直して、v2 で全部合格します",
+  demo: "小さなオフロード車の 11 の試験 — 不合格の所を 4 回直して、v5 で全部合格します",
 };
 // The demo run recommended at the top of the run list when no saved run is there (its scripted run).
 export const PICK_DEMO_ID = "video";
