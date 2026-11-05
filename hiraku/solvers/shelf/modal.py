@@ -12,12 +12,12 @@ from ..k0_handcalc import units
 from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import build
 from ..k1_frame.modal import MASS_CASE, modes, solve_modal
-from ..k1_frame.shaft import driveshaft_modes
+from ..k1_frame.shaft import driveshaft_modes, driveshaft_shapes
 from . import fixtures
 from .base import LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, on_board, param_value, result
 
 FLEX_LIMIT = 0.3  # a mode whose shape is more than this far from a rigid motion bends the frame
-FIELD_MODES = 6
+FIELD_MODES = 10  # modes with a mode_shape field (the first FIELD_MODES of n_modes)
 
 
 def _beam_modes(length, section, material, supports, tip_mass_kg=0.0, n=3):
@@ -99,18 +99,27 @@ class Modal(BuiltinTool):
             v = units.to_unit(q, "km/h", "max_speed")
         r = modes(design, n)
         f, flex, lflex = r["frequencies"], r["flexibility"], r["ladder_flexibility"]
-        results = [result(f"mode_{i + 1}", float(fi), "Hz") for i, fi in enumerate(f)]
-        body = [float(fi) for fi, x in zip(f, flex) if x < FLEX_LIMIT]
-        ladder = [float(fi) for fi, x, lx in zip(f, flex, lflex) if x >= FLEX_LIMIT and lx >= FLEX_LIMIT]
-        other = [float(fi) for fi, x, lx in zip(f, flex, lflex) if x >= FLEX_LIMIT and lx < FLEX_LIMIT]
+        n_fields = min(FIELD_MODES, len(f))
+
+        def mode_row(quantity: str, i: int) -> Record:
+            """The row of mode i's frequency, with field_index when mode i has a mode_shape field (fields[i])."""
+            row = result(quantity, float(f[i]), "Hz")
+            if i < n_fields:
+                row["field_index"] = i
+            return row
+
+        results = [mode_row(f"mode_{i + 1}", i) for i in range(len(f))]
+        body = [i for i, x in enumerate(flex) if x < FLEX_LIMIT]
+        ladder = [i for i, (x, lx) in enumerate(zip(flex, lflex)) if x >= FLEX_LIMIT and lx >= FLEX_LIMIT]
+        other = [i for i, (x, lx) in enumerate(zip(flex, lflex)) if x >= FLEX_LIMIT and lx < FLEX_LIMIT]
         frame = [float(fi) for fi, x in zip(f, flex) if x >= FLEX_LIMIT]  # everything that bends (the excitation gap)
         if body:
-            results.append(result("first_body_mode", body[0], "Hz"))
+            results.append(mode_row("first_body_mode", body[0]))
         if not ladder:
             raise DesignError(f"no frame bending mode among the first {n} modes; ask for more modes (n_modes)")
-        results.append(result("first_frame_mode", ladder[0], "Hz"))
+        results.append(mode_row("first_frame_mode", ladder[0]))
         if other:  # members of another part (the roll bar) bend while the ladder stays as it is
-            results.append(result("first_rollbar_mode", other[0], "Hz"))
+            results.append(mode_row("first_rollbar_mode", other[0]))
         driven = [s for s in design["supports"] if s["actuation"]["drive"]] or design["supports"]
         radius = float(np.mean([s["radius_mm"] for s in driven]))
         f_wheel = (v / 3.6) / (2 * math.pi * radius / 1000.0)
@@ -121,24 +130,60 @@ class Modal(BuiltinTool):
             exc["motor"] = f_wheel * units.to_unit(gear, "1", "gear_ratio")
             results.append(result("motor_rotation_frequency", exc["motor"], "Hz"))
         shafts = driveshaft_modes(design)
+        shaft_rows = []
         for key, quantity in (("bending", "driveshaft_bending_mode"), ("torsion", "driveshaft_torsion_mode")):
             if shafts[key]:
                 pid = min(shafts[key], key=shafts[key].get)
-                results.append(result(quantity, shafts[key][pid], "Hz", pid))
+                shaft_rows.append((key, pid, result(quantity, shafts[key][pid], "Hz", pid)))
+                results.append(shaft_rows[-1][2])
         gaps = {k: min(abs(fr - fe) / fe for fr in frame) * 100.0 for k, fe in exc.items() if fe > 0}
         nearest = min(gaps, key=gaps.get)
         results.append(result("excitation_gap", gaps[nearest], "%", nearest))
         fields = []
-        for i in range(min(FIELD_MODES, len(f))):
+        for i in range(n_fields):
             kind = ("body on springs" if flex[i] < FLEX_LIMIT else "frame" if lflex[i] >= FLEX_LIMIT else "roll bar")
             fields.append({"kind": "mode_shape", "label": f"mode {i + 1} ({kind})", "unit": "1",
                            "frequency_Hz": float(f[i]),
                            "per_node": {nid: [float(x) for x in u] for nid, u in r["shapes"][i].items()}})
         effects = [{"name": f"mode {i + 1}: share of the shape that bends the frame", "value": float(flex[i]), "unit": "1"}
-                   for i in range(min(FIELD_MODES, len(f)))]
+                   for i in range(n_fields)]
+        if shaft_rows:
+            shapes = driveshaft_shapes(design)
+            for key, pid, row in shaft_rows:
+                row["field_index"] = len(fields)
+                fields.append(shaft_field(pid, key, row["value"], shapes[pid]))
         series, note = response_series(design, r, f, flex)
         effects.append({"name": note})
         return {"results": results, "fields": fields, "effects": effects, "series": series}
+
+
+def shaft_field(pid: str, key: str, frequency: float, shape: Record) -> Record:
+    """The mode_shape field of a driveshaft's first bending or torsion mode (k1_frame.shaft.driveshaft_shapes) on
+    points <pid>.p00 to .pNN evenly along the shaft from its inner joint to its outer one (the shaft model's
+    element nodes; the shaft has no design nodes). Bending: a vec3 across the shaft in the vertical plane through
+    its axis (the tube is round; that plane is a choice); torsion: the twist (a number)."""
+    inner, outer = shape["inner_mm"], shape["outer_mm"]
+    u = shape[key]
+    pts = len(u) - 1
+    a = ", ".join(f"{x:.1f}" for x in inner)
+    b = ", ".join(f"{x:.1f}" for x in outer)
+    where = f"points {pid}.p00 to {pid}.p{pts:02d} evenly from the inner joint ({a}) mm to the outer joint ({b}) mm"
+    axis = (outer - inner) / np.linalg.norm(outer - inner)
+    side = np.array([0.0, 0.0, 1.0]) - axis[2] * axis
+    side = side / np.linalg.norm(side)
+    if key == "bending":
+        per = {f"{pid}.p{k:02d}": [float(x) + 0.0 for x in uk * side] for k, uk in enumerate(u)}
+        label = (f"{pid}: driveshaft first bending mode (pinned at both joints, the shaft's beam model), sideways "
+                 f"displacement in the vertical plane through the axis, at {where}")
+    else:
+        # a mode_shape's per_node is a displacement (vec3): the twist is shown as the displacement of the tube's
+        # top line, twist x radius along the tangent there (axis x up), over its largest
+        tangent = np.cross(axis, side)
+        per = {f"{pid}.p{k:02d}": [float(x) + 0.0 for x in uk * tangent] for k, uk in enumerate(u)}
+        label = (f"{pid}: driveshaft first torsion mode (motor and reducer inertia at the inner joint, the wheel at "
+                 f"the outer, the shaft's torsion model), twist shown as the displacement of the tube's top line "
+                 f"along its tangent, at {where}")
+    return {"kind": "mode_shape", "label": label, "unit": "1", "frequency_Hz": float(frequency), "per_node": per}
 
 
 FRF_POINTS = 400
