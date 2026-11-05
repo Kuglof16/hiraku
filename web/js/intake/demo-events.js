@@ -11453,7 +11453,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 4 件、答え 0 件、既定値 3 件、答えが無いまま 3 件",
+   "text": "質問 4 件、答え 0 件、既定値 3 件、答えが無いまま 3 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {
@@ -12444,7 +12444,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件",
+   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {

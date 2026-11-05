@@ -448,10 +448,10 @@ def hearing_text(prepared: Prepared) -> str:
         got = {a["rule_id"]: a["choice"] for a in prepared.answered.get("rule_answers", [])}
         dropped = [r for r, c in got.items() if c == "drop_rule"]
         return (f"当たった規則の相談 {len(rules)} 件、答え {len(got)} 件" + (f"、この実行で外す規則 {'・'.join(dropped)}" if dropped else "")
-                + (f"、答えが無いまま {len(rules) - len(got)} 件" if len(got) < len(rules) else ""))
+                + (f"、答えが無いまま {len(rules) - len(got)} 件 (人がまだ決めていない)" if len(got) < len(rules) else ""))
     if not prepared.asked["questions"]:  # nothing to ask: the requirements file stands
         keys = "・".join(r["key"] for r in prepared.answered["answers"] if r["source"] == "default")
         return "要件のファイルのまま進みます" + (f" (既定値で足した {by['default']} 件: {keys})" if by["default"] else "")
-    left = f"、答えが無いまま {len(prepared.unresolved)} 件" if prepared.unresolved else ""
+    left = f"、答えが無いまま {len(prepared.unresolved)} 件 (聞いたが、答えも標準の値も無く、要件に入っていない)" if prepared.unresolved else ""
     more = (f"。当たった規則の相談 {len(rules)} 件、答え {len(prepared.answered.get('rule_answers', []))} 件") if rules else ""
     return f"質問 {len(prepared.asked['questions'])} 件、答え {by['hearing']} 件、既定値 {by['default']} 件{left}{more}"
