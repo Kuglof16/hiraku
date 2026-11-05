@@ -21,7 +21,7 @@ from hiraku.webserve.server import make_server
 from tests.web.held_fixture import HELD_LC, REFERENCE_CASES, REFERENCE_KINDS, REFERENCE_TITLES, held_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 

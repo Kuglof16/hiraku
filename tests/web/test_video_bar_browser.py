@@ -17,7 +17,7 @@ from pathlib import Path
 from tests.web.test_layout_lint_browser import ASSEMBLY, DOMAINS, ENABLED, READY, WIDTHS, Screen, describe, lint, start_servers
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 

@@ -22,7 +22,7 @@ from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.body_fixture import ADDED, BASE, added_ids, body_design, body_events, schema_has_part_material
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 

@@ -27,7 +27,7 @@ from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.test_assembly_browser import assembly_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
