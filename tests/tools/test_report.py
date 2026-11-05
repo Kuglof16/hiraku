@@ -189,6 +189,16 @@ class ReportTest(RunCase, unittest.TestCase):
                                            "rule_id": rule_id, "targets": ["seat"], "hits": hits, "pass": not hit},
                             design_version=v, agent="packager")
 
+    def test_every_problem_is_said_in_one_refusal(self):
+        """Run 160725: two write_report calls, each told of one problem."""
+        item = {"domain": "assembly", "change": "座面を深くする", "reason": "AS-01 に当たった", "rule_id": "AS-01"}
+        with self.assertRaises(ToolError) as e:
+            build_report(self.ctx, {"summary": "R1 は 987.6 MPa", "next": [item]}, "lead")
+        msg = str(e.exception)
+        self.assertIn("直すところが 2 つあります", msg)
+        self.assertIn("987.6 MPa", msg)
+        self.assertIn("前の版で当たって直した規則は next に入れず", msg)
+
     def test_a_next_item_answering_a_rule_hit_may_name_a_domain_not_picked(self):
         item = {"domain": "assembly", "change": "座面を深くする", "reason": "HU-02 に当たった", "rule_id": "HU-02"}
         self.assertNotIn("assembly", self.ctx.picked)

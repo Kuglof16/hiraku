@@ -1,0 +1,418 @@
+{
+  "design_version": 7,
+  "agent": "lead",
+  "domains": [
+    {
+      "domain": "strength",
+      "state": "green",
+      "line": "R7 grip_deflection 0.7274 mm ≤ 5 mm (余裕 85 % 道を手計算で確かめ、ツールの値で) / R7 pedal_deflection 0.1553 mm ≤ 5 mm (余裕 97 % 道を手計算で確かめ、ツールの値で) / R8 free_parts 0 ≤ 0 (余裕 0) / R8 max_utilisation 0.5176 ≤ 1 (余裕 48 % 道を手計算で確かめ、ツールの値で) / R8 occupant_push_deflection 11.92 mm ≤ 25 mm (余裕 52 %) / R1 max_stress 75.13 MPa ≤ 143.3 MPa (余裕 48 % 道を手計算で確かめ、ツールの値で) / R4 rops_occupant_clearance 77.34 mm ≥ 0 mm (余裕 77.34 mm)",
+      "verdict_ids": [
+        "ver-0085",
+        "ver-0086",
+        "ver-0087",
+        "ver-0088",
+        "ver-0089",
+        "ver-0092",
+        "ver-0091"
+      ],
+      "effects": [
+        {
+          "name": "beam: bending_vertical (rail_L_HB)",
+          "value": 45.72579745756945,
+          "unit": "MPa",
+          "share": 0.63287654411299
+        },
+        {
+          "name": "wall bending part at the shell max ((outer - inner) / 2, von Mises)",
+          "value": 100.57082162866838,
+          "unit": "MPa",
+          "share": 0.5892627641670721
+        },
+        {
+          "name": "membrane part at the shell max ((outer + inner) / 2, von Mises)",
+          "value": 70.10146201855322,
+          "unit": "MPa",
+          "share": 0.41073723583292787
+        }
+      ],
+      "assumptions": [
+        "力は全部、触れている所のいちばん短い鎖 1 本を通る",
+        "枠は部材だけの梁。支えはツールと同じピン",
+        "3 つの向きのうち押さえがいちばん大きい向き",
+        "部品は剛体、触れている所はツールと同じばね (k_t 3 方向、k_r 3 軸)。力は全部、いちばん短い鎖 1 本を通るとみる (ほかの道は 0: 釣り合っている力の分布の 1 つなので、動きは上から押さえられる)",
+        "枠は部材だけの 3 次元の梁 (板・ほかの部品は力を持たないとみる)。支えはツールと同じピン。鎖の着く所に、力と、握る点からの腕によるモーメントを掛ける",
+        "動きの大きさ |u| は、3 つの向きの押さえの和 (柔らかさの行列の跡) を使うので、荷重の向きの押さえより最大 √3 倍大きめ",
+        "力は全部、踏む面から最短の鎖 1 本を通り、部材だけの枠に着く。支えはツールと同じピン",
+        "踏む面の法線の向きに押す。押さえがいちばん大きいペダル",
+        "触れている所を部材からたどって、届かない部品を数える (carried_by は見ない)",
+        "触れている所はどれも 6 方向に硬い (1 か所で触れれば、その部品は止まる)",
+        "レールと部品を下げたロールバーの柱を見る (横の部材は入れない)",
+        "レールは車軸の 2 点で支えた梁と軸",
+        "ねじれは横の部材が固く付くとみて大きめ",
+        "4 つの組のうちいちばん大きい点",
+        "上下の曲げ・横の曲げ・軸の力の応力は、レールの角で全部同じ向きに重なるとみる (大きめ)",
+        "横の曲げは、横の部材を溶接で付けたはしご形の枠が 1 つの枠として受けるとみて、2 本のレールの断面を 1 つにした形 I = 2 (A (s/2)^2 + I_h) で出す。これははしご形の横の硬さの上限 (横の部材が限りなく硬い) で、横の部材が曲がる分 (各レールが自分で曲がる分) は入らない。そのため、この項は小さめに出て、不利な側とは限らない",
+        "レールは load_path.rail_utilisation と同じ (横の部材の応力は入らない)",
+        "ロールバーの柱は、足の節からの片持ち。上の横の棒が柱の先を押さえる分は入れない (大きめ)",
+        "柱に金具で下げた部品 (座席など) と、それに座る乗員の重さと加速度は、全部その柱が持つとみる。座席が床にも留まっていても、床の分は引かない (大きめ)",
+        "柱の足で、曲げ・軸の力の応力を重ね、ねじれは円管の τ = T c / J (角管でも同じ式: 近似)",
+        "柱に何も下がっていなければ、柱の分は 0",
+        "ねじれは閉じた薄い管 (Bredt) の τ = T / (2 A_m t)、A_m = (b - t)(h - t)",
+        "曲げ・ねじれの値は、レールを車軸の 2 点で支えた梁と軸として、荷重から静力学で出す (load_path の builder)",
+        "点 R から外へいちばん先に当たる横の棒を押す",
+        "棒は両端固定の梁、柱は足からの片持ち (ほかの棒が柱をつなぐ分は入れない)",
+        "棒の両端は柱に固定 (回らない)。棒の曲げは両端固定の梁の 1 点の荷重",
+        "棒の両端の力 (F b/L と F a/L) は、それぞれの柱の足からの片持ちの先に掛かる。柱の足 (出っ張りの腕・レール) は硬いとみる。ほかの棒が柱どうしをつなぐ分は入れない (柱は同じ向きに動くので)。そのため柱の足が動く分だけ小さめに出る",
+        "押す点の動きは、柱の先の動きを棒の上で直線に分けた値 (b/L と a/L) を、仕事で力の向きに読む",
+        "横の部材の端のモーメントが最も大きいつなぎ目で、横の部材の端がレールの側壁を板として曲げる",
+        "入力は joint_wall_inputs (版 7)",
+        "Kirchhoff plate, linear elastic; the rail's side wall simply supported along its upper and lower walls (their rotational restraint is not counted) and running on along the rail both ways",
+        "the cross member's end loads the wall as line loads of thin-walled beam bending (force-controlled; the end ring's own stiffness, which would draw load to its corners, is not counted)",
+        "only the moment about the rail's axis (the cross member's vertical bending); its axial force, sideways bending and torsion are left out",
+        "membrane stress in the wall is left out (wall bending only)",
+        "L joint (open_end = 1): the cross member's end wall is taken to close the rail's end over the joint, so the wall runs on; sigma_open_end with a free edge there is a bound, not the estimate",
+        "gussets: the upper and lower wall loads spread evenly over the gussets' welds along the rail; the plates' own stiffness is not counted",
+        "through: the moment goes into both side walls as in-plane shear along the cross member's side walls; the joint is rigid",
+        "against the K1 shell's hot spots (R1 step, 10 mm): butt and gusset ladders -4 to -13 %, but at the rail-end L joints by two errors that cancel (the chain gives them too much moment, the closed-end wall too little stress per moment); with through cross members the rail-end joint comes out 23 to 41 % low. Not counted: the rail's section distortion at its open end (a beam on an elastic foundation in the shell's numbers) and how the wheel mount puts its load onto the wall",
+        "たわみは pred-0159/0160/0161",
+        "荷重ごとに上の角をたわみの分だけ動かしたロールバーと乗員の空間のいちばん近い距離",
+        "each loading on its own from the bar as built: the permanent set of one loading is not carried into the next (OECD Code 4 loads in sequence)",
+        "the bar moves as its top corners move, the rest of the nodes staying: the posts turn about their feet as straight lines (length kept), the top beam stays straight between the corners (rops_inputs); the bending of the members between their nodes and the feet's own motion are not seen",
+        "the rear motion's corner shares are the portal_frame_rear formula's at the rear energy; both senses of each motion are tried (the smaller distance is kept)",
+        "the deflection is the portal formula's at its load point (side and rear: at the energy; top: at the crushing force, the posts' length when the frame collapses below it); a deflection past the end of a motion is taken at its end"
+      ],
+      "differences": [
+        {
+          "comparison_id": "cmp-0137",
+          "diff_rel": -0.9238605688200286,
+          "cause_id": "cause-0016"
+        },
+        {
+          "comparison_id": "cmp-0139",
+          "diff_rel": -0.6757439460773611,
+          "cause_id": "cause-0017"
+        },
+        {
+          "comparison_id": "cmp-0142",
+          "diff_rel": -0.3101039012188511,
+          "cause_id": "cause-0018"
+        },
+        {
+          "comparison_id": "cmp-0152",
+          "diff_rel": -0.21671642324271323,
+          "cause_id": "cause-0019"
+        }
+      ]
+    },
+    {
+      "domain": "assembly",
+      "state": "green",
+      "line": "H1 interference_count 0 ≤ 0 (余裕 0) / H1 motion_interference_count 0 ≤ 0 (余裕 0) / H1 joint_gap_count 0 ≤ 0 (余裕 0) / H1 envelope_outside_count 0 ≤ 0 (余裕 0) / H1 free_steer_angle 30 deg ≥ 30 deg (余裕 0 %) / H3 knee_room 9.818 mm ≥ 0 mm (余裕 9.818 mm) / H3 knee_angle_room 32.67 mm ≥ 0 mm (余裕 32.67 mm)",
+      "verdict_ids": [
+        "ver-0078",
+        "ver-0079",
+        "ver-0080",
+        "ver-0081",
+        "ver-0084",
+        "ver-0082",
+        "ver-0083"
+      ],
+      "effects": [],
+      "assumptions": [
+        "回してある部品と斜めの部材は数えない",
+        "重なってよい深さはツールと同じ決まり",
+        "入力は formula_inputs (analysis.h1_overlap_calc, 版 7)",
+        "parts not turned (no rpy_deg) as their boxes, members along x, y or z as the box of their length and section; turned parts and slanted members left out (their axis-aligned box is far bigger than they are), so an overlap of one of them can be missed, never added",
+        "two boxes overlap by the smallest of their overlaps along x, y and z",
+        "what may overlap how far is the tool's rule (k4_geometry.model.allowance): the definition of an interference, not a calculation",
+        "動くのは車輪とタイロッドだけ",
+        "車輪は支えの位置を通る縦の軸で回り、上下に行程の半分ずつ動く",
+        "入力は formula_inputs (analysis.h1_motion_calc, 版 7)",
+        "only the wheels and the tie rods move (the tool also moves the knuckle, the brake and the other links of the corner)",
+        "the wheel turns about the vertical axis through the support's position, through -max_steer_angle to +max_steer_angle; it moves up and down by half the travel each way",
+        "the other bodies as in assembly.overlap_count (turned parts and slanted members left out); what is mounted to the moving part is the tool's rule (k4_geometry.model.mounted)",
+        "箱どうしの離れは形どうしの離れより大きくならない",
+        "電線とホースは数えない",
+        "入力は formula_inputs (analysis.h1_joint_calc, 版 7)",
+        "the gap between the axis-aligned boxes round the two (a node's or a support's point for those): never more than the gap between the shapes, so a joint can be missed, never added",
+        "a joint touches when the gap is at most 2 mm; wires and hoses run between the two and are not counted",
+        "回してある部品は回した角を囲む箱、斜めの部材は両端を広げた箱",
+        "入力は formula_inputs (analysis.h1_envelope_calc, 版 7)",
+        "each body as the axis-aligned box round it (turned parts round their turned corners, slanted members round their ends widened by half the section's largest side)",
+        "inside means inside one box of the envelope, more than 0.5 mm out counts",
+        "theta_free は pred-0143 の値",
+        "theta_stop は設計の変数 max_steer_angle (formula_inputs)",
+        "ハンドルは max_steer_angle で止まる",
+        "the steering stops at theta_stop: the wheel is not turned further, so the angle checked is not larger than it",
+        "背もたれに付けて座る",
+        "膝の長さは AIST の若年男性 95 パーセンタイル (J5)",
+        "入力は formula_inputs (analysis.h3_calc, 版 7)",
+        "the person sits against the seat back",
+        "thighs level, along x",
+        "脚は膝で曲がる 2 本の棒 (横から見て)",
+        "膝の角度は K4 の座らせ方から",
+        "入力は formula_inputs (analysis.h3_knee_calc, 版 7)",
+        "the leg is two straight links hinged at the knee (side view); the hip-ankle distance grows with the knee angle, so a margin is negative exactly when the angle is out of the range",
+        "the knee angles are those of K4's seated poses (each person at their best place in the seat's slide): not an independent estimate of the angle, only of its margin"
+      ],
+      "differences": []
+    }
+  ],
+  "unchecked": [
+    {
+      "item": "Q03 使う頻度・年数",
+      "source": "assumption (a sample answer)"
+    },
+    {
+      "item": "Q11 路面の摩擦係数 (砂利)",
+      "source": "assumption (gravel; no public value found)"
+    },
+    {
+      "item": "Q12 路面の粗さ (ISO 8608 のクラス)",
+      "source": "assumption: the forest road taken as ISO 8608 class C. ISO 8608 covers unpaved roads too (https://www.iso.org/standard/71202.html); class C = 128-512 x 10^-6 m^3 at n0 = 0.1 cycle/m from the table in https://link.springer.com/article/10.1007/s12544-013-0127-8 (not checked in this repository)"
+    },
+    {
+      "item": "Q13 縦の坂 (止まって発進できる一番急な坂)",
+      "source": "林道規程 (林野庁): 縦断勾配は 12 % まで、100 m 以内なら 14 % まで; the steepest stretch, https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf (not checked in this repository). The sustained 12 % is the forest loop's grade_high in data/catalog/tests.yaml (P4, T1, T2)"
+    },
+    {
+      "item": "Q14 横の傾き",
+      "source": "assumption (no basis found)"
+    },
+    {
+      "item": "Q15 段差",
+      "source": "assumption"
+    },
+    {
+      "item": "Q18 横風 (瞬間)",
+      "source": "気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)"
+    },
+    {
+      "item": "Q19 気温 (範囲の高い端)",
+      "source": "assumption (the hot end of a -10 to 40 degC range of use)"
+    },
+    {
+      "item": "Q20 水・ほこり (IP)",
+      "source": "assumption (a sample answer, dust and splashing water on a forest road)"
+    },
+    {
+      "item": "Q31 体格の範囲",
+      "source": "AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+    },
+    {
+      "item": "Q34 弱い人がいるか",
+      "source": "assumption (a sample answer)"
+    },
+    {
+      "item": "Q44 足を置く面どうしの高さの差の上限 (段と段、最後の段から床まで)",
+      "source": "ISO 4252:1983 Table 1 (between steps max 300 mm; last step to door sill max 300 mm), read 2026-11-04; ISO 2867:1994 Table 1 B (riser 230 to 400 mm, basic 300 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q45 足を置く面の幅の下限",
+      "source": "ISO 4252:1983 Table 1 (width of step min 150 mm; footnote: for practical reasons not less than 250 mm), read 2026-11-04; ISO 2867:1994 Table 1 C (one foot 160 mm min, both feet 320 mm min), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q46 足を置く面の外の縁から先の、つま先が入る空きの下限",
+      "source": "ISO 4252:1983 Table 1 (clearance from the outside edge of the step min 150 mm), read 2026-11-04; ISO 2867:1994 Table 1 F2 (toe clearance min 150 mm, basic 200 mm), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q47 開口を、乗る人が道具なしに片手・一つの動作で開けられること",
+      "source": "assumption. CPSC NPR 79 FR 68964, preamble (occupant retention), read 2026-11-04, accepts a barrier the occupant puts in place with one hand in one operation, such as a door (said of closing; applied here to opening). 道路運送車両の保安基準 第25条第3項, read 2026-11-04: 鎖・ロープなど転落を防ぐ装置は扉の代わりになる. No force or time for opening was found"
+    },
+    {
+      "item": "Q48 乗り降りの手がかりの高さの上限 (足を置く面から上へ)",
+      "source": "ISO 2867:1980 7.8 (grab rails begin at max 1 600 mm above the ground or platform; continue to at least 900 mm above the last step), read 2026-11-04; ISO 2867:1994 Table 2 D, not checked here. an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). Whether a hand hold is required at all for a floor below 1 m was not found in any source read (ISO 2867:1994 4.7 asks for three-point support above 1 m)"
+    },
+    {
+      "item": "Q49 手でつかむ所の太さ (直径か平行な面の間) の下限",
+      "source": "ISO 2867:1980 7.3 (grab rail or handle: 16 mm min, 25 mm recommended, 38 mm max), read 2026-11-04; ISO 2867:1994 Table 2 A (16 mm min, 38 mm max, 25 mm basic), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q51 0 → 最高速度の時間",
+      "source": "assumption"
+    },
+    {
+      "item": "Q52 停止距離",
+      "source": "assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https://www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+    },
+    {
+      "item": "Q53 止まっていられる坂",
+      "source": "assumption: borrowed from 細目告示 第171条 第5項, https://www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+    },
+    {
+      "item": "Q54 航続",
+      "source": "assumption"
+    },
+    {
+      "item": "Q60 倒れない角度 (Q30 の組で)",
+      "source": "fully loaded (two_cargo, as Q30): 24 deg from ROHVA 1 and ANSI B71.9 as summarized by CPSC (2020); the same summary gives 33 deg for two people and 35 deg empty (the last for public roads only) (not checked in this repository)"
+    },
+    {
+      "item": "Q61 安全率 (降伏に対して)",
+      "source": "assumption"
+    },
+    {
+      "item": "Q65 衝突の速さ",
+      "source": "assumption (the top speed, Q50)"
+    },
+    {
+      "item": "Q66 手の操作部に掛かる力 (握る点、前後・上下・回す向きのそれぞれ)",
+      "source": "assumption: UN Regulation No. 79 (1988 text), table \"Steering control effort requirements\" (M1, with a failure: 300 N) taken as the largest hand force in use (the table was read; using it as a design load is the assumption)"
+    },
+    {
+      "item": "Q67 手の操作部の握る点の動きの上限 (Q66 の力で)",
+      "source": "assumption (the range where the feel and position of the control do not change; no source)"
+    },
+    {
+      "item": "Q69 足の操作部の踏む面の支えの動きの上限 (Q68 の力で)",
+      "source": "assumption (small against the control's travel; no source)"
+    },
+    {
+      "item": "Q70 公道を走るか",
+      "source": "assumption of this fixed file; Q70 is a required question and was not asked"
+    },
+    {
+      "item": "Q74 電池の電圧",
+      "source": "assumption (16 LiFePO4 cells in series x 3.2 V nominal)"
+    },
+    {
+      "item": "Q80 材料と接合",
+      "source": "assumption (steel tube frame)"
+    },
+    {
+      "item": "Q82 出荷の形",
+      "source": "assumption"
+    },
+    {
+      "item": "Q86 乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N)",
+      "source": "assumption (the R4 builder's M). The coefficients 1.75, 1.4 and 20 are OECD Standard Code 4 (February 2026), 3.5.2.1, 3.5.3.1, 3.6.1 (read), borrowed from tractors >= 600 kg; they stay in the R4 builder, the contract having no unit J/kg or N/kg for them"
+    },
+    {
+      "item": "Q87 泥や石を放す踏面の範囲 (車軸の真上から前へ)",
+      "source": "道路運送車両の保安基準の細目を定める告示 (2023.9.22 版) 第178条 第2項 第1号 (read); a public-road rule for other traffic, borrowed: applying it to the occupants is an assumption"
+    },
+    {
+      "item": "Q88 泥や石を放す踏面の範囲 (車軸の真上から後ろへ)",
+      "source": "the same 第178条 第2項 第1号 (read; borrowed, an assumption as Q87). The tread above the axle beyond this arc counts too (assumption)"
+    },
+    {
+      "item": "Q89 手でつかむ所の太さの上限",
+      "source": "ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q90 悪路の走行距離 (疲労)",
+      "source": "assumption (no public basis found)"
+    },
+    {
+      "item": "Q91 運転時間",
+      "source": "assumption (a sample answer)"
+    },
+    {
+      "item": "Q93 乗り降りの開口の前後の幅 (座面より上で、人の胴が通る部分の最小)",
+      "source": "ISO 4252:1983 Figure 1 (450 mm min at 1 000 mm above the door sill, 470 mm min at 1 250 mm) and ISO 2867:1980 10.1 (450 mm min from 770 to 1 550 mm above the platform, 680 mm recommended), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read). The current ISO 4252:2007 and ISO 2867:2011 were not checked"
+    },
+    {
+      "item": "Q94 乗り降りの開口の前後の幅 (床から座面の高さまでの、足と脚が通る部分の最小)",
+      "source": "ISO 2867:1980 10.1 (300 mm min from the platform up to 770 mm), read 2026-11-04; ISO 4252:1983 Figure 1 gives 250 mm min for the lower part (the larger is kept), read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q95 乗り降りの開口の高さ (座面の面から上へ、ふさいではいけない最小)",
+      "source": "assumption: H = AIST 人体寸法データベース 1991-92, I1 座高 (seat surface to vertex), young adults, men, 95 percentile = 985.2 mm (N 217), read 2026-11-04 in the table. No standard read gives a height above the seat surface"
+    },
+    {
+      "item": "Q96 乗り降りの開口の高さ (床・敷居から上へ、ふさいではいけない最小)",
+      "source": "ISO 4252:1983 Figure 1 (1 250 mm min above the door sill; its NOTE lets the measuring heights be lowered where the seat is reached straight from the footstep), read 2026-11-04; ISO 2867:1980 10.2 recommends 1 300 mm or more from the floor in sit-down cabs, read 2026-11-04. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "Q97 地面から最初の足を置く面 (床の上面か最初の段) までの高さの上限",
+      "source": "ISO 4252:1983 Table 1 (first step from level ground max 550 mm, widest normally inflated tyres included), read 2026-11-04; ISO 2867:1994 Table 1 A (max 700 mm, basic 400 mm), read 2026-11-04. The smaller maximum is kept. Both are an older edition of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard for a small open off-road vehicle could be read)"
+    },
+    {
+      "item": "material stkr400",
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository."
+    },
+    {
+      "item": "material ss400",
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository."
+    },
+    {
+      "item": "material stkm13a",
+      "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository."
+    }
+  ],
+  "next": [
+    {
+      "domain": "assembly",
+      "change": "ハンドルの止めの角 max_steer_angle に余裕を持たせるか、基準との関係を見直す",
+      "reason": "切れ角は止めで決まり、基準ちょうどで余裕が 0 (ver-0084)"
+    },
+    {
+      "domain": "strength",
+      "change": "R1-step100 のシェルで、塔の柱がレールに着くつなぎ目のホットスポットを手計算で予測し、場所を付けて照合する式を足す",
+      "reason": "式のつなぎ目とシェルの最大の場所が違い、照合が食い違ってツールの値で合否を出した (cmp-0152、cause-0019)"
+    },
+    {
+      "domain": "strength",
+      "change": "横の部材 cross_B のつなぎ目の入隅を、ガセットか肉厚 cross_t で見直す",
+      "reason": "シェル ana-0099 で要素の最大応力が cross_B の入隅で大きく出ている (特異点として判定外)"
+    }
+  ],
+  "summary": "版 7 で、選んだ 2 分野とも緑。\n- 組み立て (assembly): 緑 (ver-0078〜ver-0084)。干渉・動きの干渉・つなぎ目・空間のはみ出しは 0。切れ角 30 deg は基準ちょうど (ver-0084)、膝の余裕 9.818 mm (ver-0082)。版 7 の rule_check の当たりは 0。\n- 規則: 版 1 で HU-02 (座面の奥行き) と AS-01 (電池の重さ) が当たった。HU-02 は人に聞いていない (人の選択を求める規則でも要件に反する直しでもないので、乗員の設計役が seat_depth で直した)。AS-01 は ask_user で聞き、人が revise_design を選んだので、battery_split と battery_capacity で直した。版 3 から当たりは 0。容量を下げたので、航続 Q54 はこの実行では確かめていない。\n- 強度信頼性 (strength): 緑 (ver-0085〜ver-0092)。R4-rops の乗員との隙間 77.34 mm (ver-0091)。R1-step100 はシェルのホットスポット 75.13 MPa で緑 (ver-0092)。R7 の 2 件・R8-stress・R1 のシェルは手計算が届かず、道を確かめたうえでツールの値で合否 (cause-0016〜cause-0019)。\n- 直しの経過: 版 2 で前輪とレールの当たり・体格を直し、版 3 で横の守りとロールバーの断面、版 4〜6 で R4-rops (横の押しで柱が乗員の空間に入る) を直し、版 6 で rollbar_offset を下げて緑 (ver-0076)。版 6 のシェルの赤 (ver-0077) は版 7 の rail_t で解けた。直しの回数は使い切った。",
+  "issues": [
+    {
+      "kind": "missing_formula",
+      "what": "版 2 の R4-rops で、ロールバーの上の梁が押す力より先に崩れる形を、手計算の式 frame_static.rops_occupant_clearance が予測できず、判定なしで終わった。原因の記録に ends_case を足そうとしたら「原因はもう書かれています」と断られた",
+      "where": "R4-rops (版 2)、record_cause",
+      "record_ids": [
+        "ana-0022",
+        "cmp-0030",
+        "cause-0003"
+      ],
+      "workaround": "判定なしのまま、原因の直し方 (rollbar_top と柱の断面) を設計役に渡し、版 3 で判定が付いた"
+    },
+    {
+      "kind": "unclear_instruction",
+      "what": "R4-rops の手計算の入力 s_side の出どころ (from) が「r4_inputs がコードで設計から計算」とだけで、どの寸法から出るか分からず、設計役が硬さや rollbar_width を変えても s_side が同じ負の値のまま 2 回の直しを使った",
+      "where": "get_context formula_inputs (R4-rops)、版 3〜5",
+      "record_ids": [
+        "pred-0059",
+        "pred-0085",
+        "pred-0110",
+        "ver-0048",
+        "ver-0062"
+      ],
+      "workaround": "設計役が空間の箱から運転者の体の箱と柱の前後の重なりを推し量り、rollbar_offset を下げて版 6 で正になった"
+    },
+    {
+      "kind": "missing_tool",
+      "what": "電池の容量と質量の関係を出すツールが無く、AS-01 に合う battery_capacity をツールで先に確かめられなかった。容量を下げたあとの航続 Q54 を確かめる荷重条件もこの実行に無い",
+      "where": "AS-01、designer-powertrain の提案",
+      "record_ids": [
+        "chg-0007"
+      ],
+      "workaround": "容量を下げた版を作り、rule_check で当たらないことを確かめた。航続は確かめていない"
+    },
+    {
+      "kind": "other",
+      "what": "rule_check の結果で、当たり・合格・評価できないの数を足しても規則の数 29 にならず、1 つの規則が結果に出ていない",
+      "where": "rule_check (版 3〜7)",
+      "workaround": "そのまま進めた"
+    },
+    {
+      "kind": "unexplained_mismatch",
+      "what": "R7 の 2 件・R8-stress・R1 のシェルで、手計算の式がゆるい押さえか場所違いのため照合が許す幅を超えた",
+      "where": "R7-hand-300N、R7-foot-500N、R8-stress、R1-step100 (シェル)、版 7",
+      "record_ids": [
+        "cmp-0137",
+        "cmp-0139",
+        "cmp-0142",
+        "cmp-0152",
+        "cause-0016",
+        "cause-0017",
+        "cause-0018",
+        "cause-0019"
+      ],
+      "workaround": "道を確かめたうえで tool_decides でツールの値で合否を出した"
+    }
+  ]
+}

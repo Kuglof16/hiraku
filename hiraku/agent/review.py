@@ -150,7 +150,7 @@ def check_causes(r: RunRecord) -> Finding:
     """Every mismatch has a cause, and the predict-again rounds per load case (mismatches before the
     load case's comparisons ended). A weaker model leaves a mismatch without a cause (the hooks then
     keep the domain closed) or needs many rounds of predicting again to reach a match."""
-    causes = {c["comparison_id"] for c in r.records("cause")}
+    causes = {c.get("comparison_id") for c in r.records("cause")}
     rounds: dict[str, int] = defaultdict(int)
     no_cause = []
     for c in r.records("comparison"):
@@ -241,7 +241,7 @@ def check_n12(r: RunRecord) -> Finding:
     first_bad = next((c for c in s1 if c["status"] == "mismatch"), None)
     if first_bad is None:
         return Finding("N12 unit mistake", False, f"no S1 mismatch among {len(s1)} S1 comparisons (the unit mistake was not found)")
-    cause = next((c for c in r.records("cause") if c["comparison_id"] == first_bad["comparison_id"]), None)
+    cause = next((c for c in r.records("cause") if c.get("comparison_id") == first_bad["comparison_id"]), None)
     text = (cause or {}).get("cause") or ""
     named = any(all(w in text for w in group) for group in UNIT_WORDS)
     after = [c for c in s1 if c["comparison_id"] > first_bad["comparison_id"]]

@@ -241,6 +241,43 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
         self.assertIn("(body) の cargo が空間から", str(e.exception))
         self.assertEqual(self.ctx.version, 1)
 
+    def test_the_carried_module_is_named_for_regrow(self):
+        """Run 160725: an occupant proposal moved the frame's pieces; the refusal names the module to add to regrow."""
+        plain = ModuleDesigngen.regenerate
+
+        def carried(gen, design, changes):
+            out = plain(gen, design, changes)
+            if "seat_x" in changes:
+                next(p for p in out["parts"] if p["id"] == "cargo")["box"]["center_mm"][0] += 300.0
+            return out
+
+        with mock.patch.object(ModuleDesigngen, "regenerate", carried):
+            self.propose("occupant", changes={"seat_x": self.mm(-1000)})
+            with self.assertRaises(ToolError) as e:
+                build_version(self.ctx, {"reason": "x"}, "packager")
+            self.assertIn("regrow に body を足して", str(e.exception))
+            self.assertNotIn("regrow に occupant", str(e.exception))  # the proposing module is not named for it
+
+    def test_a_proposal_the_generator_cannot_build_is_refused_to_its_designer(self):
+        """Run 160725: rollbar_width 1200 mm was refused only at build_version; now revise_design says it."""
+        plain = ModuleDesigngen.regenerate
+
+        def floor(gen, design, changes):
+            if changes.get("seat_x", {}).get("value", -900.0) > -700.0:
+                raise ValueError("seat_x goes 21.4 mm into floor; make seat_x at most -700 mm")
+            return plain(gen, design, changes)
+
+        with mock.patch.object(ModuleDesigngen, "regenerate", floor):
+            with self.assertRaises(ToolError) as e:
+                self.propose("occupant", changes={"seat_x": self.mm(-650)})
+            msg = str(e.exception)
+            self.assertIn("提案は記録していません", msg)
+            self.assertIn("21.4 mm into floor", msg)
+            self.assertIn("revise_design を呼び直して", msg)
+            self.assertEqual(self.ctx.store.pending_proposals(), [])
+            self.propose("occupant", changes={"seat_x": self.mm(-750)})
+        self.assertEqual(len(self.ctx.store.pending_proposals()), 1)
+
     def test_regrow_names_modules_of_the_design(self):
         self.propose("powertrain", changes={"battery_x": self.mm(-700)})
         with self.assertRaisesRegex(ToolError, "は envelopes と regrow の両方"):

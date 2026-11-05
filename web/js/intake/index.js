@@ -25,7 +25,7 @@
 import { fill, h } from "./dom.js";
 import { buildModel } from "./model.js";
 import { renderA1 } from "./a1.js";
-import { renderA2 } from "./a2.js";
+import { renderA2, submit } from "./a2.js";
 import { renderA5 } from "./a5.js";
 
 const SCREENS = [["A1", "作りたいもの", renderA1], ["A2", "確認したいこと", renderA2], ["A5", "守るルール", renderA5]];
@@ -70,6 +70,7 @@ export function mountIntake(host, api, options = {}) {
     fill(nav, SCREENS.map(([id, label]) => h("button", { class: id === ui.screen ? "on" : "", onclick: () => show(id), dataset: { screen: id } }, label)));
   }
   ui.rerender = (opts) => draw(opts);
+  ui.show = (id) => show(id);
 
   function show(id) {
     if (!panes[id]) throw new Error(`unknown intake screen ${id}`);
@@ -114,6 +115,10 @@ export function mountIntake(host, api, options = {}) {
     draw();
   }
 
+  // for a host's own buttons: send "use the standard values" now, or bring the questions into view
+  const useDefaults = () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true });
+  const showQuestions = () => { show("A1"); panes.A1.querySelector?.(".in-ask-top")?.scrollIntoView?.({ block: "start" }); };
+
   draw();
-  return { show, update, setWant, setTime, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
+  return { show, update, setWant, setTime, useDefaults, showQuestions, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
 }

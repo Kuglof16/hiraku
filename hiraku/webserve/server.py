@@ -33,8 +33,8 @@ Standard library only. Routes:
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
-opens the default run when the URL names none: the run given as default_run,
-else the newest saved run.
+opens on the run list when the URL names no run; the list recommends the
+default run (おすすめ): the run given as default_run, else the newest saved run.
 
 The screen draws only from events, so the server never interprets them beyond
 parsing JSON lines. A line still being written (no trailing newline) is left
@@ -352,7 +352,7 @@ def list_runs(runs_dir: Path, saved_dir: Path | None = None, default_run: str | 
     """Saved runs, then runs under runs_dir (both newest id first), then the contract sample.
 
     A run in both places is listed once, from runs_dir (the same id is the same run).
-    The default (what the screen opens when the URL names no run) is default_run when
+    The default (the run the run list recommends, おすすめ) is default_run when
     it is listed, else the newest saved run, else none.
     """
     local = _run_dirs(Path(runs_dir))
