@@ -35,6 +35,7 @@ import numpy as np
 
 from ..fe import tubes
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
+from . import hot_spots
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, check_record, mesh_of,
                    on_board, param_list, param_text, param_value, result, run_param)
 from .frame_static import (PATH_FORMULA, PATH_PREDICTS, STEP_HEIGHT, STEP_SUPPORTS, add_frames, front_supports,
@@ -312,7 +313,7 @@ class FrameTubes(BuiltinTool):
         c = r["cases"]["case"]
         if c["status"] != "solved":
             raise LoadCaseError("the shell model was not solved: " + "; ".join(c["reasons"]))
-        out = outputs(design, r, loads, src)
+        out = outputs(design, r, loads, src, self, load_case)
         out["assumptions"] = (assumptions + out.get("assumptions", [])
                               + [FACET_ASSUMPTION.format(n=tubes.HOT_SPOT_MIN_FACETS) if facets is None
                                  else QUICK_FACET_ASSUMPTION.format(n=facets, n0=tubes.HOT_SPOT_MIN_FACETS)])
@@ -385,7 +386,9 @@ def tube_mesh_fields(r: dict, mesh: Record) -> list[Record]:
     return out
 
 
-def outputs(design: Record, r: dict, loads: list, src: str) -> Record:
+def outputs(design: Record, r: dict, loads: list, src: str, tool=None, load_case: Record | None = None) -> Record:
+    """results / fields / vectors / effects / assumptions of one frame_tubes analysis; with tool (and the load
+    case), hot_spots too (tube_hot_spots)."""
     c = r["cases"]["case"]
     fs = r["shells"]
     hs = c["hot_spots"]
@@ -449,7 +452,44 @@ def outputs(design: Record, r: dict, loads: list, src: str) -> Record:
     lost, said = lost_load_outputs()
     results.append(lost)
     effects.append(said)
-    return {"results": results, "fields": fields, "vectors": vectors, "effects": effects, "assumptions": assumptions}
+    out = {"results": results, "fields": fields, "vectors": vectors, "effects": effects, "assumptions": assumptions}
+    if tool is not None:
+        hot = tube_hot_spots(tool, load_case, hs, per_member)
+        if hot is not None:
+            out["hot_spots"] = hot
+    return out
+
+
+def tube_hot_spots(tool, load_case: Record, hs: list, per_member: dict[str, float]) -> list[Record] | None:
+    """analysis.hot_spots of the tube shells (hot_spots module), on the quantity the tool is judged on (frame_tubes
+    has no judged_as, so the criterion's own):
+    - max_stress (R1): one row per member, its largest element von Mises over all its tubes' elements (as
+      max_stress is read: the mounts' elements included), where = the member;
+    - max_hot_spot_stress (R1s): one row per weld line group, a member at a joint (the largest size of the hot
+      spots read there), where = the member, plus the element peak as a row of quantity max_stress with
+      hot_spots.SHARP_NOTE (not the judged quantity there).
+    The limit is the criterion's. None when the criterion is not a "<=" stress or is judged on another quantity."""
+    judged = hot_spots.judged_limit(tool, load_case)
+    if judged is None or judged[0] not in ("max_stress", "max_hot_spot_stress"):
+        return None
+    q, limit = judged
+    if q == "max_stress":
+        return hot_spots.top([hot_spots.row(m, q, v, limit) for m, v in per_member.items()])
+    groups: dict[tuple[str, str], dict] = {}
+    for h in hs:
+        k = (h["member"], h["joint"])
+        if k not in groups or abs(h["value"]) > abs(groups[k]["value"]):
+            groups[k] = h
+    rows = [hot_spots.row(h["member"], q, abs(h["value"]), limit,
+                          note=(f"joint {h['joint']} ({h['kind']}), {h['side']} side, {h['place']}, tube {h['tube']}, "
+                                f"{'outer' if h['surface'] == 'top' else 'inner'} surface"),
+                          at_mm=h["position_mm"])
+            for h in groups.values()]
+    keep = []
+    if per_member:
+        m = max(per_member, key=per_member.get)
+        keep.append(hot_spots.row(m, "max_stress", per_member[m], limit, note=hot_spots.SHARP_NOTE))
+    return hot_spots.top(rows, keep=keep)
 
 
 def tube_frames(design: Record, r: dict, series) -> Record:
