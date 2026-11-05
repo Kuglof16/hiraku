@@ -533,6 +533,52 @@ console.log(JSON.stringify({{ top, sent: sent.map((b) => b.answers), defaults: s
         self.assertTrue(got["nothing"] and got["note"])  # nothing was read from the words: it says so and why
         self.assertTrue(got["noDash"])  # limits that are not decided are not shown as "—"
 
+    def test_the_standard_values_button_waits_for_the_questions_that_need_an_answer(self):
+        got = self.a2("""
+button('標準の値のまま進める').listeners.click[0]();
+await wait();
+const refused = { sent: sent.length, said: el.text().includes('答えが要る質問 (積載) に答えてから、押してください') };
+// answered with the question that needs an answer still without one (the draft came back with Q40 open): it asks again
+events = [asked, e(2, 5, 'hearing.answered', { answers: [], rule_answers: [] })];
+intake.update();
+const t = el.text();
+const card = el.all('article').find((a) => a.dataset.key === 'Q40');
+console.log(JSON.stringify({ refused, again: card.className.includes('asking'), stillAnswerable: !el.all('button').find((b) => b.text() === '答えて進める').disabled,
+  confirmLeft: el.all('article').find((a) => a.dataset.key === 'Q34').className.includes('open') }));
+""")
+        self.assertEqual(got["refused"], {"sent": 0, "said": True})  # nothing is sent, and it says why
+        self.assertTrue(got["again"] and got["stillAnswerable"])  # the question is open and the answer button works: no dead end
+        self.assertTrue(got["confirmLeft"])  # the question that does not need an answer is closed as "no answer"
+
+    def test_the_questions_that_need_an_answer_come_first_in_the_hearing(self):
+        got = self.a2("""
+events = [e(1, 1, 'hearing.asked', { questions: [
+  { req_key: 'Q03', name: '使う頻度', text: 'a', ask: 'confirm' }, { req_key: 'Q11', name: '路面', text: 'b', ask: 'confirm' },
+  { req_key: 'Q40', name: '積載', text: 'c', ask: 'must' }, { req_key: 'Q20', name: '水', text: 'd', ask: 'confirm' },
+  { req_key: 'Q50', name: '最高速度', text: 'e', ask: 'must' }] })];
+intake.update();
+console.log(JSON.stringify(el.all('article').map((a) => a.dataset.key)));
+""")
+        self.assertEqual(got[:2], ["Q40", "Q50"])
+        self.assertEqual(got[2:], ["Q03", "Q11", "Q20"])  # the others keep their order
+
+    def test_a_finished_run_without_any_rule_check_says_so_and_does_not_say_not_yet(self):
+        got = self.a5("""
+const { DEMOS } = await import(%s);
+const { buildModel } = await import(%s);
+const { renderA5 } = await import(%s);
+const events = DEMOS[Object.keys(DEMOS)[0]].filter((e) => e.kind !== 'rule_check.recorded');
+const draw = (list) => {
+  const m = buildModel(list, { picksFinal: true });
+  const el = new El('div');
+  renderA5(el, m, { events: () => [] }, { screen: 'A5', mode: 'category', filter: 'all', query: '', selected: null, collapsed: new Set(), disabled: new Set(), dropped: [], litSeen: new Set(), rerender() {} });
+  return el.text();
+};
+const open = draw(events), done = draw([...events, { seq: 9999, t: 9999, ts: 'x', run_id: 'r', kind: 'run.finished', data: { status: 'done', stop_code: 'done' } }]);
+console.log(JSON.stringify({ openNotYet: open.includes('まだ調べていません'), doneThisRun: done.includes('この実行では調べていません'), doneNotYet: done.includes('まだ調べていません') }));
+""" % (json.dumps(url('demo-events.js')), json.dumps(url('model.js')), json.dumps(url('a5.js'))))
+        self.assertEqual(got, {"openNotYet": True, "doneThisRun": True, "doneNotYet": False})
+
     def test_a_replay_that_cannot_take_files_says_so(self):
         got = self.a5("""
 const [el, root] = mount({});

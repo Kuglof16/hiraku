@@ -154,7 +154,9 @@ export function hearingRows(m) {
   const answers = new Map((m.hearing.answered?.answers || []).map((a) => [a.key, a]));
   return asked.map((q) => {
     const a = answers.get(q.req_key);
-    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
+    // a question that needs an answer stays open until it has one (the answered event may have come without it)
+    const unanswered = q.ask === "must" ? (m.finished ? "ended" : "asking") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking";
+    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : unanswered };
   });
 }
 

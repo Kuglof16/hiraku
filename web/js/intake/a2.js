@@ -93,6 +93,22 @@ function requirementRow(r, flags) {
     h("td", { class: "trust" }, h("span", { class: `in-dot t${r.trust}`, title: TRUST_JA[r.trust] }, r.trust)));
 }
 
+/** Names of the questions that need an answer and have none yet (nothing picked, nothing answered). */
+function mustLeft(rows, ui) {
+  return rows.filter((r) => r.ask === "must" && r.state === "asking" && !r.answer && !ui.answers[r.req_key]).map((r) => r.name);
+}
+
+/** "Use the standard values": refused with a sentence while a question that needs an answer has none (it would end in a dead end). */
+function useDefaultsOrSay(api, ui, rows) {
+  const left = mustLeft(rows, ui);
+  if (left.length) {
+    ui.error = `答えが要る質問 (${left.join("・")}) に答えてから、押してください`;
+    ui.rerender();
+    return null;
+  }
+  return submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true });
+}
+
 /**
  * The questions that need an answer (and the rule hits), as one panel for the top of A1: the person answers where they
  * are, without moving to the hearing tab. The answers are the same ones A2 sends (ui.answers).
@@ -106,7 +122,7 @@ export function askingPanel(m, api, ui) {
   const canSend = !!api.answerHearing && !ui.sending;
   const need = must.length + rules.length;
   const actions = h("div", { class: "in-actions" },
-    h("button", { class: "in-btn", type: "button", disabled: !canSend, onclick: () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true }) }, "標準の値のまま進める"),
+    h("button", { class: "in-btn", type: "button", disabled: !canSend, onclick: () => useDefaultsOrSay(api, ui, rows) }, "標準の値のまま進める"),
     h("button", { class: "in-btn primary", type: "button", disabled: !canSend,
       onclick: () => submit(api, ui, { answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true }) },
     ui.sending ? "送っています…" : "答えて進める"));
@@ -137,7 +153,8 @@ export async function submit(api, ui, body) {
 }
 
 export function renderA2(el, m, api, ui) {
-  const rows = hearingRows(m);
+  // the questions that need an answer come first (and keep their order among themselves)
+  const rows = hearingRows(m).map((r, i) => [r, i]).sort((a, b) => (b[0].ask === "must" && b[0].state === "asking") - (a[0].ask === "must" && a[0].state === "asking") || a[1] - b[1]).map(([r]) => r);
   const rules = ruleRows(m);
   // another hearing (a new run, other questions): what was picked for the earlier one is not sent with this one
   const sig = [...rows.map((r) => r.req_key), ...rules.map((r) => r.rule_id)].join(",");
@@ -161,7 +178,7 @@ export function renderA2(el, m, api, ui) {
             h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えたいこと", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !canSend }),
             ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした。${ui.error}`) : null,
             h("div", { class: "in-actions" },
-              h("button", { class: "in-btn", disabled: !canSend, onclick: () => submit(api, ui, { answers: {}, note: ui.note || "", useDefaults: true }) }, "標準の値のまま進める"),
+              h("button", { class: "in-btn", disabled: !canSend, onclick: () => useDefaultsOrSay(api, ui, rows) }, "標準の値のまま進める"),
               h("button", { class: "in-btn primary", disabled: !canSend,
                 onclick: () => submit(api, ui, answersBody()) }, ui.sending ? "送っています…" : "答えて進める")))
         : null,
