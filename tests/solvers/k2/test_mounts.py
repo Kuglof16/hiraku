@@ -159,6 +159,11 @@ class DrivenMountsTest(unittest.TestCase):
     def test_the_lane_change_gives_the_mount_forces(self):
         self.check("lane_change", {"speed": {"value": 40.0, "unit": "km/h"}, "find_limit": False})
 
+    def test_the_launch_gives_the_mount_forces(self):
+        q = lambda v, u: {"value": v, "unit": u}
+        self.check("launch", {"target_speed": q(20.0, "km/h"), "motor_torque": q(20.0, "N*m"),
+                              "gear_ratio": q(8.0, "1"), "motor_power": q(5.0, "kW"), "max_time": q(15.0, "s")})
+
     def test_the_rough_slope_gives_the_mount_forces(self):
         self.check("offroad_roll", {"length": {"value": 20.0, "unit": "m"}})
 
