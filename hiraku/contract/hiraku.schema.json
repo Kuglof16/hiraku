@@ -762,8 +762,81 @@
               "description": "fillet weld leg length (throat = 0.7 leg)"
             }
           }
+        },
+        "declared": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Sizes the design states for the knowledge rules (rule_check), written by the code that builds the design. The names are the intake vocabulary's declared facts (hiraku.intake.facts.FACTS, scope declared); a new name is added there and here together. A part with joint gives bolt_diameter_mm and weld_throat_mm from joint (bolt_d_mm, 0.7 weld_leg_mm), not here.",
+          "propertyNames": {
+            "enum": [
+              "bend_radius_mm",
+              "hole_edge_mm",
+              "hole_diameter_mm",
+              "bolt_diameter_mm",
+              "thread_engagement_mm",
+              "weld_length_mm",
+              "weld_throat_mm",
+              "clearance_mm",
+              "tolerance_stack_mm",
+              "clearance_hole_mm",
+              "position_tolerance_mm",
+              "closing_gap_mm"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "value",
+              "unit",
+              "basis"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unit": {
+                "const": "mm"
+              },
+              "basis": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Where the value comes from: a design variable (e.g. 'variable rollbar_t'), a standard (edition and table, or 'not checked'), or 'assumption'."
+              }
+            }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "joint"
+            ]
+          },
+          "then": {
+            "properties": {
+              "declared": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "bolt_diameter_mm"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "weld_throat_mm"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "node": {
       "type": "object",
@@ -4427,6 +4500,14 @@
               },
               "at_mm": {
                 "$ref": "#/$defs/vec3"
+              },
+              "tool_side": {
+                "type": "string",
+                "description": "The side the hands and tool come from to this fastening, as a direction (e.g. +z): the free side used, or, when no side is free, the first side tried."
+              },
+              "tool_gap_mm": {
+                "type": "number",
+                "description": "Smallest gap between the space the hands and tool need on tool_side and anything else in the way, computed by the assembly tool; negative = how deep something reaches into that space. Shown, not judged (the hands' way rule has no source yet)."
               }
             }
           }
