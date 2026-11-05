@@ -58,8 +58,9 @@ export function readable(hex) {
 }
 
 // "前のばねの硬さ 25 → 30 N/mm" for each changed variable (before: the base design's value),
-// "part_mounts を brackets に" for each choice.
-export function changeWords(chg, base) {
+// "part_mounts を brackets に" for each choice. sep: between the name and the values (" ", or
+// "を " for a sentence: "前のばねの硬さを 25 → 30 N/mm").
+export function changeWords(chg, base, sep = " ") {
   const out = [];
   for (const [name, q] of Object.entries(chg.changes ?? {})) {
     // the design's variable_names, else the screen's table (labels.js VARIABLE_JA), else the id
@@ -67,7 +68,7 @@ export function changeWords(chg, base) {
     const was = base?.variables?.[name];
     const u = unitLabel(q.unit ?? was?.unit ?? "");
     const unit = u && u !== "1" ? ` ${u}` : "";
-    out.push(was && typeof was.value === "number" ? `${said} ${fmt(was.value)} → ${fmt(q.value)}${unit}` : `${said}を ${fmt(q.value)}${unit} に`);
+    out.push(was && typeof was.value === "number" ? `${said}${sep}${fmt(was.value)} → ${fmt(q.value)}${unit}` : `${said}を ${fmt(q.value)}${unit} に`);
   }
   for (const [name, v] of Object.entries(chg.choices ?? {})) out.push(`${name} を ${String(v)} に`);
   return out;
@@ -130,6 +131,20 @@ export function roundCardHtml(s, playhead) {
     `<div class="rc-head" data-round="built" data-version="${v}">${esc(agentName("packager"))}が ${list.length} つの提案を版 ${v} にまとめた</div>` +
     `<ol class="rc-list">${list.map((c) => rowHtml(c, base)).join("")}</ol>`
   );
+}
+
+// What a version changed from its parent, in one sentence for viewers, made from the records'
+// values only: "版 6 → 版 7 で、レールの管の厚さを 2.3 → 3.2 mm". The changes are the version's
+// design.created module_changes[].changes (each variable's new value and unit) and choices; the
+// value before and the name are the parent version's (its variables, its variable_names, else
+// labels.js VARIABLE_JA, else the variable's own name). null when the version has no recorded
+// change (its change_reason, the packager's own words with record ids, is for ?dev=1 only).
+export function versionChangeLine(s, v) {
+  const d = s.designs?.[v];
+  if (!d || d.parent_version == null) return null;
+  const base = s.designs[d.parent_version];
+  const words = (d.module_changes ?? []).flatMap((c) => changeWords(c, base, "を "));
+  return words.length ? `版 ${d.parent_version} → 版 ${v} で、${words.join("・")}` : null;
 }
 
 // The grid head's line for a version built from proposals: "版 1 → 2: 足まわり 前のばねの硬さ 25 → 30・…".
