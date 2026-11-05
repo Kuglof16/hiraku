@@ -428,11 +428,21 @@ def save_answer(run_path: Path, body: Record) -> Path:
     return path
 
 
+_READ_TRIES = 10
+_READ_RETRY_S = 0.05
+
+
 def read_answer(run_path: Path) -> Record | None:
     path = Path(run_path) / ANSWER_FILE
-    if not path.exists():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    for attempt in range(_READ_TRIES):
+        try:  # Windows: while the writer renames the file into place, exists() and open() can both fail with PermissionError
+            if not path.exists():
+                return None
+            return json.loads(path.read_text(encoding="utf-8"))
+        except PermissionError:
+            if attempt + 1 < _READ_TRIES:
+                time.sleep(_READ_RETRY_S)
+    return None  # still busy: the next poll of wait_for_answer reads it
 
 
 def wait_for_answer(run_path: Path, timeout_s: float, *, poll_s: float = 0.5,
