@@ -125,6 +125,10 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [row]}), [])
         self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{k: v for k, v in row.items() if k != "predicted"}]}), [])
         self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": -1}]}), [])
+        self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "at_mm": [1200.0, -310.0, 420.0]}]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "at_mm": [1200.0, -310.0]}]}), [])
+        self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": 1000}]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": 1000.5}]}), [])
 
     def test_hot_spot_red_and_its_cause(self):
         v = load("verdict.json")
@@ -156,18 +160,55 @@ class SchemaTest(unittest.TestCase):
         from hiraku.intake.facts import FACTS
 
         root = contract.schema()
-        names = set(root["$defs"]["part"]["properties"]["declared"]["propertyNames"]["enum"])
-        self.assertEqual(names, {n for n, (_, _, scope) in FACTS.items() if scope == "declared"})
+        decl = root["$defs"]["part"]["properties"]["declared"]
+        names = set(decl["propertyNames"]["enum"])
+        units = set(decl["additionalProperties"]["properties"]["unit"]["enum"])
+        vocab = {n: unit for n, (_, unit, scope) in FACTS.items() if scope == "declared"}
+        self.assertLessEqual(set(vocab), names)  # the contract may lead the vocabulary by a branch, never trail it
+        self.assertLessEqual(set(vocab.values()), units)
         part = dict(load("design.json")["parts"][0])
         bend = {"value": 3.0, "unit": "mm", "basis": "assumption"}
         self.assertEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": bend}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_r": bend}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {**bend, "unit": "in"}}}), [])
+        uj = {"value": 12.5, "unit": "deg", "basis": "computed from the shaft geometry"}
+        self.assertEqual(contract.errors("part", {**part, "declared": {"uj_angle_max_deg": uj}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {"value": 3.0, "unit": "mm"}}}), [])
         joint = {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}
         self.assertEqual(contract.errors("part", {**part, "joint": joint, "declared": {"hole_edge_mm": bend}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
         self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
+
+    def test_node_motion_field(self):
+        f = {"kind": "node_motion", "unit": "mm", "nodes": ["N1", "N2"], "members": [["N1", "N2", "rail_L_0"]],
+             "frames": {"t_s": [0.0, 0.01], "positions_mm": [[[0, 0, 0], [500, 0, 0]], [[0, 0, 0], [480, 0, 5]]],
+                        "broken": [[], ["rail_L_0"]]}}
+        self.assertEqual(contract.errors("field", f), [])
+        self.assertNotEqual(contract.errors("field", {k: v for k, v in f.items() if k != "members"}), [])
+        self.assertNotEqual(contract.errors("field", {**f, "members": [["N1", "N2"]]}), [])
+        many = {**f, "frames": {**f["frames"], "t_s": [0.0] * 151}}
+        self.assertNotEqual(contract.errors("field", many), [])
+        self.assertEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_member": {"a": 1.0}}), [])
+
+    def test_part_rating(self):
+        part = {**dict(load("design.json")["parts"][0]), "kind": "strap"}  # kind is free text
+        ok = {**part, "rating": {"working_load_N": 2500.0, "basis": "EN 12195-2 LC (not checked)"}}
+        self.assertEqual(contract.errors("part", ok), [])
+        self.assertNotEqual(contract.errors("part", {**part, "rating": {"working_load_N": 0, "basis": "x"}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "rating": {"working_load_N": 2500.0}}), [])
+
+    def test_scene_circle(self):
+        ring = {"kind": "circle", "label": "外側の前輪の円", "position_mm": [0.0, 4900.0, 0.0], "size_mm": [9800.0, 9800.0, 0.0]}
+        self.assertEqual(contract.errors("scene_object", ring), [])
+        self.assertNotEqual(contract.errors("scene_object", {**ring, "kind": "ring"}), [])
+
+    def test_tool_check_in_japanese(self):
+        chk = {"case": "static load FL", "quantity": "wheel_load", "expected": 1694.37, "got": 1694.93, "unit": "N",
+               "tolerance_rel": 0.001, "pass": True, "source": "moment balance"}
+        ja = {**chk, "case_ja": "止まっているときの左前輪の荷重", "source_ja": "前後の輪のまわりの力のつり合い"}
+        self.assertEqual(contract.errors("tool_check", chk), [])  # both optional
+        self.assertEqual(contract.errors("tool_check", ja), [])
+        self.assertNotEqual(contract.errors("tool_check", {**ja, "case_ja": ""}), [])
 
     def test_rule_check_keeps_the_values_it_checked(self):
         rc = {"rule_check_id": "rchk-0001", "design_version": 5, "rule_id": "SM-01", "targets": ["bracket_lca_FL1"],
