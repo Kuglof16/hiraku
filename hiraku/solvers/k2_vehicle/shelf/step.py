@@ -15,7 +15,7 @@ from ..scenario import new_sim
 from ..units import G0
 from .base import MOTOR, MU, K2Tool, P, Pair, _box, _half_width, _length, _res
 from .mounts import corner_mounts  # noqa: F401  (moved to mounts.py; other modules import it from here)
-from .mounts import LOAD_EVERY_S, load_state, mount_peak, mount_series, mount_vectors
+from .mounts import LOAD_EVERY_S, LoadLog, has_mounts, load_state, mount_peak, mount_series, mount_vectors, state_at
 
 
 def step_push(veh, h: float, stepping: list[int], *, dt: float = 1e-3, y_range=None, ramp_s: float = 4.0,
@@ -179,7 +179,12 @@ class StepClimbTool(K2Tool):
     controller) until every wheel the step covers has crossed it and 0.5 s more, the
     vectors are that run at lift-off (each wheel's reaction and grip, and the inertia
     force -(road forces + weight) at the CG, so the set balances the weight), and the
-    scene's step stands where that run's step is. Run 2 gives numbers only.
+    scene's step stands where that run's step is. Run 2 gives numbers only, unless the
+    analyze call gives record_run = "speed": then series, vectors and scene come from run 2
+    (rolling at the test speed from step_push's run_up, 2 m, before the step: the approach, the hit and the
+    climb or the stall; the vectors at the instant of peak_wheel_force; the step where run 2
+    met it; with K&C corners the mount_* series and mount_force_peak of that run), and run 1
+    gives numbers only.
     With K&C corners, run 1 also gives the force the body receives at each suspension mount
     (joint vectors at lift-off, and the mount_* series of mount_series: tens of instants from
     the standstill against the step until the end of the record, closer around each climb,
@@ -196,7 +201,10 @@ class StepClimbTool(K2Tool):
               P("speed", "km/h", 10.0, "speed of run 2"),
               P("step_supports", None, None, "comma-separated support ids that meet the step "
                                              "(default: the front-most supports)"),
-              MU, *MOTOR)
+              MU, *MOTOR,
+              P("record_run", None, "push", "which run the record's series, vectors and scene show: "
+                "push (run 1, the push from standstill) or speed (run 2, driving at the step at the test speed)",
+                choices=("push", "speed"), run_option=True))
     pairs = (Pair("front_wheel_force", "step_climb.pushed_wheel_load", "F", (("h", "step_height"),)),
              Pair("front_wheel_force", "step_climb.wheel_force_rigid", "F", (("h", "step_height"),),
                   "W = a front wheel's load; with the static load it comes out high, since the push moves "
@@ -310,10 +318,14 @@ class StepClimbTool(K2Tool):
             notes.append("motor not given: the driven wheels get the torque the speed controller asks for (no limit)")
         road = step_road(crawl["x_step"], h, y_range)
         sim = new_sim(veh, road=road, dt=self.dt, settle_s=1.0)
+        on_speed = self.text(lp, "record_run") == "speed"
+        rec2 = Recorder(sim, self.record_hz) if on_speed and self.record_hz > 0 else None
+        log2 = LoadLog(sim) if rec2 is not None and any(has_mounts(c) for c in veh.corners) else None
         start_rolling(sim, speed)
         ctrl = SpeedController(sim)
         driven = [i for i, c in enumerate(veh.corners) if c.drive]
-        peak, peak_id, peak_z, slow_t, t_climb = 0.0, None, 0.0, 0.0, None
+        peak, peak_id, peak_z, slow_t, t_climb, t_peak = 0.0, None, 0.0, 0.0, None, None
+        peak_inertia = None
         reason = None
         # climbed: the hindmost wheel centre (world x) is 0.6 m past the step's corner
         x_done = crawl["x_step"] + 0.6
@@ -324,12 +336,27 @@ class StepClimbTool(K2Tool):
                 cap = motor.wheel_torque_total(wbar) / len(driven)
                 drive = [min(x, cap) for x in drive]
             sim.step(controls(sim, 0.0, drive, brake))
+            if rec2 is not None:
+                rec2.tick()
+            if log2 is not None:
+                log2.tick()
             o = sim.out
+            new_peak = False
             for i, c in enumerate(veh.corners):
                 fmag = math.sqrt(sum(x * x for x in o["f"][i]))
                 if fmag > peak:
-                    peak, peak_id = fmag, c.id
+                    peak, peak_id, new_peak = fmag, c.id, True
                 peak_z = max(peak_z, o["f"][i][2])
+            if new_peak:
+                t_peak = sim.t
+                if rec2 is not None:
+                    # the vectors at the instant of peak_wheel_force (only that one kept), with the
+                    # d'Alembert force -(road forces + weight) at the CG, as run 1's
+                    rec2.snap.clear()
+                    rec2.keep_snapshot()
+                    m = veh.m_total
+                    peak_inertia = ([-(sum(o["f"][i][k] for i in range(len(o["f"]))) + m * sim.g[k]) for k in range(3)],
+                                    sim.cg_world().tolist())
             if t_climb is None and float(sim.wheel_centres()[:, 0].min()) > x_done:
                 t_climb = sim.t
             if t_climb is not None and sim.t > t_climb + 0.8:
@@ -345,9 +372,27 @@ class StepClimbTool(K2Tool):
                 _res("peak_wheel_force", peak, "N", peak_id), _res("peak_vertical_wheel_force", peak_z, "N")]
         if t_climb is not None:
             res.append(_res("climb_time", t_climb, "s"))
-        rec = crawl["recorder"]
         y0, y1 = (-_half_width(veh) - 0.5, _half_width(veh) + 0.5) if y_range is None else \
             ((0.0, _half_width(veh) + 0.5) if y_range[0] >= 0.0 else (-_half_width(veh) - 0.5, 0.0))
+        if rec2 is not None:
+            # the record shows run 2: driving at the step at the test speed
+            scene = [_box("step", f"段差 {h * 1000:.0f} mm ({speed * 3.6:g} km/h で向かう走り)",
+                          (crawl["x_step"], y0, 0.0), (crawl["x_step"] + _length(veh) + 3.0, y1, h))]
+            series = rec2.series()
+            vectors = rec2.vectors(-1)
+            if peak_inertia is not None:
+                vectors.append({"kind": "inertia", "at": "cg", "origin_mm": [x * 1000.0 for x in peak_inertia[1]],
+                                "vector_N": [float(x) for x in peak_inertia[0]]})
+            if log2 is not None and log2.states:
+                series += mount_series(veh, log2.states, [] if t_peak is None else [(t_peak - 0.2, t_peak + 0.2)])
+                top = mount_peak(series)
+                if top is not None:
+                    res.append(top[0])
+                    vectors += mount_vectors(veh, state_at(log2.states, top[1]))
+            notes.append(f"the record is run 2: rolling at {speed * 3.6:g} km/h from 2 m before the step "
+                         "(record_run = speed); run 1, the push from standstill, gives numbers only")
+            return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}
+        rec = crawl["recorder"]
         x0 = crawl["x_corner"]
         scene = [_box("step", f"段差 {h * 1000:.0f} mm (1 回目の押し上げの位置)",
                       (x0, y0, 0.0), (x0 + _length(veh) + 3.0, y1, h))]
