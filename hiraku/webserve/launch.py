@@ -173,12 +173,27 @@ def run_command(requirements: Path, mode: str, runs_dir: Path, intake_events: Pa
     return cmd + (["--scripted"] if mode == "scripted" else [])
 
 
+def end_tree(proc: subprocess.Popen) -> None:
+    """End a child run and what it started (on Windows, kill() alone leaves its children)."""
+    if proc.poll() is not None:
+        return
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=False)
+    if proc.poll() is None:
+        proc.kill()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 class Launcher:
     """One child run at a time; remembers the runs started from this server."""
 
     def __init__(self, runs_dir: Path, requirements_dir: Path = REQUIREMENTS_DIR, env: dict[str, str] | None = None,
                  command: Callable[[Path, str, Path], list[str]] = run_command,
-                 reader: Callable[[Path], dict[str, Any]] = read_requirements, wait_s: float = 60.0,
+                 reader: Callable[[Path], dict[str, Any]] = read_requirements, wait_s: float = 600.0,
                  demo_runs_file: Path = DEMO_RUNS_FILE):
         self.runs_dir = Path(runs_dir)
         self.requirements_dir = Path(requirements_dir)
@@ -354,7 +369,8 @@ class Launcher:
         with self.lock:
             if self.running():
                 # (run_id is None until the child prints its folder)
-                raise LaunchError(409, f"a run is still going: {self.current.get('run_id')}",
+                rid = self.current.get("run_id")
+                raise LaunchError(409, f"a run is still going: {rid}" if rid else "a run is still starting (it has not printed its run folder yet)",
                                   {"running_run_id": self.current.get("run_id")})
             self.runs_dir.mkdir(parents=True, exist_ok=True)
             env ={**self.env, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
@@ -370,6 +386,9 @@ class Launcher:
         # The child prints its own folder (run folder: ...) once the folder and its events.jsonl
         # exist. Only that line names the run: a new folder in runs/ may be another run's (one
         # started at the same time from the command line or drip), and stop() writes into it.
+        # The child prints it after start_run's tool checks, which can take over a minute while
+        # other heavy work runs: wait_s is long, and a child still silent after it is ended (with
+        # what it started), so no unnamed run stays behind holding the one place (409).
         deadline = time.monotonic() + self.wait_s
         while time.monotonic() < deadline:
             rid = info["run_id"]
@@ -379,7 +398,14 @@ class Launcher:
             if "exit_code" in info:  # the child has ended and all its output was read (_read)
                 raise LaunchError(500, "the run ended before it started: " + " / ".join(tail))
             time.sleep(0.1)
-        raise LaunchError(504, "the run did not print its run folder in time")
+        with self.lock:
+            if info["run_id"] is None:  # (it may print at the last moment: then it is a run, see below)
+                end_tree(proc)
+                if self.proc is proc:
+                    self.proc, self.current = None, None
+                raise LaunchError(504, f"the run did not print its run folder in {self.wait_s:g} s; it was stopped")
+        self.started.append(info)
+        return info
 
     def stop(self, run_id: Any) -> dict[str, Any]:
         """Ask the run started here to stop (only that one, and only while it runs)."""
