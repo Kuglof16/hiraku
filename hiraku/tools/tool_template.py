@@ -96,6 +96,9 @@ from hiraku.solvers.k1_frame import analyze, build
 from hiraku.solvers.shelf.base import G_FACTOR, LOADING, BuiltinTool, check_record, param_text, param_value, result
 
 TUBE = {"shape": "rect_tube", "dims_mm": {"b": 40.0, "h": 80.0, "t": 2.0}}
+# A template's example material, not a design's: values typical of a structural steel (yield 235 MPa as SS400's
+# minimum for thin plate in JIS G 3101; E, nu and density general design values). Not checked in this repository;
+# the template's known answer is computed from them, so it holds whatever they are.
 STEEL = {"E_MPa": 205000.0, "nu": 0.3, "density_kg_m3": 7850.0, "yield_MPa": 235.0}
 
 
