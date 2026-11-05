@@ -115,6 +115,17 @@ def split_by_module(design: Record, changes: Record, choices: Record) -> tuple[d
     return {m: by[m] for m in order}, package, stray
 
 
+def revision_hits(design: Record, routed: dict[str, list[str]], rev: Record) -> bool:
+    """Whether a plan entry answers a red of the version on a design with modules: one of the entry's modules (or
+    the packager, for package variables) is where the reds go (routed: roles.route_reds). No routed red (a rule's
+    red tile), names no module owns (revise_modules says so) and a driver fit with no changes of its own count as
+    hits, as before this check."""
+    by, package, stray = split_by_module(design, dict(rev.get("changes") or {}), dict(rev.get("choices") or {}))
+    if stray or not routed or (not by and not package and rev.get("fit") == "driver"):
+        return True
+    return any(f"designer.{m}" in routed for m in by) or bool(package and "packager" in routed)
+
+
 def room_for(previous: Record, merged: Record) -> dict[str, list[Record]]:
     """The packager's room for a round: for each module whose parts or members would leave its envelope on the
     design with the round's changes, that module's envelope made again from the new design
@@ -290,6 +301,8 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
         args.update(safe_side=True, safe_side_reason=expected["safe_side_reason"])
+    if expected.get("tool_decides"):  # docs/contract.md 手計算の役目: the plan's step records the path check first
+        args.update(tool_decides=True, tool_decides_reason=expected["tool_decides_reason"])
     if expected.get("end"):
         args["ends_case"] = True  # rules.ended_cases reads it: the load case holds no heavier stage nor the stop
     recorded = record_cause(ctx, args, agent)
@@ -298,8 +311,9 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if ver is not None:
         if retry is not None:
             raise ScriptError(f"the plan gives {hit['comparison_id']} both safe_side and a retry")
-        _say(ctx, agent, lc, f"安全側の食い違いとして、不利な方の値 (予測) で合否を出しました: "
-                             f"{'合格' if ver['pass'] else '不合格'} — {verdict_line(ver)}")
+        how = ("手計算は値に届かないが、力の道は手計算で確かめてあるので、ツールの値で" if expected.get("tool_decides")
+               else "安全側の食い違いとして、不利な方の値 (予測) で")
+        _say(ctx, agent, lc, f"{how}合否を出しました: {'合格' if ver['pass'] else '不合格'} — {verdict_line(ver)}")
         return
     if expected.get("end"):
         if retry is not None:
@@ -477,21 +491,39 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             s.emit("agent.started", agent=agent, domain=domain, data={"agent_id": agent, **NO_MODEL})
             started.append(agent)
 
+    def hits_reds(rev: Record) -> bool:
+        from hiraku.agent.roles import route_reds
+
+        design = ctx.store.design()
+        return not design.get("modules") or revision_hits(design, route_reds(ctx, ctx.version), rev)
+
     def next_revision(ended: set[str] | None = None) -> int | None:
-        """The index of the plan's next revision: for the version's reds (ended None) the first entry that is
-        not for ended cases; for load cases that ended without a verdict (rules.ended_cases) the first entry
-        whose answers_ended names one of them. None when there is none or the round limit is used up."""
+        """The index of the plan's next revision: for the version's reds (ended None) the first entry not used
+        yet that is not for ended cases and answers one of the reds (hits_reds: a run of fewer tests than the
+        plan's, the screen's tests picked, skips the entries for reds it does not have; they stay for a later
+        version); for load cases that ended without a verdict (rules.ended_cases) the first entry whose
+        answers_ended names one of them. None when there is none or the round limit is used up."""
         if ctx.version - 1 >= ctx.project["round_limit"]:
             return None
         for i, rev in enumerate(revisions):
             answers = set(rev.get("answers_ended") or [])
-            if (ended is None and not answers) or (ended is not None and answers & ended):
+            if (ended is None and not answers and hits_reds(rev)) or (ended is not None and answers & ended):
                 return i
         return None
 
+    def none_hit() -> bool:
+        """Entries for reds are left, but none answers this version's reds (next_revision found none)."""
+        return ctx.version - 1 < ctx.project["round_limit"] and any(
+            not rev.get("answers_ended") for rev in revisions)
+
     def revise(text: str, index: int | None = None) -> None:
         _check_stop(ctx)
-        rev = revisions.pop(next_revision() if index is None else index)
+        at = next_revision() if index is None else index
+        put_off = [r for r in revisions[:at] if not r.get("answers_ended")] if index is None else []
+        if put_off:  # earlier entries for reds this version does not have (fewer tests than the plan's): kept
+            s.emit("agent.said", agent="lead", text=f"台本の次の直し {len(put_off)} つは、版 {ctx.version} の赤に当たらないので"
+                   "後に回し、赤に当たる直しを使います: " + "、".join(r.get("say") or r["reason"][:40] for r in put_off))
+        rev = revisions.pop(at)
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
         changes, reason = dict(rev.get("changes") or {}), rev["reason"]
@@ -619,8 +651,10 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                     revised = True
                     break
                 held_back = (stage, reds)
-                s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。設計を直す手が"
-                                                        f"残っていないので、重い段には進みません (HK5)")
+                left = ("台本に残る直しはどれもこの赤に当たらない (この要件では計画の直しが当たらない) ので" if none_hit()
+                        else "設計を直す手が残っていないので")
+                s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。{left}、"
+                                                        f"重い段には進みません (HK5)")
                 break
             if revised:
                 continue
@@ -664,7 +698,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         used_up = ctx.version - 1 >= ctx.project["round_limit"]
         names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
         why = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました" if used_up
-               else "台本に設計の直しが残っていません")
+               else "この要件では計画の直しが当たらない (台本に残る直しは、どれもこの版の赤を直すモジュールのものではありません)"
+               if none_hit() else "台本に設計の直しが残っていません")
         status, code = "stopped", "round_limit" if used_up else "not_judged"
         reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。それより重い段の荷重条件は、"
                   f"低い段の赤が残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)

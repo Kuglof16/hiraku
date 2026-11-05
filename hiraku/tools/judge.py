@@ -50,14 +50,48 @@ def prediction_is_unfavourable(comparison: Record, op: str) -> bool:
     return p >= a if unfavourable_side(op) == "larger" else p <= a
 
 
+PATH_FORMULA = "load_path.free_parts"  # docs/contract.md 手計算の役目: the hand calculation of the load path
+PATH_CHECKED = "path_checked"
+
+
+def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Record | None = None) -> str | None:
+    """docs/contract.md 手計算の役目, the load path checked by hand, in this version: (1) a load_path.free_parts
+    prediction of 0, of the load case's loaded parts (one of its own predictions) or of every part of the version
+    (contract 947969a: the quantity free_parts, of any load case, as qa.check_run reads it); (2) an ok analysis
+    of the load case that follows the path (a free_parts or unsupported_load result) finds no unsupported load,
+    nor does the analysis that decides (given: the compared one). None when it holds, else why not (for people)."""
+    lc_id = load_case["load_case_id"]
+    hand = [p for p in ctx.store.records("prediction", version) if p.get("formula_id") == PATH_FORMULA
+            and (p["load_case_id"] == lc_id or p["quantity"] == "free_parts")]
+    if not hand:
+        return (f"版 {version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
+                "記録されていない")
+    if not any(p["value"] == 0 for p in hand):
+        p = hand[-1]
+        return f"手計算 {p['prediction_id']} ({PATH_FORMULA}) で、つながらない部品が {p['value']:g} ある"
+    seen = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == lc_id and a["status"] == "ok"
+            and any(r.get("quantity") in ("free_parts", UNSUPPORTED_LOAD) for r in a.get("results") or [])]
+    if not seen:
+        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (free_parts か unsupported_load を出すもの、"
+                "load_path など) がまだ回っていない")
+    for a in [seen[-1]] + ([analysis] if analysis is not None else []):
+        lost = [r for r in a.get("results") or [] if r.get("quantity") == UNSUPPORTED_LOAD and r.get("value", 0) > 0]
+        if lost:
+            return f"解析 {a['analysis_id']} ({a['tool']}) で、支えのない荷重が {max(r['value'] for r in lost):g} ある"
+    return None
+
+
 def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case: Record,
-                 cause_id: str | None = None) -> Record:
+                 cause_id: str | None = None, basis: str | None = None) -> Record:
     """From a match: the analysis value. With cause_id (an explained safe-side mismatch):
-    the prediction, which the caller has checked is the unfavourable value."""
+    the prediction, which the caller has checked is the unfavourable value. With cause_id and basis
+    path_checked (a cause with tool_decides, the load path checked by hand: path_check): the analysis value."""
     crit = load_case["criterion"]
-    value = comparison["predicted"] if cause_id else comparison["analyzed"]
+    checked = cause_id is not None and basis == PATH_CHECKED
+    value = comparison["predicted"] if cause_id and not checked else comparison["analyzed"]
     limit = crit["limit"]
-    extra = ({"basis": "explained_safe_side", "value_from": "prediction", "cause_id": cause_id} if cause_id
+    extra = ({"basis": PATH_CHECKED, "value_from": "analysis", "cause_id": cause_id} if checked
+             else {"basis": "explained_safe_side", "value_from": "prediction", "cause_id": cause_id} if cause_id
              else {"basis": "match", "value_from": "analysis"})
     return {
         "verdict_id": verdict_id,
@@ -203,7 +237,8 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
         if c["status"] != "mismatch":
             continue
         cause = causes.get(c["comparison_id"])
-        if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
+        # (b): settled by a resolved cause, a safe-side one, or one where the tool decides after the path check
+        if cause is None or not (cause.get("resolved") or cause.get("safe_side") or cause.get("tool_decides")):
             out.append((c, cause))
     return out
 
@@ -315,7 +350,8 @@ NOT_OP = {"<=": ">", "<": ">=", ">=": "<", ">": "<="}  # the relation that holds
 def verdict_line(v: Record) -> str:
     """The verdict in one line. The sign between the numbers is the relation that holds: the
     criterion's when it passes; when it fails, the opposite, with the criterion beside it."""
-    safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
+    safe = (" 安全側の予測で" if v.get("basis") == "explained_safe_side"
+            else " 道を手計算で確かめ、ツールの値で" if v.get("basis") == PATH_CHECKED else "")
     value, limit = v["value"]["value"], v["limit"]["value"]
     if v.get("margin_pct") is None:  # a zero limit: the margin in the quantity's own unit
         room = _amount(margin(value, v["op"], limit), v["limit"]["unit"])

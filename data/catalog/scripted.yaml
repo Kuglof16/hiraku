@@ -54,9 +54,10 @@ offroad-4w:
   # (hiraku.designgen.driver_fit; `fit_evals` the designs it measures, `fit_time_s` a time guard) and added to them.
   # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
   # version 1 layout and the hand hold to get in by (stage 0) -> version 2 the opening, shut by the bolted net
-  # (stage 0, H7) -> version 3 the controls (stage 1: R7-hand red on the grip's bound: rev_controls) -> version 4 the
-  # vehicle's motion (stage 2, P3) -> version 5: every tile green expected (R7-hand and R7-foot pass on their bounds,
-  # safe side; the EC2 scripted run of 6c55e4d, before 3a95c79, ended with R7-foot not judged).
+  # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3) -> version 4: every tile green expected. R7-hand
+  # passes on the tool's value at stage 1 (docs/contract.md 手計算の役目: the grip's bound is loose, the load path is
+  # checked by hand, tool_decides, basis path_checked), so no revision thickens the towers for it (the entry
+  # rev_controls of the runs up to 4275bfe); R7-foot passes on its bound (safe side).
   # No revision adds the parts' brackets by hand: no red of a version asks for them.
   revise:
     - &rev_layout
@@ -98,26 +99,6 @@ offroad-4w:
         the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json with the previous
         revision's choices and values (no fit): entry_blocked 3; with this choice 0, entry_handhold 3. The analysis department:
         clip_net and door both open (not counted by H7, not pushed on or stiffening in R8); the opening is 703 mm either way
-    # Stage 1 (version 3): R7-hand is red on the hand calculation's upper bound (load_path.grip_bound, the analysis
-    # department's af8e987: 9.66 mm against 5 mm). The frame's towers and dash members (one section, tower_b x
-    # tower_t) go thicker where the column's bracket lands. R7-foot is predicted by the same bound (3a95c79) and
-    # passes on the rail strut (0.62 mm), so the pedals stay where they are.
-    - &rev_controls
-      say: 手の操作 (R7-hand) の赤を直すため、ハンドルの柱の金具が着く塔とダッシュの部材を太くします
-      changes:
-        tower_b: {value: 38, unit: mm}
-        tower_t: {value: 3.2, unit: mm}
-      reason: >-
-        R7-hand: 握る点の動きの上から押さえる値 (手計算 load_path.grip_bound) が限界 5 mm を超える。ほとんどが、ハンドルの柱の
-        金具が着く所 (ダッシュの柱の上) の前後の柔らかさなので、塔とダッシュの部材 (同じ断面) を 30 mm 角 2.3 mm から
-        38 mm 角 3.2 mm にする
-      source: >-
-        the design department's probe (af8e987: grip_bound_inputs with load_path.grip_bound, and the load_path tool) on
-        version 3 of the demo scripted run 20261105-051330-offroad-4w-scripted (the same design as N15's version 3): bound
-        9.66 mm (tool 0.815); tower_t 3.2 alone 8.05; tower_b 35 and tower_t 3.2 5.60; tower_b 38 and tower_t 3.2 4.72
-        (tool 0.788); 38 x 4.5 4.13. On N15's version 5 (rails and gussets): 9.10, with 38 x 3.2 4.23. tower_b must stay
-        under rail_b (40 mm). The EC2 scripted runs of 6c55e4d: R7-hand 4.72 mm (demo v004) and 4.23 mm (N15 v006), safe
-        side. The pedal on its rail strut, by the same bound (pedal_bound_inputs, 3a95c79): demo v003 0.62 mm (tool 0.19)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 15, unit: kW}
@@ -312,7 +293,6 @@ offroad-4w-video:
   revise:
     - *rev_layout
     - *rev_opening
-    - *rev_controls
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 17, unit: kW}
@@ -346,10 +326,9 @@ offroad-4w-video:
 offroad-4w-n15:
   extends: offroad-4w
   # HK5, light first: one revision per red stage. Version 1: the layout and the hand hold to get in by
-  # (stage 0) are red -> version 2: the opening, shut by the bolted net (stage 0, H7) -> version 3: the controls
-  # (stage 1): R7-hand red on the grip's bound (rev_controls) -> version 4: the vehicle dynamics
-  # (stage 2) red at P3 -> version 5: the shells (stage 3) red at R1s -> version 6: every tile green, the run done
-  # (tests/agent/test_scene_n15.py; the N15 scripted run 20261105-001933-offroad-4w-scripted).
+  # (stage 0) are red -> version 2: the opening, shut by the bolted net (stage 0, H7) -> version 3: the vehicle
+  # dynamics (stage 2) red at P3 (R7-hand passes on the tool's value, path_checked) -> version 4: the shells
+  # (stage 3) red at R1s -> version 5: every tile green, the run done (tests/agent/test_scene_n15.py).
   # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
   # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
   notes:
@@ -357,7 +336,6 @@ offroad-4w-n15:
   revise:
     - *rev_layout
     - *rev_opening
-    - *rev_controls
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 17, unit: kW}
