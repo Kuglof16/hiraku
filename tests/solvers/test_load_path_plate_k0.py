@@ -13,7 +13,7 @@ import numpy as np
 
 from hiraku import solvers
 from hiraku.catalog.builders import BUILDERS, PLANS
-from hiraku.catalog.builders.load_path import R7_TOL, chain_inputs
+from hiraku.catalog.builders.load_path import R7_TOL, chain_inputs, pedal_inputs
 from hiraku.solvers.shelf import LoadPath
 from tests.solvers.test_builders_load_path import PRED, REQ, SPECS, predict, results
 from tests.solvers.test_load_path import touch_nearest
@@ -82,9 +82,23 @@ class BulkheadTest(unittest.TestCase):
 
     @staticmethod
     def run_both(design):
+        """(control_deflection on pedal_inputs, the tool); the plan's own prediction (the bound) is checked in
+        test_plan_bound_above_the_tool."""
         lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, design) if c["load_case_id"] == "R7-foot-500N")
         got = results(LoadPath().run(design, lc, PRED, {}))
-        return predict(PLANS["R7"], design, lc)["pedal_deflection"], got["pedal_deflection"]["value"]
+        pred = REG.evaluate("load_path.control_deflection", pedal_inputs(design, lc))["outputs"]["delta"]["value"]
+        return pred, got["pedal_deflection"]["value"]
+
+    def test_plan_bound_above_the_tool(self):
+        """The plan predicts the pedal by load_path.grip_bound (pedal_bound_inputs): on the bulkhead (the plate strip
+        added, an estimate) it is still above the tool."""
+        from hiraku.designgen import ladder_4w as GEN
+
+        d = GEN.build(GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "bulkhead",
+                                         "side_guard": "bars_net"}, {}))
+        lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, d) if c["load_case_id"] == "R7-foot-500N")
+        tool = results(LoadPath().run(d, lc, PRED, {}))["pedal_deflection"]["value"]
+        self.assertGreaterEqual(predict(PLANS["R7"], d, lc)["pedal_deflection"], tool)
 
     def test_version_1_pedal_moved_onto_the_bulkhead(self):
         """K0 18.4 mm, the tool 24.0 mm: 30.3 % of K0's value, just outside R7_TOL. K0 holds the plate's centre; in
