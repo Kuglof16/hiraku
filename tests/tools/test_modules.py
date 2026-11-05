@@ -153,13 +153,33 @@ class BuildVersionTest(ModuleCase, unittest.TestCase):
         with self.assertRaises(ToolError):
             build_version(self.ctx, {"reason": "もう一度"}, "packager")
 
-    def test_the_same_variable_twice_is_refused_naming_both(self):
+    def test_a_modules_new_proposal_replaces_its_earlier_one(self):
+        """Run 20261105-091217: build_version refused chg-0005, the designer proposed chg-0006 again, and the two
+        clashed with no way to take chg-0005 back. A module has one proposal per round: the new one replaces it."""
+        self.propose("powertrain", choices={"battery_pack": "big"})
         self.propose("occupant", changes={"seat_x": self.mm(-1000)})
-        self.propose("occupant", changes={"seat_x": self.mm(-950)})
-        with self.assertRaises(ToolError) as e:
+        out = self.propose("occupant", changes={"seat_x": self.mm(-950)})
+        self.assertEqual(out["replaced"], ["chg-0002"])
+        self.assertIn("chg-0002 は、この提案に置き換わりました", out["note"])
+        self.assertEqual(out["pending"], ["chg-0001", "chg-0003"])
+        self.assertEqual(self.ctx.store.superseded_change_ids(), ["chg-0002"])
+        built = build_version(self.ctx, {"reason": "x"}, "packager")
+        self.assertEqual(built["module_changes"], ["chg-0001", "chg-0003"])
+        self.assertEqual(self.ctx.store.design(2)["variables"]["seat_x"]["value"], -950.0)
+        self.assertEqual(self.ctx.store.pending_proposals(), [])
+
+    def test_a_proposal_refused_by_build_version_is_replaced_and_the_version_is_built(self):
+        """The N13 flow (contract 8762a06): build_version refuses a proposal (here the battery past its space), the
+        module's designer proposes again, and the packager builds the version from the new proposal alone."""
+        self.propose("powertrain", changes={"battery_x": self.mm(-700)})  # 100 mm past the envelope's end
+        with self.assertRaises(ToolError):
             build_version(self.ctx, {"reason": "x"}, "packager")
-        self.assertIn("chg-0001 と chg-0002", str(e.exception))
-        self.assertEqual(self.ctx.version, 1)
+        again = self.propose("powertrain", changes={"battery_x": self.mm(-850)})
+        self.assertEqual(again["replaced"], ["chg-0001"])
+        out = build_version(self.ctx, {"reason": "出し直しの提案で"}, "packager")
+        self.assertEqual(out["module_changes"], ["chg-0002"])
+        self.assertEqual(self.ctx.store.design(2)["variables"]["battery_x"]["value"], -850.0)
+        self.assert_events_fit()
 
     def test_a_proposal_and_the_packager_on_the_same_variable_is_refused(self):
         # a variable listed by two modules (stand-in: the packager's own track and a frame entry for it)

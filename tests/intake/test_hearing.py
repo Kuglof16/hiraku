@@ -142,6 +142,14 @@ class PrepareTest(unittest.TestCase):
         with self.assertRaises(IntakeError):
             prepare(full, {"Q34": "子ども"})  # already in the file: fix the file, do not overwrite it silently
 
+    def test_an_answer_from_the_screen_to_a_key_the_file_has_is_left_out_not_the_whole_answer(self):
+        full = load_product("care-bed")
+        got = prepare(full, {"Q34": "子ども"}, skip_present=True)
+        self.assertEqual(got.ignored, ["Q34"])
+        self.assertIn("Q34", got.answered["note"])
+        self.assertEqual({r["key"]: r["value"] for r in got.requirements_file["requirements"]}["Q34"],
+                         {r["key"]: r["value"] for r in full["requirements"]}["Q34"])  # the file's value stays
+
     def test_hearing_text(self):
         req, own = bare("care-bed")
         p = prepare(req, {"Q30": "two_cargo", "Q40": 1}, product_defaults=own)

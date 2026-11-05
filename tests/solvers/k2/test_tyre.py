@@ -75,5 +75,41 @@ class MagicFormula(unittest.TestCase):
         self.assertAlmostEqual(fl, mf.forces(2000.0, mf.kappa_max, 0.0)[0])  # no damping on a held deflection
 
 
+class CompiledKernels(unittest.TestCase):
+    """The compiled tyre kernels (numba) give the plain Python functions' values within 1e-12 of their size."""
+
+    def assertClose(self, got, ref):
+        for a, b in zip(got, ref):
+            if isinstance(b, bool):
+                self.assertEqual(bool(a), b)
+            else:
+                self.assertLessEqual(abs(a - b), 1e-12 * max(1.0, abs(b)), (got, ref))
+
+    def test_forces_and_peaks(self):
+        import random
+
+        mf = MF61(load_coefficients(), fz0=2000.0, r0=0.3, lmux=0.9, lmuy=0.8, lkx=0.7, lky=0.6)
+        rng = random.Random(7)
+        for _ in range(5000):
+            a = (rng.uniform(-500.0, 6000.0), rng.uniform(-1.0, 1.0), rng.uniform(-0.6, 0.6),
+                 rng.choice((0.0, rng.uniform(-0.1, 0.1))))
+            self.assertClose(mf.forces_and_peaks(*a), mf.forces_and_peaks_py(*a))
+        self.assertEqual(tuple(mf.forces_and_peaks(0.0, 0.1, 0.1)), (0.0,) * 6)
+
+    def test_mf_tyre_force_both_sides(self):
+        import random
+
+        mf = MF61(load_coefficients(), fz0=2000.0, r0=0.3)
+        rng = random.Random(8)
+        for side in (1.0, -1.0):
+            tyre = MFTyre(mf, 0.3, 2000.0, side)
+            for _ in range(5000):
+                a = (rng.uniform(tyre.dx_lo * 1.1, tyre.dx_hi * 1.1), rng.uniform(tyre.dy_lo * 1.1, tyre.dy_hi * 1.1),
+                     rng.uniform(-3.0, 3.0), rng.uniform(-3.0, 3.0), rng.uniform(0.0, 15.0),
+                     rng.choice((0.0, rng.uniform(-15.0, 15.0), rng.uniform(-0.5, 0.5))), rng.uniform(-0.1, 0.1),
+                     rng.choice((0.0, rng.uniform(0.0, 6000.0))))
+                self.assertClose(tyre.force(*a), tyre.force_py(*a))
+
+
 if __name__ == "__main__":
     unittest.main()

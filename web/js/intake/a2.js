@@ -103,6 +103,12 @@ async function submit(api, ui, body) {
 export function renderA2(el, m, api, ui) {
   const rows = hearingRows(m);
   const rules = ruleRows(m);
+  // another hearing (a new run, other questions): what was picked for the earlier one is not sent with this one
+  const sig = [...rows.map((r) => r.req_key), ...rules.map((r) => r.rule_id)].join(",");
+  if (ui.askedSig !== sig) {
+    if (ui.askedSig !== undefined) { ui.answers = {}; ui.ruleAnswers = {}; }
+    ui.askedSig = sig;
+  }
   const asking = [...rows, ...rules].some((r) => r.state === "asking");
   const answersBody = () => ({ answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true });
   const canSend = asking && !!api.answerHearing && !ui.sending;

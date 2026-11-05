@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import math
 
-from .magic_formula import MF61
+import numpy as np
+
+from .jit import ENABLED as JIT, njit
+from .magic_formula import MF61, _combined, _k_kya
 from .units import G0
 
 LOW_SPEED_DAMPING_RATIO = 0.7   # tyre deflection-state damping at standstill (fades out above V_LOW)
@@ -88,7 +91,7 @@ class MFTyre:
     """
 
     __slots__ = ("mf", "sigma", "mirror", "cx_ls", "cy_ls", "dx_lo", "dx_hi", "dy_lo", "dy_hi", "kappa_peak",
-                 "ta_peak", "mu", "rx0", "ry0")
+                 "ta_peak", "mu", "rx0", "ry0", "_t")
 
     def __init__(self, mf: MF61, sigma: float, static_load: float, side: float):
         self.mf = mf
@@ -104,8 +107,19 @@ class MFTyre:
         self.mu = max(mf.mu_x(static_load), mf.mu_y(static_load))
         self.rx0 = mf.mu_x(static_load) * static_load / mf.kxk(static_load)  # D / K at the static load
         self.ry0 = mf.mu_y(static_load) * static_load / abs(mf.kya(static_load))
+        # the constants of force() in _mf_force's order
+        self._t = np.array([self.sigma, 1.0 if self.mirror else 0.0, self.cx_ls, self.cy_ls, self.dx_lo, self.dx_hi,
+                            self.dy_lo, self.dy_hi, self.kappa_peak, self.ta_peak, self.mu, self.rx0, self.ry0],
+                           dtype=np.float64)
 
     def force(self, dx, dy, vsl, vst, vroll, vcx, gamma, ntot):
+        if JIT:
+            return _mf_force(self.mf._p, self._t, float(dx), float(dy), float(vsl), float(vst), float(vcx),
+                             float(gamma), float(ntot))
+        return self.force_py(dx, dy, vsl, vst, vroll, vcx, gamma, ntot)
+
+    def force_py(self, dx, dy, vsl, vst, vroll, vcx, gamma, ntot):
+        """force in plain Python: the reference the compiled _mf_force is tested against."""
         sigma = self.sigma
         v = abs(vcx)
         lam = v / sigma
@@ -113,10 +127,10 @@ class MFTyre:
         kappa = -dx / sigma
         ta = dy / sigma
         if self.mirror:
-            fx, fy, mz, dxp, kxk, dyp = self.mf.forces_and_peaks(ntot, kappa, -ta, -gamma)
+            fx, fy, mz, dxp, kxk, dyp = self.mf.forces_and_peaks_py(ntot, kappa, -ta, -gamma)
             fy, mz = -fy, -mz
         else:
-            fx, fy, mz, dxp, kxk, dyp = self.mf.forces_and_peaks(ntot, kappa, ta, gamma)
+            fx, fy, mz, dxp, kxk, dyp = self.mf.forces_and_peaks_py(ntot, kappa, ta, gamma)
         rate_x, rate_y = vsl - lam * dx, vst - lam * dy
         if (dx <= self.dx_lo and rate_x < 0.0) or (dx >= self.dx_hi and rate_x > 0.0):
             rate_x = 0.0
@@ -144,6 +158,41 @@ class MFTyre:
         dxn = self.dx_lo if dxn < self.dx_lo else (self.dx_hi if dxn > self.dx_hi else dxn)
         dyn = self.dy_lo if dyn < self.dy_lo else (self.dy_hi if dyn > self.dy_hi else dyn)
         return dxn, dyn
+
+
+@njit
+def _mf_force(p, t, dx, dy, vsl, vst, vcx, gamma, ntot):
+    """MFTyre.force_py over the MF61 coefficients p and the tyre's constants t (MFTyre._t)."""
+    sigma, cx_ls, cy_ls = t[0], t[2], t[3]
+    dx_lo, dx_hi, dy_lo, dy_hi = t[4], t[5], t[6], t[7]
+    v = abs(vcx)
+    lam = v / sigma
+    fade = 1.0 / (1.0 + (v / V_LOW) ** 2)
+    kappa = -dx / sigma
+    ta = dy / sigma
+    if t[1] != 0.0:
+        fx, fy, mz, dxp, kxk, dyp = _combined(p, ntot, kappa, -ta, -gamma)
+        fy, mz = -fy, -mz
+    else:
+        fx, fy, mz, dxp, kxk, dyp = _combined(p, ntot, kappa, ta, gamma)
+    rate_x, rate_y = vsl - lam * dx, vst - lam * dy
+    if (dx <= dx_lo and rate_x < 0.0) or (dx >= dx_hi and rate_x > 0.0):
+        rate_x = 0.0
+    if (dy <= dy_lo and rate_y < 0.0) or (dy >= dy_hi and rate_y > 0.0):
+        rate_y = 0.0
+    fl = fx - cx_ls * fade * rate_x
+    ft = fy - cy_ls * fade * rate_y
+    lim = t[10] * ntot
+    cap = max(lim, math.sqrt(fx * fx + fy * fy))
+    mag = math.sqrt(fl * fl + ft * ft)
+    if mag > cap:
+        fl, ft = fl * cap / mag, ft * cap / mag
+    sliding = False
+    if ntot > 0.0:
+        rk = kappa / (t[8] * dxp / kxk / t[11])
+        ra = ta / (t[9] * dyp / abs(_k_kya(p, ntot, 0.0)) / t[12])
+        sliding = rk * rk + ra * ra > 1.0
+    return fl, ft, mz, sliding, lim
 
 
 class CasterTyre:
