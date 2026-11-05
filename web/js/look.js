@@ -697,8 +697,9 @@ function hdriOf(renderer, role) {
 }
 
 // The stage (the cut views). Look values, chosen for the picture:
-//   SUN_ASIDE   the sun's azimuth from straight behind the vehicle (as the camera sees it):
-//               its shadow falls toward the viewer and a little to the side
+//   SUN_ASIDE   the sun's azimuth from straight behind the vehicle (as the view's first camera
+//               sees it, then fixed to the world): its shadow falls toward the viewer and a
+//               little to the side
 //   SUN_EL      the sun's height without the HDRI (with it: the HDRI's own sun, kept within SUN_EL_RANGE)
 //   HAZE        the haze (three.js Fog) from near_m past the camera's target to far_m past it
 //   GROUND_MM   half the side of the ground (ISO mm round the vehicle), to where the haze has hidden it
@@ -734,6 +735,7 @@ export class Look {
     this.groundRole = this.stage ? "gravel" : "dirt";
     this.assets = this.stage ? { sky: false, horizon: false, gravel: false, concrete: false } : { sky: false, dirt: false, concrete: false };
     this.backdrop = null; // the stage's sky: { tex, el, az, haze } once the HDRI is loaded
+    this.sunAz = null; // the stage's sun azimuth (three.js world, about y), set once (fixSun)
     this.fog = null;
     this.assetsReady = Promise.resolve();
   }
@@ -813,17 +815,27 @@ export class Look {
     }
   }
 
+  // The stage's sun azimuth, fixed to the world (the road and the vehicle) once: SUN_ASIDE
+  // from straight behind the vehicle as this camera sees it (the view's first camera). Later
+  // calls keep it, so the sun, its shadows and the sky stay put while the camera moves.
+  fixSun(camera, target) {
+    if (this.sunAz !== null) return this.sunAz;
+    const away = target.clone().sub(camera.position);
+    away.y = 0;
+    if (away.lengthSq() < 1e-12) away.set(-1, 0, 0);
+    this.sunAz = Math.atan2(away.z, away.x) + SUN_ASIDE;
+    return this.sunAz;
+  }
+
   // The stage at each frame (camera and target in three.js world, m): the sky behind and
   // the haze (not on a see-through overlay view, tinted), the sky turned so that its sun
-  // stands where the sun light is. Returns the sun's direction (unit, from the target).
+  // stands where the sun light is (fixSun: set from the first camera, then kept). Returns
+  // the sun's direction (unit, from the target).
   stageFrame(scene, camera, target, tinted = false) {
     const b = this.backdrop;
     scene.background = !tinted && b ? b.tex : null;
     scene.fog = !tinted && b ? this.fog : null;
-    const away = target.clone().sub(camera.position);
-    away.y = 0;
-    if (away.lengthSq() < 1e-12) away.set(-1, 0, 0);
-    const az = Math.atan2(away.z, away.x) + SUN_ASIDE;
+    const az = this.fixSun(camera, target);
     const el = b ? Math.min(SUN_EL_RANGE[1], Math.max(SUN_EL_RANGE[0], b.el)) : SUN_EL;
     if (b) {
       // three.js turns a direction by the rotation's opposite before it looks the sky up, so a

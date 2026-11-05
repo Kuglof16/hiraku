@@ -1866,6 +1866,8 @@ export class Workbench3D {
     this.camera.updateProjectionMatrix();
     this.controls.target.copy(other.controls.target);
     this.noFollow = true;
+    // one camera, one sun: the other view's (look.js fixSun)
+    if (other.look.sunAz !== null) this.look.sunAz = other.look.sunAz;
   }
 
   render() {
@@ -2043,6 +2045,8 @@ export class Workbench3D {
     this.controls.update();
     this.followBase = null;
     this.followApplied = null;
+    // a cut's sun is fixed to the world from its first framing (look.js fixSun)
+    if (this.look.stage) this.look.fixSun(this.camera, this.controls.target);
   }
 }
 
