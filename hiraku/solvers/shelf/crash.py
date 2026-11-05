@@ -88,24 +88,36 @@ class Crash(BuiltinTool):
         m, v, k = 500.0, 40.0 / 3.6, 200e3
         r = impact(m, v, Front(k, 10.0, 0.0))
         src = "undamped mass-spring impact: a = v sqrt(k/m), x = v sqrt(m/k), t = (pi/2) sqrt(m/k); 500 kg, 200 kN/m, 40 km/h"
+        src_ja = (f"減衰のない質量とばねの衝突: a = v √(k/m)、x = v √(m/k)、t = (π/2) √(m/k)。{m:g} kg、{k / 1e3:g} kN/m、"
+                  f"{v * 3.6:g} km/h")
+        spring_ja = f"{m:g} kg が {v * 3.6:g} km/h で {k / 1e3:g} kN/m のばねに当たる"
         out.append(check_record("500 kg at 40 km/h on a 200 kN/m spring", "peak_deceleration",
-                                v * math.sqrt(k / m), r["a_max"], "m/s^2", 1e-6, src))
+                                v * math.sqrt(k / m), r["a_max"], "m/s^2", 1e-6, src, case_ja=spring_ja, source_ja=src_ja))
         out.append(check_record("500 kg at 40 km/h on a 200 kN/m spring", "max_crush",
-                                v * math.sqrt(m / k), r["x_max"], "m", 1e-6, src))
+                                v * math.sqrt(m / k), r["x_max"], "m", 1e-6, src, case_ja=spring_ja, source_ja=src_ja))
         out.append(check_record("500 kg at 40 km/h on a 200 kN/m spring", "stop_time",
-                                math.pi / 2 * math.sqrt(m / k), r["t_stop"], "s", 1e-6, src))
-        r = impact(600.0, 10.0, Front(100e3, 0.08, 600e3))
+                                math.pi / 2 * math.sqrt(m / k), r["t_stop"], "s", 1e-6, src, case_ja=spring_ja,
+                                source_ja=src_ja))
+        m2, v2 = 600.0, 10.0
+        r = impact(m2, v2, Front(100e3, 0.08, 600e3))
         out.append(check_record("bumper then crush zone, 600 kg at 10 m/s", "energy_absorbed",
                                 r["E_kinetic"], r["E_absorbed"], "J", 1e-6,
-                                "work-energy: the springs take m v^2 / 2 at the stop"))
+                                "work-energy: the springs take m v^2 / 2 at the stop",
+                                case_ja=f"バンパーのあとにつぶれる部分、{m2:g} kg が {v2:g} m/s で当たる",
+                                source_ja="仕事とエネルギー: 止まるまでに、ばねが m v² / 2 を受け取る"))
         lad = fixtures.ladder_design()
-        res = crash_frame(lad, 20.0 * STANDARD_GRAVITY)
+        a_g = 20.0
+        res = crash_frame(lad, a_g * STANDARD_GRAVITY)
+        wall_ja = f"左右対称のはしご形のフレームが壁で {a_g:g} g の減速で止められる"
         out.append(check_record("symmetric ladder stopped by a wall at 20 g", "hold_reaction",
                                 0.0, res["residual_ratio"], "1", 1e-6,
-                                "inertia relief: wall force and d'Alembert loads balance, the holding restraints carry nothing"))
+                                "inertia relief: wall force and d'Alembert loads balance, the holding restraints carry nothing",
+                                case_ja=wall_ja,
+                                source_ja="慣性リリーフ: 壁の力とダランベールの慣性力がつり合い、押さえ (拘束) は何も受けない"))
         out.append(check_record("symmetric ladder stopped by a wall at 20 g", "deceleration",
-                                20.0 * STANDARD_GRAVITY, -float(res["inertia_accel"][0]), "m/s^2", 1e-9,
-                                "rigid-body acceleration from the wall force: a = F / m"))
+                                a_g * STANDARD_GRAVITY, -float(res["inertia_accel"][0]), "m/s^2", 1e-9,
+                                "rigid-body acceleration from the wall force: a = F / m",
+                                case_ja=wall_ja, source_ja="壁の力から出す剛体の加速度: a = F / m"))
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:

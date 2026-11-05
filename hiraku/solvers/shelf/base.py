@@ -126,17 +126,24 @@ class _Declared(dict):
 
 
 def check_record(case: str, quantity: str, expected: float, got: float | None, unit: str,
-                 tolerance_rel: float, source: str) -> Record:
+                 tolerance_rel: float, source: str, case_ja: str | None = None,
+                 source_ja: str | None = None) -> Record:
     """A `tool_check` record. Passes when |got - expected| <= tol * |expected|
-    (or <= tol when the expected value is 0)."""
+    (or <= tol when the expected value is 0). case_ja, source_ja: the case and the source in plain
+    Japanese for the screen (contract bf6712f), built beside the English from the same values."""
     if got is None:
         ok = False
     else:
         scale = abs(expected) if expected != 0 else 1.0
         ok = abs(got - expected) <= tolerance_rel * scale
-    return {"case": case, "quantity": quantity, "expected": float(expected),
-            "got": None if got is None else float(got), "unit": unit,
-            "tolerance_rel": float(tolerance_rel), "pass": bool(ok), "source": source}
+    out = {"case": case, "quantity": quantity, "expected": float(expected),
+           "got": None if got is None else float(got), "unit": unit,
+           "tolerance_rel": float(tolerance_rel), "pass": bool(ok), "source": source}
+    if case_ja:
+        out["case_ja"] = case_ja
+    if source_ja:
+        out["source_ja"] = source_ja
+    return out
 
 
 def param_value(load_case: Record, name: str, unit: str, default: float | None = None) -> float | None:
