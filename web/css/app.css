@@ -958,6 +958,10 @@ body.video .mode .stop-btn { display: none; }
 /* app.js loadingNote: while a record is read */
 .loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
   border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }
+.loading-note .ln-sub { font-size: 15px; margin-top: 6px; color: var(--ink-2, #555); }
+.loading-note a { pointer-events: auto; margin-left: 10px; font-weight: 600; }
+.loading-note.failed { border-color: #b3261e; }
+body.video .loading-note { display: none; }
 
 /* the verdict in one sentence, then the value beside its criterion */
 .verdict .verdict-big { font-size: 24px; font-weight: 800; margin-bottom: 2px; }

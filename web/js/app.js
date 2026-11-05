@@ -1741,7 +1741,22 @@ function loadingNote(body) {
     document.body.append(el);
   }
   const mb = (n) => fmt(n / 1e6, 2);
-  el.textContent = `記録を読み込み中… ${mb(body.next_offset ?? 0)} / ${mb(body.size ?? 0)} MB (読み終わると再生が始まる。長さは読んだ分だけ伸びる)`;
+  // (before the first part comes back the size is not known yet: the note shows at once, so the
+  // screen is never an empty bench with nothing to press)
+  const done = body.size ? ` ${mb(body.next_offset ?? 0)} / ${mb(body.size)} MB` : "";
+  el.innerHTML = `<div>記録を読み込んでいます…${esc(done)}</div>` +
+    `<div class="ln-sub">読み終わると再生が始まります。 <a href="${withDev("?list=1")}">☰ 一覧へ</a></div>`;
+}
+
+// A record that could not be read: why, and what to press next (open it again, or the list).
+function loadFailedNote(runId, e) {
+  loadingNote(null);
+  const el = document.createElement("div");
+  el.id = "loading-note";
+  el.className = "loading-note failed";
+  el.innerHTML = `<div>記録を読み込めませんでした</div><div class="ln-sub">${esc(String(e?.message ?? e))}</div>` +
+    `<div class="ln-sub"><a href="${withDev(`?run=${encodeURIComponent(runId)}`)}">↻ 開き直す</a> <a href="${withDev("?list=1")}">☰ 一覧へ</a></div>`;
+  document.body.append(el);
 }
 
 async function openRun(runId) {
@@ -1750,11 +1765,11 @@ async function openRun(runId) {
     addEvents(evs);
     if (!feed?.loaded && body && body.next_offset < body.size) loadingNote(body);
   });
+  loadingNote({});
   try {
     await feed.readAll();
   } catch (e) {
-    loadingNote(null);
-    showRunList(`読めなかった: ${e}`);
+    loadFailedNote(runId, e);
     return;
   }
   feed.loaded = true;
