@@ -2,6 +2,7 @@
 bar are hidden, in the present mode too; without video=1 both are there. ?t= and
 window.hiraku.seek move the replay without the bar. What stood above a bar (the colour legend,
 A7's 接合 switch) comes down to the 3D's edge, and the layout lint finds nothing on these pages.
+A seek to a time the bar shows as the end (0.1 s) lands on the end: the run is finished there.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -117,6 +118,29 @@ class VideoBarBrowserTest(unittest.TestCase):
             self.assertEqual(float(mid["mark"]), mid["t"], video)
             self.assertEqual(end, dur, video)
         self.assertEqual(seen[""], seen["&video=1"])
+
+    def test_a_time_shown_as_the_end_is_the_end(self):
+        """The bar shows 0.1 s: a seek less than 0.05 s before the last event's time (?t=2656 on a
+        record ending at 2656.009) applies it, the run's end; a time further before does not."""
+        for video in ("", "&video=1"):
+            page, errors = self.open(f"run=sample&t=0{video}")
+            got = page.evaluate("""async () => { const pl = window.hiraku.player, n = pl.events.length;
+              const end = pl.duration, prev = pl.events[n - 2].t;
+              if (end !== pl.events[n - 1].t) return { endIsNotTheLastEvent: [end, pl.events[n - 1].t] };
+              await window.hiraku.seek(end - 0.03);
+              const near = { applied: pl.applied, t: pl.playhead, status: pl.state.status };
+              const mid = Math.max(prev, end - 0.5) + 0.06 < end - 0.06 ? (Math.max(prev, end - 0.5) + end) / 2 : null;
+              let before = null;
+              if (mid !== null) { await window.hiraku.seek(mid); before = { applied: pl.applied, t: pl.playhead }; }
+              await window.hiraku.seek(1e6);
+              return { n, end, near, mid, before, last: pl.events[n - 1].kind, endStatus: pl.state.status }; }""")
+            page.close()
+            self.assertEqual(errors, [], video)
+            self.assertNotIn("endIsNotTheLastEvent", got, video)  # (the replay ends at the last event, as 150416)
+            self.assertEqual(got["last"], "run.finished", video)
+            self.assertEqual(got["near"], {"applied": got["n"], "t": got["end"], "status": got["endStatus"]}, video)
+            self.assertIsNotNone(got["mid"], video)  # (the sample's end comes after a gap)
+            self.assertEqual(got["before"], {"applied": got["n"] - 1, "t": got["mid"]}, video)
 
     def test_no_layout_breaks_with_video(self):
         problems = lint(self.browser, self.bases, VIDEO_SCREENS, WIDTHS)

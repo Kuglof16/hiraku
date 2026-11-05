@@ -1529,10 +1529,14 @@ function loop(ts) {
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
+// A time the bar shows as the end (fmtTime: 0.1 s) is the end: ?t=2656 on a record whose last
+// event is at 2656.009 shows it finished, as the bar's "2656.0 / 2656.0" says.
+const END_SNAP_S = 0.05;
+
 async function seekAndDraw(t) {
   ui.frozen = true;
   player.pause();
-  player.seek(t);
+  player.seek(t >= player.duration - END_SNAP_S ? player.duration : t);
   draw();
   await nextFrame();
   draw();
