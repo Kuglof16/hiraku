@@ -121,7 +121,7 @@ READ = """async ({ t, tab }) => {
   });
   const says = [...document.querySelectorAll("[data-say]")].filter(shown).map((e) => ({ agent: e.dataset.say, text: e.textContent, on: Number(e.style.opacity || 0) > 0 }));
   return { loaded: document.documentElement.dataset.agentPets ?? null, agents: window.hiraku.state().agentOrder, pets, says,
-           circles: [...document.querySelectorAll("#agents li .pet, #tiles .tile .pet")].filter(shown).length,
+           circles: [...document.querySelectorAll("#agents li:not(.agroup) .pet, #tiles .tile .pet")].filter(shown).length,
            names: [...document.querySelectorAll("#agents li")].map((li) => li.textContent) };
 }"""
 
@@ -154,11 +154,12 @@ class AgentPetsTest(unittest.TestCase):
         self.servers.append(server)
         return f"http://127.0.0.1:{server.server_address[1]}"
 
-    def open(self, base, query):
+    def open(self, base, query, bundles_open=True):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/?run={RUN}&pace=0&{query}")
+        # (one row per agent: the bundles of the agents' list open, ?agents=open; the bundles have their own test)
+        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}&{query}")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -347,6 +348,40 @@ class AgentPetsTest(unittest.TestCase):
         self.assertNotIn("手を止めた", got["say"])
         self.assertFalse(got["saying"])
         self.assertEqual((got["why"], got["shown"]), ("仕事を終えた", True))
+
+    def test_the_cae_roles_are_one_row_until_opened(self):
+        """The seven CAE agents are one row 「CAE 役 ×7」 (one designer, one lead: their own rows),
+        closed by default; its look follows the members (at work: the same class as a member's row at
+        work); pressed, it opens into the seven rows and closes again; the same t is the same list."""
+        base = self.serve()
+        rows = """() => [...document.querySelectorAll('#agents > li')].map((li) => ({
+            group: li.dataset.group ?? null, agent: li.dataset.agent ?? null, member: li.classList.contains('member'),
+            cls: ['active', 'alert', 'done'].filter((c) => li.classList.contains(c)),
+            text: li.querySelector('.ag-toggle')?.textContent ?? null, open: li.querySelector('.ag-toggle')?.getAttribute('aria-expanded') ?? null }))"""
+        for t in (0.25, 5.3, 1e6):
+            page, errors = self.open(base, f"tab=bench&t={t}", bundles_open=False)
+            closed = page.evaluate(rows)
+            text = page.inner_text("#agents")
+            self.assertEqual([r["agent"] or r["group"] for r in closed], ["lead", "designer", "packager", "cae"], t)
+            head = closed[3]
+            self.assertEqual((head["text"], head["open"]), ("▸CAE 役 ×7", "false"), t)
+            page.click("#agents [data-agent-group='cae']")
+            page.wait_for_selector("#agents li.member")
+            opened = page.evaluate(rows)
+            members = [r for r in opened if r["member"]]
+            self.assertEqual(sorted(r["agent"] for r in members), sorted(CAE), t)
+            self.assertEqual(opened[3]["open"], "true", t)
+            # the bundle's look: an alert first, else at work when one member is
+            want = ["alert"] if any("alert" in r["cls"] for r in members) else ["active"] if any("active" in r["cls"] for r in members) \
+                else ["done"] if all("done" in r["cls"] for r in members) else []
+            self.assertEqual(head["cls"], want, t)
+            page.click("#agents [data-agent-group='cae']")
+            page.wait_for_function("!document.querySelector('#agents li.member')")
+            again, errors2 = self.open(base, f"tab=bench&t={t}", bundles_open=False)
+            self.assertEqual((again.evaluate(rows), again.inner_text("#agents")), (closed, text), t)  # the same t: the same list
+            self.assertEqual(errors + errors2, [])
+            page.close()
+            again.close()
 
     def test_without_the_pets_file_circles_and_names(self):
         """No pet3d.js (404): the list is the circles and names as before, the tiles keep their circles."""

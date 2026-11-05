@@ -247,6 +247,14 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 .agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
 .agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
 .agents ul.pets.many .petrow .petslot { width: 42px; height: 42px; }
+/* a bundle of one role kind (app.js agentGroupHtml): 「▸ 設計役 ×6」, opened into its members */
+.agents .ag-toggle { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.agents .ag-toggle .caret { font-size: 0.8em; color: var(--muted); width: 0.9em; }
+.agents .ag-toggle .cnt { font-weight: 700; }
+.agents .ag-toggle:hover { text-decoration: underline; }
+.agents li.member { margin-left: 18px; }
+.agents ul.pets li.petrow.member { grid-template-columns: 42px auto minmax(0, 1fr); }
+.agents ul.pets li.petrow.member .petslot { width: 42px; height: 42px; }
 .agents ul.pets.many .petrow .nm { font-size: 15px; }
 .agents ul.pets.many .petrow .st { font-size: 13px; }
 .agents ul.pets.many .petrow .say { font-size: 12.5px; }
@@ -999,13 +1007,17 @@ body.video .loading-note { display: none; }
 .lbl-key { font-size: 16px; }
 .lbl-key small { font-size: 14px; }
 
-/* the switch between the present mode and the workbench */
+/* 詳しく, in the present mode only */
 .viewswitch { display: flex; align-items: center; }
 .viewswitch button { font-size: 16px; padding: 4px 16px; border: 1.5px solid var(--ink); color: var(--ink); background: var(--panel); }
-.viewswitch button[data-view="present"] { border-radius: 999px 0 0 999px; }
-.viewswitch button[data-view="bench"] { border-radius: 0 999px 999px 0; border-left: none; }
-.viewswitch button.on { background: var(--ink); color: var(--panel); font-weight: 700; }
 .viewswitch .detail-btn { display: none; margin-left: 12px; border-radius: 999px; border-color: var(--line); color: var(--muted); }
+/* the 3D's corner: make it large (the present mode) and back; the toggles move left of it */
+.expand-btn { position: absolute; top: 8px; right: 10px; z-index: 9; width: 38px; height: 38px; padding: 0; display: grid; place-items: center;
+  border: 1.5px solid var(--ink); border-radius: 10px; background: rgba(251, 249, 244, 0.95); color: var(--ink); cursor: pointer; }
+.expand-btn:hover { background: var(--ink); color: var(--panel); }
+.expand-btn svg { width: 22px; height: 22px; }
+body:not(.video) .toggles { right: 58px; }
+body.video .expand-btn { display: none; }
 .viewswitch .detail-btn.on { border-color: var(--ink); color: var(--ink); }
 body.video .viewswitch { display: none; }
 

@@ -287,12 +287,13 @@ class ModulesBrowserTest(unittest.TestCase):
 
     def test_six_designers_in_the_agents_list(self):
         names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in contract.MODULE_DESIGNERS]
-        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6")
+        # (the designers are one bundle 「設計役 ×n」 in the list; ?agents=open opens it)
+        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6&agents=open")
         text = page.locator("#agents").inner_text()
         for n in names:
             self.assertIn(n, text)
         # with the pets (this branch's pet3d.js may or may not have the six): each designer has a pet
-        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6")
+        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6&agents=open")
         if page.evaluate("document.documentElement.dataset.agentPets") != "on":
             self.skipTest("no pets on this server")
         for a in contract.MODULE_DESIGNERS:

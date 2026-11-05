@@ -99,6 +99,8 @@ const ui = {
   stopAsked: false,
   present: params.get("present") === "1", // the present mode
   detail: false, // in the present mode: the log, the chain and the hooks opened (詳しく)
+  // the agents' bundles opened (renderAgents): closed by default, all open with ?agents=open
+  openGroups: new Set(params.get("agents") === "open" ? ["designer", "cae"] : []),
 };
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
@@ -406,7 +408,13 @@ function renderDraft() {
       : "";
     body = `<b>要件がそろいました</b>${scripted}${claude}${starting}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
-  else if (draft.state) body = `<span>分野が決まりました。${tabWord("A2")}のタブで答えるか、標準の値のまま進めてください</span>`;
+  // the domains are picked, the hearing waits: the intake's own question box (質問に答える / 標準の
+  // 値のまま進める, on A1's top and on A2) has the buttons; the bar has them only while the screen
+  // shown has none (syncDraftAsk)
+  else if (draft.state)
+    body =
+      `<span class="draft-ask"><button data-draft-ask="questions">質問に答える</button>` +
+      `<button data-draft-ask="defaults">標準の値のまま進める</button></span>`;
   else
     body =
       (draft.demoTitle
@@ -418,7 +426,29 @@ function renderDraft() {
   markTabs(player.state);
   intake?.update();
   fillPrefill();
+  syncDraftAsk();
 }
+
+// The bar's 質問に答える / 標準の値のまま進める are hidden while the intake screen shown has its own
+// (the question box: the same two ways, not to be seen twice).
+function syncDraftAsk() {
+  const ask = document.querySelector("#draftbar .draft-ask");
+  if (!ask) return;
+  const own = [...document.querySelectorAll("#intake-host button")].some((b) => b.textContent === "標準の値のまま進める" && b.checkVisibility());
+  ask.hidden = own;
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-draft-ask]");
+  if (!b || !intake) return;
+  if (b.dataset.draftAsk === "questions") {
+    // the questions are on A1's top: the screen's tab goes there, then the intake scrolls to them
+    ui.pinnedTab = "A1";
+    ui.tabPlan = [];
+    drawn.rev = -1;
+    requestAnimationFrame(() => requestAnimationFrame(() => intake.showQuestions()));
+  } else intake.useDefaults();
+});
 
 // The demo's want goes into A1's box through intake.setWant (not sent: the person presses 送る).
 // Once, when the intake is mounted.
@@ -467,6 +497,7 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  syncDraftAsk();
   syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
   const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
@@ -597,18 +628,23 @@ function renderShelf() {
 
 function renderTop(s) {
   $("want").textContent = s.project?.want ?? "";
+  // the version and cost pills only once there is a run (none on a new request, or before run.started)
+  const hasRun = !!s.project;
+  $("pill-version").hidden = !hasRun;
+  $("pill-cost").hidden = !hasRun;
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
   $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
   // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0.
   // A scripted run (project.driver) calls no Claude: no cost, said so rather than $0.00.
   const scripted = s.project?.driver === "scripted";
-  $("pill-cost").textContent = scripted ? "費用なし (台本の再生)" : `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  $("pill-cost").textContent = scripted ? "費用なし (決まった手順)" : `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
   const live = player.live;
   // a replay says where the record is at the playhead (not that something runs now)
   const status = { running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
   $("mode").innerHTML =
-    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "台本の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
+    // (the run list's words: 決まった手順, DRIVEN_JA / labels.js runSummaryJa)
+    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
     // the run's id only under ?dev=1 (people go back to the list by 「☰ 一覧へ」)
     (DEV ? `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` : "") +
     // a run this screen started can be stopped while it goes
@@ -644,23 +680,86 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 
 // The agents: with pets (js/agent_pets.js), each its 3D pet, name, status and bubble; without
 // (no /pets/pet3d.js), or for an agent whose role has no pet, a circle and the name.
+// The agents of one role kind, bundled into one row in the list when there are two or more:
+// the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
+const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
+const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
+const AGENT_ALERT = ["止められた", "食い違い", "赤", "解析が通らない"];
+const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : a.active ? "active" : "");
+
+// The list's entries in the agents' order: one agent, or a bundle at its first member's place.
+function agentEntries(order) {
+  const groups = new Map();
+  for (const id of order) {
+    const g = agentGroupOf(id);
+    if (g) groups.set(g, [...(groups.get(g) ?? []), id]);
+  }
+  const out = [];
+  const placed = new Set();
+  for (const id of order) {
+    const g = agentGroupOf(id);
+    if (!g || groups.get(g).length < 2) out.push({ id });
+    else if (!placed.has(g)) {
+      placed.add(g);
+      out.push({ group: g, ids: groups.get(g) });
+    }
+  }
+  return out;
+}
+
+function agentRowHtml(s, id, extra = "") {
+  const a = s.agents[id];
+  const cls = `${agentCls(a)}${extra}`;
+  // the role's name in full (操安の CAE 役), not the domain alone
+  if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
+  return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
+}
+
+// A bundle's row: 「設計役 ×6」, pressed to show each one (ui.openGroups; closed by default, so the
+// picture at ?t= does not depend on what was pressed). Its look and status follow the members: an
+// alert first, then the ones at work (the same look as a single row at work), else all done, else
+// the status they share. Closed, it carries the pet (and bubble) of its first member at work, else
+// of its first member.
+function agentGroupHtml(s, g, ids) {
+  const open = ui.openGroups.has(g);
+  const as = ids.map((id) => s.agents[id]);
+  const alert = as.find((a) => agentCls(a) === "alert");
+  const going = ids.filter((id) => agentCls(s.agents[id]) === "active");
+  const cls = alert ? "alert" : going.length ? "active" : as.every((a) => a.status === "✓") ? "done" : "";
+  const st = alert ? alert.status
+    : going.length ? `${s.agents[going[0]].status}${going.length > 1 ? ` ほか ${going.length - 1}` : ""}`
+    : as.every((a) => a.status === as[0].status) ? as[0].status : "";
+  const rep = going[0] ?? ids[0];
+  const btn = `<button class="ag-toggle" type="button" data-agent-group="${g}" aria-expanded="${open}" title="${open ? "たたむ" : "1 人ずつ見る"}">` +
+    `<span class="caret">${open ? "▾" : "▸"}</span>${AGENT_GROUP_JA[g]} <span class="cnt">×${ids.length}</span></button>`;
+  const head = agentPets?.has(rep)
+    ? `<li class="petrow agroup ${cls}${open ? " open" : ""}" data-group="${g}"${open ? "" : " data-say-host"}>` +
+      (open ? `<span class="petslot"></span>` : `<span class="petslot" data-pet-slot="${esc(rep)}"></span>`) +
+      `<span class="nm">${btn}</span><span class="st">${esc(st)}</span>${open ? "" : `<span class="say" data-say="${esc(rep)}"></span>`}</li>`
+    : `<li class="agroup ${cls}${open ? " open" : ""}" data-group="${g}"><span class="pet" style="--pet:${petColor(rep)}"></span><span>${btn}</span><span class="st">${esc(st)}</span></li>`;
+  return head + (open ? ids.map((id) => agentRowHtml(s, id, " member")).join("") : "");
+}
+
 function renderAgents(s) {
   const order = agentOrder(s);
+  const entries = agentEntries(order);
+  const rows = entries.reduce((n, e) => n + (e.group && ui.openGroups.has(e.group) ? 1 + e.ids.length : 1), 0);
   const ul = $("agents");
-  ul.classList.toggle("many", order.length > 6);
-  ul.classList.toggle("lots", order.length > 8); // modules: the six module designers come on top of the others
+  ul.classList.toggle("many", rows > 6);
+  ul.classList.toggle("lots", rows > 8); // modules: the six module designers come on top of the others
   ul.classList.toggle("pets", !!agentPets);
-  ul.innerHTML = order
-    .map((id) => {
-      const a = s.agents[id];
-      const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
-      // the role's name in full (操安の CAE 役), not the domain alone
-      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
-      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
-    })
-    .join("");
+  ul.innerHTML = entries.map((e) => (e.group ? agentGroupHtml(s, e.group, e.ids) : agentRowHtml(s, e.id))).join("");
   agentPets?.mount(ul, "bench");
 }
+
+$("agents").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-agent-group]");
+  if (!b) return;
+  const g = b.dataset.agentGroup;
+  if (ui.openGroups.has(g)) ui.openGroups.delete(g);
+  else ui.openGroups.add(g);
+  drawn.rev = -1;
+});
 
 function rank(id) {
   const fixed = ["lead", "designer", "packager"];
@@ -1383,6 +1482,17 @@ function seekFromPointer(ev) {
 }
 
 // ---- the present mode -----------------------------------------------------------
+// The 3D made large: the corner button (#expand-btn: corners out to make it large, in to go back)
+// or Esc; ?present=1 opens the page so (the films and the tests use it).
+const EXPAND_SVG = {
+  out: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`,
+  in: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>`,
+};
+function setPresent(on) {
+  ui.present = on;
+  if (!on) ui.detail = false;
+  applyPresent();
+}
 // The colour bar and the graph move beside the view (into the rail, under the card), so
 // neither lies over the 3D; the panels the mode hides (css: body.present) come back over
 // the view with 詳しく.
@@ -1393,7 +1503,11 @@ function applyPresent() {
   $("present-rail").hidden = !on;
   // (both are placed absolutely in the view, so where they go back among its children does not matter)
   (on ? $("present-rail") : viewport).append($("legend"), $("graph"));
-  for (const b of document.querySelectorAll("#viewswitch [data-view]")) b.classList.toggle("on", (b.dataset.view === "present") === on);
+  const exp = $("expand-btn");
+  exp.innerHTML = on ? EXPAND_SVG.in : EXPAND_SVG.out;
+  exp.title = on ? "元の大きさに戻す (Esc)" : "大きく見る";
+  exp.setAttribute("aria-label", exp.title);
+  exp.setAttribute("aria-pressed", String(on));
   $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
   $("detail-btn").classList.toggle("on", ui.detail);
   const url = new URL(location.href);
@@ -1632,8 +1746,7 @@ $("toggles").addEventListener("click", (ev) => {
 $("viewswitch").addEventListener("click", (ev) => {
   const b = ev.target.closest("button");
   if (!b) return;
-  if (b.dataset.view) ui.present = b.dataset.view === "present";
-  else if (b.id === "detail-btn") ui.detail = !ui.detail;
+  if (b.id === "detail-btn") ui.detail = !ui.detail;
   if (!ui.present) ui.detail = false;
   applyPresent();
 });
@@ -1654,7 +1767,12 @@ $("tabs").addEventListener("click", (ev) => {
   ui.pinnedTab = b.dataset.tab;
   ui.tabPlan = []; // a tab pressed by hand ends ?tabs=
 });
+$("expand-btn").addEventListener("click", () => setPresent(!ui.present));
 window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && ui.present) {
+    setPresent(false);
+    return;
+  }
   if (ev.target.closest("input, textarea")) return;
   if (ev.code === "Space") {
     ev.preventDefault();
@@ -2174,8 +2292,11 @@ $("view-intake").addEventListener("change", (ev) => {
 });
 
 fitStage();
+// the module names (designer.<module> → 「枠の設計役」) from the start, so a record still being read
+// does not show the ids; drawn again once they are in
+loadModuleNames().then(() => (drawn.rev = -1));
 if (ui.present) applyPresent();
-else $("viewswitch").querySelector('[data-view="bench"]').classList.add("on");
+else $("expand-btn").innerHTML = EXPAND_SVG.out;
 requestAnimationFrame(loop);
 if (params.get("run")) openRun(params.get("run"));
 else if (params.get("src")) {
