@@ -119,6 +119,14 @@ export const AGENT_STOP_JA = {
   user_stop: "人が止めた",
   error: "エラーで終わった",
 };
+// The same, short, for the line under the role's name in the agents' pane (the name is on the row
+// above, so no 「…が手を止めた」). done is the plain end (drawn faint); the others stand out (app.css .why).
+export const AGENT_STOP_SHORT_JA = {
+  done: "仕事を終えた",
+  run_ended: "動いている間に実行が終わった",
+  user_stop: "人が止めた",
+  error: "エラーで終わった",
+};
 export const AGENT_STOP_NOTE_CHARS = 40; // a stop_reason up to this long is shown as it is; a longer one goes under くわしく / into the title
 
 // agent.stopped's data said for people: { code, words, reason } (words: AGENT_STOP_JA of stop_code;

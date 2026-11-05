@@ -230,7 +230,10 @@ body.video .hint { display: none; }
 .agents li .why, .petrow .why { grid-column: 2 / span 2; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .petrow .why { grid-row: 2; align-self: start; margin-top: 2px; padding: 0 2px; }
 .petrow.saying .why { visibility: hidden; }
-.agents li .why[data-stop-code="error"] { color: var(--red); }
+/* done is the plain end: faint; the stops that say something went short stand out */
+.agents li .why[data-stop-code="done"] { opacity: 0.6; }
+.agents li .why[data-stop-code="run_ended"], .agents li .why[data-stop-code="user_stop"] { color: var(--orange, #b26b00); font-weight: 600; }
+.agents li .why[data-stop-code="error"] { color: var(--red); font-weight: 600; }
 .agents ul.pets.lots .petrow .why { font-size: 12px; margin-top: 0; }
 .agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
 .agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
