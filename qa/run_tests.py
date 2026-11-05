@@ -70,9 +70,10 @@ HEAVY_GB = 4.0  # a class whose peak was this much or more is "heavy": at most -
 RESERVE_GB = 4.0  # a heavy class starts only when free memory is its last peak plus this (unless none runs)
 # heavy whatever their own process's peak says (the floor of memory_of): measured on 11/5 00:32 (four
 # at once took about 34 GB). SpaceFrameConvergenceTest runs each mesh level in a child process (one at a
-# time by default), whose memory is not in the worker's peak: 14.4 GB is the 14 mm level's (11/5 02:26).
+# time by default), whose memory is not in the worker's peak: 15.7 GB is the 14 mm level's on Linux (EC2, 11/5
+# 11:30; 14.4 GB on Windows, 11/5 02:26).
 KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
-                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 14.4,
+                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 15.7,
                   "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
                   "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
 CONVERGENCE_JOBS = "HIRAKU_CONVERGENCE_JOBS"  # mesh levels the convergence test runs side by side (worker_env)
