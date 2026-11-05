@@ -1387,9 +1387,11 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     errs = contract.errors("module_change", change)
     if errs:
         raise ToolError("提案が契約の形に合いません: " + "; ".join(errs))
+    before_ids = [c["change_id"] for c in ctx.store.pending_proposals(v) if c["module_id"] == module]
     ctx.store.propose_change(change, design_version=v, agent=agent,
                              text=f"{contract.MODULE_NAMES_JA.get(module, module)}の提案 {change['change_id']}: {reason}")
     pending = ctx.store.pending_proposals(v)
+    replaced = [c for c in ctx.store.superseded_change_ids(v) if c in before_ids]
     return {
         "change_id": change["change_id"],
         "module": module,
@@ -1397,8 +1399,11 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
         **({"changes": changes} if changes else {}),
         **({"choices": choices} if choices else {}),
         "pending": [c["change_id"] for c in pending],
-        "note": (f"提案として記録しました (版はまだ作っていません)。パッケージ役が build_version で、"
-                 f"版 {v} への提案を全部まとめて版 {v + 1} を作ります"),
+        **({"replaced": replaced} if replaced else {}),
+        "note": (f"提案として記録しました (版はまだ作っていません)。"
+                 + (f"同じモジュールの前の提案 {'、'.join(replaced)} は、この提案に置き換わりました (1 回の直しで、"
+                    "モジュールの提案は 1 つ)。" if replaced else "")
+                 + f"パッケージ役が build_version で、版 {v} への提案を全部まとめて版 {v + 1} を作ります"),
     }
 
 
