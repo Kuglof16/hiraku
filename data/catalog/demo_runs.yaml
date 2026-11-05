@@ -91,13 +91,17 @@ runs:
       lead-sonnet: {usd: 22.86, upper_usd: 22.86}
     cuts: [N04, N06, N17]
   - id: demo
-    title: デモの車の 6 つの試験
-    shows: 段差・フレーム・振動・組み立て・加速。版 1 の赤を設計役が直し、版 2 で全部緑
+    title: デモの車の 11 の試験
+    shows: >-
+      段差・フレームとつなぎ目・振動・組み立て・乗り降り・加速。赤を設計役が 4 回直し (配置、乗り降りの網、
+      モーター、レールのつなぎ目)、版 5 で全部緑
     file: offroad-4w.yaml
     modes: [scripted, claude]
-    # python -m hiraku.catalog.cost <run folder>: 82 calls (cae.* 70, packager 12) in scripted run 20261103-153651-offroad-4w-scripted
+    # scripted run 20261106-081501-offroad-4w-scripted on main 1a155201: done on version 5, every tile green; 11 tests
+    # listed, 10 judged (P1 has no criterion: compared, not judged)
+    # python -m hiraku.catalog.cost <run folder>: 415 calls (cae.nvh 27, cae.powertrain 55, cae.strength 113, packager 220)
     estimates_usd:
-      default: {usd: 12.54, upper_usd: 12.54}
-      cae-sonnet: {usd: 6.27, upper_usd: 6.27}
-      cae-haiku: {usd: 0.31, upper_usd: 3.13}
-      lead-sonnet: {usd: 6.27, upper_usd: 6.27}
+      default: {usd: 63.45, upper_usd: 63.45}
+      cae-sonnet: {usd: 31.72, upper_usd: 31.72}
+      cae-haiku: {usd: 1.59, upper_usd: 15.86}
+      lead-sonnet: {usd: 31.72, upper_usd: 31.72}
