@@ -23,6 +23,7 @@ import { CutN04, CutN15 } from "./cut_grid.js";
 import { NG_WORD, OK_WORD, esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
+import { fetchAllEvents } from "./eventread.js";
 import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
 import { looksReady } from "./look.js";
 import { CutN16 } from "./cut_n16.js";
@@ -58,18 +59,7 @@ const TILES = {
   heat: { test: "T1", name: "熱", field: "temperature" },
 };
 
-async function readRun(runId) {
-  const events = [];
-  let offset = 0;
-  for (;;) {
-    const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events?offset=${offset}`, { cache: "no-store" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error ?? res.status);
-    events.push(...body.events);
-    if (body.next_offset >= body.size || body.next_offset === offset) return events;
-    offset = body.next_offset;
-  }
-}
+const readRun = fetchAllEvents;
 
 function stateOf(events) {
   let s = initialState();
