@@ -67,4 +67,9 @@
 .sh-checks tr.bad td { background: var(--red-pale); }
 .sh-checks tr.wait td { background: var(--orange-pale); }
 
+/* ?dev=1 only: the ids and the English folded under くわしく */
+.sh-more summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 400; }
+.sh-checks .sh-more, .sh-fl .sh-more { font-size: 12px; }
+.sh-en { color: var(--muted); }
+
 .sh-code { margin: 0; max-height: 420px; overflow: auto; padding: 12px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 8px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre; }

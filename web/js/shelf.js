@@ -6,8 +6,14 @@
 // some seconds the first time and answers {"ready": false} until then). The run's tool.checked
 // records are laid over it by name (the run's are newer); tools only the run has are added.
 // The only numbers made here are counts (tools, checks passed); the rest are the records' values.
+//
+// Words for people: a formula by its title (the K0 Formula's title in /api/shelf's formulas, or in
+// /api/formulas while the shelf is being built; an id without a title as it is), a quantity by quantityName, a check's case and source by case_ja and
+// source_ja when the record has them (the English as written when not). The ids (the tool's name,
+// the formula's id, the quantity's key) and the English beside a Japanese case or source are shown
+// only under ?dev=1, inside くわしく.
 
-import { BASE_JA, DOMAINS, DOMAIN_JA, fmt, fmtPct, unitLabel } from "./labels.js";
+import { BASE_JA, DOMAINS, DOMAIN_JA, fmt, fmtPct, quantityName, unitLabel } from "./labels.js";
 import { fill, h } from "./intake/dom.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
@@ -52,9 +58,13 @@ function checkState(t) {
   const n = (t.checks ?? []).length;
   const p = passed(t);
   const cls = !n ? "none" : isChecking(t) ? "wait" : p === n ? "ok" : "bad";
-  const title = !n ? "照合の例が無い" : isChecking(t) ? "照合中 (まだ値の無い例がある)" : p === n ? "照合が全部通った" : "通らない例がある";
-  return h("span", { class: `sh-chk ${cls}`, title }, `照合 ${p} / ${n}`);
+  const title = !n ? "答えの分かっている問題が無い" : isChecking(t) ? "確かめている途中 (まだ値の無い問題がある)"
+    : p === n ? "答えの分かっている問題で全部 OK" : "OK でない問題がある";
+  return h("span", { class: `sh-chk ${cls}`, title }, `OK ${p} / ${n}`);
 }
+
+// ?dev=1: the ids and the English are shown, folded under くわしく; without it, not at all.
+const DEV = new URLSearchParams(globalThis.location?.search ?? "").get("dev") === "1";
 
 function marks(t) {
   return [
@@ -67,7 +77,16 @@ export function mountShelf(el, api) {
   const ui = { mode: "domain", filter: "all", query: "", collapsed: new Set(), selected: null };
   const shelf = { ready: false, tools: [], formulas: [], archetypes: {}, error: null, asked: false, failed: null };
   const code = new Map(); // `${runId}|${name}` -> {state: "loading"|"none"|"ok"|"error", n, text}
+  const opened = new Set(); // the くわしく left open, by key (they stay open across the redraws)
   let timer = null;
+
+  // A くわしく (only under ?dev=1) holding the ids or the English; key: what keeps it open.
+  function more(key, ...kids) {
+    if (!DEV) return null;
+    return h("details", { class: "more sh-more", open: opened.has(key), dataset: { more: key },
+        ontoggle: (e) => { if (e.target.open) opened.add(key); else opened.delete(key); } },
+      h("summary", {}, "くわしく"), ...kids);
+  }
 
   const search = h("input", { class: "sh-search", type: "search", placeholder: "ツールの名前・試験の番号で探す",
     oninput: (e) => { ui.query = e.target.value; render(); } });
@@ -82,7 +101,21 @@ export function mountShelf(el, api) {
     h("div", { class: "sh-bar" }, search, modeSeg, filterSeg, sum),
     h("div", { class: "sh-body" }, treeBox, detailBox)));
 
+  // The formulas' titles from GET /api/formulas (light: ids and titles only), so a run's tool names its
+  // formulas while the shelf is still being built. Asked once; on a failure the ids stay as they are.
+  const titles = new Map();
+  async function askTitles() {
+    try {
+      const got = await (await fetch("/api/formulas", { cache: "no-store" })).json();
+      for (const f of got.formulas ?? []) if (typeof f.title === "string" && f.title) titles.set(f.formula_id, f.title);
+    } catch {
+      return;
+    }
+    render();
+  }
+
   async function ask() {
+    if (!shelf.asked) askTitles();
     shelf.asked = true;
     clearTimeout(timer);
     try {
@@ -104,9 +137,16 @@ export function mountShelf(el, api) {
     return shelf.formulas.find((f) => f.formula_id === id) ?? null;
   }
 
+  // A formula's words: its title (K0's Formula.title, from the shelf or /api/formulas), or the id when it has none.
+  function formulaName(id) {
+    const f = formulaOf(id);
+    return f && typeof f.title === "string" && f.title ? f.title : titles.get(id) ?? id;
+  }
+
   function formulaChip(id) {
     const f = formulaOf(id);
-    return h("span", { class: "sh-f", title: f ? `${f.expression}` : "棚の式の一覧に無い" }, f ? f.title : "", h("code", {}, id));
+    return h("span", { class: "sh-f", dataset: { formula: id }, title: f ? `${f.expression}` : "棚の式の一覧に無い" },
+      formulaName(id), DEV ? h("code", {}, id) : null);
   }
 
   // A tool's applies_to (the kinds of design it can analyse; none: any design) as one line of names:
@@ -126,10 +166,10 @@ export function mountShelf(el, api) {
   function row(t) {
     return h("li", { class: `sh-tool${ui.selected === t.name ? " sel" : ""}${isUnusable(t) ? " is-off" : ""}${isClaude(t) ? " is-claude" : ""}`,
         dataset: { tool: t.name }, onclick: () => { ui.selected = t.name; render(); } },
-      h("div", { class: "sh-name" }, h("b", {}, t.title ?? t.name), h("code", {}, t.name), marks(t)),
+      h("div", { class: "sh-name" }, h("b", {}, t.title ?? t.name), DEV ? h("code", {}, t.name) : null, marks(t)),
       h("div", { class: "sh-cols" },
         h("span", { class: "sh-tests", title: "対応する試験 (カタログの番号)" }, (t.tests ?? []).length ? t.tests.map((x) => h("span", { class: "sh-tid" }, x)) : h("span", { class: "sh-dim" }, "試験なし")),
-        h("span", { class: "sh-k0", title: "手計算の段 (K0 の式)" }, (t.formulas ?? []).length ? t.formulas.map(formulaChip) : h("span", { class: "sh-dim" }, "式なし")),
+        h("span", { class: "sh-k0", title: "手計算の式 (K0)" }, (t.formulas ?? []).length ? t.formulas.map(formulaChip) : h("span", { class: "sh-dim" }, "式なし")),
         h("span", { class: "sh-base", title: "CAE の段 (土台)" }, h("b", {}, t.base), ` ${BASE_JA[t.base] ?? ""}`),
         checkState(t)),
       appliesTo(t));
@@ -187,31 +227,39 @@ export function mountShelf(el, api) {
   }
 
   function detail(t) {
-    if (!t) return h("p", { class: "sh-dim" }, "左のツールを選ぶと、照合の表が出ます");
+    if (!t) return h("p", { class: "sh-dim" }, "左のツールを選ぶと、答えの分かっている問題で確かめた結果が出ます");
     const checks = t.checks ?? [];
+    const k = (what) => `${t.name}|${what}`;
+    // a check's case or source: the Japanese when the record has it (the English under くわしく), else the English
+    const words = (ja, en, key) => (typeof ja === "string" && ja ? [ja, more(key, h("div", { class: "sh-en" }, en))] : en);
     return h("div", { class: "sh-detail", dataset: { tool: t.name } },
-      h("header", {}, h("h3", {}, t.title ?? t.name), h("code", {}, t.name), marks(t), checkState(t)),
+      h("header", {}, h("h3", {}, t.title ?? t.name), marks(t), checkState(t), more(k("name"), h("code", {}, t.name))),
       h("dl", {},
         h("dt", {}, "分野"), h("dd", {}, DOMAIN_JA[t.domain] ?? t.domain),
         h("dt", {}, "試験"), h("dd", {}, (t.tests ?? []).join("・") || "—"),
-        h("dt", {}, "手計算の段"), h("dd", {}, (t.formulas ?? []).length
-          ? t.formulas.map((id) => { const f = formulaOf(id); return h("div", { class: "sh-fl" }, f ? f.title : "", h("code", {}, id), f ? h("code", { class: "sh-expr" }, f.expression) : null); })
+        h("dt", {}, "手計算の式"), h("dd", {}, (t.formulas ?? []).length
+          ? t.formulas.map((id) => {
+            const f = formulaOf(id);
+            return h("div", { class: "sh-fl", dataset: { formula: id } }, formulaName(id),
+              f ? h("code", { class: "sh-expr" }, f.expression) : null, more(k(`f:${id}`), h("code", {}, id)));
+          })
           : "—"),
         h("dt", {}, "CAE の段"), h("dd", {}, `${t.base} ${BASE_JA[t.base] ?? ""}`),
         h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行の照合の記録)") : null)),
-      h("h4", {}, "照合の表", h("small", {}, ` 答えの分かっている例 ${checks.length}`)),
+      h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問)`),
       checks.length
         ? h("table", { class: "sh-checks" },
-            h("thead", {}, h("tr", {}, ["例", "量", "答え", "ツールの値", "単位", "許す幅", "結果", "答えの出どころ"].map((x) => h("th", {}, x)))),
-            h("tbody", {}, checks.map((c) => h("tr", { class: c.got === null ? "wait" : c.pass ? "ok" : "bad" },
-              h("td", {}, c.case), h("td", {}, h("code", {}, c.quantity)),
+            h("thead", {}, h("tr", {}, ["確かめた場面", "何の値", "正しい値", "ツールの値", "単位", "ずれてよい幅", "結果", "正しい値の出どころ"].map((x) => h("th", {}, x)))),
+            h("tbody", {}, checks.map((c, i) => h("tr", { class: c.got === null ? "wait" : c.pass ? "ok" : "bad" },
+              h("td", { class: "case" }, words(c.case_ja, c.case, k(`case:${i}`))),
+              h("td", { class: "qty" }, quantityName(c.quantity), quantityName(c.quantity) !== c.quantity ? more(k(`q:${i}`), h("code", {}, c.quantity)) : null),
               h("td", { class: "num", title: String(c.expected) }, fmt(c.expected, 6)),
               h("td", { class: "num", title: String(c.got) }, c.got === null ? "照合中" : fmt(c.got, 6)),
               h("td", {}, unitLabel(c.unit)),
               h("td", { class: "num", title: String(c.tolerance_rel) }, fmtPct(c.tolerance_rel, 1)),
-              h("td", {}, c.got === null ? "—" : c.pass ? "合格 ✓" : "不合格 ✗"),
-              h("td", { class: "src" }, c.source)))))
-        : h("p", { class: "sh-dim" }, "照合の例がありません"),
+              h("td", {}, c.got === null ? "—" : c.pass ? "OK" : "×"),
+              h("td", { class: "src" }, words(c.source_ja, c.source, k(`src:${i}`)))))))
+        : h("p", { class: "sh-dim" }, "答えの分かっている問題がありません"),
       isClaude(t) ? codeBlock(t) : null);
   }
 
