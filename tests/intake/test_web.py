@@ -439,6 +439,19 @@ console.log(JSON.stringify({ deg: showValue(15, 'deg'), temp: showValue(40, 'deg
 """ % url('model.js'))
         self.assertEqual(got, {"deg": "15 度", "temp": "40 ℃", "sec": "6 秒", "kg": "150 kg", "none": "1.5", "table": True, "legend": True})
 
+    def test_answers_picked_for_an_earlier_hearing_are_not_sent_with_the_next_one(self):
+        got = self.a2("""
+choiceq('Q34', 'いない');
+button('答えて進める').listeners.click[0]();
+await wait();
+events = [e(5, 20, 'hearing.asked', { questions: [{ req_key: 'Q64', name: 'ROPS', text: 'つけますか', ask: 'confirm', choices: [{ value: 'yes', label: 'つける' }] }] })];
+intake.update();
+button('答えて進める').listeners.click[0]();
+await wait();
+console.log(JSON.stringify(sent.map((b) => b.answers)));
+""".replace("choiceq('Q34', 'いない');", "el.all('article').find((a) => a.dataset.key === 'Q34').all('button').find((b) => b.text() === 'いない').listeners.click[0]();"))
+        self.assertEqual(got, [{"Q34": {"value": "none"}}, {}])  # the second hearing does not carry the first one's answer
+
     def test_a_replay_that_cannot_take_files_says_so(self):
         got = self.a5("""
 const [el, root] = mount({});
