@@ -4695,8 +4695,10 @@
             "gate",
             "wall",
             "ramp",
-            "ground"
-          ]
+            "ground",
+            "circle"
+          ],
+          "description": "circle: a path drawn on the ground (e.g. the turning circle of the outer front wheel or of the body's outermost point): position_mm its centre, size_mm [diameter, diameter, 0]."
         },
         "label": {
           "type": "string"
