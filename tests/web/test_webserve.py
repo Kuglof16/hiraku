@@ -522,6 +522,26 @@ class ShelfTest(unittest.TestCase):
             self.assertEqual(self.get(f"/api/runs/{RUN_ID}/tools/{bad}")[0], 404, bad)
         self.assertEqual(self.get("/api/runs/sample/tools/rollbar_load-1.py")[0], 404)
 
+    def test_a_runs_tool_list(self):
+        """GET /api/runs/<id>/tools: the versions of each tools/<name>-<n>.py (not the .check.json)."""
+        status, _, text = self.get(f"/api/runs/{RUN_ID}/tools")
+        self.assertEqual((status, json.loads(text)), (200, {"tools": {"rollbar_load": [1]}}))
+        self.assertEqual(self.get("/api/runs/sample/tools")[0], 404)
+        self.assertEqual(self.get("/api/runs/not-a-run-id/tools")[0], 404)
+        status, _, text = self.get("/api/runs/20261102-203001-none/tools")  # a run id with no folder: nothing
+        self.assertEqual((status, json.loads(text)), (200, {"tools": {}}))
+
+    def test_tool_versions(self):
+        from hiraku.webserve.server import tool_versions
+
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, True)
+        self.assertEqual(tool_versions(d / "tools"), {})
+        (d / "tools").mkdir()
+        for name in ("rops-1.py", "rops-10.py", "rops-2.py", "rops-1.check.json", "a_b-3.py", "Bad-1.py", "x.py"):
+            (d / "tools" / name).write_text("", encoding="utf-8")
+        self.assertEqual(tool_versions(d / "tools"), {"a_b": [3], "rops": [1, 2, 10]})
+
 
 class LaunchTest(unittest.TestCase):
     """Starting a run from the screen (the child is a stand-in for python -m hiraku run)."""

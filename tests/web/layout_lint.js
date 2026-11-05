@@ -17,6 +17,9 @@
 //   overflow  text runs out of its box: scrollWidth > clientWidth + SLACK on an element that holds
 //             text (or holds such an element), except a box cut with an ellipsis (text-overflow).
 //             A box that scrolls (overflow auto) is counted only sideways: the lists scroll down.
+//             A table wider than the room inside the box it sits in is counted too (overflow: "table").
+//   unit      a number and its unit in one text (2.772 mm, -34.8 %) broken across lines (2.772 / mm).
+//             Let off with data-lint="unit" or "wrap".
 //   lonely    a line of a wrapped text holds one letter only (終わっ / た): characters are grouped
 //             into lines by their boxes (one Range per character).
 //   paren     (with lonely, the same lines) a short aside in brackets, up to 30 characters a side,
@@ -287,6 +290,24 @@
     if (cs.textOverflow === "ellipsis") continue;
     const over = px(e.scrollWidth - e.clientWidth);
     if (e.clientWidth > 0 && over > SLACK) add("overflow", e, { by: `${over.toFixed(0)}px`, overflow: cs.overflowX });
+  }
+  // (c) overflow, a table: wider than the box it sits in (its cells fit themselves, the table is cut
+  // by the card around it: a value's right end and its unit out of sight)
+  for (const t of all) {
+    if (t.tagName !== "TABLE" || exempt(t, "overflow") || !visible(t)) continue;
+    const box = t.parentElement;
+    if (!box || !root.contains(box) || box.clientWidth === 0) continue;
+    const bs = getComputedStyle(box);
+    const room = box.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);
+    const over = px(t.getBoundingClientRect().width - room * scale);
+    if (over > SLACK) add("overflow", t, { by: `${over.toFixed(0)}px`, overflow: "table" });
+  }
+  // (c2) unit: a number and its unit (2.772 mm, -34.8 %, 1,231 N) broken across lines
+  const NUM_UNIT = /^[-+−]?[\d,]*\.?\d+(?:e[-+]?\d+)?\s+\S{1,8}$/i;
+  for (const n of textNodes(root)) {
+    const p = n.parentElement;
+    if (!p || !NUM_UNIT.test(n.textContent.trim()) || exempt(p, "wrap") || exempt(p, "unit") || !visible(p)) continue;
+    if (lines(nodeBoxes([n])).length > 1 || lines(charBoxes([n])).length > 1) add("unit", p, { line: n.textContent.trim() });
   }
 
   // (d) lonely: one letter on a line of its own

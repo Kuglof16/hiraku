@@ -15,7 +15,7 @@
 // pet3d's states and how long a reaction lasts. A pet's bubble is the agent's newest log
 // line (the same words as the log), cut short, for SAY_S seconds after its event.
 
-import { DOMAINS, agentName, esc } from "./labels.js";
+import { AGENT_STOP_SHORT_JA, DOMAINS, agentName, esc } from "./labels.js";
 import { PetStage, loadPets, missingPetKeys, poseTime } from "./cut_pets.js";
 import { loadLayout } from "./compose.js";
 import { moduleColor } from "./proposals.js"; // modules:
@@ -173,6 +173,8 @@ export function sayAt(log, owners, id, t) {
     if (e.t > t) continue;
     if (t - e.t >= SAY_S) return null;
     if (!(owners.get(e.seq) ?? []).includes(id)) continue;
+    // its stop: no bubble (「…が手を止めた (…)」 in a frame on every row); the why line under the name says it
+    if (e.kind === "agent.stopped") return null;
     return { seq: e.seq, t: e.t, text: shortSay(e.text, id), full: e.text };
   }
   return null;
@@ -206,11 +208,11 @@ export function petRowHtml(id, status, { tag = "li", cls = "", name = null, why 
   );
 }
 
-// Why an agent stopped, one line: the code's words (labels.js AGENT_STOP_JA), else the reason cut
+// Why an agent stopped, one line: the code's short words (labels.js AGENT_STOP_SHORT_JA), else the reason cut
 // short; the whole reason is the title.
 export function stopWhyHtml(why) {
   if (!why) return "";
-  const chars = [...(why.words ?? why.reason ?? "")];
+  const chars = [...(AGENT_STOP_SHORT_JA[why.code] ?? why.words ?? why.reason ?? "")];
   const text = chars.length > SAY_CHARS ? `${chars.slice(0, SAY_CHARS - 1).join("")}…` : chars.join("");
   const title = why.reason && why.reason !== text ? why.reason : "";
   return `<span class="why" data-stop-code="${esc(why.code ?? "")}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</span>`;
