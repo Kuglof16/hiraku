@@ -134,6 +134,7 @@ class RunStore:
         # from where the last read stopped, a shorter file is read again
         self._events_read: tuple[int, list[Record]] = (0, [])
         self._built: dict[int, tuple[tuple[int, int], list[str]]] = {}  # version -> (design.json stat, change ids)
+        self._designs: dict[int, tuple[tuple[int, int, int], Record]] = {}  # design_shared: version -> (stamp, design)
 
     # ------------------------------------------------------------------ create / open
 
@@ -381,6 +382,23 @@ class RunStore:
         if not path.exists():
             raise StoreError(f"no design version {v}")
         return _read_json(path)
+
+    def design_shared(self, version: int | None = None) -> tuple[tuple[int, int, int], Record]:
+        """(stamp, design) of a version, read once while design.json's stat holds: the design is shared between
+        calls, so read it and do not change it (design() gives a copy of one's own). The stamp (version, mtime,
+        size) changes when the file does, for a caller that keeps what it worked out from the design (run
+        283a934: design_kind read the whole design 8 980 times, 76 s; the plan's refs 2 932 times, 34 s)."""
+        with self._lock:
+            v = version or self.design_version
+            path = layout.version_dir(self.path, v) / layout.DESIGN_FILE
+            if not path.exists():
+                raise StoreError(f"no design version {v}")
+            st = path.stat()
+            stamp = (v, st.st_mtime_ns, st.st_size)
+            kept = self._designs.get(v)
+            if kept is None or kept[0] != stamp:
+                kept = self._designs[v] = (stamp, _read_json(path))
+            return kept
 
     # ------------------------------------------------------------------ records
 

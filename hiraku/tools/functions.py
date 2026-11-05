@@ -505,8 +505,9 @@ def design_kind(ctx: RunContext) -> str | None:
     gen_of, kinds = getattr(ctx.designgen, "generator_of", None), getattr(ctx.designgen, "ARCHETYPES", None)
     if not ctx.version or gen_of is None or not kinds:
         return None
+    shared = getattr(ctx.store, "design_shared", None)  # read once while the file holds (run 283a934: 8 980 reads)
     try:
-        gen = gen_of(ctx.store.design())
+        gen = gen_of(shared()[1] if shared else ctx.store.design())
     except ValueError:  # DesignGenError: its variables match no generator
         return None
     return next((k for k, m in kinds.items() if m is gen), None)

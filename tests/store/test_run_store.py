@@ -209,6 +209,17 @@ class RunStoreTest(unittest.TestCase):
             self.assertEqual(self.store.records("prediction", 1), one)  # same stretch: the same listing
         self.assertEqual(len(self.store.records("prediction", 1)), 2)  # outside: listed again
 
+    def test_the_shared_design_is_read_once_while_its_file_holds(self):
+        self.store.write_design(example("design.json"))
+        stamp, one = self.store.design_shared()
+        self.assertIs(self.store.design_shared()[1], one)
+        self.assertIsNot(self.store.design(), one)  # design() is a copy of one's own
+        path = layout.version_dir(self.store.path, 1) / layout.DESIGN_FILE
+        path.write_text(json.dumps(dict(one, notes_for_test="x")), encoding="utf-8")
+        again = self.store.design_shared()
+        self.assertNotEqual(again[0], stamp)
+        self.assertEqual(again[1]["notes_for_test"], "x")
+
     def test_a_mesh_is_validated_on_a_sample_of_its_long_arrays(self):
         from hiraku.store.run_store import MESH_SAMPLE, _sampled
 
