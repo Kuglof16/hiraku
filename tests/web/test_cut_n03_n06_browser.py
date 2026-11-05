@@ -117,6 +117,8 @@ def design_members():
     """The member ids of the contract sample's design (the fixture's stress is 60 + 25 k on member k)."""
     src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
     return [m["id"] for m in next(e for e in src if e["kind"] == "design.created")["data"]["members"]]
+DRIVE_KM = 60.0  # the thermal case's distance (shape example)
+SLOPE_PCT = 14.0  # the launch case's slope (shape example)
 STOP_LIMIT = 14.0  # m (shape example)
 STOP_GOT = 16.0  # m (shape example)
 
@@ -129,8 +131,10 @@ def n03_n06_events():
     members = [m["id"] for m in design["members"]]
     run["data"]["load_cases"] = [
         _lc("P4-v", "P4", "powertrain", "長く走る (形の見本)", criterion=_crit("soc_end", ">", 0.0, "%")),
-        _lc("T1-v", "T1", "thermal", "長く走ったときの電池の温度 (形の見本)", criterion=_crit("temp_battery_max", "<=", 55.0, "degC")),
-        _lc("P2-v", "P2", "powertrain", "発進 (形の見本)"),
+        _lc("T1-v", "T1", "thermal", "長く走ったときの電池の温度 (形の見本)", criterion=_crit("temp_battery_max", "<=", 55.0, "degC"),
+            params={"loading": "two_cargo", "distance": {"value": DRIVE_KM, "unit": "km"}}),
+        _lc("P2-v", "P2", "powertrain", "坂で発進 (形の見本)", criterion=_crit("top_speed", ">", 0.0, "km/h"),
+            params={"loading": "two_cargo", "grade": {"value": SLOPE_PCT, "unit": "%"}}),
         _lc("R1-v", "R1", "strength", "段差の力 (形の見本)", criterion=_crit("max_stress", "<=", ALLOWABLE, "MPa")),
         _lc("P1-step-beyond", "P1", "powertrain", "限界の外: 高い段差 (形の見本)", params={"loading": "two_cargo", "step_height": {"value": 250.0, "unit": "mm"}}),
         _lc("R1-step-beyond", "R1", "strength", "限界の外: 高い段差の力 (形の見本)", criterion=_crit("max_stress", "<=", ALLOWABLE, "MPa")),
@@ -372,23 +376,29 @@ class CutN03N06Test(unittest.TestCase):
         # squeezed: 2400 s of record over loop_to_s - lead_s on the mean, as rateLabel says it
         self.assertEqual(shots[1.0]["view"]["rate"], f"×{round(2400.0 / (T['loop_to_s'] - T['lead_s']))}")
 
-    def test_n03_plays_the_long_drive_then_the_straight_acceleration(self):
+    def test_n03_plays_the_long_drive_then_the_launch_on_the_slope(self):
         layout = n03_n06_layout()
         base = self.serve(layout, events={"20261103-120000-n03": n03_n06_events()})
         page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
         shots = {t: page.evaluate(READ, t) for t in N03_TIMES}
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
-        self.check_n03_times(shots, layout, launch_end=6.0)  # P3's record: 0 .. 6 s
-        # the popup's titles are words only (the tests' ids are for the makers); the flat
-        # acceleration (P3) is preferred to P2; one graph at a time (the battery's
-        # temperature, then the speed)
-        self.assertEqual(shots[1.0]["title"], "長く走ったときの電池の温度")
-        self.assertEqual(shots[3.5]["title"], "加速の速さ")
-        self.assertEqual(page.evaluate("document.querySelector('.n03-page[data-page=launch] h3').dataset.tests"), "P3")
+        self.check_n03_times(shots, layout, launch_end=8.0)  # P2's record: 0 .. 8 s
+        # two scenes, each under its question in one line with the record's numbers (the
+        # thermal case's distance, the launch case's slope); the tests' ids are for the makers;
+        # the launch on the slope (P2) is preferred to P3; one graph at a time
+        self.assertEqual(shots[1.0]["title"], "60 km 走ると、電池は何度になる?")
+        self.assertEqual(shots[3.5]["title"], "14 % の坂で発進できる?")
+        self.assertEqual(page.evaluate("document.querySelector('.n03-page[data-page=launch] h3').dataset.tests"), "P2")
+        for t in (1.0, 3.5):
+            h = page.evaluate("""(t) => window.hiraku.seek(t).then(() => { const h = [...document.querySelectorAll('.n03-page h3')].find((x) => x.offsetParent);
+                                  const s = getComputedStyle(h); return [s.whiteSpace, h.scrollWidth <= h.clientWidth + 0.5, parseFloat(s.fontSize)]; })""", t)
+            self.assertEqual(h[:2], ["nowrap", True], t)  # one line, not cut short
+            self.assertGreaterEqual(h[2], 24, t)  # not below the story's body text
         # the battery's limit line says what it is, from the load case's criterion (55 degC);
-        # every recorded value keeps to it (48.4 degC), so "✓ 上限より下" shows from ok_s, and through
-        # the acceleration (under the speed) as "✓ 電池の温度は上限より下"
+        # every recorded value keeps to it (48.4 degC, no verdict: the result against the
+        # criterion), so "✓ OK" shows from ok_s on the drive; the launch's "✓ OK" (top speed
+        # above 0 on the slope) from the middle of accel_s .. the end
         T = layout["n03"]["times"]
         self.assertIn("上限 55 ℃", shots[1.0]["limitText"])
         # the axis has round steps from the surroundings (no ambient in this case: 0) up to the
@@ -397,8 +407,8 @@ class CutN03N06Test(unittest.TestCase):
         self.assertEqual(min(ticks), 0.0)
         self.assertTrue(40.0 <= max(ticks) <= 55.0, ticks)  # up to the limit (0 .. 55: steps of 20)
         self.assertTrue(all(b > a for a, b in zip(ticks, ticks[1:])))
-        # "✓ 上限より下" on its own line, layout.json n03.popup.ok_of_reading x its reading's size
-        # (not below text_px; shown under a second)
+        # "✓ OK" on its own line, layout.json n03.popup.ok_of_reading x its reading's size
+        # (not below text_px)
         P = layout["n03"]["popup"]
         self.assertEqual(shots[2.6]["okPx"], max(P["text_px"], round(shots[2.6]["okReadingPx"] * P["ok_of_reading"])))
         self.assertEqual(shots[1.0]["ok"], "hidden")
@@ -406,9 +416,15 @@ class CutN03N06Test(unittest.TestCase):
         for t in (T["ok_s"], 2.5, T["loop_to_s"], 2.85):
             self.assertEqual(shots[t]["ok"], "visible", t)
             self.assertEqual(shots[t]["carried"][1], "hidden", t)
+        launch_ok = T["accel_s"] + (layout["n03"]["duration_s"] - T["accel_s"]) / 2
         for t in (T["accel_s"], 3.5, 4.97):
-            self.assertEqual(shots[t]["carried"], ["✓ 電池の温度は上限より下", "visible", True], t)
+            self.assertEqual(shots[t]["carried"], ["✓ OK", "visible" if t >= launch_ok else "hidden", True], t)
             self.assertEqual(shots[t]["ok"], "hidden", t)
+        self.assertIn(4.97, [t for t in N03_TIMES if t >= launch_ok])  # the launch's answer is seen
+        # no word of the old wording
+        for got in shots.values():
+            for x in got["texts"]:
+                self.assertNotIn("上限より下", x["text"])
         # the squeeze of the record's time is a note (not counted, not read)
         self.assertEqual(page.evaluate("document.querySelector('[data-box=\"n03.view.rate\"]').dataset.kind"), "note")
         self.assertEqual({t: len(g["now"]) for t, g in shots.items() if t >= layout["n03"]["times"]["lead_s"]}, {t: 1 for t in N03_TIMES if t >= layout["n03"]["times"]["lead_s"]})
@@ -436,17 +452,41 @@ class CutN03N06Test(unittest.TestCase):
         self.assertTrue(max(ticks) <= 55.0, ticks)
         page.close()
 
-    def test_n03_takes_p2_without_a_p3_record(self):
+    def test_n03_takes_p3_without_a_p2_record(self):
+        """Without the slope's record the flat run (P3, no criterion): its question without a
+        slope, and no answer (the record says none)."""
         layout = n03_n06_layout()
-        events = [e for e in n03_n06_events() if not (e["kind"] == "analysis.finished" and e["data"]["load_case_id"] == "P3-v")]
+        events = [e for e in n03_n06_events() if not (e["kind"] == "analysis.finished" and e["data"]["load_case_id"] == "P2-v")]
         base = self.serve(layout, events={"20261103-120000-n03": events})
         page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
         shots = {t: page.evaluate(READ, t) for t in N03_TIMES}
         self.assertEqual(errors, [])
         self.check_n03(shots, layout)
-        self.check_n03_times(shots, layout, launch_end=8.0)  # P2's record: 0 .. 8 s
-        self.assertEqual(shots[3.5]["title"], "加速の速さ")
-        self.assertEqual(page.evaluate("document.querySelector('.n03-page[data-page=launch] h3').dataset.tests"), "P2")
+        self.check_n03_times(shots, layout, launch_end=6.0)  # P3's record: 0 .. 6 s
+        self.assertEqual(shots[3.5]["title"], "平らな道で発進できる?")
+        self.assertIsNone(shots[4.97]["carried"])
+        self.assertEqual(page.evaluate("document.querySelector('.n03-page[data-page=launch] h3').dataset.tests"), "P3")
+        page.close()
+
+    def test_n03_answers_ng_from_a_failing_verdict(self):
+        """A verdict on the thermal case that fails: the drive answers "✕ NG" in red (the
+        verdict comes before the record's own values)."""
+        layout = n03_n06_layout()
+        events = n03_n06_events()
+        end = events.pop()
+        events.append({**end, "kind": "verdict.recorded", "agent": "cae.thermal", "domain": "thermal", "design_version": 1,
+                       "data": {"verdict_id": "ver-0001", "comparison_id": "cmp-0001", "load_case_id": "T1-v", "test_id": "T1", "domain": "thermal",
+                                "quantity": "temp_battery_max", "value": {"value": 58.0, "unit": "degC"}, "op": "<=",
+                                "limit": {"value": 55.0, "unit": "degC"}, "pass": False, "margin_pct": -5.5}})
+        events.append(end)
+        for i, e in enumerate(events):
+            e["seq"] = i
+        base = self.serve(layout, events={"20261103-120000-n03": events})
+        page, errors = self.open(f"{base}/cut.html?cut=n03&run=20261103-120000-n03&t=0")
+        page.evaluate(READ, 2.6)
+        got = page.evaluate("() => { const e = document.querySelector('[data-page=drive] .n03-ok'); return [e.textContent, getComputedStyle(e).color, getComputedStyle(e).visibility]; }")
+        self.assertEqual(errors, [])
+        self.assertEqual(got, ["✕ NG", "rgb(200, 64, 42)", "visible"])
         page.close()
 
     def check_n06(self, shots, layout, recorded):

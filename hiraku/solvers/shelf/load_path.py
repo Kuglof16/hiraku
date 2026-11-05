@@ -1704,13 +1704,13 @@ class LoadPath(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R7", "R8"]
-    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.free_parts"]
+    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.grip_bound", "load_path.free_parts"]
     load_case_params = (LOAD_KIND, HAND_FORCE, FOOT_FORCE, ACCEL_V, ACCEL_LON, ACCEL_LAT, OCC_MASS, OCC_LAT, OCC_LON,
                         PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
     run_params = (TOUCH, NET_PRESTRESS)
     # Every load kind gives free_parts. grip_deflection (load_kind hand) and pedal_deflection (foot) are predicted
-    # by load_path.control_deflection (output delta) with the inputs of hiraku.catalog.builders.load_path.
-    # control_inputs; they are not listed here because a load case of the default kind (inertia) has neither.
+    # by load_path.grip_bound (output delta) with the inputs of hiraku.catalog.builders.load_path (grip_bound_inputs,
+    # pedal_bound_inputs); they are not listed here because a load case of the default kind (inertia) has neither.
     predicts = (
         Predicts("free_parts", "load_path.free_parts", "n", "the contacts followed from the members (a graph search)"),
     )

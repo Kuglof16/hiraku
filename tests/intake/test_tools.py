@@ -296,6 +296,50 @@ class AskUserToolTest(ToolsTestCase):
             path = hearing.save_answer(Path(d), {"answers": {}, "ruleAnswers": [{"rule_id": "SM-01", "choice": "drop_rule", "note": "n"}]})
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["rule_answers"], [{"rule_id": "SM-01", "choice": "drop_rule", "note": "n"}])
 
+    def screen_answers(self, ctx, body, after=0.3, **args):
+        """ask_user waits for a person; the 'screen' writes hearing.answer.json while it waits."""
+        import threading
+        import time
+
+        from hiraku.intake import hearing
+
+        path = ctx.store.path
+
+        def write():
+            time.sleep(after)
+            (Path(path) / hearing.ANSWER_FILE).write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+
+        t = threading.Thread(target=write)
+        t.start()
+        try:
+            return call("ask_user", ctx, wait_seconds=5, **args)
+        finally:
+            t.join()
+
+    def test_a_stale_key_in_the_screens_answer_is_left_out_and_the_rest_is_used(self):
+        # the file already has Q34; the screen still sent an answer to it (a leftover from an earlier hearing)
+        have = [{"key": "Q34", "name": "弱い人", "value": "いない", "source": "user", "trust": 1, "basis": "from the file"}]
+        ctx = make_ctx(self.root, requirements=have)
+        got = self.screen_answers(ctx, {"answers": {"Q30": "two_cargo", "Q34": "子ども"}, "note": "", "use_defaults": True})
+        self.assertEqual(got["ignored"], ["Q34"])
+        values = {r["key"]: r["value"] for r in got["answers"]}
+        self.assertEqual(values["Q30"], "two_cargo")  # the answer that was fine is used
+        self.assertNotIn("Q34", {r["key"] for r in got["answers"] if r["source"] == "hearing"})
+        answered = [e for e in ctx.store.events() if e["kind"] == ev.HEARING_ANSWERED]
+        if answered:
+            self.assertIn("Q34 は要件のファイルにもう有る", answered[-1]["data"].get("note", ""))
+
+    def test_an_answer_that_is_refused_here_leaves_the_hearing_open(self):
+        from hiraku.intake import hearing
+
+        ctx = make_ctx(self.root)
+        got = self.screen_answers(ctx, {"answers": {"Q98": 1}, "note": "", "use_defaults": True})  # not an item: save_answer would have said no
+        self.assertFalse(got["recorded"])
+        self.assertIn("Q98", got["refused"])
+        self.assertIn("開いたまま", got["next"])
+        self.assertTrue((Path(ctx.store.path) / hearing.REQUEST_FILE).exists())  # the question is still shown
+        self.assertNotIn(ev.HEARING_ANSWERED, self.kinds(ctx))  # nothing was closed with no answers
+
     def test_the_answers_file_may_be_named_by_its_file_name_or_the_product(self):
         for i, name in enumerate(("care-bed.answers.yaml", "care-bed", "data/requirements/products/care-bed.answers.yaml")):
             with self.subTest(name=name):

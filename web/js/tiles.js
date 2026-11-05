@@ -262,7 +262,7 @@ export class TileBoard {
     this.head.innerHTML =
       `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
       `<span class="flow">${flow}</span>${change}` +
-      (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div" })).join("")}</div>` : "");
+      (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div", why: s.agents[id]?.stopWhy })).join("")}</div>` : "");
     this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
 
     const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));

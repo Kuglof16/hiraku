@@ -35,18 +35,23 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return v / np.linalg.norm(v)
 
 
+def _cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """np.cross of two 3-vectors (the same products and differences, without its per-call overhead)."""
+    return np.array([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]])
+
+
 def rotate_about(point: np.ndarray, origin: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
     """Rodrigues rotation of `point` about the line (origin, axis)."""
     k = _unit(axis)
     v = point - origin
     c, s = math.cos(angle), math.sin(angle)
-    return origin + v * c + np.cross(k, v) * s + k * float(k @ v) * (1.0 - c)
+    return origin + v * c + _cross(k, v) * s + k * float(k @ v) * (1.0 - c)
 
 
 def rotation_between(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Smallest rotation matrix taking direction a to direction b."""
     a, b = _unit(a), _unit(b)
-    v = np.cross(a, b)
+    v = _cross(a, b)
     c = float(a @ b)
     s = float(np.linalg.norm(v))
     if s < 1e-15:
