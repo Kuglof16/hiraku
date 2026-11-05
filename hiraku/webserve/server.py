@@ -671,6 +671,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # socketserver's listen backlog is 5; a page asks for its modules on several connections at
+    # once, and with a busy machine the accept loop falls behind (a browser test saw
+    # ERR_CONNECTION_REFUSED with other browser tests running beside it)
+    request_queue_size = 64
+
     def handle_error(self, request, client_address) -> None:
         # A page that closes while its request is answered is not an error of the server.
         if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):

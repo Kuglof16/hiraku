@@ -36,8 +36,11 @@ class PagesTest(unittest.TestCase):
             for url in ("https://cdn.jsdelivr.net/npm/three@0.170.0/../../etc/x.js", "https://cdn.jsdelivr.net/npm/other@1/x.js",
                         "https://example.com/npm/three@0.170.0/build/three.module.js"):
                 self.assertIsNone(cache_path(url), url)
+        with mock.patch.dict(os.environ, {"HIRAKU_THREE_CACHE": "off"}):
+            self.assertFalse(pages.cache_on())
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("HIRAKU_THREE_CACHE", None)
+            self.assertTrue(pages.cache_on())
             self.assertEqual(cache_path(THREE).parts[-4:], ("hiraku-three-cache", "three@0.170.0", "build", "three.module.js"))
 
     def test_store_from_many_threads_leaves_one_whole_file(self):

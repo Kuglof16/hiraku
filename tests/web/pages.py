@@ -10,7 +10,8 @@ whose `new_page` and `new_context` give pages that
    HIRAKU_THREE_CACHE, or <temp>/hiraku-three-cache; the path under it is the URL after
    /npm/ (three@0.170.0/...), so the version is part of the path. A file that is not there
    yet is fetched once, written under a temporary name and moved into place with
-   os.replace, so tests running in parallel never read half a file.
+   os.replace, so tests running in parallel never read half a file. HIRAKU_THREE_CACHE=off: no
+   route (the CDN, as before). Each page's default timeout is 120 s (DEFAULT_TIMEOUT_MS).
 2. with HIRAKU_WEB_MAP=<folder> only: record which functions of web/js ran (the Chrome
    DevTools protocol's precise coverage), one JSON file per page,
    <folder>/<pid>-<n>.json. Without HIRAKU_WEB_MAP nothing is started.
@@ -49,6 +50,26 @@ _lock = threading.Lock()
 def cache_dir() -> Path:
     env = os.environ.get("HIRAKU_THREE_CACHE")
     return Path(env) if env else Path(tempfile.gettempdir()) / "hiraku-three-cache"
+
+
+def cache_on() -> bool:
+    """HIRAKU_THREE_CACHE=off: no route, three.js from the CDN as without this module."""
+    return os.environ.get("HIRAKU_THREE_CACHE", "").lower() != "off"
+
+
+# Playwright's default for a navigation or an action that was given no timeout is 30 s. With
+# several browser tests side by side a heavy page's goto took longer than that (2026-11-05: four
+# heavy screen tests repeated beside two more, goto timeouts in tests that pass alone; the pages
+# open in about 3 s each with six side by side, with or without this cache). A timeout written in
+# a test is kept as written.
+DEFAULT_TIMEOUT_MS = 120_000
+
+
+def _route(context) -> None:
+    context.set_default_timeout(DEFAULT_TIMEOUT_MS)
+    context.set_default_navigation_timeout(DEFAULT_TIMEOUT_MS)
+    if cache_on():
+        context.route(THREE_URL, _three_route)
 
 
 def cache_path(url: str) -> Path | None:
@@ -218,7 +239,7 @@ def _flush(maps: list, context=None) -> None:
 
 
 def _wrap_context(context, maps: list):
-    context.route(THREE_URL, _three_route)
+    _route(context)
     real_new_page, real_close = context.new_page, context.close
 
     def new_page(*a, **kw):
@@ -241,7 +262,7 @@ def _wrap_browser(browser):
     def new_page(*a, **kw):
         page = real_new_page(*a, **kw)
         ctx = page.context  # the page's own context (closed with the page)
-        ctx.route(THREE_URL, _three_route)
+        _route(ctx)
         _watch_page(page, maps)
         if map_dir() is not None:
             real_ctx_close = ctx.close
