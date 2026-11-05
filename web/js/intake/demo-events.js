@@ -86,7 +86,7 @@ export const DEMOS = {
       "unit": "m/s",
       "source": "default",
       "trust": 1,
-      "basis": "気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)"
+      "basis": "気象庁「風の強さと吹き方」https:\/\/www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.html (the table is an image, kazehyo.png and kazehyo.pdf): 平均風速 20 m/s is where 「非常に強い風」 begins; 注 2: the gust is often about 1.5 times the mean wind (3 times or more when the air is unstable). So a gust of 30 m/s (1.5 x 20 m/s) (read 2026-11-05)"
      },
      {
       "key": "Q19",
@@ -167,7 +167,7 @@ export const DEMOS = {
       "unit": "m",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 第3号's table, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf (the 2021.6.9 text): the row for a maximum speed of 35 km/h or more and under 80 km/h (initial speed 35 km/h, stopping distance 14 m or less), a borrowing and not a row for this vehicle's kind (the same table's row for 20 km/h or more and under 35 km/h: initial speed 20 km/h, 5 m or less) (read 2026-11-05)"
      },
      {
       "key": "Q53",
@@ -176,7 +176,7 @@ export const DEMOS = {
       "unit": "%",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: borrowed from 細目告示 第171条 第5項, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 第5号, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf (the 2021.6.9 text): 「5 分の 1 こう配」 (20 %), not a requirement for this vehicle's kind (read 2026-11-05)"
      },
      {
       "key": "Q54",
@@ -23082,7 +23082,7 @@ export const DEMOS = {
       "unit": "m/s",
       "source": "default",
       "trust": 1,
-      "basis": "気象庁の風の強さの目安で、瞬間風速 30 m/s (平均風速では 20 m/s) とする (not checked in this repository)"
+      "basis": "気象庁「風の強さと吹き方」https:\/\/www.jma.go.jp/jma/kishou/know/yougo_hp/kazehyo.html (the table is an image, kazehyo.png and kazehyo.pdf): 平均風速 20 m/s is where 「非常に強い風」 begins; 注 2: the gust is often about 1.5 times the mean wind (3 times or more when the air is unstable). So a gust of 30 m/s (1.5 x 20 m/s) (read 2026-11-05)"
      },
      {
       "key": "Q19",
@@ -23216,7 +23216,7 @@ export const DEMOS = {
       "unit": "m",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: borrowed from 細目告示 第171条 第5項 (初速 35 km/h), https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 第3号's table, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf (the 2021.6.9 text): the row for a maximum speed of 35 km/h or more and under 80 km/h (initial speed 35 km/h, stopping distance 14 m or less), a borrowing and not a row for this vehicle's kind (the same table's row for 20 km/h or more and under 35 km/h: initial speed 20 km/h, 5 m or less) (read 2026-11-05)"
      },
      {
       "key": "Q53",
@@ -23225,7 +23225,7 @@ export const DEMOS = {
       "unit": "%",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: borrowed from 細目告示 第171条 第5項, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf; the table is for vehicles of 25 km/h or less and others, not for this vehicle's class (not checked in this repository)"
+      "basis": "assumption: borrowed from 細目告示 第171条 第5項 第5号, https:\/\/www.mlit.go.jp/jidosha/content/S171.pdf (the 2021.6.9 text): 「5 分の 1 こう配」 (20 %), not a requirement for this vehicle's kind (read 2026-11-05)"
      },
      {
       "key": "Q54",
