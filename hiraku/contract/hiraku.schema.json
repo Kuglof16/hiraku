@@ -71,6 +71,27 @@
         }
       }
     },
+    "design_variable": {
+      "type": "object",
+      "required": [
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the value comes from: a standard or catalogue (edition and table, or 'not checked'), or 'assumption'. Optional; a variable chosen by the design has none."
+        }
+      }
+    },
     "vec3": {
       "type": "array",
       "items": {
@@ -938,7 +959,7 @@
         "variables": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/quantity"
+            "$ref": "#/$defs/design_variable"
           },
           "description": "Named design variables, e.g. wheelbase, track, cg_height."
         },

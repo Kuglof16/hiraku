@@ -265,6 +265,14 @@ class SchemaTest(unittest.TestCase):
         a["prediction_ids"] = []
         self.assertNotEqual(contract.errors("analysis", a), [])
 
+    def test_design_variable_may_name_its_basis(self):
+        d = load("design.json")
+        d["variables"]["tire_vertical_stiffness"] = {"value": 150.0, "unit": "N/mm", "basis": "assumption"}
+        self.assertEqual(contract.errors("design", d), [])
+        d["variables"]["tire_vertical_stiffness"]["basis"] = ""
+        self.assertNotEqual(contract.errors("design", d), [])
+        self.assertNotEqual(contract.errors("quantity", {"value": 1.0, "unit": "mm", "basis": "assumption"}), [])
+
     def test_quantity_needs_a_known_unit(self):
         self.assertEqual(contract.errors("quantity", {"value": 1.0, "unit": "mm"}), [])
         self.assertNotEqual(contract.errors("quantity", {"value": 1.0, "unit": "inch"}), [])
