@@ -30,6 +30,23 @@ items:
     example: 週末ごとに 5 年
     question: どのくらいの頻度で、何年くらい使いますか。
 
+  - key: Q04
+    name: 段差に当たるときの速さ
+    applies_if: self_propelled
+    ask: default
+    why: 走ったまま段差に当たると、止まった所から押し上げるときの何倍かの力が車輪とフレームにかかるためです。
+    example: 10 km/h
+    unit: km/h
+    default:
+      value: 10
+      unit: km/h
+      trust: 3
+      basis: >-
+        assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is
+        the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the
+        step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force
+        of pushing up from rest. A speed from a rule or a test method was not checked
+
   - key: Q11
     name: 路面・床と摩擦係数
     applies_if: self_propelled or standing
@@ -130,6 +147,147 @@ items:
         the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road
         vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a
         strength for cargo bed anchors
+
+  - key: Q22
+    name: 電線の電流を確かめるときの周りの温度
+    applies_if: electric or battery
+    ask: default
+    why: 電線が流してよい電流は周りが熱いほど小さくなるので、どの温度で確かめるかを先に決めるためです。
+    example: 40 degC (モーターや制御器のそばはもっと高いことがあります)
+    default:
+      value: 40
+      unit: degC
+      trust: 3
+      basis: >-
+        assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue,
+        page 02•43 "Current Ratings for Automotive Cables" (ambient 40 degC, single cable isolated in free air),
+        https://objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is
+        the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes
+        or in the sun it can be higher, and then the table value is too high
+
+  - key: Q23
+    name: 束ねて触れ合う電線の、流してよい電流の割合
+    applies_if: electric or battery
+    ask: default
+    why: 電線を束ねると熱が逃げにくくなり、1 本のときより少ない電流しか流せないためです。
+    example: 0.5 (8 本までの束)
+    default:
+      value: 0.5
+      unit: "1"
+      trust: 2
+      basis: >-
+        Anixter catalogue, page 02•43 "Current Ratings for Automotive Cables", note: wires grouped and touching, rating
+        factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https://objects.eanixter.com/PD379251-AN.PDF,
+        read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation
+        behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching
+        cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not
+        used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6
+        (industrial cables, 8 cables 0.52)
+
+  - key: Q24
+    name: 回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合
+    applies_if: electric or battery
+    ask: default
+    why: ショートや流れ過ぎのときに、電線が熱くなって燃える前に回路を切るためです。
+    example: 1.0 (電線の許容電流を超えない)
+    default:
+      value: 1.0
+      unit: "1"
+      trust: 3
+      basis: >-
+        assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated
+        so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06
+        (https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR
+        183.455(c), read 2026-11-06 (https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I;
+        boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for
+        50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above
+        50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2)
+        were not checked
+
+  - key: Q25
+    name: 1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)
+    applies_if: electric or battery
+    ask: default
+    why: きつく曲げると被覆や導体が傷み、振動でそこから切れるためです。
+    example: 3 (外径 9.4 mm の電線なら 28.2 mm 以上)
+    default:
+      value: 3
+      unit: "1"
+      trust: 2
+      basis: >-
+        Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static),
+        https://media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06
+        (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that
+        moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page
+        02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06
+
+  - key: Q26
+    name: 束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)
+    applies_if: electric or battery
+    ask: default
+    why: 束を曲げると外側の電線が引っ張られ、内側の電線が押しつぶされるためです。
+    example: 10
+    default:
+      value: 10
+      unit: "1"
+      trust: 3
+      basis: >-
+        assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius
+        of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6
+        times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06,
+        https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a
+        bundle was read
+
+  - key: Q27
+    name: 配線を支える点どうしの間隔の上限
+    applies_if: electric or battery
+    ask: default
+    why: 支えの間が長いと、悪路の揺れで電線がたわんで振られ、こすれたり留め具の所で切れたりするためです。
+    example: 609.6 mm
+    default:
+      value: 609.6
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables
+        supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118:
+        normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06,
+        https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing
+        (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in
+        normal flight, so the borrowed value may be too long (not checked)
+
+  - key: Q28
+    name: 板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)
+    applies_if: electric or battery
+    ask: default
+    why: 揺れで電線が板の縁にこすれ、被覆がすり切れてショートするのを防ぐためです。
+    example: 9.525 mm
+    default:
+      value: 9.525
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever
+        wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at
+        penetrations, read 2026-11-06, https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf.
+        33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion,
+        with no number, read 2026-11-06 (https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)
+
+  - key: Q29
+    name: 動かして操作する仕組みと配線の隙間の下限
+    applies_if: (electric or battery) and ride
+    ask: default
+    why: ハンドルなど動く所に電線が当たると、こすれて切れたり、操作のじゃまになったりするためです。
+    example: 12.7 mm
+    default:
+      value: 12.7
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd (mechanical control cables)
+        and 11-125 (movable controls): at least 1/2 in (= 12.7 mm, computed) between wiring and the controls when the
+        bundle is pushed with light hand pressure toward them, read 2026-11-06,
+        https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf
 
   - key: Q30
     name: 人数と荷重の組み合わせ
@@ -265,6 +423,24 @@ items:
         (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap
         greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and
         light vehicles
+
+  - key: Q39
+    name: 電池の端子から、最初に回路を守る器具までの電線の長さの上限
+    applies_if: battery
+    ask: default
+    why: 電池と守りの器具の間の電線は守られていないので、そこでショートすると大きな電流が止まらないためです。
+    example: 1828.8 mm
+    default:
+      value: 1828.8
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a
+        trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the
+        conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in
+        (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06,
+        https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines).
+        The longest of these is taken; a road-vehicle value was not checked
 
   - key: Q40
     name: 積載

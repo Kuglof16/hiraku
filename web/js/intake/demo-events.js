@@ -915,7 +915,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「電池の決まり」から 13 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-BT",
@@ -947,6 +947,171 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 2,
       "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線に続けて流す電流は、その電線が流してよい電流 (束ねてあれば束の割合をかけたもの) 以下",
+      "check": "(wire_bundle_count <= 1 and wire_current_A <= wire_rated_current_A) or wire_current_A <= req_Q23 * wire_rated_current_A",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\": approximate current by conductor size for a single cable isolated in free air at 40 degC ambient, 90 degC and 105 degC conductor temperature, and rating factors for grouped touching cables (2: 0.80 .. 8: 0.50), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). wire_rated_current_A is the single-wire value of the cable maker's table at the ambient of R4-01 and the cable's temperature class; the code that gives it names the table in the declared basis. A table for another class (DIN VDE 0298-4 via Lapp T12, 33 CFR 183 Table 5 for boats) is borrowed and makes the hit trust 3",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具 (ヒューズ・ブレーカ) の定格電流は、守る電線が流してよい電流を超えない",
+      "check": "wire_fuse_rating_A <= req_Q24 * wire_rated_current_A and (wire_bundle_count <= 1 or wire_fuse_rating_A <= req_Q24 * req_Q23 * wire_rated_current_A)",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48 (a breaker opens before the current rating of the wire attached to it is exceeded), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. 33 CFR 183.455(c) (boats: not above 150 % of Table 5 under 50 V, not above 100 % at 50 V or more), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06. ISO 8820 and ISO 6469-3:2021 clauses 7.1 / 7.2 (overload and short-circuit protection, seen only as titles in the table of contents) not checked",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-03",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具の定格電流は、ふだん流れる電流以上 (ふだんの使い方で切れない)",
+      "check": "wire_fuse_rating_A >= wire_current_A",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a device rated below the continuous current opens in normal use and the consumer gets no electricity); not taken from a standard. The time-current curve of the device (start-up and motor peaks) is not judged here",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-04",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の被覆の温度クラスの上限は、電線が通る場所のいちばん高い周りの温度以上",
+      "check": "wire_insulation_max_degC >= wire_place_max_degC",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The classes: IS/ISO 6722:2006 (identical with ISO 6722:2006) Table 1, A -40 to 85 degC, B -40 to 100 degC, C -40 to 125 degC, D -40 to 150 degC, E -40 to 175 degC, F -40 to 200 degC, G -40 to 225 degC, H -40 to 250 degC, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06 (ISO 6722-1:2011 not checked). The rule is borrowed (assumption): FAA AC 43.13-1B with Change 1, par. 11-124, wires rated so that the conductor stays within the wire specification maximum when the ambient and the heat rise of the current are counted, read 2026-11-06. This check counts the ambient only; the heat rise is in WR-01 (the rated current at that ambient). No clearance in mm from a motor, brake or hot cells was read",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-05",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の定格の電圧は、電池のいちばん高い電圧以上 (60 V の電線は 60 V 以下の系だけ)",
+      "check": "wire_voltage_rating_V >= var_battery_voltage",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "IS/ISO 6722:2006 (identical with ISO 6722:2006) 3.1: a 60 V cable is for road vehicle systems whose nominal system voltage is equal to or less than 60 V d.c. or 25 V a.c.; 3.2: a 600 V cable above that, up to 600 V; 4.1: above 60 V d.c. special care against mechanical stress, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06. ISO 6722 says nominal system voltage; this check uses var_battery_voltage, the full-charge voltage of BT-02, which is the stricter. For the demo battery 16 x 3.65 V = 58.4 V (cell cut-off from the EVE LF50K specification, the source of BT-01), below 60 V",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-06",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "1 本で通す電線の曲げの内側の半径は、外径の 3 倍以上 (動かない所)",
+      "check": "wire_bundle_count > 1 or wire_bend_radius_mm >= req_Q25 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V automotive cable). Static installation only; a wire that moves with the steering or the suspension is not covered by this value",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-07",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "束ねた電線の曲げの内側の半径は、束の中でいちばん太い電線の外径の 10 倍以上",
+      "check": "wire_bundle_count <= 1 or wire_bend_radius_mm >= req_Q26 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117 (bundles not less than 10 times the outside diameter of the largest wire), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-08",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線を支える点どうしの間隔は 609.6 mm 以下 (管やダクトの中は除く)",
+      "check": "wire_support_spacing_mm <= req_Q27",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146 (intervals not more than 24 in = 609.6 mm, computed, except in troughs, ducts or conduits), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. No public road-vehicle value was found",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-09",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "板や縁を通り抜ける所で留めていない配線は、縁から 9.525 mm 以上離す (守りの輪を付ける)",
+      "check": "wire_penetration_clearance_mm >= req_Q28",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115 (grommets where wires cannot be clamped, at least 3/8 in = 9.525 mm, computed, from structure at penetrations), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06; 33 CFR 183.445(a) (boats: protected from abrasion through a bulkhead or rigid surface, no number), read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-10",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線と、動かして操作する仕組みの隙間は 12.7 mm 以上",
+      "check": "wire_control_clearance_mm >= req_Q29",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd and 11-125 (at least 1/2 in = 12.7 mm, computed, from controls under light hand pressure), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-11",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の端子から最初に回路を守る器具までの電線は 1828.8 mm 以下",
+      "check": "battery_fuse_length_mm <= req_Q39",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a) (within 72 in = 1828.8 mm, computed, of the battery, measured along the conductor), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06",
       "applies_to": {
        "kinds": [
         "battery"
@@ -1614,9 +1779,18 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 10 件、答え 7 件、既定値 10 件",
+   "text": "質問 10 件、答え 7 件、既定値 20 件",
    "data": {
     "answers": [
+     {
+      "key": "Q04",
+      "name": "段差に当たるときの速さ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "value": 10,
+      "unit": "km/h"
+     },
      {
       "key": "Q21",
       "name": "荷台の固定点 1 か所が受けられる力の下限",
@@ -1625,6 +1799,78 @@ export const DEMOS = {
       "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
       "value": 8000,
       "unit": "N"
+     },
+     {
+      "key": "Q22",
+      "name": "電線の電流を確かめるときの周りの温度",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high",
+      "value": 40,
+      "unit": "degC"
+     },
+     {
+      "key": "Q23",
+      "name": "束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "default",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)",
+      "value": 0.5,
+      "unit": "1"
+     },
+     {
+      "key": "Q24",
+      "name": "回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked",
+      "value": 1.0,
+      "unit": "1"
+     },
+     {
+      "key": "Q25",
+      "name": "1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)",
+      "source": "default",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page 02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06",
+      "value": 3,
+      "unit": "1"
+     },
+     {
+      "key": "Q26",
+      "name": "束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read",
+      "value": 10,
+      "unit": "1"
+     },
+     {
+      "key": "Q27",
+      "name": "配線を支える点どうしの間隔の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)",
+      "value": 609.6,
+      "unit": "mm"
+     },
+     {
+      "key": "Q28",
+      "name": "板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
+      "value": 9.525,
+      "unit": "mm"
+     },
+     {
+      "key": "Q29",
+      "name": "動かして操作する仕組みと配線の隙間の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd (mechanical control cables) and 11-125 (movable controls): at least 1/2 in (= 12.7 mm, computed) between wiring and the controls when the bundle is pushed with light hand pressure toward them, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf",
+      "value": 12.7,
+      "unit": "mm"
      },
      {
       "key": "Q36",
@@ -1651,6 +1897,15 @@ export const DEMOS = {
       "trust": 3,
       "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1 (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
       "value": 60,
+      "unit": "mm"
+     },
+     {
+      "key": "Q39",
+      "name": "電池の端子から、最初に回路を守る器具までの電線の長さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06, https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines). The longest of these is taken; a road-vehicle value was not checked",
+      "value": 1828.8,
       "unit": "mm"
      },
      {
@@ -20981,6 +21236,313 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0019",
     "design_version": 1,
+    "rule_id": "WR-01",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_bundle_count",
+       "wire_current_A",
+       "wire_rated_current_A"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 35,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "WR-02",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_fuse_rating_A",
+       "wire_rated_current_A",
+       "wire_bundle_count"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "WR-03",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_fuse_rating_A",
+       "wire_current_A"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "WR-04",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_insulation_max_degC",
+       "wire_place_max_degC"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "WR-05",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_voltage_rating_V"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "WR-06",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_bundle_count",
+       "wire_bend_radius_mm",
+       "wire_outer_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "WR-07",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_bundle_count",
+       "wire_bend_radius_mm",
+       "wire_outer_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "WR-08",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_support_spacing_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "WR-09",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_penetration_clearance_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
+    "design_version": 1,
+    "rule_id": "WR-10",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_control_clearance_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "WR-11",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "battery",
+      "missing": [
+       "battery_fuse_length_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
      "battery",
@@ -21112,15 +21674,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -22162,15 +22724,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0021",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "CS-01",
     "targets": [
@@ -22191,15 +22753,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 37,
-   "ts": "2026-11-03T10:00:16.100+09:00",
-   "t": 16.1,
+   "seq": 48,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0022",
+    "rule_check_id": "rchk-0033",
     "design_version": 1,
     "rule_id": "CS-02",
     "targets": [
@@ -22221,15 +22783,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 38,
-   "ts": "2026-11-03T10:00:16.200+09:00",
-   "t": 16.2,
+   "seq": 49,
+   "ts": "2026-11-03T10:00:17.300+09:00",
+   "t": 17.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0023",
+    "rule_check_id": "rchk-0034",
     "design_version": 1,
     "rule_id": "CS-03",
     "targets": [
@@ -22250,15 +22812,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 39,
-   "ts": "2026-11-03T10:00:16.300+09:00",
-   "t": 16.3,
+   "seq": 50,
+   "ts": "2026-11-03T10:00:17.400+09:00",
+   "t": 17.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0024",
+    "rule_check_id": "rchk-0035",
     "design_version": 1,
     "rule_id": "CS-04",
     "targets": [
@@ -22278,15 +22840,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 40,
-   "ts": "2026-11-03T10:00:16.400+09:00",
-   "t": 16.4,
+   "seq": 51,
+   "ts": "2026-11-03T10:00:17.500+09:00",
+   "t": 17.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0025",
+    "rule_check_id": "rchk-0036",
     "design_version": 1,
     "rule_id": "CS-05",
     "targets": [
@@ -22305,15 +22867,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 41,
-   "ts": "2026-11-03T10:00:16.500+09:00",
-   "t": 16.5,
+   "seq": 52,
+   "ts": "2026-11-03T10:00:17.600+09:00",
+   "t": 17.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0026",
+    "rule_check_id": "rchk-0037",
     "design_version": 1,
     "rule_id": "CS-06",
     "targets": [
@@ -22334,15 +22896,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 42,
-   "ts": "2026-11-03T10:00:16.600+09:00",
-   "t": 16.6,
+   "seq": 53,
+   "ts": "2026-11-03T10:00:17.700+09:00",
+   "t": 17.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0027",
+    "rule_check_id": "rchk-0038",
     "design_version": 1,
     "rule_id": "CS-07",
     "targets": [
@@ -22362,15 +22924,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 43,
-   "ts": "2026-11-03T10:00:16.700+09:00",
-   "t": 16.7,
+   "seq": 54,
+   "ts": "2026-11-03T10:00:17.800+09:00",
+   "t": 17.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0028",
+    "rule_check_id": "rchk-0039",
     "design_version": 1,
     "rule_id": "CS-08",
     "targets": [
@@ -22389,15 +22951,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.800+09:00",
-   "t": 16.8,
+   "seq": 55,
+   "ts": "2026-11-03T10:00:17.900+09:00",
+   "t": 17.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0029",
+    "rule_check_id": "rchk-0040",
     "design_version": 1,
     "rule_id": "CS-09",
     "targets": [
@@ -22416,15 +22978,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 56,
+   "ts": "2026-11-03T10:00:18.000+09:00",
+   "t": 18.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0041",
     "design_version": 1,
     "rule_id": "CS-10",
     "targets": [
@@ -22444,15 +23006,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 46,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 57,
+   "ts": "2026-11-03T10:00:18.100+09:00",
+   "t": 18.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0042",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -22497,15 +23059,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 47,
-   "ts": "2026-11-03T10:00:17.100+09:00",
-   "t": 17.1,
+   "seq": 58,
+   "ts": "2026-11-03T10:00:18.200+09:00",
+   "t": 18.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0032",
+    "rule_check_id": "rchk-0043",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -22554,15 +23116,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 48,
-   "ts": "2026-11-03T10:00:17.200+09:00",
-   "t": 17.2,
+   "seq": 59,
+   "ts": "2026-11-03T10:00:18.300+09:00",
+   "t": 18.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0033",
+    "rule_check_id": "rchk-0044",
     "design_version": 1,
     "rule_id": "UJ-01",
     "targets": [
@@ -22581,15 +23143,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 49,
-   "ts": "2026-11-03T10:00:17.300+09:00",
-   "t": 17.3,
+   "seq": 60,
+   "ts": "2026-11-03T10:00:18.400+09:00",
+   "t": 18.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0034",
+    "rule_check_id": "rchk-0045",
     "design_version": 1,
     "rule_id": "UJ-02",
     "targets": [
@@ -22609,15 +23171,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 50,
-   "ts": "2026-11-03T10:00:17.400+09:00",
-   "t": 17.4,
+   "seq": 61,
+   "ts": "2026-11-03T10:00:18.500+09:00",
+   "t": 18.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0035",
+    "rule_check_id": "rchk-0046",
     "design_version": 1,
     "rule_id": "UJ-03",
     "targets": [
@@ -22637,15 +23199,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 51,
-   "ts": "2026-11-03T10:00:17.500+09:00",
-   "t": 17.5,
+   "seq": 62,
+   "ts": "2026-11-03T10:00:18.600+09:00",
+   "t": 18.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0036",
+    "rule_check_id": "rchk-0047",
     "design_version": 1,
     "rule_id": "UJ-04",
     "targets": [
@@ -22664,15 +23226,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 52,
-   "ts": "2026-11-03T10:00:17.600+09:00",
-   "t": 17.6,
+   "seq": 63,
+   "ts": "2026-11-03T10:00:18.700+09:00",
+   "t": 18.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0037",
+    "rule_check_id": "rchk-0048",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -23028,15 +23590,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 53,
-   "ts": "2026-11-03T10:00:17.700+09:00",
-   "t": 17.7,
+   "seq": 64,
+   "ts": "2026-11-03T10:00:18.800+09:00",
+   "t": 18.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0038",
+    "rule_check_id": "rchk-0049",
     "design_version": 1,
     "rule_id": "SY-01",
     "targets": [
@@ -23050,15 +23612,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 54,
-   "ts": "2026-11-03T10:00:17.800+09:00",
-   "t": 17.8,
+   "seq": 65,
+   "ts": "2026-11-03T10:00:18.900+09:00",
+   "t": 18.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0039",
+    "rule_check_id": "rchk-0050",
     "design_version": 1,
     "rule_id": "SY-02",
     "targets": [
@@ -23072,15 +23634,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 55,
-   "ts": "2026-11-03T10:00:17.900+09:00",
-   "t": 17.9,
+   "seq": 66,
+   "ts": "2026-11-03T10:00:19.000+09:00",
+   "t": 19.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0040",
+    "rule_check_id": "rchk-0051",
     "design_version": 1,
     "rule_id": "SY-03",
     "targets": [
@@ -23096,15 +23658,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 56,
-   "ts": "2026-11-03T10:00:18.000+09:00",
-   "t": 18.0,
+   "seq": 67,
+   "ts": "2026-11-03T10:00:19.100+09:00",
+   "t": 19.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0041",
+    "rule_check_id": "rchk-0052",
     "design_version": 1,
     "rule_id": "SY-04",
     "targets": [
@@ -23117,15 +23679,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 57,
-   "ts": "2026-11-03T10:00:18.100+09:00",
-   "t": 18.1,
+   "seq": 68,
+   "ts": "2026-11-03T10:00:19.200+09:00",
+   "t": 19.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0042",
+    "rule_check_id": "rchk-0053",
     "design_version": 1,
     "rule_id": "SY-05",
     "targets": [
@@ -23138,15 +23700,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 58,
-   "ts": "2026-11-03T10:00:18.200+09:00",
-   "t": 18.2,
+   "seq": 69,
+   "ts": "2026-11-03T10:00:19.300+09:00",
+   "t": 19.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0043",
+    "rule_check_id": "rchk-0054",
     "design_version": 1,
     "rule_id": "SY-06",
     "targets": [
@@ -23158,15 +23720,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 59,
-   "ts": "2026-11-03T10:00:18.300+09:00",
-   "t": 18.3,
+   "seq": 70,
+   "ts": "2026-11-03T10:00:19.400+09:00",
+   "t": 19.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0044",
+    "rule_check_id": "rchk-0055",
     "design_version": 1,
     "rule_id": "SY-07",
     "targets": [],
@@ -23176,15 +23738,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 60,
-   "ts": "2026-11-03T10:00:18.400+09:00",
-   "t": 18.4,
+   "seq": 71,
+   "ts": "2026-11-03T10:00:19.500+09:00",
+   "t": 19.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0045",
+    "rule_check_id": "rchk-0056",
     "design_version": 1,
     "rule_id": "SY-08",
     "targets": [
@@ -23197,15 +23759,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 61,
-   "ts": "2026-11-03T10:00:18.500+09:00",
-   "t": 18.5,
+   "seq": 72,
+   "ts": "2026-11-03T10:00:19.600+09:00",
+   "t": 19.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0046",
+    "rule_check_id": "rchk-0057",
     "design_version": 1,
     "rule_id": "SY-09",
     "targets": [
@@ -23217,15 +23779,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 62,
-   "ts": "2026-11-03T10:00:18.600+09:00",
-   "t": 18.6,
+   "seq": 73,
+   "ts": "2026-11-03T10:00:19.700+09:00",
+   "t": 19.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0047",
+    "rule_check_id": "rchk-0058",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -23352,15 +23914,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 63,
-   "ts": "2026-11-03T10:00:18.700+09:00",
-   "t": 18.7,
+   "seq": 74,
+   "ts": "2026-11-03T10:00:19.800+09:00",
+   "t": 19.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0048",
+    "rule_check_id": "rchk-0059",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -23407,15 +23969,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 64,
-   "ts": "2026-11-03T10:00:18.800+09:00",
-   "t": 18.8,
+   "seq": 75,
+   "ts": "2026-11-03T10:00:19.900+09:00",
+   "t": 19.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0049",
+    "rule_check_id": "rchk-0060",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -23909,7 +24471,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「電池の決まり」から 13 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-BT",
@@ -23941,6 +24503,171 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 2,
       "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線に続けて流す電流は、その電線が流してよい電流 (束ねてあれば束の割合をかけたもの) 以下",
+      "check": "(wire_bundle_count <= 1 and wire_current_A <= wire_rated_current_A) or wire_current_A <= req_Q23 * wire_rated_current_A",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\": approximate current by conductor size for a single cable isolated in free air at 40 degC ambient, 90 degC and 105 degC conductor temperature, and rating factors for grouped touching cables (2: 0.80 .. 8: 0.50), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). wire_rated_current_A is the single-wire value of the cable maker's table at the ambient of R4-01 and the cable's temperature class; the code that gives it names the table in the declared basis. A table for another class (DIN VDE 0298-4 via Lapp T12, 33 CFR 183 Table 5 for boats) is borrowed and makes the hit trust 3",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具 (ヒューズ・ブレーカ) の定格電流は、守る電線が流してよい電流を超えない",
+      "check": "wire_fuse_rating_A <= req_Q24 * wire_rated_current_A and (wire_bundle_count <= 1 or wire_fuse_rating_A <= req_Q24 * req_Q23 * wire_rated_current_A)",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48 (a breaker opens before the current rating of the wire attached to it is exceeded), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. 33 CFR 183.455(c) (boats: not above 150 % of Table 5 under 50 V, not above 100 % at 50 V or more), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06. ISO 8820 and ISO 6469-3:2021 clauses 7.1 / 7.2 (overload and short-circuit protection, seen only as titles in the table of contents) not checked",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-03",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具の定格電流は、ふだん流れる電流以上 (ふだんの使い方で切れない)",
+      "check": "wire_fuse_rating_A >= wire_current_A",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a device rated below the continuous current opens in normal use and the consumer gets no electricity); not taken from a standard. The time-current curve of the device (start-up and motor peaks) is not judged here",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-04",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の被覆の温度クラスの上限は、電線が通る場所のいちばん高い周りの温度以上",
+      "check": "wire_insulation_max_degC >= wire_place_max_degC",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The classes: IS/ISO 6722:2006 (identical with ISO 6722:2006) Table 1, A -40 to 85 degC, B -40 to 100 degC, C -40 to 125 degC, D -40 to 150 degC, E -40 to 175 degC, F -40 to 200 degC, G -40 to 225 degC, H -40 to 250 degC, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06 (ISO 6722-1:2011 not checked). The rule is borrowed (assumption): FAA AC 43.13-1B with Change 1, par. 11-124, wires rated so that the conductor stays within the wire specification maximum when the ambient and the heat rise of the current are counted, read 2026-11-06. This check counts the ambient only; the heat rise is in WR-01 (the rated current at that ambient). No clearance in mm from a motor, brake or hot cells was read",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-05",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の定格の電圧は、電池のいちばん高い電圧以上 (60 V の電線は 60 V 以下の系だけ)",
+      "check": "wire_voltage_rating_V >= var_battery_voltage",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "IS/ISO 6722:2006 (identical with ISO 6722:2006) 3.1: a 60 V cable is for road vehicle systems whose nominal system voltage is equal to or less than 60 V d.c. or 25 V a.c.; 3.2: a 600 V cable above that, up to 600 V; 4.1: above 60 V d.c. special care against mechanical stress, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06. ISO 6722 says nominal system voltage; this check uses var_battery_voltage, the full-charge voltage of BT-02, which is the stricter. For the demo battery 16 x 3.65 V = 58.4 V (cell cut-off from the EVE LF50K specification, the source of BT-01), below 60 V",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-06",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "1 本で通す電線の曲げの内側の半径は、外径の 3 倍以上 (動かない所)",
+      "check": "wire_bundle_count > 1 or wire_bend_radius_mm >= req_Q25 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V automotive cable). Static installation only; a wire that moves with the steering or the suspension is not covered by this value",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-07",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "束ねた電線の曲げの内側の半径は、束の中でいちばん太い電線の外径の 10 倍以上",
+      "check": "wire_bundle_count <= 1 or wire_bend_radius_mm >= req_Q26 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117 (bundles not less than 10 times the outside diameter of the largest wire), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-08",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線を支える点どうしの間隔は 609.6 mm 以下 (管やダクトの中は除く)",
+      "check": "wire_support_spacing_mm <= req_Q27",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146 (intervals not more than 24 in = 609.6 mm, computed, except in troughs, ducts or conduits), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. No public road-vehicle value was found",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-09",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "板や縁を通り抜ける所で留めていない配線は、縁から 9.525 mm 以上離す (守りの輪を付ける)",
+      "check": "wire_penetration_clearance_mm >= req_Q28",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115 (grommets where wires cannot be clamped, at least 3/8 in = 9.525 mm, computed, from structure at penetrations), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06; 33 CFR 183.445(a) (boats: protected from abrasion through a bulkhead or rigid surface, no number), read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-10",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線と、動かして操作する仕組みの隙間は 12.7 mm 以上",
+      "check": "wire_control_clearance_mm >= req_Q29",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd and 11-125 (at least 1/2 in = 12.7 mm, computed, from controls under light hand pressure), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-11",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の端子から最初に回路を守る器具までの電線は 1828.8 mm 以下",
+      "check": "battery_fuse_length_mm <= req_Q39",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a) (within 72 in = 1828.8 mm, computed, of the battery, measured along the conductor), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06",
       "applies_to": {
        "kinds": [
         "battery"
@@ -24667,7 +25394,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 11 件、答え 3 件、既定値 17 件",
+   "text": "質問 11 件、答え 3 件、既定値 24 件",
    "data": {
     "answers": [
      {
@@ -24678,6 +25405,69 @@ export const DEMOS = {
       "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
       "value": 8000,
       "unit": "N"
+     },
+     {
+      "key": "Q22",
+      "name": "電線の電流を確かめるときの周りの温度",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high",
+      "value": 40,
+      "unit": "degC"
+     },
+     {
+      "key": "Q23",
+      "name": "束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "default",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)",
+      "value": 0.5,
+      "unit": "1"
+     },
+     {
+      "key": "Q24",
+      "name": "回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked",
+      "value": 1.0,
+      "unit": "1"
+     },
+     {
+      "key": "Q25",
+      "name": "1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)",
+      "source": "default",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page 02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06",
+      "value": 3,
+      "unit": "1"
+     },
+     {
+      "key": "Q26",
+      "name": "束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read",
+      "value": 10,
+      "unit": "1"
+     },
+     {
+      "key": "Q27",
+      "name": "配線を支える点どうしの間隔の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)",
+      "value": 609.6,
+      "unit": "mm"
+     },
+     {
+      "key": "Q28",
+      "name": "板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
+      "value": 9.525,
+      "unit": "mm"
      },
      {
       "key": "Q31",
@@ -25298,7 +26088,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「電池の決まり」から 13 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-BT",
@@ -25330,6 +26120,171 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 2,
       "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線に続けて流す電流は、その電線が流してよい電流 (束ねてあれば束の割合をかけたもの) 以下",
+      "check": "(wire_bundle_count <= 1 and wire_current_A <= wire_rated_current_A) or wire_current_A <= req_Q23 * wire_rated_current_A",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\": approximate current by conductor size for a single cable isolated in free air at 40 degC ambient, 90 degC and 105 degC conductor temperature, and rating factors for grouped touching cables (2: 0.80 .. 8: 0.50), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). wire_rated_current_A is the single-wire value of the cable maker's table at the ambient of R4-01 and the cable's temperature class; the code that gives it names the table in the declared basis. A table for another class (DIN VDE 0298-4 via Lapp T12, 33 CFR 183 Table 5 for boats) is borrowed and makes the hit trust 3",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具 (ヒューズ・ブレーカ) の定格電流は、守る電線が流してよい電流を超えない",
+      "check": "wire_fuse_rating_A <= req_Q24 * wire_rated_current_A and (wire_bundle_count <= 1 or wire_fuse_rating_A <= req_Q24 * req_Q23 * wire_rated_current_A)",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48 (a breaker opens before the current rating of the wire attached to it is exceeded), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. 33 CFR 183.455(c) (boats: not above 150 % of Table 5 under 50 V, not above 100 % at 50 V or more), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06. ISO 8820 and ISO 6469-3:2021 clauses 7.1 / 7.2 (overload and short-circuit protection, seen only as titles in the table of contents) not checked",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-03",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具の定格電流は、ふだん流れる電流以上 (ふだんの使い方で切れない)",
+      "check": "wire_fuse_rating_A >= wire_current_A",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a device rated below the continuous current opens in normal use and the consumer gets no electricity); not taken from a standard. The time-current curve of the device (start-up and motor peaks) is not judged here",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-04",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の被覆の温度クラスの上限は、電線が通る場所のいちばん高い周りの温度以上",
+      "check": "wire_insulation_max_degC >= wire_place_max_degC",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The classes: IS/ISO 6722:2006 (identical with ISO 6722:2006) Table 1, A -40 to 85 degC, B -40 to 100 degC, C -40 to 125 degC, D -40 to 150 degC, E -40 to 175 degC, F -40 to 200 degC, G -40 to 225 degC, H -40 to 250 degC, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06 (ISO 6722-1:2011 not checked). The rule is borrowed (assumption): FAA AC 43.13-1B with Change 1, par. 11-124, wires rated so that the conductor stays within the wire specification maximum when the ambient and the heat rise of the current are counted, read 2026-11-06. This check counts the ambient only; the heat rise is in WR-01 (the rated current at that ambient). No clearance in mm from a motor, brake or hot cells was read",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-05",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の定格の電圧は、電池のいちばん高い電圧以上 (60 V の電線は 60 V 以下の系だけ)",
+      "check": "wire_voltage_rating_V >= var_battery_voltage",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "IS/ISO 6722:2006 (identical with ISO 6722:2006) 3.1: a 60 V cable is for road vehicle systems whose nominal system voltage is equal to or less than 60 V d.c. or 25 V a.c.; 3.2: a 600 V cable above that, up to 600 V; 4.1: above 60 V d.c. special care against mechanical stress, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06. ISO 6722 says nominal system voltage; this check uses var_battery_voltage, the full-charge voltage of BT-02, which is the stricter. For the demo battery 16 x 3.65 V = 58.4 V (cell cut-off from the EVE LF50K specification, the source of BT-01), below 60 V",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-06",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "1 本で通す電線の曲げの内側の半径は、外径の 3 倍以上 (動かない所)",
+      "check": "wire_bundle_count > 1 or wire_bend_radius_mm >= req_Q25 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V automotive cable). Static installation only; a wire that moves with the steering or the suspension is not covered by this value",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-07",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "束ねた電線の曲げの内側の半径は、束の中でいちばん太い電線の外径の 10 倍以上",
+      "check": "wire_bundle_count <= 1 or wire_bend_radius_mm >= req_Q26 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117 (bundles not less than 10 times the outside diameter of the largest wire), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-08",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線を支える点どうしの間隔は 609.6 mm 以下 (管やダクトの中は除く)",
+      "check": "wire_support_spacing_mm <= req_Q27",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146 (intervals not more than 24 in = 609.6 mm, computed, except in troughs, ducts or conduits), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. No public road-vehicle value was found",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-09",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "板や縁を通り抜ける所で留めていない配線は、縁から 9.525 mm 以上離す (守りの輪を付ける)",
+      "check": "wire_penetration_clearance_mm >= req_Q28",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115 (grommets where wires cannot be clamped, at least 3/8 in = 9.525 mm, computed, from structure at penetrations), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06; 33 CFR 183.445(a) (boats: protected from abrasion through a bulkhead or rigid surface, no number), read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-10",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線と、動かして操作する仕組みの隙間は 12.7 mm 以上",
+      "check": "wire_control_clearance_mm >= req_Q29",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd and 11-125 (at least 1/2 in = 12.7 mm, computed, from controls under light hand pressure), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-11",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の端子から最初に回路を守る器具までの電線は 1828.8 mm 以下",
+      "check": "battery_fuse_length_mm <= req_Q39",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a) (within 72 in = 1828.8 mm, computed, of the battery, measured along the conductor), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06",
       "applies_to": {
        "kinds": [
         "battery"
@@ -26403,7 +27358,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「電池の決まり」から 13 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-BT",
@@ -26435,6 +27390,171 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 2,
       "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線に続けて流す電流は、その電線が流してよい電流 (束ねてあれば束の割合をかけたもの) 以下",
+      "check": "(wire_bundle_count <= 1 and wire_current_A <= wire_rated_current_A) or wire_current_A <= req_Q23 * wire_rated_current_A",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\": approximate current by conductor size for a single cable isolated in free air at 40 degC ambient, 90 degC and 105 degC conductor temperature, and rating factors for grouped touching cables (2: 0.80 .. 8: 0.50), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). wire_rated_current_A is the single-wire value of the cable maker's table at the ambient of R4-01 and the cable's temperature class; the code that gives it names the table in the declared basis. A table for another class (DIN VDE 0298-4 via Lapp T12, 33 CFR 183 Table 5 for boats) is borrowed and makes the hit trust 3",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具 (ヒューズ・ブレーカ) の定格電流は、守る電線が流してよい電流を超えない",
+      "check": "wire_fuse_rating_A <= req_Q24 * wire_rated_current_A and (wire_bundle_count <= 1 or wire_fuse_rating_A <= req_Q24 * req_Q23 * wire_rated_current_A)",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48 (a breaker opens before the current rating of the wire attached to it is exceeded), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. 33 CFR 183.455(c) (boats: not above 150 % of Table 5 under 50 V, not above 100 % at 50 V or more), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06. ISO 8820 and ISO 6469-3:2021 clauses 7.1 / 7.2 (overload and short-circuit protection, seen only as titles in the table of contents) not checked",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-03",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具の定格電流は、ふだん流れる電流以上 (ふだんの使い方で切れない)",
+      "check": "wire_fuse_rating_A >= wire_current_A",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a device rated below the continuous current opens in normal use and the consumer gets no electricity); not taken from a standard. The time-current curve of the device (start-up and motor peaks) is not judged here",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-04",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の被覆の温度クラスの上限は、電線が通る場所のいちばん高い周りの温度以上",
+      "check": "wire_insulation_max_degC >= wire_place_max_degC",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The classes: IS/ISO 6722:2006 (identical with ISO 6722:2006) Table 1, A -40 to 85 degC, B -40 to 100 degC, C -40 to 125 degC, D -40 to 150 degC, E -40 to 175 degC, F -40 to 200 degC, G -40 to 225 degC, H -40 to 250 degC, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06 (ISO 6722-1:2011 not checked). The rule is borrowed (assumption): FAA AC 43.13-1B with Change 1, par. 11-124, wires rated so that the conductor stays within the wire specification maximum when the ambient and the heat rise of the current are counted, read 2026-11-06. This check counts the ambient only; the heat rise is in WR-01 (the rated current at that ambient). No clearance in mm from a motor, brake or hot cells was read",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-05",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の定格の電圧は、電池のいちばん高い電圧以上 (60 V の電線は 60 V 以下の系だけ)",
+      "check": "wire_voltage_rating_V >= var_battery_voltage",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "IS/ISO 6722:2006 (identical with ISO 6722:2006) 3.1: a 60 V cable is for road vehicle systems whose nominal system voltage is equal to or less than 60 V d.c. or 25 V a.c.; 3.2: a 600 V cable above that, up to 600 V; 4.1: above 60 V d.c. special care against mechanical stress, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06. ISO 6722 says nominal system voltage; this check uses var_battery_voltage, the full-charge voltage of BT-02, which is the stricter. For the demo battery 16 x 3.65 V = 58.4 V (cell cut-off from the EVE LF50K specification, the source of BT-01), below 60 V",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-06",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "1 本で通す電線の曲げの内側の半径は、外径の 3 倍以上 (動かない所)",
+      "check": "wire_bundle_count > 1 or wire_bend_radius_mm >= req_Q25 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V automotive cable). Static installation only; a wire that moves with the steering or the suspension is not covered by this value",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-07",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "束ねた電線の曲げの内側の半径は、束の中でいちばん太い電線の外径の 10 倍以上",
+      "check": "wire_bundle_count <= 1 or wire_bend_radius_mm >= req_Q26 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117 (bundles not less than 10 times the outside diameter of the largest wire), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-08",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線を支える点どうしの間隔は 609.6 mm 以下 (管やダクトの中は除く)",
+      "check": "wire_support_spacing_mm <= req_Q27",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146 (intervals not more than 24 in = 609.6 mm, computed, except in troughs, ducts or conduits), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. No public road-vehicle value was found",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-09",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "板や縁を通り抜ける所で留めていない配線は、縁から 9.525 mm 以上離す (守りの輪を付ける)",
+      "check": "wire_penetration_clearance_mm >= req_Q28",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115 (grommets where wires cannot be clamped, at least 3/8 in = 9.525 mm, computed, from structure at penetrations), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06; 33 CFR 183.445(a) (boats: protected from abrasion through a bulkhead or rigid surface, no number), read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-10",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線と、動かして操作する仕組みの隙間は 12.7 mm 以上",
+      "check": "wire_control_clearance_mm >= req_Q29",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd and 11-125 (at least 1/2 in = 12.7 mm, computed, from controls under light hand pressure), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-11",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の端子から最初に回路を守る器具までの電線は 1828.8 mm 以下",
+      "check": "battery_fuse_length_mm <= req_Q39",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a) (within 72 in = 1828.8 mm, computed, of the battery, measured along the conductor), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06",
       "applies_to": {
        "kinds": [
         "battery"
@@ -27202,9 +28322,18 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 17 件、答え 2 件、既定値 24 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "質問 17 件、答え 2 件、既定値 33 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
+     {
+      "key": "Q04",
+      "name": "段差に当たるときの速さ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "value": 10,
+      "unit": "km/h"
+     },
      {
       "key": "Q13",
       "name": "縦の坂",
@@ -27242,12 +28371,84 @@ export const DEMOS = {
       "unit": "N"
      },
      {
+      "key": "Q22",
+      "name": "電線の電流を確かめるときの周りの温度",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high",
+      "value": 40,
+      "unit": "degC"
+     },
+     {
+      "key": "Q23",
+      "name": "束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "default",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)",
+      "value": 0.5,
+      "unit": "1"
+     },
+     {
+      "key": "Q24",
+      "name": "回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked",
+      "value": 1.0,
+      "unit": "1"
+     },
+     {
+      "key": "Q25",
+      "name": "1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)",
+      "source": "default",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page 02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06",
+      "value": 3,
+      "unit": "1"
+     },
+     {
+      "key": "Q26",
+      "name": "束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read",
+      "value": 10,
+      "unit": "1"
+     },
+     {
+      "key": "Q27",
+      "name": "配線を支える点どうしの間隔の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)",
+      "value": 609.6,
+      "unit": "mm"
+     },
+     {
+      "key": "Q28",
+      "name": "板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
+      "value": 9.525,
+      "unit": "mm"
+     },
+     {
       "key": "Q31",
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
       "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html. Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
       "value": "子どもを含む"
+     },
+     {
+      "key": "Q39",
+      "name": "電池の端子から、最初に回路を守る器具までの電線の長さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06, https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines). The longest of these is taken; a road-vehicle value was not checked",
+      "value": 1828.8,
+      "unit": "mm"
      },
      {
       "key": "Q41",
@@ -27466,6 +28667,15 @@ export const DEMOS = {
     "cost_usd": 0.0,
     "requirements": [
      {
+      "key": "Q04",
+      "name": "段差に当たるときの速さ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "value": 10,
+      "unit": "km/h"
+     },
+     {
       "key": "Q11",
       "name": "路面の摩擦係数 (砂利)",
       "value": 0.6,
@@ -27537,6 +28747,78 @@ export const DEMOS = {
       "unit": "N"
      },
      {
+      "key": "Q22",
+      "name": "電線の電流を確かめるときの周りの温度",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high",
+      "value": 40,
+      "unit": "degC"
+     },
+     {
+      "key": "Q23",
+      "name": "束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "default",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)",
+      "value": 0.5,
+      "unit": "1"
+     },
+     {
+      "key": "Q24",
+      "name": "回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked",
+      "value": 1.0,
+      "unit": "1"
+     },
+     {
+      "key": "Q25",
+      "name": "1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)",
+      "source": "default",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page 02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06",
+      "value": 3,
+      "unit": "1"
+     },
+     {
+      "key": "Q26",
+      "name": "束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read",
+      "value": 10,
+      "unit": "1"
+     },
+     {
+      "key": "Q27",
+      "name": "配線を支える点どうしの間隔の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)",
+      "value": 609.6,
+      "unit": "mm"
+     },
+     {
+      "key": "Q28",
+      "name": "板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
+      "value": 9.525,
+      "unit": "mm"
+     },
+     {
+      "key": "Q29",
+      "name": "動かして操作する仕組みと配線の隙間の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd (mechanical control cables) and 11-125 (movable controls): at least 1/2 in (= 12.7 mm, computed) between wiring and the controls when the bundle is pushed with light hand pressure toward them, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf",
+      "value": 12.7,
+      "unit": "mm"
+     },
+     {
       "key": "Q30",
       "name": "人数と荷重の組 (見る組)",
       "value": "two_cargo",
@@ -27596,6 +28878,15 @@ export const DEMOS = {
       "trust": 3,
       "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1 (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
       "value": 60,
+      "unit": "mm"
+     },
+     {
+      "key": "Q39",
+      "name": "電池の端子から、最初に回路を守る器具までの電線の長さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06, https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines). The longest of these is taken; a road-vehicle value was not checked",
+      "value": 1828.8,
       "unit": "mm"
      },
      {
@@ -28434,7 +29725,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「電池の決まり」から 2 件の規則",
+   "text": "最初から入っているナレッジ「電池の決まり」から 13 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-BT",
@@ -28466,6 +29757,171 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 2,
       "basis": "UN Regulation No. 100 (02 series of amendments), MLIT English/Japanese text, para. 2.17: \"High Voltage\" is a working voltage > 60 V and <= 1500 V DC (or > 30 V and <= 1000 V AC rms); para. 2.38: the working voltage is the highest voltage the maker specifies in open circuit or normal operation (so the full-charge voltage, not the nominal one), https:\/\/www.mlit.go.jp/jidosha/un/UN_R100.pdf; read 2026-11-03. This text says \"High Voltage\", not \"voltage class B\". R100 Part I itself covers M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage handling on any vehicle",
+      "applies_to": {
+       "kinds": [
+        "battery"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-01",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線に続けて流す電流は、その電線が流してよい電流 (束ねてあれば束の割合をかけたもの) 以下",
+      "check": "(wire_bundle_count <= 1 and wire_current_A <= wire_rated_current_A) or wire_current_A <= req_Q23 * wire_rated_current_A",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\": approximate current by conductor size for a single cable isolated in free air at 40 degC ambient, 90 degC and 105 degC conductor temperature, and rating factors for grouped touching cables (2: 0.80 .. 8: 0.50), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). wire_rated_current_A is the single-wire value of the cable maker's table at the ambient of R4-01 and the cable's temperature class; the code that gives it names the table in the declared basis. A table for another class (DIN VDE 0298-4 via Lapp T12, 33 CFR 183 Table 5 for boats) is borrowed and makes the hit trust 3",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-02",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具 (ヒューズ・ブレーカ) の定格電流は、守る電線が流してよい電流を超えない",
+      "check": "wire_fuse_rating_A <= req_Q24 * wire_rated_current_A and (wire_bundle_count <= 1 or wire_fuse_rating_A <= req_Q24 * req_Q23 * wire_rated_current_A)",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48 (a breaker opens before the current rating of the wire attached to it is exceeded), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. 33 CFR 183.455(c) (boats: not above 150 % of Table 5 under 50 V, not above 100 % at 50 V or more), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06. ISO 8820 and ISO 6469-3:2021 clauses 7.1 / 7.2 (overload and short-circuit protection, seen only as titles in the table of contents) not checked",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-03",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "回路を守る器具の定格電流は、ふだん流れる電流以上 (ふだんの使い方で切れない)",
+      "check": "wire_fuse_rating_A >= wire_current_A",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's minimum (a device rated below the continuous current opens in normal use and the consumer gets no electricity); not taken from a standard. The time-current curve of the device (start-up and motor peaks) is not judged here",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-04",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の被覆の温度クラスの上限は、電線が通る場所のいちばん高い周りの温度以上",
+      "check": "wire_insulation_max_degC >= wire_place_max_degC",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "The classes: IS/ISO 6722:2006 (identical with ISO 6722:2006) Table 1, A -40 to 85 degC, B -40 to 100 degC, C -40 to 125 degC, D -40 to 150 degC, E -40 to 175 degC, F -40 to 200 degC, G -40 to 225 degC, H -40 to 250 degC, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06 (ISO 6722-1:2011 not checked). The rule is borrowed (assumption): FAA AC 43.13-1B with Change 1, par. 11-124, wires rated so that the conductor stays within the wire specification maximum when the ambient and the heat rise of the current are counted, read 2026-11-06. This check counts the ambient only; the heat rise is in WR-01 (the rated current at that ambient). No clearance in mm from a motor, brake or hot cells was read",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-05",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電線の定格の電圧は、電池のいちばん高い電圧以上 (60 V の電線は 60 V 以下の系だけ)",
+      "check": "wire_voltage_rating_V >= var_battery_voltage",
+      "origin": "builtin",
+      "trust": 1,
+      "basis": "IS/ISO 6722:2006 (identical with ISO 6722:2006) 3.1: a 60 V cable is for road vehicle systems whose nominal system voltage is equal to or less than 60 V d.c. or 25 V a.c.; 3.2: a 600 V cable above that, up to 600 V; 4.1: above 60 V d.c. special care against mechanical stress, https:\/\/archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06. ISO 6722 says nominal system voltage; this check uses var_battery_voltage, the full-charge voltage of BT-02, which is the stricter. For the demo battery 16 x 3.65 V = 58.4 V (cell cut-off from the EVE LF50K specification, the source of BT-01), below 60 V",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-06",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "1 本で通す電線の曲げの内側の半径は、外径の 3 倍以上 (動かない所)",
+      "check": "wire_bundle_count > 1 or wire_bend_radius_mm >= req_Q25 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V automotive cable). Static installation only; a wire that moves with the steering or the suspension is not covered by this value",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-07",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "束ねた電線の曲げの内側の半径は、束の中でいちばん太い電線の外径の 10 倍以上",
+      "check": "wire_bundle_count <= 1 or wire_bend_radius_mm >= req_Q26 * wire_outer_diameter_mm",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117 (bundles not less than 10 times the outside diameter of the largest wire), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-08",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線を支える点どうしの間隔は 609.6 mm 以下 (管やダクトの中は除く)",
+      "check": "wire_support_spacing_mm <= req_Q27",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146 (intervals not more than 24 in = 609.6 mm, computed, except in troughs, ducts or conduits), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. No public road-vehicle value was found",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-09",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "板や縁を通り抜ける所で留めていない配線は、縁から 9.525 mm 以上離す (守りの輪を付ける)",
+      "check": "wire_penetration_clearance_mm >= req_Q28",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115 (grommets where wires cannot be clamped, at least 3/8 in = 9.525 mm, computed, from structure at penetrations), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06; 33 CFR 183.445(a) (boats: protected from abrasion through a bulkhead or rigid surface, no number), read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-10",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "配線と、動かして操作する仕組みの隙間は 12.7 mm 以上",
+      "check": "wire_control_clearance_mm >= req_Q29",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd and 11-125 (at least 1/2 in = 12.7 mm, computed, from controls under light hand pressure), https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06",
+      "applies_to": {
+       "kinds": [
+        "electrical"
+       ]
+      }
+     },
+     {
+      "rule_id": "WR-11",
+      "doc_id": "KN-BT",
+      "category": "battery",
+      "text": "電池の端子から最初に回路を守る器具までの電線は 1828.8 mm 以下",
+      "check": "battery_fuse_length_mm <= req_Q39",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a) (within 72 in = 1828.8 mm, computed, of the battery, measured along the conductor), https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06",
       "applies_to": {
        "kinds": [
         "battery"
@@ -28942,9 +30398,18 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 10 件: Q21・Q35・Q36・Q37・Q38・Q57・Q59・Q63・Q83・Q84)",
+   "text": "要件のファイルのまま進みます (既定値で足した 20 件: Q04・Q21・Q22・Q23・Q24・Q25・Q26・Q27・Q28・Q29・Q35・Q36・Q37・Q38・Q39・Q57・Q59・Q63・Q83・Q84)",
    "data": {
     "answers": [
+     {
+      "key": "Q04",
+      "name": "段差に当たるときの速さ",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "value": 10,
+      "unit": "km/h"
+     },
      {
       "key": "Q21",
       "name": "荷台の固定点 1 か所が受けられる力の下限",
@@ -28953,6 +30418,78 @@ export const DEMOS = {
       "basis": "assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23); the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a strength for cargo bed anchors",
       "value": 8000,
       "unit": "N"
+     },
+     {
+      "key": "Q22",
+      "name": "電線の電流を確かめるときの周りの温度",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: 40 degC is the ambient air temperature of the automotive current rating table in the Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\" (ambient 40 degC, single cable isolated in free air), https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page). It is the condition of that table, not a measured temperature of this vehicle: near the motor, the controller, the brakes or in the sun it can be higher, and then the table value is too high",
+      "value": 40,
+      "unit": "degC"
+     },
+     {
+      "key": "Q23",
+      "name": "束ねて触れ合う電線の、流してよい電流の割合",
+      "source": "default",
+      "trust": 2,
+      "basis": "Anixter catalogue, page 02•43 \"Current Ratings for Automotive Cables\", note: wires grouped and touching, rating factor 2 cables 0.80, 3 0.70, 4 0.65, 5 0.60, 6 0.56, 7 0.53, 8 0.50, https:\/\/objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06 (secondary: a distributor's technical page for automotive cable; the standard or calculation behind it is not named). 0.50 (8 cables) is taken so that one number covers a harness of up to 8 touching cables; more than 8 cables is not in the table (not checked). Similar factors for other classes, borrowed and not used: 33 CFR 183 Table 5 note 2 (boats, 7-24 conductors 0.50), DIN VDE 0298-4 Table 21 quoted by Lapp Table 12-6 (industrial cables, 8 cables 0.52)",
+      "value": 0.5,
+      "unit": "1"
+     },
+     {
+      "key": "Q24",
+      "name": "回路を守る器具の定格電流の、守る電線の流してよい電流に対する上限の割合",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48: a circuit breaker is rated so that it opens before the current rating of the wire attached to it is exceeded, read 2026-11-06 (https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf; aircraft wiring). 33 CFR 183.455(c), read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I; boats with gasoline engines): not above 150 % of the Table 5 amperage for circuits under 50 V, not above 100 % for 50 V or more (the next larger standard size allowed if it does not exceed 150 %). The 51.2 V circuit is above 50 V, so 1.0 is taken for every circuit. The road-vehicle rules (ISO 8820, ISO 6469-3:2021 clauses 7.1 and 7.2) were not checked",
+      "value": 1.0,
+      "unit": "1"
+     },
+     {
+      "key": "Q25",
+      "name": "1 本の電線を曲げる内側の半径の下限 (電線の外径の倍数、動かない所)",
+      "source": "default",
+      "trust": 2,
+      "basis": "Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1 Technical data: min. bending radius 3 x D (static), https:\/\/media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a manufacturer's data sheet, 60 V thin-wall PVC automotive cable, ISO 19642-3 class B). Static only: a cable that moves (to the steering or the suspension) is not covered; for moving flexible cords the Anixter catalogue page 02•67 (after BS 7540, cords up to 450/750 V, borrowed) gives 5D up to 12 mm and 6D above, read 2026-11-06",
+      "value": 3,
+      "unit": "1"
+     },
+     {
+      "key": "Q26",
+      "name": "束ねた電線を曲げる内側の半径の下限 (束の中でいちばん太い電線の外径の倍数)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117: the bend radius of wire groups or bundles not less than 10 times the outside diameter of the largest wire (3 times in 11-96 aa, 6 times in 11-117, where suitably supported at breakouts or reversals), read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. No road-vehicle value for a bundle was read",
+      "value": 10,
+      "unit": "1"
+     },
+     {
+      "key": "Q27",
+      "name": "配線を支える点どうしの間隔の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146: wires and cables supported at intervals not more than 24 in (= 609.6 mm, computed) unless in troughs, ducts or conduits; 11-118: normally not more than 1/2 in (12.7 mm) deflection between supports, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. A public road-vehicle spacing (SAE J1292, an OEM harness guide) was not found; this vehicle shakes more on rough tracks than an aircraft in normal flight, so the borrowed value may be too long (not checked)",
+      "value": 609.6,
+      "unit": "mm"
+     },
+     {
+      "key": "Q28",
+      "name": "板や縁を通り抜ける所での、配線と縁の隙間の下限 (留められない所)",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
+      "value": 9.525,
+      "unit": "mm"
+     },
+     {
+      "key": "Q29",
+      "name": "動かして操作する仕組みと配線の隙間の下限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd (mechanical control cables) and 11-125 (movable controls): at least 1/2 in (= 12.7 mm, computed) between wiring and the controls when the bundle is pushed with light hand pressure toward them, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf",
+      "value": 12.7,
+      "unit": "mm"
      },
      {
       "key": "Q35",
@@ -28988,6 +30525,15 @@ export const DEMOS = {
       "trust": 3,
       "basis": "assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series (https:\/\/www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1 (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles",
       "value": 60,
+      "unit": "mm"
+     },
+     {
+      "key": "Q39",
+      "name": "電池の端子から、最初に回路を守る器具までの電線の長さの上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: borrowed from boats. 33 CFR 183.460(a): each ungrounded output conductor from a storage battery has a trip-free circuit breaker or fuse within 72 in (= 1828.8 mm, computed) of the battery, measured along the conductor (the cranking motor feed is excepted); 183.455(b) puts the device at the source of power, or within 7 in (177.8 mm), or within 40 in (1016 mm) if the conductor is sheathed, read 2026-11-06, https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I (boats with gasoline engines). The longest of these is taken; a road-vehicle value was not checked",
+      "value": 1828.8,
       "unit": "mm"
      },
      {
@@ -48251,6 +49797,313 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0019",
     "design_version": 1,
+    "rule_id": "WR-01",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_bundle_count",
+       "wire_current_A",
+       "wire_rated_current_A"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0020",
+    "design_version": 1,
+    "rule_id": "WR-02",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_fuse_rating_A",
+       "wire_rated_current_A",
+       "wire_bundle_count"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 35,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0021",
+    "design_version": 1,
+    "rule_id": "WR-03",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_fuse_rating_A",
+       "wire_current_A"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0022",
+    "design_version": 1,
+    "rule_id": "WR-04",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_insulation_max_degC",
+       "wire_place_max_degC"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0023",
+    "design_version": 1,
+    "rule_id": "WR-05",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_voltage_rating_V"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0024",
+    "design_version": 1,
+    "rule_id": "WR-06",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_bundle_count",
+       "wire_bend_radius_mm",
+       "wire_outer_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0025",
+    "design_version": 1,
+    "rule_id": "WR-07",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_bundle_count",
+       "wire_bend_radius_mm",
+       "wire_outer_diameter_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0026",
+    "design_version": 1,
+    "rule_id": "WR-08",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_support_spacing_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0027",
+    "design_version": 1,
+    "rule_id": "WR-09",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_penetration_clearance_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0028",
+    "design_version": 1,
+    "rule_id": "WR-10",
+    "targets": [
+     "aux"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "aux",
+      "missing": [
+       "wire_control_clearance_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "WR-11",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "battery",
+      "missing": [
+       "battery_fuse_length_mm"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
      "battery",
@@ -48382,15 +50235,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -49432,15 +51285,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0021",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "CS-01",
     "targets": [
@@ -49461,15 +51314,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.100+09:00",
-   "t": 16.1,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0022",
+    "rule_check_id": "rchk-0033",
     "design_version": 1,
     "rule_id": "CS-02",
     "targets": [
@@ -49491,15 +51344,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 37,
-   "ts": "2026-11-03T10:00:16.200+09:00",
-   "t": 16.2,
+   "seq": 48,
+   "ts": "2026-11-03T10:00:17.300+09:00",
+   "t": 17.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0023",
+    "rule_check_id": "rchk-0034",
     "design_version": 1,
     "rule_id": "CS-03",
     "targets": [
@@ -49520,15 +51373,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 38,
-   "ts": "2026-11-03T10:00:16.300+09:00",
-   "t": 16.3,
+   "seq": 49,
+   "ts": "2026-11-03T10:00:17.400+09:00",
+   "t": 17.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0024",
+    "rule_check_id": "rchk-0035",
     "design_version": 1,
     "rule_id": "CS-04",
     "targets": [
@@ -49548,15 +51401,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 39,
-   "ts": "2026-11-03T10:00:16.400+09:00",
-   "t": 16.4,
+   "seq": 50,
+   "ts": "2026-11-03T10:00:17.500+09:00",
+   "t": 17.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0025",
+    "rule_check_id": "rchk-0036",
     "design_version": 1,
     "rule_id": "CS-05",
     "targets": [
@@ -49575,15 +51428,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 40,
-   "ts": "2026-11-03T10:00:16.500+09:00",
-   "t": 16.5,
+   "seq": 51,
+   "ts": "2026-11-03T10:00:17.600+09:00",
+   "t": 17.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0026",
+    "rule_check_id": "rchk-0037",
     "design_version": 1,
     "rule_id": "CS-06",
     "targets": [
@@ -49604,15 +51457,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 41,
-   "ts": "2026-11-03T10:00:16.600+09:00",
-   "t": 16.6,
+   "seq": 52,
+   "ts": "2026-11-03T10:00:17.700+09:00",
+   "t": 17.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0027",
+    "rule_check_id": "rchk-0038",
     "design_version": 1,
     "rule_id": "CS-07",
     "targets": [
@@ -49632,15 +51485,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 42,
-   "ts": "2026-11-03T10:00:16.700+09:00",
-   "t": 16.7,
+   "seq": 53,
+   "ts": "2026-11-03T10:00:17.800+09:00",
+   "t": 17.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0028",
+    "rule_check_id": "rchk-0039",
     "design_version": 1,
     "rule_id": "CS-08",
     "targets": [
@@ -49659,15 +51512,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 43,
-   "ts": "2026-11-03T10:00:16.800+09:00",
-   "t": 16.8,
+   "seq": 54,
+   "ts": "2026-11-03T10:00:17.900+09:00",
+   "t": 17.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0029",
+    "rule_check_id": "rchk-0040",
     "design_version": 1,
     "rule_id": "CS-09",
     "targets": [
@@ -49686,15 +51539,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 55,
+   "ts": "2026-11-03T10:00:18.000+09:00",
+   "t": 18.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0041",
     "design_version": 1,
     "rule_id": "CS-10",
     "targets": [
@@ -49714,15 +51567,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 56,
+   "ts": "2026-11-03T10:00:18.100+09:00",
+   "t": 18.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0042",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -49767,15 +51620,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 46,
-   "ts": "2026-11-03T10:00:17.100+09:00",
-   "t": 17.1,
+   "seq": 57,
+   "ts": "2026-11-03T10:00:18.200+09:00",
+   "t": 18.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0032",
+    "rule_check_id": "rchk-0043",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -49824,15 +51677,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 47,
-   "ts": "2026-11-03T10:00:17.200+09:00",
-   "t": 17.2,
+   "seq": 58,
+   "ts": "2026-11-03T10:00:18.300+09:00",
+   "t": 18.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0033",
+    "rule_check_id": "rchk-0044",
     "design_version": 1,
     "rule_id": "UJ-01",
     "targets": [
@@ -49851,15 +51704,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 48,
-   "ts": "2026-11-03T10:00:17.300+09:00",
-   "t": 17.3,
+   "seq": 59,
+   "ts": "2026-11-03T10:00:18.400+09:00",
+   "t": 18.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0034",
+    "rule_check_id": "rchk-0045",
     "design_version": 1,
     "rule_id": "UJ-02",
     "targets": [
@@ -49879,15 +51732,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 49,
-   "ts": "2026-11-03T10:00:17.400+09:00",
-   "t": 17.4,
+   "seq": 60,
+   "ts": "2026-11-03T10:00:18.500+09:00",
+   "t": 18.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0035",
+    "rule_check_id": "rchk-0046",
     "design_version": 1,
     "rule_id": "UJ-03",
     "targets": [
@@ -49907,15 +51760,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 50,
-   "ts": "2026-11-03T10:00:17.500+09:00",
-   "t": 17.5,
+   "seq": 61,
+   "ts": "2026-11-03T10:00:18.600+09:00",
+   "t": 18.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0036",
+    "rule_check_id": "rchk-0047",
     "design_version": 1,
     "rule_id": "UJ-04",
     "targets": [
@@ -49934,15 +51787,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 51,
-   "ts": "2026-11-03T10:00:17.600+09:00",
-   "t": 17.6,
+   "seq": 62,
+   "ts": "2026-11-03T10:00:18.700+09:00",
+   "t": 18.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0037",
+    "rule_check_id": "rchk-0048",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -50298,15 +52151,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 52,
-   "ts": "2026-11-03T10:00:17.700+09:00",
-   "t": 17.7,
+   "seq": 63,
+   "ts": "2026-11-03T10:00:18.800+09:00",
+   "t": 18.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0038",
+    "rule_check_id": "rchk-0049",
     "design_version": 1,
     "rule_id": "SY-01",
     "targets": [
@@ -50320,15 +52173,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 53,
-   "ts": "2026-11-03T10:00:17.800+09:00",
-   "t": 17.8,
+   "seq": 64,
+   "ts": "2026-11-03T10:00:18.900+09:00",
+   "t": 18.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0039",
+    "rule_check_id": "rchk-0050",
     "design_version": 1,
     "rule_id": "SY-02",
     "targets": [
@@ -50342,15 +52195,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 54,
-   "ts": "2026-11-03T10:00:17.900+09:00",
-   "t": 17.9,
+   "seq": 65,
+   "ts": "2026-11-03T10:00:19.000+09:00",
+   "t": 19.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0040",
+    "rule_check_id": "rchk-0051",
     "design_version": 1,
     "rule_id": "SY-03",
     "targets": [
@@ -50366,15 +52219,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 55,
-   "ts": "2026-11-03T10:00:18.000+09:00",
-   "t": 18.0,
+   "seq": 66,
+   "ts": "2026-11-03T10:00:19.100+09:00",
+   "t": 19.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0041",
+    "rule_check_id": "rchk-0052",
     "design_version": 1,
     "rule_id": "SY-04",
     "targets": [
@@ -50387,15 +52240,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 56,
-   "ts": "2026-11-03T10:00:18.100+09:00",
-   "t": 18.1,
+   "seq": 67,
+   "ts": "2026-11-03T10:00:19.200+09:00",
+   "t": 19.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0042",
+    "rule_check_id": "rchk-0053",
     "design_version": 1,
     "rule_id": "SY-05",
     "targets": [
@@ -50408,15 +52261,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 57,
-   "ts": "2026-11-03T10:00:18.200+09:00",
-   "t": 18.2,
+   "seq": 68,
+   "ts": "2026-11-03T10:00:19.300+09:00",
+   "t": 19.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0043",
+    "rule_check_id": "rchk-0054",
     "design_version": 1,
     "rule_id": "SY-06",
     "targets": [
@@ -50428,15 +52281,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 58,
-   "ts": "2026-11-03T10:00:18.300+09:00",
-   "t": 18.3,
+   "seq": 69,
+   "ts": "2026-11-03T10:00:19.400+09:00",
+   "t": 19.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0044",
+    "rule_check_id": "rchk-0055",
     "design_version": 1,
     "rule_id": "SY-07",
     "targets": [],
@@ -50446,15 +52299,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 59,
-   "ts": "2026-11-03T10:00:18.400+09:00",
-   "t": 18.4,
+   "seq": 70,
+   "ts": "2026-11-03T10:00:19.500+09:00",
+   "t": 19.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0045",
+    "rule_check_id": "rchk-0056",
     "design_version": 1,
     "rule_id": "SY-08",
     "targets": [
@@ -50467,15 +52320,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 60,
-   "ts": "2026-11-03T10:00:18.500+09:00",
-   "t": 18.5,
+   "seq": 71,
+   "ts": "2026-11-03T10:00:19.600+09:00",
+   "t": 19.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0046",
+    "rule_check_id": "rchk-0057",
     "design_version": 1,
     "rule_id": "SY-09",
     "targets": [
@@ -50487,15 +52340,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 61,
-   "ts": "2026-11-03T10:00:18.600+09:00",
-   "t": 18.6,
+   "seq": 72,
+   "ts": "2026-11-03T10:00:19.700+09:00",
+   "t": 19.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0047",
+    "rule_check_id": "rchk-0058",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -50622,15 +52475,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 62,
-   "ts": "2026-11-03T10:00:18.700+09:00",
-   "t": 18.7,
+   "seq": 73,
+   "ts": "2026-11-03T10:00:19.800+09:00",
+   "t": 19.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0048",
+    "rule_check_id": "rchk-0059",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -50677,15 +52530,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 63,
-   "ts": "2026-11-03T10:00:18.800+09:00",
-   "t": 18.8,
+   "seq": 74,
+   "ts": "2026-11-03T10:00:19.900+09:00",
+   "t": 19.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0049",
+    "rule_check_id": "rchk-0060",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [

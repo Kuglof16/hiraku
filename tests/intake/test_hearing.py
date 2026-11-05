@@ -10,6 +10,8 @@ from hiraku.intake.hearing import (applicable_items, hearing_text, item, load_an
                                    prepare, save_answer)
 from hiraku.intake.products import answers_file
 
+NEW_DEFAULT_KEYS = ("Q04", "Q22", "Q23", "Q24", "Q25", "Q26", "Q27", "Q28", "Q29", "Q39")  # the step speed and the wiring items: ask default
+
 
 def bare(slug):
     """The request as a person would first give it: the sentence and the flags, no requirements yet."""
@@ -190,6 +192,9 @@ class RequirementsFileStandsTest(unittest.TestCase):
                                 {"key": "Q58", "name": "最小回転半径の上限", "value": 3, "unit": "m", "source": "user", "trust": 1},
                                 {"key": "Q21", "name": "荷台の固定点 1 か所が受けられる力の下限", "value": 8000, "unit": "N", "source": "user", "trust": 1},
                                 {"key": "Q59", "name": "荷と荷台のあいだの摩擦の係数", "value": 0.6, "unit": "1", "source": "user", "trust": 1}]
+        for k in NEW_DEFAULT_KEYS:  # the items the file does not carry itself: their standard values
+            d = item(k)["default"]
+            req["requirements"].append({"key": k, "name": item(k)["name"], "value": d["value"], "unit": d["unit"], "source": "user", "trust": 1})
         return req
 
     def test_nothing_is_asked_when_the_file_has_every_required_item(self):

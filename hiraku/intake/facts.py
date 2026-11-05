@@ -91,6 +91,20 @@ FACTS: dict[str, tuple[str, str, str]] = {
     "lashing_wll_min_N": ("荷につながる帯・金具・固定点のうち、使ってよい力の最小", "N", "part"),
     "lashing_wll_sum_N": ("荷につながる帯 (kind が strap) の使ってよい力の合計 (1 本ずつ 1 回数える)", "N", "part"),
     "anchor_strength_min_N": ("荷につながる固定点 (kind が anchor) が受けられる力の最小", "N", "part"),
+    # wiring (a wire run = one wire or one bundle between two ends, the part of kind electrical)
+    "wire_current_A": ("電線に続けて流れる電流", "A", "declared"),
+    "wire_rated_current_A": ("電線 1 本が流してよい電流 (表の値、周りの温度と被覆の温度クラスのとき)", "A", "declared"),
+    "wire_bundle_count": ("同じ束に触れ合って入っている電線の数 (1 本だけなら 1)", "1", "declared"),
+    "wire_fuse_rating_A": ("その電線を守るヒューズ・ブレーカの定格電流", "A", "declared"),
+    "wire_insulation_max_degC": ("電線の被覆が使える温度の上限", "degC", "declared"),
+    "wire_place_max_degC": ("電線が通る場所のいちばん高い周りの温度", "degC", "declared"),
+    "wire_voltage_rating_V": ("電線の定格の電圧", "V", "declared"),
+    "wire_bend_radius_mm": ("電線を曲げる所の内側の半径 (最小)", "mm", "declared"),
+    "wire_outer_diameter_mm": ("電線の外径 (束なら束の中でいちばん太いもの)", "mm", "declared"),
+    "wire_support_spacing_mm": ("配線を支える点どうしの間隔 (最大)", "mm", "declared"),
+    "wire_penetration_clearance_mm": ("板や縁を通り抜ける所で、留めていない配線と縁との隙間 (最小)", "mm", "declared"),
+    "wire_control_clearance_mm": ("配線と、動かして操作する仕組みとの隙間 (最小)", "mm", "declared"),
+    "battery_fuse_length_mm": ("電池の端子から最初に回路を守る器具までの電線の長さ", "mm", "declared"),
 }
 REQ_NAME = re.compile(r"^req_Q[0-9]{2}$")  # the number of a requirement, in the requirement's own unit
 VAR_PREFIX = "var_"  # a design variable's value, in the variable's own unit
