@@ -189,5 +189,28 @@ class PagesBrowserTest(unittest.TestCase):
         self.assertFalse(out.exists())
 
 
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class DeadDriverBrowserTest(unittest.TestCase):
+    """Its own Playwright (one sync Playwright at a time in a thread), no class-wide one."""
+
+    def test_a_dead_driver_does_not_stop_the_next_class(self):
+        """The driver gone under a class (seen in long runs): its browser.close() in tearDownClass
+        does not raise, so pw.stop() runs; and a Playwright left started is stopped by the next start."""
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch()
+        page = browser.new_page()
+        pw._impl_obj._connection._transport._proc.kill()  # the driver process
+        with self.assertRaises(Exception):
+            page.evaluate("1")
+        browser.close()  # as tearDownClass does
+        left = sync_playwright().start()  # pw was not stopped: the next start stops it
+        try:
+            b = left.chromium.launch()
+            self.assertEqual(b.new_page().evaluate("1 + 1"), 2)
+            b.close()
+        finally:
+            left.stop()
+
+
 if __name__ == "__main__":
     unittest.main()

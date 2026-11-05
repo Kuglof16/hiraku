@@ -279,19 +279,36 @@ def _wrap_browser(browser):
 
     def close(*a, **kw):
         _flush(maps)  # pages the test left open
-        return real_close(*a, **kw)
+        try:
+            return real_close(*a, **kw)
+        except Exception as e:
+            # the driver is gone (its tests have already failed with it): let tearDownClass go on
+            # to pw.stop(), else every later class in this process fails to start Playwright
+            if _DRIVER_GONE in str(e):
+                return None
+            raise
 
     browser.new_page, browser.new_context, browser.close = new_page, new_context, close
     return browser
 
 
+_DRIVER_GONE = "Connection closed while reading from the driver"
+_live: list = []  # Playwright instances started here and not stopped yet
+
+
 def _wrap_playwright(pw):
-    real_launch = pw.chromium.launch
+    real_launch, real_stop = pw.chromium.launch, pw.stop
 
     def launch(*a, **kw):
         return _wrap_browser(real_launch(*a, **kw))
 
-    pw.chromium.launch = launch
+    def stop(*a, **kw):
+        if pw in _live:
+            _live.remove(pw)
+        return real_stop(*a, **kw)
+
+    pw.chromium.launch, pw.stop = launch, stop
+    _live.append(pw)
     return pw
 
 
@@ -300,6 +317,15 @@ class _Starter:
         self._cm = _sync_playwright()
 
     def start(self):
+        # one left started by a class whose tearDownClass stopped half way: stopped first, so this
+        # start is not refused ("Sync API inside the asyncio loop")
+        for old in list(_live):
+            try:
+                old.stop()
+            except Exception:
+                pass
+            if old in _live:
+                _live.remove(old)
         return _wrap_playwright(self._cm.start())
 
     def __enter__(self):
