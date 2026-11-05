@@ -131,6 +131,20 @@ def _declared_facts(part: Record) -> dict[str, float]:
     return out
 
 
+UNCONFIRMED = ("not checked", "assumption")  # a declared basis that says the value is not confirmed
+
+
+def _declared_unchecked(part: Record) -> list[str]:
+    """Names of the part's declared values whose basis says they are not confirmed (a bend radius assumed, a size not
+    checked). A rule judged with one of them says so (rule_check.checked[].unchecked)."""
+    read = _declared_facts(part)
+    out = []
+    for name, d in (part.get("declared") or {}).items():
+        if name in read and any(m in str(d.get("basis", "")).lower() for m in UNCONFIRMED):
+            out.append(name)
+    return out
+
+
 def _box_facts(part: Record) -> dict[str, float]:
     cx, cy, cz = part["box"]["center_mm"]
     sx, sy, sz = part["box"]["size_mm"]
@@ -223,7 +237,8 @@ def targets(design: Record, requirements: list[Record] | None = None) -> list[Re
             mat = design.get("materials", {}).get(p.get("material"), {}).get("yield_MPa")
             if "yield_MPa" not in facts and _num(mat):
                 facts["yield_MPa"] = mat
-        out.append({"id": p["id"], "type": "part", "kind": p["kind"], "name": p["name"], "facts": facts})
+        out.append({"id": p["id"], "type": "part", "kind": p["kind"], "name": p["name"], "facts": facts,
+                    "unchecked": _declared_unchecked(p)})
     for pid, members in members_by_part.items():
         if pid not in part_ids:
             for m in members:  # one target per member, under its id (the contract's rule_check names ids of the design)

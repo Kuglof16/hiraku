@@ -126,6 +126,25 @@ class CheckRuleTest(unittest.TestCase):
         self.assertIn("1 人で持てる重さ に合わない (mass_kg = 50)", res["hits"][0]["message"])
         self.assertFalse(res["pass"])
 
+    def test_every_evaluated_part_leaves_its_values_and_the_unconfirmed_ones_are_named(self):
+        design = mini_design()
+        design["parts"][2]["declared"] = {"bend_radius_mm": {"value": 2.0, "unit": "mm", "basis": "assumption: not drawn"}}
+        design["parts"][3]["declared"] = {"bend_radius_mm": {"value": 0.5, "unit": "mm", "basis": "drawing 12, read"}}
+        ts = facts.targets(design)
+        res = rulecheck.check_rule(rule("bend_radius_mm >= 1", ["body", "cargo", "battery"]), ts)
+        by = {c["part_id"]: c for c in res["checked"]}
+        self.assertEqual(sorted(by), ["cargo", "floor"])  # the battery declares nothing: not evaluable, not in checked
+        self.assertEqual(by["floor"], {"part_id": "floor", "values": {"bend_radius_mm": 2.0}, "unchecked": ["bend_radius_mm"]})
+        self.assertEqual(by["cargo"], {"part_id": "cargo", "values": {"bend_radius_mm": 0.5}})  # confirmed: no `unchecked`
+        self.assertEqual([h["part_id"] for h in res["hits"]], ["cargo"])  # a hit is in checked too
+        self.assertEqual([n["part_id"] for n in res["not_evaluable"]], ["battery"])
+        from hiraku import contract
+        contract.validate("rule_check", {"rule_check_id": "rchk-0001", "design_version": 1, **res})
+
+    def test_a_rule_nobody_could_evaluate_has_no_checked(self):
+        res = rulecheck.check_rule(rule("bend_radius_mm >= 1", ["body"]), self.ts)
+        self.assertNotIn("checked", res)
+
     def test_no_kinds_means_every_part_and_nothing_else(self):
         res = rulecheck.check_rule(rule("bottom_z_mm >= 0"), self.ts)
         self.assertEqual(res["targets"], ["battery", "seat", "floor", "cargo"])

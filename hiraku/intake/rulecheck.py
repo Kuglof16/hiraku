@@ -33,16 +33,27 @@ def check_rule(rule: Record, targets: list[Record]) -> Record:
     names = expression.names(rule["check"])
     hit_list: list[Record] = []
     not_evaluable: list[Record] = []
+    checked: list[Record] = []
     chosen = applicable_targets(rule, targets)
     for t in chosen:
         answer, missing = expression.evaluate(rule["check"], t["facts"])
         if answer is None:
             not_evaluable.append({"part_id": t["id"], "missing": missing})
-        elif not answer:
-            values = {n: float(t["facts"][n]) for n in names if isinstance(t["facts"].get(n), (int, float))}
+            continue
+        values = {n: float(t["facts"][n]) for n in names if isinstance(t["facts"].get(n), (int, float)) and not isinstance(t["facts"].get(n), bool)}
+        if values:  # every part the check was evaluated on, passing or not, with the values it used
+            entry: Record = {"part_id": t["id"], "values": values}
+            unchecked = [n for n in values if n in t.get("unchecked", ())]
+            if unchecked:
+                entry["unchecked"] = unchecked
+            checked.append(entry)
+        if not answer:
             hit_list.append({"part_id": t["id"], "values": values, "message": _message(rule, values)})
-    return {"rule_id": rule["rule_id"], "targets": [t["id"] for t in chosen], "hits": hit_list,
-            "not_evaluable": not_evaluable, "pass": not hit_list}
+    rec = {"rule_id": rule["rule_id"], "targets": [t["id"] for t in chosen], "hits": hit_list,
+           "not_evaluable": not_evaluable, "pass": not hit_list}
+    if checked:
+        rec["checked"] = checked
+    return rec
 
 
 def check_all(

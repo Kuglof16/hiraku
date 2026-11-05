@@ -315,6 +315,55 @@ console.log(JSON.stringify(ruleRows(intake.model).map((r) => [r.rule_id, r.state
 
 
 @unittest.skipUnless(NODE, "node is not installed")
+class MeasuredValuesTest(unittest.TestCase):
+    """A5 shows what a check measured, and for a part that breaks a simple limit what it has and what is asked."""
+
+    def test_a_simple_limit_and_the_values_a_check_used_are_read_from_the_record(self):
+        got = node(f"""{FAKE_DOM}
+import {{ checkedRows, simpleLimit }} from "{url('model.js')}";
+const m = {{ checks: new Map([["X-01", {{ rule_id: "X-01", targets: ["a", "b", "c"], pass: false, not_evaluable: [{{ part_id: "c", missing: ["bend_radius_mm"] }}],
+  hits: [{{ part_id: "a", values: {{ bend_radius_mm: 0.5 }}, message: "m" }}],
+  checked: [{{ part_id: "a", values: {{ bend_radius_mm: 0.5 }}, unchecked: ["bend_radius_mm"] }}, {{ part_id: "b", values: {{ bend_radius_mm: 2 }} }}] }}]]) }};
+const rows = checkedRows(m, {{ rule_id: "X-01", check: "bend_radius_mm >= 1" }});
+const none = checkedRows(m, {{ rule_id: "NONE", check: "x >= 1" }});
+const complex = checkedRows(m, {{ rule_id: "X-01", check: "bend_radius_mm >= 1 and mass_kg < 5" }});
+console.log(JSON.stringify({{ limit: simpleLimit("hole_edge_mm >= 12.5"), other: simpleLimit("a >= b"), none: none.length,
+  a: rows[0], b: rows[1], complexNeed: complex[0].need }}));
+""")
+        self.assertEqual(got["limit"], {"name": "hole_edge_mm", "op": ">=", "limit": 12.5})
+        self.assertIsNone(got["other"])
+        self.assertEqual(got["none"], 0)
+        self.assertEqual(got["a"], {"part_id": "a", "hit": True, "values": [{"name": "bend_radius_mm", "value": 0.5, "unchecked": True}],
+                                    "need": {"name": "bend_radius_mm", "now": 0.5, "op": ">=", "opJa": "以上", "limit": 1}, "unchecked": True})
+        self.assertEqual(got["b"]["hit"], False)
+        self.assertIsNone(got["complexNeed"])  # only one plain comparison is turned into 今 → 要る
+
+    def test_the_rule_detail_lists_the_values_and_says_what_is_asked_and_what_is_not_confirmed(self):
+        got = node(f"""{FAKE_DOM}
+import {{ DEMOS }} from "{url('demo-events.js')}";
+import {{ buildModel, allRules, simpleLimit, showValue }} from "{url('model.js')}";
+import {{ FACTS }} from "{url('data.js')}";
+import {{ renderA5 }} from "{url('a5.js')}";
+const m = buildModel(DEMOS[Object.keys(DEMOS)[0]], {{ picksFinal: true }});
+const rule = allRules(m).find((r) => simpleLimit(r.check) && FACTS[simpleLimit(r.check).name]);  // a plain comparison of a known fact
+const lim = simpleLimit(rule.check);
+const unit = FACTS[lim.name].unit;
+const bad = lim.op.startsWith("<") ? lim.limit + 10 : lim.limit - 0.5, good = lim.op.startsWith("<") ? lim.limit - 1 : lim.limit + 5;
+m.checks.set(rule.rule_id, {{ rule_id: rule.rule_id, design_version: 1, targets: ["a", "b"], pass: false, not_evaluable: [],
+  hits: [{{ part_id: "a", values: {{ [lim.name]: bad }}, message: "m" }}],
+  checked: [{{ part_id: "a", values: {{ [lim.name]: bad }}, unchecked: [lim.name] }}, {{ part_id: "b", values: {{ [lim.name]: good }} }}] }});
+const el = new El("div");
+renderA5(el, m, {{ events: () => [] }}, {{ screen: "A5", mode: "category", filter: "all", query: "", selected: rule.rule_id, collapsed: new Set(),
+  disabled: new Set(), dropped: [], litSeen: new Set(), rerender() {{}} }});
+const t = el.text();
+const asked = showValue(lim.limit, unit);
+console.log(JSON.stringify({{ title: t.includes("判定に使った値"), notConfirmed: t.includes("確かめていない値を使っています") && t.includes("(確かめていない値)"),
+  need: t.includes(`今 ${{showValue(bad, unit)}} → 要る ${{asked}}`), ok: t.includes(`要る ${{asked}}`) }}));
+""")
+        self.assertEqual(got, {"title": True, "notConfirmed": True, "need": True, "ok": True})
+
+
+@unittest.skipUnless(NODE, "node is not installed")
 class FirstTimeTroubleTest(unittest.TestCase):
     """What a person new to the screens can trip on: sending with nothing filled in, a refused answer, a run that ended
     while a question was open, a file of the wrong shape."""
