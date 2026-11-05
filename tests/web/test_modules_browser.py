@@ -9,6 +9,7 @@ The record's schema check runs always; the rest is skipped unless HIRAKU_WEB_BRO
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -82,6 +83,31 @@ def named_events() -> list[dict]:
     return out
 
 
+LEFT = "20261105-210300-left"  # the module record with proposals the packager never built
+
+
+def left_events() -> list[dict]:
+    """The module record with two proposals no version takes: chg-0090 on version 2 just before
+    version 3 is built from the others (as 20261105-094333), and chg-0091 on version 3 just before
+    the run finishes (as 20261105-091217). -> events (T_STALE, T_LATE are when each is in)."""
+    events = module_events()
+    proposal = next(e for e in reversed(events) if e["kind"] == "design.change_proposed")
+    i3 = max(i for i, e in enumerate(events) if e["kind"] == "design.created")
+    stale = copy.deepcopy(proposal)
+    stale["t"] = round(events[i3 - 1]["t"] + 0.1, 2)
+    stale["data"]["change_id"] = "chg-0090"
+    events.insert(i3, stale)
+    fin = next(i for i, e in enumerate(events) if e["kind"] == "run.finished")
+    late = copy.deepcopy(proposal)
+    late["t"] = round(events[fin - 1]["t"] + 0.1, 2)
+    late["design_version"] = 3
+    late["data"]["change_id"] = "chg-0091"
+    events.insert(fin, late)
+    for i, e in enumerate(events):
+        e["seq"] = i
+    return events
+
+
 class ModuleRecordTest(unittest.TestCase):
     def test_record_passes_the_schema(self):
         events = module_events()
@@ -106,6 +132,7 @@ class ModulesBrowserTest(unittest.TestCase):
         write_run(cls.tmp / "runs", RUN_ID, module_events())
         write_run(cls.tmp / "runs", PLAIN, plain_events())
         write_run(cls.tmp / "runs", NAMED, named_events())
+        write_run(cls.tmp / "runs", LEFT, left_events())
         cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -197,6 +224,41 @@ class ModulesBrowserTest(unittest.TestCase):
         head = page.locator("#grid-head [data-built]").inner_text()
         self.assertIn("2 つの提案", head)
         self.assertIn(f"枠 {shown_name(page, 'rail_t')} 2.3 → 3.2 mm", head)
+
+    def test_the_round_card_drops_proposals_left_behind(self):
+        """A proposal on a version that a newer one replaced without it, and one still waiting when
+        the run finishes, are not shown as waiting for the packager (proposals.js roundCardHtml)."""
+        events = left_events()
+        t = {e["data"]["change_id"]: e["t"] for e in events if e["kind"] == "design.change_proposed"}
+        t_v3 = max(e["t"] for e in events if e["kind"] == "design.created")
+        t_end = next(e["t"] for e in events if e["kind"] == "run.finished")
+        # one page, seeking the replay (window.hiraku.seek): the card at each time
+        page = self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t={t['chg-0090'] + 0.05}")
+        at = lambda tt: page.evaluate("""async (tt) => { await window.hiraku.seek(tt);
+            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+            const c = document.getElementById('roundcard');
+            return { hidden: !c || c.hidden, round: c?.querySelector('.rc-head')?.dataset.round ?? null,
+                     ids: [...(c?.querySelectorAll('.rc-list li') ?? [])].map((li) => li.dataset.change) }; }""", tt)
+        # chg-0090 waits beside the round's others while version 2 is the newest
+        got = at(t["chg-0090"] + 0.05)
+        self.assertEqual(got["round"], "pending")
+        self.assertIn("chg-0090", got["ids"])
+        # version 3 built without it: the card names what was built, chg-0090 is gone
+        got = at(t_v3 + 0.05)
+        self.assertEqual(got["round"], "built")
+        self.assertNotIn("chg-0090", got["ids"])
+        # chg-0091 on version 3 waits while the run goes on (a record cut there keeps it) ...
+        got = at(t["chg-0091"] + 0.05)
+        self.assertEqual((got["round"], got["ids"]), ("pending", ["chg-0091"]))
+        # ... and not once the run has finished (version 3's built card stays its ROUND_SHOW_S, without it)
+        self.assertLess(t_end - t_v3, 12)
+        got = at(t_end + 0.05)
+        self.assertEqual(got["round"], "built")
+        self.assertNotIn("chg-0091", got["ids"])
+        # the record's end (a seek past it stops there): still no waiting card
+        got = at(1e6)
+        self.assertNotEqual(got["round"], "pending")
+        self.assertNotIn("chg-0091", got["ids"])
 
     def test_variable_names_from_the_design(self):
         # design.variable_names (contract b615e2c) first, then the screen's table (labels.js

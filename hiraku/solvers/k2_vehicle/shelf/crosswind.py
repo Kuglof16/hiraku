@@ -52,7 +52,8 @@ class CrosswindTool(K2Tool):
     to slide sideways), slides_first (1), side_force (N at wind_speed),
     min_upwind_wheel_load (N, the upwind wheels together, a gust of wind_speed reaching the
     vehicle at `speed` with the steering held straight), lateral_drift (m, drift_time after
-    the gust).
+    the gust). hot_spots: critical_wind_speed with the wind from each side (the load case's
+    wind_from judged, the other side found here) and the wheels' friction use and unloading.
     """
 
     name = "crosswind"
@@ -111,6 +112,12 @@ class CrosswindTool(K2Tool):
         res = []
         if ramp["v_crit"] is not None:
             res.append(_res("critical_wind_speed", ramp["v_crit"], "m/s", side_name))
+        # the other side too (the load case names one, from the CG's offset): a place the hand
+        # calculation does not look at, for the hot_spots (CAE の役目)
+        other_name = "wind from the " + ("right" if from_left else "left")
+        other = wind_ramp(held, self.aero(held, lp), not from_left, dt=self.dt)
+        places = [{"where": n, "quantity": "critical_wind_speed", "value": r_["v_crit"], "unit": "m/s", "judged": j}
+                  for n, r_, j in ((side_name, ramp, True), (other_name, other, False)) if r_["v_crit"] is not None]
         slide = wind_ramp(veh, aero, from_left, dt=self.dt, stop_on_slide=True)
         slide_v = slide["slide_speed"]
         if slide_v is not None:
@@ -161,4 +168,5 @@ class CrosswindTool(K2Tool):
         side = 0.5 * aero.rho * aero.cy * aero.side_area * gust * gust * (-1.0 if from_left else 1.0)
         wind_vec = [{"kind": "wind", "at": "side_cp", "origin_mm": [x * 1000.0 for x in cp_world],
                      "vector_N": [0.0, side, 0.0]}]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1, wind_vec), "assumptions": notes}
+        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1, wind_vec), "assumptions": notes,
+                "places": places}

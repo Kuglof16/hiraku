@@ -27,6 +27,8 @@ class OffroadRollTool(K2Tool):
     at which the uphill wheels all left the ground while it was made, when they did).
     With K&C corners the drive also gives the force the body receives at each suspension mount
     (lane_change.add_mounts: mount_* series with gravity_x/y/z, mount_force_peak, joint vectors).
+    hot_spots: tip_slope_angle on each side up where the wheels lift while the slope is made (the
+    load case's slope_up judged; the other side by the same turn, brakes held, without the drive).
     """
 
     name = "offroad_roll"
@@ -114,6 +116,15 @@ class OffroadRollTool(K2Tool):
                _res("tipped", 1.0 if st["tipped"] else 0.0, "1")]
         if st["tip_angle"] is not None:
             res.append(_res("tip_slope_angle", math.degrees(st["tip_angle"]), "deg"))
+        # the slope the other way up as well (the load case names one side, from the CG's offset): only
+        # its making, brakes held, for the tip angle; a place the hand calculation does not look at
+        other = new_sim(veh, road=road, dt=self.dt, settle_s=1.0)
+        tip_other = _ramp_gravity(other, side_gravity, -beta if left_up else beta, self.q(lp, "slope_ramp_time", "s"),
+                                  up=_side_ids(other, not left_up))
+        side_name = {True: "left side up", False: "right side up"}
+        places = [{"where": side_name[up_], "quantity": "tip_slope_angle", "value": math.degrees(a), "unit": "deg",
+                   "judged": j} for up_, a, j in ((left_up, st["tip_angle"], True), (not left_up, tip_other, False))
+                  if a is not None]
         if st["tipped"]:
             notes.append("the vehicle tipped over; the run stops there (K2 has no body-ground contact)")
         rec = st["recorder"]
@@ -132,6 +143,6 @@ class OffroadRollTool(K2Tool):
                  dict(_slope(f"横 {math.degrees(beta):g}° の斜面 ({side}が上)。slope_angle の通りに水平から傾く", veh,
                              float(x[0]), float(x[-1]), roll=beta if left_up else -beta), angle_channel="slope_angle")]
         out = {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-               "assumptions": notes}
+               "assumptions": notes, "places": places}
         add_mounts(veh, st, out)  # the drive over the rough slope (the slope's making is not in it)
         return out

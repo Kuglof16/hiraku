@@ -25,7 +25,9 @@ Standard library only. Routes:
                                         the K0 formulas ({"ready": false} while computed, shelf.py)
     GET /api/runs/<run_id>/tools/<file> a tool a run wrote (tools/<name>-<n>.py) or its checks
                                         (tools/<name>-<n>.check.json)
-    GET /api/formulas                   the K0 formulas' ids and Japanese titles (formula_titles)
+    GET /api/runs/<run_id>/tools        the tools a run wrote: {"tools": {name: [n, ...]}} from
+                                        the names of its tools/<name>-<n>.py (empty without tools/)
+    GET /api/formulas                  the K0 formulas' ids and Japanese titles (formula_titles)
     GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
                                         module designers (web/js/modules.js)
 
@@ -44,6 +46,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import socket
 import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -87,6 +90,8 @@ CONTENT_TYPES = {
 
 _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 _TOOL_FILE_RE = re.compile(r"^/api/runs/([^/]+)/tools/([a-z0-9_]+-[0-9]+(?:\.py|\.check\.json))$")
+_TOOL_LIST_RE = re.compile(r"^/api/runs/([^/]+)/tools/?$")
+_TOOL_NAME_RE = re.compile(r"^([a-z0-9_]+)-([0-9]+)\.py$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
 # One line longer than MAX_READ_BYTES is still read whole up to this size (a mesh.created or an
 # analysis.finished with per-element values of a large mesh); a longer line is skipped as bad.
@@ -107,6 +112,19 @@ def events_path(runs_dir: Path, run_id: str, saved_dir: Path | None = None) -> P
     if not path.exists() and saved_dir is not None and (Path(saved_dir) / run_id / EVENTS_FILE).exists():
         return Path(saved_dir) / run_id / EVENTS_FILE
     return path
+
+
+def tool_versions(tools_dir: Path) -> dict[str, list[int]]:
+    """{tool name: its version numbers, ascending} from the files tools/<name>-<n>.py of a run
+    ({} when the run has no tools/)."""
+    out: dict[str, list[int]] = {}
+    if not tools_dir.is_dir():
+        return out
+    for f in tools_dir.iterdir():
+        m = _TOOL_NAME_RE.match(f.name)
+        if m and f.is_file():
+            out.setdefault(m.group(1), []).append(int(m.group(2)))
+    return {k: sorted(v) for k, v in sorted(out.items())}
 
 
 def read_events(path: Path, offset: int) -> dict[str, Any]:
@@ -471,6 +489,10 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             self._send_tool_file(m.group(1), m.group(2))
             return
+        m = _TOOL_LIST_RE.match(path)
+        if m:
+            self._send_tool_list(m.group(1))
+            return
         if path.startswith("/api/"):
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -631,6 +653,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_tool_list(self, run_id: str) -> None:
+        path = events_path(self.runs_dir, run_id, self.saved_dir)
+        # (as the tool files: the run's folder may hold tools/ before its events)
+        if path is None or path == SAMPLE_EVENTS:
+            self._send_json({"error": f"no run {run_id}"}, HTTPStatus.NOT_FOUND)
+            return
+        self._send_json({"tools": tool_versions(path.parent / TOOLS_DIR)})
+
     def _send_json(self, obj: Any, status: HTTPStatus = HTTPStatus.OK) -> None:
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -642,6 +672,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # On Windows SO_REUSEADDR (HTTPServer's default) lets a second socket bind a port another
+    # server already listens on, so a second HIRAKU would quietly share the port with an old one.
+    # There the port is bound exclusively instead: a port in use fails with OSError.
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
     def handle_error(self, request, client_address) -> None:
         # A page that closes while its request is answered is not an error of the server.
         if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):

@@ -292,4 +292,7 @@ class LaneChangeTool(K2Tool):
                "assumptions": notes + ["the cones and gates are drawn around the centre line; the driver model "
                                        "follows the line and the gates are not judged"]}
         add_mounts(veh, st, out)
+        # each side's least load (S3 judges the lighter of the two: both sides are judged places)
+        out["places"] = [{"where": side, "quantity": "min_side_load", "value": st["min_side"][side], "unit": "N",
+                          "judged": True} for side in ("left", "right") if math.isfinite(st["min_side"][side])]
         return out

@@ -120,6 +120,16 @@ class RunListRowsBrowserTest(unittest.TestCase):
         self.assertEqual(got, EXPECTED)
         self.assertEqual(line, "11/4 08:40 · 全部合格・版 4 · 決まった手順で再現")
 
+    def test_the_state_column_follows_how_the_run_ended(self):
+        """The right column: 完了 / 途中で止まった / 実行中 (labels.js RUN_STATE_JA), not 完了 for every finished run."""
+        page, errors = self.open(1280, 720)
+        got = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")].map((tr) =>
+                 [tr.dataset.run, [tr.querySelector("td.state").dataset.state, tr.querySelector("td.state").textContent]]))""")
+        page.close()
+        self.assertEqual(errors, [])
+        self.assertEqual(got, {PASSED: ["done", "完了"], STOPPED: ["stopped", "途中で止まった"],
+                               GOING: ["going", "実行中"], OLD: ["stopped", "途中で止まった"]})
+
     def test_the_rows_pass_the_layout_lint(self):
         for width, height in ((1280, 720), (900, 506)):
             page, errors = self.open(width, height)

@@ -217,6 +217,9 @@ PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
 <p id="aside" style="width: 7.5em; font-size: 16px">(無料・Claude なし)</p>
 <p id="allowed" data-lint="wrap" style="width: 64px">終わった</p>
 <button data-lint="wrap" style="width: 40px">まだ長い札</button>
+<div id="card" style="width: 160px; overflow: hidden"><table id="wide"><tr><td style="white-space: nowrap">rops_occupant_clearance.side_mirror</td><td>2.772 mm</td></tr></table></div>
+<div style="width: 300px"><table><tr><td>名前</td><td id="split" style="width: 30px">4.143 mm</td></tr></table></div>
+<div style="width: 300px"><table id="fits"><tr><td style="overflow-wrap: anywhere">rops_occupant_clearance.side_mirror</td><td id="whole" style="white-space: nowrap">2.772 mm</td></tr></table></div>
 </body></html>"""
 
 
@@ -240,7 +243,7 @@ class LayoutLintBrowserTest(unittest.TestCase):
 
     def test_the_lint_finds_planted_breaks(self):
         """Each rule on a page made to break it; the ellipsis and data-lint="wrap" are let off."""
-        page = self.browser.new_page(viewport={"width": 800, "height": 450})
+        page = self.browser.new_page(viewport={"width": 800, "height": 700})  # (the tables at the end in view)
         page.set_content(PLANTED)
         got = page.evaluate(LINT_JS, {})
         page.close()
@@ -267,6 +270,12 @@ class LayoutLintBrowserTest(unittest.TestCase):
         for quiet in ("#cut", "#allowed"):
             self.assertNotIn(quiet, {p["sel"] for p in got})
         self.assertFalse([p for p in got if p["text"] == "まだ長い札"])
+        # a table wider than its card (the value cut at the card's edge), a value split from its unit;
+        # not a table whose long name wraps and whose value stays whole
+        self.assertIn(("overflow", "#wide"), found)
+        self.assertIn(("unit", "#split"), found)
+        for quiet in ("#fits", "#whole"):
+            self.assertNotIn(quiet, {p["sel"] for p in got})
 
     def test_no_layout_breaks_on_the_screens(self):
         problems = lint(self.browser, self.bases)

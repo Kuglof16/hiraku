@@ -2360,6 +2360,10 @@
                 "type": "string",
                 "description": "member, part, joint or element group id"
               },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "The point the value was read at, in design coordinates (mm): on a shell model the point on the weld line where the hot spot was read, on a beam model the point on the member."
+              },
               "quantity": {
                 "type": "string"
               },
@@ -2371,7 +2375,9 @@
               },
               "utilisation": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "The ratio that goes over 1 exactly when the row fails the load case's criterion: value / limit for <= and <, limit / value for >= and >. Where that ratio is undefined or outside 0 to 1000 (a limit or a value at or below 0, or a very small limit), it is written as 1000 when the row fails the criterion and 0 when it passes."
               },
               "predicted": {
                 "type": "boolean",
@@ -3331,6 +3337,38 @@
             }
           },
           "description": "Parts the check could not be evaluated on, with the values the design lacks."
+        },
+        "checked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "values"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "part_id": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "The part's values the check used."
+              },
+              "unchecked": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Names among values whose source is not confirmed (a part.declared basis of 'not checked' or 'assumption')."
+              }
+            }
+          },
+          "description": "Every part the check was evaluated on, passing or not, with the values it used (hits says which of them break the rule)."
         },
         "pass": {
           "type": "boolean"

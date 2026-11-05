@@ -153,12 +153,17 @@ export function mountShelf(el, api) {
     const key = `${runId}|${t.name}`;
     if (!code.has(key)) {
       code.set(key, { state: "loading" });
+      // the versions the run's tools/ holds (GET /api/runs/<id>/tools), then only the newest file:
+      // no guessing <name>-<n+1>.py and a 404 for it in the console
       (async () => {
-        let last = null;
         try {
-          for (let n = 1; n < 1000; n += 1) {
+          const lr = await fetch(`/api/runs/${encodeURIComponent(runId)}/tools`, { cache: "no-store" });
+          if (!lr.ok) throw new Error(`${lr.status}`);
+          const versions = (await lr.json()).tools?.[t.name] ?? [];
+          const n = versions.length ? versions[versions.length - 1] : null;
+          let last = null;
+          if (n !== null) {
             const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/tools/${t.name}-${n}.py`, { cache: "no-store" });
-            if (res.status === 404) break;
             if (!res.ok) throw new Error(`${res.status}`);
             last = { n, text: await res.text() };
           }
