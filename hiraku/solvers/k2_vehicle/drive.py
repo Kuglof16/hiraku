@@ -74,7 +74,7 @@ class Motor:
     torque: float          # N m at the motor
     power: float           # W
     gear: float            # motor turns per wheel turn
-    efficiency: float = 0.9
+    efficiency: float = 0.9  # driveline efficiency: an assumption, no source (shelf/base.py DRIVELINE_EFFICIENCY)
     max_speed: float = math.inf  # rad/s at the motor
 
     def wheel_torque_total(self, wheel_speed: float, throttle: float = 1.0) -> float:
@@ -124,6 +124,8 @@ class SpeedController:
 class PathDriver:
     """Pure pursuit on a reference line y_ref(x) (road frame), steering-rate limited."""
 
+    # preview 0.6 s (at least 3 m) and a steering rate of 400 deg/s stand for a human driver: HIRAKU's choice,
+    # an assumption, no source
     def __init__(self, sim: Sim, y_ref, preview_time: float = 0.6, min_preview: float = 3.0,
                  steer_rate: float = math.radians(400.0)):
         self.sim = sim

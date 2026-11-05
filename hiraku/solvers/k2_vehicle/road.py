@@ -164,6 +164,8 @@ class RandomRoad(Road):
 
     name = "iso8608"
 
+    # n_min, n_max: the band of spatial frequencies summed (cycle/m). HIRAKU's choice, meant as ISO 8608's band;
+    # whether ISO 8608 gives this band was not checked in this repository
     def __init__(self, road_class: str = "C", half_track: float = 0.6, seed: int = 1,
                  n_min: float = 0.011, n_max: float = 2.83, dn: float = 0.01,
                  fade_start: float = 2.0, fade_end: float = 6.0, gd_n0: float | None = None):
