@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from hiraku import contract
 from hiraku.contract import layout
@@ -93,6 +94,9 @@ class CheckRun(unittest.TestCase):
 
     def rules(self, events, level="error"):
         return {f.rule for f in self.findings(events) if f.level == level}
+
+    def messages(self, events, rule, level="error"):
+        return [f.message for f in self.findings(events) if f.rule == rule and f.level == level]
 
     def assertFlags(self, events, rule):
         found = self.findings(events)
@@ -434,6 +438,17 @@ class CheckRun(unittest.TestCase):
         ev = self._finish(self._unjudged_case(self._red(sample_events())), "stopped", "not_judged")
         self.assertEqual(self.rules(ev), set())
 
+    def test_not_judged_after_a_case_ended_without_a_verdict(self):
+        # a load case whose mismatch was ended (cause ends_case, contract 08cf4d6) is named by the stop as not
+        # judged, a -beyond case without a criterion too (the video run of t17's candidate): not_judged agrees
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "the hand calculation stops short",
+                 "fix": "none in this run", "resolved": False, "ends_case": True}
+        ev = self._insert(sample_events(), "comparison.recorded", "cause.recorded", cause)
+        self.assertNotIn("run.stop_code", self.rules(self._finish(ev, "stopped", "not_judged")))
+        # resolved later, it no longer stands
+        ev = self._insert(ev, "cause.recorded", "cause.recorded", dict(cause, resolved=True, resolved_by="cmp-0001"))
+        self.assertIn("run.stop_code", self.rules(self._finish(ev, "stopped", "not_judged")))
+
     def test_round_limit_needs_the_revisions_used(self):
         # one design version and round_limit 1: no revision was made
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
@@ -741,6 +756,58 @@ class CheckRun(unittest.TestCase):
             extra.append(j)
         ev[at:at] = extra
         return renumber(ev)
+
+    def _heavier_beyond_then_lighter_pass(self, v2_shell=None, shell_stage=3):
+        """Two versions (modular): v1's frame_shell (stage shell_stage) of R1 at 200 MPa against 156.7 after
+        frame_static's pass; v2 judged on frame_static alone (pass, tile green), with a frame_shell analysis
+        of v2 giving v2_shell MPa when given."""
+        ev = modular(red=False)
+        ev = self._shell_after_green(ev, 200.0, then="pending")
+        ev = self._stages(ev, frame_static=1, frame_shell=shell_stage)
+        at = next(n for n, e in enumerate(ev) if e["kind"] == "design.created" and e["data"].get("design_version") == 2) + 1
+        new = []
+        chain = [e for e in ev if e["kind"] in ("prediction.recorded", "analysis.started", "analysis.finished",
+                                                  "comparison.recorded", "verdict.recorded")
+                 and (e["data"].get("analysis_id") in (None, "ana-0001") or e["kind"] == "prediction.recorded")]
+        for e in chain:
+            c = copy.deepcopy(e)
+            d = c["data"]
+            for k, old, nw in (("prediction_id", "pred-0001", "pred-0002"), ("analysis_id", "ana-0001", "ana-0003"),
+                               ("comparison_id", "cmp-0001", "cmp-0002"), ("verdict_id", "ver-0001", "ver-0002")):
+                if d.get(k) == old:
+                    d[k] = nw
+            if "prediction_ids" in d:
+                d["prediction_ids"] = ["pred-0002"]
+            if "design_version" in d:
+                d["design_version"] = 2
+            if "design_version" in c:
+                c["design_version"] = 2
+            c["t"], c["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+            new.append(c)
+        if v2_shell is not None:
+            s, f = (copy.deepcopy(e) for e in new if e["kind"] in ("analysis.started", "analysis.finished"))
+            for e in (s, f):
+                e["data"].update(analysis_id="ana-0004", tool="frame_shell")
+            f["data"].pop("fields", None)
+            f["data"]["results"] = [{"quantity": "max_hot_spot_stress", "value": v2_shell, "unit": "MPa"}]
+            new += [s, f]
+        j = copy.deepcopy(next(e for e in ev if e["kind"] == "judgement.updated"))
+        j["data"].update(design_version=2, state="green", verdict_ids=["ver-0002"])
+        j["design_version"] = 2
+        j["t"], j["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        new.append(j)
+        ev[at:at] = new
+        return renumber(ev)
+
+    def test_d_a_lighter_pass_does_not_clear_a_heavier_tool_s_exceedance(self):
+        # docs/contract.md 分野が緑になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
+        # limit, v2 green on frame_static alone
+        said = lambda ev: [m for m in self.messages(ev, "judgement.state") if "contract (d)" in m]
+        self.assertTrue(said(self._heavier_beyond_then_lighter_pass()))
+        # a shell of v2 giving the judged quantity (within the limit) clears it
+        self.assertEqual(said(self._heavier_beyond_then_lighter_pass(v2_shell=120.0)), [])
+        # the exceedance came from a tool no heavier than frame_static's stage: frame_static's pass stands
+        self.assertEqual(said(self._heavier_beyond_then_lighter_pass(shell_stage=1)), [])
 
     def test_a_later_result_beyond_the_criterion_holds_a_green_tile(self):
         # the sample's limit is 156.7 MPa; a green tile left standing after a shell result beyond it
@@ -1166,6 +1233,22 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._rule_check(knowledge=True, rule_id="SM-99"), "rule_check.rule")
         self.assertIn("rule_check.targets", self.rules(self._rule_check(targets=["battery", "seat", "gearbox"]), "warn"))
 
+    def _system_red(self, category="system", red_count=1, state="red", hits=True):
+        """The rule_check sample with its rule SM-01 of the given category, then the v1 assembly tile."""
+        ev = self._rule_check(knowledge=True) if hits else self._rule_check(knowledge=True, hits=[], **{"pass": True})
+        by_kind(ev, "knowledge.imported")["data"]["rules"][0]["category"] = category
+        tile = {"design_version": 1, "domain": "assembly", "state": state, "red_count": red_count,
+                "verdict_ids": [], "summary": "系の欠け 1 件"}
+        return self._insert(ev, "rule_check.recorded", "judgement.updated", tile, design_version=1)
+
+    def test_a_system_rule_hitting_a_part_turns_the_assembly_tile_red(self):
+        # hiraku.tools.judge compute_judgement: red_count counts the system rules' misses too
+        self.assertNotIn("judgement.state", self.rules(self._system_red()))
+        self.assertIn("judgement.state", self.rules(self._system_red(category="sheet_metal")))  # not a system rule
+        self.assertIn("judgement.state", self.rules(self._system_red(red_count=0)))
+        self.assertIn("judgement.state", self.rules(self._system_red(state="pending", red_count=1)))
+        self.assertIn("judgement.state", self.rules(self._system_red(hits=False)))  # nothing hits: not red
+
     def test_rule_check_on_the_whole_design(self):
         rc = self._example("rule_check")
         whole = dict(targets=["design"], hits=[dict(rc["hits"][0], part_id="design")], not_evaluable=[])
@@ -1339,6 +1422,59 @@ class Modules(unittest.TestCase):
         self.assertTrue(self.hk6(modular(case_modules=("frame",))))
         self.assertTrue(self.hk6(modular(red=False)))
 
+    def test_a_red_system_rule_lets_a_designer_propose(self):
+        nothing = "chg-0001 proposed while nothing in v1 is red"
+        self.assertIn(nothing, self.hk6(modular(red=False, proposals=[self._no_case()])))
+
+        def with_rule(category):
+            ev = modular(red=False, proposals=[self._no_case()])
+            rc = CheckRun._example("rule_check")
+            rc.update(targets=["battery"], hits=[dict(rc["hits"][0], part_id="battery")], not_evaluable=[])
+            ev = CheckRun._insert(ev, "design.created", "rule_check.recorded", rc, design_version=1)
+            k = CheckRun._example("knowledge_imported")
+            k["rules"][0]["category"] = category
+            return CheckRun._insert(ev, "design.created", "knowledge.imported", k)
+        self.assertEqual(self.hk6(with_rule("system")), set())
+        self.assertIn(nothing, self.hk6(with_rule("sheet_metal")))
+
+    def test_a_person_s_answer_to_a_rule_hit_lets_its_part_s_module_propose(self):
+        # docs/contract.md (規則の当たりを人に聞く): rule_answers revise_design for AS-01 on the battery lets the
+        # powertrain designer propose, though no red load case names powertrain (N13 run 20261105-094333)
+        prop = {"change_id": "chg-0001", "module_id": "powertrain", "agent_id": "designer.powertrain",
+                "reason": "AS-01: split the battery", "changes": {}}
+
+        def run(answer):
+            ev = modular(case_modules=("suspension",), proposals=[prop])
+            for e in ev:
+                if e["kind"] == "design.created":
+                    e["data"]["parts"][0]["module"] = "powertrain"  # the battery
+            ev = CheckRun._insert(ev, "agent.stopped", "hearing.asked", {"questions": [], "rule_questions": [
+                {"rule_id": "AS-01", "parts": ["battery"], "text": "split it or drop the rule?",
+                 "choices": ["revise_design", "drop_rule"]}]}, agent="lead")
+            ev = CheckRun._insert(ev, "hearing.asked", "hearing.answered", {"answers": [], "rule_answers": [
+                {"rule_id": "AS-01", "choice": answer}]}, agent="lead")
+            return {m for m in self.hk6(ev) if "chg-0001 from powertrain" in m}
+        self.assertEqual(run("revise_design"), set())
+        self.assertTrue(run("drop_rule"))
+
+    @staticmethod
+    def _no_case():
+        return {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                "reason": "a system rule is red", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
+
+    def test_an_optional_variable_left_out_is_its_default(self):
+        # the generator writes an optional variable only when it differs from its default
+        from unittest import mock
+
+        def warns(default):
+            ev = modular()
+            del [e for e in ev if e["kind"] == "design.created"][-1]["data"]["variables"]["wheel_radius"]
+            spec = [{"name": "wheel_radius", "unit": "mm", "default": default, "value": default}]
+            with mock.patch("hiraku.designgen.variables", lambda d: spec):
+                return {m for m in self.hk6(ev, "warn") if "as chg-0001 set it" in m}
+        self.assertEqual(warns(320.0), set())
+        self.assertEqual(len(warns(300.0)), 1)
+
     def test_only_the_packager_builds_the_round(self):
         for why, build in (("a designer made it", None),
                            ("module_changes missing", {"module_changes": []}),
@@ -1356,6 +1492,33 @@ class Modules(unittest.TestCase):
                     v2["data"]["module_changes"][0]["reason"] = "another reason"
                 self.assertTrue(self.hk6(ev), why)
 
+    def test_a_later_proposal_of_a_module_replaces_its_earlier_one(self):
+        # docs/contract.md (8762a06): the same module proposing again in the round replaces its proposal;
+        # build_version lists only the later one
+        first = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                 "reason": "a larger wheel takes the step", "load_case_ids": ["R1-step100"],
+                 "changes": {"wheel_radius": {"value": 340.0, "unit": "mm"}}}
+        again = dict(first, change_id="chg-0002", reason="refused: smaller",
+                     changes={"wheel_radius": {"value": 320.0, "unit": "mm"}})
+        ev = modular(proposals=[first, again])
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"] = [copy.deepcopy(again)]
+        d2["variables"]["wheel_radius"] = again["changes"]["wheel_radius"]
+        self.assertEqual(self.hk6(ev), set())
+        # the two listed (the earlier one not replaced) is wrong, and so is the earlier one alone
+        for listed in ([first, again], [first]):
+            with self.subTest(listed=[x["change_id"] for x in listed]):
+                d2["module_changes"] = copy.deepcopy(listed)
+                self.assertTrue(any("each module's last" in m for m in self.hk6(ev)), self.hk6(ev))
+        # another module's proposal stays
+        other = {"change_id": "chg-0003", "module_id": "frame", "agent_id": "designer.frame", "reason": "x",
+                 "load_case_ids": ["R1-step100"], "changes": {}}
+        ev = modular(case_modules=("suspension", "frame"), proposals=[first, other, again])
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"] = [copy.deepcopy(again), copy.deepcopy(other)]
+        d2["variables"]["wheel_radius"] = again["changes"]["wheel_radius"]
+        self.assertEqual(self.hk6(ev), set())
+
     def test_a_variable_no_module_lists_may_follow_with_a_warning(self):
         ev = modular()
         d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
@@ -1371,7 +1534,17 @@ class Modules(unittest.TestCase):
         one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
                "reason": "r", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
         two = dict(one, change_id="chg-0002", changes={"wheel_radius": {"value": 330.0, "unit": "mm"}})
-        self.assertTrue(any("all change wheel_radius" in m for m in self.hk6(modular(proposals=[one, two]))))
+        # the same module twice: the later proposal replaces the earlier (docs/contract.md, 8762a06), no clash
+        ev = modular(proposals=[one, two])
+        [e for e in ev if e["kind"] == "design.created"][-1]["data"]["module_changes"] = [copy.deepcopy(two)]
+        self.assertFalse(any("all change" in m for m in self.hk6(ev)))
+        # what is left: the packager's change and a module's proposal setting the same layout variable
+        pkg = {"change_id": "chg-0003", "module_id": "package", "agent_id": "packager", "reason": "longer",
+               "design_version": 1, "changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}
+        stray = dict(one, changes={"wheelbase": {"value": 1950.0, "unit": "mm"}})
+        ev = modular(proposals=[stray])
+        [e for e in ev if e["kind"] == "design.created"][-1]["data"]["module_changes"].append(pkg)
+        self.assertTrue(any("all change wheelbase" in m for m in self.hk6(ev)))
 
     def test_no_proposal_without_modules(self):
         ev = modular(modules=False)
@@ -1395,6 +1568,33 @@ class Modules(unittest.TestCase):
                               "rpy_deg": [0.0, 0.0, 90.0]}), set())
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [480.0, 420.0, 220.0]})), 2)
         self.assertEqual(len(run({"center_mm": [-900.0, 0.0, 300.0], "size_mm": [420.0, 520.0, 220.0]})), 2)
+
+    def test_a_module_given_no_room_has_no_place_for_its_parts(self):
+        # as the assembly tool (H1-envelope): a module other than the package with no envelope box
+        ev = modular()
+        for e in ev:
+            if e["kind"] == "design.created":
+                e["data"]["parts"][0]["module"] = "powertrain"
+        said = {f.message for f in self.findings(ev) if f.rule == "module.envelope"}
+        self.assertTrue(said)
+        self.assertTrue(all("which has no envelope box" in m for m in said), said)
+        self.assertTrue(any("part battery is in module powertrain" in m for m in said), said)
+
+    def test_a_member_is_its_tube_not_its_line(self):
+        # the N15 plan's last design with node LS2 raised 60 mm: the assembly tool finds four members out of
+        # their module's room (cross_S2, side_foot_LS2 and two rail pieces whose line stays inside but whose
+        # 80 mm tube does not)
+        from qa.check_run import RunChecker
+
+        d = json.loads((Path(__file__).resolve().parent / "fixtures" / "n15-v005-design.json")
+                       .read_text(encoding="utf-8"))
+        next(n for n in d["nodes"] if n["id"] == "LS2")["xyz_mm"][2] += 60.0
+        said = []
+        probe = mock.Mock(warn=lambda rule, w, text: said.append(text), error=lambda *a: said.append(a))
+        RunChecker._check_envelopes(probe, 5, d, "v005/design.json")
+        self.assertEqual(sorted(said), sorted(f"v5 member {m} leaves the envelope of {mod}" for m, mod in (
+            ("cross_S2", "frame"), ("rail_L_LSG_LS2", "frame"), ("rail_L_S2H", "frame"),
+            ("side_foot_LS2", "occupant"))))
 
 
 

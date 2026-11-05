@@ -45,7 +45,9 @@ import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { mergePieces, partPieces, wheelPieces } from "./shapes.js";
+import { mergePieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
+import { JointMarks } from "./joints.js"; // joints: the joint marks (toggle 接合)
+import { frameEnds, tubeGeometry, tubeSection } from "./tubes.js"; // the frame's hollow tubes
 
 const INK = "#1d1d1f";
 const MUTED = "#6b665c";
@@ -150,12 +152,33 @@ function sectionSize(section) {
   return { round: false, width: d.b ?? d.w ?? d.h ?? 30, height: d.h ?? d.b ?? 30 };
 }
 
-function memberGeometry(design, m, nodes) {
+// A member with a tube section (tubes.js tubeSection): hollow, its ends by frameEnds (ends), the
+// unit tube of its section and ends shared by every such member (cache), stretched by `local`
+// (x from x0 to x1 in the member's frame, x = 0 at the middle of its nodes); else as before.
+function memberGeometry(design, m, nodes, ends = null, cache = null) {
   const a = nodes[m.node_a];
   const b = nodes[m.node_b];
   if (!a || !b) return null;
   const length = a.distanceTo(b);
   if (length < 1e-6) return null;
+  const tube = ends?.[m.id] ? tubeSection(design, m) : null;
+  if (tube) {
+    const e = ends[m.id];
+    const x0 = -length / 2 + e.a.trim;
+    const x1 = length / 2 - e.b.trim;
+    const [capA, capB] = [e.a.kind !== "through", e.b.kind !== "through"];
+    const key = `${tube.kind}|${tube.w}|${tube.h}|${tube.t}|${capA}|${capB}`;
+    let unit = cache?.get(key);
+    if (!unit) {
+      unit = tubeGeometry(tube, capA, capB);
+      unit.geo.userData.shared = true;
+      cache?.set(key, unit);
+    }
+    const local = new THREE.Matrix4().makeTranslation(x0, 0, 0).multiply(new THREE.Matrix4().makeScale(x1 - x0, 1, 1));
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const matrix = memberBasis(a, b).setPosition(mid).multiply(local);
+    return { geo: unit.geo, edges: unit.edges, matrix, local, localInv: local.clone().invert(), x0, x1, ends: e, tube, length, mid, width: tube.w, height: tube.h, round: tube.kind === "round" };
+  }
   const { round, width, height } = sectionSize(design.sections?.[m.section]);
   const geo = round ? new THREE.CylinderGeometry(width / 2, width / 2, length, 20).rotateZ(-Math.PI / 2) : new THREE.BoxGeometry(length, width, height);
   const mid = a.clone().add(b).multiplyScalar(0.5);
@@ -456,6 +479,7 @@ export class Workbench3D {
     this.fitted = false;
     this.keys = { contour: null, vectors: null };
     this.size = { w: 1, h: 1 };
+    this.joints = new JointMarks(this); // joints: marks in the body group, off until the toggle
   }
 
   resize(w, h, pixelRatio) {
@@ -491,15 +515,17 @@ export class Workbench3D {
     this.props.clear();
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
-    if (!design) return;
+    if (!design) return void this.joints.setDesign(null); // joints:
 
     const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
     this.nodes = nodes;
     const ink = [];
     const box = new THREE.Box3();
 
+    const tubeEnds = frameEnds(design);
+    const tubeCache = new Map();
     for (const m of design.members ?? []) {
-      const g = memberGeometry(design, m, nodes);
+      const g = memberGeometry(design, m, nodes, tubeEnds, tubeCache);
       if (!g) continue;
       const mesh = new THREE.Mesh(g.geo, this.look.memberMaterial(design.materials?.[m.material] ?? null, m.part ?? null));
       mesh.material.userData.baseColor = "#" + mesh.material.color.getHexString();
@@ -510,12 +536,27 @@ export class Workbench3D {
       this.model.add(mesh);
       // Edges in the member's own frame, so a mode shape can move them with it.
       const localEdges = [];
-      pushEdges(localEdges, g.geo, null, g.round ? 40 : 20);
-      pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
+      if (g.edges) {
+        // a tube's own ink lines (its rounded corners would give none by the crease angle)
+        const p = new THREE.Vector3();
+        localEdges.push(...g.edges);
+        for (let i = 0; i < g.edges.length; i += 3) {
+          p.set(g.edges[i], g.edges[i + 1], g.edges[i + 2]).applyMatrix4(mesh.matrix);
+          ink.push(p.x, p.y, p.z);
+        }
+      } else {
+        pushEdges(localEdges, g.geo, null, g.round ? 40 : 20);
+        pushEdges(ink, g.geo, mesh.matrix, g.round ? 40 : 20);
+      }
       this.members[m.id] = { mesh, node_a: m.node_a, node_b: m.node_b, localEdges, ...g };
       box.expandByPoint(nodes[m.node_a]).expandByPoint(nodes[m.node_b]);
       if (this.labelRenderer) {
-        const tag = label(esc(m.id), "lbl-id");
+        // member.name (the contract's name for a person) when there is one: its short form (before a
+        // bracket) on the tag, the whole name and the id as the tooltip; else the id as before
+        const short = m.name ? String(m.name).replace(/\s*[（(].*$/, "") || m.name : m.id;
+        const tag = label(esc(short), "lbl-id");
+        tag.element.title = m.name ? `${m.name} (${m.id})` : m.id;
+        tag.element.dataset.member = m.id;
         tag.position.copy(g.mid);
         this.names.add(tag);
       }
@@ -572,7 +613,24 @@ export class Workbench3D {
 
     // Wheels listed as parts are drawn from the supports instead.
     const wheelAt = (c) => (design.supports ?? []).some((sp) => v3(sp.position_mm).distanceTo(c) < 50);
-    let seat = 0;
+    // A seat per person, not per occupant part: an occupant may be given in body segments
+    // ("<person>" the torso, "<person>.<segment>"), and a person's parts board together, in
+    // the order the persons first come in design.parts (hiraku/contract/loading.py).
+    const occupants = (design.parts ?? []).filter((p) => p.kind === "occupant");
+    const seatOf = new Map();
+    for (const p of occupants) if (!seatOf.has(personOf(p))) seatOf.set(personOf(p), seatOf.size);
+    // A person with a head part is drawn segment by segment; a person without one (an occupant
+    // given as one box, or a torso box that still holds the head) keeps the torso drawn as a
+    // capsule with a ball for the head, as before.
+    const headed = new Set(occupants.filter((p) => segmentOf(p) === "head").map(personOf));
+    // the parts drawn here by their short name (one name tag for those that share it)
+    const sameShort = new Map();
+    for (const p of design.parts ?? []) {
+      if (p.kind === "wheel" && wheelAt(v3(p.box.center_mm))) continue;
+      const k = String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id;
+      if (!sameShort.has(k)) sameShort.set(k, []);
+      sameShort.get(k).push(p);
+    }
     for (const p of design.parts ?? []) {
       const c = v3(p.box.center_mm);
       const sz = p.box.size_mm;
@@ -580,7 +638,20 @@ export class Workbench3D {
       if (p.kind === "wheel" && wheelAt(c)) continue;
       const g = new THREE.Group();
       let edges = null;
-      if (p.kind === "occupant") {
+      if (p.kind === "occupant" && (segmentOf(p) !== null || headed.has(personOf(p)))) {
+        // one rounded shape inside the segment's box, turned with it (rpy_deg as for any part)
+        const holder = new THREE.Group();
+        holder.position.copy(c);
+        const rpy = p.box.rpy_deg ?? [0, 0, 0];
+        holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
+        const mat = this.look.partMaterial("occupant");
+        for (const pc of occupantSegmentPieces(p)) {
+          const mesh = new THREE.Mesh(pc.geo, mat);
+          mesh.castShadow = this.look.real;
+          holder.add(mesh);
+        }
+        g.add(holder);
+      } else if (p.kind === "occupant") {
         const mat = this.look.partMaterial("occupant");
         const r = Math.min(sz[0], sz[1]) * 0.26;
         const head = Math.min(sz[0], sz[1]) * 0.2;
@@ -619,14 +690,20 @@ export class Workbench3D {
           g.add(edges);
         }
       }
-      // Short name on the tag (the part before a bracket); the full name is the tooltip.
+      // Short name on the tag (the part before a bracket); the full name is the tooltip. Parts
+      // sharing a short name (a person's body segments) get one tag, on the first of them, with how
+      // many parts it names and no mass (how their masses add up is not in the data); a part whose
+      // mass is 0 or not given shows none (the roll bar's tubes weigh as members, not as its part).
       const short = String(p.name ?? p.id).replace(/\s*[（(].*$/, "") || p.id;
-      const tag = label(`${esc(short)}<small>${fmt(p.mass_kg)} kg</small>`, "lbl-part");
-      tag.element.title = p.name ?? p.id;
+      const same = sameShort.get(short) ?? [];
+      const mass = p.mass_kg > 0 ? `<small>${fmt(p.mass_kg)} kg</small>` : "";
+      const tag = label(same.length > 1 ? `${esc(short)}<small>部品 ${same.length} 個</small>` : `${esc(short)}${mass}`, "lbl-part");
+      tag.element.title = same.length > 1 ? `${short}: ${same.map((x) => x.name ?? x.id).join("、")}` : p.name ?? p.id;
+      if (same.length > 1 && same[0] !== p) tag.element.dataset.named = "0"; // named by the first one's tag
       tag.position.copy(c).add(new THREE.Vector3(0, 0, sz[2] / 2 + 40));
       if (this.labelRenderer) g.add(tag); // a shared renderer draws no labels: kept out of its scene
       this.parts.add(g);
-      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seat++ : null, onBoard: true, center: c, size: sz, short };
+      this.partObjs[p.id] = { group: g, edges, tag, kind: p.kind, seat: p.kind === "occupant" ? seatOf.get(personOf(p)) : null, onBoard: true, center: c, size: sz, short, mass: p.mass_kg ?? 0 };
     }
 
     this.bboxIso = box.isEmpty() ? new THREE.Box3(new THREE.Vector3(-1000, -1000, 0), new THREE.Vector3(1000, 1000, 1000)) : box;
@@ -640,6 +717,7 @@ export class Workbench3D {
       this.fitted = true;
     }
     this.lightAll(); // a rule hit pointed at before stays lit on the new version
+    this.joints.setDesign(design); // joints:
   }
 
   // Light what a rule hit names (the person points at it in A2): ids of parts, frame members,
@@ -771,7 +849,8 @@ export class Workbench3D {
 
   // Who is on board for a load case's params.loading (empty / driver / two /
   // two_cargo; none means two_cargo). Occupants board in the order they are
-  // listed and cargo rides only with two_cargo, as the solvers do. Parts that
+  // listed (a person's segments with the person, o.seat) and cargo rides only
+  // with two_cargo, as the solvers do. Parts that
   // stay off are drawn faint and left out of the centre of gravity.
   setLoading(loading) {
     if (loading === this.loading) return;
@@ -816,6 +895,7 @@ export class Workbench3D {
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
       });
     }
+    this.joints?.partLook(); // joints: the parts see-through while the joints are on
   }
 
   // Centre of gravity used only to place the mark when the analysis gives none:
@@ -1063,7 +1143,7 @@ export class Workbench3D {
     }
     for (const [id, info] of Object.entries(this.members)) {
       const mat = info.mesh.material;
-      const geo = info.mesh.geometry;
+      let geo = info.mesh.geometry;
       mat.vertexColors = false;
       const plain = mat.userData.baseColor ?? GRAY;
       if (!contour) {
@@ -1079,11 +1159,17 @@ export class Workbench3D {
         mat.color.set(colorOf(v, contour.max, contour.min));
         paintTwin(info.mesh, colorOf(v, contour.max, contour.min));
       } else if (typeof va === "number" && typeof vb === "number") {
+        if (geo.userData.shared) {
+          // a tube's shape is shared by the members of its section: this one gets its own copy to paint
+          geo = info.mesh.geometry = geo.clone();
+          geo.userData.shared = false;
+        }
         const pos = geo.getAttribute("position");
         const cols = new Float32Array(pos.count * 3);
         const c = new THREE.Color();
         for (let i = 0; i < pos.count; i += 1) {
-          const u = pos.getX(i) / info.length + 0.5;
+          const x = info.local ? info.x0 + pos.getX(i) * (info.x1 - info.x0) : pos.getX(i);
+          const u = x / info.length + 0.5;
           c.set(colorOf(va + (vb - va) * u, contour.max, contour.min));
           cols.set([c.r, c.g, c.b], i * 3);
         }
@@ -1105,6 +1191,7 @@ export class Workbench3D {
         );
         ghost.matrixAutoUpdate = false;
         ghost.matrix.copy(info.mesh.matrix);
+        if (info.localInv) ghost.matrix.multiply(info.localInv); // back to node to node
         this.overGhosts.add(ghost);
       }
     }
@@ -1360,6 +1447,7 @@ export class Workbench3D {
         m = memberBasis(a, b)
           .scale(new THREE.Vector3(a.distanceTo(b) / info.length, 1, 1))
           .setPosition(a.clone().add(b).multiplyScalar(0.5));
+        if (info.local) m.multiply(info.local); // a tube: its unit shape stretched between its ends
       }
       info.mesh.matrix.copy(m);
       info.mesh.matrixWorldNeedsUpdate = true;
@@ -1728,12 +1816,14 @@ export class Workbench3D {
     this.arrows.visible = !!t.arrows && !this.frame;
     this.names.visible = !!t.names;
     this.markers.visible = !!t.names;
-    for (const o of Object.values(this.partObjs)) o.tag.visible = !!t.names;
+    for (const o of Object.values(this.partObjs)) o.tag.visible = !!t.names && o.tag.element.dataset.named !== "0";
     for (const o of Object.values(this.wheelObjs)) o.tag.visible = !!t.names || o.ring.visible;
     this.overGhosts.visible = !!t.contour;
     this.ghost.visible = !!this.frame && !!t.limit && this.liftIsLimit !== false;
     this.cg.visible = !!t.cg && !!this.cgPos && !this.closeUp;
     this.placeMotionArrows(this.frame);
+    if ("joints" in t) this.joints.setOn(t.joints); // joints: (a view given no joints key keeps its own)
+    else this.joints.sync();
   }
 
   // Time-driven effects use the playhead only, so a frozen ?t= frame is repeatable.
@@ -1800,6 +1890,30 @@ export class Workbench3D {
     if (this.labelRenderer) {
       this.labelRenderer.render(this.scene, this.camera);
       this.placeOutLabels();
+      this.declutterNames();
+    }
+  }
+
+  // With 名前 on, a name tag that would lie over one already shown is hidden (thinned out): the
+  // parts first, heaviest first, then the members' and nodes' ids. Looked at every few frames
+  // (the tags move with the camera); a hidden tag keeps its place and comes back when clear.
+  declutterNames() {
+    if (!this.toggles?.names) return;
+    this.declutterTick = ((this.declutterTick ?? 0) + 1) % 6;
+    if (this.declutterTick !== 1) return;
+    const tags = [];
+    for (const o of Object.values(this.partObjs)) if (o.tag.visible && o.tag.element.dataset.named !== "0") tags.push({ el: o.tag.element, rank: 0, w: -(o.mass ?? 0) });
+    for (const t of this.names.children) if (t.element) tags.push({ el: t.element, rank: t.element.classList.contains("lbl-node") ? 2 : 1, w: 0 });
+    tags.sort((a, b) => a.rank - b.rank || a.w - b.w);
+    const kept = [];
+    for (const t of tags) {
+      t.el.style.visibility = "";
+      if (t.el.style.display === "none") continue;
+      const r = t.el.getBoundingClientRect();
+      if (!(r.width > 0)) continue;
+      const hit = kept.some((k) => r.left < k.right && r.right > k.left && r.top < k.bottom && r.bottom > k.top);
+      if (hit) t.el.style.visibility = "hidden";
+      else kept.push(r);
     }
   }
 

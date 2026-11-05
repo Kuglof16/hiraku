@@ -797,8 +797,11 @@ def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], si
             if (c - n0) @ u_in > 0:
                 cands.append((j, host, br, n0, u_in))
         if not cands:
+            tied = [j for j in joints if j.node == node and j.kind == "tied"]
+            why = (f" (the joint of {runs[tied[0].branch].members[0]} there is tied: {tied[0].reason})" if tied
+                   else "")
             raise DesignError(f"gusset {p['id']!r}: node {node!r} has no T joint (a tube ending square on the side "
-                              f"of a rect tube, sharing its ring) on the side of the gusset's centre; put gussets "
+                              f"of a rect tube, sharing its ring) on the side of the gusset's centre{why}; put gussets "
                               f"at T joints")
         j, host, br, n0, u_in = cands[0]
         u_s = host.ex if (c - n0) @ host.ex >= 0 else -host.ex
@@ -926,7 +929,10 @@ def build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_stri
     return copy.deepcopy(mesh)
 
 
-def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
+def joint_layout(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True):
+    """The tubes' runs, their joints and the gussets as the mesh lays them out before the grids (a joint whose grid
+    lines clash with another's becomes tied, and a gusset on a tied joint raises DesignError): (mem, runs, ends,
+    joints, gussets, run_through, mount_nodes). The design generator calls it to refuse such gussets."""
     size = float(element_size_mm)
     if not size > 0:
         raise ValueError("element_size_mm must be positive")
@@ -946,10 +952,39 @@ def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_str
         bad = _clashes(runs, joints)
         if not bad:
             break
+        whom = {id(j): _clashing_with(j, joints, runs) for j in bad}
         for j in bad:
             _untie_through(runs, j)
             j.kind = "tied"
-            j.reason = "its grid lines would clash with another joint's"
+            j.reason = f"its grid lines would clash with {whom[id(j)]}"
+    return mem, runs, ends, joints, gussets, run_through, mount_nodes
+
+
+def _clashing_with(j: _Joint, joints: list[_Joint], runs: list[_Run]) -> str:
+    """Which other joints' grid lines cross j's footprint on the same tube (for the reason a joint is tied):
+    "the joint of <member> at <node> (<wall>)", or the lines of a gusset or a wheel mount when no joint's do."""
+    s0, s1, c0, c1 = j.footprint
+    own_s = set(j.s_set)
+    near = {j.wall: (c0, c1, set(j.c_set))}
+    if j.through and j.far_footprint:
+        near[j.far_wall] = (*j.far_footprint[2:], set(j.far_c_set))
+    out = []
+    for k in joints:
+        if k is j or k.host != j.host or k.kind == "tied" or not k.s_set:
+            continue
+        hit = any(s0 + TOL < s < s1 - TOL and s not in own_s for s in k.s_set)
+        walls = [(k.wall, k.c_set)] + ([(k.far_wall, k.far_c_set)] if k.through else [])
+        hit = hit or any(w in near and any(near[w][0] + TOL < c < near[w][1] - TOL and c not in near[w][2] for c in cs)
+                         for w, cs in walls)
+        if hit:
+            where = " (through to the far wall)" if k.through else ""
+            out.append(f"the joint of {runs[k.branch].members[0]} at {k.node}{where}")
+    return ", ".join(sorted(set(out))) if out else "the lines of a gusset or a wheel mount next to it"
+
+
+def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
+    size = float(element_size_mm)
+    mem, runs, ends, joints, gussets, run_through, mount_nodes = joint_layout(design, size, weld_strips)
 
     # ---- grids per run
     all_nodes, grids, run_elems = [], [], []

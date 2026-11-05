@@ -1,6 +1,10 @@
 // Names shown on the screen and number formatting. Formatting only rounds
 // recorded values for display; it never makes a new number.
 
+// The cuts' words for a pass and a fail (one wording on every cut).
+export const OK_WORD = "✓ OK";
+export const NG_WORD = "✕ NG";
+
 export const DOMAINS = ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"];
 
 export const DOMAIN_JA = {
@@ -86,6 +90,26 @@ export const STOP_CODE_JA = {
   red_left: "赤の分野を残したまま終わった", // rounds were left, but the hooks' stop limit ended it with red domains
 };
 
+// Why a role stopped (agent.stopped stop_code, contract a31e520), in words. run_ended: the run
+// ended while the role was still working (the run's own reason is run.finished's stop_code).
+export const AGENT_STOP_JA = {
+  done: "自分の仕事を終えた",
+  run_ended: "動いている間に実行が終わった",
+  user_stop: "人が止めた",
+  error: "エラーで終わった",
+};
+export const AGENT_STOP_NOTE_CHARS = 40; // a stop_reason up to this long is shown as it is; a longer one goes under くわしく / into the title
+
+// agent.stopped's data said for people: { code, words, reason } (words: AGENT_STOP_JA of stop_code;
+// reason: stop_reason, trimmed), or null when the record says neither (records from before a31e520).
+export function agentStopWhy(d) {
+  const code = typeof d?.stop_code === "string" ? d.stop_code : null;
+  const reason = typeof d?.stop_reason === "string" && d.stop_reason.trim() ? d.stop_reason.trim() : null;
+  const words = AGENT_STOP_JA[code] ?? null;
+  if (!words && !reason) return null;
+  return { code, words, reason };
+}
+
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
@@ -93,6 +117,7 @@ export const RULES = [
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
+  { id: "HK6", key: "HK6_module_scope", ja: "持ち場" }, // modules: contract d9631a5
 ];
 
 export const BASE_JA = {
@@ -212,6 +237,13 @@ const QUANTITY_JA = {
   blocked_parts: "入らない部品の数",
   steps_without_tool_clearance: "工具が入らない手順の数",
   steps_out_of_reach: "手が届かない手順の数",
+  // held: the joints and the modules' spaces (hiraku/solvers/shelf/assembly.py at 7fc0ffc)
+  joint_gap_count: "つながりの不足の数",
+  joint_gaps: "離れたつながりの数",
+  unjoined_parts: "つながりの無い部品の数",
+  worst_joint_gap: "いちばん離れたつながり",
+  envelope_outside_count: "モジュールの空間からはみ出した部品の数",
+  worst_envelope_outside: "いちばん大きいはみ出し",
   free_steer_angle: "当たらずに切れる舵角",
   max_steer_angle: "最大の舵角",
   // the shell solver (frame_shell): the judged hot-spot stress
@@ -236,7 +268,125 @@ const QUANTITY_JA = {
   knee_room: "ひざの前のすき間",
   tip_slope_angle: "山側の輪が浮く斜面の角度",
   climbable: "段差を登れるか",
+  // the quantities of the N15 v5 record without a name before (one per id; a dotted id reads as
+  // its base's name and what follows the dot, quantityName)
+  mean_uphill_load: "山側の輪の平均の荷重",
+  free_steer_angle_geometric: "当たらずに切れる舵角 (平面の幾何)",
+  free_parts: "枠につながっていない部品の数",
+  free_part: "枠につながっていない部品",
+  unsupported_load: "支えの無い荷重",
+  grip_deflection: "握る点の動き",
+  pedal_deflection: "ペダルの面の動き",
+  occupant_push_deflection: "乗員を押したときの外側の動き",
+  occupant_push_open: "外側に何も無い押す点の数",
+  max_utilisation: "応力と許しの比 (最大)",
+  allowable_stress: "許される応力",
+  max_part_deflection: "部品の最大の動き",
+  temp_motor_max: "モーターのいちばん高い温度",
+  temp_battery_end: "終わりの電池の温度",
+  temp_controller_end: "終わりの制御器の温度",
+  temp_motor_end: "終わりのモーターの温度",
+  loss_battery_mean: "電池の平均の損失",
+  loss_controller_mean: "制御器の平均の損失",
+  loss_motor_mean: "モーターの平均の損失",
+  wheel_load_FL: "前左の輪の荷重",
+  wheel_load_FR: "前右の輪の荷重",
+  wheel_load_RL: "後左の輪の荷重",
+  wheel_load_RR: "後右の輪の荷重",
+  min_rear_axle_load: "後軸の最小荷重",
+  peak_tractive_force: "最大の駆動力",
+  top_speed_power: "出力で決まる最高速度",
+  mean_decel_g: "平均減速度 (g)",
+  max_lateral_accel_g: "最大横加速度 (g)",
+  speed_at_stop: "止まったときの速さ",
+  head_clearance: "頭の上のすき間",
+  hip_room: "腰まわりのすき間",
+  shoulder_room: "肩まわりのすき間",
+  leg_clearance: "脚まわりのすき間",
+  foot_room: "足元のすき間",
+  knee_angle_room: "ひざの角度の余り",
+  pedal_reach: "ペダルへの届き",
+  spray_reaching_occupant: "乗員に届く巻き上げの線の数",
+  spray_uncovered_arc: "覆われていない巻き上げの弧",
+  first_rollbar_mode: "ロールバーの 1 次の固有振動数",
+  driveshaft_bending_mode: "ドライブシャフトの曲げの固有振動数",
+  driveshaft_torsion_mode: "ドライブシャフトのねじりの固有振動数",
+  fatigue_damage: "疲労の損傷度",
+  max_stress_axial: "軸力の応力 (最大)",
+  max_stress_beam: "梁の応力 (最大)",
+  max_stress_bending_sideways: "横の曲げの応力 (最大)",
+  max_stress_bending_vertical: "縦の曲げの応力 (最大)",
+  max_stress_torsion: "ねじりの応力 (最大)",
+  tipped: "倒れたか",
+  lifted_by_push: "押して浮いたか",
 };
+
+// Names of the series channels (the name before the dot: wheel_camber.FL -> wheel_camber) that
+// series.js GROUPS does not name, for the graph's chips and the tiles' small charts. Names only;
+// a channel not here is shown as written.
+const CHANNEL_JA = {
+  wheel_camber: "キャンバー",
+  wheel_toe: "トー",
+  wheel_torque: "輪のトルク",
+  mount: "取付点の力",
+  temp: "温度",
+  frequency_response: "周波数応答",
+  deceleration: "減速度",
+  decel: "減速度",
+  crush: "つぶれ",
+  wall_force: "壁の力",
+  soc: "電池残量",
+  power: "出力",
+  current: "電流",
+  grade: "勾配",
+  slope_angle: "斜面の角度",
+  wind_speed: "風速",
+  path_y: "横の位置",
+  body_torque: "車体にかかるトルク",
+  stress: "応力",
+  stress_ranges: "応力の幅",
+  sn_curve: "S-N 線図",
+  inertia_force: "慣性力",
+  inertia_moment: "慣性力のモーメント",
+  table_angle: "台の角度",
+  steer: "操舵角",
+  accel: "加速度",
+  cg: "重心",
+  roll: "ロール",
+  pitch: "ピッチ",
+  sprung_accel: "ばね上の加速度",
+  sprung_ang_vel: "ばね上の角速度",
+  sprung_cg: "ばね上の重心",
+  sprung_roll: "ばね上のロール",
+  sprung_pitch: "ばね上のピッチ",
+  sprung_yaw: "ばね上のヨー",
+  speed: "速さ",
+  yaw: "ヨー",
+};
+// The names after the dot that are not a wheel (series.js wheelName): the parts a quantity is of
+// (temp.battery), the suspension's mounts (mount_x.FL.lca_front). Not here: shown as written.
+const CHANNEL_PART_JA = {
+  battery: "電池",
+  motor: "モーター",
+  controller: "制御器",
+  damper_upper: "ダンパー上",
+  lca_front: "下アーム前",
+  lca_rear: "下アーム後",
+  uca_front: "上アーム前",
+  uca_rear: "上アーム後",
+  tie_inner: "タイロッド内",
+};
+// The axis at the end of a name (inertia_force_x): the road frame's (x along the road, y left, z up).
+const AXIS_JA = { x: "前後", y: "左右", z: "上下" };
+export function channelName(base) {
+  if (CHANNEL_JA[base]) return CHANNEL_JA[base];
+  const m = /^(.+)_([xyz])$/.exec(base ?? "");
+  if (m && CHANNEL_JA[m[1]]) return `${CHANNEL_JA[m[1]]} (${AXIS_JA[m[2]]})`;
+  return base;
+}
+export function channelPartName(id) {
+  return CHANNEL_PART_JA[id] ?? id;
+}
 
 // Names for viewers who do not know CAE (the video's pages): the trade's words left out.
 // A quantity not listed here reads as quantityName.
@@ -324,7 +474,27 @@ const VARIABLE_JA = {
   battery_x: "電池の前後の位置",
   wheelbase: "ホイールベース",
   track: "トレッド",
+  // modules: the variables a module designer changes in the sample records
+  front_spring_rate: "前のばねの硬さ",
+  rear_spring_rate: "後ろのばねの硬さ",
+  cargo_height: "荷の高さ",
+  rail_t: "レールの板厚",
+  seat_x: "座席の前後の位置",
+  max_steer_angle: "最大の舵角",
 };
+
+// A design variable's name for viewers: design.variable_names (written by the generator,
+// contract b615e2c) when it names it, else VARIABLE_JA; null when neither does.
+export function variableName(name, design = null) {
+  const own = design?.variable_names?.[name];
+  if (typeof own === "string" && own.trim()) return own;
+  return VARIABLE_JA[name] ?? null;
+}
+
+// modules: module id -> name (filled from the server's /api/modules, the contract's MODULE_NAMES_JA;
+// empty when the server has no such route: the id is shown as written)
+export const MODULE_JA = {};
+export const moduleName = (m) => MODULE_JA[m] ?? m ?? "";
 const DIM_JA = { t: "板厚", h: "高さ", b: "幅", d: "直径" };
 const PART_FIELD_JA = { mass_kg: "重さ" };
 const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
@@ -334,7 +504,8 @@ const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
 // design, before any bracket); null when it has no name here.
 export function designNumberName(path, design = null) {
   const p = String(path ?? "").split(".");
-  if (p[0] === "variables") return VARIABLE_JA[p[1]] ?? null;
+  // a variable: the design's own name for it (design.variable_names, contract b615e2c), else this table
+  if (p[0] === "variables") return variableName(p[1], design);
   if (p[0] === "sections" && p.at(-2) === "dims_mm") return DIM_JA[p.at(-1)] ? `フレームの管の${DIM_JA[p.at(-1)]}` : null;
   if (p[0] === "parts" && PART_FIELD_JA[p.at(-1)]) {
     const part = (design?.parts ?? []).find((x) => x.id === p[1]);
@@ -362,13 +533,49 @@ export function resultText(r, sig = 3) {
 }
 
 export function quantityName(q) {
-  return QUANTITY_JA[q] ?? q ?? "";
+  if (q == null) return "";
+  if (QUANTITY_JA[q]) return QUANTITY_JA[q];
+  // max_stress.rail_L_FA, pedal_deflection.pedal_brake: the base's name, then what it is of
+  const dot = String(q).indexOf(".");
+  if (dot > 0 && QUANTITY_JA[q.slice(0, dot)]) return `${QUANTITY_JA[q.slice(0, dot)]} (${q.slice(dot + 1)})`;
+  return q;
+}
+
+// Load cases that share a test id (R8 x 3, T2 x 2, ...): a short name for each from its title, to
+// tell them apart beside the id. The words their titles share at the start and at the end are
+// left out, then the rest up to its first bracket or comma, at most SHORT_MAX letters.
+// -> Map load_case_id -> short name (only for ids that repeat).
+const SHORT_MAX = 9;
+export function caseShortNames(cases) {
+  const byTest = new Map();
+  for (const c of cases ?? []) {
+    if (!byTest.has(c.test_id)) byTest.set(c.test_id, []);
+    byTest.get(c.test_id).push(c);
+  }
+  const out = new Map();
+  for (const list of byTest.values()) {
+    if (list.length < 2) continue;
+    const titles = list.map((c) => [...String(c.title ?? c.load_case_id)]);
+    let pre = 0;
+    while (titles.every((t) => pre < t.length && t[pre] === titles[0][pre])) pre += 1;
+    let suf = 0;
+    while (titles.every((t) => suf < t.length - pre && t[t.length - 1 - suf] === titles[0][titles[0].length - 1 - suf])) suf += 1;
+    list.forEach((c, i) => {
+      let s = titles[i].slice(pre, titles[i].length - suf).join("").replace(/^[\s、・のをで]+/, "");
+      s = s.split(/\s*[（(、,]/)[0].trim();
+      const letters = [...s];
+      s = letters.length > SHORT_MAX ? `${letters.slice(0, SHORT_MAX).join("")}…` : s;
+      out.set(c.load_case_id, s || c.load_case_id);
+    });
+  }
+  return out;
 }
 
 export function agentName(id) {
   if (!id) return "";
   if (ROLE_JA[id]) return ROLE_JA[id];
   if (id.startsWith("cae.")) return DOMAIN_JA[id.slice(4)] ?? id;
+  if (id.startsWith("designer.")) return `${moduleName(id.slice(9))}の設計役`; // modules: designer.<module>
   return id;
 }
 
@@ -435,6 +642,52 @@ export function fmtVU(value, unit, sig) {
 // with the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
 export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (API キー)", claude_code_plugin: "Claude Code" };
 
+// How a run was driven, in the run list's words: 決まった手順で再現 (scripted) or Claude で実行.
+export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
+
+// run.finished stop_code, said short in the run list: 途中で止まった (…) (the words of STOP_CODE_JA, shorter).
+export const STOP_SHORT_JA = {
+  not_judged: "判定の無い分野を残した",
+  round_limit: "繰り返しの上限に達した",
+  red_left: "赤の分野を残した",
+  cost_limit: "上限の費用に達した",
+  turn_limit: "ターン数の上限に達した",
+  user_stop: "人が止めた",
+};
+const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
+
+// A stop_reason said short: the code's words, else (records older than stop_code) the reason's
+// known opening, else its first sentence up to 18 characters.
+export function stopShort(code, reason) {
+  if (STOP_SHORT_JA[code]) return STOP_SHORT_JA[code];
+  const s = (reason || "").trim();
+  if (/^まだ判定の無い分野/.test(s)) return STOP_SHORT_JA.not_judged;
+  if (!s) return "";
+  const first = s.split(/[。(（]/)[0].trim() || s;
+  return [...first].length > 18 ? [...first].slice(0, 18).join("") + "…" : first;
+}
+
+// How a run ended, one phrase for its row in the run list, from /api/runs' summary
+// (hiraku/webserve/server.py _run_summary): finished, end_status, stop_code, stop_reason,
+// stop_after, last_version, judged {green, red, pending}.
+export function endingJa(r) {
+  if (!r.finished) return "実行中";
+  const v = Number.isInteger(r.last_version) ? `・版 ${r.last_version}` : "";
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return "分野を選ぶところまで";
+  const j = r.judged;
+  if (r.end_status === "stopped") {
+    const why = stopShort(r.stop_code, r.stop_reason);
+    return `途中で止まった${why ? ` (${why})` : ""}${v}`;
+  }
+  if (r.end_status === "failed") return `エラーで止まった${v}`;
+  if (j && j.green > 0 && !j.red && !j.pending) return `全部合格${v}`;
+  if (j) {
+    const parts = [j.green ? `合格 ${j.green}` : "", j.red ? `赤 ${j.red}` : "", j.pending ? `判定なし ${j.pending}` : ""].filter(Boolean);
+    return `完了${v}・${parts.join("・")}`;
+  }
+  return `完了${v}・判定なし`;
+}
+
 // The run list for people (no ?dev=1): one line per demo run of data/catalog/demo_runs.yaml, by its id,
 // saying what it lets you do. The yaml's title and shows are written for the developers; an id not here
 // shows its title.
@@ -488,6 +741,14 @@ const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;
 
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+}
+
+// Escaped text with each aside in brackets of up to max letters (one bracket inside allowed:
+// "(電池を下げた (形の見本))") made one piece (span.aside: wraps only within itself when longer
+// than the line), so a line does not break inside a short aside.
+export function keepAsides(s, max = 40) {
+  const re = new RegExp(`\\(((?:[^()]|\\([^()]*\\)){1,${max}})\\)`, "g");
+  return esc(s).replace(re, '<span class="aside">($1)</span>');
 }
 
 // What an agent said, as plain text: Markdown marks (bold, headings, code,

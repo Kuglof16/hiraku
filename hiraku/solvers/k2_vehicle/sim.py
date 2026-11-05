@@ -39,6 +39,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .jit import ENABLED as JIT, njit
 from .model import Vehicle
 from .road import Road
 from .tyre import tyre_of
@@ -96,6 +97,82 @@ def _to_body(rot, x, y, z):
             r02 * x + r12 * y + r22 * z)
 
 
+@njit
+def _k_path(rows, s, lo, hi, hx, hy, hz, side, camber0, toe0, cc, ct):
+    """Sim._path_py over the K&C table's polynomial rows (wheel centre x, y, z, camber, toe)."""
+    sc = lo if s < lo else (hi if s > hi else s)
+    ext = s - sc
+    ncoef = rows.shape[1]
+    out = np.empty((5, 3))
+    for r in range(2):  # wheel centre x and y: value, first and second derivative
+        v, d1, d2 = rows[r, 0], 0.0, 0.0
+        for k in range(1, ncoef):
+            ck = rows[r, k]
+            d2 = d2 * sc + 2.0 * d1
+            d1 = d1 * sc + v
+            v = v * sc + ck
+        if ext != 0.0:
+            v = v + d1 * ext
+            d2 = 0.0
+        out[r, 0], out[r, 1], out[r, 2] = v, d1, d2
+    out[2, 0], out[2, 1], out[2, 2] = (sc + 1.0 * ext if ext != 0.0 else sc), 1.0, 0.0
+    for r in range(3, 5):  # camber and toe: value and first derivative
+        v, d1 = rows[r, 0], 0.0
+        for k in range(1, ncoef):
+            ck = rows[r, k]
+            d1 = d1 * sc + v
+            v = v * sc + ck
+        if ext != 0.0:
+            v = v + d1 * ext
+        out[r, 0], out[r, 1], out[r, 2] = v, d1, 0.0
+    sd_ = -1.0 if side < 0 else 1.0
+    return (hx + out[0, 0], hy + sd_ * out[1, 0], hz + out[2, 0], out[0, 1], sd_ * out[1, 1], out[2, 1],
+            out[0, 2], sd_ * out[1, 2], out[2, 2], -side * out[3, 1], -side * out[4, 1],
+            camber0 + out[3, 0] + cc, toe0 + out[4, 0] + ct)
+
+
+@njit
+def _k_comply(rows, s, lo, hi, rot, lx, ly, lz, tx, ty, tz, fl, ft, mz, side):
+    """Sim._comply_py for one corner: (toe, camber) of the compliance table at the travel times the force."""
+    sc = lo if s < lo else (hi if s > hi else s)
+    vals = np.empty(rows.shape[0])
+    for r in range(rows.shape[0]):
+        v = rows[r, 0]
+        for k in range(1, rows.shape[1]):
+            v = v * sc + rows[r, k]
+        vals[r] = v
+    r00, r01, r02, r10, r11, r12, r20, r21, r22 = rot
+    lbx, lby = r00 * lx + r10 * ly + r20 * lz, r01 * lx + r11 * ly + r21 * lz
+    tbx, tby = r00 * tx + r10 * ty + r20 * tz, r01 * tx + r11 * ty + r21 * tz
+    fx = fl * lbx + ft * tbx
+    fy = fl * lby + ft * tby
+    m = mz
+    if side < 0:
+        fy, m = -fy, -m
+    return vals[0] * fx + vals[2] * fy + vals[4] * m, vals[1] * fx + vals[3] * fy + vals[5] * m
+
+
+@njit
+def _solve_pairs(mm, rhs, pairs):
+    """Sim._solve_sym_py: M x = b on the mirror pairs' sums and differences (mm and rhs are changed)."""
+    for k in range(pairs.shape[0]):
+        i, j = pairs[k, 0], pairs[k, 1]
+        ci, cj = mm[:, i].copy(), mm[:, j].copy()
+        mm[:, i], mm[:, j] = ci + cj, ci - cj
+    for k in range(pairs.shape[0]):
+        i, j = pairs[k, 0], pairs[k, 1]
+        ri, rj = mm[i, :].copy(), mm[j, :].copy()
+        mm[i, :], mm[j, :] = ri + rj, ri - rj
+        bi, bj = rhs[i], rhs[j]
+        rhs[i], rhs[j] = bi + bj, bi - bj
+    y = np.linalg.solve(mm, rhs)
+    x = y.copy()
+    for k in range(pairs.shape[0]):
+        i, j = pairs[k, 0], pairs[k, 1]
+        x[i], x[j] = y[i] + y[j], y[i] - y[j]
+    return x
+
+
 @dataclass
 class Controls:
     steer: list   # per corner (rad)
@@ -137,17 +214,22 @@ class Sim:
             self.m_dof = self.m_dof + self.mu_[i]
         self.kc = [c.path is not None and bool(np.any(c.path.coef[[0, 1, 3, 4]])) for c in cs]
         self.coef = [c.path.coef.tolist() if c.path is not None else None for c in cs]
+        self._coef = [np.ascontiguousarray(c.path.coef, dtype=np.float64) if c.path is not None else None
+                      for c in cs]  # for the compiled _k_path
         self.camber0 = [c.path.camber0 if c.path is not None else 0.0 for c in cs]
         self.toe0 = [c.path.toe0 if c.path is not None else 0.0 for c in cs]
         self.s_lo = [c.path.s_lo if c.path is not None else -1.0 for c in cs]
         self.s_hi = [c.path.s_hi if c.path is not None else 1.0 for c in cs]
         self.comp = [c.path.comp.tolist() if c.path is not None and c.path.comp is not None else None for c in cs]
+        self._comp = [np.ascontiguousarray(c.path.comp, dtype=np.float64)
+                      if c.path is not None and c.path.comp is not None else None for c in cs]  # for _k_comply
         pos = {i: k for k, i in enumerate(self.dofidx)}
         self.pairs = []
         for i, c in enumerate(cs):
             j = c.mirror
             if j > i and c.dof and cs[j].dof:
                 self.pairs.append((6 + pos[i], 6 + pos[j]))
+        self._pairs = np.array(self.pairs, dtype=np.int64).reshape(-1, 2)  # for the compiled _solve_pairs
         self.groups = []
         seen = set()
         for i, c in enumerate(cs):
@@ -210,6 +292,14 @@ class Sim:
             return hx, hy, hz, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.camber0[i], self.toe0[i]
         if not self.kc[i]:
             return hx, hy, hz + s, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        if JIT:
+            return _k_path(self._coef[i], float(s), self.s_lo[i], self.s_hi[i], hx, hy, hz, self.side[i],
+                           self.camber0[i], self.toe0[i], self.cc[i], self.ct[i])
+        return self._path_py(i, s)
+
+    def _path_py(self, i: int, s: float):
+        """_path on a K&C table in plain Python: the reference the compiled _k_path is tested against."""
+        hx, hy, hz = self.hard[i]
         lo, hi = self.s_lo[i], self.s_hi[i]
         sc = lo if s < lo else (hi if s > hi else s)
         ext = s - sc
@@ -664,6 +754,18 @@ class Sim:
         """Toe and camber of the K&C compliance for the next step: the table's compliance at the
         travel times this step's tyre force at the contact (body x, y) and aligning moment. The
         tables are for a left wheel, so a right wheel's Fy and Mz go in mirrored."""
+        if not JIT:
+            return self._comply_py(keep, fl, ft, mz, rot)
+        for i in range(self.n):
+            rows = self._comp[i]
+            if rows is None or keep[i] is None:
+                continue
+            k = keep[i]
+            self.ct[i], self.cc[i] = _k_comply(rows, self.s[i], self.s_lo[i], self.s_hi[i], rot, k[0], k[1], k[2],
+                                               k[3], k[4], k[5], fl[i], ft[i], mz[i], self.side[i])
+
+    def _comply_py(self, keep, fl, ft, mz, rot):
+        """_comply in plain Python: the reference the compiled _k_comply is tested against."""
         for i in range(self.n):
             rows = self.comp[i]
             if rows is None or keep[i] is None:
@@ -705,6 +807,12 @@ class Sim:
         """Solve M x = b on mirror-pair sums/differences (exact zeros stay zero)."""
         if not self.pairs:
             return np.linalg.solve(mm, rhs)
+        if JIT:
+            return _solve_pairs(mm, rhs, self._pairs)
+        return self._solve_sym_py(mm, rhs)
+
+    def _solve_sym_py(self, mm: np.ndarray, rhs: np.ndarray) -> np.ndarray:
+        """_solve_sym in numpy from Python: the reference the compiled _solve_pairs is tested against."""
         m2 = mm
         b2 = rhs
         for i, j in self.pairs:

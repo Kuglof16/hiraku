@@ -20,6 +20,14 @@ or setUpModule) runs one process per method (--no-split keeps it whole). --only 
 runs only the classes whose name starts with PREFIX (its times are added to the file,
 not put in place of it).
 
+Memory: each worker reports its peak (runs/test_memory.json, local). A class whose peak
+was HEAVY_GB or more (or one of KNOWN_HEAVY_GB, whose value is a floor) is heavy: at most
+--max-heavy (default 2) heavy classes run at once, and a heavy class waits while another
+runs and free memory is under its peak plus RESERVE_GB ("waiting for memory: ..."); the
+lighter classes after it go first meanwhile. A scripted run's own process is not in its
+class's peak on Windows. Each worker gets HIRAKU_CONVERGENCE_JOBS=1 unless it is set: the
+convergence test's mesh levels run one at a time, as its KNOWN_HEAVY_GB value counts them.
+
 A class that failed for lack of memory (MemoryError, numpy's _ArrayMemoryError,
 Windows' "paging file too small" WinError 1455: the machine was full, often
 with other work) is run again alone after the pool, one at a time, and printed
@@ -51,13 +59,24 @@ import sys
 import tempfile
 import time
 import unittest
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from qa import procs
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMES = ROOT / "runs" / "test_times.json"  # runs/ is local (not committed)
+MEMORY = ROOT / "runs" / "test_memory.json"  # each class's peak memory (GB) last time, local too
+HEAVY_GB = 4.0  # a class whose peak was this much or more is "heavy": at most --max-heavy of them at once
+RESERVE_GB = 4.0  # a heavy class starts only when free memory is its last peak plus this (unless none runs)
+# heavy whatever their own process's peak says (the floor of memory_of): measured on 11/5 00:32 (four
+# at once took about 34 GB). SpaceFrameConvergenceTest runs each mesh level in a child process (one at a
+# time by default), whose memory is not in the worker's peak: 15.7 GB is the 14 mm level's on Linux (EC2, 11/5
+# 11:30; 14.4 GB on Windows, 11/5 02:26).
+KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
+                  "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 15.7,
+                  "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
+                  "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
+CONVERGENCE_JOBS = "HIRAKU_CONVERGENCE_JOBS"  # mesh levels the convergence test runs side by side (worker_env)
 # started first when there are no times yet
 HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verification.test_tools_protocol",
          "tests.solvers.test_frame_shell", "tests.solvers.test_k1_shell", "tests.tools.test_made_tools")
@@ -67,7 +86,8 @@ CLASS_SKIP_RE = re.compile(r"^setUpClass \(([\w.]+)\)$")
 # (commitment limit) or 0xC0000017 (no memory) leaves only its exit code; on Linux the OOM killer's SIGKILL is exit -9
 MEMORY_RE = re.compile(r"MemoryError|\[WinError 1455\]|Memory allocation still failed"
                        r"|\bexit (3221225773|3221225495|-9)\b")
-LOCK_DIR = Path(tempfile.gettempdir()) / "hiraku-run-tests"  # one file per qa.run_tests running on this PC
+# one file per qa.run_tests running on this PC; HIRAKU_RUN_TESTS_LOCK_DIR moves it (tests of the lock itself)
+LOCK_DIR = Path(os.environ.get("HIRAKU_RUN_TESTS_LOCK_DIR") or Path(tempfile.gettempdir()) / "hiraku-run-tests")
 
 
 # --- other suites on the same PC ----------------------------------------------------------
@@ -144,9 +164,10 @@ def _lock_byte(f) -> bool:
         return False
 
 
-def take_queue(jobs: int, wait: bool = True, say=print):
+def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_tests"):
     """The machine-wide suite lock: the open lock file (keep it open while the suite runs; the OS frees
-    the lock when the process ends), or None when another run holds it and wait is False."""
+    the lock when the process ends), or None when another run holds it and wait is False. what: the
+    holder's job, shown to those waiting (qa.slot takes the same lock for other heavy jobs)."""
     LOCK_DIR.mkdir(exist_ok=True)
     f = open(LOCK_DIR / QUEUE_FILE, "a+b")
     shown = None
@@ -160,10 +181,10 @@ def take_queue(jobs: int, wait: bool = True, say=print):
             holder = {}
         if holder.get("pid") != shown:
             shown = holder.get("pid")
-            say(f"waiting for {holder.get('pid', '?')} ({holder.get('root', '?')}, since {holder.get('started', '?')})",
-                flush=True)
+            say(f"waiting for {holder.get('pid', '?')} ({holder.get('what', 'qa.run_tests')}, {holder.get('root', '?')}, "
+                f"since {holder.get('started', '?')})", flush=True)
         time.sleep(POLL_S)
-    (LOCK_DIR / QUEUE_INFO).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs,
+    (LOCK_DIR / QUEUE_INFO).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs, "what": what,
                                                    "started": time.strftime("%H:%M")}), encoding="utf-8")
     return f
 
@@ -216,7 +237,7 @@ def discover(only: list[str] | None = None, split: dict[str, float] | None = Non
         groups = {k: v for k, v in groups.items() if k.startswith(tuple(only))}
     if split:
         for name in [k for k, ids in groups.items() if k in classes and len(ids) > 1]:
-            if _weight(name, split) >= SPLIT_S and not _shares_setup(classes[name]):
+            if (_weight(name, split) or 0.0) >= SPLIT_S and not _shares_setup(classes[name]):  # None: never timed
                 for i in groups.pop(name):
                     groups[i] = [i]
     return groups
@@ -241,6 +262,60 @@ class _Result(unittest.TextTestResult):
         super().startTest(test)
 
 
+def peak_gb() -> float | None:
+    """This process's peak memory in GB (Windows: peak working set; elsewhere: max RSS of it and its
+    waited-for children), or None when it cannot be read."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            class Counters(ctypes.Structure):
+                _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+                    (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                                                   "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                                                   "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+            c = Counters()
+            c.cb = ctypes.sizeof(c)
+            psapi = ctypes.WinDLL("psapi")
+            psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+            kernel = ctypes.WinDLL("kernel32")
+            kernel.GetCurrentProcess.restype = wintypes.HANDLE
+            if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(c), c.cb):
+                return None
+            return c.PeakWorkingSetSize / 2**30
+        import resource
+        kb = max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                 resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
+        return kb / 2**20  # Linux reports KB
+    except Exception:
+        return None
+
+
+def free_gb() -> float | None:
+    """Free physical memory in GB (Windows: available; Linux: MemAvailable), or None."""
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class Status(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong)] + [
+                    (n, ctypes.c_ulonglong) for n in ("ullTotalPhys", "ullAvailPhys", "ullTotalPageFile",
+                                                      "ullAvailPageFile", "ullTotalVirtual", "ullAvailVirtual",
+                                                      "ullAvailExtendedVirtual")]
+            st = Status()
+            st.dwLength = ctypes.sizeof(st)
+            if not ctypes.WinDLL("kernel32").GlobalMemoryStatusEx(ctypes.byref(st)):
+                return None
+            return st.ullAvailPhys / 2**30
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 2**20
+    except Exception:
+        return None
+    return None
+
+
 def worker(out: Path, names: list[str]) -> int:
     """Run the named tests with unittest; write what ran, failed and was skipped to out (JSON)."""
     sys.path.insert(0, str(ROOT))
@@ -259,6 +334,7 @@ def worker(out: Path, names: list[str]) -> int:
         "errors": [{"test": str(t), "kind": "ERROR", "last": last(tb), "traceback": tb} for t, tb in res.errors],
         "skipped": [{"test": str(t), "why": why} for t, why in res.skipped],
         "expected_failures": len(res.expectedFailures), "unexpected_successes": len(res.unexpectedSuccesses),
+        "peak_gb": peak_gb(),
     }, ensure_ascii=False), encoding="utf-8")
     return 0
 
@@ -286,12 +362,103 @@ def _order(groups: dict[str, list[str]], last: dict[str, float] | None = None) -
     return sorted(groups, key=weight, reverse=True)
 
 
+def _last_memory() -> dict[str, float]:
+    try:
+        return json.loads(MEMORY.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def memory_of(name: str, last: dict[str, float]) -> float | None:
+    """The last peak (GB) of a class or method (a method that never ran alone: its class's), and never less
+    than the known one (KNOWN_HEAVY_GB: a class whose heavy work runs in child processes)."""
+    known = next((KNOWN_HEAVY_GB[k] for k in (name, name.rsplit(".", 1)[0]) if k in KNOWN_HEAVY_GB), None)
+    for k in (name, name.rsplit(".", 1)[0]):
+        if k in last:
+            return max(float(last[k]), known or 0.0)
+    return known
+
+
+def schedule(names: list[str], jobs: int, run, memory: dict, max_heavy: int = 2,
+             free=free_gb, poll_s: float = 5.0, say=None) -> list[dict]:
+    """Run names (in this order of preference) on `jobs` threads with run(name) -> result. A heavy
+    name (memory HEAVY_GB or more) starts only while fewer than max_heavy heavy ones run and, when
+    another heavy one runs, free memory is at least its peak plus RESERVE_GB; while it waits, the
+    lighter names after it go first. Returns the results in the order they ended."""
+    import threading
+    pending = list(names)
+    results: list[dict] = []
+    state = {"heavy": 0}
+    cond = threading.Condition()
+    told: set = set()
+
+    def heavy(n: str) -> bool:
+        m = memory.get(n)
+        return m is not None and m >= HEAVY_GB
+
+    def pick():
+        for n in pending:
+            if not heavy(n):
+                return n
+            if state["heavy"] >= max_heavy:
+                continue
+            if state["heavy"] > 0:
+                f = free()
+                if f is not None and f < memory[n] + RESERVE_GB:
+                    if say and n not in told:
+                        told.add(n)
+                        say(f"waiting for memory: {n} ({memory[n]:.1f} GB last time, {f:.1f} GB free)")
+                    continue
+            return n
+        return None
+
+    def loop():
+        while True:
+            with cond:
+                while True:
+                    if not pending:
+                        return
+                    n = pick()
+                    if n is not None:
+                        break
+                    cond.wait(timeout=poll_s)
+                pending.remove(n)
+                h = heavy(n)
+                state["heavy"] += h
+            try:
+                r = run(n)
+            except Exception as e:  # never lose a class: it is reported as not run
+                r = {"name": n, "s": 0.0, "crash": f"the runner failed: {e!r}"}
+            finally:
+                with cond:
+                    state["heavy"] -= h
+                    cond.notify_all()
+            with cond:
+                results.append(r)
+
+    threads = [threading.Thread(target=loop, daemon=True) for _ in range(max(1, jobs))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results
+
+
+def worker_env() -> dict:
+    """A worker's environment: one BLAS thread (qa.procs), and one mesh level at a time in the convergence
+    test (HIRAKU_CONVERGENCE_JOBS=1 unless set): KNOWN_HEAVY_GB counts that class as one level, and levels
+    side by side (up to 46.9 GB for four) would not be seen by the heavy classes started after it."""
+    env = procs.one_blas_thread()
+    env.setdefault(CONVERGENCE_JOBS, "1")
+    return env
+
+
 def _run_one(name: str, tmp: Path, timeout: float, tag: str = "") -> dict:
     out = tmp / f"{name}{tag}.json"
     t0 = time.perf_counter()
     try:  # on timeout the worker and the runs it started are stopped; one BLAS thread each (qa.procs)
         proc = procs.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out), name], cwd=ROOT,
-                         env=procs.one_blas_thread(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
+                         env=worker_env(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"name": name, "s": time.perf_counter() - t0, "crash": f"no result within {timeout:g} s"}
     s = time.perf_counter() - t0
@@ -341,12 +508,14 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m qa.run_tests", description=__doc__.split("\n\n")[0])
     ap.add_argument("--jobs", "-j", type=int, default=None,
                     help="processes at a time (default: CPUs - 4, at least 8; 8 with --no-wait)")
-    ap.add_argument("--timeout", type=float, default=1800.0, help="seconds one class may take (default 1800)")
+    ap.add_argument("--timeout", type=float, default=3600.0, help="seconds one class may take (default 3600)")
     ap.add_argument("--only", action="append", default=[], metavar="PREFIX",
                     help="run only the classes whose name starts with PREFIX (e.g. tests.web); may be repeated")
     ap.add_argument("--no-split", action="store_true",
                     help=f"keep every class in one process (by default a class that took {SPLIT_S:g} s or more "
                          "last time and shares no setup runs one process per method)")
+    ap.add_argument("--max-heavy", type=int, default=2,
+                    help=f"classes whose last peak was {HEAVY_GB:g} GB or more that may run at once (default 2)")
     ap.add_argument("--no-wait", action="store_true",
                     help="run at once, without waiting for the machine-wide suite lock (emergencies only)")
     args = ap.parse_args(argv)
@@ -364,10 +533,11 @@ def main(argv: list[str] | None = None) -> int:
     groups = discover(args.only, None if args.no_split else last)
     expected = {i for ids in groups.values() for i in ids}
     results = []
-    with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(_run_one, name, Path(tmp), args.timeout) for name in _order(groups, last)]
-        for f in as_completed(futures):
-            results.append(f.result())
+    mem_last = _last_memory()
+    memory = {name: memory_of(name, mem_last) for name in groups}
+    with tempfile.TemporaryDirectory() as tmp:
+        results = schedule(_order(groups, last), args.jobs, lambda n: _run_one(n, Path(tmp), args.timeout), memory,
+                           max_heavy=args.max_heavy, say=lambda m: print(m, file=sys.stderr, flush=True))
         again = _rerun_alone(results, Path(tmp), args.timeout)
     wall = time.perf_counter() - start
 
@@ -415,6 +585,10 @@ def main(argv: list[str] | None = None) -> int:
             last = {}
         last.update({r["name"]: round(r["s"], 2) for r in results})
         TIMES.write_text(json.dumps(last, indent=1), encoding="utf-8")
+        if not args.only:
+            mem_last = {}
+        mem_last.update({r["name"]: round(r["peak_gb"], 2) for r in results if r.get("peak_gb") is not None})
+        MEMORY.write_text(json.dumps(mem_last, indent=1), encoding="utf-8")
     except OSError:
         pass
     return 1 if failed else 0
