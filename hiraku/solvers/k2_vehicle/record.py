@@ -108,6 +108,13 @@ class Recorder:
             self._put(f"wheel_load.{cid}", "N", n_)
             self._put(f"wheel_fx.{cid}", "N", o["fx"][i])
             self._put(f"wheel_fy.{cid}", "N", o["fy"][i])
+            # the friction circle: the tyre model's limit mu N, how much of it the force uses, and
+            # sliding (the use at or past 1, or the tyre model's own judgement: past the peak slip)
+            lim = sim.tyres[i].mu * n_
+            use = math.hypot(o["fx"][i], o["fy"][i]) / lim if lim > 0.0 else 0.0
+            self._put(f"friction_limit.{cid}", "N", lim)
+            self._put(f"friction_use.{cid}", "1", use)
+            self._put(f"sliding.{cid}", "1", 1.0 if use >= 1.0 or o["sliding"][i] else 0.0)
             self._put(f"wheel_stroke.{cid}", "mm", sim.s[i] * 1000.0)
             self._put(f"wheel_steer.{cid}", "deg", math.degrees(o["steer"][i]))
             self._put(f"wheel_spin.{cid}", "deg", math.degrees(self.spin_angle[i]))
