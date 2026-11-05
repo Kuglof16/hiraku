@@ -336,6 +336,121 @@
         }
       }
     },
+    "material_card": {
+      "description": "One material's properties, each with its own source (data/materials/cards/<id>.json). The solvers keep reading design.materials; a card says where each value comes from.",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "category",
+        "properties"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The key in data/materials/materials.json and design.materials when the material is there."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name_ja": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": [
+            "steel",
+            "aluminium",
+            "copper",
+            "polymer",
+            "rubber",
+            "other"
+          ]
+        },
+        "standard": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The standard that defines the material, e.g. JIS G 3466."
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the values hold for, e.g. thickness up to 16 mm, or room temperature."
+        },
+        "properties": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "E_MPa",
+              "nu",
+              "density_kg_m3",
+              "yield_MPa",
+              "tensile_MPa",
+              "elongation_pct",
+              "fatigue_limit_MPa",
+              "thermal_conductivity_W_mK",
+              "specific_heat_J_kgK",
+              "thermal_expansion_per_K",
+              "max_service_degC",
+              "resistivity_ohm_m"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "value",
+              "kind",
+              "source",
+              "checked"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "kind": {
+                "enum": [
+                  "standard_minimum",
+                  "typical",
+                  "computed",
+                  "assumption"
+                ],
+                "description": "A guaranteed minimum of a standard, a typical value, a value computed from others, or an assumption."
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Document, edition and table or page; a secondary source says so. For an assumption, why this value."
+              },
+              "checked": {
+                "type": "boolean",
+                "description": "True only when the value was read in the source named here."
+              },
+              "checked_on": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "if": {
+              "properties": {
+                "checked": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "checked_on"
+              ]
+            }
+          }
+        }
+      }
+    },
     "material": {
       "type": "object",
       "required": [

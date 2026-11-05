@@ -10,6 +10,7 @@ from hiraku.contract import layout
 from hiraku.contract import loading as loading_rule
 
 EXAMPLES = {
+    "material_card": "material_card.json",
     "requirements_file": "requirements_file.json",
     "design": "design.json",
     "load_case": "load_case.json",
@@ -155,6 +156,19 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolt_d_mm": 0}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolts": 0}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"nut": 1}}), [])
+
+    def test_material_card_says_where_each_value_comes_from(self):
+        card = load("material_card.json")
+        y = card["properties"]["yield_MPa"]
+        with_prop = lambda p: {**card, "properties": {"yield_MPa": p}}
+        self.assertNotEqual(contract.errors("material_card", with_prop({k: v for k, v in y.items() if k != "source"})), [])
+        self.assertNotEqual(contract.errors("material_card", with_prop({**y, "source": ""})), [])
+        self.assertNotEqual(contract.errors("material_card", with_prop({**y, "kind": "guess"})), [])
+        self.assertNotEqual(contract.errors("material_card", with_prop({**y, "checked": True})), [])  # needs checked_on
+        self.assertEqual(contract.errors("material_card", with_prop({**y, "checked": True, "checked_on": "2026-11-06"})), [])
+        self.assertNotEqual(contract.errors("material_card", {**card, "properties": {"yield_kPa": y}}), [])
+        self.assertNotEqual(contract.errors("material_card", {**card, "properties": {}}), [])
+        self.assertNotEqual(contract.errors("material_card", {**card, "id": "STKR 400"}), [])
 
     def test_declared_sizes_for_the_rules(self):
         from hiraku.intake.facts import FACTS
