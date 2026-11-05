@@ -210,16 +210,21 @@ def _rod_hits(design, bs, bx, s, rod, c, th, travel) -> dict[str, float]:
     rk = f"part:{rod['id']}"
     others = {k: v for k, v in bx.items() if bs[k].support != s["id"] and not mounted(bs[rk], bs[k], design)}
     out: dict[str, float] = {}
+    if not others:
+        return out
+    keys = list(others)
+    LO = np.array([np.asarray(others[k][0], float) for k in keys])[None, :, :]  # (1, boxes, 3)
+    HI = np.array([np.asarray(others[k][1], float) for k in keys])[None, :, :]
     for a in angles:
         ra = math.radians(float(a))
         R = np.array([[math.cos(ra), -math.sin(ra), 0.0], [math.sin(ra), math.cos(ra), 0.0], [0.0, 0.0, 1.0]])
         for dz in dzs:
             o = c + R @ (outer - c) + np.array([0.0, 0.0, float(dz)])
-            pts = inner + t * (o - inner)
-            for k, (lo, hi) in others.items():
-                d_out = np.linalg.norm(np.maximum(lo - pts, 0.0) + np.maximum(pts - hi, 0.0), axis=1)
-                d_in = np.min(np.minimum(pts - lo, hi - pts), axis=1)
-                depth = float(np.max(np.where(d_out > 0.0, radius - d_out, radius + d_in)))
+            P = (inner + t * (o - inner))[:, None, :]  # (points, 1, 3): every box at once, the same arithmetic
+            d_out = np.linalg.norm(np.maximum(LO - P, 0.0) + np.maximum(P - HI, 0.0), axis=2)
+            d_in = np.min(np.minimum(P - LO, HI - P), axis=2)
+            depths = np.max(np.where(d_out > 0.0, radius - d_out, radius + d_in), axis=0)
+            for k, depth in zip(keys, depths.tolist()):
                 if depth > TOUCH_MM and depth > out.get(k, 0.0):
                     out[k] = depth
     return out

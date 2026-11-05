@@ -268,6 +268,7 @@ class Prepared:
     unresolved: list[str]  # asked, no answer, no default
     unfilled: list[str]  # `default` items with no value anywhere
     unasked: list[str] = field(default_factory=list)  # `confirm` items left out (ask_confirm False), no value anywhere
+    ignored: list[str] = field(default_factory=list)  # answered, but the file already has the key (skip_present)
 
     @property
     def ready(self) -> bool:
@@ -285,8 +286,12 @@ def prepare(
     wording: dict[str, str] | None = None,
     choices: dict[str, list[Record]] | None = None,
     ask_confirm: bool = True,
+    skip_present: bool = False,
 ) -> Prepared:
     """Ask what is missing and settle it: answers first, then defaults. The file in is not changed.
+
+    skip_present: an answer to a key the file already has is left out and named in `ignored` (answers that come from the
+    screen: one stale key must not throw away the rest). False: it is refused (answers a caller writes).
 
     ask_confirm False is for requirements that arrive as a file somebody wrote (see plan_hearing): nothing is
     asked but the `must` items the file lacks, and the defaults it takes are in `answered` and in the file out.
@@ -310,8 +315,13 @@ def prepare(
         else:
             unresolved.append(key)
     defaulted = list(plan.defaulted)
+    ignored: list[str] = []
     for key in list(answers):  # something the person said that was not asked (a `default` item, or a key nobody needed)
         if key in in_file:
+            if skip_present:
+                answers.pop(key)
+                ignored.append(key)
+                continue
             raise IntakeError(f"{key} は要件のファイルにもう有ります。答えで書き換えず、ファイルを直してください")
         settled.append(_answer_requirement(item(key), answers.pop(key)))
         defaulted = [r for r in defaulted if r["key"] != key]
@@ -322,11 +332,14 @@ def prepare(
     out["requirements"] = [merged[k] for k in sorted(merged)]
     contract.validate("requirements_file", out)
     answered: Record = {"answers": [*defaulted, *settled]}
-    if note and note.strip():
-        answered["note"] = note.strip()
+    said = [note.strip()] if note and note.strip() else []
+    if ignored:
+        said.append(f"{'・'.join(ignored)} は要件のファイルにもう有るので、答えは使いませんでした")
+    if said:
+        answered["note"] = "。".join(said)
     taken = {r["key"] for r in settled}
     return Prepared(out, {"questions": plan.questions}, answered, unresolved,
-                    [k for k in plan.unfilled if k not in taken], [k for k in plan.unasked if k not in taken])
+                    [k for k in plan.unfilled if k not in taken], [k for k in plan.unasked if k not in taken], ignored)
 
 
 # ------------------------------------------------------------------- waiting for a person in a run

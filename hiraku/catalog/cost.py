@@ -42,7 +42,8 @@ COUNTED = {"prediction.recorded": "prediction_id", "analysis.started": "analysis
            "comparison.recorded": "comparison_id", "cause.recorded": "cause_id"}
 
 # USD per million tokens. Source: https://claude.com/pricing (anthropic.com/pricing redirects there),
-# read on 2026-11-03. cache_write is the 5-minute cache write.
+# read on 2026-11-03 and checked again on 2026-11-05 (every value below as on the page). cache_write is the
+# 5-minute cache write.
 PRICE_KINDS = ("input", "output", "cache_write", "cache_read")
 PRICES = {
     "claude-opus-5-5": {"input": 4.0, "output": 20.0, "cache_write": 5.0, "cache_read": 0.20},

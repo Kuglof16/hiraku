@@ -48,7 +48,9 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
             pred = store.get("prediction", cmp.get("prediction_id", "")) or {}
             if not in_domains(store, pred.get("load_case_id"), domains):
                 continue
-            safe = (f"はい: {c.get('safe_side_reason', '')}" if c.get("safe_side") else "")
+            safe = (f"はい: {c.get('safe_side_reason', '')}" if c.get("safe_side")
+                    else f"ツールの値で判定 (道は手計算で確かめた): {c.get('tool_decides_reason', '')}" if c.get("tool_decides")
+                    else "")
             rows.append([c["cause_id"], str(v), c["comparison_id"], pred.get("load_case_id", ""), cmp.get("quantity", ""),
                          f"{cmp['diff_rel'] * 100:+.1f} %" if "diff_rel" in cmp else "", " ".join(c["cause"].split()),
                          " ".join(c["fix"].split()), safe])

@@ -39,7 +39,7 @@ class FreeWeightTest(unittest.TestCase):
         lc = next(c for c in BUILDERS["R8"](SPECS["R8"], REQ, d) if c["load_case_id"] == "R8-stress")
         r = results(LoadPath().run(d, lc, [{"prediction_id": "pred-0001"}], {}))
         self.assertEqual(r["free_parts"]["value"], 0.0)
-        self.assertNotIn("unsupported_load", r)
+        self.assertEqual(r["unsupported_load"]["value"], 0.0)
 
 
 if __name__ == "__main__":

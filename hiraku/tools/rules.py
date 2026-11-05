@@ -9,14 +9,13 @@ is missing and what to call next, because Claude reads it and acts on it.
 from __future__ import annotations
 
 import re
-from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
 from hiraku import contract
 from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
-from hiraku.tools.judge import beyond_text, held_cases, latest_verdicts
+from hiraku.tools.judge import beyond_text, held_cases, latest_verdicts, reading  # noqa: F401 (reading: hooks use rules.reading)
 from hiraku.catalog import is_beyond
 from hiraku.tools.shelf import NOT_CHECKED, STAGE_NAMES_JA, load_case_stage, tool_stage
 
@@ -293,7 +292,10 @@ def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | Non
             bad = outside_module(mods, "package", {"changes": args.get("changes") or {}}, "パッケージ役")
             if bad:
                 return Denial(HK6, "パッケージ役の changes はレイアウトの変数だけです: " + "; ".join(bad)
-                              + "。ほかのモジュールの変数は、そのモジュールの設計役が revise_design で提案します")
+                              + "。ほかのモジュールの変数は、そのモジュールの設計役が revise_design で提案します。"
+                              "次にすること: その変数を changes から外し、build_version を呼ばずに、まとめ役に「どの変数を・"
+                              "いくつに・なぜ (断りの文)」と、持ち主の設計役 (designer.<モジュール>) の名前を返す "
+                              "(その設計役の出し直しは前の提案を置き換える)")
         return None
     return None
 
@@ -306,12 +308,6 @@ def check_call(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | No
             return check_hk6(ctx, tool, args, agent)
         check = CHECKS.get(tool)
         return check(ctx, args) if check else None
-
-
-def reading(ctx: RunContext) -> Any:
-    """The store's reading() (each record file read once, the records not to be changed), if it has one."""
-    got = getattr(ctx.store, "reading", None)
-    return got() if got is not None else nullcontext()
 
 
 def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:

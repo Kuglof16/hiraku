@@ -54,10 +54,11 @@ offroad-4w:
   # (hiraku.designgen.driver_fit; `fit_evals` the designs it measures, `fit_time_s` a time guard) and added to them.
   # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
   # version 1 layout and the hand hold to get in by (stage 0) -> version 2 the opening, shut by the bolted net
-  # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3; the joined design's load path and controls pass
-  # stage 1, R7's pedal ended not judged: K0 does not reach the ladder's twist) -> version 4: no red tile, strength
-  # not judged (R7-hand and R7-foot); the demo scripted run 20261105-001932-offroad-4w-scripted.
-  # No revision adds the parts' brackets or the pedal post: no red of a version asks for them.
+  # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3) -> version 4: every tile green expected. R7-hand
+  # passes on the tool's value at stage 1 (docs/contract.md 手計算の役目: the grip's bound is loose, the load path is
+  # checked by hand, tool_decides, basis path_checked), so no revision thickens the towers for it (the entry
+  # rev_controls of the runs up to 4275bfe); R7-foot passes on its bound (safe side).
+  # No revision adds the parts' brackets by hand: no red of a version asks for them.
   revise:
     - &rev_layout
       say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、運転席の位置を直し、横の守りと握り棒を付けます
@@ -320,16 +321,14 @@ offroad-4w-video:
 
 # Video scene N15, data/requirements/offroad-4w-n15.yaml: the offroad-4w plan on the demo vehicle
 # (roll bar, floors, parts with their systems) with the video file's tests, R1s included, revised
-# round by round until no tile is red, strength not judged (R7-hand and R7-foot) (tests/agent/test_scene_n15.py). Each revision fixes the
+# round by round until every tile is green (tests/agent/test_scene_n15.py). Each revision fixes the
 # reds of the version before it; the values were read off the scripted runs' records (`source`).
 offroad-4w-n15:
   extends: offroad-4w
   # HK5, light first: one revision per red stage. Version 1: the layout and the hand hold to get in by
   # (stage 0) are red -> version 2: the opening, shut by the bolted net (stage 0, H7) -> version 3: the vehicle
-  # dynamics (stage 2) red at P3 (the joined design passes stage 1) -> version 4: the shells (stage 3) red at
-  # R1s -> version 5: no red tile; strength stays not judged, R7-hand and R7-foot ending without a verdict (their
-  # mismatch's cause ends them: expected_mismatch end, ends_case), so the run stops not_judged
-  # (tests/agent/test_scene_n15.py; the N15 scripted run 20261105-001933-offroad-4w-scripted).
+  # dynamics (stage 2) red at P3 (R7-hand passes on the tool's value, path_checked) -> version 4: the shells
+  # (stage 3) red at R1s -> version 5: every tile green, the run done (tests/agent/test_scene_n15.py).
   # Said at the start and in the report: the scripted run leaves R4 out (decided for the video: a tool
   # made by Claude appears only in a run with Claude, data/requirements/offroad-4w-n13.claude.yaml)
   notes:

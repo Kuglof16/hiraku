@@ -362,6 +362,49 @@ def _control_deflection() -> Formula:
     )
 
 
+def _grip_bound() -> Formula:
+    """An upper bound on the length of a control point's movement by complementary energy: any set of internal forces
+    in equilibrium with the load stores at least the true complementary energy, so the movement along the load is
+    at most F times that set's compliance 1/k_e. The point's 3 x 3 flexibility is positive semi-definite, so its
+    largest eigenvalue is at most its trace (at most 1/k_tr, the bounds along three axes at right angles summed), and
+    |u| = |C F| is at most F / sqrt(k_e k_tr)."""
+    F, k_e, k_tr = sp.symbols("F k_e k_tr", real=True)
+    delta = F / sp.sqrt(k_e * k_tr)
+    return Formula(
+        formula_id="load_path.grip_bound",
+        title="操作部の握る点 (踏む面) の動きを上から押さえる値 (補エネルギー: 触れている所の鎖 1 本と、板を入れない部材だけの枠)",
+        domain="strength",
+        expression="delta = F / sqrt(k_e k_tr); delta_along = F / k_e",
+        inputs={
+            "F": {"unit": "N", "description": "the hand force at the grip or the foot force on the pedal's face",
+                  "min": 0},
+            "k_e": {"unit": "N/mm", "description": "1 over the bound on the compliance along the load: the chain of "
+                                                   "contacts carrying it all (1/k_t + |r x e|^2/k_r for each, in "
+                                                   "series) plus the members-only frame's at the landing point (the "
+                                                   "force and its moment about there)", "min": 0},
+            "k_tr": {"unit": "N/mm", "description": "1 over the same bounds along x, y and z summed (bounds the trace of "
+                                                    "the point's flexibility)", "min": 0},
+        },
+        outputs={"delta": ("mm", "the bound on the length of the point's movement", delta),
+                 "delta_along": ("mm", "the bound on its movement along the load", F / k_e)},
+        terms={"along_load": F / k_e},
+        assumptions=[
+            "部品は剛体、触れている所はツールと同じばね (k_t 3 方向、k_r 3 軸)。力は全部、いちばん短い鎖 1 本を通るとみる "
+            "(ほかの道は 0: 釣り合っている力の分布の 1 つなので、動きは上から押さえられる)",
+            "枠は部材だけの 3 次元の梁 (板・ほかの部品は力を持たないとみる)。支えはツールと同じピン。鎖の着く所に、力と、"
+            "握る点からの腕によるモーメントを掛ける",
+            "動きの大きさ |u| は、3 つの向きの押さえの和 (柔らかさの行列の跡) を使うので、荷重の向きの押さえより最大 √3 倍"
+            "大きめ",
+        ],
+        source=("complementary energy theorem (an equilibrium set of internal forces gives an upper bound on the "
+                "loaded point's movement along the load, textbook energy methods); for a positive semi-definite C, "
+                "|C f|^2 = f C^2 f <= lambda_max f C f <= trace(C) f C f"),
+        requires=[(sp.And(k_e > 0, k_tr > 0, k_tr <= k_e), "the stiffnesses must be positive and k_tr at most k_e "
+                                                              "(the trace is at least the compliance along the load)")],
+        symbols={"F": F, "k_e": k_e, "k_tr": k_tr},
+    )
+
+
 def _free_parts() -> Formula:
     n_parts, n_held = sp.symbols("n_parts n_held", real=True)
     return Formula(
@@ -369,7 +412,9 @@ def _free_parts() -> Formula:
         title="どこにも繋がらない部品の数 (触れている所を部材からたどる)",
         domain="strength",
         expression="n = n_parts - n_held",
-        inputs={"n_parts": {"unit": "1", "description": "parts modelled as rigid bodies", "min": 0},
+        inputs={"n_parts": {"unit": "1", "description": ("parts counted: every part modelled as a rigid body, or (the "
+                                                         "path check of a load case) the parts the load case loads"),
+                            "min": 0},
                 "n_held": {"unit": "1", "description": "those a chain of contacts joins to a frame member", "min": 0}},
         outputs={"n": ("1", "parts joined to nothing that holds them", n_parts - n_held)},
         assumptions=["触れている所はどれも 6 方向に硬い (1 か所で触れれば、その部品は止まる)"],
@@ -381,4 +426,4 @@ def _free_parts() -> Formula:
 
 def all_formulas() -> list[Formula]:
     return [_control_deflection(), _plate_strip(), _post_node(), _bar_on_posts(), _rail_utilisation(),
-            _frame_utilisation(), _free_parts()]
+            _frame_utilisation(), _grip_bound(), _free_parts()]

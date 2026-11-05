@@ -1289,8 +1289,8 @@ def analyse_load_path(design: Record, kind: str, values: dict, touch: float = TO
                                     + ", ".join(unsupported), "value": float(len(unsupported)), "unit": "1"})
     else:
         unsupported = []
-    if unsupported:
-        results.append(result("unsupported_load", len(unsupported), "1", _where(unsupported)))
+    # given at 0 too: the analysis then counts as one that looked for the path (docs/contract.md 手計算の役目)
+    results.append(result("unsupported_load", len(unsupported), "1", _where(unsupported) if unsupported else None))
     loaded = [pid for pid in dict.fromkeys(lost) if pid in free]  # the free parts this load case loads, named first
     results.insert(0, result("free_parts", len(free), "1", _where(loaded + [p for p in free if p not in loaded])))
     for pid in dict.fromkeys(lost):
@@ -1704,15 +1704,18 @@ class LoadPath(BuiltinTool):
     domain = "strength"
     base = "K1"
     tests = ["R7", "R8"]
-    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.free_parts"]
+    formulas = ["load_path.control_deflection", "load_path.plate_strip", "load_path.grip_bound", "load_path.free_parts"]
     load_case_params = (LOAD_KIND, HAND_FORCE, FOOT_FORCE, ACCEL_V, ACCEL_LON, ACCEL_LAT, OCC_MASS, OCC_LAT, OCC_LON,
                         PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
     run_params = (TOUCH, NET_PRESTRESS)
     # Every load kind gives free_parts. grip_deflection (load_kind hand) and pedal_deflection (foot) are predicted
-    # by load_path.control_deflection (output delta) with the inputs of hiraku.catalog.builders.load_path.
-    # control_inputs; they are not listed here because a load case of the default kind (inertia) has neither.
+    # by load_path.grip_bound (output delta) with the inputs of hiraku.catalog.builders.load_path (grip_bound_inputs,
+    # pedal_bound_inputs); they are not listed here because a load case of the default kind (inertia) has neither.
     predicts = (
         Predicts("free_parts", "load_path.free_parts", "n", "the contacts followed from the members (a graph search)"),
+        Predicts("unsupported_load", "load_path.free_parts", "n",
+                 "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the same search over the parts "
+                 "the load case loads"),
     )
 
     def known_answers(self) -> list[Record]:

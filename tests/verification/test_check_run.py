@@ -95,6 +95,9 @@ class CheckRun(unittest.TestCase):
     def rules(self, events, level="error"):
         return {f.rule for f in self.findings(events) if f.level == level}
 
+    def messages(self, events, rule, level="error"):
+        return [f.message for f in self.findings(events) if f.rule == rule and f.level == level]
+
     def assertFlags(self, events, rule):
         found = self.findings(events)
         self.assertIn(rule, {f.rule for f in found if f.level == "error"},
@@ -435,6 +438,17 @@ class CheckRun(unittest.TestCase):
         ev = self._finish(self._unjudged_case(self._red(sample_events())), "stopped", "not_judged")
         self.assertEqual(self.rules(ev), set())
 
+    def test_not_judged_after_a_case_ended_without_a_verdict(self):
+        # a load case whose mismatch was ended (cause ends_case, contract 08cf4d6) is named by the stop as not
+        # judged, a -beyond case without a criterion too (the video run of t17's candidate): not_judged agrees
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "the hand calculation stops short",
+                 "fix": "none in this run", "resolved": False, "ends_case": True}
+        ev = self._insert(sample_events(), "comparison.recorded", "cause.recorded", cause)
+        self.assertNotIn("run.stop_code", self.rules(self._finish(ev, "stopped", "not_judged")))
+        # resolved later, it no longer stands
+        ev = self._insert(ev, "cause.recorded", "cause.recorded", dict(cause, resolved=True, resolved_by="cmp-0001"))
+        self.assertIn("run.stop_code", self.rules(self._finish(ev, "stopped", "not_judged")))
+
     def test_round_limit_needs_the_revisions_used(self):
         # one design version and round_limit 1: no revision was made
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
@@ -742,6 +756,58 @@ class CheckRun(unittest.TestCase):
             extra.append(j)
         ev[at:at] = extra
         return renumber(ev)
+
+    def _heavier_beyond_then_lighter_pass(self, v2_shell=None, shell_stage=3):
+        """Two versions (modular): v1's frame_shell (stage shell_stage) of R1 at 200 MPa against 156.7 after
+        frame_static's pass; v2 judged on frame_static alone (pass, tile green), with a frame_shell analysis
+        of v2 giving v2_shell MPa when given."""
+        ev = modular(red=False)
+        ev = self._shell_after_green(ev, 200.0, then="pending")
+        ev = self._stages(ev, frame_static=1, frame_shell=shell_stage)
+        at = next(n for n, e in enumerate(ev) if e["kind"] == "design.created" and e["data"].get("design_version") == 2) + 1
+        new = []
+        chain = [e for e in ev if e["kind"] in ("prediction.recorded", "analysis.started", "analysis.finished",
+                                                  "comparison.recorded", "verdict.recorded")
+                 and (e["data"].get("analysis_id") in (None, "ana-0001") or e["kind"] == "prediction.recorded")]
+        for e in chain:
+            c = copy.deepcopy(e)
+            d = c["data"]
+            for k, old, nw in (("prediction_id", "pred-0001", "pred-0002"), ("analysis_id", "ana-0001", "ana-0003"),
+                               ("comparison_id", "cmp-0001", "cmp-0002"), ("verdict_id", "ver-0001", "ver-0002")):
+                if d.get(k) == old:
+                    d[k] = nw
+            if "prediction_ids" in d:
+                d["prediction_ids"] = ["pred-0002"]
+            if "design_version" in d:
+                d["design_version"] = 2
+            if "design_version" in c:
+                c["design_version"] = 2
+            c["t"], c["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+            new.append(c)
+        if v2_shell is not None:
+            s, f = (copy.deepcopy(e) for e in new if e["kind"] in ("analysis.started", "analysis.finished"))
+            for e in (s, f):
+                e["data"].update(analysis_id="ana-0004", tool="frame_shell")
+            f["data"].pop("fields", None)
+            f["data"]["results"] = [{"quantity": "max_hot_spot_stress", "value": v2_shell, "unit": "MPa"}]
+            new += [s, f]
+        j = copy.deepcopy(next(e for e in ev if e["kind"] == "judgement.updated"))
+        j["data"].update(design_version=2, state="green", verdict_ids=["ver-0002"])
+        j["design_version"] = 2
+        j["t"], j["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        new.append(j)
+        ev[at:at] = new
+        return renumber(ev)
+
+    def test_d_a_lighter_pass_does_not_clear_a_heavier_tool_s_exceedance(self):
+        # docs/contract.md 分野が緑になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
+        # limit, v2 green on frame_static alone
+        said = lambda ev: [m for m in self.messages(ev, "judgement.state") if "contract (d)" in m]
+        self.assertTrue(said(self._heavier_beyond_then_lighter_pass()))
+        # a shell of v2 giving the judged quantity (within the limit) clears it
+        self.assertEqual(said(self._heavier_beyond_then_lighter_pass(v2_shell=120.0)), [])
+        # the exceedance came from a tool no heavier than frame_static's stage: frame_static's pass stands
+        self.assertEqual(said(self._heavier_beyond_then_lighter_pass(shell_stage=1)), [])
 
     def test_a_later_result_beyond_the_criterion_holds_a_green_tile(self):
         # the sample's limit is 156.7 MPa; a green tile left standing after a shell result beyond it
@@ -1066,6 +1132,82 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "verdict.recorded")["data"]["value"] = {"value": 123.60000000000001, "unit": "MPa"}
         self.assertFlags(ev, "verdict.values")
 
+    # --- a verdict the tool decides after the load path was checked by hand (basis path_checked, 2fc1006) ----
+    def path_checked_flow(self, free_parts=0.0, unsupported=0.0, predicted=80.0, tool_free=None):
+        """Mismatch (the hand calculation 80 MPa against the analysis 123.6) -> cause with tool_decides and its
+        reason -> a load_path prediction of free_parts in the version before the verdict -> verdict from the
+        analysis, on the sample's R1 case. The analysis gives unsupported_load `unsupported` (None: no such result)
+        and free_parts `tool_free` (None: none)."""
+        ev = sample_events()
+        c = self._predict(ev, predicted)
+        self.assertEqual(c["status"], "mismatch")
+        at = by_kind(ev, "comparison.recorded")
+        stamp = {"ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "agent": "cae.strength", "seq": 0}
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "the hand beam leaves the gussets out",
+                 "fix": "none in this run", "resolved": False, "tool_decides": True,
+                 "tool_decides_reason": "no hand formula reaches the joint's stress"}
+        p0 = by_kind(ev, "prediction.recorded")["data"]
+        path = dict(copy.deepcopy(p0), prediction_id="pred-0009", quantity="free_parts", value=free_parts, unit="1",
+                    formula_id="load_path.free_parts", expression="n = n_parts - n_held",
+                    inputs={"n_parts": {"value": 3.0, "unit": "1"}, "n_held": {"value": 3.0 - free_parts, "unit": "1"}})
+        path.pop("terms", None)
+        i = ev.index(at) + 1
+        ev[i:i] = [dict(stamp, kind="cause.recorded", data=cause),
+                   dict(stamp, kind="comparison.recorded", data=dict(copy.deepcopy(c), cause_id="cause-0001")),
+                   dict(stamp, kind="prediction.recorded", design_version=1, data=path)]
+        results = by_kind(ev, "analysis.finished")["data"]["results"]
+        if unsupported is not None:
+            results.append({"quantity": "unsupported_load", "value": unsupported, "unit": "1"})
+        if tool_free is not None:
+            results.append({"quantity": "free_parts", "value": tool_free, "unit": "1"})
+        by_kind(ev, "verdict.recorded")["data"].update(basis="path_checked", value_from="analysis", cause_id="cause-0001",
+                                                        value=dict(c["analyzed"]))
+        return renumber(ev)
+
+    def test_path_checked_verdict_with_the_path_checked(self):
+        found = [str(f) for f in self.findings(self.path_checked_flow()) if f.rule.startswith("verdict.")]
+        self.assertEqual(found, [])
+
+    def test_path_checked_needs_the_hand_check_and_no_loose_load(self):
+        said = lambda ev: [f.message for f in self.findings(ev) if f.rule == "verdict.path_checked"]
+        self.assertTrue(any("are not 0" in m for m in said(self.path_checked_flow(free_parts=1.0))))
+        self.assertTrue(any("unsupported_load 2" in m for m in said(self.path_checked_flow(unsupported=2.0))))
+        # design f5e16af (review C2): the tool must say it found a path for every load (unsupported_load 0 given),
+        # and a free_parts result above 0 fails it
+        self.assertTrue(any("gives no unsupported_load" in m for m in said(self.path_checked_flow(unsupported=None))))
+        self.assertTrue(any("free_parts 1" in m for m in said(self.path_checked_flow(tool_free=1.0))))
+        self.assertEqual(said(self.path_checked_flow(tool_free=0.0)), [])
+        ev = self.path_checked_flow()
+        ev = renumber([e for e in ev if not (e["kind"] == "prediction.recorded"
+                                             and e["data"].get("quantity") == "free_parts")])
+        self.assertTrue(any("no load_path.free_parts prediction" in m for m in said(ev)))
+        # the load case's own path check predicts unsupported_load with the same formula: it counts too
+        ev = self.path_checked_flow()
+        p = next(e for e in ev if e["kind"] == "prediction.recorded" and e["data"].get("quantity") == "free_parts")
+        p["data"]["quantity"] = "unsupported_load"
+        self.assertEqual(said(ev), [])
+        # another formula with a 0 does not
+        p["data"]["formula_id"] = "beam.cantilever_tip"
+        self.assertTrue(any("no load_path.free_parts prediction" in m for m in said(ev)))
+
+    def test_path_checked_needs_a_cause_that_says_the_tool_decides(self):
+        ev = self.path_checked_flow()
+        cause = by_kind(ev, "cause.recorded")["data"]
+        del cause["tool_decides"], cause["tool_decides_reason"]
+        self.assertFlags(ev, "verdict.path_checked")
+        ev = self.path_checked_flow()
+        by_kind(ev, "verdict.recorded")["data"]["value"] = dict(by_kind(ev, "comparison.recorded")["data"]["predicted"])
+        self.assertFlags(ev, "verdict.values")
+
+    def test_a_cause_takes_one_way_to_settle_its_mismatch(self):
+        # contract 26de5b8: tool_decides with safe_side is an error (ends_case with either too)
+        for extra in ({"safe_side": True, "safe_side_reason": "x"}, {"ends_case": True}):
+            with self.subTest(extra=sorted(extra)):
+                ev = self.path_checked_flow()
+                by_kind(ev, "cause.recorded")["data"].update(extra)
+                self.assertTrue(any(f.rule == "cause.settled" for f in self.findings(ev) if f.level == "error"))
+        self.assertNotIn("cause.settled", self.rules(self.path_checked_flow()))
+
     # --- the listing of what the hooks did (--effects) -------------------------------
     def effects(self, events):
         return "\n".join(cr.run_effects(write_run(self.root / f"r{len(list(self.root.iterdir()))}", events)))
@@ -1371,6 +1513,26 @@ class Modules(unittest.TestCase):
         self.assertEqual(self.hk6(with_rule("system")), set())
         self.assertIn(nothing, self.hk6(with_rule("sheet_metal")))
 
+    def test_a_person_s_answer_to_a_rule_hit_lets_its_part_s_module_propose(self):
+        # docs/contract.md (規則の当たりを人に聞く): rule_answers revise_design for AS-01 on the battery lets the
+        # powertrain designer propose, though no red load case names powertrain (N13 run 20261105-094333)
+        prop = {"change_id": "chg-0001", "module_id": "powertrain", "agent_id": "designer.powertrain",
+                "reason": "AS-01: split the battery", "changes": {}}
+
+        def run(answer):
+            ev = modular(case_modules=("suspension",), proposals=[prop])
+            for e in ev:
+                if e["kind"] == "design.created":
+                    e["data"]["parts"][0]["module"] = "powertrain"  # the battery
+            ev = CheckRun._insert(ev, "agent.stopped", "hearing.asked", {"questions": [], "rule_questions": [
+                {"rule_id": "AS-01", "parts": ["battery"], "text": "split it or drop the rule?",
+                 "choices": ["revise_design", "drop_rule"]}]}, agent="lead")
+            ev = CheckRun._insert(ev, "hearing.asked", "hearing.answered", {"answers": [], "rule_answers": [
+                {"rule_id": "AS-01", "choice": answer}]}, agent="lead")
+            return {m for m in self.hk6(ev) if "chg-0001 from powertrain" in m}
+        self.assertEqual(run("revise_design"), set())
+        self.assertTrue(run("drop_rule"))
+
     @staticmethod
     def _no_case():
         return {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
@@ -1406,6 +1568,33 @@ class Modules(unittest.TestCase):
                     v2["data"]["module_changes"][0]["reason"] = "another reason"
                 self.assertTrue(self.hk6(ev), why)
 
+    def test_a_later_proposal_of_a_module_replaces_its_earlier_one(self):
+        # docs/contract.md (8762a06): the same module proposing again in the round replaces its proposal;
+        # build_version lists only the later one
+        first = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
+                 "reason": "a larger wheel takes the step", "load_case_ids": ["R1-step100"],
+                 "changes": {"wheel_radius": {"value": 340.0, "unit": "mm"}}}
+        again = dict(first, change_id="chg-0002", reason="refused: smaller",
+                     changes={"wheel_radius": {"value": 320.0, "unit": "mm"}})
+        ev = modular(proposals=[first, again])
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"] = [copy.deepcopy(again)]
+        d2["variables"]["wheel_radius"] = again["changes"]["wheel_radius"]
+        self.assertEqual(self.hk6(ev), set())
+        # the two listed (the earlier one not replaced) is wrong, and so is the earlier one alone
+        for listed in ([first, again], [first]):
+            with self.subTest(listed=[x["change_id"] for x in listed]):
+                d2["module_changes"] = copy.deepcopy(listed)
+                self.assertTrue(any("each module's last" in m for m in self.hk6(ev)), self.hk6(ev))
+        # another module's proposal stays
+        other = {"change_id": "chg-0003", "module_id": "frame", "agent_id": "designer.frame", "reason": "x",
+                 "load_case_ids": ["R1-step100"], "changes": {}}
+        ev = modular(case_modules=("suspension", "frame"), proposals=[first, other, again])
+        d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
+        d2["module_changes"] = [copy.deepcopy(again), copy.deepcopy(other)]
+        d2["variables"]["wheel_radius"] = again["changes"]["wheel_radius"]
+        self.assertEqual(self.hk6(ev), set())
+
     def test_a_variable_no_module_lists_may_follow_with_a_warning(self):
         ev = modular()
         d2 = [e for e in ev if e["kind"] == "design.created"][-1]["data"]
@@ -1421,7 +1610,17 @@ class Modules(unittest.TestCase):
         one = {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",
                "reason": "r", "changes": {"wheel_radius": {"value": 320.0, "unit": "mm"}}}
         two = dict(one, change_id="chg-0002", changes={"wheel_radius": {"value": 330.0, "unit": "mm"}})
-        self.assertTrue(any("all change wheel_radius" in m for m in self.hk6(modular(proposals=[one, two]))))
+        # the same module twice: the later proposal replaces the earlier (docs/contract.md, 8762a06), no clash
+        ev = modular(proposals=[one, two])
+        [e for e in ev if e["kind"] == "design.created"][-1]["data"]["module_changes"] = [copy.deepcopy(two)]
+        self.assertFalse(any("all change" in m for m in self.hk6(ev)))
+        # what is left: the packager's change and a module's proposal setting the same layout variable
+        pkg = {"change_id": "chg-0003", "module_id": "package", "agent_id": "packager", "reason": "longer",
+               "design_version": 1, "changes": {"wheelbase": {"value": 1900.0, "unit": "mm"}}}
+        stray = dict(one, changes={"wheelbase": {"value": 1950.0, "unit": "mm"}})
+        ev = modular(proposals=[stray])
+        [e for e in ev if e["kind"] == "design.created"][-1]["data"]["module_changes"].append(pkg)
+        self.assertTrue(any("all change wheelbase" in m for m in self.hk6(ev)))
 
     def test_no_proposal_without_modules(self):
         ev = modular(modules=False)

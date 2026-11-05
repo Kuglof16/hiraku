@@ -39,12 +39,23 @@ CHANGE_PROPOSED = "design.change_proposed"
 ID_PREFIX = {**layout.ID_PREFIX, MODULE_CHANGE: "chg"}
 
 
+# Keys of an analysis that RunStore.reading() leaves out: the tools' large outputs for the screen and the export
+# (fields on the members or shells, time series, the animation's scene). The hooks' and the rules' checks read
+# results, status, tool and ids only.
+READING_DROPS = ("fields", "series", "scene")
+
+
 class StoreError(RuntimeError):
     pass
 
 
 def _now() -> datetime:
     return datetime.now().astimezone()
+
+
+def _change_number(change: Record) -> int:
+    """chg-0012 -> 12: proposals are numbered run-wide in the order they were made."""
+    return int(change["change_id"].rsplit("-", 1)[1])
 
 
 def _iso(dt: datetime) -> str:
@@ -99,10 +110,14 @@ class RunStore:
         self._t0_mono = mono()
         self._t_offset = 0.0  # t of the last event when reopened
         self._counters = {kind: 0 for kind in ID_PREFIX}
-        # inside reading(): record files already read, by path (None outside). Emptied on every event, since every
-        # write of this store emits one
-        self._read_cache: dict[Path, Any] | None = None
+        # inside reading(): record files already looked at in this stretch, by path (None outside). Emptied on every
+        # event, since every write of this store emits one
+        self._read_cache: dict[str, Any] | None = None
+        self._ids: dict[str, dict[str, tuple[int, Path]]] = {}  # inside reading(): kind -> record id -> (version, path)
         self._reading_depth = 0
+        # what reading() read, kept across stretches: path -> ((mtime_ns, size), record); a file whose stat changed
+        # (written since, by this process or another) is read again. Analyses are kept without READING_DROPS
+        self._kept: dict[str, tuple[tuple[int, int], Any]] = {}
 
     # ------------------------------------------------------------------ create / open
 
@@ -163,11 +178,15 @@ class RunStore:
         return round(self._t_offset + (self._mono() - self._t0_mono), 3)
 
     def emit(self, kind: str, *, agent: str | None = None, domain: str | None = None,
-             design_version: int | None = None, text: str | None = None, data: Record | None = None) -> Record:
-        """Append one event to events.jsonl (validated) and return it."""
+             design_version: int | None = None, text: str | None = None, data: Record | None = None,
+             data_checked: bool = False) -> Record:
+        """Append one event to events.jsonl (validated) and return it. data_checked: data is a record add_record
+        has just validated whole, so the event is validated with READING_DROPS left out of its data (the large
+        arrays of an analysis: a 12 MB shell analysis took 3.7 s as a record and 4.0 s again as the event)."""
         with self._lock:
             if self._read_cache:
                 self._read_cache.clear()  # the event goes with a write (or a hook's answer): read the files again
+            self._ids.clear()
             if kind == "run.started":
                 # t counts from run.started, so its own t is exactly 0
                 self._t0_mono, self._t_offset = self._mono(), 0.0
@@ -191,7 +210,10 @@ class RunStore:
                 event["text"] = text
             if data is not None:
                 event["data"] = data
-            contract.validate("event", event)
+            if data_checked and isinstance(data, dict) and any(k in data for k in READING_DROPS):
+                contract.validate("event", {**event, "data": {k: v for k, v in data.items() if k not in READING_DROPS}})
+            else:
+                contract.validate("event", event)
             line = json.dumps(event, ensure_ascii=False, separators=(", ", ": "))
             with self.events_path.open("a", encoding="utf-8", newline="\n") as f:
                 f.write(line + "\n")
@@ -343,17 +365,22 @@ class RunStore:
         with self._lock:
             contract.validate(kind, record)
             rid = record[f"{kind}_id"]
-            _write_json(layout.record_path(self.path, design_version, kind, rid), record)
+            path = layout.record_path(self.path, design_version, kind, rid)
+            _write_json(path, record)
+            self._kept.pop(str(path), None)  # rewritten: read again (also when the stat would not show it)
             self.emit(RECORD_EVENT[kind], agent=agent, domain=domain, design_version=design_version,
-                      text=text, data=record)
+                      text=text, data=record, data_checked=True)
             return record
 
     @contextmanager
     def reading(self) -> Iterator[None]:
-        """A stretch of reads that change nothing (the hooks' and the rules' checks): each record file is read
-        once, and records(), find() and get() hand back the same objects for it, so the caller must not change
-        them. The store's lock is held throughout (tools run in threads); an event (every write emits one)
-        empties what was read. Nested calls share the outer stretch."""
+        """A stretch of reads that change nothing (the hooks' and the rules' checks): records(), find() and get()
+        hand back the same objects for a file, so the caller must not change them. A file is read once and kept
+        for later stretches while its stat (mtime, size) stays the same, so a check reads only the records
+        written since the last one. Analyses come without READING_DROPS (the tools' fields, time series and
+        scenes: large, and no check reads them). The store's lock is held throughout (tools run in threads); an
+        event (every write emits one) makes the stretch look at the files again. Nested calls share the outer
+        stretch."""
         with self._lock:
             self._reading_depth += 1
             if self._reading_depth == 1:
@@ -364,14 +391,37 @@ class RunStore:
                 self._reading_depth -= 1
                 if self._reading_depth == 0:
                     self._read_cache = None
+                    self._ids.clear()
 
     def _read_record(self, path: Path) -> Any:
         cache = self._read_cache
         if cache is None:
             return _read_json(path)
-        if path not in cache:
-            cache[path] = _read_json(path)
-        return cache[path]
+        key = str(path)
+        if key not in cache:
+            st = os.stat(key)
+            stamp = (st.st_mtime_ns, st.st_size)
+            kept = self._kept.get(key)
+            if kept is None or kept[0] != stamp:
+                rec = _read_json(path)
+                if path.parent.name == layout.RECORD_DIRS["analysis"] and isinstance(rec, dict):
+                    rec = {k: v for k, v in rec.items() if k not in READING_DROPS}
+                kept = self._kept[key] = (stamp, rec)
+            cache[key] = kept[1]
+        return cache[key]
+
+    def _id_index(self, kind: str) -> dict[str, tuple[int, Path]]:
+        """Inside reading(): record id -> (version, path) of a kind, from one listing of each version's folder."""
+        got = self._ids.get(kind)
+        if got is None:
+            got = {}
+            for v in sorted(self._project.get("design_versions") or []):
+                folder = layout.version_dir(self.path, v) / layout.RECORD_DIRS[kind]
+                if folder.is_dir():
+                    for p in folder.glob("*.json"):
+                        got.setdefault(p.stem, (v, p))
+            self._ids[kind] = got
+        return got
 
     def records(self, kind: str, design_version: int | None = None) -> list[Record]:
         """Records of one kind, in id order, for one version or for the whole run."""
@@ -387,9 +437,12 @@ class RunStore:
     def find(self, kind: str, record_id: str) -> tuple[int, Record] | None:
         """(design_version, record) for an id, or None."""
         with self._lock:
+            if self._read_cache is not None:
+                hit = self._id_index(kind).get(record_id)
+                return (hit[0], self._read_record(hit[1])) if hit else None
             for v in sorted(self._project.get("design_versions") or []):
                 p = layout.record_path(self.path, v, kind, record_id)
-                if (self._read_cache is not None and p in self._read_cache) or p.exists():
+                if p.exists():
                     return v, self._read_record(p)
             return None
 
@@ -426,12 +479,26 @@ class RunStore:
 
     def proposals(self, design_version: int | None = None, *, pending: bool = False) -> list[Record]:
         """The module designers' proposals, in id order: those based on one version (or all); with pending,
-        only those no version was built from yet."""
+        only those no version was built from yet, and of those only each module's latest on its version (a module
+        has one proposal per round: a new one replaces the module's earlier proposal that was not built,
+        superseded_change_ids)."""
         with self._lock:  # tools run in threads: no read while another thread appends or replaces
             got = self._proposals(self.events())
             built = self.built_change_ids() if pending else set()
-            out = [c for v, c in got if (design_version is None or v == design_version) and c["change_id"] not in built]
-            return sorted(out, key=lambda c: int(c["change_id"].rsplit("-", 1)[1]))
+            out = sorted(((v, c) for v, c in got if (design_version is None or v == design_version)
+                          and c["change_id"] not in built), key=lambda vc: _change_number(vc[1]))
+            if pending:
+                last = {(v, c["module_id"]): c["change_id"] for v, c in out}
+                out = [(v, c) for v, c in out if last[(v, c["module_id"])] == c["change_id"]]
+            return [c for _, c in out]
+
+    def superseded_change_ids(self, design_version: int | None = None) -> list[str]:
+        """Proposals based on the version (default: the current) that no version was built from and that a later
+        proposal of the same module replaced, in id order."""
+        with self._lock:
+            v = design_version or self.design_version
+            built, kept = self.built_change_ids(), {c["change_id"] for c in self.pending_proposals(v)}
+            return [c["change_id"] for c in self.proposals(v) if c["change_id"] not in built | kept]
 
     def pending_proposals(self, design_version: int | None = None) -> list[Record]:
         """The proposals based on the current version (or the one given) that no version was built from yet."""

@@ -233,6 +233,55 @@ class SuiteQueue(unittest.TestCase):
         self.assertEqual(len(said), 1, said)  # said once per holder, not at every poll
         self.assertTrue(said[0].startswith("waiting for ") and str(rt.ROOT) in said[0], said)
 
+    def test_the_browser_suite_has_a_lock_of_its_own(self):
+        # beside the plain suite (another lock file), not beside another browser suite
+        p = self._holder(30)
+        try:
+            b = rt.take_queue(4, wait=False, queue="browser")
+            self.assertIsNotNone(b, "the browser suite waited for the plain suite")
+            self.assertIsNone(rt.take_queue(4, wait=False, queue="browser"))
+            b.close()
+        finally:
+            procs.kill_tree(p)
+            p.wait()
+
+    def test_a_mapping_worker_lists_the_repository_files_its_test_used(self):
+        # PY_MAP=1: the worker's audit hook collects the repository files opened or imported (qa.browser_pick's input)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "w.json"
+            env = dict(os.environ, **{rt.PY_MAP: "1"})
+            subprocess.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out),
+                            "tests.verification.test_run_tests._ReadsAFile"], cwd=rt.ROOT, env=env, check=True,
+                           capture_output=True)
+            files = json.loads(out.read_text(encoding="utf-8"))["py_files"]
+        self.assertIn("data/catalog/scripted.yaml", files)  # opened by the test
+        self.assertIn("qa/procs.py", files)  # imported
+        self.assertFalse(any(f.startswith(("..", "/")) or ":" in f for f in files), files[:5])
+
+    def test_browser_switches_the_browser_tests_on_for_tests_web(self):
+        from unittest import mock
+
+        seen = {}
+
+        def stop_after_discovery(only=None, split=None):
+            seen.update(only=only, switch=os.environ.get(rt.BROWSER_SWITCH))
+            raise SystemExit(0)
+
+        with mock.patch.dict(os.environ, {}, clear=False), mock.patch.object(rt, "discover", stop_after_discovery), \
+                mock.patch.object(rt, "_take_lock"), mock.patch.object(rt, "_others", return_value=[]):
+            os.environ.pop(rt.BROWSER_SWITCH, None)
+            with self.assertRaises(SystemExit):
+                rt.main(["--browser", "--no-wait"])
+        self.assertEqual(seen, {"only": [rt.BROWSER_PREFIX], "switch": "1"})
+
+
+class _ReadsAFile(unittest.TestCase):
+    """Run only by name from test_a_mapping_worker_lists_the_repository_files_its_test_used (a leading
+    underscore: discovery still finds it, so it does nothing but read a file)."""
+
+    def test_read(self):
+        (rt.ROOT / "data" / "catalog" / "scripted.yaml").read_bytes()
+
 
 class _Alone:  # stands for a TestCase (not one, so discovery does not run it)
     def test_a(self): pass
@@ -318,17 +367,46 @@ class MemoryAware(unittest.TestCase):
         self.assertEqual(len(res), 1)
         self.assertIn("boom", res[0]["crash"])
 
+    def test_a_worker_runs_the_convergence_levels_one_at_a_time(self):
+        # KNOWN_HEAVY_GB counts SpaceFrameConvergenceTest as one 15.7 GB level; side by side they reach 46.9 GB
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(rt.CONVERGENCE_JOBS, None)
+            self.assertEqual(rt.worker_env()[rt.CONVERGENCE_JOBS], "1")
+            os.environ[rt.CONVERGENCE_JOBS] = "3"  # set on purpose (a run of that class alone): kept
+            self.assertEqual(rt.worker_env()[rt.CONVERGENCE_JOBS], "3")
+
+    def test_convergence_levels_side_by_side_count_their_peaks_together(self):
+        from unittest import mock
+
+        conv = rt.CONVERGENCE
+        for jobs, want in (("1", 15.7), ("2", 29.7), ("3", 43.2), ("9", 54.5), ("x", 15.7)):
+            with self.subTest(jobs=jobs), mock.patch.dict(os.environ, {rt.CONVERGENCE_JOBS: jobs}):
+                self.assertEqual(rt.memory_of(conv, {conv: 0.6}), want)
+        with mock.patch.dict(os.environ, {rt.CONVERGENCE_JOBS: "3"}):
+            self.assertEqual(rt.memory_of(conv, {conv: 50.0}), 50.0)  # a larger measured peak stands
+            self.assertEqual(rt.memory_of("m.A", {"m.A": 5.0}), 5.0)  # other classes as before
+
     def test_memory_of(self):
         last = {"m.A": 5.0, "m.B.test_x": 1.0}
         self.assertEqual(rt.memory_of("m.A", last), 5.0)
         self.assertEqual(rt.memory_of("m.A.test_y", last), 5.0)  # split for the first time: the class's peak
         self.assertEqual(rt.memory_of("m.B.test_x", last), 1.0)
         self.assertEqual(rt.memory_of("tests.solvers.test_frame_tubes.MeshFlowTest", {}), 7.6)
-        # a known one is a floor: its levels run in child processes the worker's peak does not see
+        # a known one is a floor: its levels run in child processes the worker's peak does not see. One level
+        # at a time without HIRAKU_CONVERGENCE_JOBS, the n largest levels together with it (the EC2 suite sets 3)
+        from unittest import mock
+
         conv = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
-        self.assertEqual(rt.memory_of(conv, {conv: 0.6}), 14.4)
-        self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), 14.4)
-        self.assertEqual(rt.memory_of(conv, {conv: 20.0}), 20.0)
+        for jobs, floor in ((None, 15.7), ("3", 43.2)):
+            env = {k: v for k, v in os.environ.items() if k != rt.CONVERGENCE_JOBS}
+            if jobs:
+                env[rt.CONVERGENCE_JOBS] = jobs
+            with self.subTest(jobs=jobs), mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(rt.memory_of(conv, {conv: 0.6}), floor)
+                self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), floor)
+                self.assertEqual(rt.memory_of(conv, {conv: 50.0}), 50.0)
         self.assertIsNone(rt.memory_of("m.C", last))
 
     def test_this_process_peak_and_free_memory_read(self):

@@ -57,7 +57,11 @@ UNPREDICTABLE_KEY = "unpredictable"
 # in STATE_FILE, written by the server: shelf.stages_of (HK5 stages; the hook command has no tools)
 STAGES_KEY = "stages"
 
-STOPPED_SESSION_CLOSED = "Claude Code のセッションが閉じたので、実行を止めました"
+# The screen's default port (hiraku.webserve.server.DEFAULT_PORT; the agent layer does not import webserve, a
+# higher layer): tests/agent/test_plugin_path checks the two are the same
+SCREEN_PORT = 8765
+
+STOPPED_SESSION_CLOSED ="Claude Code のセッションが閉じたので、実行を止めました"
 STOPPED_NEW_RUN = "同じセッションで新しい実行を始めたので、この実行は止めました"
 NO_RUN = "実行がありません。start_run(requirements_file=...) で実行を始めるか、open_run(run_id=...) で走っている実行を開いてください"
 
@@ -378,7 +382,8 @@ class PluginServer:
     def _answer(self, ctx: RunContext) -> Record:
         return {"run_id": ctx.project["run_id"], "run_dir": str(ctx.store.path.resolve()),
                 "design_version": ctx.version, "driver": ctx.project.get("driver"),
-                "screen": f"画面 (python -m hiraku.webserve) の ?run={ctx.project['run_id']} で見られます",
+                "screen": (f"画面で見られます: リポジトリのフォルダで .venv の python -m hiraku.webserve を始め、"
+                           f"http://127.0.0.1:{SCREEN_PORT}/?run={ctx.project['run_id']} を開く"),
                 "task": prompts.lead_task(ctx)}
 
     def start(self, args: Record) -> Record:
