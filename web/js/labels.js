@@ -142,7 +142,7 @@ export function agentStopWhy(d) {
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
-  { id: "HK2", key: "HK2_tool_usable", ja: "照合ずみのツールだけ" },
+  { id: "HK2", key: "HK2_tool_usable", ja: "OK のツールだけ" },
   { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
@@ -362,6 +362,105 @@ const QUANTITY_JA = {
   max_stress_torsion: "ねじりの応力 (最大)",
   tipped: "倒れたか",
   lifted_by_push: "押して浮いたか",
+  // the quantities of the shelf's known-answer checks (tool_check.quantity; the meaning from each check's case
+  // and source in hiraku/solvers). Checks that write a sentence as the quantity are left as written.
+  // K2 vehicle checks (k2_vehicle/checks.py and the K2 shelf tools)
+  wheel_load: "輪にかかる荷重",
+  wheel_load_sum: "輪の荷重の和",
+  wheel_load_difference: "左右の輪の荷重の差",
+  total_wheel_load: "全部の輪の荷重の和",
+  front_axle_load: "前の軸の荷重",
+  uphill_load: "山側の輪の荷重",
+  aligning_moment_sign: "セルフアライニングモーメントの向き (合えば 1)",
+  cornering_stiffness: "コーナリングスティフネス",
+  slip_stiffness: "スリップの剛性 (前後)",
+  peak_lateral_force: "横力の最大",
+  peak_longitudinal_force: "前後力の最大",
+  friction_ellipse: "摩擦楕円に対する比 (最大)",
+  fall_error: "自由落下の計算のずれ",
+  parked_drift: "坂に止めたときのずれ",
+  ride_frequency: "ばね上の上下の固有振動数",
+  yaw: "ヨー角",
+  yaw_rate: "ヨーレート",
+  yaw_mirror_error: "左右に切ったときのヨー角の対称のずれ",
+  lateral_mirror_error: "左右に切ったときの横位置の対称のずれ",
+  yaw_rate_mirror_error: "左右に曲がったときのヨーレートの対称のずれ",
+  tilt_angle_difference: "転倒する傾きの左右の差",
+  critical_wind_speed_difference: "転倒する風速の左右の差",
+  psd_ratio: "作った路面の凹凸と規格の比 (PSD)",
+  G_d_at_n0: "基準の波数での路面の凹凸の大きさ (G_d(n0))",
+  damper_force: "ダンパーの力",
+  upper_arm_force: "アッパーアームの力",
+  mount_force_sum_error: "取付点の力の和のずれ",
+  compliance_ratio_error: "剛性を 2 倍にしたときのたわみやすさの比のずれ",
+  toe_per_aligning_moment: "アライニングモーメントあたりのトーの変化",
+  // K1 frame and shell
+  root_stress: "根元の応力",
+  von_mises: "ミーゼス応力",
+  mid_deflection: "中央のたわみ",
+  tip_deflection: "先端のたわみ",
+  tip_twist: "先端のねじれ角",
+  centre_deflection: "板の中央のたわみ",
+  Kt_gross: "穴のまわりの応力集中係数 (総断面)",
+  shell_weight: "シェルの重さ",
+  hold_reaction: "押さえの点の反力 (重さとの比)",
+  force_imbalance: "力のつり合いのずれ (重さとの比)",
+  first_frequency: "1 次の固有振動数",
+  bounce_frequency: "上下に揺れる固有振動数",
+  // load path (load_path.py)
+  box_deflection: "箱を押したときのたわみ",
+  top_deflection: "積んだ箱のいちばん上のたわみ",
+  plate_middle_deflection: "板の中央のたわみ",
+  linear_deflection: "張った線の線形のたわみ",
+  sag: "張った線のたわみ",
+  post1_load: "柱 1 の荷重",
+  post2_load: "柱 2 の荷重",
+  held_box_free: "支えのある箱を浮いているとしたか",
+  max_utilisation_is_the_tip: "いちばん厳しいのが先端の部材か",
+  // crash
+  deceleration: "減速度",
+  energy_absorbed: "吸収したエネルギー",
+  // fatigue (fatigue.py, bed_use.py)
+  damage: "疲労の損傷度",
+  damage_frame: "フレームの溶接の損傷度",
+  damage_lug_back: "後ろの耳 (ラグ) の溶接の損傷度",
+  damage_worst: "いちばん大きい溶接の損傷度",
+  lug_root_stress: "耳 (ラグ) の根元の応力",
+  cycles_at_FAT: "FAT の応力範囲での繰り返し数",
+  cycles_at_half_the_knee_range: "折れ点の半分の応力範囲での繰り返し数",
+  sum_of_half_ranges: "レインフローの範囲の和 (半分)",
+  count_of_range_3: "レインフローで数えた範囲 3 の回数",
+  count_of_range_4: "レインフローで数えた範囲 4 の回数",
+  count_of_range_6: "レインフローで数えた範囲 6 の回数",
+  count_of_range_8: "レインフローで数えた範囲 8 の回数",
+  count_of_range_9: "レインフローで数えた範囲 9 の回数",
+  // care bed (bed_tools.py, bed_use.py)
+  support_load_A: "支点 A の荷重",
+  support_load_B: "支点 B の荷重",
+  support_load_C: "支点 C の荷重",
+  support_load_A_plus_B: "支点 A と B の荷重の和",
+  force_at_45deg: "45° 上げたときのアクチュエーターの力",
+  force_flat: "水平のときのアクチュエーターの力",
+  stroke: "アクチュエーターのストローク",
+  lever_stroke: "アクチュエーターのストローク (45° まで)",
+  duty: "1 時間のうちアクチュエーターが動く割合",
+  run_time: "続けて動く時間 (1 ストローク)",
+  // K3 power and heat
+  current: "電流",
+  heat_in: "入れた熱量",
+  rise_at_tau: "時定数の時刻の温度上昇",
+  steady_rise: "落ち着いたときの温度上昇",
+  // K4 geometry, entry, spray
+  overlap: "箱どうしの重なり (負は隙間)",
+  capsule_overlap: "丸棒の重なり (負は隙間)",
+  lid_after_content: "中身の後にふたを組むか",
+  entry_opening_width: "乗り口の幅",
+  entry_opening_height: "乗り口の高さ",
+  entry_step_height: "乗り口の最初の足場の高さ",
+  entry_blocked: "乗り口をふさぐ部材の数",
+  entry_handhold: "乗り口の手がかりの数",
+  t_enter: "線が箱に入るまでの距離",
+  hits: "線が当たったか",
 };
 
 // Names of the series channels (the name before the dot: wheel_camber.FL -> wheel_camber) that
@@ -586,6 +685,22 @@ export function quantityName(q) {
   }
   return q;
 }
+// The words that tell the judged number from a value shown for reference (the present card,
+// the workbench's comparison card, the colour bar and the 3D's largest-value tag).
+export const JUDGED_JA = {
+  number: "判定の量", // before the judged quantity's name, over the card's large number
+  ref: "参考 (判定に使わない)", // over the values shown beside it that the verdict does not use
+  refTag: "参考", // before 最大 on the 3D's tag of a field the verdict does not use
+  refBar: "参考の色", // before a colour bar's title when the field is not the judged quantity
+  otherQuantity: "判定は別の量", // under such a colour bar, before the judged quantity's name
+  // Shown wherever strength is judged (the present card, the workbench's analysis card, the grid's
+  // strength tile): the suspension and wheel mounts are not judged. The records say it only in the
+  // analyses' free-text assumptions (no field marks the excluded elements), so it is always shown
+  // when the run has a strength load case.
+  // 取付点の荷重条件が入ったら消す (remove once a load case judges the mounts).
+  mountsNotJudged: "取付点 (金具・溶接・ボルト) は判定していない。取付の範囲は、金具が補強する仮定で判定から外している",
+};
+
 // The parts after the dot that a tool writes for one quantity, in words (a part not here is shown as written).
 // rops_occupant_clearance.<part>: rops_frame_pushover pushes the roll bar from the left top corner (side),
 // the right one (side_mirror), backwards near the left (rear) or the right (rear_mirror), and down (top).
@@ -694,31 +809,12 @@ export function fmtVU(value, unit, sig) {
 // with the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
 export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (API キー)", claude_code_plugin: "Claude Code" };
 
-// How a run was driven, in the run list's words: 決まった手順で再現 (scripted) or Claude で実行.
+// How a run is driven, in A1's words for its start buttons: 決まった手順で再現 (scripted) or Claude で実行.
 export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
 export const SCRIPTED_CUT_JA = `${DRIVEN_JA.scripted} (Claude なし)`; // the video cuts' corner tag on a scripted run (cut.js)
 
-// run.finished stop_code, said short in the run list: 途中で止まった (…) (the words of STOP_CODE_JA, shorter).
-export const STOP_SHORT_JA = {
-  not_judged: "判定の無い分野を残した",
-  round_limit: "繰り返しの上限に達した",
-  red_left: "赤の分野を残した",
-  cost_limit: "上限の費用に達した",
-  turn_limit: "ターン数の上限に達した",
-  user_stop: "人が止めた",
-};
+// a run that ended at the domain picks (its stop_reason says so; stop_after "picks" in newer records)
 const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
-
-// A stop_reason said short: the code's words, else (records older than stop_code) the reason's
-// known opening, else its first sentence up to 18 characters.
-export function stopShort(code, reason) {
-  if (STOP_SHORT_JA[code]) return STOP_SHORT_JA[code];
-  const s = (reason || "").trim();
-  if (/^まだ判定の無い分野/.test(s)) return STOP_SHORT_JA.not_judged;
-  if (!s) return "";
-  const first = s.split(/[。(（]/)[0].trim() || s;
-  return [...first].length > 18 ? [...first].slice(0, 18).join("") + "…" : first;
-}
 
 // The run list's state column (for people): how the run ended in one word, from /api/runs' summary
 // (finished, end_status of run.finished). A run that stops after the picks as asked is 完了.
@@ -729,25 +825,41 @@ export function runState(r) {
   return r.end_status === "stopped" || r.end_status === "failed" ? r.end_status : "done";
 }
 
-// How a run ended, one phrase for its row in the run list, from /api/runs' summary
-// (hiraku/webserve/server.py _run_summary): finished, end_status, stop_code, stop_reason,
-// stop_after, last_version, judged {green, red, pending}.
-export function endingJa(r) {
-  if (!r.finished) return "実行中";
-  const v = Number.isInteger(r.last_version) ? `・版 ${r.last_version}` : "";
-  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return "分野を選ぶところまで";
+// The run list's row title for people (no ?dev=1): what replaying the record shows, from /api/runs'
+// summary (hiraku/webserve/server.py _run_summary: driver, finished, end_status, stop_reason,
+// stop_after, last_version, judged {green, red, pending}) — how it was driven, then how far the design went (last_version) and how it was judged.
+// The state column says 完了 / 途中で止まった, so a stopped row here says only how far it got
+// (and a red domain left over): 「決まった手順で最後まで・5 回目の設計で全部合格」
+// 「Claude の運転・4 回目の設計まで」.
+const HOW_JA = { scripted: "決まった手順", agent_sdk: "Claude の運転", claude_code_plugin: "Claude の運転" };
+export function runSummaryJa(r) {
+  const how = HOW_JA[r.driver] ?? "";
+  const v = Number.isInteger(r.last_version) ? r.last_version : null;
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return [how, "分野を選ぶところまで"].filter(Boolean).join("・");
+  if (!r.finished) return [how, v ? `いま ${v} 回目の設計` : ""].filter(Boolean).join("・");
+  const state = runState(r);
   const j = r.judged;
-  if (r.end_status === "stopped") {
-    const why = stopShort(r.stop_code, r.stop_reason);
-    return `途中で止まった${why ? ` (${why})` : ""}${v}`;
+  let far = "";
+  if (state === "done") {
+    const head = how ? `${how}で最後まで` : "";
+    if (v && j && j.green > 0 && !j.red && !j.pending) far = `${v} 回目の設計で全部合格`;
+    else if (v && j) far = `${v} 回目の設計で` + [j.green ? `合格 ${j.green}` : "", j.red ? `不合格 ${j.red}` : "", j.pending ? `合否の出ていない分野 ${j.pending}` : ""].filter(Boolean).join("・");
+    else if (v) far = `${v} 回目の設計まで`;
+    return [head, far].filter(Boolean).join("・");
   }
-  if (r.end_status === "failed") return `エラーで止まった${v}`;
-  if (j && j.green > 0 && !j.red && !j.pending) return `全部合格${v}`;
-  if (j) {
-    const parts = [j.green ? `合格 ${j.green}` : "", j.red ? `赤 ${j.red}` : "", j.pending ? `判定なし ${j.pending}` : ""].filter(Boolean);
-    return `完了${v}・${parts.join("・")}`;
-  }
-  return `完了${v}・判定なし`;
+  if (v) far = `${v} 回目の設計まで` + (j?.red ? `・不合格が残った` : "");
+  return [how, far].filter(Boolean).join("・");
+}
+
+// A record the list for people keeps under the closed 「この PC の記録」: one this PC ran that has no
+// project.driver (made before the field, while HIRAKU was being built), no design version, or that
+// ended at the domain picks. Saved records always stay on the list.
+export function isOlderRecord(r) {
+  if (r.saved) return false;
+  if (r.sample) return true;
+  if (!r.driver) return true;
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return true;
+  return r.finished && !Number.isInteger(r.last_version);
 }
 
 // The run list for people (no ?dev=1): one line per demo run of data/catalog/demo_runs.yaml, by its id,

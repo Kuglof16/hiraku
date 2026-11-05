@@ -1,3 +1,4 @@
+import copy
 import json
 import tempfile
 import unittest
@@ -172,6 +173,21 @@ class FinishTest(unittest.TestCase):
         self.assertEqual(first["domains"]["picks"][0]["domain"], "handling")
         self.assertEqual(rf["tests"], [t for t in own["tests"] if t not in gone])
         self.assertEqual(contract.errors("requirements_file", rf), [])
+
+    def test_a_test_the_file_lists_but_the_flags_do_not_pick_stays_unless_its_own_domain_goes(self):
+        from unittest import mock
+
+        own = copy.deepcopy(load_product("offroad-4w"))
+        own["tests"] = [t for t in own["tests"] if t != "R1s"] + ["R1s"]  # listed by the file; the flags never pick it (applies_if: not always)
+        with mock.patch.object(request, "load_product", return_value=own):
+            first = request.begin(own["want"], product="offroad-4w")
+            answers, _ = load_answers(answers_file("offroad-4w"))
+            kept = request.finish(request.revise(first["draft"], exclude=["handling"])["draft"], answers)["requirements_file"]["tests"]
+            self.assertIn("R1s", kept)  # handling was taken off; R1s belongs to strength
+            self.assertNotIn("S1", kept)
+            gone = request.finish(request.revise(first["draft"], exclude=["strength"])["draft"], answers)["requirements_file"]["tests"]
+            self.assertNotIn("R1s", gone)  # strength was taken off: its test goes with it
+            self.assertNotIn("R1", gone)
 
     def test_a_product_nobody_has_a_file_for(self):
         first = request.begin("飲み物を運ぶロボ", product="my-robot")

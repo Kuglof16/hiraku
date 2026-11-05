@@ -68,13 +68,28 @@ def _rayleigh_damage(sigma_s: float, cycles: float, v: dict) -> float:
     """Miner damage of `cycles` cycles whose amplitudes are Rayleigh with spread sigma_s (narrow band)."""
     import numpy as np
 
-    from ..k1_frame.fatigue import sn_cycles
-
     a = np.linspace(sigma_s * 1e-4, 8.0 * sigma_s, BAND_POINTS)  # stress amplitudes, Rayleigh
     p = a / sigma_s**2 * np.exp(-a**2 / (2.0 * sigma_s**2))
     m2 = spectrum_slope(v["m"])  # a spectrum, not constant amplitude: the design's m2 is not used
-    inv_n = np.array([1.0 / sn_cycles(2.0 * x, v["FAT"], v["m"], v["N_knee"], m2) for x in a])
+    inv_n = np.array(_inv_cycles([2.0 * x for x in a.tolist()], v["FAT"], v["m"], v["N_knee"], m2))
     return cycles * float(np.trapezoid(p * inv_n, a))
+
+
+def _inv_cycles(ranges: list[float], fat: float, m: float, n_knee: float, m2: float) -> list[float]:
+    """[1 / k1_frame.fatigue.sn_cycles(r, fat, m, n_knee, m2) for r in ranges], worked as sn_cycles works each one
+    (the same operations on the same floats), with the parts that do not depend on r worked once."""
+    import math
+
+    s_knee = fat * (2e6 / n_knee) ** (1.0 / m)
+    log_2e6, log_knee = math.log(2e6), math.log(n_knee)
+    out = []
+    for r in ranges:
+        if r <= 0:
+            out.append(0.0)  # 1 / inf
+            continue
+        log_n = log_2e6 + m * math.log(fat / r) if r >= s_knee else log_knee + m2 * math.log(s_knee / r)
+        out.append(1.0 / math.exp(log_n) if log_n < 700.0 else 0.0)
+    return out
 
 
 def _road_damage(v: dict) -> dict:

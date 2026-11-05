@@ -612,6 +612,22 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
     def can_revise() -> bool:
         return next_revision() is not None
 
+    ruled: set[int] = set()  # versions the knowledge rules were applied to
+
+    def check_rules() -> None:
+        """The plan's rule_check: the knowledge rules on this version's parts, once per version (also on a version
+        a red stage revises before the last stage; QA's video run on 6d86a75e had them on version 5 only)."""
+        nonlocal asked
+        if not plan.get("rule_check") or ctx.version in ruled:
+            return
+        ruled.add(ctx.version)
+        who = "packager" if any(a["agent_id"] == "packager" for a in ctx.project["agents"]) else "lead"
+        if who != "lead":
+            start(who)
+        checked = _check_rules(ctx, who)
+        if checked and plan.get("ask_on_hits") and not asked:
+            asked = _ask_on_hits(ctx, checked)
+
     held_back: tuple[int, list[Record]] | None = None
     try:
         _check_stop(ctx)  # pressed while the tools were checked or the first version was built
@@ -647,6 +663,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                     s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。"
                                                             f"重い段に進む前に、設計役が直します")
                     names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
+                    check_rules()  # this version's rules before it is left behind (the stamp card reads every version)
                     revise(f"{names}が赤なので、設計を直します")
                     revised = True
                     break
@@ -659,13 +676,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             if revised:
                 continue
             _check_stop(ctx)  # what was put in the inbox during the last step
-            if plan.get("rule_check"):  # the knowledge rules on this version's parts
-                who = "packager" if any(a["agent_id"] == "packager" for a in ctx.project["agents"]) else "lead"
-                if who != "lead":
-                    start(who)
-                checked = _check_rules(ctx, who)
-                if checked and plan.get("ask_on_hits") and not asked:
-                    asked = _ask_on_hits(ctx, checked)
+            check_rules()
             if held_back is not None:
                 break
             reds = _red_tiles(ctx)

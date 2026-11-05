@@ -387,5 +387,55 @@ class Units(unittest.TestCase):
             ka.convert(1.0, "mm", "N")
 
 
+class ClevisMount(unittest.TestCase):
+    """qa.known_answers' clevis bracket (R9), each stress by hand on round numbers."""
+
+    def test_the_force_splits_along_the_pin_the_root_and_across(self):
+        # pin axis x, root line y: F = (0, 300, 400) has nothing out of plane, 300 along the root, 400 across
+        p = ka.mount_force_split((0.0, 300.0, 400.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+        self.assertEqual({k: round(v, 9) for k, v in p.items()},
+                         {"F": 500.0, "F_n": 0.0, "F_t": 300.0, "F_v": 400.0, "F_p": 500.0})
+        # the axes need not be unit vectors; the pieces still add back up to |F|
+        p = ka.mount_force_split((120.0, -50.0, 90.0), (0.0, 0.0, 2.0), (3.0, 4.0, 0.0))
+        self.assertAlmostEqual(p["F_n"] ** 2 + p["F_t"] ** 2 + p["F_v"] ** 2, p["F"] ** 2, places=9)
+        with self.assertRaises(ValueError):  # the root line must lie in the plate
+            ka.mount_force_split((1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0))
+
+    def test_pin_shear_on_two_planes_and_bearing_on_each_plate(self):
+        # 1000 N on one 10 mm pin: two planes of 78.54 mm^2; each 4 mm plate bears 500 N on 40 mm^2
+        self.assertAlmostEqual(ka.clevis_pin_shear(1000.0, 10.0, 1), 1000.0 / (2 * 25 * math.pi), places=9)
+        self.assertAlmostEqual(ka.clevis_bearing(1000.0, 10.0, 4.0, 1), 12.5, places=12)
+        self.assertAlmostEqual(ka.clevis_bearing(1000.0, 10.0, 4.0, 2), 6.25, places=12)
+
+    def test_the_plate_root_as_a_cantilever(self):
+        # out of plane: 50 N (half) x 20 mm on b t^2 / 6 = 40 x 16 / 6
+        self.assertAlmostEqual(ka.clevis_plate_root_stress(100.0, 0.0, 0.0, 20.0, 40.0, 4.0), 9.375, places=12)
+        # in plane: 50 N x 20 mm on t b^2 / 6 = 4 x 1600 / 6
+        self.assertAlmostEqual(ka.clevis_plate_root_stress(0.0, 100.0, 0.0, 20.0, 40.0, 4.0), 0.9375, places=12)
+        # peel: 50 N on 40 x 4
+        self.assertAlmostEqual(ka.clevis_plate_root_stress(0.0, 0.0, 100.0, 20.0, 40.0, 4.0), 0.3125, places=12)
+        self.assertAlmostEqual(ka.clevis_plate_root_stress(100.0, 100.0, 100.0, 20.0, 40.0, 4.0), 10.625, places=12)
+
+    def test_the_welds_throat(self):
+        s, b, t, e = 5.0, 40.0, 4.0, 20.0
+        a = 0.7 * s
+        # the force alone: 50 N per plate on two lines of 40 mm, throat 3.5 mm
+        self.assertAlmostEqual(ka.clevis_weld_stress(100.0, 0.0, 0.0, e, b, t, s), (50.0 / 80.0) / a, places=12)
+        # out of plane alone: the couple (50 x 20) / 4 = 250 N on each 40 mm line
+        self.assertAlmostEqual(ka.clevis_weld_stress(0.0, 100.0, 0.0, e, b, t, s), (250.0 / 40.0) / a, places=12)
+        # in plane alone: 3 M / b^2 with M = 50 x 20
+        self.assertAlmostEqual(ka.clevis_weld_stress(0.0, 0.0, 100.0, e, b, t, s), (3000.0 / 1600.0) / a, places=12)
+
+    def test_the_four_utilisations_by_the_contract_s_names(self):
+        from qa.check_run import MOUNT_QUANTITIES
+
+        got = ka.clevis_utilisations((0.0, 300.0, 400.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), d=10.0, n=1, t=4.0,
+                                     s=5.0, b=40.0, e=20.0, f_v=384.0, f_b=212.48, f_plate=245.0, f_vw=230.94)
+        self.assertEqual(sorted(got), sorted(MOUNT_QUANTITIES))
+        self.assertAlmostEqual(got["bolt_shear_utilisation"], ka.clevis_pin_shear(500.0, 10.0, 1) / 384.0, places=12)
+        # 500 N in plane, half on each 4 mm plate, on a 10 mm hole: 250 / 40 = 6.25 MPa
+        self.assertAlmostEqual(got["bolt_bearing_utilisation"], 6.25 / 212.48, places=12)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -818,6 +818,101 @@ class ToolDecidesTest(RunCase, unittest.TestCase):
         self.assertIn("tool_decides", str(cm.exception))
 
 
+class HotSpotTest(RunCase, unittest.TestCase):
+    """docs/contract.md CAE の役目 (d761e77): a place the hand calculation did not predict, over the limit, makes
+    the load case red at analyze (basis hot_spot); its cause answers the verdict (verdict_id) instead of a comparison."""
+
+    def setUp(self):
+        super().setUp()
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def with_spots(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            out["hot_spots"] = [dict(r) for r in self.rows]
+            return out
+
+        tool.run = with_spots
+        self.rows = []
+
+    def row(self, where="cross_B", value=200.0, predicted=False, quantity="max_stress", limit=156.6666666):
+        return {"where": where, "quantity": quantity, "value": {"value": value, "unit": "MPa"},
+                "limit": {"value": limit, "unit": "MPa"}, "utilisation": value / limit, "predicted": predicted}
+
+    def r1(self):
+        ana, _, _ = self.run_p1()
+        pred = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        ana2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                  "prediction_ids": [pred["prediction_id"]]})
+        return pred, ana2
+
+    def test_an_unpredicted_place_over_the_limit_is_red_and_stays_red_after_a_match(self):
+        from hiraku.tools.judge import latest_verdicts
+
+        self.rows = [self.row(), self.row(where="rail_L", value=120.0)]  # the second is within its limit
+        pred, ana = self.r1()
+        spot = [v for v in self.ctx.store.records("verdict") if v.get("basis") == "hot_spot"]
+        self.assertEqual(len(spot), 1)
+        self.assertEqual((spot[0]["where"], spot[0]["analysis_id"], spot[0]["pass"], spot[0]["value"]["value"]),
+                         ("cross_B", ana["analysis_id"], False, 200.0))
+        compare(self.ctx, {"prediction_id": pred["prediction_id"], "analysis_id": ana["analysis_id"]})  # a match
+        self.assertEqual(latest_verdicts(self.ctx, self.ctx.version)["R1-step100"]["verdict_id"], spot[0]["verdict_id"])
+        tile = next(t for t in self.ctx.store.judgements() if t["domain"] == "strength")
+        self.assertEqual(tile["state"], "red")
+        self.assertIn("手計算が予測していない cross_B で", tile["summary"])
+        self.assertIn(f"record_cause (verdict_id {spot[0]['verdict_id']})", tile["summary"])
+        self.assertIn("load_path.free_parts", tile["summary"])  # no path check in this version: asked for too
+        self.assert_events_fit()
+
+    def test_the_cause_answers_the_verdict(self):
+        self.rows = [self.row()]
+        self.r1()
+        ver = next(v for v in self.ctx.store.records("verdict") if v.get("basis") == "hot_spot")
+        args = {"verdict_id": ver["verdict_id"], "cause": "the cross member's end bends the rail wall",
+                "fix": "a gusset at the joint"}
+        for bad in ({"safe_side": True, "safe_side_reason": "x"}, {"ends_case": True},
+                    {"tool_decides": True, "tool_decides_reason": "x"}, {"where": "rail_L"}):
+            with self.subTest(bad=bad), self.assertRaises(ToolError):
+                record_cause(self.ctx, {**args, **bad})
+        with self.assertRaises(ToolError):  # both ids, or neither
+            record_cause(self.ctx, {**args, "comparison_id": "cmp-0001"})
+        out = record_cause(self.ctx, args)
+        self.assertEqual((out["cause"]["verdict_id"], out["cause"]["where"]), (ver["verdict_id"], "cross_B"))
+        self.assertIsNone(out["verdict"])
+        with self.assertRaises(ToolError):  # written once
+            record_cause(self.ctx, args)
+        tile = next(t for t in self.ctx.store.judgements() if t["domain"] == "strength")
+        self.assertEqual(tile["state"], "red")  # the red stands until a version keeps the place within its limit
+        self.assertNotIn("record_cause (verdict_id", tile["summary"])
+        from hiraku.export.report import _causes
+
+        table = _causes(self.ctx.store)[0]
+        self.assertIn(f"{ver['verdict_id']} (cross_B)", [r[2] for r in table])  # the export's cause table
+        self.assert_events_fit()
+
+    def test_predicted_rows_within_limit_rows_and_other_quantities_make_no_red(self):
+        self.rows = [self.row(predicted=True), self.row(where="a", value=150.0),
+                     self.row(where="b", quantity="max_displacement"),
+                     {**self.row(where="corner"), "note": "尖り。細かくすると上がる"}]  # a singular point (cc6f396)
+        self.r1()
+        self.assertEqual([v for v in self.ctx.store.records("verdict") if v.get("basis") == "hot_spot"], [])
+
+
+class PredictionOutputsTest(RunCase, unittest.TestCase):
+    """Run 160725: a formula's outputs not taken as the prediction are kept in its assumptions (the R4
+    clearance's travel left was the number the designers needed)."""
+
+    def test_the_other_outputs_are_said(self):
+        from hiraku.tools.functions import OTHER_OUTPUTS
+
+        ana, _, _ = self.run_p1()
+        pred = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        line = [a for a in pred["assumptions"] if a.startswith(OTHER_OUTPUTS)]
+        self.assertEqual(len(line), 1)
+        self.assertIn("M ", line[0])  # the bending moment beside sigma, the output predicted
+        self.assertNotIn("sigma", line[0])
+
+
 class VerdictsPerPlaceTest(RunCase, unittest.TestCase):
     """docs/contract.md 分野が緑になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
     must pass; a later verdict of the same quantity and place replaces the earlier one."""

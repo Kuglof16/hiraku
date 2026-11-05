@@ -386,17 +386,115 @@ def mount_forces(hp: Hardpoints, sol: dict, force: np.ndarray, contact: np.ndarr
             "tie_rod_tension": t, "damper_tension": d, "damper_lower_point": dl}
 
 
+class TravelSolver:
+    """solve_at_travel for many travels of one set of hardpoints: the march from design is kept
+    (each step's arm angle, the bench's two loop angles after it, and the wheel centre's rise), so a
+    travel solves only its last bracket. The bracket, the bench's warm start and so every solve are
+    those of solve_at_travel: the same answer bit for bit."""
+
+    def __init__(self, hp: Hardpoints):
+        self.hp = hp
+        self.bench = DoubleWishboneBench(hp)
+        self.z0 = float(hp.wheel_center[2])
+        arm = float(np.linalg.norm(hp.lca_outer - 0.5 * (hp.lca_front + hp.lca_rear)))
+        self.step = 0.002 / arm
+        self.march: dict[float, list[tuple[float, float, float, float]]] = {1.0: [], -1.0: []}
+        self.sols: dict[float, list[dict]] = {1.0: [], -1.0: []}
+        self.design: dict | None = None
+        self.limits = (-math.inf, math.inf)
+
+    def _grow(self, sign: float) -> tuple[float, float, float, float]:
+        m = self.march[sign]
+        b = self.bench
+        b._phi, b._psi = (m[-1][1], m[-1][2]) if m else (0.0, 0.0)
+        theta = m[-1][0] + sign * self.step if m else sign * self.step
+        sol = b.solve(theta)
+        dz = float(sol["wheel_center"][2]) - self.z0
+        m.append((theta, b._phi, b._psi, dz))
+        self.sols[sign].append(sol)
+        return m[-1]
+
+    def near(self, travel: float) -> dict:
+        """The march's solution whose travel is nearest (within half a step of about 2 mm of the
+        wheel's travel): no refining, for a quick screening."""
+        if self.design is None:
+            self.bench._phi, self.bench._psi = 0.0, 0.0
+            self.design = self.bench.solve(0.0)
+        if travel == 0.0:
+            return self.design
+        first = self.march[1.0][0] if self.march[1.0] else self._grow(1.0)
+        sign = -1.0 if first[3] * travel < 0.0 else 1.0
+        m = self.march[sign]
+        while not m or (abs(m[-1][3]) < abs(travel) and abs(m[-1][0]) <= 1.5):
+            self._grow(sign)
+        best, best_d = self.design, abs(travel)
+        for (_, _, _, dz), sol in zip(m, self.sols[sign]):
+            if abs(dz - travel) < best_d:
+                best, best_d = sol, abs(dz - travel)
+        return best
+
+    def solve(self, travel: float) -> dict:
+        b = self.bench
+        if travel == 0.0:
+            b._phi, b._psi = 0.0, 0.0
+            return b.solve(0.0)
+        first = self.march[1.0][0] if self.march[1.0] else self._grow(1.0)
+        sign = -1.0 if first[3] * travel < 0.0 else 1.0
+        m = self.march[sign]
+        k = 0
+        while True:
+            if k == len(m):
+                self._grow(sign)
+            theta, phi, psi, dz = m[k]
+            if abs(dz) >= abs(travel):
+                break
+            if abs(theta) > 1.5:
+                raise ValueError("the bench does not reach this travel")
+            k += 1
+        prev = m[k - 1][0] if k else 0.0
+        b._phi, b._psi = phi, psi
+        f = lambda t: float(b.solve(t)["wheel_center"][2]) - self.z0 - travel
+        return b.solve(brentq(f, min(prev, theta), max(prev, theta), xtol=1e-14, rtol=1e-14))
+
+
+_SOLVERS: dict[tuple, TravelSolver] = {}
+
+
+def table_solver(table: dict) -> TravelSolver:
+    """The TravelSolver of a K&C table's hardpoints, kept per set of hardpoints (the last 16); its
+    `limits` are the table's travels (m)."""
+    hpj = table["hardpoints_mm"]
+    key = tuple((k, tuple(float(x) for x in v) if isinstance(v, (list, tuple)) else v) for k, v in sorted(hpj.items()))
+    ts = _SOLVERS.get(key)
+    if ts is None:
+        if len(_SOLVERS) >= 16:
+            _SOLVERS.pop(next(iter(_SOLVERS)))
+        ts = _SOLVERS[key] = TravelSolver(Hardpoints.from_json(hpj))
+    rows = table["rows"]
+    ts.limits = (rows[0]["travel_mm"] / 1000.0, rows[-1]["travel_mm"] / 1000.0)
+    return ts
+
+
+def table_solution(table: dict, travel: float) -> dict:
+    """The bench solution of a K&C table's hardpoints at a travel (m, held inside the table):
+    solve_at_travel's, through table_solver."""
+    ts = table_solver(table)
+    lo, hi = ts.limits
+    return ts.solve(min(max(travel, lo), hi))
+
+
 def corner_mount_forces(table: dict, side: float, travel: float, force: np.ndarray,
-                        contact: np.ndarray | None = None, moment: np.ndarray | None = None) -> dict:
+                        contact: np.ndarray | None = None, moment: np.ndarray | None = None,
+                        sol: dict | None = None) -> dict:
     """mount_forces of a corner on a K&C table (a left-wheel table; side < 0 mirrors it) at a
     travel (m, held inside the table) for the force (N, body axes) at `contact` (design frame, m;
     default under the wheel) and a moment on the knuckle (N*m, body axes): {mount: (point, force)},
-    design frame, metres and newtons."""
+    design frame, metres and newtons. sol: a table_solution to use instead of solving at the travel
+    (e.g. one at a nearby travel, for a quick screening)."""
     hp = Hardpoints.from_json(table["hardpoints_mm"])
-    rows = table["rows"]
-    lo, hi = rows[0]["travel_mm"] / 1000.0, rows[-1]["travel_mm"] / 1000.0
     flip = np.array([1.0, -1.0 if side < 0 else 1.0, 1.0])
-    sol = solve_at_travel(hp, min(max(travel, lo), hi))
+    if sol is None:
+        sol = table_solution(table, travel)
     # a moment is an axial vector: mirrored in y it keeps its y part and turns its x and z parts
     r = mount_forces(hp, sol, np.asarray(force, dtype=float) * flip,
                      None if contact is None else np.asarray(contact, dtype=float) * flip,
