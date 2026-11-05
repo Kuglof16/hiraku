@@ -35,6 +35,28 @@ class DefaultTest(unittest.TestCase):
         cls.d = build()
         cls.p = parts(cls.d)
 
+    def test_standard_measures_from_the_parts(self):
+        """Q35-Q38's measures (k4_geometry.seats.standard_measures): from the parts' boxes and the large person's hip
+        point, as the module's notes say; reported by the assembly tool once each, with its assumption."""
+        got = seats.standard_measures(self.d)
+        self.assertEqual(len(got), 2)
+        for rid, m in got.items():
+            r = self.p[rid]
+            c, s = r["box"]["center_mm"], r["box"]["size_mm"]
+            seat = next(p for p in self.d["parts"] if p["kind"] == "seat" and seats.restraint_of(self.d, p) is r)
+            top_z = seat["box"]["center_mm"][2] + seat["box"]["size_mm"][2] / 2.0
+            self.assertAlmostEqual(m["height_above_R"], c[2] + s[2] / 2.0 - (top_z + SIZES[BIG]["trochanter_height"]))
+            self.assertAlmostEqual(m["width"], s[1])
+            self.assertAlmostEqual(m["backset"], seats.restraint_results(self.d)[f"headrest_gap_{BIG}.{rid}"][0])
+            self.assertGreaterEqual(m["seatback_gap"], 0.0)
+        from hiraku.solvers.shelf.assembly import Assembly
+
+        rec = Assembly()._analyse(self.d)
+        qs = [r["quantity"] for r in rec["results"]]
+        for q in seats.STANDARD:
+            self.assertEqual(qs.count(q), 1, q)
+        self.assertTrue(any("R17" in a for a in rec["assumptions"]))
+
     def test_parts_for_both_seats(self):
         for seat in SEATS:
             sb, hr = ladder_4w.seat_back_ids(seat)
@@ -111,8 +133,9 @@ class DefaultTest(unittest.TestCase):
         got = {r["quantity"]: r for r in res}
         want = seats.restraint_results(self.d)
         rows = seats.head_restraints(self.d)
-        # the worst, per restraint and per body size there: 3 quantities x (1 + 2 restraints x (1 + 2 sizes))
-        self.assertEqual(len(want), 3 * (1 + 2 * 3))
+        # the worst, per restraint and per body size there: 3 quantities x (1 + 2 restraints x (1 + 2 sizes)); and the
+        # 4 measures of Q35-Q38 (k4_geometry.seats.STANDARD), the worst and per restraint: 4 x (1 + 2)
+        self.assertEqual(len(want), 3 * (1 + 2 * 3) + 4 * (1 + 2))
         for q, (v, where) in want.items():
             self.assertAlmostEqual(got[q]["value"], v, places=9)
             self.assertEqual(got[q]["where"], where)

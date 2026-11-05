@@ -2046,7 +2046,7 @@
           ]
         }
       ],
-      "system": "other",
+      "system": "seat",
       "module": "occupant"
     },
     {
@@ -2082,7 +2082,7 @@
           ]
         }
       ],
-      "system": "other",
+      "system": "seat",
       "module": "occupant"
     },
     {
@@ -2128,7 +2128,7 @@
           ]
         }
       ],
-      "system": "other",
+      "system": "seat",
       "module": "occupant"
     },
     {
@@ -2164,7 +2164,7 @@
           ]
         }
       ],
-      "system": "other",
+      "system": "seat",
       "module": "occupant"
     },
     {

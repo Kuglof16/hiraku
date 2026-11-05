@@ -38,6 +38,14 @@ CACHE_SIZE = 8  # designs (with their occupants on board) whose results are kept
 _CACHE: dict[str, Record] = {}
 
 
+# how the head restraint's measures of the requirements Q35-Q38 are reproduced (k4_geometry.seats.STANDARD's notes)
+HEADREST_STANDARD_RULE = (
+    "頭の後ろの高さ・幅・backset・背もたれとのすき間 (Q35-Q38、UN R17・FMVSS 202a の測り方を受付部が読んだもの) は、"
+    "次の簡略で測っている: R 点は大きい人 (AIST の m95) の腰の点 (規格は 50 パーセンタイルの男性の H 点。高さは厳しい側に出る)、"
+    "背もたれは直立 (背の角度 0) なので胴の線に沿う距離は鉛直の距離、上端から 65 mm 下の幅は箱の幅、"
+    "背もたれとのすき間は上下の隙間 (165 mm の球は再現していない)、backset は大きい人の頭の後ろから頭受けの前の面まで")
+
+
 class Assembly(BuiltinTool):
     name = "assembly"
     stage = 0  # layout: interference, occupant fit, assembly order
@@ -227,6 +235,8 @@ class Assembly(BuiltinTool):
         out = {"results": results, "assembly": seq, "interferences": found, "assumptions": [HAND_WAY_RULE]}
         if any(p["kind"] in PEDAL_KINDS for p in design.get("parts", [])):
             out["assumptions"].insert(0, PEDAL_RULE)
+        if any(q.startswith("headrest_height_above_R") for q in (r["quantity"] for r in results)):
+            out["assumptions"].append(HEADREST_STANDARD_RULE)
         if people:
             out["effects"] = [{"name": f"body sizes: {AIST_SOURCE}"}]
             if "knee_angle_room" in groups:
