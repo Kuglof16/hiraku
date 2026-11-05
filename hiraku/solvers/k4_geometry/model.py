@@ -28,7 +28,7 @@ from .capsule import Capsule, capsule_box_overlap, capsule_overlap, from_obb, fr
 from .obb import OBB, from_box, from_member, overlap
 
 TOUCH_MM = 1.0  # overlap up to this is touching, not interference
-MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is mounted on
+MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is mounted on (HIRAKU's choice, no source)
 # Part kinds held as capsules: shafts, steering links and rods. Kinds not in a design yet
 # are listed so that designs using them get capsules without a change here.
 SLENDER_KINDS = ("driveshaft", "propshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "steering_column",

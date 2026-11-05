@@ -51,7 +51,9 @@ STANDARD_SIZES = Path(__file__).resolve().parents[3] / "data" / "sections" / "st
 
 def standard(shape: str) -> list[tuple[str, Record]]:
     """The standard sizes of a tube shape (data/sections/standard_tubes.json: rect_tube from
-    JIS G 3466, round_tube from JIS G 3444; its source block says where each list was read),
+    JIS G 3466, round_tube from JIS G 3444; its source block says where each list was read; both
+    lists checked against JIS G 3466 Tables 5 and 6 and JIS G 3444 Table 6 on 2026-11-03, README,
+    the table of values checked),
     as section records with the list's source; a rect_tube size A x B is taken with b = B
     across and h = A up (b <= h)."""
     data = json.loads(STANDARD_SIZES.read_text(encoding="utf-8"))

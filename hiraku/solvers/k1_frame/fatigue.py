@@ -20,6 +20,8 @@ from .model import COMBO, build, stress_dims
 
 
 # ---------------------------------------------------------------- rainflow (ASTM E1049-85, 5.4.4)
+# The counting rule is written here from ASTM E1049-85 (reapproved), section 5.4.4 as cited; the
+# standard's text was not checked in this repository.
 
 def reversals(series) -> list[float]:
     """Peaks and valleys of a series (first and last points kept)."""
@@ -63,7 +65,10 @@ def rainflow(series) -> list[tuple[float, float, float]]:
 
 def sn_cycles(stress_range: float, fat: float, m: float, n_knee: float, m2: float) -> float:
     """Cycles to failure at a stress range (MPa) on an IIW-type curve: FAT at 2e6 cycles, slope m,
-    then slope m2 beyond the knee (n_knee cycles)."""
+    then slope m2 beyond the knee (n_knee cycles). The FAT class's reference of 2e6 cycles is the IIW
+    definition (Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed.,
+    Springer 2016), not checked in this repository; FAT, m, n_knee and m2 are the caller's (README, the
+    table of values not checked)."""
     if stress_range <= 0:
         return math.inf
     s_knee = fat * (2e6 / n_knee) ** (1.0 / m)

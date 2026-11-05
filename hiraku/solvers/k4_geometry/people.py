@@ -78,7 +78,7 @@ SIZES: dict[str, dict[str, float]] = {
         "hand_breadth": 88.3,  # source: L10 Hand breadth, diagonal (metacarpale radiale to ulnare)
         "hand_thickness": 32.0,  # source: L16 Hand thickness
     },
-    "f5": {
+    "f5": {  # the same items as m95, young adult female 5th percentile (same source and date)
         "buttock_trochanter": 65.9,
         "trochanter_height": 58.0,
         "buttock_condyle": 470.1,
@@ -116,9 +116,9 @@ BIG, SMALL = "m95", "f5"
 # the floor, used to place the pedals and the feet of a seat without pedals. pedal_reach measures
 # against the straight leg (180 deg, the links' geometry): whether the foot reaches the pedal at all;
 # how comfortable the knee is, is knee_angle_room's (KNEE_COMFORT_DEG).
-FOOT_ANGLE_DEG = 20.0
-KNEE_ANGLE_DEG = 100.0
-KNEE_MAX_DEG = 180.0
+FOOT_ANGLE_DEG = 20.0  # HIRAKU's choice, an assumption, no source
+KNEE_ANGLE_DEG = 100.0  # HIRAKU's choice, an assumption, no source (inside KNEE_COMFORT_DEG below)
+KNEE_MAX_DEG = 180.0  # the straight leg (geometry)
 # The comfortable range of the knee angle (between thigh and shank) in the driving posture: 99-138 deg,
 # Porter and Gyi 1998 (Int. J. Vehicle Design 19(3) 255-266; 55 drivers' preferred postures, goniometer on the
 # right side), as Schmidt et al. 2014 reproduce it (Applied Ergonomics 45, 247-260, Table 1, p. 251). Read in

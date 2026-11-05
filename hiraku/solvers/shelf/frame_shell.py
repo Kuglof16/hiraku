@@ -63,7 +63,7 @@ from ..k1_shell.frame import ShellFrame, analyze_shell, element_place, membrane_
 from ..k1_shell.mesh import ELEMENT_SIZE_MM, build_mesh
 from ..k1_shell.solve import solver_assumption
 from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
-from . import scene
+from . import hot_spots, scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
                    param_value, result, run_param)
 from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, add_frames,
@@ -315,7 +315,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
             v, ee = res["excluded_max"]
             effects.append({"name": (f"largest element stress inside the wheel mounts (left out of max_stress; in the "
                                      f"stress fields, whose largest it is when above max_stress): element {ee} of "
-                                     f"{ms.element_member[ee]}"), "value": v, "unit": "MPa"})
+                                     f"{ms.element_member[ee]} (so until the bracket plates are meshed into the shell "
+                                     f"and judged by R9, which shows only the hand calculation of the pins, plates and "
+                                     f"welds now)"), "value": v, "unit": "MPa"})
     effects.append(member_effect("max_stress", member_peak))
     effects += [
         {"name": src},
@@ -371,6 +373,45 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
     if assumptions:
         out["assumptions"] = assumptions
     return out
+
+
+UNTIED_ASSUMPTION = ("判定していない継ぎ手: {ids} (節を共有せず、RBE2 の剛な棒でつないだ継ぎ手 (斜め、丸い管、3 本以上の端、"
+                     "格子の線がぶつかる所)。溶接の帯が無く、ホットスポット応力を読んでいない)")
+
+
+def untied_joints(res: dict) -> list[str]:
+    """Design nodes of the joints tied by rigid links without weld strips (mesh joint kind "tied"): no hot
+    spot is read there."""
+    return sorted(n for n, k in res["mesh"].joint_kinds.items() if k == "tied")
+
+
+def shell_hot_spots(tool, load_case: Record, res: dict) -> list[Record] | None:
+    """analysis.hot_spots of the shell (hot_spots module). The judged quantity is max_hot_spot_stress
+    (judged_as): one row per weld line group, a member at a joint (the largest size of the hot spots read
+    there, outer and inner surface; where = "<member>@<joint>", unique per weld line group), against the
+    criterion's limit. The element peak (max_stress, at a sharp re-entrant corner, singular) is one more row
+    of quantity max_stress with SHARP_NOTE: not the judged quantity, so it never makes a red. The wheel mounts'
+    elements are not read (hot spots and member_max leave them out). None when the criterion is not a "<="
+    stress, or is judged on a quantity the shell has no per-place values of."""
+    judged = hot_spots.judged_limit(tool, load_case)
+    if judged is None or judged[0] != "max_hot_spot_stress":
+        return None
+    q, limit = judged
+    groups: dict[tuple[str, str], dict] = {}
+    for h in res.get("hot_spots") or []:
+        k = (h["member"], h["joint"])
+        if k not in groups or abs(h["value"]) > abs(groups[k]["value"]):
+            groups[k] = h
+    rows = [hot_spots.row(f"{h['member']}@{h['joint']}", q, abs(h["value"]), limit,
+                          note=(f"joint {h['joint']} ({h['kind']}), {SIDE[h['side']]}, {h['place']}, strip towards "
+                                f"{h['towards']}, {'outer' if h['surface'] == 'top' else 'inner'} surface"),
+                          at_mm=h["position_mm"])
+            for h in groups.values()]
+    worst = res["worst_member"]
+    peak, e = res["member_max"][worst]
+    sharp = hot_spots.row(worst, "max_stress", peak, limit, note=hot_spots.SHARP_NOTE,
+                          at_mm=element_place(res, e)["centre_mm"])
+    return hot_spots.top(rows, keep=[sharp])
 
 
 def mesh_fields(res: dict, mesh: Record, zz: dict | None = None) -> list[Record]:
@@ -901,6 +942,12 @@ class FrameShell(BuiltinTool):
         ground = {sid: [(k, p, f) for k, p, f in gr["vectors"]] for sid, gr in res["ground"].items()}
         beam = beam_analyze(design, g_factor=g, ground_forces=ground, inertia_N=inertia)
         out = shell_outputs(design, res, beam, up[0] if up else None, None if up else step, sup)
+        hot = shell_hot_spots(self, load_case, res)
+        if hot is not None:
+            out["hot_spots"] = hot
+        untied = untied_joints(res)
+        if untied:
+            out.setdefault("assumptions", []).append(UNTIED_ASSUMPTION.format(ids=", ".join(untied)))
         zz = zz_error(res["frame"].model, res["stress"])
         out["effects"] += zz_effects(res, zz)
         out.setdefault("assumptions", []).append(zz_assumption())

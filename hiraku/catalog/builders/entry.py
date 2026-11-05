@@ -13,7 +13,9 @@ data/catalog/tests.yaml, has no such test yet, so a run does not reach it; tests
 
 The numbers are the intake department's reading of ISO 4252:1983 and ISO 2867:1980 / 1994 (older editions of
 standards for agricultural tractors and earth-moving machinery, borrowed for this vehicle), of the AIST body sizes
-(Q95, an assumption) and of CPSC's proposed rule (Q47, an assumption); said in each criterion's basis. A case whose
+(Q95, an assumption) and of CPSC's proposed rule (Q47, an assumption); said in each criterion's basis. The values
+and the clauses are the requirements' (data/requirements/offroad-4w*.yaml, each basis saying "read 2026-11-04" or
+"not checked"); none is in the README's table of values checked. A case whose
 keys are missing is not built; with none left the test is not evaluated (BuildError naming the keys). Q44 to Q46
 (between steps, a step's width and the toe room) are not judged: the tool measures the rise between steps only
 (entry_step_rise) and the designs have no steps.

@@ -49,7 +49,10 @@ into another body further than K4 allows.
 Occupant and cargo masses are requirements (Q33, Q40), not design choices:
 the default occupant mass is AIST anthropometric database 1991-92 item N1
 Weight, young adult male 95th percentile (source: read from
-https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03).
+https://www.airc.aist.go.jp/dhrt/91-92/data/list.html on 2026-11-03, as Q33's basis in
+data/requirements/offroad-4w.yaml says). The README's table of values not checked still
+lists 76.6 kg as not checked (the AIST statistics could not be read); not re-checked
+2026-11-05 (no web access in that session).
 """
 
 from __future__ import annotations
@@ -146,9 +149,12 @@ VARIABLES: dict[str, Var] = {
     "cargo_mass": Var("kg", 150.0, meaning="Q40"),
     "cargo_height": Var("mm", 300.0, meaning="height of the load stacked on the deck (its centre of gravity half of it "
                         "above the deck); describes the load, so the designer does not change it"),
-    # powertrain and battery: a 51.2 V LiFePO4 pack (16 cells at 3.2 V, taken as the nominal
-    # voltage of a LiFePO4 cell, not checked against a cell data sheet in this repository),
-    # a 10 kW peak motor driving the rear axle through a reduction
+    # powertrain and battery: a 51.2 V LiFePO4 pack (16 cells at 3.2 V: the cell's nominal voltage 3.2 V is
+    # EVE LF50K product specification LF50K-73103 Ver. D, section 3, table row 2,
+    # https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf, checked 2026-11-03
+    # (README, the table of values checked); 16 in series is HIRAKU's choice),
+    # a 10 kW peak motor driving the rear axle through a reduction. The motor's power, torque, speed, the
+    # efficiencies, the resistance and the heat capacities below are assumptions, HIRAKU's choice, no source
     "motor_peak_power": Var("kW", 10.0, 5.0, 20.0, "motor peak power (the motor's mass goes with it)"),
     "motor_peak_torque": Var("N*m", 50.0, 30.0, 120.0, "motor peak torque (the motor's mass goes with it)"),
     "motor_max_speed": Var("rpm", 6000.0, 3000.0, 10000.0, "motor speed limit (with gear_ratio and the wheel radius it "
@@ -159,7 +165,7 @@ VARIABLES: dict[str, Var] = {
     "controller_efficiency": Var("1", 0.96, meaning="assumption"),
     "regen_efficiency": Var("1", 0.5, meaning="assumption"),
     "aux_power": Var("W", 150.0, meaning="assumption"),
-    "battery_voltage": Var("V", 51.2, meaning="16 x 3.2 V, not checked (see above)"),
+    "battery_voltage": Var("V", 51.2, meaning="16 x 3.2 V (EVE LF50K cell nominal voltage, checked 2026-11-03; see above)"),
     "battery_capacity": Var("Ah", 100.0, 50.0, 200.0, "battery capacity (its mass and length go with it)"),
     "battery_resistance": Var("ohm", 0.02, meaning="assumption"),
     "mass_factor": Var("1", 1.05, meaning="assumption: the turning parts add 5 % to the mass in acceleration"),
@@ -171,14 +177,19 @@ VARIABLES: dict[str, Var] = {
     "motor_thermal_resistance": Var("K/W", 0.06, meaning="assumption"),
     "controller_heat_capacity": Var("J/K", 3600.0, meaning="assumption"),
     "controller_thermal_resistance": Var("K/W", 0.1, meaning="assumption"),
-    # temperature limits of the parts (not checked in this repository):
-    # source: EVE LF50K product specification, cells up to 55 degC,
-    # https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf
-    "battery_max_temperature": Var("degC", 55.0, meaning="cell limit, EVE LF50K product specification (not checked)"),
-    # source: Curtis 1236 manual, output cut back from 85 degC at the heatsink,
-    # https://www.bintelli.com/wp-content/uploads/2023/06/Curtis-Controller-1236-Manual.pdf
-    "controller_max_temperature": Var("degC", 85.0, meaning="cutback temperature, Curtis 1236 manual (not checked)"),
-    # source: thermal class F (155 degC) of IEC 60085 for the winding insulation
+    # temperature limits of the parts (two of three checked, as the README's table of values not checked records):
+    # source: EVE LF50K product specification, cells up to 55 degC (section 3),
+    # https://www.rcscomponents.kiev.ua/datasheets/LF50K32V50AhProduct%20Specification.pdf; checked (README, the
+    # table of values not checked, the temperature row; the row gives no date)
+    "battery_max_temperature": Var("degC", 55.0, meaning="cell limit, EVE LF50K product specification section 3 "
+                                   "(checked)"),
+    # source: Curtis 1234/36/38 manual, Appendix D Table D-1: output cut back from 85 degC at the heatsink,
+    # https://www.bintelli.com/wp-content/uploads/2023/06/Curtis-Controller-1236-Manual.pdf; checked (README, the
+    # table of values not checked, the temperature row; no date)
+    "controller_max_temperature": Var("degC", 85.0, meaning="cutback temperature at the heatsink, Curtis 1234/36/38 "
+                                      "manual Appendix D Table D-1 (checked)"),
+    # source: thermal class F (155 degC) of IEC 60085 for the winding insulation; IEC 60085 is not readable here
+    # (only a Wikipedia page was read), not checked. Taking class F for this motor is an assumption
     "motor_max_temperature": Var("degC", 155.0, meaning="insulation class F, IEC 60085 (not checked)"),
     # aerodynamics (assumptions; the drag coefficient is set high because the seats are open)
     "drag_coefficient": Var("1", 0.8, meaning="assumption"),
@@ -186,8 +197,9 @@ VARIABLES: dict[str, Var] = {
     "side_force_coefficient": Var("1", 1.0, meaning="assumption"),
     "side_area": Var("m^2", 2.4, meaning="assumption"),
     "centre_of_pressure_height": Var("mm", 800.0, meaning="assumption"),
-    # source: Manual of the ICAO Standard Atmosphere (ICAO Doc 7488), sea level; not checked in this repository
-    "air_density": Var("kg/m^3", 1.225, meaning="ICAO standard atmosphere, sea level"),
+    # source: Manual of the ICAO Standard Atmosphere (ICAO Doc 7488; the README also cites ISO 2533), sea level;
+    # not checked in this repository (neither text was opened)
+    "air_density": Var("kg/m^3", 1.225, meaning="ICAO standard atmosphere, sea level (not checked)"),
     # tyre cornering stiffness per axle, both tyres (assumptions)
     "front_cornering_stiffness": Var("N/rad", 25000.0, meaning="assumption"),
     "rear_cornering_stiffness": Var("N/rad", 30000.0, meaning="assumption"),
@@ -198,7 +210,9 @@ VARIABLES: dict[str, Var] = {
     # fatigue of the welded joints: the S-N form (slope 3, knee at 1e7 cycles) follows
     # A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components,
     # 2nd ed., Springer 2016 (IIW), not checked in this repository; FAT 71 for the
-    # fillet-welded tube joints and the slope 22 beyond the knee are assumptions
+    # fillet-welded tube joints and the slope 22 beyond the knee are assumptions. The README (the table of values
+    # not checked, the fatigue row) records that for variable amplitude loads summed by Miner's rule the IIW takes
+    # 2 m1 - 1 (= 5) beyond the knee (IIW-1823-07, 2008, 4.3.1); 22 is the constant amplitude slope
     "fatigue_fat_class": Var("MPa", 71.0, meaning="assumption (see above)"),
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
@@ -449,7 +463,8 @@ FOOT_FLOOR_MARGIN_MM = 10.0  # the footwell floor this far beyond the large driv
 # part takes is HIRAKU's choice (assumption, not sized): 3.2 mm where people stand or cargo lies, the thinnest
 # standard 2.3 mm for the bulkhead. A plate's mass is its area x the catalogue's unit mass at its thickness
 # (PLATE_KG_M2, plate_mass; the checkers included). Before, it was area x thickness x the material's density, without
-# the checkers (7 % less at 3.2 mm, 9 % less at 2.3 mm).
+# the checkers (7 % less at 3.2 mm, 9 % less at 2.3 mm). The catalogue's values are not in the README's tables yet
+# and were not re-read on 2026-11-05 (no web access in that session).
 PLATE_STEEL = "ss400"
 PLATE_FINISH = "painted"  # assumption
 FLOOR_PLATE_T_MM = 3.2  # the footwell floor, the floor under the seats and the deck (one value: _driver_v1)
@@ -520,6 +535,8 @@ def _driver_v1() -> dict[str, float]:
 
 
 _DRIVER_V1 = _driver_v1()
+# The AIST body sizes quoted below (I3 637.5, I13 399.1, I11 58.0 mm, ...) are k4_geometry.people's values (AIST
+# anthropometric database 1991-92); the README's table of values not checked lists the body sizes as not checked.
 _DRIVER_VARS = {
     "seat_height": Var("mm", SEAT_HEIGHT_V1_MM, SEAT_HEIGHT_MIN_MM, float(math.floor(_DRIVER_V1["small_level_thigh_seat"])),
                        "the seats' cushion top (the seat box's top) above the floor under them; the occupants, the "
@@ -671,8 +688,10 @@ _OPTION_VARS.update({
                    "tyre, fender_width wide (molded HDPE, FENDER_T_MM thick, FENDER_PIECES straight pieces); 0: none"),
     "fender_front_deg": Var("deg", 30.0, 0.0, 90.0, "how far the fender reaches ahead of the wheel's top, as the angle at "
                             "the wheel centre from the vertical; the default is the intake department's FN-19 value "
-                            "(細目告示 第 178 条 第 2 項 in their table, not read here)"),
-    "fender_rear_deg": Var("deg", 50.0, 0.0, 120.0, "how far it reaches behind the top (FN-19's 50 deg, as above)"),
+                            "(Q87: 細目告示 (2023.9.22 版) 第 178 条 第 2 項 第 1 号, read by the intake department; not "
+                            "checked by the analysis department; a public-road rule, borrowed)"),
+    "fender_rear_deg": Var("deg", 50.0, 0.0, 120.0, "how far it reaches behind the top (FN-19's 50 deg, Q88, the same "
+                           "article, as above)"),
     "fender_width": Var("mm", 240.0, 120.0, 400.0, "fender width across the wheel (at least the tyre's)"),
     "fender_gap": Var("mm", 40.0, 10.0, 150.0, "the fender's inner face this far over the tyre (assumption)"),
 })
@@ -702,8 +721,12 @@ DOOR_T_MM = 2.3  # the door's sheet (HIRAKU's choice, no source for a door's thi
 #   thickness whose unit mass was read (PLATE_KG_M2)
 # The door's hinges and latch take a clip's size and mass (SIDE_NET_CLIP_MM, SIDE_NET_CLIP_KG 0.05 kg): HIRAKU's
 #   choice, no source for a hinge's or a latch's mass
-GRAB_BAR_D_MM, GRAB_BAR_T_MM = 27.2, 2.3  # a JIS G 3444 standard size (data/sections/standard_tubes.json)
-GRAB_BAR_GAP_MM = 75.0  # the hand's room between the grip and the post
+# a JIS G 3444 standard size (data/sections/standard_tubes.json, Table 6; the README's table of values checked
+# records that table checked 2026-11-03: its 128 rows counted; 27.2 x 2.3 is not among the sizes named as read)
+GRAB_BAR_D_MM, GRAB_BAR_T_MM = 27.2, 2.3
+# the hand's room between the grip and the post: ISO 2867:1994 Table 2 C as the intake department read it, not
+# checked by the analysis department (see grab_bar_gap)
+GRAB_BAR_GAP_MM = 75.0
 _OPTION_VARS_ENTRY = {
     "side_opening": Var("1", 0.0, 0.0, 2.0,
                         "0: the side frame (side_bars) runs from S2 to S1 (v1's options); 1 or 2: its front post stands "
@@ -725,8 +748,8 @@ _OPTION_VARS_ENTRY = {
                       "the grab bar's outside diameter: the default 27.2 mm is a JIS G 3444 standard size (the list in "
                       "data/sections/standard_tubes.json), the nearest above the 25 mm ISO 2867:1980 7.3 recommends "
                       "for a grab rail; the range is that clause's 16 mm min and 38 mm max (requirement items Q49 and "
-                      "Q89 as the intake department read them; an older edition of a standard for earth-moving "
-                      "machinery, borrowed)"),
+                      "Q89 as the intake department read them, 2026-11-04; not checked by the analysis department; an "
+                      "older edition of a standard for earth-moving machinery, borrowed)"),
     "grab_bar_t": Var("mm", GRAB_BAR_T_MM, 1.6, 4.5, "the grab bar's tube wall (27.2 x 2.3: JIS G 3444 standard size)"),
     "grab_bar_gap": Var("mm", GRAB_BAR_GAP_MM, 50.0, 150.0,
                         "the clear room between the grip and the post's face: the default is the 75 mm hand clearance "
@@ -790,6 +813,31 @@ VARIABLES["battery_split"] = Var(
     "on its side, wired in series (the second to the first). build() refuses when the packs do not fit between the "
     "rails or between the seat cross members. Written into design.variables only when it is 2")
 OPTIONAL["battery_split"] = ("battery_split",)
+# The suspension brackets' joint (part.joint, docs/contract.md 金具の継ぎ手; load case R9 サスペンション取付):
+# the clevis plates' thickness, the pin's diameter and the fillet weld's leg, revisable by the suspension's
+# designer. The number of pins is not a variable: one through each clevis (kit/mounts.PINS_PER_BRACKET). The
+# brackets' mass follows from mount_plate_t (kit/mounts._bracket). Written into design.variables only when one
+# of the three is not its default (so the default design is as before).
+VARIABLES["mount_plate_t"] = Var(
+    "mm", mounts.BRACKET_T_MM, 2.3, 9.0,
+    "the suspension brackets' plate thickness (two plates per clevis): the default 3.2 mm is the brackets' plate as "
+    "before (kit/mounts.BRACKET_T_MM, an assumption, not sized); the range is HIRAKU's for R9 to size it")
+VARIABLES["mount_bolt_d"] = Var(
+    "mm", mounts.BOLT_D_MM, 6.0, 20.0,
+    "the suspension brackets' pin (bolt) diameter, grade 8.8: the default 10 mm is HIRAKU's assumption (not sized); "
+    "the range is HIRAKU's for R9 to size it")
+VARIABLES["mount_weld_leg"] = Var(
+    "mm", mounts.WELD_LEG_MM, 2.0, 8.0,
+    "the fillet weld's leg along each bracket plate's base (throat 0.7 leg): the default 3 mm is HIRAKU's assumption "
+    "(not sized); the range is HIRAKU's for R9 to size it")
+OPTIONAL["mount_joint"] = ("mount_plate_t", "mount_bolt_d", "mount_weld_leg")
+
+
+def mount_joint(v: dict) -> Record:
+    """The suspension brackets' part.joint from the variables (missing ones at their defaults)."""
+    def get(k):
+        return float(v.get(k, VARIABLES[k].default))
+    return mounts.joint_sizes(get("mount_plate_t"), get("mount_bolt_d"), get("mount_weld_leg"))
 INTEGERS = INTEGERS + ("battery_split",)
 # The net without side bars (build_side_net), assumptions without a source:
 SIDE_NET_CLIP_MM = 20.0  # a quick-release clip's size (a cube), between the net's edge and the post
@@ -1116,7 +1164,8 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
                                                      "dims": {"lower": {"b": v["lower_b"], "h": v["lower_b"]}}},
                               rho, post_dx, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
                               whole=REAR_OVERHANG_RAILS,
-                              rear_post_dx={"A": x_a - post_x} if x_a - post_x != post_dx else None)
+                              rear_post_dx={"A": x_a - post_x} if x_a - post_x != post_dx else None,
+                              joint=mount_joint(v))
     except (mounts.MountError, ValueError) as e:
         raise DesignGenError(str(e)) from None
     _check_rear_post(supports, post_x, v["tower_b"])
@@ -1219,7 +1268,7 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     add_options(design, v, guard, rho, net, closure)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
-    arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
+    arms.pivot_brackets(design, rho, mount_joint(v))  # clevis brackets at the lower arm pivots and damper tops on bare nodes
     _floors_clear_of_brackets(design)  # each floor can be lowered in from above
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:

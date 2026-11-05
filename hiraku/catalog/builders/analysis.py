@@ -330,6 +330,9 @@ _WHEELS = (("rear_a", "sigma_ra", "左の後輪"), ("rear_b", "sigma_rb", "右�
 # The values above were summed with slope 22 below the S-N knee. Both sides now use 2 m - 1 = 5 there (IIW-1823-07
 # (2008) sec. 4.3.1, p.110, for a spectrum): hand 0.151 against tool 0.126 (version 1) and 0.215 against 0.193
 # (track 1220 mm, steering_x -200 mm, rail_t 4.5 mm, gusset_leg 40 mm, motor_peak_power 12 kW).
+# The slope 2 m - 1 below the knee: Hobbacher, IIW document IIW-1823-07 (2008), sec. 4.3.1, as cited; not checked
+# against that text in this repository (README, the table of values not checked, the fatigue row).
+
 
 _LEG_ASSUME = ["はしごがねじれると左右のレールが上下逆に曲がり、脚の付く所で左右逆に前後へ傾く (反りのあるねじり、U 字が無いとき)",
                "脚と下の横の部材の U 字がその傾きを止め、横の部材はねじられ脚は曲げられる。U 字は中で左右逆の形 (半分を解く)",
@@ -438,7 +441,7 @@ def p4_drive_energy(spec: Record, req: Record, design: Record) -> Record:
         "test_id": "P4",
         "domain": spec["domain"],
         "title": f"林道の周回を {d:g} km 走って電池が残るか ({LOADING_JA[load]})",
-        "params": {**params, "soc_start": q(100.0, "%"), "loading": load},  # starting with a full battery
+        "params": {**params, "soc_start": q(100.0, "%"), "loading": load},  # a full battery: an assumption
         "requirement_keys": [*loop_keys, *keys],
         "criterion": {"quantity": "soc_end", "op": ">", "limit": q(0.0, "%"),
                       "basis": f"P4: charge is left at the end of Q54 {d:g} km", "requirement_keys": ["Q54"]},
@@ -490,7 +493,10 @@ P4_PLAN = {
 }
 
 
-T_BEYOND_K = 5.0  # the case past the limit: an ambient where the hand-calculated part temperature is this far over its limit
+# the case past the limit: an ambient where the hand-calculated part temperature is this far over its limit (HIRAKU's
+# choice, no source). The parts' limits themselves and their sources are in hiraku/designgen (README, the table of
+# values not checked, the parts' temperature row).
+T_BEYOND_K = 5.0
 
 
 def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
@@ -605,6 +611,7 @@ T2_PLAN = _t_plan("モーターと制御器", tuple((f"temp_{part}_max", output)
 H_TOL = 0.05
 
 
+# The joints' 2 mm gap: the program management's figure, HIRAKU's choice, no source.
 H1_JOINTS_TITLE = "つながりが形の上で触れているか (つながる点 at_mm が両方の形の上、つながりの無い部品が無い)"
 H1_JOINTS_CRITERION = {"quantity": "joint_gap_count", "op": "<=", "limit": {"value": 0.0, "unit": "1"},
                        "basis": "H1: every mechanical joint a part's connects_to names touches (gap at most 2 mm: the "
@@ -754,6 +761,10 @@ H1_MOTION_PLAN = {
 def h3_people(spec: Record, req: Record, design: Record) -> list[Record]:
     """Two cases: the large person's knees clear the part ahead (knee_room), and the driver's pedal knee in the
     comfortable range for both body sizes (knee_angle_room), each seated at their best place in the slide."""
+    # Outside values in the bases (the numbers are k4_geometry.people's): the AIST body sizes (J5, the 5th / 95th
+    # percentiles), AIST human body dimensions database 1991-92, not checked (README, the table of values not
+    # checked); the knee range 99-138 deg, Porter and Gyi 1998 as Schmidt et al. 2014 (Applied Ergonomics 45,
+    # Table 1, p. 251) reproduce it: the review read there, the original not checked (people.KNEE_COMFORT_SOURCE).
     load, keys = loading(req, design)
     body = {
         "load_case_id": "H3-body-size",
@@ -880,7 +891,9 @@ H5_PLAN = {
 # reference mass, kg; E in J, F in N), 3.5.2 the longitudinal load on the uppermost transverse member at one
 # sixth of the width of the top inwards from the outside corner, 3.5.3 the side load at the upper extremity,
 # 3.6.1 the crushing force across the rear uppermost members with its resultant in the median plane, 3.5.2.2 and
-# 3.5.3.2 the loading stopped when the structure infringes on the clearance zone.
+# 3.5.3.2 the loading stopped when the structure infringes on the clearance zone. The loads (1.4 M, 1.75 M, 20 M)
+# and the one sixth: checked against that text on 2026-11-03 (README, the table of values checked). The 600 kg of
+# 2.1 and the clause 3.8 the criterion's basis names are not in that row.
 R4_CODE4 = {"rear": 1.4, "side": 1.75, "crush": 20.0}  # J/kg, J/kg, N/kg
 # Reference mass: 500 kg, the mass for which the catalog's values (side 875 J, rear 700 J, from above 10 kN) are
 # the Code 4 formulas (875 / 1.75 = 700 / 1.4 = 10 000 / 20 = 500). Not the demo vehicle's mass; Code 4 sets M
@@ -1023,11 +1036,15 @@ from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E
 from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)
 from hiraku.catalog.builders.entry import PLANS as _ENTRY_PLANS  # noqa: E402
+from hiraku.catalog.builders.mounts_r9 import BUILDERS as _R9_BUILDERS  # noqa: E402  (R9: mounts_r9.py)
+from hiraku.catalog.builders.mounts_r9 import FEEDS as _R9_FEEDS  # noqa: E402
+from hiraku.catalog.builders.mounts_r9 import PLANS as _R9_PLANS  # noqa: E402
 
 BUILDERS = {
     **_LOAD_PATH_BUILDERS,
     **_SPRAY_BUILDERS,
     **_ENTRY_BUILDERS,
+    **_R9_BUILDERS,
     "C1": c1_crash,
     "N1": n1_modal,
     "R3": r3_fatigue,
@@ -1043,5 +1060,6 @@ BUILDERS = {
 PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
          "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
          "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
-         "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS}
-FEEDS: dict[str, list[str]] = {}  # none of these tests takes another's results
+         "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS,
+         **_R9_PLANS}
+FEEDS: dict[str, list[str]] = dict(_R9_FEEDS)  # R9 takes the K2 load cases' mount series (mounts_r9.py)
