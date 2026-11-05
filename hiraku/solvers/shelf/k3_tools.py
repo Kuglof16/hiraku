@@ -217,19 +217,27 @@ def drive_known_answers() -> list[Record]:
     expected = 600.0 * STANDARD_GRAVITY * 0.02 * d / 3600.0
     out.append(check_record("flat 5 km, lossless drive chain with full regeneration", "energy_used",
                             expected, r.energy["battery"], "Wh", 1e-6,
-                            "rolling resistance work m g C_rr d; acceleration energy comes back when stopping"))
+                            "rolling resistance work m g C_rr d; acceleration energy comes back when stopping",
+                            case_ja=(f"平らな道を {d / 1000.0:g} km、駆動の損失なし、ブレーキのエネルギーはすべて電池に"
+                                     "戻す"),
+                            source_ja="転がり抵抗の仕事 m g C_rr d。加速に使ったエネルギーは止まるときに戻る"))
     pt = _test_powertrain(R_batt=0.1)
     I = pt.battery_current(1000.0)
     out.append(check_record("battery 50 V, 0.1 ohm, 1 kW at the terminals", "current",
                             (50.0 - math.sqrt(2500.0 - 400.0)) / 0.2, I, "A", 1e-12,
-                            "equivalent circuit: (OCV - R I) I = P, smaller root"))
+                            "equivalent circuit: (OCV - R I) I = P, smaller root",
+                            case_ja=f"電池 {pt.V_batt:g} V、内部抵抗 {pt.R_batt:g} Ω、端子から 1 kW を取り出す",
+                            source_ja="電池の等価回路: (開放電圧 - R I) I = P の、小さいほうの解"))
     pt = _test_powertrain(T_max=1000.0 * 0.3 / 10.0)  # 1000 N at the wheels, 1.67 m/s^2 for 600 kg
     prof = speed_profile([Segment(200.0, 0.0, 10.0), Segment(200.0, 0.0, 10.0)], pt, dx=0.05)
     k = int(np.argmax(prof["v"] >= 10.0 - 1e-9))
     t = float(np.sum(np.diff(prof["x"][:k + 1]) / ((prof["v"][1:k + 1] + prof["v"][:k]) / 2.0)))
     out.append(check_record("0 to 10 m/s with 1000 N at the wheels, 600 kg, rolling resistance 0.02",
                             "time_to_speed", 600.0 * 10.0 / (1000.0 - 600.0 * STANDARD_GRAVITY * 0.02), t, "s", 2e-3,
-                            "constant net force: t = m v / (F - m g C_rr)"))
+                            "constant net force: t = m v / (F - m g C_rr)",
+                            case_ja=(f"0 から 10 m/s まで、車輪で 1000 N の力、{pt.mass:g} kg、転がり抵抗の係数 "
+                                     f"{pt.Crr:g}"),
+                            source_ja="差し引きの力が一定: t = m v / (F - m g C_rr)"))
     return out
 
 
@@ -239,13 +247,20 @@ def thermal_known_answers() -> list[Record]:
     n = 1000
     T = net.simulate(np.full((n, 1), 100.0), 1.0, 0.0)
     src = "first-order RC: dT = P R (1 - exp(-t / R C)); P 100 W, R 0.5 K/W, C 2000 J/K, tau 1000 s"
-    out.append(check_record("one part, 100 W step", "rise_at_tau", 50.0 * (1.0 - math.exp(-1.0)), float(T[n, 0]), "K", 1e-9, src))
-    out.append(check_record("one part, 100 W step", "steady_rise", 50.0, float(net.steady([100.0])[0]), "K", 1e-12, src))
+    src_ja = (f"1 次の RC 回路: dT = P R (1 - exp(-t / R C))。P 100 W、R 0.5 K/W、C {net.C[0]:g} J/K、"
+              f"時定数 {n:g} s")
+    one_ja = "部品 1 つに 100 W を急に入れる"
+    out.append(check_record("one part, 100 W step", "rise_at_tau", 50.0 * (1.0 - math.exp(-1.0)), float(T[n, 0]), "K", 1e-9, src,
+                            case_ja=one_ja, source_ja=src_ja))
+    out.append(check_record("one part, 100 W step", "steady_rise", 50.0, float(net.steady([100.0])[0]), "K", 1e-12, src,
+                            case_ja=one_ja, source_ja=src_ja))
     G = np.array([[0.0, 1.0 / 0.3], [1.0 / 0.3, 0.0]])
     net2 = ThermalNetwork(["inner", "outer"], np.array([500.0, 800.0]), np.array([0.0, 1.0 / 0.7]), G)
     out.append(check_record("two parts in series to the air (0.3 + 0.7 K/W), 40 W into the inner", "steady_rise",
                             40.0 * (0.3 + 0.7), float(net2.steady([40.0, 0.0])[0]), "K", 1e-12,
-                            "series thermal resistances add"))
+                            "series thermal resistances add",
+                            case_ja="2 つの部品を直列にして空気へ (0.3 + 0.7 K/W)、内側に 40 W を入れる",
+                            source_ja="直列の熱抵抗は足し算になる"))
     P = np.zeros((3000, 2))
     P[:1000, 0] = 40.0
     P[1000:, 1] = 25.0
@@ -255,5 +270,7 @@ def thermal_known_answers() -> list[Record]:
     put_in = 40.0 * 1000 + 25.0 * 2000
     out.append(check_record("energy ledger of the two-part network", "heat_in",
                             put_in, stored + lost, "J", 1e-3,
-                            "heat put in = heat stored + heat lost to the air (outflow integrated by trapezoids)"))
+                            "heat put in = heat stored + heat lost to the air (outflow integrated by trapezoids)",
+                            case_ja="2 つの部品の熱の出入りの帳簿",
+                            source_ja="入れた熱 = たまった熱 + 空気へ逃げた熱 (逃げた分は台形で足し合わせる)"))
     return out
