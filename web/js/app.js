@@ -37,7 +37,7 @@ import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
-import { AgentPets, PET_PAINTS, agentIdsOf, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
@@ -150,13 +150,6 @@ const petsReady = (params.get("pets") === "0" ? Promise.resolve(null) : AgentPet
   if (p) p.setPixel((window.devicePixelRatio || 1) * stageScale);
   drawn.rev = -1;
 });
-
-// While a record is read: the pets of the agents it names, made and their shaders compiled
-// ahead of the first frame (agent_pets.js prepare; the frames draw them as before).
-function preparePets(events) {
-  const ids = agentIdsOf(events);
-  if (ids.length) petsReady.then(() => agentPets?.prepare(ids));
-}
 
 // ---- player ---------------------------------------------------------------
 const player = new Player();
@@ -1755,7 +1748,6 @@ async function openRun(runId) {
   resetPlayer();
   feed = new EventFeed(runId, (evs, body) => {
     addEvents(evs);
-    if (!feed?.loaded) preparePets(evs);
     if (!feed?.loaded && body && body.next_offset < body.size) loadingNote(body);
   });
   try {
