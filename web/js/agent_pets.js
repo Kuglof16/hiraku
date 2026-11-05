@@ -312,7 +312,6 @@ export class AgentPets {
   // Make the pets of these agents ahead of their first frame (while the record is read) and
   // have their shaders compiled, so that frame waits for neither. Each is kept aside until
   // box() needs it: the pets' order (this.pets) stays the order the frames ask for them.
-  // Resolves when the compile is done.
   prepare(ids) {
     let made = 0;
     for (const id of ids) {
@@ -320,7 +319,7 @@ export class AgentPets {
       this.spare.set(id, this.stage.add(this.roleOf(id)));
       made += 1;
     }
-    return made ? this.stage.precompile() : Promise.resolve();
+    if (made) this.stage.precompile();
   }
 
   // Put the boxes into the slots ([data-pet-slot] = agent id) under root.

@@ -123,15 +123,15 @@ export class PetStage {
     return pet;
   }
 
-  // Have the shaders of the pets made so far (add; hidden ones too: three's compile takes every
-  // material of the scene) compiled before their first paint, finished in the background
-  // (compileAsync); nothing is drawn. Resolves when done (or it failed: paint then compiles
-  // them as before).
+  // Start compiling the shaders of the pets made so far (add; hidden ones too: three's compile
+  // takes every material of the scene) ahead of their first paint; nothing is drawn and nothing
+  // waits here (the GPU compiles them meanwhile; the first paint waits only for what is left).
+  // Not compileAsync: its promise can stay unsettled when it throws in its own timer.
   precompile() {
     try {
-      return this.renderer.compileAsync(this.scene, this.cameraFor(this.size.W / this.size.H).cam).catch(() => {});
+      this.renderer.compile(this.scene, this.cameraFor(this.size.W / this.size.H).cam);
     } catch {
-      return Promise.resolve();
+      /* paint compiles them as before */
     }
   }
 
