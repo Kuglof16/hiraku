@@ -2360,6 +2360,10 @@
                 "type": "string",
                 "description": "member, part, joint or element group id"
               },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "The point the value was read at, in design coordinates (mm): on a shell model the point on the weld line where the hot spot was read, on a beam model the point on the member."
+              },
               "quantity": {
                 "type": "string"
               },
