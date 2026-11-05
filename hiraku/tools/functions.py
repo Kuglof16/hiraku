@@ -1049,7 +1049,7 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
             raise ToolError("tool_decides を付けるときは、手計算が値に届かない理由を tool_decides_reason に書いてください")
         ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
         _check_on_criterion(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None, "tool_decides")
-        gap = path_check(ctx, lc, v)
+        gap = path_check(ctx, lc, v, ana)
         if gap:
             raise ToolError(f"tool_decides は、力の道を手計算で確かめてあるときだけ付けられます。いまは{gap}。"
                             f"{PATH_FORMULA} で部品から部材までの道を予測して記録し、道をたどるツール (load_path) で解析して"

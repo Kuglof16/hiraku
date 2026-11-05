@@ -54,26 +54,30 @@ PATH_FORMULA = "load_path.free_parts"  # docs/contract.md 手計算の役目: th
 PATH_CHECKED = "path_checked"
 
 
-def path_check(ctx: RunContext, load_case: Record, version: int) -> str | None:
-    """docs/contract.md 手計算の役目, the load path checked by hand: in this version, a prediction of the load case
-    by load_path.free_parts says every part is joined to a member (0), and the newest ok analysis of the load case
-    that follows the path (a free_parts or unsupported_load result) finds no unsupported load. None when it holds,
-    else why not (for people)."""
+def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Record | None = None) -> str | None:
+    """docs/contract.md 手計算の役目, the load path checked by hand, in this version: (1) a load_path.free_parts
+    prediction of 0, of the load case's loaded parts (one of its own predictions) or of every part of the version
+    (contract 947969a: the quantity free_parts, of any load case, as qa.check_run reads it); (2) an ok analysis
+    of the load case that follows the path (a free_parts or unsupported_load result) finds no unsupported load,
+    nor does the analysis that decides (given: the compared one). None when it holds, else why not (for people)."""
     lc_id = load_case["load_case_id"]
-    preds = [p for p in ctx.store.records("prediction", version)
-             if p["load_case_id"] == lc_id and p.get("formula_id") == PATH_FORMULA]
-    if not preds:
-        return (f"版 {version} で {lc_id} の道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) "
-                "がまだ記録されていない")
-    if preds[-1]["value"] > 0:
-        return f"手計算 {preds[-1]['prediction_id']} ({PATH_FORMULA}) で、つながらない部品が {preds[-1]['value']:g} ある"
+    hand = [p for p in ctx.store.records("prediction", version) if p.get("formula_id") == PATH_FORMULA
+            and (p["load_case_id"] == lc_id or p["quantity"] == "free_parts")]
+    if not hand:
+        return (f"版 {version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
+                "記録されていない")
+    if not any(p["value"] == 0 for p in hand):
+        p = hand[-1]
+        return f"手計算 {p['prediction_id']} ({PATH_FORMULA}) で、つながらない部品が {p['value']:g} ある"
     seen = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == lc_id and a["status"] == "ok"
             and any(r.get("quantity") in ("free_parts", UNSUPPORTED_LOAD) for r in a.get("results") or [])]
     if not seen:
-        return f"版 {version} で {lc_id} の力の道をたどるツールの解析 (load_path など、free_parts を出すもの) がまだ回っていない"
-    lost = [r for r in seen[-1].get("results") or [] if r.get("quantity") == UNSUPPORTED_LOAD and r.get("value", 0) > 0]
-    if lost:
-        return f"解析 {seen[-1]['analysis_id']} ({seen[-1]['tool']}) で、支えのない荷重が {max(r['value'] for r in lost):g} ある"
+        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (free_parts か unsupported_load を出すもの、"
+                "load_path など) がまだ回っていない")
+    for a in [seen[-1]] + ([analysis] if analysis is not None else []):
+        lost = [r for r in a.get("results") or [] if r.get("quantity") == UNSUPPORTED_LOAD and r.get("value", 0) > 0]
+        if lost:
+            return f"解析 {a['analysis_id']} ({a['tool']}) で、支えのない荷重が {max(r['value'] for r in lost):g} ある"
     return None
 
 

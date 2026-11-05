@@ -202,6 +202,7 @@ def cae_prompt(domain: str, modules: bool = False) -> str:
 5. compare(prediction_id, analysis_id) で、解析の結果と名前が同じ予測を照合する。名前が違えば result_quantity を付ける。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の式 (レールの式など) なら、where にその部材の ID を付けてその場所の結果と比べる (付けないと全部の場所の不利な方と比べる)。一致して基準があれば合否と判定が付く。合否は全部の場所のうち不合格に近い方でしか作られない。
 6. 食い違ったら、予測の前提・入力の値と単位・荷重のかけ方・支え方を見直し、原因と直し方を record_cause に書く。そのあと、直した予測を記録し直して analyze → compare をやり直す。
    - 原因で差が説明でき、予測が本当の値を安全側から押さえていると判断できるときだけ、record_cause に safe_side と理由を付ける。ツールが数字の向きを確かめ、予測の値で合否を付ける (hiraku:find-the-cause の 5)。
+   - 手計算が値に届かない (式が無い、上から押さえる式がゆるくて限界を超える、など) ときは、手計算で力の道を確かめる: その版で load_path.free_parts の予測 (つながらない部品 0) を記録し、道をたどるツールの解析 (load_path など) に支えのない荷重 (unsupported_load) が無いことを見て、record_cause に tool_decides と tool_decides_reason を付ける。ツールの値で合否が付く (合格も赤もある)。道の確かめもできないときだけ ends_case を付ける。
    - 一致させるために式を作り込まない。式を変えるのは、抜けていた物理を入れるときだけ。
    - シェル (frame_shell) のホットスポット (max_hot_spot_stress) が、梁の式の予測を大きく超えたときは、つなぎ目の壁の曲げを予測し直す: get_context(sections=["joint_wall_inputs"], load_case_id=...) の inputs で、式 frame_static.joint_wall_bending (output sigma) を記録する。
 7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。
