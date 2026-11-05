@@ -101,6 +101,9 @@ PLATE_MATERIAL = {"name": "steel (assumed)", "E_MPa": 205000.0, "nu": 0.3}
 # The cables are solved geometrically non-linear (Newton, the frame stays linear): tension T = max(0, T0 + EA
 # (L - L0) / L0) along the cable's present direction, so a pushed net takes the push by its sag.
 NET_KINDS = ("side_net",)
+# A rod pinned at its ends (a brake pushrod) passes through holes and by brackets without bearing on them: it touches
+# only what its connects_to pins it to (either way round).
+PIN_ENDED_KINDS = ("pushrod",)
 NET_CELL_MM = 50.0
 NET_PRESTRESS_MPA = 20.0  # the wires' stress as fitted (assumption, no source; run param net_prestress)
 NET_NEWTON_TOL = 1e-6  # mm per mm of the largest movement
@@ -601,11 +604,26 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
     parts = [f"part:{p['id']}" for p in modelled_parts(design)]
     slices = member_slices(design)
     props = member_props(design)
+    pinned: dict[str, set[str]] = {}
+    for p in design.get("parts", []):
+        for c in p.get("connects_to", []):
+            pinned.setdefault(f"part:{p['id']}", set()).add(c.get("to", ""))
+            pinned.setdefault(f"part:{c.get('to', '')}", set()).add(p["id"])
+    pin_ended = {f"part:{p['id']}" for p in design.get("parts", []) if p.get("kind") in PIN_ENDED_KINDS}
+
+    def bears(a: str, b: str) -> bool:
+        for x, y in ((a, b), (b, a)):
+            if x in pin_ended and y.split(":", 1)[1] not in pinned.get(x, set()):
+                return False
+        return True
+
     out: list[Contact] = []
     for i, pk in enumerate(parts):
         P = bs[pk]
         rp = _radius(P.obb)
         for mid, sl in slices.items():
+            if not bears(pk, f"member:{mid}"):
+                continue
             M = bs[f"member:{mid}"]
             if np.linalg.norm(P.obb.center - M.obb.center) > rp + _radius(M.obb) + touch:
                 continue
@@ -623,6 +641,8 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
             k_t, k_r, _ = contact_stiffness(area)
             out.append(Contact(pk, f"member:{mid}", point, area, k_t, k_r, t, tuple(sorted(t for t, _ in hit))))
         for qk in parts[i + 1:]:
+            if not bears(pk, qk):
+                continue
             Q = bs[qk]
             if np.linalg.norm(P.obb.center - Q.obb.center) > rp + _radius(Q.obb) + touch:
                 continue

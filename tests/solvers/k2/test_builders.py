@@ -116,10 +116,15 @@ class Builders(unittest.TestCase):
             h[above] = tilt_inputs(self.design, lc)["h"]["value"]
         # the demo design's cargo box stands on its floor with its centre 150 mm up
         self.assertAlmostEqual(h[150.0], h[None], places=6)
-        # 712.7 mm before the roll bar was on by default (its tubes raise the centre of gravity), 718.8 mm before
-        # the suspension towers, the dash and the occupants' bodies as parts, 726.5 mm before the floors and the deck
-        # were steel sheets 3.2 mm thick (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down
-        self.assertAlmostEqual(h[620.0], 710.4, delta=0.5)
+        # 703.0 mm before every part was joined to the frame (kit/joints: fittings and struts as parts with their
+        # mass, 47db54d and the commits before it on the joints branch; the arms' 703.0 came in after them unchanged);
+        # 699.4 mm before the suspension box was the arms, damper and ball joints (kit/arms.py: the same mass, the
+        # damper's and the upper arm's share higher up) and the clevis brackets; 710.4 mm before the occupants were in segments (2a4e726: head, neck, trunk, upper arm, forearm, hand; the
+        # same mass spread over those boxes), 712.7 mm before the roll bar
+        # was on by default (its tubes raise the centre of gravity), 718.8 mm before the suspension towers, the dash
+        # and the occupants' bodies as parts, 726.5 mm before the floors and the deck were steel sheets 3.2 mm thick
+        # (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down
+        self.assertAlmostEqual(h[620.0], 702.3, delta=0.5)
 
     def test_cases_past_the_limit(self):
         for tid in BEYOND:

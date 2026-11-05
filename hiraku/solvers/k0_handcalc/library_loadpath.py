@@ -257,6 +257,57 @@ def _rail_utilisation() -> Formula:
     )
 
 
+def _frame_utilisation() -> Formula:
+    """The larger of load_path.rail_utilisation and a roll bar post's: the post a cantilever from its foot that
+    carries all of what is hung on it (bending, twist and axial force at the foot, one von Mises stress)."""
+    rail = _rail_utilisation()
+    S = rail.symbols
+    Mp, Tp, Np, Ap, Ip, Jp, cp, fyp = sp.symbols("M_p T_p N_p A_p I_p J_p c_p f_yp", real=True)
+    u_rail = rail.outputs["u"][2]
+    sig_p = Mp * cp / Ip + Np / Ap
+    tau_p = Tp * cp / Jp
+    vm_p = sp.sqrt(sig_p ** 2 + 3 * tau_p ** 2)
+    u_post = vm_p * S["SF"] / fyp
+    u = sp.Piecewise((u_rail, u_rail >= u_post), (u_post, True))
+    names = dict(S, M_p=Mp, T_p=Tp, N_p=Np, A_p=Ap, I_p=Ip, J_p=Jp, c_p=cp, f_yp=fyp)
+    inputs = dict(rail.inputs)
+    inputs.update({
+        "M_p": {"unit": "N*mm", "description": "the post's bending moment at its foot (0 without a post carrying "
+                                               "parts)", "min": 0},
+        "T_p": {"unit": "N*mm", "description": "its twisting moment at the foot", "min": 0},
+        "N_p": {"unit": "N", "description": "its axial force", "min": 0},
+        "A_p": {"unit": "mm^2", "description": "the post's section area", "min": 0},
+        "I_p": {"unit": "mm^4", "description": "its smaller second moment of area", "min": 0},
+        "J_p": {"unit": "mm^4", "description": "its torsion constant", "min": 0},
+        "c_p": {"unit": "mm", "description": "its extreme fibre's distance from the axis", "min": 0},
+        "f_yp": {"unit": "MPa", "description": "the post's yield", "min": 0},
+    })
+    return Formula(
+        formula_id="load_path.frame_utilisation",
+        title="はしご形の枠のレールと、部品を下げたロールバーの柱の、応力の許しに対する割合の大きい方",
+        domain="strength",
+        expression=(rail.expression + "; post: sigma_p = M_p c_p / I_p + N_p / A_p, tau_p = T_p c_p / J_p, "
+                    "u_p = sqrt(sigma_p^2 + 3 tau_p^2) SF / f_yp; u = max(u_rail, u_p)"),
+        inputs=inputs,
+        outputs={"u": ("1", "the larger utilisation of the rail and the post", u),
+                 "u_rail": ("1", "the rail's (load_path.rail_utilisation)", u_rail),
+                 "u_post": ("1", "the post's", u_post),
+                 "von_mises_post": ("MPa", "the post's von Mises stress at its foot", vm_p)},
+        assumptions=list(rail.assumptions[:2]) + [
+            "レールは load_path.rail_utilisation と同じ (横の部材の応力は入らない)",
+            "ロールバーの柱は、足の節からの片持ち。上の横の棒が柱の先を押さえる分は入れない (大きめ)",
+            "柱に金具で下げた部品 (座席など) と、それに座る乗員の重さと加速度は、全部その柱が持つとみる。座席が床にも"
+            "留まっていても、床の分は引かない (大きめ)",
+            "柱の足で、曲げ・軸の力の応力を重ね、ねじれは円管の τ = T c / J (角管でも同じ式: 近似)",
+            "柱に何も下がっていなければ、柱の分は 0",
+        ] + list(rail.assumptions[3:]),
+        source=rail.source + "; a cantilever post's foot moment from statics, sigma = M c / I + N / A, tau = T c / J",
+        requires=list(rail.requires) + [(sp.And(Ap > 0, Ip > 0, Jp > 0, cp > 0, fyp > 0),
+                                         "the post's section values and yield must be positive")],
+        symbols=names,
+    )
+
+
 def _control_deflection() -> Formula:
     F, k_t, k_r, L, E, I, d_p = sp.symbols("F k_t k_r L E I delta_plate", real=True)
     G, J, r_t, d_r = sp.symbols("G J r_t delta_root", real=True)
@@ -329,4 +380,5 @@ def _free_parts() -> Formula:
 
 
 def all_formulas() -> list[Formula]:
-    return [_control_deflection(), _plate_strip(), _post_node(), _bar_on_posts(), _rail_utilisation(), _free_parts()]
+    return [_control_deflection(), _plate_strip(), _post_node(), _bar_on_posts(), _rail_utilisation(),
+            _frame_utilisation(), _free_parts()]

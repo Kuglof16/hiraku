@@ -18,7 +18,9 @@ class DemoDesignTest(unittest.TestCase):
 
     def test_file_matches_its_generator(self):
         mod = runpy.run_path(str(ROOT / "data" / "designs" / "make_offroad_4w_v1.py"))
-        self.assertEqual(mod["build"](), self.design)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, mod["build"](), self.design)
 
     def test_references_resolve(self):
         nodes = {n["id"] for n in self.design["nodes"]}

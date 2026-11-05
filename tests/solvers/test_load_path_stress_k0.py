@@ -64,5 +64,66 @@ class StressInputsTest(unittest.TestCase):
         self.assertAlmostEqual(u30, 2.0 * u15, delta=1e-9)
 
 
+D_P, T_P = 42.7, 2.3  # the roll bar's round tube
+A_P = math.pi / 4 * (D_P ** 2 - (D_P - 2 * T_P) ** 2)
+I_P = math.pi / 64 * (D_P ** 4 - (D_P - 2 * T_P) ** 4)
+
+
+def frame(Mp=0.0, Tp=0.0, Np=0.0, **rail_kw):
+    base = {"M_v": 0.0, "M_h": 0.0, "T": 0.0, "N": 0.0}
+    base.update(rail_kw)
+    ins = {"M_v": q(base["M_v"], "N*mm"), "M_h": q(base["M_h"], "N*mm"), "T": q(base["T"], "N*mm"),
+           "N": q(base["N"], "N"), "b": q(B, "mm"), "h": q(H, "mm"), "t": q(T_W, "mm"), "A": q(A, "mm^2"),
+           "I_v": q(IV, "mm^4"), "I_h": q(IH, "mm^4"), "s": q(700.0, "mm"), "f_y": q(245.0, "MPa"), "SF": q(1.5, "1"),
+           "M_p": q(Mp, "N*mm"), "T_p": q(Tp, "N*mm"), "N_p": q(Np, "N"), "A_p": q(A_P, "mm^2"),
+           "I_p": q(I_P, "mm^4"), "J_p": q(2 * I_P, "mm^4"), "c_p": q(D_P / 2, "mm"), "f_yp": q(215.0, "MPa")}
+    return {k: v["value"] for k, v in REG.evaluate("load_path.frame_utilisation", ins)["outputs"].items()}
+
+
+class FrameUtilisationTest(unittest.TestCase):
+    def test_the_post_as_a_cantilever(self):
+        """A mass m hung at height h and offset e ahead of the post's foot, pushed forward by a and down by g: the
+        foot's moment m g (a h + e) about one axis, sigma = M c / I + N / A, u = sigma SF / f_y."""
+        m, g, a, h, e = 87.6, 9.80665, 0.9, 600.0, 250.0
+        M, N = m * g * (a * h + e), m * g
+        got = frame(Mp=M, Np=N)
+        sig = M * (D_P / 2) / I_P + N / A_P
+        self.assertAlmostEqual(got["von_mises_post"], sig, delta=1e-9)
+        self.assertAlmostEqual(got["u_post"], sig * 1.5 / 215.0, delta=1e-12)
+        self.assertEqual(got["u"], got["u_post"])  # the post governs: nothing on the rail
+
+    def test_twist_on_a_round_tube(self):
+        Tq = 2.0e5
+        self.assertAlmostEqual(frame(Tp=Tq)["von_mises_post"], math.sqrt(3) * Tq * (D_P / 2) / (2 * I_P), delta=1e-9)
+
+    def test_the_rail_governs_without_a_post(self):
+        got = frame(M_v=1.0e6)
+        self.assertEqual(got["u_post"], 0.0)
+        self.assertAlmostEqual(got["u"], rail(Mv=1.0e6)["u"], delta=1e-12)
+
+
+class SeatsOnTheRollBarTest(unittest.TestCase):
+    """Version 1 with the seats hung on the roll bar's posts (mount_seats): the post is the most used member in
+    the tool, and K0's post (a cantilever from its foot that carries all of the seat and its occupant) is above it
+    within R8's tolerance."""
+
+    def test_k0_post_against_the_tool(self):
+        from hiraku.catalog.builders import BUILDERS
+        from hiraku.catalog.builders.load_path import frame_inputs
+        from hiraku.designgen import ladder_4w as G
+        from hiraku.solvers.shelf import LoadPath
+        from tests.solvers.test_builders_load_path import REQ, SPECS, results
+
+        d = G.build({"mount_seats": q(1.0, "1")})
+        lc = next(c for c in BUILDERS["R8"](SPECS["R8"], REQ, d) if c["load_case_id"] == "R8-stress")
+        k0 = {k: v["value"] for k, v in REG.evaluate("load_path.frame_utilisation", frame_inputs(d, lc))["outputs"].items()}
+        r = results(LoadPath().run(d, lc, [{"prediction_id": "p"}], {}))
+        self.assertTrue(r["max_utilisation"]["where"].startswith("rollbar_post"), r["max_utilisation"])
+        self.assertEqual(k0["u"], k0["u_post"])
+        tool = r["max_utilisation"]["value"]
+        self.assertGreater(k0["u"], tool)  # the post carries everything: K0 the larger
+        self.assertLessEqual(abs(tool - k0["u"]) / k0["u"], lc["tolerance_rel"], (k0["u"], tool))
+
+
 if __name__ == "__main__":
     unittest.main()

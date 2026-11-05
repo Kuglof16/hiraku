@@ -13,7 +13,11 @@ HIRAKU 本体は `qa/` を読み込まない。試験 (`tests/verification/`) �
 | `judge_scan.py` | 公開する前のブランチを読み、公開してはいけないものと、人が見るべき所を並べる |
 | `run_tests.py` | 全部の試験を、試験のクラスごとに別のプロセスで並べて回す (`python -m unittest` と同じ試験。数で確かめる)。メモリが足りずに落ちたクラス (MemoryError、WinError 1455) だけは、あとで 1 つずつ回し直し、「rerun alone after a memory error」と結果を出して、その結果だけを数える。全部の試験は PC で 1 つずつ回す: 始める前に PC 全体の鍵 (システムの一時フォルダの `hiraku-run-tests/suite.lock`。プロセスが終われば外れる) を取り、ほかが持っている間は「waiting for <pid> (<worktree>, since hh:mm)」と出して待つ。鍵を持っている間は CPU の数 − 4 (8 以上) のプロセスで回す。急ぐときだけ `--no-wait` (待たずに 8 プロセスで回し、重なりを「warning: another qa.run_tests is running on this PC」で知らせる) |
 | `procs.py` | 時間切れのあるコマンドの実行。時間切れのときは、そのコマンドが始めたプロセスごと止める (subprocess の時間切れは、そのコマンドのプロセスしか止めない。試験のプロセスを止めても、それが始めた台本の運転は回り続ける)。`run_tests` のクラスの時間切れと、台本の運転の時間切れで使う。`run_tests` の試験のプロセスと台本の運転には、BLAS のスレッドを 1 本にして渡す (`OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`、もう決めてあればそのまま)。numpy と scipy の OpenBLAS は、使うかもしれないスレッドの数だけメモリを先に取るので、たくさん同時に回すと PC のメモリが尽きる |
+| `slot.py` | 手元の PC で重い仕事 (本物の運転、動画の書き出し、K2 の収束の計測、比べる仕事) を回す入口: `python -m qa.slot <用途> -- <コマンド>`。`run_tests` と同じ PC 全体の鍵を取り、試験一式やほかの重い仕事が持っている間は「waiting for <pid> (<用途>, <worktree>, since hh:mm)」と出して待つ。コマンドが終わっても、失敗しても、Ctrl+C で取り消しても (コマンドが始めたプロセスごと止める) 鍵は外れる。`--no-wait` は、鍵が取られていればコマンドを回さずに終わる (終了コード 3) |
 | `compare_runs.py` | 2 つの実行のフォルダを、記録のファイルごと・`events.jsonl` の行ごとに比べる (直す前と後の台本の運転が同じかを見る、リファクタリングの守り) |
+| `shared_runs.py` | 遅い試験の台本の運転を、要件ファイルとコードの版ごとに 1 回だけ作り、それを読むクラスで使い回す (下の「走らせ方」) |
+| `numba_cache.py` | numba の `@njit(cache=True)` を、いくつものプロセスが同時に初めて呼んだとき、cache (`__pycache__` の `.nbi`・`.nbc`) の書き込みがぶつからないかと、機械語に直す最初の呼び出しの秒を見る (`python -m qa.numba_cache --procs 12`)。1 回目は直し、2 回目は cache を読む。どちらも、落ちたプロセス・違う結果・cache の注意を数える。numba が無ければ何もしない |
+| `remote_suite.py` | 速い一式・ブラウザ・遅い一式を順に回し、回った数・OK/FAILED・秒を 1 つの要約 (JSON) にする。試験だけをする機械 (Linux など) のため |
 
 ## 走らせ方
 
@@ -50,7 +54,7 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 
 重い試験は、main に入れる前に毎回回す `python -m unittest` には入れない。毎回回す `test_real_runs` は、動画用の要件の台本の運転 1 本だけ (記録が契約と hooks に合うか、終わり方)。`HIRAKU_SLOW_TESTS=1` のときだけ、次も回す:
 
-- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 1200 秒で、かかった秒数を標準エラーに 1 行出す
+- ほかの要件ファイル (`offroad-4w.yaml` など) の台本の運転。台本の運転は要件ファイルごとに 1 つのクラス (`ScriptedRun_<ファイル名>`、例 `ScriptedRun_offroad_4w_video`) なので、`python -m qa.run_tests` は並べて回す。1 本の運転の時間切れは 3000 秒 (動画の要件は 5 つの版で単独約 2060 秒)、1 クラスの時間切れは 3600 秒で、かかった秒数を標準エラーに 1 行出す
 - 動画用の要件をもう 1 回回して、バイトで比べる。2 回目は 1 回目と同時に回す (`ScriptedRun_offroad_4w_video` の中で 2 つのスレッド)。なので、そのクラスも運転 1 本ぶんの時間で終わる
 - `needs_mesh` のツールを、デモのフレームのメッシュ全体で解く。使える設計の型を持つツール (`applies_to`) はその型の設計で解き、自分でメッシュを作るツール (`make_mesh`) にはそのメッシュ (`mesher` はツールの名前) を渡し、field はそのメッシュを名指す。`make_mesh` の無いツールは部材ごとの値だけ。ツールごとに 1 つのクラス (`MeshFieldRecord_<ツール名>`、例 `MeshFieldRecord_frame_shell`) なので、これも並べて回す。`HIRAKU_SLOW_TESTS` が無いときは `MeshFieldRecord` が 1 つだけあって、skip の理由を出す
 
@@ -59,6 +63,35 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 - 台本の運転の通り道 (`hiraku/solvers/`・`hiraku/agent/`・`hiraku/store/`・`hiraku/tools/`・`hiraku/catalog/`・`data/catalog/`・`data/requirements/`) を変える取り込みのあと、取り込んだ main で 1 回。同じ回にいくつかの部署を取り込むなら、最後の 1 回だけでよい
 - 動画や `showcase/` に使う運転を記録する前に 1 回
 - コマンドはどちらか: `python -m qa.compare_runs --twice data/requirements/offroad-4w-video.yaml`、または `HIRAKU_SLOW_TESTS=1 python -m unittest tests.verification.test_real_runs`
+
+同じ台本の運転を読む試験のクラスがいくつかあるので、運転は `qa.shared_runs.scripted_run(要件ファイル)` で 1 回だけ作り、`runs/.test-cache/<鍵>/` に置いて読み合う。
+
+- 鍵: `hiraku/`・`data/`・`plugins/` の中身 (作業中の変更も入る)、要件ファイル、Python・numpy・scipy の版、pypardiso があるか、`HIRAKU_SOLVER`
+- 同じ鍵の 2 つ目のクラスは、1 つ目が終わるのを待って、同じフォルダを読む
+- 次の一式でも、鍵が同じなら作り直さない
+- 残すのは終了コード 0 で終わった運転だけ。新しい鍵 3 つ分を残す
+- 試験は運転のフォルダを読むだけにする。書くときは `copy_run` で写してから書く
+- `HIRAKU_SHARED_RUNS=0` にすると、毎回作る
+- 2 回回して同じかを比べる運転 (動画用の 2 回目) には使わない
+
+`qa.run_tests` のほかの決まり:
+
+- 前の回に 60 秒以上かかったクラスは、メソッドごとに別のプロセスで回す。ただし、メソッドのあいだで何も共有しないクラスだけ (`setUpClass`・`tearDownClass`・`setUpModule` が無い)。`--no-split` にすると、クラスのまま回す
+- メモリの重いクラスは、同時に `--max-heavy` (既定 2) 個まで。前の回の山が 4 GB 以上のクラスを重いとみる
+  - まだ測っていないときは、11/5 に測った 4 つ (RearLinkRevision・SpaceFrameConvergence・SpaceFrameK2・MeshFlow、7.6〜8.7 GB) を重いとみる
+  - 山はプロセスごとに `runs/test_memory.json` に残る。Windows では、台本の運転の別のプロセスの分は入らない
+  - 重いクラスがほかに走っているときは、空きが「そのクラスの山 + 4 GB」になるまで待つ (`waiting for memory: ...`)。待つ間は、後ろの軽いクラスを先に回す
+- `--only tests.web` のように付けると、名前がその前置きで始まるクラスだけを回す (何度でも付けられる)
+
+### Linux (Ubuntu 24.04、Python 3.12) で回すとき
+
+- venv に `requirements.txt` と `playwright==1.62.0` を入れ、`python -m playwright install --with-deps chromium` を回す。字のために `fonts-noto-cjk` も入れる
+- `python -m qa.remote_suite` で、3 つを順に回す: 速い一式 (`--jobs 8 --no-wait`)、ブラウザ (`tests.web.browser`)、遅い一式 (`HIRAKU_SLOW_TESTS=1`、`--jobs 6 --no-wait`)
+  - 子のプロセスには `OPENBLAS_NUM_THREADS=1`・`OMP_NUM_THREADS=1`・`PYTHONUTF8=1` を渡す (もう決めてあればそのまま)
+  - 1 つずつの出力は `runs/remote_suite/<名前>.log` に出る
+  - 要約は `runs/remote_suite/summary.json` に出る (回った数、OK/FAILED、失敗・skip の数、秒、終了コード)
+  - 1 行ずつの要約も表示する。どれか 1 つでも OK でなければ、終了コードは 1
+  - `--only fast,slow` で一部だけ回せる。`--jobs` と `--slow-jobs` でプロセスの数を変えられる
 
 ## 照合の考え方
 
@@ -73,7 +106,8 @@ python -m qa.compare_runs runs/<run_a> runs/<run_b>                             
 - ファイルと event: 記録のファイル 1 つに同じ中身の event が 1 つある。記録を直すときは同じ ID の event を出し直し、変えてよい欄は契約で決まったものだけ
 - 実行の設定: `project.json` は `run.started` のまま (変えてよい欄を除く)。設計役が版 1 を作る実行では、版 1 のあとの `project.updated` が荷重条件・選んだ分野・役を出し直す。途中で変わった要件は、いつでも `project.updated` で出し直してよい。`stop.request`・ヒアリングのファイル・`inbox/` の頼みは実行が終われば残らない (残れば注意)。`knowledge/` には `knowledge.imported` が名指すファイルだけがある。`tools/` には、実行の中で作った道具の試みごとに `<名前>-<n>.py` と `.check.json` がそろう
 - 報告: `report.json` は最後の `report.written` と同じ。報告は選んだ分野をすべて持ち、状態と合否の ID はその時のタイルと同じ、食い違いはその版の食い違いの照合で、差と原因は記録と同じ (判定のある荷重条件の食い違いを落としていれば注意)
-- HK1〜HK5: 解析の前に同じ版・同じ荷重条件の予測がある / 照合に通った道具だけを使う / 食い違いに原因が書かれるまで、その分野の解析と照合は進まない / 選んだ分野が判定されるまで done で終わらない (直す回数の上限 `round_limit` で止まるときも、最後の版は判定まで進める。判定されたとは、合否の基準のある荷重条件のすべてに最後の版の合否があること。赤のタイルでも、ほかの試験に合否が無ければ終わっていない) / 軽い計算から: その版で、低い段 (`stage`) の道具ですでに確かめた荷重条件に合格が揃うまで、高い段の道具の解析は始まらない (段は `tool.checked` の道具の仕様から。無ければ 1。フックと同じく、限界の外の荷重条件 (`-beyond`、落ちるための条件) は数えない。解析する荷重条件そのものは、低い段の道具の判定が赤のときだけ数える)
+- HK1〜HK5: 解析の前に同じ版・同じ荷重条件の予測がある / 照合に通った道具だけを使う / 食い違いに原因が書かれるまで、その分野の解析と照合は進まない / 選んだ分野が判定されるまで done で終わらない (直す回数の上限 `round_limit` で止まるときも、最後の版は判定まで進める。判定されたとは、合否の基準のある荷重条件のすべてに最後の版の合否があること。赤のタイルでも、ほかの試験に合否が無ければ終わっていない) / 軽い計算から: その版で、低い段 (`stage`) の道具ですでに確かめた荷重条件に合格が揃うまで、高い段の道具の解析は始まらない (段は `tool.checked` の道具の仕様から。無ければ 1。フックと同じく、限界の外の荷重条件 (`-beyond`、落ちるための条件) は数えない。解析する荷重条件そのものは、低い段の道具の判定が赤のときだけ数える。判定できない荷重条件も数えない。記録から見て、予測のどれも基準の量を予測していない (K0 の式が無い) か、判定に使う量のいちばん新しい照合が食い違いで、その原因が `ends_case: true` で、解けていない (台本の expected_mismatch の end) もの。印の無い原因は直す前の原因なので、今までどおり数える)
+- HK6 (モジュールに分けた設計だけ): 提案 (`design.change_proposed`) は `designer.<モジュール>` が出し、自分のモジュールの変数と選択だけを変える。package は提案しない。提案のモジュールは、その版の赤の荷重条件の `modules` に入っている。2 版目からの版はパッケージ役が作る。`module_changes` は、その回の提案と、パッケージ役の package の変更 (多くて 1 つ、package の変数だけ) を、そのまま並べたもの。同じ変数を 1 回に 2 度変えない。版で動いた変数は、package の変更に入っているか、その回に提案したモジュールの変数 (fit: driver のようにコードが決めた値も)。部品の箱と部材の両端がモジュールの envelope の箱に入るか (0.5 mm まで。外れは警告 `module.envelope`)
 - 実行の終わり: `stop_code` は status と合う (`done` ⇔ `done`、`error` ⇔ `failed`)。`not_judged` は判定の無い荷重条件が残っているときだけ、`round_limit` は設計の直しを上限まで使ったときだけ
 - 照合の数字: 差は符号つき (解析 − 予測)。一致・食い違いを計算し直し、許す幅は荷重条件から取る。照合の量 (`quantity`) は、実際に比べた解析の結果の名前 (予測の量と違ってよい。例: 予測 `f_wheel` と結果 `wheel_rotation_frequency`)。`where` (部材や部品の id) があれば、その場所の結果と合う
 - 合否の出どころ: 一致した照合からなら値は解析。説明された安全側の食い違いからなら、原因が `safe_side` と理由を持ち、予測が基準に対して不利な側 (`<=` なら解析以上、`>=` なら解析以下) にあって、値は予測。合否と余裕は計算し直し、基準は荷重条件から取る。荷重の通り道が無い (`basis` `unsupported_load`) なら、照合ではなく `analysis_id` の解析から: その前に記録された同じ荷重条件の ok の解析で、結果の `unsupported_load` が 0 より大きく、合否はその値・`<=`・限界 0・不合格・`margin_pct` null

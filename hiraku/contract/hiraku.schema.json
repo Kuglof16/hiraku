@@ -3585,6 +3585,40 @@
           "if": {
             "properties": {
               "kind": {
+                "const": "agent.stopped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "agent_id": {
+                    "$ref": "#/$defs/agent_id"
+                  },
+                  "stop_code": {
+                    "enum": [
+                      "done",
+                      "run_ended",
+                      "user_stop",
+                      "error"
+                    ],
+                    "description": "Why the role stopped, for the screen to word: done = it ended its own work; run_ended = the run ended while the role was still working (the run's own reason is run.finished's stop_code); user_stop = the stop button; error = the role ended with an error. Optional."
+                  },
+                  "stop_reason": {
+                    "type": "string",
+                    "description": "Free text for people (may be English); the screen shows stop_code."
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
                 "const": "run.finished"
               }
             }

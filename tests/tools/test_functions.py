@@ -621,6 +621,19 @@ class SafeSideTest(RunCase, unittest.TestCase):
         self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
         self.assert_events_fit()
 
+    def test_an_ended_case_beyond_its_criterion_says_the_tools_numbers(self):
+        from hiraku.tools import judge
+
+        cmp = self.r1_mismatch(6.0)  # the tool's stress (about 186 MPa) beyond the criterion (156.7 MPa)
+        record_cause(self.ctx, self.args(cmp, ends_case=True))
+        text = rules.cannot_judge_text(self.ctx)
+        self.assertIn("R1-step100 は、食い違いの原因を記録して判定なしで終えた", text)
+        self.assertRegex(text, r"R1-step100: ツール frame_static では .*max_stress が [\d.]+ MPa で、基準 ≤ [\d.]+ MPa を超える")
+        self.assertIn("赤にもしていません", text)
+        self.assertNotIn("R1-step100", judge.latest_verdicts(self.ctx, 1))  # no red without a prediction
+        with mock.patch.object(judge, "beyond_results", return_value=[]):  # within its criterion: nothing more said
+            self.assertNotIn("ツール", rules.cannot_judge_text(self.ctx))
+
     def test_a_cause_without_ends_case_ends_nothing(self):
         cmp = self.r1_mismatch(1.5)
         cause = record_cause(self.ctx, self.args(cmp))["cause"]
@@ -1181,6 +1194,24 @@ class DesignContextTest(RunCase, unittest.TestCase):
         self.assertEqual((ch["from_version"], ch["to_version"]), (1, 2))
         self.assertEqual(ch["changed"], [{"variable": "track", "old": {"value": old["value"], "unit": old["unit"]},
                                           "new": {"value": 1400.0, "unit": "mm"}}])
+
+    def test_revise_design_builds_the_load_cases_again_for_the_new_version(self):
+        from hiraku.contract import layout
+        from hiraku.tools.functions import revise_design
+
+        first = [dict(lc) for lc in self.ctx.load_cases]
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "wider"}, "designer")
+        made = [e for e in self.ctx.store.events() if e["kind"] == "load_cases.created"]
+        self.assertEqual([e["design_version"] for e in made], [2])
+        self.assertEqual(made[0]["data"]["design_version"], 2)
+        path = layout.version_dir(self.ctx.store.path, 2) / layout.VERSION_LOAD_CASES_FILE
+        self.assertTrue(path.exists())
+        # the same ids, in the same order; the context reads the new version's; project.load_cases stays version 1's
+        self.assertEqual([lc["load_case_id"] for lc in self.ctx.load_cases], [lc["load_case_id"] for lc in first])
+        self.assertIs(self.ctx.load_cases, self.ctx.store.version_load_cases(2))
+        self.assertEqual(self.ctx.project["load_cases"], first)
+        self.assertEqual(self.ctx.store.version_load_cases(1), first)
+        self.assert_events_fit()
 
 
 class UnpredictableCaseTest(RunCase, unittest.TestCase):

@@ -89,11 +89,19 @@ def _reader(name: str) -> Any:
         raise ScriptError(f"inputs_from {name!r} is not in hiraku.catalog.builders: {e}") from None
 
 
+def _unpredictable(ctx: RunContext, lc: Record) -> bool:
+    """True when the load case has a criterion whose quantity no K0 formula of the run's registry predicts."""
+    from hiraku.tools.rules import predicted_quantities
+
+    crit = lc.get("criterion")
+    return bool(crit and ctx.formulas is not None and crit["quantity"] not in predicted_quantities(ctx, lc))
+
+
 def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     """The product's plan plus a step from the builders for each load case it lacks: the product's own
     (PRODUCT_STEPS, e.g. the care bed's step_for), else PLANS_BEYOND for a case past the limit, else
     PLANS; ordered upstream first. A builders' step whose tool is not on the shelf goes to `unshelved`. `missing` lists
-    the load cases nobody gave a step for. A product step whose load case this run did not
+    the load cases nobody gave a step for; `not_judged` those of them no K0 formula predicts (left not judged). A product step whose load case this run did not
     build (another step height, say) is left out: its causes were written for that load case.
     So is a step whose tool is not on this run's shelf; `unshelved` names those (load case, tool)."""
     out = copy.deepcopy(plan if plan is not None else plan_of(ctx))
@@ -103,7 +111,7 @@ def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
     out["unshelved"] = [(s["load_case"], s["tool"]) for s in built if s["tool"] not in ctx.tools]
     have = {s["load_case"] for s in out["steps"]}
     recipes, past = external_builders()[2], beyond_plans()
-    out["missing"] = []
+    out["missing"], out["not_judged"] = [], []
     for lc in ctx.load_cases:
         if lc["load_case_id"] in have:
             continue
@@ -112,7 +120,8 @@ def compose_plan(ctx: RunContext, plan: Record | None = None) -> Record:
         recipe = (product_step(ctx.project["product"], lc) or (is_beyond(lc) and recipe_for(past, lc))
                   or recipe_for(recipes, lc))
         if recipe is None:
-            out["missing"].append(lc["load_case_id"])
+            # a load case no K0 formula predicts has no step on purpose: it stays not judged (HK4, HK5)
+            out["not_judged" if _unpredictable(ctx, lc) else "missing"].append(lc["load_case_id"])
         elif ctx.tools and recipe["tool"] not in ctx.tools:
             out["unshelved"].append((lc["load_case_id"], recipe["tool"]))
         else:

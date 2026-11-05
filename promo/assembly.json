@@ -15,7 +15,7 @@
     "N00"
    ],
    "video": {
-    "1080": "${WORK}/clips/n00_titlepets_1080p.mp4",
+    "1080": "${WORK}/clips/n00_everywhere_1080p.mp4",
     "2160": "${WORK}/clips/n00_2160p.mp4"
    },
    "join": {
@@ -134,13 +134,13 @@
    "cuts": [
     "N09"
    ],
-   "video": "${WORK}/clips/n09_app_1080p.mp4"
+   "video": "${WORK}/clips/real/n09_real_1080p.mp4"
   },
   {
    "cuts": [
     "N14"
    ],
-   "video": "${WORK}/clips/n14_app_1080p.mp4"
+   "video": "${WORK}/clips/real/n14_real_1080p.mp4"
   },
   {
    "cuts": [
@@ -194,7 +194,7 @@
    "cuts": [
     "N17"
    ],
-   "video": "${WORK}/clips/n17_app_1080p.mp4",
+   "video": "${WORK}/clips/real/n17_real_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5
@@ -219,7 +219,7 @@
     "N18"
    ],
    "video": {
-    "1080": "${WORK}/clips/n18_pets_1080p.mp4",
+    "1080": "${WORK}/clips/n18_everywhere_1080p.mp4",
     "2160": "${WORK}/clips/n18_2160p.mp4"
    }
   }

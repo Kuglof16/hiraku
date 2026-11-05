@@ -8,7 +8,8 @@ from pathlib import Path
 from hiraku import solvers
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the free parts these tests are about
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 TOOL = {t.name: t for t in solvers.builtin_tools()}["load_path"]
 
 

@@ -497,5 +497,37 @@ class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
         self.assert_events_fit()
 
 
+class SplitByModuleTest(unittest.TestCase):
+    """A plan's revision on a design with modules: each variable and choice goes to the module that lists it,
+    the package variables to the packager (contract d9631a5)."""
+
+    DESIGN = {"modules": [
+        {"module_id": "package", "variables": ["track"], "choices": []},
+        {"module_id": "steering", "variables": ["steering_column_angle"], "choices": ["pedal_mount"]},
+        {"module_id": "occupant", "variables": ["seat_height"], "choices": ["side_guard"]},
+        {"module_id": "body", "variables": [], "choices": ["fenders"]},
+    ]}
+
+    def test_each_part_goes_to_its_owner(self):
+        from hiraku.agent.scripted import split_by_module
+
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        by, package, stray = split_by_module(
+            self.DESIGN, {"track": mm(1220), "seat_height": mm(233.5), "steering_column_angle": {"value": 20, "unit": "deg"}},
+            {"fenders": "wheel", "pedal_mount": "post", "side_guard": "bars_net"})
+        self.assertEqual(list(by), ["steering", "occupant", "body"])  # the contract's module order
+        self.assertEqual(by["steering"], {"changes": {"steering_column_angle": {"value": 20, "unit": "deg"}},
+                                          "choices": {"pedal_mount": "post"}})
+        self.assertEqual(by["occupant"], {"changes": {"seat_height": mm(233.5)}, "choices": {"side_guard": "bars_net"}})
+        self.assertEqual(by["body"], {"choices": {"fenders": "wheel"}})
+        self.assertEqual((package, stray), ({"track": mm(1220)}, []))
+
+    def test_a_name_no_module_owns_is_named(self):
+        from hiraku.agent.scripted import split_by_module
+
+        self.assertEqual(split_by_module(self.DESIGN, {"wheelbase": {"value": 1, "unit": "mm"}}, {"roof": "x"})[2],
+                         ["wheelbase", "roof"])
+
+
 if __name__ == "__main__":
     unittest.main()

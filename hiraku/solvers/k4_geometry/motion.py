@@ -43,13 +43,29 @@ def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) 
             o = _link_moved(b, R, c, dz, steer)
         else:
             o = (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
+        c_o, r_o = _sphere(o)
         for k2, other in bs.items():
-            if k2 in group or mounted(b, other, design):
+            if k2 in group:
+                continue
+            # spheres round the two shapes apart by more than the touch: they cannot overlap (a quick test first)
+            c2, r2 = _sphere(other)
+            if float(np.linalg.norm(c2 - c_o)) > r_o + r2 + TOUCH_MM:
+                continue
+            if mounted(b, other, design):
                 continue
             ov = shape_overlap(o, other)
             if ov > TOUCH_MM:
                 out.append((k, k2, ov))
     return out
+
+
+def _sphere(b: Body) -> tuple[np.ndarray, float]:
+    """A sphere round the shape the overlap test uses: the capsule's (a moved link's box is not moved), else the
+    box's."""
+    if b.capsule is not None:
+        c = b.capsule
+        return (c.a + c.b) / 2.0, float(np.linalg.norm(c.b - c.a)) / 2.0 + c.r
+    return b.obb.center, float(np.linalg.norm(b.obb.half))
 
 
 def _link_moved(b: Body, R: np.ndarray, c: np.ndarray, dz: float, steer: float) -> Body:

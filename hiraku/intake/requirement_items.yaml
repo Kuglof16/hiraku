@@ -8,6 +8,7 @@
 #   question    what the hearing says (must and confirm)
 #   why         one line for a first-time reader: why the question is needed (shown on the screen with the question)
 #   example     an example answer (shown on the screen)
+#   unit        the unit a number typed as text ("150") is kept in, when the item has no numeric default (Q40, Q50)
 #   choices     answers offered; the person can always write another (allow_other)
 #   default     {value, unit?, trust, basis}: used when nothing better is known. A product's own
 #               requirements file (data/requirements/products/) wins over it.
@@ -169,6 +170,7 @@ items:
     ask: must
     why: 荷の重さで、骨組みにかかる力が決まるためです。
     example: 150 kg
+    unit: kg
     question: 載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。
 
   - key: Q41
@@ -280,6 +282,7 @@ items:
     ask: must
     why: 止まるまでの距離と、ぶつかったときの強さを計算するためです。
     example: 40 km/h
+    unit: km/h
     question: 最高速度は。
 
   - key: Q51

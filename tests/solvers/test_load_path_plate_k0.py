@@ -19,7 +19,8 @@ from tests.solvers.test_builders_load_path import PRED, REQ, SPECS, predict, res
 from tests.solvers.test_load_path import touch_nearest
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the floating pedal these tests move
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 REG = solvers.formula_registry()
 E, G, T = 205000.0, 205000.0 / 2.6, 2.3
 
@@ -100,15 +101,24 @@ class BulkheadTest(unittest.TestCase):
         point, n = pedal_face(face)
         inputs, notes = chain_inputs(d, "pedal_brake", point, 500.0, [n])
         self.assertIn("板の帯: bulkhead", notes)
-        self.assertGreater(inputs["delta_plate"]["value"] / pred, 0.95)  # the plate strip is nearly all of it
+        # the plate strip is most of it (0.90); the rest is mostly the landing post's root node turning
+        # (load_path._node_turning), counted since the node of several members is not taken rigid
+        self.assertGreater(inputs["delta_plate"]["value"] / pred, 0.85)
 
     def test_version_2_stands_on_the_bulkhead(self):
         from hiraku.designgen import ladder_4w as GEN
 
         d = GEN.build(GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "bulkhead",
                                          "side_guard": "bars_net"}, {}))
-        pred, tool = self.run_both(d)  # K0 45.0 mm, the tool 49.5 mm
+        # the pedal held by its stand alone (the pushrod taken out): K0 47.0 mm, the tool 49.5 mm
+        alone = dict(d, parts=[dict(p, connects_to=[c for c in p.get("connects_to", []) if c["to"] != "pushrod_brake"])
+                               for p in d["parts"] if p["id"] != "pushrod_brake"])
+        pred, tool = self.run_both(alone)
         self.assertLessEqual(abs(tool - pred) / pred, R7_TOL, f"K0 {pred:.2f} mm, tool {tool:.2f} mm")
+        # as generated, the pushrod pinned to the master cylinder (on the bulkhead) holds the pedal too: the tool
+        # about 26 mm. K0 follows the stand's path alone, so it is the larger (the safe side for pedal <= limit)
+        pred, tool = self.run_both(d)
+        self.assertGreater(pred, 1.3 * tool, f"K0 {pred:.2f} mm, tool {tool:.2f} mm")
 
     def test_no_plate_no_term(self):
         lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, V1) if c["load_case_id"] == "R7-hand-300N")
