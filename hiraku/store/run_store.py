@@ -178,8 +178,11 @@ class RunStore:
         return round(self._t_offset + (self._mono() - self._t0_mono), 3)
 
     def emit(self, kind: str, *, agent: str | None = None, domain: str | None = None,
-             design_version: int | None = None, text: str | None = None, data: Record | None = None) -> Record:
-        """Append one event to events.jsonl (validated) and return it."""
+             design_version: int | None = None, text: str | None = None, data: Record | None = None,
+             data_checked: bool = False) -> Record:
+        """Append one event to events.jsonl (validated) and return it. data_checked: data is a record add_record
+        has just validated whole, so the event is validated with READING_DROPS left out of its data (the large
+        arrays of an analysis: a 12 MB shell analysis took 3.7 s as a record and 4.0 s again as the event)."""
         with self._lock:
             if self._read_cache:
                 self._read_cache.clear()  # the event goes with a write (or a hook's answer): read the files again
@@ -207,7 +210,10 @@ class RunStore:
                 event["text"] = text
             if data is not None:
                 event["data"] = data
-            contract.validate("event", event)
+            if data_checked and isinstance(data, dict) and any(k in data for k in READING_DROPS):
+                contract.validate("event", {**event, "data": {k: v for k, v in data.items() if k not in READING_DROPS}})
+            else:
+                contract.validate("event", event)
             line = json.dumps(event, ensure_ascii=False, separators=(", ", ": "))
             with self.events_path.open("a", encoding="utf-8", newline="\n") as f:
                 f.write(line + "\n")
@@ -363,7 +369,7 @@ class RunStore:
             _write_json(path, record)
             self._kept.pop(str(path), None)  # rewritten: read again (also when the stat would not show it)
             self.emit(RECORD_EVENT[kind], agent=agent, domain=domain, design_version=design_version,
-                      text=text, data=record)
+                      text=text, data=record, data_checked=True)
             return record
 
     @contextmanager

@@ -159,6 +159,28 @@ class RunStoreTest(unittest.TestCase):
             self.assertEqual(self.store.records("analysis", 1), [{"analysis_id": "ana-0001", "results": []}])
         self.assertEqual(self.store.records("analysis", 1), [ana])  # outside reading(): the whole record
 
+    def test_a_record_with_large_arrays_is_validated_once_whole_and_its_event_is_whole(self):
+        """The event of a record add_record validated is checked without READING_DROPS (speed); what is written
+        is the whole record, and it fits the event schema whole."""
+        from unittest import mock
+
+        self.store.write_design(example("design.json"))
+        ana = example("analysis.json")
+        self.assertIn("fields", ana)
+        seen = []
+        orig = contract.validate
+        with mock.patch.object(contract, "validate", side_effect=lambda k, o: (seen.append((k, o)), orig(k, o))[1]):
+            self.store.add_record("analysis", ana, design_version=1, agent="cae.strength", domain="strength")
+        self.assertEqual([k for k, _ in seen], ["analysis", "event"])
+        self.assertIn("fields", seen[0][1])
+        self.assertNotIn("fields", seen[1][1]["data"])
+        last = self.store.events()[-1]
+        self.assertEqual(last["data"], ana)
+        self.assertEqual(contract.errors("event", last), [])
+        bad = dict(ana, fields="not a list")
+        with self.assertRaises(ValueError):  # the record's own check still sees the large parts
+            self.store.add_record("analysis", bad, design_version=1, agent="cae.strength", domain="strength")
+
     def test_invalid_record_is_not_written(self):
         self.store.write_design(example("design.json"))
         bad = example("prediction.json")
