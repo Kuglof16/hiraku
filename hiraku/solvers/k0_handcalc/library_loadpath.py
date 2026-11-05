@@ -372,11 +372,12 @@ def _grip_bound() -> Formula:
     delta = F / sp.sqrt(k_e * k_tr)
     return Formula(
         formula_id="load_path.grip_bound",
-        title="操作部の握る点の動きを上から押さえる値 (補エネルギー: 触れている所の鎖 1 本と、板を入れない部材だけの枠)",
+        title="操作部の握る点 (踏む面) の動きを上から押さえる値 (補エネルギー: 触れている所の鎖 1 本と、板を入れない部材だけの枠)",
         domain="strength",
         expression="delta = F / sqrt(k_e k_tr); delta_along = F / k_e",
         inputs={
-            "F": {"unit": "N", "description": "the hand force at the grip", "min": 0},
+            "F": {"unit": "N", "description": "the hand force at the grip or the foot force on the pedal's face",
+                  "min": 0},
             "k_e": {"unit": "N/mm", "description": "1 over the bound on the compliance along the load: the chain of "
                                                    "contacts carrying it all (1/k_t + |r x e|^2/k_r for each, in "
                                                    "series) plus the members-only frame's at the landing point (the "

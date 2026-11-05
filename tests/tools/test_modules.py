@@ -100,11 +100,25 @@ class ProposalTest(ModuleCase, unittest.TestCase):
         self.assertEqual(mine["variables"], {"seat_x": {"value": -900.0, "unit": "mm"}})
         self.assertEqual(mine["choices"], {"seat_kind": ["fixed", "slide"]})
         self.assertEqual(len(mine["envelope"]), 1)
-        self.assertEqual(mine["interfaces"][0]["id"], "seat_mount")
+        self.assertTrue(mine["interfaces"][0]["at"][0].startswith("seat_mount"))  # grouped: "<id>@<node or point>"
         self.assertEqual([c["change_id"] for c in got["pending"]], ["chg-0001"])
         self.assertEqual(got["pending"][0]["changes"], {"battery_x": "-950 mm"})
         every = get_context(self.ctx, {"sections": ["modules"]}, "packager")["modules"]
         self.assertEqual(len(every["modules"]), 6 - 1)  # package, frame, occupant, powertrain, body
+        # every module at once: the spaces in outline (run 094333: the whole answer went over Claude Code's limit)
+        occ = next(m for m in every["modules"] if m["module_id"] == "occupant")
+        self.assertEqual(occ["envelope"]["boxes"], 1)
+        self.assertEqual(set(occ["envelope"]["bounds_mm"]), {"min", "max"})
+        self.assertIn("shown", every)
+
+    def test_a_generator_refusal_says_who_changes_the_named_variable(self):
+        from hiraku.tools.functions import _who_changes
+
+        design = self.ctx.store.design()
+        said = _who_changes(design, "seat_x goes 21 mm into the floor; make seat_x larger", "build_version")
+        self.assertIn("designer.occupant が revise_design (module=occupant) で出し直す", said)
+        self.assertIn("track", _who_changes(design, "make track wider", "build_version"))
+        self.assertEqual(_who_changes(design, "no variable here", "build_version"), "値を変えて build_version を呼び直してください")
 
 
 class BuildVersionTest(ModuleCase, unittest.TestCase):

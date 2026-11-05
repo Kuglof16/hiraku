@@ -72,9 +72,13 @@ _PRODUCT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
 class LaunchError(Exception):
-    def __init__(self, status: int, message: str):
+    """status: the HTTP status; message: the record's English (kept as "error"); extra: fields
+    sent beside it for the screen to say it in its own words (e.g. running_run_id)."""
+
+    def __init__(self, status: int, message: str, extra: dict[str, Any] | None = None):
         super().__init__(message)
         self.status = status
+        self.extra = dict(extra or {})
 
 
 def knowledge_name(name: Any) -> str:
@@ -349,7 +353,9 @@ class Launcher:
             raise LaunchError(403, f"{KEY_NAME} is not set where this server runs; start the server in a window that has it")
         with self.lock:
             if self.running():
-                raise LaunchError(409, f"a run is still going: {self.current.get('run_id')}")
+                # (run_id is None until the child prints its folder)
+                raise LaunchError(409, f"a run is still going: {self.current.get('run_id')}",
+                                  {"running_run_id": self.current.get("run_id")})
             self.runs_dir.mkdir(parents=True, exist_ok=True)
             env ={**self.env, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
             cmd = self.command(path, mode, self.runs_dir, events) if events is not None else self.command(path, mode, self.runs_dir)

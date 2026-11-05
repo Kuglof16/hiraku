@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 
 from hiraku.catalog.builders import BUILDERS
-from hiraku.catalog.builders.load_path import PLANS, grip_bound_inputs
+from hiraku.catalog.builders.load_path import PLANS, grip_bound_inputs, pedal_bound_inputs
 from hiraku.designgen import ladder_4w as GEN
 from hiraku.solvers import formula_registry
 from hiraku.solvers.k0_handcalc import sections
@@ -70,13 +70,26 @@ class AboveTheToolTest(unittest.TestCase):
             bound = REG.evaluate("load_path.grip_bound", grip_bound_inputs(d, lc))["outputs"]["delta"]["value"]
             self.assertGreaterEqual(bound, got, values)
 
+    def test_pedal_on_generated_designs(self):
+        """The pedal's bound (pedal_bound_inputs) at or above the tool's pedal_deflection: as generated, and with the
+        pedals on the post's pedal beam (where control_deflection's cantilever falls short of the tool)."""
+        tool = LoadPath()
+        for values in ({}, GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "post",
+                                               "side_guard": "bars_net"}, {})):
+            d = GEN.build(values)
+            lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, d) if c["load_case_id"] == "R7-foot-500N")
+            got = results(tool.run(d, lc, [{"prediction_id": "pred-0001"}], {}))["pedal_deflection"]["value"]
+            bound = REG.evaluate("load_path.grip_bound", pedal_bound_inputs(d, lc))["outputs"]["delta"]["value"]
+            self.assertGreaterEqual(bound, got, values)
+
     def test_plan_judges_on_the_bound(self):
         step = PLANS["R7"]
-        pred = next(p for p in step["predictions"] if p["quantity"] == "grip_deflection")
-        self.assertEqual(pred["formula_id"], "load_path.grip_bound")
-        entry = next(e for e in step["expected_mismatch"] if e["quantity"] == "grip_deflection")
-        self.assertTrue(entry["safe_side"])
-        self.assertNotIn("end", entry)
+        for quantity in ("grip_deflection", "pedal_deflection"):
+            pred = next(p for p in step["predictions"] if p["quantity"] == quantity)
+            self.assertEqual(pred["formula_id"], "load_path.grip_bound")
+            entry = next(e for e in step["expected_mismatch"] if e["quantity"] == quantity)
+            self.assertTrue(entry["safe_side"])
+            self.assertNotIn("end", entry)
 
 
 if __name__ == "__main__":

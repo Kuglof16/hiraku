@@ -4,12 +4,19 @@ confirm it (value = the prediction, the unfavourable one)."""
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any
 
 from hiraku import contract
 from hiraku.tools.context import RunContext
 
 Record = dict[str, Any]
+
+
+def reading(ctx: RunContext) -> Any:
+    """The store's reading() (each record file read once, the records not to be changed), if it has one."""
+    got = getattr(ctx.store, "reading", None)
+    return got() if got is not None else nullcontext()
 
 OPS = {
     "<=": lambda v, lim: v <= lim,
@@ -218,7 +225,37 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
     for a, r in beyond_results(ctx, load_case, version):
         out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"
                    f"基準 {OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超えている")
+    gap = unchecked_since_beyond(ctx, load_case, version)
+    if gap:
+        out.append(gap)
     return out
+
+
+def unchecked_since_beyond(ctx: RunContext, load_case: Record, version: int) -> str | None:
+    """docs/contract.md 分野が緑になる条件 (d): when an earlier version of the run had an analysis of the load case
+    beyond its criterion, this version needs an ok analysis that gives the judged quantity from a tool of the same
+    or a heavier stage than the heaviest tool that was beyond; a lighter tool's pass does not clear it. The reason,
+    or None when nothing earlier was beyond or such an analysis is there."""
+    from hiraku.tools.shelf import tool_stage  # shelf reads the tools; judge is read by rules
+
+    crit = load_case.get("criterion")
+    if crit is None:
+        return None
+    earlier = [(w, a) for w in range(1, version) for a, _ in beyond_results(ctx, load_case, w)]
+    if not earlier:
+        return None
+    need = max(tool_stage(ctx, a["tool"]) for _, a in earlier)
+    w, worst = max(earlier, key=lambda wa: (tool_stage(ctx, wa[1]["tool"]), wa[0]))
+    mine = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == load_case["load_case_id"]
+            and tool_stage(ctx, a["tool"]) >= need]
+    gives = [a for a in mine if a["status"] == "ok" and any(
+        r["quantity"] == judged_quantity(ctx, a["tool"], crit["quantity"]) for r in a.get("results", []))]
+    if gives:
+        return None
+    failed = [a["analysis_id"] for a in mine if a["status"] != "ok"]
+    now = f"この版の解析 {'、'.join(failed)} は失敗した" if failed else "この版ではまだ回していない"
+    return (f"版 {w} で解析 {worst['analysis_id']} ({worst['tool']}) が基準を超えた。同じか重い段のツールで "
+            f"{crit['quantity']} を出す解析が要るが、{now} (軽い段のツールの合格では消えない)")
 
 
 def beyond_text(ctx: RunContext, load_case: Record, version: int) -> str | None:
@@ -364,8 +401,12 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
 
 
 def update_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
-    """Recompute the tile and store it; an unchanged tile is not written again (no judgement.updated)."""
-    j = compute_judgement(ctx, domain, version)
+    """Recompute the tile and store it; an unchanged tile is not written again (no judgement.updated). The tile
+    is worked out inside the store's reading(): green rule (d) reads every earlier version's analyses for each
+    load case, so outside it each update read them all again (a demo run's version 4, all four tiles: 3260 files,
+    299 MB; inside: 170 files the first time, none after)."""
+    with reading(ctx):
+        j = compute_judgement(ctx, domain, version)
     contract.validate("judgement", j)
     if any(t == j for t in ctx.store.judgements(j["design_version"])):
         return j

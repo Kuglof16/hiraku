@@ -119,6 +119,35 @@ class SchemaTest(unittest.TestCase):
                                                                       "stop_code": "red_left"}}), [])
         self.assertEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength"}}), [])  # optional
 
+    def test_fast_path_gives_jsonschemas_errors(self):
+        """The fast check of long plain arrays and maps reports exactly what jsonschema reports."""
+        root = contract.schema()
+        plain = jsonschema.Draft202012Validator({"$schema": root["$schema"], "$defs": root["$defs"],
+                                                 "$ref": "#/$defs/field"}, format_checker=jsonschema.FormatChecker())
+
+        def slow(obj):
+            return [f"field: {'/'.join(str(p) for p in e.absolute_path) or '(root)'}: {e.message}"
+                    for e in sorted(plain.iter_errors(obj), key=lambda e: list(e.absolute_path))]
+
+        n = 200
+        good = {"kind": "mode_shape", "unit": "1", "mesh_id": "mesh-0001",
+                "per_member": {f"m{i}": i * 0.5 for i in range(n)},
+                "per_node": {f"n{i}": ([0.1, 0.2, 1.0] if i % 2 else 3.0) for i in range(n)},
+                "per_element": [float(i) for i in range(n)] + [7]}
+        self.assertEqual(contract.errors("field", good), [])
+        self.assertEqual(slow(good), [])
+        for where, bad in [("per_member", "x"), ("per_member", True), ("per_node", [1.0, 2.0]),
+                           ("per_node", [[1.0], 2.0, 3.0]), ("per_node", None), ("per_element", "1.5"),
+                           ("per_element", False)]:
+            with self.subTest(where=where, bad=bad):
+                obj = json.loads(json.dumps(good))
+                if where == "per_element":
+                    obj[where][57] = bad
+                else:
+                    obj[where][f"{where[4]}57"] = bad
+                self.assertNotEqual(contract.errors("field", obj), [])
+                self.assertEqual(contract.errors("field", obj), slow(obj))
+
     def test_series_against_time_or_another_quantity(self):
         base = {"channel": "toe.FL", "unit": "deg", "values": [0.0, 0.1]}
         self.assertEqual(contract.errors("series", {**base, "t_s": [0.0, 1.0]}), [])

@@ -194,6 +194,9 @@ class PluginRunCase:
 
 class ServerTest(PluginRunCase, unittest.TestCase):
     def test_start_run_makes_a_plugin_run_and_names_it_current(self):
+        from hiraku.webserve.server import DEFAULT_PORT
+
+        self.assertIn(f"http://127.0.0.1:{DEFAULT_PORT}/?run={self.ctx.project['run_id']}", self.started["screen"])
         self.assertEqual(self.ctx.project["driver"], plugin.DRIVER)
         self.assertEqual(self.started["driver"], "claude_code_plugin")
         self.assertIn("get_context", self.started["task"])

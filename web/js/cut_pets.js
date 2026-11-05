@@ -72,14 +72,16 @@ export function poseTime(state, since, t, idleT, hop) {
 // one pet at a time through a camera fitted to pet3d's FRAME box and copies the frame into
 // that pet's own 2D canvas. Shared by the cut's tiles (TilePets) and the app's agents
 // (agent_pets.js). cam: layout.json n00.camera; size: the largest canvas { W, H } in px
-// at scale 1; shadow: the key light's shadow map (px a side; small pets need less).
+// at scale 1; shadow: the key light's shadow map (px a side; small pets need less); lite:
+// pet3d.js v9's light pets; antialias: the renderer's (the cut keeps both defaults).
 export class PetStage {
-  constructor(HP, cam, size, { shadow = 1024 } = {}) {
+  constructor(HP, cam, size, { shadow = 1024, lite = false, antialias = true } = {}) {
     this.HP = HP;
     this.cam = cam;
     this.size = { W: size.W, H: size.H };
     this.scale = 1;
-    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.lite = lite;
+    const r = new THREE.WebGLRenderer({ antialias, alpha: true, preserveDrawingBuffer: true });
     r.setPixelRatio(1);
     r.setClearColor(0x000000, 0);
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -115,7 +117,7 @@ export class PetStage {
 
   // A pet of a role (pet3d.js ROLES id), hidden until it is drawn.
   add(role) {
-    const pet = this.HP.create(THREE, { role, theme: "paper" });
+    const pet = this.HP.create(THREE, this.lite ? { role, theme: "paper", lite: true } : { role, theme: "paper" });
     pet.group.visible = false;
     this.scene.add(pet.group);
     return pet;
@@ -151,8 +153,8 @@ export class PetStage {
   }
 
   // Draw a pet at pose (pet3d's time) in a pet3d state into the whole of a 2D canvas (its
-  // context ctx), which must fit in the off-page canvas.
-  paint(pet, ctx, pose, state) {
+  // context ctx), which must fit in the off-page canvas. o: pet3d's update options (blocked's since).
+  paint(pet, ctx, pose, state, o = undefined) {
     const r = this.renderer;
     const gl = r.domElement;
     const w = ctx.canvas.width;
@@ -160,7 +162,8 @@ export class PetStage {
     const { cam, dist, half } = this.cameraFor(w / h);
     pet.setPixelScale(h / (2 * dist * half));
     pet.group.visible = true;
-    pet.update(pose, state, cam);
+    if (o) pet.update(pose, state, cam, o);
+    else pet.update(pose, state, cam);
     // into the top left w x h of the off-page canvas (the viewport's y is from the bottom)
     r.setViewport(0, gl.height - h, w, h);
     r.setScissor(0, gl.height - h, w, h);

@@ -1709,8 +1709,8 @@ class LoadPath(BuiltinTool):
                         PUSH_FORCE, SAFETY_FACTOR, HAND_PART, FOOT_PARTS, LOADING)
     run_params = (TOUCH, NET_PRESTRESS)
     # Every load kind gives free_parts. grip_deflection (load_kind hand) and pedal_deflection (foot) are predicted
-    # by load_path.control_deflection (output delta) with the inputs of hiraku.catalog.builders.load_path.
-    # control_inputs; they are not listed here because a load case of the default kind (inertia) has neither.
+    # by load_path.grip_bound (output delta) with the inputs of hiraku.catalog.builders.load_path (grip_bound_inputs,
+    # pedal_bound_inputs); they are not listed here because a load case of the default kind (inertia) has neither.
     predicts = (
         Predicts("free_parts", "load_path.free_parts", "n", "the contacts followed from the members (a graph search)"),
     )

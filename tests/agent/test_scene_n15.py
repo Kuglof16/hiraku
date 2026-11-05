@@ -4,10 +4,9 @@ modules: each round the module designers propose and the packager builds the ver
 d9631a5). On the joined design (the parts' fittings and the struts are in version 1), one revision
 answers each version's red stage: the layout and a hand hold to get in by (H7-handhold), then the
 opening the bolted side net shuts (H7-opening), then the controls (R7-hand red on the hand calculation's
-upper bound, load_path.grip_bound: the towers and dash members thicker; R7-foot ended without a verdict,
-its cause's fix: the pedals on the post), then the motor (P3), then the rails and gussets (R1s).
-Version 6 has every tile green: R7-hand passes on the bound (safe side) and R7-foot on a matched hand
-calculation, so the run ends done. The red domains of each version are written below; when a tool, a
+upper bound, load_path.grip_bound: the towers and dash members thicker), then the motor (P3), then the
+rails and gussets (R1s). Version 6 has every tile green: R7-hand and R7-foot pass on their bounds (safe
+side), so the run ends done. The red domains of each version are written below; when a tool, a
 builder or the demo design changes them, this test says so."""
 
 import json

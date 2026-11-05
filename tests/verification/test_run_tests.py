@@ -318,6 +318,16 @@ class MemoryAware(unittest.TestCase):
         self.assertEqual(len(res), 1)
         self.assertIn("boom", res[0]["crash"])
 
+    def test_a_worker_runs_the_convergence_levels_one_at_a_time(self):
+        # KNOWN_HEAVY_GB counts SpaceFrameConvergenceTest as one 15.7 GB level; side by side they reach 46.9 GB
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(rt.CONVERGENCE_JOBS, None)
+            self.assertEqual(rt.worker_env()[rt.CONVERGENCE_JOBS], "1")
+            os.environ[rt.CONVERGENCE_JOBS] = "3"  # set on purpose (a run of that class alone): kept
+            self.assertEqual(rt.worker_env()[rt.CONVERGENCE_JOBS], "3")
+
     def test_memory_of(self):
         last = {"m.A": 5.0, "m.B.test_x": 1.0}
         self.assertEqual(rt.memory_of("m.A", last), 5.0)
@@ -326,8 +336,8 @@ class MemoryAware(unittest.TestCase):
         self.assertEqual(rt.memory_of("tests.solvers.test_frame_tubes.MeshFlowTest", {}), 7.6)
         # a known one is a floor: its levels run in child processes the worker's peak does not see
         conv = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
-        self.assertEqual(rt.memory_of(conv, {conv: 0.6}), 14.4)
-        self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), 14.4)
+        self.assertEqual(rt.memory_of(conv, {conv: 0.6}), 15.7)
+        self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), 15.7)
         self.assertEqual(rt.memory_of(conv, {conv: 20.0}), 20.0)
         self.assertIsNone(rt.memory_of("m.C", last))
 

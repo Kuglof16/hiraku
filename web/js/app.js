@@ -15,7 +15,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -31,7 +31,8 @@ import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
-import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
+import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { reportNextHtml } from "./report_next.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
@@ -205,7 +206,7 @@ const intakeApi = {
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
-    if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
+    if (draft) return draft.state && !draft.busy && !draft.starting ? draftAnswer : undefined;
     return runGoing() ? answerHearing : undefined;
   },
   get dropFile() {
@@ -213,16 +214,16 @@ const intakeApi = {
   },
   // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
   get send() {
-    return draft && !draft.busy ? draftSend : undefined;
+    return draft && !draft.busy && !draft.starting ? draftSend : undefined;
   },
   get editFlags() {
-    return draft?.state && !draft.busy ? (flags) => draftChange({ flags }) : undefined;
+    return draft?.state && !draft.busy && !draft.starting ? (flags) => draftChange({ flags }) : undefined;
   },
   get exclude() {
-    return draft?.state && !draft.busy ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
+    return draft?.state && !draft.busy && !draft.starting ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
   },
   get setLimits() {
-    return draft?.state && !draft.busy ? (limits) => draftChange({ limits }) : undefined;
+    return draft?.state && !draft.busy && !draft.starting ? (limits) => draftChange({ limits }) : undefined;
   },
 };
 
@@ -244,16 +245,27 @@ function draftEvents() {
   return list.map((e, i) => ({ seq: i, t: 0, ts: "", run_id: "request", ...e }));
 }
 
+// A refused call throws an Error with the server's English message, its status and body (for
+// the screen to say it in Japanese; the English stays for the record, e.g. in a title).
 async function postRequest(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const got = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(got.error ?? `${res.status}`), { status: res.status, body: got });
   return got;
+}
+
+// 409 from /api/launch (launch.py: a run started here is still going): the words for people, with
+// a link to that run when the server knows its id yet (null until the run prints its folder).
+function goingHtml(e) {
+  if (e?.status !== 409 || !("running_run_id" in (e.body ?? {}))) return null;
+  const rid = e.body.running_run_id;
+  const link = rid ? ` <a class="going-run" href="${withDev(`?run=${encodeURIComponent(rid)}`)}">その運転を開く</a>` : ` <a class="going-run" href="${withDev("?list=1")}">一覧で見る</a>`;
+  return `<span class="err" title="${esc(e.message)}">いま走っている運転があります。終わってから始めてください。${link}</span>`;
 }
 
 // One call at a time; the bar says what is going on, and an error stays there in its words.
 async function draftCall(busy, fn) {
-  Object.assign(draft, { busy, error: "" });
+  Object.assign(draft, { busy, error: "", errorHtml: "" });
   renderDraft();
   try {
     await fn();
@@ -303,10 +315,31 @@ async function draftStart(mode) {
     return;
   }
   draft.confirm = false;
-  await draftCall("走らせています…", async () => {
+  if (draft.starting) return; // one start at a time (the buttons are disabled meanwhile)
+  // /api/launch returns once the run has printed its folder, after the tools it uses are
+  // checked; until then the bar says so, counts the seconds, and the buttons cannot be pressed.
+  // On success they stay so while the page moves to the run.
+  Object.assign(draft, { starting: { mode, at: performance.now() }, error: "", errorHtml: "" });
+  renderDraft();
+  const tick = setInterval(renderStartingSeconds, 1000);
+  try {
     const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
     location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
-  });
+  } catch (e) {
+    clearInterval(tick);
+    draft.starting = null;
+    draft.errorHtml = goingHtml(e) ?? "";
+    draft.error = draft.errorHtml ? "" : `始められませんでした: ${e.message ?? e}`;
+    renderDraft();
+  }
+}
+
+function startingSeconds() {
+  return draft?.starting ? Math.floor((performance.now() - draft.starting.at) / 1000) : 0;
+}
+function renderStartingSeconds() {
+  const el = document.querySelector("#draftbar .starting .secs");
+  if (el) el.textContent = `${startingSeconds()} 秒`;
 }
 
 // The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
@@ -321,15 +354,24 @@ function renderDraft() {
   if (draft.busy) body = `<span class="busy">${esc(draft.busy)}</span>`;
   else if (d?.ready && d.designable === false) body = `<span class="err">この製品の設計の作り方がまだ無いので、走らせられません</span>`;
   else if (d?.ready) {
+    // while a start is on its way (draftStart) both buttons stay, disabled, with what is going on
+    const st = draft.starting;
+    const off = st ? " disabled" : "";
+    // what each way is, in one line (the run list's words for them: DRIVEN_JA)
     const scripted =
-      `<button data-start="scripted">台本で始める (Claude は呼ばない)</button>` +
-      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`);
+      `<span class="way"><button data-start="scripted"${off}>台本で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`) +
+      `</span>`;
+    const claudeWhy = `<span class="why">Claude が考えて進めます。費用がかかります</span>`;
     const claude = !keyed
-      ? `<button disabled>Claude で始める</button><span class="why">HIRAKU を起こした窓に ${esc(draft.keyName ?? "ANTHROPIC_API_KEY")} が無い</span>`
-      : draft.confirm
+      ? `<span class="way"><button disabled title="${esc(`${draft.keyName ?? "ANTHROPIC_API_KEY"} が HIRAKU を起こした窓に無い`)}">Claude で始める</button>${claudeWhy}<span class="why">Claude で始めるには準備が要ります (<a class="readme" href="${README_RUN}" target="_blank" rel="noopener">くわしく</a>)</span></span>`
+      : draft.confirm && !st
         ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
-        : `<button data-start="claude">Claude で始める (費用の上限 ${usd})</button>`;
-    body = `<b>要件がそろいました</b>${scripted}${claude}`;
+        : `<span class="way"><button data-start="claude"${off}>Claude で始める (費用の上限 ${usd})</button>${claudeWhy}</span>`;
+    const starting = st
+      ? `<span class="starting" role="status"><b>${st.mode === "claude" ? "Claude で" : "台本で"}運転を始めています。</b>最初は、使うツールの確かめに時間がかかります (数十秒)。<span class="secs">${startingSeconds()} 秒</span></span>`
+      : "";
+    body = `<b>要件がそろいました</b>${scripted}${claude}${starting}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
   else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、標準の値のまま進めてください</span>`;
   else
@@ -338,7 +380,8 @@ function renderDraft() {
         ? `<span>デモ「${esc(draft.demoTitle)}」の依頼の文を入れました。直してもかまいません。送ると分野を選びます</span>`
         : `<span>依頼のタブで、作りたいものを書いて送ってください</span>`) +
       (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
-  bar.innerHTML = body + (draft.error ? `<span class="err">${esc(draft.error)}</span>` : "");
+  bar.innerHTML = body + (draft.errorHtml || (draft.error ? `<span class="err">${esc(draft.error)}</span>` : ""));
+  bar.classList.toggle("starting", !!draft.starting);
   intake?.update();
   fillPrefill();
 }
@@ -532,8 +575,8 @@ function renderAgents(s) {
       const a = s.agents[id];
       const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
       // the role's name in full (操安の CAE 役), not the domain alone
-      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id) });
-      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
+      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
+      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
     })
     .join("");
   agentPets?.mount(ul, "bench");
@@ -563,7 +606,10 @@ function hookLogItem(e, hook, resolved) {
 function logItem(e, ctx = null) {
   if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
-  const note = e.note ? `<span class="note">${keepAsides(e.note)}</span>` : "";
+  // more: words too long for a note (an agent.stopped's stop_reason), folded under くわしく
+  const note =
+    (e.note ? `<span class="note">${keepAsides(e.note)}</span>` : "") +
+    (e.more ? `<details class="more"><summary>くわしく</summary><span class="note">${keepAsides(e.more)}</span></details>` : "");
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
   // What an agent said can run long: the line shows its first lines, the record keeps all of it.
   // A short aside in brackets stays on one line: not "(形の見 / 本)".
@@ -655,10 +701,21 @@ function renderChain(s, chain) {
       .map(([k, q]) => `<span>${esc(k)}</span><span>${esc(fmtQ(q))}</span>`)
       .join("");
     const terms = (pred.terms ?? []).filter((t) => typeof t.share === "number");
+    // What a bar is (hiraku/solvers/k0_handcalc/registry.py _terms): a formula with additive
+    // terms gives each term's value / the prediction; one without gives each input's elasticity
+    // (how many % the prediction moves for 1 % more of that input). The record does not say
+    // which: terms that are all the inputs, at the inputs' values, are elasticities.
+    const sameAsInput = (t) => { const q = pred.inputs?.[t.name]; return !!q && (t.value === undefined || Math.abs(t.value - q.value) <= 1e-9 * Math.max(1, Math.abs(q.value))); };
+    const elastic = terms.length > 0 && terms.every(sameAsInput);
+    const what = quantityName(pred.quantity);
+    const caption = elastic
+      ? `棒: その入力を 1 % 大きくすると、${what}が何 % 変わるか`
+      : `棒: ${what}のうち、その項が占める割合 (項の値 ÷ ${what})`;
+    const termName = (t) => formulaInputName(pred.formula_id, t.name) ?? t.name;
     const termsHtml = terms.length
-      ? `<div class="terms">${terms
+      ? `<div class="terms-cap" data-terms="${elastic ? "elasticity" : "share"}">${esc(caption)}</div><div class="terms">${terms
           .slice(0, 4)
-          .map((t) => `<span>${esc(t.name)}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${fmtPct(t.share, 0)}</span>`)
+          .map((t) => `<span title="${esc(t.name)}">${esc(termName(t))}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${elastic ? fmtSigned(t.share, 0) : fmtPct(t.share, 0)}</span>`)
           .join("")}</div>`
       : "";
     const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(a)}</li>`).join("");
@@ -688,12 +745,12 @@ function renderChain(s, chain) {
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
-      `<div class="sub">${esc(ana.tool)}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
+      `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
       (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "");
   } else if (running) {
     a.className = "card busy";
-    a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${esc(running.tool)} で解析中…</div>`;
+    a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div title="${esc(running.tool)}">${esc(toolShort(s, running.tool))} で解析中…</div>`;
   } else {
     a.className = "card wait";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${pred ? "予測を受けて解析を待っている" : "予測のあとに走る"}</div>`;
@@ -747,6 +804,8 @@ function renderChain(s, chain) {
 }
 
 const toolTitle = (s, tool) => s.tools[tool]?.title ?? tool;
+// short, as the log says it (state.js toolWord): labels.js's name, else the title up to its bracket, else the name
+const toolShort = (s, tool) => plainToolName(tool) ?? (String(toolTitle(s, tool)).replace(/\s*[（(].*$/, "") || tool);
 
 // The ok analyses of the shown one's load case and design version, the newest of each
 // tool, in the order their tools first came (e.g. the beam analysis, then the shell one).
@@ -1138,6 +1197,15 @@ function renderGrid(s) {
     const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
     banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
   }
+  // the newest report's next changes (none written yet, or no next: no block)
+  const nx = $("report-next");
+  const html = reportNextHtml(s.report);
+  if (nx.dataset.html !== html) {
+    nx.dataset.html = html;
+    nx.innerHTML = html;
+    keepOpen(nx);
+  }
+  nx.hidden = !html;
 }
 
 function renderStatus(s) {
@@ -1191,7 +1259,10 @@ function renderTransient(s, playhead, chain, resolved) {
   r.style.opacity = run ? 1 : 0;
   if (run) {
     const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(playhead * Math.PI * 2));
-    r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(run.tool)} で解析中 (${esc(run.load_case_id)})`;
+    // the tool by the record's title up to its bracket (the log's words, state.js toolWord); the id under the pointer
+    const tool = toolShort(s, run.tool);
+    r.title = `${run.tool} (${run.load_case_id})`;
+    r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(tool)} で解析中`;
   }
   renderHooks(s, playhead, resolved);
 }
@@ -1719,10 +1790,12 @@ async function renderLaunch(message = "") {
   const keyless = info.claude_ready
     ? ""
     : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは決まった手順の再現と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
-  const fresh = `<p><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+  // a new request first: the way in for someone who brings their own product
+  const fresh = `<p class="fresh-top"><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
   box.innerHTML =
+    fresh +
     demoSection(info, busy) +
-    `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+    `<h3>その場で走らせる</h3>${keyless}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
 // 決まった手順で再現 / Claude で走らせる (?dev=1) for one requirements file r ({file, cost_limit_usd, round_limit}).
@@ -1766,27 +1839,30 @@ function demoSection(info, busy) {
   if (info.demo_runs_error) return `<h3>デモの実行</h3><p class="err">デモの一覧を読めなかった: ${esc(info.demo_runs_error)}</p>`;
   const list = info.demo_runs ?? [];
   if (!list.length) return "";
+  // The title first; what the developers read (what it shows, with its tab names and hooks; the
+  // cut tags; the cost line; the file) under くわしく, after it.
   const rows = list.map((d) => {
     const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
-    const head =
-      `<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>` +
-      (d.shows ? `<div class="shows">${prose(d.shows)}</div>` : "");
-    let left, right = "";
+    const head = `<div class="dhead"><b>${esc(d.title || d.id)}</b></div>`;
+    const detail = [d.shows ? `<div class="shows">${prose(d.shows)}</div>` : "", cuts ? `<div class="cuts">${cuts}</div>` : ""];
+    let left = "", right = "";
     if (d.error) left = `<div class="err">使えない: ${esc(d.error)}${d.file ? ` (${esc(d.file)})` : ""}</div>`;
     else if (d.file) {
       // (a file row carries its requirements' product too; file is what tells the two apart)
       const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
-      left =
+      detail.push(
         `<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}</div>` +
-        `<div class="rid">${esc(d.file)}</div>`;
+          `<div class="rid">${esc(d.file)}</div>`,
+      );
       right = runButtons(info, d, `demo:${d.id}`, busy);
     } else {
-      left = `<div class="rid">${prose(d.want)} <span class="nw">(products/${esc(d.product)}.yaml)</span></div>`;
+      detail.push(`<div class="rid">${prose(d.want)} <span class="nw">(products/${esc(d.product)}.yaml)</span></div>`);
       right =
-        `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">A1 で依頼する</a>` +
+        `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">依頼する</a>` +
         `<span class="why">依頼の文が入った A1 が開く。送るのは押してから</span></div>`;
     }
-    return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}</div>${right}</div>`;
+    const more = `<details class="more"><summary>くわしく</summary>${detail.join("")}</details>`;
+    return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}${more}</div>${right}</div>`;
   });
   return `<h3>デモの実行</h3><div class="demo-runs">${rows.join("")}</div>`;
 }
@@ -1875,7 +1951,7 @@ function plainButtons(info, d, busy) {
 function plainLaunch(info, message) {
   const busy = !!info.running;
   const pick = pickHtml(info, busy);
-  if (info.available === false) return pick + waysHtml(info);
+  if (info.available === false) return pick + waysHtml(info); // (no server to send a request to)
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えました</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
   const running = busy ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${rid ? stop : ""}</p>` : "";
@@ -1889,12 +1965,13 @@ function plainLaunch(info, message) {
         else btns = `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">試す</a></div>`;
         return `<div class="lreq demo" data-demo="${esc(d.id)}"><div class="dline">${prose(line)}<details class="more"><summary>くわしく</summary>${demoDetail(d)}</details></div>${btns}</div>`;
       });
+  // a new request first (above the recommendation and the demos)
   const fresh =
-    `<div class="lreq fresh"><div class="dline">自分で頼む — 作りたいものを文で書いて、はじめから頼みます</div>` +
-    `<div class="lbtns"><a class="new-request" href="?new=1">書く</a></div></div>`;
+    `<div class="fresh-top"><a class="new-request" href="?new=1">＋ 新しく依頼する</a>` +
+    `<span class="dline">作りたいものを文で書いて、はじめから頼みます</span></div>`;
   return (
-    pick + waysHtml(info) + (message ? `<p class="err">${esc(message)}</p>` : "") + running +
-    `<h3>デモ</h3><div class="demo-runs">${rows.join("")}${fresh}</div>`
+    fresh + pick + waysHtml(info) + (message ? `<p class="err">${esc(message)}</p>` : "") + running +
+    `<h3>デモ</h3><div class="demo-runs">${rows.join("")}</div>`
   );
 }
 
@@ -1904,10 +1981,12 @@ async function launch(file, mode) {
   try {
     const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
     const out = await res.json();
-    if (!res.ok) throw new Error(out.error ?? String(res.status));
+    if (!res.ok) throw Object.assign(new Error(out.error ?? String(res.status)), { status: res.status, body: out });
     location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
   } catch (e) {
-    renderLaunch(`走らせられなかった: ${e.message ?? e}`);
+    // a run started here still going (409): in words, the list's own line links to it
+    const going = e.status === 409 && "running_run_id" in (e.body ?? {});
+    renderLaunch(going ? "いま走っている運転があります。終わってから始めてください。" : `走らせられなかった: ${e.message ?? e}`);
   }
 }
 
