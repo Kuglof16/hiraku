@@ -1382,6 +1382,26 @@ class Modules(unittest.TestCase):
         self.assertEqual(self.hk6(with_rule("system")), set())
         self.assertIn(nothing, self.hk6(with_rule("sheet_metal")))
 
+    def test_a_person_s_answer_to_a_rule_hit_lets_its_part_s_module_propose(self):
+        # docs/contract.md (規則の当たりを人に聞く): rule_answers revise_design for AS-01 on the battery lets the
+        # powertrain designer propose, though no red load case names powertrain (N13 run 20261105-094333)
+        prop = {"change_id": "chg-0001", "module_id": "powertrain", "agent_id": "designer.powertrain",
+                "reason": "AS-01: split the battery", "changes": {}}
+
+        def run(answer):
+            ev = modular(case_modules=("suspension",), proposals=[prop])
+            for e in ev:
+                if e["kind"] == "design.created":
+                    e["data"]["parts"][0]["module"] = "powertrain"  # the battery
+            ev = CheckRun._insert(ev, "agent.stopped", "hearing.asked", {"questions": [], "rule_questions": [
+                {"rule_id": "AS-01", "parts": ["battery"], "text": "split it or drop the rule?",
+                 "choices": ["revise_design", "drop_rule"]}]}, agent="lead")
+            ev = CheckRun._insert(ev, "hearing.asked", "hearing.answered", {"answers": [], "rule_answers": [
+                {"rule_id": "AS-01", "choice": answer}]}, agent="lead")
+            return {m for m in self.hk6(ev) if "chg-0001 from powertrain" in m}
+        self.assertEqual(run("revise_design"), set())
+        self.assertTrue(run("drop_rule"))
+
     @staticmethod
     def _no_case():
         return {"change_id": "chg-0001", "module_id": "suspension", "agent_id": "designer.suspension",

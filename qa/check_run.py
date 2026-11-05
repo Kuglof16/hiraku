@@ -1600,6 +1600,26 @@ class RunChecker:
                 last[rc["rule_id"]] = rc
         return {rid for rid, rc in last.items() if rc.get("hits")}
 
+    def _rule_answered_modules(self, v: int, d: dict, i: int) -> set[str]:
+        """The modules whose parts a person said to fix for a rule hit (docs/contract.md, 規則の当たりを人に
+        聞く): a hearing.asked rule_question and its hearing.answered rule_answer revise_design, both after
+        version v was made and before event i; the modules of the question's parts in v."""
+        made = self.designs[v][0]
+        asked: dict[str, list] = {}
+        out: set[str] = set()
+        mod_of = {p.get("id"): p.get("module") for p in d.get("parts") or []}
+        for j in range(made + 1, min(i, len(self.events))):
+            e = self.events[j]
+            data = e.get("data") or {}
+            if e.get("kind") == "hearing.asked":
+                for q in data.get("rule_questions") or []:
+                    asked[q.get("rule_id")] = q.get("parts") or []
+            elif e.get("kind") == "hearing.answered":
+                for a in data.get("rule_answers") or []:
+                    if a.get("choice") == "revise_design":
+                        out |= {mod_of.get(p) for p in asked.get(a.get("rule_id"), [])} - {None}
+        return out
+
     def check_modules(self) -> None:
         """HK6_module_scope (contract d9631a5): the module designers propose, the packager builds."""
         rule = "HK6_module_scope"
@@ -1635,12 +1655,15 @@ class RunChecker:
                     self.error(rule, w, f"{cid} {what} {', '.join(out)}, not among {m}'s {allowed} in v{v}")
             reds = self._red_cases(v, i)
             named = {x for lc in reds for x in (self.lc(lc, v) or {}).get("modules") or []}
+            ruled = m in self._rule_answered_modules(v, d, i)  # a person said to fix its part for a rule hit
             for lc in p.get("load_case_ids") or []:
                 if lc not in reds:
                     self.error(rule, w, f"{cid} answers {lc}, which is not red in v{v}")
                 elif m not in ((self.lc(lc, v) or {}).get("modules") or []):
                     self.error(rule, w, f"{cid} from {m} answers {lc}, whose modules do not name {m}")
-            if not reds and not self._system_misses(v, i):
+            if ruled:
+                pass
+            elif not reds and not self._system_misses(v, i):
                 self.error(rule, w, f"{cid} proposed while nothing in v{v} is red")
             elif not reds:
                 pass  # only a system rule is red (assembly tile); it names no module
