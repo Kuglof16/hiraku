@@ -296,8 +296,14 @@ class FrameTubes(BuiltinTool):
                 mesh, prepared, why = self._mesh_to_solve_on(design, params, size)
                 prepared = prepared or _prepared_for(design, size)
             else:  # the version's mesh is at the default facet count: solved on a mesh of its own, not drawn on
-                mesh, why = None, f"solved on a quick mesh with {facets} facets per round tube (hot_spot_facets), not the version's mesh"
-                prepared = _prepared_for(design, size, facets)
+                given, why = mesh_of(design, params)
+                if given is not None and given.get("mesher") != self.name:
+                    why = (f"mesh {given.get('mesh_id')} was made by {given.get('mesher') or 'frame_mesh'}, not by "
+                           f"{self.name}; the stresses are given per member")
+                elif given is not None:
+                    why = (f"solved on a quick mesh with {facets} facets per round tube (hot_spot_facets), not drawn "
+                           f"on {given.get('mesh_id')}")
+                mesh, prepared = None, _prepared_for(design, size, facets)
             r = tubes.analyse_loads(design, {"case": loads}, size, prepared=prepared)
         except (tubes.TubeMeshError, ValueError) as e:
             raise LoadCaseError(str(e)) from None
