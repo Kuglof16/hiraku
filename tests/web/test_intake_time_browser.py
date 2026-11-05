@@ -4,7 +4,8 @@ card's glow in A1 follows the playback time, so opening the same ?tab=A1 or ?tab
 background grid's rounding moves, 0299313); seek and plain playback pass the time too. And
 ?tabs=A1:0,A2:40,bench:55 (app.js tabPlan): the tab of the replay's time, at ?t=, through seek
 back and forth and while playing; it wins over ?tab=, unknown names are left out, a tab pressed by
-hand ends it.
+hand ends it. With ?present=1&video=1 too (the films): the same tabs, the present mode and the
+subtitles' band kept, the intake screens shown left of the card, the same picture twice.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -194,6 +195,73 @@ class TabPlanBrowserTest(_RunPage):
         page.close()
         self.assertEqual(errors, [])
         self.assertEqual(got["on"], "grid")
+
+
+# What the film sees in the present mode with the video layout: the tab, the classes, and where the
+# shown view, the card's rail and the stage's rows lie.
+PRESENT_PROBE = """() => {
+  const seen = (el) => !!el && el.checkVisibility() && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+  const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+  const view = ["view-intake", "view-bench"].find((id) => seen(document.getElementById(id)));
+  return { on: document.querySelector('.tab.on')?.dataset.tab, present: document.body.classList.contains("present"),
+    video: document.body.classList.contains("video"), view, viewRect: view ? rect(document.getElementById(view)) : null,
+    screen: [...document.querySelectorAll('#view-intake .in-pane')].find((p) => !p.hidden)?.dataset.screen ?? null,
+    card: seen(document.getElementById("present-card")) ? rect(document.getElementById("present-card")) : null,
+    rail: rect(document.getElementById("present-rail")), main: rect(document.getElementById("main")),
+    hidden: ["tabs", "statusrow", "viewswitch"].filter((id) => !seen(document.getElementById(id))) };
+}"""
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class TabPlanPresentBrowserTest(_RunPage):
+    """?present=1&video=1&tabs=A1:0,A2:40,bench:55 (how the films are shot): the tab of the replay's
+    time, the present mode kept (the intake screens shown as they are, left of the card), the bottom
+    170 px empty, and the same picture twice at the same t."""
+
+    QUERY = f"present=1&video=1&tabs=A1:0,A2:{ASKED_AT},bench:55"
+
+    def check_layout(self, got, tab, t):
+        self.assertEqual(got["on"], tab, t)
+        self.assertEqual((got["present"], got["video"]), (True, True), t)
+        self.assertEqual(got["hidden"], ["tabs", "statusrow", "viewswitch"], t)
+        self.assertEqual(got["view"], "view-bench" if tab == "bench" else "view-intake", t)
+        if tab != "bench":
+            self.assertEqual(got["screen"], tab, t)
+        self.assertIsNotNone(got["card"], t)
+        v, r = got["viewRect"], got["rail"]
+        self.assertLessEqual(v["x"] + v["w"], r["x"], t)  # the view lies left of the card's rail
+        self.assertLessEqual(got["main"]["y"] + got["main"]["h"], STAGE["height"] - 170, t)  # the subtitles' band
+        self.assertLessEqual(v["y"] + v["h"], STAGE["height"] - 170, t)
+
+    def test_the_tab_at_t_in_the_present_mode(self):
+        for t, tab in ((5, "A1"), (LIT_AT + 0.25, "A1"), (ASKED_AT + 2.5, "A2"), (57, "bench")):
+            page, errors = self.open(f"{self.QUERY}&t={t}")
+            got = page.evaluate(PRESENT_PROBE)
+            page.close()
+            self.assertEqual(errors, [], t)
+            self.check_layout(got, tab, t)
+
+    def test_the_same_t_twice_is_the_same_picture(self):
+        for t in (LIT_AT + 0.25, ASKED_AT + 2.5, 57):
+            shots = []
+            for _ in range(2):
+                page, errors = self.open(f"{self.QUERY}&t={t}")
+                shots.append(page.screenshot())
+                page.close()
+                self.assertEqual(errors, [], t)
+            self.assertTrue(shots[0] == shots[1], f"t={t}: the two pictures differ")
+
+    def test_seek_and_playing_keep_the_present_mode(self):
+        page, errors = self.open(f"{self.QUERY}&t=5")
+        seen = [(t, page.evaluate(f"async (t) => {{ await window.hiraku.seek(t); return ({PRESENT_PROBE})(); }}", t)) for t in (57, ASKED_AT + 1, 5)]
+        page.evaluate(f"() => {{ window.hiraku.player.seek({ASKED_AT - 0.5}); document.getElementById('pb-play').click(); }}")
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A2'", timeout=30000)
+        played = page.evaluate(PRESENT_PROBE)
+        page.close()
+        self.assertEqual(errors, [])
+        for (t, got), tab in zip(seen, ("bench", "A2", "A1")):
+            self.check_layout(got, tab, t)
+        self.check_layout(played, "A2", "played")
 
 
 if __name__ == "__main__":
