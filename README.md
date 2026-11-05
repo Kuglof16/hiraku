@@ -1,30 +1,164 @@
 # HIRAKU
 
-作りたいものの要件を渡すと、Claude のエージェントたちが分野ごとに結果を手計算で予測してから CAE で解析し、予測と照らし合わせながら設計を直していくアプリです。
+作りたいもの (たとえば、林道を走れる小さな車) の条件を渡すと、Claude のエージェントたちが、分野ごとに「手計算で結果を予測する → CAE (コンピューターでの解析) で計算する → 予測と照らし合わせる」を進め、合わない所の設計を直していくアプリです。
+計算の様子は、3D の画面で見られます。使うのは Windows の PC と Python 3.12 で、Claude を呼ばない「台本の運転」なら API キーは要りません。
 
 HIRAKU: Claude agents predict each result by hand calculation before running the CAE analysis, check one against the other, and revise the design.
 
 Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作っています。
 
-## いま動くもの
+## はじめに動かす
 
-- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた試験 (段差越え P1・強度 R1・振動 N1・ハンドルの切れ角 H1・乗員の体格 H3・発進 P3) を「手計算で予測 → 解析 → 照合」で回す流れ。基準のある試験は合否まで出す (P1 は基準が無く照合まで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で合否を出す
-- 設計役が設計の変数を変えて次の版を作る (`revise_design`)。デモの車両では、v1 で不合格の H1・H3 を直して v2 で合格する
-- 解析のツール 17 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。`hiraku.solvers.builtin_tools()` の数)。どれも答えの分かっている例と照合してから使う。手計算の式 61 個 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は 9 つのツール (frame_static・frame_shell・step_climb・drive_energy・thermal・crash・modal・fatigue・assembly) に `params.sensitivity` で付く。感度の試験があるのは frame_static だけ
-- 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
-- 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
-- 画面から実行を始める口。実行の一覧の「デモの実行」と「その場で走らせる」で、要件のファイルを台本の運転か Claude の運転で始める。デモの行のうち依頼の文のものは、その文を入れた依頼の画面 A1 を開く。A1 で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。Claude の運転は、サーバーを起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
+用意するもの: Windows の PC、git、Python 3.12、インターネット (部品を入れるとき・画面を開くとき)。
 
-まだのもの: 20 試験ぶんを全部まとめて回すこと、新しい設計・報告・組み立てなどの画面。
+1. Python 3.12 が入っているか確かめます。コマンドの窓 (コマンドプロンプトか PowerShell) で次を打ちます。
 
-## 動かし方
+   ```
+   py -3.12 --version
+   ```
 
-Python 3.12 で、リポジトリの中に venv を作って依存を入れます。
+   `Python 3.12.…` と出れば大丈夫です。出ないときは、https://www.python.org/downloads/ から 3.12 を入れ、窓を開き直してもう一度確かめます。
+
+2. HIRAKU を取ってきます。
+
+   ```
+   git clone https://github.com/Kuglof16/hiraku.git
+   cd hiraku
+   ```
+
+3. HIRAKU だけの Python の環境 (`.venv`) を作り、部品を入れます。Python は 3.12 を使います (`py -3.12`)。3.13 以降だと、部品の numba に合う版が無いことがあります (確かめていません)。
+
+   ```
+   py -3.12 -m venv .venv
+   .venv\Scripts\python -m pip install -r requirements.txt
+   ```
+
+4. `HIRAKU.cmd` をダブルクリックします (窓から `HIRAKU.cmd` と打ってもかまいません)。黒い窓が開き、HIRAKU の画面のサーバーが起きて、ブラウザで画面が自動で開きます (アドレスは http://127.0.0.1:8765/)。HIRAKU を使っている間は、黒い窓を閉じません。終わるときは、黒い窓を閉じます。
+
+うまくいかないとき:
+
+- `HIRAKU.cmd` の窓に「.venv\Scripts\python.exe was not found」と出て止まる: 手順 3 がまだです。
+- ブラウザが開かない、または別のものが 8765 番を使っている: 別の番号で起こします。
+
+  ```
+  .venv\Scripts\python -m hiraku.webserve --port 8766 --open
+  ```
+
+- 3D が出ない: 画面は 3D の部品 (three.js 0.170.0、MIT) を jsDelivr から読み込むので、インターネットにつながっている必要があります。
+- 字は BIZ UDPGothic があればそれを使い、無ければ游ゴシックかメイリオで出ます。字は同梱していません。
+
+## 最初の運転 (台本の運転)
+
+「台本の運転」は、Claude を呼ばずに、決まった順にツールを呼んで、設計を試験して直すところまでを再現する運転です。無料で、API キーは要りません。
+
+1. 画面の最初のページ「HIRAKU でできること」を開きます。
+2. まず短いもの: 「デモ」の「要件の書き間違いを見つける」の行の「再現する」を押します (約 40 秒。cm と mm の書き間違いを、手計算と解析の食い違いから見つけて直す流れです)。本格的なものは、「小さなオフロード車の 6 つの試験」の行の「再現する」です (下の時間を見てください)。「おすすめ」に「見る」が出ているときは、保存した記録をすぐ再生できます。
+3. 押すと、ボタンが押せなくなり、画面が作業台に変わるまで **数十秒 (長くて 1 分ほど)** 何も変わりません。使うツールの確認をしている時間で、止まっているわけではありません。その間にもう一度押さないでください。
+4. 作業台に変わると、実行が進みます。かかった時間 (この PC で測った値。PC やほかの仕事で変わります):
+   - 「要件の書き間違いを見つける」: 約 40 秒 (設計部が測った値)
+   - 「小さなオフロード車の 6 つの試験」(10 の試験): 約 16 分 (945 秒。ほかの重い仕事と同時に回したときの値)
+
+   途中で止めたいときは、上の「止める」を押します。
+5. 見る所:
+   - 画面の上の「版 N・繰り返し a / b 回」: 設計の版 (v1、v2 …) と、直して確かめ直した回数 (b は上限) です。
+   - 作業台の右の「予測 → 解析 → 照合」: いま確かめている試験の、手計算の予測・CAE の結果・その差です。
+   - 左の「記録」: 実行の中で起きたことが、順に並びます。
+   - 画面の下の「hooks」の並び: 実行の途中で、順番を守らせるために止めた回数が出ます (たとえば「HK1 予測が先 ×1 解決済み」)。
+   - 「全分野」のタブ: 分野ごとの判定と、版ごとの赤の数 (「版 1 赤 1 → 版 2 赤 1 → 版 3 赤 0」のように並びます)。デモの車の 10 の試験では、版 1 と 2 で組み立ての試験が赤、版 3 で P3 が赤、版 4 で全部緑になります。
+   - 右上の「見せる / 作業台」: 「見せる」は 3D を大きく見せる表示、「作業台」は作業の様子を見る表示です。
+6. 終わった実行は、画面の上に「再生・完了」と出ます。「☰ 一覧へ」でさいしょのページに戻ると、いまの実行が「この PC で実行した記録」に並び、「見る」でいつでも再生できます。
+
+記録は `runs\<実行の名前>\events.jsonl` に残ります。点検するには、次を打ちます。
 
 ```
-python -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m hiraku check runs\<実行の名前>
 ```
+
+画面を使わずに台本の運転を回すこともできます (デモの車で、終わるまで約 16 分かかりました。ほかの重い仕事と同時に測った値です)。
+
+```
+.venv\Scripts\python -m hiraku run data/requirements/offroad-4w.yaml --scripted
+```
+
+合否をどう出しているかは、[docs/judging.md](docs/judging.md) に 1 枚でまとめてあります。
+
+## Claude で回す
+
+Claude で新しく実行するには、Anthropic の API キーが要ります。キーは、HIRAKU を起こす窓だけに入れます (PC 全体には入れません)。キーはこの README にも、コミットにも、チャットにも貼りません。`HIRAKU.cmd` はキーを書き出さず、聞きもしません。
+
+コマンドプロンプトの場合:
+
+```
+set ANTHROPIC_API_KEY=（あなたのキー）
+HIRAKU.cmd
+```
+
+PowerShell の場合:
+
+```
+$env:ANTHROPIC_API_KEY = "（あなたのキー）"
+.\HIRAKU.cmd
+```
+
+- キーを入れた窓から `HIRAKU.cmd` を起こすと、画面の「実行する」が押せます。キーが無いと、一覧に「Claude で実行するには、API キーを設定して HIRAKU を起動し直してください」と出て、「実行する」は押せません。
+- 「実行する」を押すと、費用の上限を見せて確かめてから始まります。一覧には、行ごとの費用の目安が「1 回 … まで」と出ます。上限は要件のファイルの `cost_limit_usd` で、上限に着くと実行は止まります。
+- 画面を使わずに回すときは、同じ窓で `--scripted` を外します。
+
+  ```
+  .venv\Scripts\python -m hiraku run data/requirements/offroad-4w.yaml
+  ```
+
+### Claude Code のプラグインで回す
+
+自分の Claude Code (自分のサインインの枠) で回す道です。API キーは要りません。リポジトリのフォルダで、次のようにします。
+
+1. 「はじめに動かす」の手順 3 まで済ませます (`.venv` が要ります)。
+2. 先にキー無しで確かめます (40 秒ほど。Claude を呼ばない台本の運転です)。
+
+   ```
+   .venv\Scripts\python -m hiraku run data/requirements/offroad-4w-n12.yaml --scripted
+   ```
+
+3. Claude Code を、プラグインを指定して起こします。`--allowedTools` を付けないと、役がツールを呼ぶたびに許可を聞かれます。
+
+   ```
+   claude --plugin-dir <リポジトリ>/plugins/hiraku --allowedTools "mcp__plugin_hiraku_hiraku"
+   ```
+
+4. Claude Code の中で `/mcp` を打ち、hiraku のサーバーがつながっているか見ます。つながっていたら、`/hiraku:run offroad-4w-n12.yaml` を打ちます (最初の `start_run` は 30〜60 秒かかります)。
+5. 実行の様子は、同じリポジトリのフォルダで `.venv\Scripts\python -m hiraku.webserve` を起こして、画面で見ます (画面は `./runs` を見るので、リポジトリのフォルダから起こします)。
+
+プラグインはコピーせず、リポジトリの中から読ませます。くわしくは [plugins/hiraku/README.md](plugins/hiraku/README.md)。設計部が手元で確かめたのは、MCP サーバーの起動、`start_run`、hooks の断り、画面に実行が出るところまでです。Claude Code の中で役が動くところ (`/hiraku:run`) は、この README を書いた時点では確かめていません。
+
+## この README の言葉
+
+| 言葉 | 意味 |
+|---|---|
+| 分野 | 何を確かめるかの区分: 操安・動力・空力・衝突・強度信頼性・音振・熱 の 7 つ (これとは別に、組み立てと人への当たりを見る) |
+| 試験 | 分野ごとの 1 つの確かめ。P1 (段差越え)・R1 (骨組みの強度)・N1 (振動)・H1 (ハンドルを切ったときの干渉)・H3 (乗る人の体格)・P3 (発進と加速) のように、頭の字は分野 (S 操安・P 動力・F 空力・C 衝突・R 強度信頼性・N 音振・T 熱・H 組み立てと人) |
+| 荷重条件 | 試験 1 つぶんの条件: 何をかけ、何を基準にし、予測と解析の差をどこまで許すか |
+| 手計算 (予測) | 式で先に結果を出すこと。式は K0 の中にある |
+| CAE | コンピューターで物の動きや強さを計算する解析。HIRAKU の中のツールが計算する |
+| 照合 | 手計算の予測と CAE の結果を、許す幅の中で比べること。食い違ったら原因を書くまで先へ進めない |
+| 版・繰り返し | 設計の版 (v1、v2 …)。不合格のとき、設計を直して次の版を作って確かめ直す。その回数が繰り返し |
+| 赤・緑 | 判定が不合格か合格か (画面の色) |
+| ツール | CAE のツール (解析のプログラム)。答えの分かっている例と合ってから使う |
+| hooks | 実行の途中で、順番を守らせるために止める決まり (HK1〜HK6)。たとえば「予測が先」「食い違いは原因が先」 |
+| 台本の運転 / Claude の運転 | 決まった順にツールを呼ぶ運転 (Claude を呼ばない) / Claude が自分で考えて進める運転 (API キーが要る) |
+| 役 | エージェントの役目: まとめ役・設計役 (設計がモジュールに分かれているときは、モジュールごとの設計役)・パッケージ役・分野ごとの CAE 役 |
+| K0〜K5 | 解析の土台: K0 手計算の式・K1 梁と板の有限要素・K2 3D の車両の物理・K3 電力と熱・K4 幾何と干渉・K5 感度 |
+| 記録 (events.jsonl) | 実行の中で起きたことを 1 行ずつ書いたファイル。画面はこれだけから描く |
+| 要件 | 作りたいものの条件 (使う場所・荷・速さ・基準など)。`data/requirements/` にある |
+
+## 試験 (任意)
+
+HIRAKU を使うだけなら要りません。コードを直したり確かめたりするときに回します。
+
+```
+.venv\Scripts\python -m unittest
+```
+
+全部で 1,900 本ほどあります。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照合・重い試験)。
 
 板とソリッドの大きなモデルを速く解く道 (任意。Windows と Linux だけ。無ければ SciPy の SuperLU で解く):
 
@@ -32,31 +166,23 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-fast.txt
 ```
 
-試験:
-
-```
-.venv\Scripts\python -m unittest
-```
-
-API キー無しで、Claude の代わりに決まった順にツールを呼ぶ「台本の運転」で 1 回まわし、記録を確かめる:
-
-```
-.venv\Scripts\python -m hiraku run data/requirements/offroad-4w.yaml --scripted
-.venv\Scripts\python -m hiraku check runs/<run_id>
-```
-
-Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて `--scripted` を外します。費用の上限は要件のファイルの `cost_limit_usd` です。
-
-記録を画面で再生する (ブラウザで http://127.0.0.1:8765/ を開き、一覧から選ぶ。`?run=sample` は形の見本、`?look=real` は実物の見た目):
-
-```
-.venv\Scripts\python -m hiraku.webserve
-```
-
-- 画面は three.js 0.170.0 (MIT) を jsDelivr から読み込むので、ネットにつながっている必要があります。字は PC にある BIZ UDPGothic を使い、同梱していません
 - ブラウザの試験は Playwright を使い、`python -m tests.web.browser` で回します (中で `HIRAKU_WEB_BROWSER=1` を入れる。試験の名前を 1 つ渡すと、それだけを回す)。ふつうの全部の試験では飛ばします (Playwright は requirements.txt に入れていません)
 - Rapier と照らし合わせる試験は、`qa/rapier` で `npm install` をしておく必要があります。していなければ、その試験は飛ばします
 - 動画の書き出しのツールは `promo/` にあり、要るものは `promo/requirements-video.txt` です
+- 画面の `?run=sample` は形の見本 (数値は計算結果ではない)、`?look=real` は実物の見た目の確認用です
+
+ここから後ろは、HIRAKU の中身と、作り方・出典の説明です。
+
+## いま動くもの
+
+- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 10 の試験 (段差越え P1・強度 R1・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「手計算で予測 → 解析 → 照合」で回す流れ。基準のある試験は合否まで出す (P1 は基準が無く照合まで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で合否を出す
+- 設計役が設計の変数を変えて次の版を作る (`revise_design`)。デモの車両では、版 1 と 2 で組み立ての試験が赤、版 3 で P3 が赤になり、版 4 で全部緑になる (数は統括部が提出前に確かめる)
+- 解析のツール 25 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。`hiraku.solvers.builtin_tools()` の数で、棚の 17 と K2 の 8)。どれも答えの分かっている例と照合してから使う。手計算の式 61 個 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は 9 つのツール (frame_static・frame_shell・step_climb・drive_energy・thermal・crash・modal・fatigue・assembly) に `params.sensitivity` で付く。感度の試験があるのは frame_static だけ
+- 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
+- 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
+- 画面から実行を始める口。一覧「HIRAKU でできること」の行ごとに、走らせ方を選ぶ: 「見る」(記録を再生する。無料)、「再現する」(決まった手順の運転。無料、Claude を呼ばない)、「実行する」(Claude で新しく実行する。Anthropic の API キーが要り、行ごとの費用の上限で止まる)。「試す」は、その依頼の文を入れた依頼の画面を開く。「自分で頼む」で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。「実行する」は、HIRAKU を起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
+
+まだのもの: 20 試験ぶんを全部まとめて回すこと、実行の最後の報告 (`write_report`) を読む画面。
 
 ## 中身
 
@@ -75,11 +201,12 @@ Claude で回すときは、その窓だけに `ANTHROPIC_API_KEY` を入れて 
 ### エージェントのループ (Claude Agent SDK)
 
 - 実行は `python -m hiraku run <要件のファイル>` で始まる (`hiraku/__main__.py`)。要件のファイルから荷重条件と実行のフォルダを作り、設計の版 1 とツールの棚の確かめまでを済ませる (`hiraku/agent/session.py` の `start_run`)。要件に `design_file` が無いときは版 0 から始め、設計役が `propose_design` で版 1 を作る (同)。
-- 役は 4 種類ある (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
+- 役は 5 種類ある (設計がモジュールに分かれているときは、設計役がモジュールごとに 1 人になる) (`hiraku/agent/roles.py`、`hiraku/agent/prompts.py`)。
   - まとめ役 (lead): メインのエージェント。仕事を役に渡し、判定を確かめ、最後に `write_report` を呼ぶ (`prompts.py` の `LEAD_PROMPT`)。
   - 分野ごとの CAE 役 (`cae-<分野>`): SDK のサブエージェント。effort は medium (`roles.py` の `CAE_EFFORT`)。
-  - パッケージ役 (`packager`): 組み立ての荷重条件を受け持つ。ナレッジの規則を当てる `rule_check` も使う (`roles.py` の `PACKAGER_TOOLS`)。
+  - パッケージ役 (`packager`): 組み立ての荷重条件を受け持つ。ナレッジの規則を当てる `rule_check` も使う (`roles.py` の `PACKAGER_TOOLS`)。 設計がモジュールに分かれているときは、`build_version` で、その回の提案を 1 つの版にまとめる (`roles.py`)。
   - 設計役 (`designer`): `propose_design` と `revise_design` で設計の版を作る。effort は high (`roles.py`)。
+  - モジュールの設計役 (`designer.<モジュール>`): 設計がモジュールに分かれているときの設計役で、モジュールごとに 1 人。自分のモジュールの変数か選択を `revise_design` (module つき) で直す提案を出し、版は作らない。直せないものはパッケージ役に渡す (`roles.py`、skill は `revise-a-module`)。
 - サブエージェントはどれも前景で動く (`background=False`)。まとめ役はその報告を待つ (`roles.py`、`runner.py` の `FOREGROUND_ROLES_ENV`)。
 - 荷重条件 1 つの進め方は CAE 役の指示に書いてある (`prompts.py` の `cae_prompt`)。
   1. `get_context` で荷重条件と設計の値を読む。
@@ -130,8 +257,10 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
   - `record_cause`: 食い違いの原因と直し方を書く。分野の止まりがこれで解ける。
 - 設計 (設計役だけ)
   - `propose_design`: 版 0 から最初の版を作る。
-  - `revise_design`: 設計の変数を変えて、次の版を作る。
+  - `revise_design`: 設計の変数を変えて、次の版を作る。モジュールに分かれた設計では、module をつけて提案として記録する (版は作らない)。
+  - `build_version`: パッケージ役だけが使う (モジュールに分かれた設計)。その回の提案を全部まとめ、次の版を組み直して記録する。
 - ツールを作る
+  - `get_tool_template`: ツールを書くときの見本。強度のツール 1 つ分の通して動くコードと、決まりの説明。
   - `check_tool`: Claude が書いたツールのコードを、別のプロセスで、答えの分かっている例と比べて確かめる。
   - `make_tool`: 確かめに通ったツールを棚に入れる。
 - 報告
@@ -145,10 +274,11 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 ### Skills と plugin (`plugins/hiraku/`)
 
 - ローカルの plugin `hiraku` が 1 つある (`plugins/hiraku/.claude-plugin/plugin.json`)。実行で読む skill はこの plugin のものだけ (`runner.py` の `plugins`・`skills`、`roles.py` の `plugin_skills`)。
-- skill は 3 つ。
+- skill は 4 つ。
   - `take-the-request`: まとめ役が依頼を受ける手順。分野を選び、要件を聞き、ナレッジを規則にし、規則を当てる。途中で届く伝言の受け方も書いてある (`plugins/hiraku/skills/take-the-request/SKILL.md`)。
   - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 照合 → 合否まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
   - `find-the-cause`: 食い違ったときに原因を探し、`record_cause` に書く手順 (`.../find-the-cause/SKILL.md`)。
+  - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの設計役が、赤の荷重条件を読んで自分のモジュールの直しを提案し、直せないものをパッケージ役に渡す手順 (`.../revise-a-module/SKILL.md`)。
 
 ### 台本の運転と Claude の運転
 
@@ -241,6 +371,11 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 
 外から持ってきた値 (規格・統計・材料・人体の寸法など) は、使った所 (データのファイルとコードの中) に出典を書いています。出典の本文をこのリポジトリで読み直していない値には "not checked" と書いています。
 
+### 単純にした所
+
+- 骨組みの強度 (R1・R1s) と介護ベッドの床と柵 (R5) の限度は、骨組みの部材 (デモでは全部 STKR400、降伏 245 MPa) の降伏 ÷ 安全率 (Q61) の 1 つの数で見る。ロールバーの部材のうち 3 本は STKM13A (215 MPa) で、R1 の中ではこの限度で見られる (ロールバーは R4 と荷重の通り道 (R8-stress) で、それぞれの材料で見る)。N15 の台本の運転 (20261104-015442) の記録では、その 3 本の応力はいちばん大きくて 69.45 MPa (版 3、シェルの要素の応力) で、STKM13A の限度 215 ÷ 1.5 = 143.3 MPa に対して 52 % の余裕がある。部材ごとの材料で見るのは、今は R8-stress だけ (`max_utilisation`)
+- サスペンションの取付点 (腕の付け根とダンパーの金具、金具とレールの溶接、ピンとボルト) は、いま判定していない。全体のシェルでは、取付の範囲 (管の壁の前後の一定の範囲。大きさは金具の大きさの仮定で、確かめていない) の要素を、金具が補強する仮定で判定から外している。取付点の判定は足しているところ。使った所: `hiraku/solvers/k1_shell/frame.py`、`hiraku/designgen/kit/mounts.py`
+
 ### 確かめていない値
 
 次の値は、出典の本文をこのリポジトリではまだ確かめていません (確かめていない)。どれも使った所に出典を書いています。
@@ -309,6 +444,8 @@ MIT ([LICENSE](LICENSE))
 | claude-agent-sdk | 0.2.173 | MIT |
 | mcp | 2.3.0 | MIT |
 | pillow | 13.0.0 | MIT-CMU |
+| numba (重い繰り返しの計算を機械語に直す) | 0.68.1 | BSD |
+| llvmlite (numba が使う) | 0.50.0 | BSD-2-Clause AND Apache-2.0 WITH LLVM-exception |
 | pypardiso (任意) | 0.4.7 | BSD-3-Clause (中で使う Intel MKL は Intel のライセンス、確かめていない) |
 | three.js (画面、jsDelivr から読む) | 0.170.0 | MIT |
 | Playwright (ブラウザの試験だけ、requirements に入れていない) | — | Apache-2.0 (確かめていない) |
