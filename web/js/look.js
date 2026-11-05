@@ -11,7 +11,9 @@
 // listed in ASSETS are used in their place when they are in web/assets/polyhaven/
 // (put there by hand, see NOTES.md there; the server says which are there, /api/assets).
 // Without them the sky light is three.js' RoomEnvironment and the ground and the
-// concrete are the canvas drawings.
+// concrete are the canvas drawings. With the horizon's HDRI the workbench shows its sky
+// behind the vehicle too (turned so that its sun stands where the sun light is), with a thin
+// haze over the far ground; the ground's colour is pulled toward grey (GROUND_GLSL).
 //
 // ?quality= (high / medium / low) picks the cost of the real look (QUALITY).
 //
@@ -652,23 +654,27 @@ export function readHdri(image) {
   }
   const row = Math.floor(brightest / W);
   const col = brightest % W;
-  const sum = [0, 0, 0];
-  let n = 0;
-  for (let r = 0; r < H; r += 1) {
-    const deg = (0.5 - (r + 0.5) / H) * 180;
-    if (deg < -1 || deg > 2) continue;
-    for (let c = 0; c < W; c += 1) {
-      const i = (r * W + c) * ch;
-      sum[0] += val(i);
-      sum[1] += val(i + 1);
-      sum[2] += val(i + 2);
-      n += 1;
+  // the mean colour (linear) of the rows from lo to hi degrees
+  const band = (lo, hi) => {
+    const sum = [0, 0, 0];
+    let n = 0;
+    for (let r = 0; r < H; r += 1) {
+      const deg = (0.5 - (r + 0.5) / H) * 180;
+      if (deg < lo || deg > hi) continue;
+      for (let c = 0; c < W; c += 1) {
+        const i = (r * W + c) * ch;
+        sum[0] += val(i);
+        sum[1] += val(i + 1);
+        sum[2] += val(i + 2);
+        n += 1;
+      }
     }
-  }
+    return sum.map((v) => v / Math.max(1, n));
+  };
   return {
     el: (0.5 - (row + 0.5) / H) * Math.PI,
     az: ((col + 0.5) / W - 0.5) * 2 * Math.PI,
-    haze: sum.map((v) => v / Math.max(1, n)),
+    haze: band(-1, 2),
   };
 }
 
@@ -707,6 +713,10 @@ const SUN_ASIDE = (40 * Math.PI) / 180;
 const SUN_EL = (50 * Math.PI) / 180;
 const SUN_EL_RANGE = [(35 * Math.PI) / 180, (65 * Math.PI) / 180];
 export const HAZE = { near_m: 8, far_m: 70 };
+// the workbench's haze, thinner: at the ground's far edge (GROUND_MM) the ground is still mostly
+// ground, and past it the HDRI's own land carries on to its horizon (a haze full by then leaves a
+// flat band of one colour under the horizon). Look values.
+export const BENCH_HAZE = { near_m: 30, far_m: 400 };
 export const GROUND_MM = 150000;
 const STAIN_SIDE_MM = 9000;
 // the side (mm) of the hazard stripes' square: four yellow and black pairs, 100 mm each
@@ -719,6 +729,19 @@ const STAIN_GLSL = `
   float stainK = clamp(texture2D(stainMap, vStainUv).r * 0.7 + texture2D(stainMap, vStainUv * 0.37 + 0.31).r * 0.6, 0.0, 1.0);
   diffuseColor.rgb *= mix(vec3(1.0), vec3(0.62, 0.53, 0.42), stainK);
 `;
+// The ground's colour pulled toward grey and a little darker: the Poly Haven dirt and gravel are
+// orange and red-brown (mean R/B about 1.8 to 1.9), where photographs of off-road vehicles on dirt,
+// gravel or concrete show a grey-brown (R/B about 1.2 to 1.4). Look values (GROUND_SAT: the colour
+// kept, 1 = as drawn; GROUND_VALUE: the brightness kept).
+const GROUND_SAT = 0.5;
+const GROUND_VALUE = 0.85;
+const GROUND_GLSL = `
+  diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), diffuseColor.rgb, ${GROUND_SAT.toFixed(2)}) * ${GROUND_VALUE.toFixed(2)};
+`;
+// The workbench's sun (no stage): its direction from the vehicle, three.js world (x, y up, z),
+// as the light always stood; the sky behind (the horizon's HDRI, when it is there) is turned
+// so that its own sun stands there.
+const BENCH_SUN = new THREE.Vector3(2.5, 6, 3.5).normalize();
 
 export class Look {
   // opts.stage: the cut views' stage (see the top of the file)
@@ -732,8 +755,9 @@ export class Look {
     this.surfaces = []; // { role, material, span_mm: [u, v] } waiting for an asset
     // in use; the stage's ground is the gravel road and its sky the horizon
     this.groundRole = this.stage ? "gravel" : "dirt";
-    this.assets = this.stage ? { sky: false, horizon: false, gravel: false, concrete: false } : { sky: false, dirt: false, concrete: false };
-    this.backdrop = null; // the stage's sky: { tex, el, az, haze } once the HDRI is loaded
+    // the workbench reads the horizon's HDRI too, only for the sky seen behind the vehicle
+    this.assets = this.stage ? { sky: false, horizon: false, gravel: false, concrete: false } : { sky: false, horizon: false, dirt: false, concrete: false };
+    this.backdrop = null; // the sky behind: { tex, el, az, haze } once the horizon's HDRI is loaded
     this.fog = null;
     this.assetsReady = Promise.resolve();
   }
@@ -782,6 +806,11 @@ export class Look {
   // HDRI with the horizon lights the scene and is seen behind it (else the sky only lights it).
   async loadAssets(renderer, scene) {
     const roles = await rolesPresent();
+    const haze = this.stage ? HAZE : BENCH_HAZE;
+    const backdrop = (got) => {
+      this.backdrop = got;
+      this.fog = new THREE.Fog(new THREE.Color().setRGB(...got.haze, THREE.LinearSRGBColorSpace), haze.near_m, haze.far_m);
+    };
     for (const role of this.stage ? ["horizon", "sky"] : ["sky"]) {
       if (!roles.includes(role)) continue;
       const got = await hdriOf(renderer, role);
@@ -789,11 +818,16 @@ export class Look {
       scene.environment = got.tex;
       scene.environmentIntensity = 0.8;
       this.assets[role] = true;
-      if (role === "horizon") {
-        this.backdrop = got;
-        this.fog = new THREE.Fog(new THREE.Color().setRGB(...got.haze, THREE.LinearSRGBColorSpace), HAZE.near_m, HAZE.far_m);
-      }
+      if (role === "horizon") backdrop(got);
       break;
+    }
+    // the workbench: the sky with its horizon behind the vehicle (the sky without one lights it)
+    if (!this.stage && roles.includes("horizon")) {
+      const got = await hdriOf(renderer, "horizon");
+      if (got) {
+        this.assets.horizon = true;
+        backdrop(got);
+      }
     }
     for (const role of [this.groundRole, "concrete"]) {
       if (!roles.includes(role)) continue;
@@ -813,18 +847,27 @@ export class Look {
     }
   }
 
-  // The stage at each frame (camera and target in three.js world, m): the sky behind and
-  // the haze (not on a see-through overlay view, tinted), the sky turned so that its sun
-  // stands where the sun light is. Returns the sun's direction (unit, from the target).
+  // The real look at each frame (camera and target in three.js world, m): the sky behind and
+  // the haze (not on a see-through overlay view, tinted, nor on a view whose ground only takes
+  // the shadow), the sky turned so that its sun stands where the sun light is. On the stage
+  // the sun stands behind the vehicle as the camera sees it; on the workbench it stays where
+  // it always stood (BENCH_SUN). Returns the sun's direction (unit, from the target).
   stageFrame(scene, camera, target, tinted = false) {
     const b = this.backdrop;
     scene.background = !tinted && b ? b.tex : null;
     scene.fog = !tinted && b ? this.fog : null;
-    const away = target.clone().sub(camera.position);
-    away.y = 0;
-    if (away.lengthSq() < 1e-12) away.set(-1, 0, 0);
-    const az = Math.atan2(away.z, away.x) + SUN_ASIDE;
-    const el = b ? Math.min(SUN_EL_RANGE[1], Math.max(SUN_EL_RANGE[0], b.el)) : SUN_EL;
+    let az;
+    let el;
+    if (this.stage) {
+      const away = target.clone().sub(camera.position);
+      away.y = 0;
+      if (away.lengthSq() < 1e-12) away.set(-1, 0, 0);
+      az = Math.atan2(away.z, away.x) + SUN_ASIDE;
+      el = b ? Math.min(SUN_EL_RANGE[1], Math.max(SUN_EL_RANGE[0], b.el)) : SUN_EL;
+    } else {
+      az = Math.atan2(BENCH_SUN.z, BENCH_SUN.x);
+      el = Math.asin(BENCH_SUN.y);
+    }
     if (b) {
       // three.js turns a direction by the rotation's opposite before it looks the sky up, so a
       // turn of (the sky's sun azimuth - the wanted azimuth) about y brings the sky's sun there
@@ -833,13 +876,15 @@ export class Look {
     }
     if (scene.fog) {
       const d = camera.position.distanceTo(target);
-      scene.fog.near = d + HAZE.near_m;
-      scene.fog.far = d + HAZE.far_m;
+      const haze = this.stage ? HAZE : BENCH_HAZE;
+      scene.fog.near = d + haze.near_m;
+      scene.fog.far = d + haze.far_m;
     }
     return new THREE.Vector3(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el));
   }
 
-  // The stage's road: dirt stains laid over its texture (STAIN_GLSL) at their own scale.
+  // The ground (the stage's road, the workbench's dirt): dirt stains laid over its texture
+  // (STAIN_GLSL) at their own scale, and its colour pulled toward grey (GROUND_GLSL).
   addStain(material, span_mm) {
     const stain = this.texture("stain");
     const repeat = new THREE.Vector2(span_mm[0] / STAIN_SIDE_MM, span_mm[1] / STAIN_SIDE_MM);
@@ -851,7 +896,7 @@ export class Look {
         .replace("#include <uv_vertex>", "#include <uv_vertex>\nvStainUv = uv * stainRepeat;");
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <common>", "#include <common>\nuniform sampler2D stainMap;\nvarying vec2 vStainUv;")
-        .replace("#include <map_fragment>", "#include <map_fragment>\n" + STAIN_GLSL);
+        .replace("#include <map_fragment>", "#include <map_fragment>\n" + STAIN_GLSL + GROUND_GLSL);
     };
     material.customProgramCacheKey = () => "stain";
     material.userData.stain = true;
@@ -888,7 +933,8 @@ export class Look {
     drawn.repeat.set(span_mm[0] / drawnSide_mm, span_mm[1] / drawnSide_mm);
     drawn.needsUpdate = true;
     const material = new THREE.MeshStandardMaterial({ map: drawn, roughness: role === "concrete" ? 0.95 : 1, metalness: 0 });
-    if (this.stage && role === this.groundRole) this.addStain(material, span_mm);
+    // the ground (stage and workbench alike): stains, pulled toward grey (GROUND_GLSL)
+    if (role === this.groundRole) this.addStain(material, span_mm);
     this.addSurface({ role, material, span_mm });
     return material;
   }

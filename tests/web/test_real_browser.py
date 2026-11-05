@@ -31,11 +31,12 @@ ASSET_FILES = {
     "sky": ("kloofendal_48d_partly_cloudy_puresky", ["kloofendal_48d_partly_cloudy_puresky_1k.hdr"]),
     "dirt": ("dirt_floor", ["dirt_floor_diff_1k.jpg", "dirt_floor_nor_gl_1k.jpg", "dirt_floor_arm_1k.jpg"]),
     "concrete": ("brushed_concrete", ["brushed_concrete_diff_1k.jpg", "brushed_concrete_nor_gl_1k.jpg", "brushed_concrete_arm_1k.jpg"]),
-    # the cut pages' stage only (tests.web.test_cut_real_browser)
+    # the sky seen behind the vehicle (on the cut pages' stage it also lights it)
     "horizon": ("kloofendal_48d_partly_cloudy", ["kloofendal_48d_partly_cloudy_1k.hdr"]),
+    # the cut pages' stage only (tests.web.test_cut_real_browser)
     "gravel": ("gravel_road", ["gravel_road_diff_1k.jpg", "gravel_road_nor_gl_1k.jpg", "gravel_road_arm_1k.jpg"]),
 }
-WORKBENCH_ROLES = ("sky", "dirt", "concrete")  # what the workbench's real look reads
+WORKBENCH_ROLES = ("sky", "horizon", "dirt", "concrete")  # what the workbench's real look reads
 
 # The canvas pixel at points of the contour and the legend's swatch for the same value.
 # Members: the middle of the top of each member with one value (a member coloured from its two
@@ -201,6 +202,7 @@ class RealLookBrowserTest(unittest.TestCase):
               let ground = null;
               b.ground.traverse((x) => { if (!ground && x.isMesh) ground = x.material; });
               return { assets: b.look.assets, intensity: b.scene.environmentIntensity,
+                       background: !!b.scene.background, fog: !!b.scene.fog,
                        ground: ground && { map: ground.map?.image?.width ?? null, normal: !!ground.normalMap, arm: ground.roughnessMap === ground.aoMap && !!ground.aoMap } };
             }""",
             self.demo_events(),
@@ -210,6 +212,8 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertEqual(got["assets"], expect)
         if expect["sky"]:
             self.assertEqual(got["intensity"], 0.8)  # look.js: the HDRI's intensity
+        # the horizon's HDRI is the sky seen behind the vehicle, with its haze (set when drawn)
+        self.assertEqual((got["background"], got["fog"]), (expect["horizon"], expect["horizon"]))
         if expect["dirt"]:
             self.assertEqual(got["ground"], {"map": 1024, "normal": True, "arm": True})
         page.close()
@@ -251,7 +255,7 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
         # no Poly Haven file listed: the drawn textures and the room light are used
         self.assertEqual(got["files"], [])
-        self.assertEqual(got["assets"], {"sky": False, "dirt": False, "concrete": False})
+        self.assertEqual(got["assets"], {"sky": False, "horizon": False, "dirt": False, "concrete": False})
         self.assertTrue(got["envIsRoom"])
         # painted steel tubes (the design's STKR400 / STKM13A): clearcoat over the paint
         self.assertEqual(got["member"], {"type": "MeshPhysicalMaterial", "finish": "painted_steel", "clearcoat": 1})

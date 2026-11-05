@@ -957,8 +957,8 @@ export class Workbench3D {
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(ISO_TO_THREE);
-      // on a stage the road runs out to where the haze has hidden it (look.js GROUND_MM)
-      const far = this.look.stage ? GROUND_MM : 20000;
+      // the real ground runs out to where the haze has hidden it (look.js GROUND_MM)
+      const far = GROUND_MM;
       holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - far, x1 + far, y0 - far, y1 + far));
       this.ground.add(holder);
       return;
@@ -1870,9 +1870,11 @@ export class Workbench3D {
 
   render() {
     if (!this.noFollow && !this.focused) this.follow();
-    // the stage: the sky, the haze and the sun behind the vehicle (none on a see-through overlay)
+    // the real look: the sky, the haze and the sun (on the stage behind the vehicle); none on a
+    // see-through overlay nor on a ground that only takes the shadow
     this.camera.updateMatrixWorld();
-    const sunDir = this.look.stage ? this.look.stageFrame(this.scene, this.camera, this.controls.target, !!this.tinted) : null;
+    const bare = !!this.tinted || this.groundStyle === "shadow";
+    const sunDir = this.look.real ? this.look.stageFrame(this.scene, this.camera, this.controls.target, bare) : null;
     if (this.sun && this.bboxIso) {
       this.iso.updateWorldMatrix(true, false); // shadowPoints reads iso's world matrix (the renderer updates the rest)
       this.look.aimSun(this.sun, this.controls.target, this.shadowPoints(), sunDir);
