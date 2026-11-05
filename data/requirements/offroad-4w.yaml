@@ -420,5 +420,5 @@ requirements:
       for a small open off-road vehicle could be read)'
 tests: [P1, R1, N1, R8, R7, H1, H3, H6, H7, P3]
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 5  # HK5: one revision per red stage, H7's opening one of its own (data/catalog/scripted.yaml)
+round_limit: 6  # HK5: one revision per red stage, H7's opening one of its own (data/catalog/scripted.yaml), and one spare for a run with Claude
 cost_limit_usd: 2.0
