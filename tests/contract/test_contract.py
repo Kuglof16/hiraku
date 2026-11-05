@@ -100,6 +100,18 @@ class SchemaTest(unittest.TestCase):
                                                      "value_from": "prediction", "cause_id": "cause-0001"}), [])
         self.assertNotEqual(contract.errors("verdict", {**v, "basis": "close_enough"}), [])
 
+    def test_tool_decides_after_the_path_check(self):
+        v = load("verdict.json")
+        ok = {**v, "basis": "path_checked", "value_from": "analysis", "cause_id": "cause-0001"}
+        self.assertEqual(contract.errors("verdict", ok), [])
+        self.assertEqual(contract.errors("verdict", {**ok, "pass": False}), [])  # the tool's value may fail too
+        self.assertNotEqual(contract.errors("verdict", {**ok, "value_from": "prediction"}), [])
+        self.assertNotEqual(contract.errors("verdict", {k: x for k, x in ok.items() if k != "cause_id"}), [])
+        c = load("cause.json")
+        self.assertEqual(contract.errors("cause", {**c, "tool_decides": True, "tool_decides_reason": "no plates by hand"}), [])
+        self.assertNotEqual(contract.errors("cause", {**c, "tool_decides": True, "ends_case": True}), [])
+        self.assertEqual(contract.errors("cause", {**c, "tool_decides": False, "ends_case": True}), [])
+
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
         ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
