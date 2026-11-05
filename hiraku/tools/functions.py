@@ -22,7 +22,8 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
-from hiraku.tools.judge import (OP_JA, PATH_CHECKED, PATH_FORMULA, STAND_IN_BELOW, failing_end, init_judgements,
+from hiraku.tools.judge import (HOT_SPOT, OP_JA, PATH_CHECKED, PATH_FORMULA, STAND_IN_BELOW, failing_end,
+                                hot_spot_verdict, init_judgements, unpredicted_over,
                                 judged_quantity, make_verdict, path_check, prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
                                 update_judgement)
 from hiraku.tools.summary import design_summary
@@ -790,6 +791,11 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if ver is not None:
         ver["verdict_id"] = ctx.store.next_id("verdict")
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=lc["domain"])
+    # docs/contract.md CAE の役目: a place the hand calculation did not predict, over the limit, makes the load case
+    # red (one verdict per place)
+    for row in unpredicted_over(ctx, out, lc):
+        ctx.store.add_record("verdict", hot_spot_verdict(ctx.store.next_id("verdict"), out, lc, row),
+                             design_version=v, agent=agent, domain=lc["domain"])
     if out["status"] == "ok" and lc["domain"] in ctx.picked:  # a result beyond the criterion holds the tile back
         update_judgement(ctx, lc["domain"], v)
     return out
@@ -830,7 +836,7 @@ def _resolve_causes(ctx: RunContext, cmp: Record, pred: Record, agent: str) -> N
     """A later match for the same load case and quantity resolves earlier causes (resolved_by is
     always a match; a safe-side verdict settles them for the tile instead, judge.unresolved_mismatches)."""
     for cause in ctx.store.records("cause"):
-        if cause["resolved"]:
+        if cause["resolved"] or not cause.get("comparison_id"):  # a hot_spot cause is settled by a version, not a match
             continue
         old = ctx.store.get("comparison", cause["comparison_id"])
         old_pred = ctx.prediction(old["prediction_id"]) if old else None
@@ -848,7 +854,7 @@ def revised_after_cause(ctx: RunContext, pred: Record, ana: Record) -> bool:
         return False
     on_it = {c["comparison_id"] for c in ctx.store.records("comparison")
              if c["analysis_id"] == ana["analysis_id"] and c["status"] == "mismatch"}
-    causes = {c["cause_id"] for c in ctx.store.records("cause") if c["comparison_id"] in on_it}
+    causes = {c["cause_id"] for c in ctx.store.records("cause") if c.get("comparison_id") in on_it}
     if not causes:
         return False
     first_cause, pred_seq = None, None
@@ -1034,6 +1040,38 @@ def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str 
     )
 
 
+def _cause_of_hot_spot(ctx: RunContext, args: dict[str, Any], agent: str | None) -> Record:
+    """record_cause for a hot_spot verdict (docs/contract.md CAE の役目): the cause of a red the tool found where
+    the hand calculation predicted nothing. No comparison, so no safe_side, ends_case or tool_decides (the red
+    stands until a revised version keeps that place within its limit); the cause carries the verdict and its place."""
+    hit = ctx.store.find("verdict", args["verdict_id"])
+    if hit is None:
+        raise ToolError(f"合否 {args['verdict_id']!r} はありません")
+    v, ver = hit
+    if ver.get("basis") != HOT_SPOT:
+        raise ToolError(f"合否 {ver['verdict_id']} は basis {ver.get('basis') or 'match'} です。verdict_id で指せるのは、"
+                        "手計算が予測していない場所の赤 (basis hot_spot) だけです。食い違いの原因は comparison_id で書いてください")
+    flags = [k for k in ("safe_side", "ends_case", "tool_decides") if args.get(k)]
+    if flags:
+        raise ToolError(f"{'・'.join(flags)} は、照合のある食い違いにだけ付けます。手計算が予測していない場所の赤は、"
+                        "直した版でその場所が許しの内になるまで赤のままです。印を外して、原因と直し方だけを書いてください")
+    if args.get("where") and args["where"] != ver["where"]:
+        raise ToolError(f"合否 {ver['verdict_id']} の場所は {ver['where']} です (where {args['where']!r} と違います)")
+    done = next((c for c in ctx.store.records("cause") if c.get("verdict_id") == ver["verdict_id"]), None)
+    if done:
+        raise ToolError(f"合否 {ver['verdict_id']} の原因は {done['cause_id']} にもう書かれています。書いた原因のまま進めてください")
+    if not args["cause"].strip() or not args["fix"].strip():
+        raise ToolError("cause と fix の両方に中身を書いてください")
+    lc = ctx.load_case(ver["load_case_id"])
+    cause = {"cause_id": ctx.store.next_id("cause"), "verdict_id": ver["verdict_id"], "where": ver["where"],
+             "cause": args["cause"].strip(), "fix": args["fix"].strip(), "resolved": False}
+    who = agent or ctx.owner(lc["load_case_id"])
+    ctx.store.add_record("cause", cause, design_version=v, agent=who, domain=lc["domain"])
+    if lc["domain"] in ctx.picked:
+        update_judgement(ctx, lc["domain"], v)
+    return {"cause": cause, "verdict": None}
+
+
 def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Write the cause of a mismatch and how to fix it (this unblocks the domain).
 
@@ -1044,6 +1082,11 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     in this run reaches the quantity: the load case ends not judged (not with safe_side).
     """
     _check_input("record_cause", args)
+    if bool(args.get("comparison_id")) == bool(args.get("verdict_id")):
+        raise ToolError("comparison_id (食い違った照合) か verdict_id (手計算が予測していない場所の赤、basis hot_spot) の、"
+                        "どちらか一方を付けてください")
+    if args.get("verdict_id"):
+        return _cause_of_hot_spot(ctx, args, agent)
     hit = ctx.store.find("comparison", args["comparison_id"])
     if hit is None:
         raise ToolError(f"照合 {args['comparison_id']!r} はありません")

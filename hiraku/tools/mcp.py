@@ -176,7 +176,9 @@ DESCRIPTIONS = {
         "tool_decides: true と理由 (tool_decides_reason) を付ける。ツールが道の確かめを見て、ツールの値で合否を作る "
         "(path_checked、合格も赤もある)。道の確かめが無いか通っていなければ断る。道の確かめもできないときだけ "
         "ends_case: true を付ける。その荷重条件は判定なしで終わり、待たれない。safe_side・tool_decides・ends_case は"
-        "どれも一緒に付けない"
+        "どれも一緒に付けない。"
+        "手計算が予測していない場所の赤 (解析の hot_spots から作られた合否、basis hot_spot) の原因は、comparison_id の"
+        "代わりに verdict_id を付けて書く (印は付けない。直した版でその場所が許しの内になれば赤は消える)"
     ),
     "revise_design": (
         "設計役だけが使う。設計の変数 (design.variables) の新しい値 (changes) と理由 (reason) から、"

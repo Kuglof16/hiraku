@@ -149,6 +149,46 @@ def unsupported_load_verdict(verdict_id: str, analysis: Record, load_case: Recor
     }
 
 
+HOT_SPOT = "hot_spot"  # docs/contract.md CAE の役目: a place the hand calculation did not predict, over the limit
+
+
+def unpredicted_over(ctx: RunContext, analysis: Record, load_case: Record) -> list[Record]:
+    """The rows of an ok analysis' hot_spots that make the load case red (docs/contract.md CAE の役目): not
+    predicted, over the limit (utilisation > 1), on the quantity the tool is judged on for the criterion
+    (judged_quantity: frame_shell's weld lines are max_hot_spot_stress, its mesh spikes max_stress do not count)."""
+    crit = load_case.get("criterion")
+    if crit is None or analysis.get("status") != "ok":
+        return []
+    q = judged_quantity(ctx, analysis.get("tool"), crit["quantity"])
+    return [r for r in analysis.get("hot_spots") or []
+            if r.get("quantity") == q and not r.get("predicted") and r.get("utilisation", 0) > 1]
+
+
+def hot_spot_verdict(verdict_id: str, analysis: Record, load_case: Record, row: Record) -> Record:
+    """The failing verdict of one unpredicted place over the limit (basis hot_spot): the row's value and limit,
+    the criterion's op, analysis_id and where; no comparison (made by analyze)."""
+    crit = load_case["criterion"]
+    value, limit = dict(row["value"]), dict(row["limit"])
+    return {
+        "verdict_id": verdict_id,
+        "analysis_id": analysis["analysis_id"],
+        "load_case_id": load_case["load_case_id"],
+        "test_id": load_case["test_id"],
+        "domain": load_case["domain"],
+        "quantity": crit["quantity"],
+        "value": value,
+        "op": crit["op"],
+        "limit": limit,
+        "pass": False,
+        "margin": {"value": margin(value["value"], crit["op"], limit["value"]), "unit": limit["unit"]},
+        "margin_pct": margin_pct(value["value"], crit["op"], limit["value"]),
+        "requirement_keys": list(crit.get("requirement_keys", [])),
+        "basis": HOT_SPOT,
+        "value_from": "analysis",
+        "where": row["where"],
+    }
+
+
 def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     """The verdict that stands for each load case in one design version (docs/contract.md 分野が緑になる条件 (a)):
     per load case, verdict quantity and place (the compared result's where, from a per-place prediction
@@ -158,7 +198,7 @@ def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
     newest: dict[str, dict[tuple, Record]] = {}
     for v in ctx.store.records("verdict", version):
         cmp = ctx.store.get("comparison", v["comparison_id"]) if v.get("comparison_id") else None
-        key = (v.get("quantity"), (cmp or {}).get("where"))
+        key = (v.get("quantity"), (cmp or {}).get("where") or v.get("where"))  # a hot_spot verdict has its own where
         per = newest.setdefault(v["load_case_id"], {})
         per.pop(key, None)  # re-insert so the dict's order stays the order the verdicts were made
         per[key] = v
@@ -380,7 +420,8 @@ def verdict_line(v: Record) -> str:
     """The verdict in one line. The sign between the numbers is the relation that holds: the
     criterion's when it passes; when it fails, the opposite, with the criterion beside it."""
     safe = (" 安全側の予測で" if v.get("basis") == "explained_safe_side"
-            else " 道を手計算で確かめ、ツールの値で" if v.get("basis") == PATH_CHECKED else "")
+            else " 道を手計算で確かめ、ツールの値で" if v.get("basis") == PATH_CHECKED
+            else f" 手計算が予測していない {v.get('where')} で" if v.get("basis") == HOT_SPOT else "")
     value, limit = v["value"]["value"], v["limit"]["value"]
     if v.get("margin_pct") is None:  # a zero limit: the margin in the quantity's own unit
         room = _amount(margin(value, v["op"], limit), v["limit"]["unit"])
@@ -422,6 +463,24 @@ def miss_line(rule: Record, check: Record) -> str:
     return f"{rule['rule_id']}「{rule['text']}」({where})"
 
 
+def hot_spot_asks(ctx: RunContext, reds: list[Record], version: int) -> list[str]:
+    """For each hot_spot red (docs/contract.md CAE の役目): the cause it still needs (record_cause with its
+    verdict_id) and, when the version's load path is not checked by hand, that check too."""
+    out = []
+    answered = {c.get("verdict_id") for c in ctx.store.records("cause", version) if c.get("verdict_id")}
+    for x in reds:
+        if x.get("basis") != HOT_SPOT:
+            continue
+        asks = [] if x["verdict_id"] in answered else [f"原因を record_cause (verdict_id {x['verdict_id']}) で書く"]
+        gap = (path_check(ctx, ctx.load_case(x["load_case_id"]), version)
+               if ctx.has_load_case(x["load_case_id"]) else None)
+        if gap:
+            asks.append(f"道の確かめ ({PATH_FORMULA}) も要る: {gap}")
+        if asks:
+            out.append(f"{x['test_id']} の {x['where']} は手計算が予測していない場所: " + "。".join(asks))
+    return out
+
+
 def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
     """The tile of a domain: red when a verdict fails, or (assembly) when a system rule hits a part;
     green when every load case with a criterion passed and none is held back (held_cases: an
@@ -441,7 +500,7 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
         lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
                 ([f"系の欠け {len(misses)} 件: " + "、".join(miss_line(r, c) for r, c in misses)] if misses else [])
-        state, summary = "red", "。".join(lines)
+        state, summary = "red", "。".join(lines + hot_spot_asks(ctx, reds, v))
         if missing:
             summary += f"。判定の無い試験 {len(missing)}: " + "、".join(missing)
         if held:

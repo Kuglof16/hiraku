@@ -78,7 +78,7 @@ class RunContext:
         return pred["domain"]
 
     def causes_by_comparison(self) -> dict[str, Record]:
-        return {c["comparison_id"]: c for c in self.store.records("cause")}
+        return {c["comparison_id"]: c for c in self.store.records("cause") if c.get("comparison_id")}
 
     def open_mismatches(self, domain: str | None = None) -> list[Record]:
         """Mismatching comparisons that have no cause yet (in one domain, or all)."""
