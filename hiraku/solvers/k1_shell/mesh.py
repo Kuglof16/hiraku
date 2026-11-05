@@ -952,11 +952,34 @@ def joint_layout(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_st
         bad = _clashes(runs, joints)
         if not bad:
             break
+        whom = {id(j): _clashing_with(j, joints, runs) for j in bad}
         for j in bad:
             _untie_through(runs, j)
             j.kind = "tied"
-            j.reason = "its grid lines would clash with another joint's"
+            j.reason = f"its grid lines would clash with {whom[id(j)]}"
     return mem, runs, ends, joints, gussets, run_through, mount_nodes
+
+
+def _clashing_with(j: _Joint, joints: list[_Joint], runs: list[_Run]) -> str:
+    """Which other joints' grid lines cross j's footprint on the same tube (for the reason a joint is tied):
+    "the joint of <member> at <node> (<wall>)", or the lines of a gusset or a wheel mount when no joint's do."""
+    s0, s1, c0, c1 = j.footprint
+    own_s = set(j.s_set)
+    near = {j.wall: (c0, c1, set(j.c_set))}
+    if j.through and j.far_footprint:
+        near[j.far_wall] = (*j.far_footprint[2:], set(j.far_c_set))
+    out = []
+    for k in joints:
+        if k is j or k.host != j.host or k.kind == "tied" or not k.s_set:
+            continue
+        hit = any(s0 + TOL < s < s1 - TOL and s not in own_s for s in k.s_set)
+        walls = [(k.wall, k.c_set)] + ([(k.far_wall, k.far_c_set)] if k.through else [])
+        hit = hit or any(w in near and any(near[w][0] + TOL < c < near[w][1] - TOL and c not in near[w][2] for c in cs)
+                         for w, cs in walls)
+        if hit:
+            where = " (through to the far wall)" if k.through else ""
+            out.append(f"the joint of {runs[k.branch].members[0]} at {k.node}{where}")
+    return ", ".join(sorted(set(out))) if out else "the lines of a gusset or a wheel mount next to it"
 
 
 def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
