@@ -37,36 +37,153 @@ def _spheres(bs: dict[str, Body]) -> tuple[list[str], np.ndarray, np.ndarray]:
     return (keys, np.array([c for c, _ in got], float).reshape(-1, 3), np.array([r for _, r in got], float))
 
 
-def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float,
-          spheres: tuple[list[str], np.ndarray, np.ndarray] | None = None) -> list[tuple[str, str, float]]:
-    """spheres: _spheres(bs), when the caller asks for many positions of the same bodies."""
+_KIN: dict[tuple[int, str], object] = {}  # (id of the design, support) -> CornerKinematics, the last few
+_MOUNTED: dict[tuple[int, str, str], bool] = {}  # (id of the design, body, body) -> mounted(), asked again at every pose
+
+
+def _mounted(a: Body, b: Body, design: dict) -> bool:
+    """model.mounted, kept per pair of bodies of one design (it reads only the design and the bodies' ids at rest)."""
+    key = (id(design), a.id, b.id)
+    got = _MOUNTED.get(key)
+    if got is None:
+        if len(_MOUNTED) > 200000:
+            _MOUNTED.clear()
+        got = _MOUNTED[key] = mounted(a, b, design)
+    return got
+
+
+def corner_kinematics(design: dict, sid: str):
+    """corner_motion.CornerKinematics of a support with double-wishbone hard points (damper points too), else None."""
+    from .corner_motion import CornerKinematics, has_kinematics
+
+    key = (id(design), sid)
+    if key not in _KIN:
+        if len(_KIN) > 32:
+            _KIN.clear()
+        _KIN[key] = CornerKinematics(design, sid) if has_kinematics(design, sid) else None
+    return _KIN[key]
+
+
+def _pose(design: dict, bs: dict[str, Body], sid: str, k: str, dz: float, steer: float, maps=None) -> Body:
+    """Body k of corner sid at a wheel travel (mm) and a steer angle (deg). A corner with hard points moves
+    as its suspension does (corner_motion; maps: CornerKinematics.maps at that pose, when made); another
+    one as described at the top."""
+    from .corner_motion import moved as kin_moved
+
+    b = bs[k]
+    kin = corner_kinematics(design, sid)
+    if kin is not None:
+        return kin_moved(b, sid, maps if maps is not None else kin.maps(dz, steer))
     s = next(x for x in design["supports"] if x["id"] == sid)
     c = np.asarray(s["position_mm"], float)
-    group = {k: b for k, b in bs.items() if b.support == sid}
-    keys, C, Rad = spheres or _spheres(bs)
     R = _rz(steer)
+    if b.kind in LINK_KINDS and b.capsule is not None:
+        return _link_moved(b, R, c, dz, steer)
+    return (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
+
+
+def _overlap(o: Body, other: Body, slabs=None) -> float:
+    """shape_overlap, a wheel taken as round (corner_motion.wheel_overlap: its box's corners would meet what
+    the tyre does not)."""
+    from .corner_motion import wheel_overlap
+
+    if o.kind == "wheel" and o.capsule is None:
+        return wheel_overlap(o, other, slabs)
+    if other.kind == "wheel" and other.capsule is None:
+        return wheel_overlap(other, o)
+    return shape_overlap(o, other)
+
+
+def _connected(design: dict) -> set[frozenset]:
+    """The pairs of part ids one part's connects_to names (either way)."""
+    out = set()
+    for p in design.get("parts", []):
+        for c in p.get("connects_to") or []:
+            if c.get("to"):
+                out.add(frozenset((p["id"], c["to"])))
+    return out
+
+
+def _rest_own(design: dict, bs: dict[str, Body], sid: str) -> dict[tuple[str, str], float]:
+    """The overlaps of a corner's own parts with each other at the design pose, for the pairs not joined to
+    each other (connects_to either way, or model.joined: a link and what it is jointed to at an end).
+    model.allowance lets a corner's parts overlap each other any amount (they ride together); in motion
+    they do not all move together, so they are compared, and only what grows past the overlap at rest
+    counts (an arm's end inside the wheel's rim is there by design)."""
+    from .model import joined
+
+    conn = _connected(design)
+    group = sorted(k for k, b in bs.items() if b.support == sid and b.kind != "suspension")
+    out = {}
+    for i, k in enumerate(group):
+        for k2 in group[i + 1:]:
+            a, b = bs[k], bs[k2]
+            if frozenset((k.split(":", 1)[1], k2.split(":", 1)[1])) in conn or joined(a, b):
+                continue
+            out[(k, k2)] = _overlap(a, b)
+    return out
+
+
+def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float,
+          spheres: tuple[list[str], np.ndarray, np.ndarray] | None = None, threshold: float = TOUCH_MM,
+          own: dict[tuple[str, str], float] | None = None) -> list[tuple[str, str, float]]:
+    """The pairs (a moved body of corner sid, another body) overlapping by more than `threshold` at the pose
+    (negative: within that gap). spheres: _spheres(bs), when the caller asks for many positions of the same
+    bodies. own: _rest_own of the corner, to check its own parts against each other too; for those pairs the
+    overlap given is what grows past the overlap at rest (at least 0)."""
+    from .corner_motion import wheel_slabs
+
+    group = {k: b for k, b in bs.items() if b.support == sid and b.kind != "suspension"}
+    keys, C, Rad = spheres or _spheres(bs)
+    kin = corner_kinematics(design, sid)
+    maps = kin.maps(dz, steer) if kin is not None else None
+    moved = {k: _pose(design, bs, sid, k, dz, steer, maps) for k in group}
     out = []
-    for k, b in group.items():
-        if b.kind == "suspension":
-            continue
-        if b.kind in LINK_KINDS and b.capsule is not None:
-            o = _link_moved(b, R, c, dz, steer)
-        else:
-            o = (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
+    reach = max(TOUCH_MM, -threshold)
+    for k, o in moved.items():
+        b = bs[k]
         c_o, r_o = _sphere(o)
-        # spheres round the two shapes apart by more than the touch: they cannot overlap (a quick test first)
-        near = np.sqrt(((C - c_o) ** 2).sum(axis=1)) <= r_o + Rad + TOUCH_MM
+        # spheres round the two shapes apart by more than the reach: they cannot come that close (a quick test)
+        near = np.sqrt(((C - c_o) ** 2).sum(axis=1)) <= r_o + Rad + reach
+        slabs = wheel_slabs(o) if o.kind == "wheel" and o.capsule is None else None
         for i in np.flatnonzero(near):
             k2 = keys[i]
             if k2 in group:
                 continue
             other = bs[k2]
-            if mounted(b, other, design):
+            if _mounted(b, other, design):
                 continue
-            ov = shape_overlap(o, other)
-            if ov > TOUCH_MM:
+            ov = _overlap(o, other, slabs)
+            if ov > threshold:
+                out.append((k, k2, ov))
+    for (k, k2), rest in (own or {}).items():
+        if k in moved and k2 in moved:
+            ov = _overlap(moved[k], moved[k2]) - max(rest, 0.0)
+            if ov > threshold:
                 out.append((k, k2, ov))
     return out
+
+
+FINE_TRAVEL_MM = 5.0  # the fine search's steps around a pair's closest coarse pose
+FINE_STEER_DEG = 1.0
+NEAR_MM = 20.0  # pairs this close at a coarse pose are searched finely around it
+
+
+def _fine(design: dict, bs: dict[str, Body], sid: str, k: str, k2: str, rest: float | None, dz0: float, st0: float,
+          d_dz: float, d_st: float, lo_hi_dz: tuple[float, float], lo_hi_st: tuple[float, float]) -> tuple[float, float, float]:
+    """The pair's largest overlap (past `rest` for a corner's own pair) on the fine grid around (dz0, st0), one
+    coarse step each way: (overlap, dz, steer)."""
+    best = (-np.inf, dz0, st0)
+    dzs = np.arange(max(lo_hi_dz[0], dz0 - d_dz), min(lo_hi_dz[1], dz0 + d_dz) + 1e-9, FINE_TRAVEL_MM) if d_dz else [dz0]
+    sts = np.arange(max(lo_hi_st[0], st0 - d_st), min(lo_hi_st[1], st0 + d_st) + 1e-9, FINE_STEER_DEG) if d_st else [st0]
+    for dz in dzs:
+        for st in sts:
+            o = _pose(design, bs, sid, k, float(dz), float(st))
+            o2 = _pose(design, bs, sid, k2, float(dz), float(st)) if bs[k2].support == sid else bs[k2]
+            ov = _overlap(o, o2) - (max(rest, 0.0) if rest is not None else 0.0)
+            if ov > best[0]:
+                best = (ov, float(dz), float(st))
+    return best
 
 
 def _sphere(b: Body) -> tuple[np.ndarray, float]:
@@ -99,16 +216,31 @@ def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:
     free = {}
     sph = _spheres(bs)
     for s in design["supports"]:
+        sid = s["id"]
         travel = float(s.get("suspension", {}).get("travel_mm") or 0.0)
         dzs = np.linspace(-travel / 2.0, travel / 2.0, STEPS) if travel > 0 else [0.0]
         steers = np.linspace(-steer_max, steer_max, STEPS) if s["actuation"]["steer"] and steer_max > 0 else [0.0]
+        own = _rest_own(design, bs, sid) if corner_kinematics(design, sid) is not None else None
+        # coarse: every pair within NEAR_MM at some pose, and its closest pose
+        close: dict[tuple[str, str], tuple[float, float, float]] = {}
         for dz in dzs:
             for st in steers:
-                for a, b, ov in _hits(design, bs, s["id"], float(dz), float(st), sph):
-                    if ov > hits.get((a, b), (0.0, ""))[0]:
-                        hits[(a, b)] = (ov, f"steer {st:+.0f} deg, wheel travel {dz:+.0f} mm")
+                for a, b, ov in _hits(design, bs, sid, float(dz), float(st), sph, threshold=-NEAR_MM, own=own):
+                    if ov > close.get((a, b), (-np.inf,))[0]:
+                        close[(a, b)] = (ov, float(dz), float(st))
+        # fine: around each close pair's closest coarse pose, one coarse step each way
+        d_dz = float(dzs[1] - dzs[0]) if len(dzs) > 1 else 0.0
+        d_st = float(steers[1] - steers[0]) if len(steers) > 1 else 0.0
+        lims = ((float(dzs[0]), float(dzs[-1])), (float(steers[0]), float(steers[-1])))
+        for (a, b), (ov, dz, st) in close.items():
+            rest = (own or {}).get((a, b))
+            fine = _fine(design, bs, sid, a, b, rest, dz, st, d_dz, d_st, *lims)
+            ov, dz, st = max((ov, dz, st), fine)
+            if ov > TOUCH_MM and ov > hits.get((a, b), (0.0, ""))[0]:
+                what = " (past its overlap at rest)" if rest is not None else ""
+                hits[(a, b)] = (ov, f"steer {st:+.0f} deg, wheel travel {dz:+.0f} mm{what}")
         if s["actuation"]["steer"] and steer_max > 0:
-            free[s["id"]] = free_steer(design, bs, s["id"], steer_max, dzs, sph)
+            free[sid] = free_steer(design, bs, sid, steer_max, dzs, sph, own)
     return {"hits": sorted(((a, b, o, c) for (a, b), (o, c) in hits.items()), key=lambda t: -t[2]), "free_steer": free}
 
 
@@ -150,19 +282,23 @@ def steer_room(design: dict, bs: dict[str, Body] | None = None) -> dict[str, dic
     return out
 
 
-def free_steer(design: dict, bs: dict[str, Body], sid: str, limit: float, dzs, spheres=None) -> float:
+def free_steer(design: dict, bs: dict[str, Body], sid: str, limit: float, dzs, spheres=None, own=None) -> float:
     """Largest steer angle (deg, both ways, whole travel) that adds no contact to what the
-    straight-ahead wheel already has, by bisection. spheres: _spheres(bs), when already made."""
+    straight-ahead wheel already has, by bisection. spheres: _spheres(bs), when already made. own:
+    _rest_own of the corner (its own parts against each other too; default: made here for a corner with
+    hard points)."""
     sph = spheres or _spheres(bs)
+    if own is None and corner_kinematics(design, sid) is not None:
+        own = _rest_own(design, bs, sid)
     base = {}
     for dz in dzs:
-        for a, b, o in _hits(design, bs, sid, float(dz), 0.0, sph):
+        for a, b, o in _hits(design, bs, sid, float(dz), 0.0, sph, own=own):
             base[(a, b)] = max(base.get((a, b), 0.0), o)
 
     def clear(ang: float) -> bool:
         for dz in dzs:
             for sgn in (1, -1):
-                for a, b, o in _hits(design, bs, sid, float(dz), sgn * ang, sph):
+                for a, b, o in _hits(design, bs, sid, float(dz), sgn * ang, sph, own=own):
                     if o > base.get((a, b), 0.0) + TOUCH_MM:
                         return False
         return True
