@@ -1859,7 +1859,7 @@
           260.0
         ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
         "RS1",
         "RS2"
@@ -1930,7 +1930,7 @@
           260.0
         ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
         "LS1",
         "LS2"
@@ -2096,6 +2096,170 @@
         }
       ],
       "module": "body"
+    },
+    {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+        "center_mm": [
+          -1325.0,
+          -300.0,
+          881.95
+        ],
+        "size_mm": [
+          60.0,
+          460.0,
+          897.5
+        ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+        "RS1",
+        "RS2"
+      ],
+      "connects_to": [
+        {
+          "to": "seat_R",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -1295.0,
+            -300.0,
+            563.2
+          ]
+        },
+        {
+          "to": "floor",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -1295.0,
+            -70.0,
+            433.2
+          ]
+        }
+      ],
+      "system": "other",
+      "module": "occupant"
+    },
+    {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+        "center_mm": [
+          -1375.0,
+          -300.0,
+          1441.95
+        ],
+        "size_mm": [
+          80.0,
+          250.0,
+          222.5
+        ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+        "RS1",
+        "RS2"
+      ],
+      "connects_to": [
+        {
+          "to": "seatback_R",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -1335.0,
+            -300.0,
+            1330.7
+          ]
+        }
+      ],
+      "system": "other",
+      "module": "occupant"
+    },
+    {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+        "center_mm": [
+          -1325.0,
+          300.0,
+          881.95
+        ],
+        "size_mm": [
+          60.0,
+          460.0,
+          897.5
+        ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+        "LS1",
+        "LS2"
+      ],
+      "connects_to": [
+        {
+          "to": "seat_L",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -1295.0,
+            300.0,
+            563.2
+          ]
+        },
+        {
+          "to": "floor",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -1295.0,
+            70.0,
+            433.2
+          ]
+        }
+      ],
+      "system": "other",
+      "module": "occupant"
+    },
+    {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+        "center_mm": [
+          -1375.0,
+          300.0,
+          1441.95
+        ],
+        "size_mm": [
+          80.0,
+          250.0,
+          222.5
+        ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+        "LS1",
+        "LS2"
+      ],
+      "connects_to": [
+        {
+          "to": "seatback_L",
+          "via": "bolt",
+          "carries": "load",
+          "at_mm": [
+            -1335.0,
+            300.0,
+            1330.7
+          ]
+        }
+      ],
+      "system": "other",
+      "module": "occupant"
     },
     {
       "id": "occupant_R.neck",
@@ -9816,6 +9980,32 @@
         {
           "id": "if-091",
           "between": [
+            "body",
+            "occupant"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1185.0,
+            -150.0,
+            656.7750000000001
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "body",
+            "occupant"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1185.0,
+            150.0,
+            656.7750000000001
+          ]
+        },
+        {
+          "id": "if-093",
+          "between": [
             "frame",
             "suspension"
           ],
@@ -9827,7 +10017,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -9840,7 +10030,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -9853,7 +10043,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -9866,7 +10056,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -9879,7 +10069,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -9892,7 +10082,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -9905,7 +10095,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -9918,7 +10108,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -9931,7 +10121,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -9944,7 +10134,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -9957,7 +10147,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -9970,7 +10160,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -9983,7 +10173,7 @@
           ]
         },
         {
-          "id": "if-104",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -9996,7 +10186,7 @@
           ]
         },
         {
-          "id": "if-105",
+          "id": "if-107",
           "between": [
             "frame",
             "suspension"
@@ -10009,7 +10199,7 @@
           ]
         },
         {
-          "id": "if-106",
+          "id": "if-108",
           "between": [
             "frame",
             "suspension"
@@ -10022,7 +10212,7 @@
           ]
         },
         {
-          "id": "if-107",
+          "id": "if-109",
           "between": [
             "frame",
             "suspension"
@@ -10035,7 +10225,7 @@
           ]
         },
         {
-          "id": "if-108",
+          "id": "if-110",
           "between": [
             "frame",
             "suspension"
@@ -10048,7 +10238,7 @@
           ]
         },
         {
-          "id": "if-109",
+          "id": "if-111",
           "between": [
             "frame",
             "suspension"
@@ -10061,7 +10251,7 @@
           ]
         },
         {
-          "id": "if-110",
+          "id": "if-112",
           "between": [
             "frame",
             "suspension"
@@ -10074,7 +10264,7 @@
           ]
         },
         {
-          "id": "if-111",
+          "id": "if-113",
           "between": [
             "frame",
             "suspension"
@@ -10087,7 +10277,7 @@
           ]
         },
         {
-          "id": "if-112",
+          "id": "if-114",
           "between": [
             "frame",
             "suspension"
@@ -12026,7 +12216,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -12039,7 +12229,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -12052,7 +12242,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -12065,7 +12255,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -12078,7 +12268,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -12091,7 +12281,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -12104,7 +12294,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -12117,7 +12307,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -12130,7 +12320,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -12143,7 +12333,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -12156,7 +12346,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -12169,7 +12359,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -12182,7 +12372,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -12195,7 +12385,7 @@
           ]
         },
         {
-          "id": "if-104",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -12208,7 +12398,7 @@
           ]
         },
         {
-          "id": "if-105",
+          "id": "if-107",
           "between": [
             "frame",
             "suspension"
@@ -12221,7 +12411,7 @@
           ]
         },
         {
-          "id": "if-106",
+          "id": "if-108",
           "between": [
             "frame",
             "suspension"
@@ -12234,7 +12424,7 @@
           ]
         },
         {
-          "id": "if-107",
+          "id": "if-109",
           "between": [
             "frame",
             "suspension"
@@ -12247,7 +12437,7 @@
           ]
         },
         {
-          "id": "if-108",
+          "id": "if-110",
           "between": [
             "frame",
             "suspension"
@@ -12260,7 +12450,7 @@
           ]
         },
         {
-          "id": "if-109",
+          "id": "if-111",
           "between": [
             "frame",
             "suspension"
@@ -12273,7 +12463,7 @@
           ]
         },
         {
-          "id": "if-110",
+          "id": "if-112",
           "between": [
             "frame",
             "suspension"
@@ -12286,7 +12476,7 @@
           ]
         },
         {
-          "id": "if-111",
+          "id": "if-113",
           "between": [
             "frame",
             "suspension"
@@ -12299,7 +12489,7 @@
           ]
         },
         {
-          "id": "if-112",
+          "id": "if-114",
           "between": [
             "frame",
             "suspension"
@@ -13261,7 +13451,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -13274,7 +13464,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -13287,7 +13477,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -13300,7 +13490,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -13313,7 +13503,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -13326,7 +13516,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -13339,7 +13529,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -13352,7 +13542,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -13365,7 +13555,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -13378,7 +13568,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -13391,7 +13581,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -13404,7 +13594,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -13417,7 +13607,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -13430,7 +13620,7 @@
           ]
         },
         {
-          "id": "if-104",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -13443,7 +13633,7 @@
           ]
         },
         {
-          "id": "if-105",
+          "id": "if-107",
           "between": [
             "frame",
             "suspension"
@@ -13456,7 +13646,7 @@
           ]
         },
         {
-          "id": "if-106",
+          "id": "if-108",
           "between": [
             "frame",
             "suspension"
@@ -13469,7 +13659,7 @@
           ]
         },
         {
-          "id": "if-107",
+          "id": "if-109",
           "between": [
             "frame",
             "suspension"
@@ -13482,7 +13672,7 @@
           ]
         },
         {
-          "id": "if-108",
+          "id": "if-110",
           "between": [
             "frame",
             "suspension"
@@ -13495,7 +13685,7 @@
           ]
         },
         {
-          "id": "if-109",
+          "id": "if-111",
           "between": [
             "frame",
             "suspension"
@@ -13508,7 +13698,7 @@
           ]
         },
         {
-          "id": "if-110",
+          "id": "if-112",
           "between": [
             "frame",
             "suspension"
@@ -13521,7 +13711,7 @@
           ]
         },
         {
-          "id": "if-111",
+          "id": "if-113",
           "between": [
             "frame",
             "suspension"
@@ -13534,7 +13724,7 @@
           ]
         },
         {
-          "id": "if-112",
+          "id": "if-114",
           "between": [
             "frame",
             "suspension"
@@ -14121,6 +14311,54 @@
         },
         {
           "center_mm": [
+            -1325.0,
+            -300.0,
+            881.95
+          ],
+          "size_mm": [
+            110.0,
+            510.0,
+            947.5
+          ]
+        },
+        {
+          "center_mm": [
+            -1375.0,
+            -300.0,
+            1441.95
+          ],
+          "size_mm": [
+            130.0,
+            300.0,
+            272.5
+          ]
+        },
+        {
+          "center_mm": [
+            -1325.0,
+            300.0,
+            881.95
+          ],
+          "size_mm": [
+            110.0,
+            510.0,
+            947.5
+          ]
+        },
+        {
+          "center_mm": [
+            -1375.0,
+            300.0,
+            1441.95
+          ],
+          "size_mm": [
+            130.0,
+            300.0,
+            272.5
+          ]
+        },
+        {
+          "center_mm": [
             -1233.53436097791,
             -300.0,
             1417.0500000000002
@@ -14584,6 +14822,32 @@
             150.0,
             497.40000000000003
           ]
+        },
+        {
+          "id": "if-091",
+          "between": [
+            "body",
+            "occupant"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1185.0,
+            -150.0,
+            656.7750000000001
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "body",
+            "occupant"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1185.0,
+            150.0,
+            656.7750000000001
+          ]
         }
       ],
       "variables": [
@@ -14591,6 +14855,8 @@
         "grab_bar_d",
         "grab_bar_gap",
         "grab_bar_t",
+        "headrest_gap",
+        "headrest_height",
         "rollbar",
         "rollbar_b",
         "rollbar_d",
@@ -15275,6 +15541,32 @@
             150.0,
             497.40000000000003
           ]
+        },
+        {
+          "id": "if-091",
+          "between": [
+            "body",
+            "occupant"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1185.0,
+            -150.0,
+            656.7750000000001
+          ]
+        },
+        {
+          "id": "if-092",
+          "between": [
+            "body",
+            "occupant"
+          ],
+          "via": "bolt",
+          "point_mm": [
+            -1185.0,
+            150.0,
+            656.7750000000001
+          ]
         }
       ],
       "variables": [
@@ -15342,6 +15634,8 @@
     "grab_bar_d": "握り棒の太さ",
     "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
     "grab_bar_t": "握り棒の管の厚さ",
+    "headrest_gap": "頭とヘッドレストの前後のすき間",
+    "headrest_height": "ヘッドレストの上端の高さ (座面から)",
     "rollbar": "ロールバー (あり・なし)",
     "rollbar_b": "ロールバーの角管の幅",
     "rollbar_d": "ロールバーの丸管の太さ",

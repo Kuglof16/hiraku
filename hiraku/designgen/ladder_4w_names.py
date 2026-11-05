@@ -101,6 +101,7 @@ VARIABLE_NAMES_JA = {
     "steering_column_angle": "コラムの傾き", "steering_wheel_height": "ハンドルの高さ (座面から)",
     "max_steer_angle": "ハンドルを切れる角度", "pedal_mount": "ペダルの台",
     "seat_height": "座面の高さ (床から)", "seat_slide": "座席の前後の滑りの量", "seat_depth": "座面の奥行き",
+    "headrest_height": "ヘッドレストの上端の高さ (座面から)", "headrest_gap": "頭とヘッドレストの前後のすき間",
     "rollbar": "ロールバー (あり・なし)", "rollbar_height": "ロールバーの高さ (座面から)",
     "rollbar_width": "ロールバーの左右の柱の間", "rollbar_offset": "ロールバーの位置 (座席の後ろからの距離)",
     "rollbar_square": "ロールバーを角管にするか", "rollbar_d": "ロールバーの丸管の太さ",

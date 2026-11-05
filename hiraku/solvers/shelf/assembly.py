@@ -18,6 +18,7 @@ from ..k4_geometry.people import slide_ends
 from ..k4_geometry.obb import from_box, overlap
 from ..k4_geometry.people import KNEE_COMFORT_SOURCE, PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
+from ..k4_geometry.seats import restraint_results
 from .base import LOADING, BuiltinTool, Predicts, Record, check_record, on_board, result
 
 
@@ -214,6 +215,10 @@ class Assembly(BuiltinTool):
                 groups[g] = (float(v), where)
         for g, (v, where) in groups.items():
             results.append(result(g, v, "mm", where))
+        # the head restraints against both body sizes' heads (k4_geometry.seats): the worst over the occupants, and
+        # per restraint (<q>.<part id>) and per body size there (<q>_<m95|f5>.<part id>), each quantity once
+        for q, (v, where) in restraint_results(design).items():
+            results.append(result(q, v, "mm", where))
         at_ends = {(a, b, o): c for a, b, o, c in ends}
         found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest",
                   "condition": at_ends.get((a, b, o), "at rest")} for a, b, o in static]

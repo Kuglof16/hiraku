@@ -137,8 +137,12 @@ PEDAL_KINDS = ("pedal", "accelerator_pedal", "brake_pedal")
 WHEEL_KINDS = ("steering", "steering_wheel")  # the steering wheel (designs with pedals only, see body_fit)
 # Bodies the legs and feet are not checked against: the person's own seat, the occupants' mass
 # boxes (the body itself) and, for the feet, the floor and pedals they rest on.
-LEG_SKIP_KINDS = ("seat", "occupant")
-FOOT_SKIP_KINDS = ("seat", "occupant", *PEDAL_KINDS)
+# A seat's back and head restraint (designgen ladder_4w: behind the seat box's rear face, within its width): they go
+# with the seat on its slide (seat_back_parts), are not a roof over the head (fit's head_clearance) and, as the seat,
+# are what the person sits against (the legs are not checked against them).
+SEAT_BACK_KINDS = ("seatback", "head_restraint")
+LEG_SKIP_KINDS = ("seat", "occupant", *SEAT_BACK_KINDS)
+FOOT_SKIP_KINDS = ("seat", "occupant", *SEAT_BACK_KINDS, *PEDAL_KINDS)
 
 
 def _box(p):
@@ -353,7 +357,7 @@ def fit(design: dict) -> dict:
         seat = _seat_of(o, seats)
         seat_top = _box(seat)[1][2] if seat else lo[2]
         head = seat_top + AIST["sitting_height_m95"]
-        above = [p for p in parts if p is not o and p["kind"] not in ("occupant",)
+        above = [p for p in parts if p is not o and p["kind"] not in ("occupant", *SEAT_BACK_KINDS)
                  and _box(p)[0][2] >= seat_top and _overlaps_xy(p, o)]
         if above:
             roof = min(_box(p)[0][2] for p in above)
@@ -723,7 +727,7 @@ def _knee_length(design: dict, o: dict, seat: dict | None, seat_back: float,
     lo, _ = _box(o)
     seat_top = _box(seat)[1][2] if seat else lo[2]
     ahead = [(p, e) for p, e in zip(parts, ext) if p is not o and p is not seat
-             and p["kind"] not in ("occupant", "seat")
+             and p["kind"] not in ("occupant", "seat", *SEAT_BACK_KINDS)
              and e[0][0] > seat_back and e[0][2] < seat_top + KNEE_BAND_MM and e[1][2] > seat_top and _overlaps_y(p, o)]
     if not ahead:
         return None
@@ -731,9 +735,27 @@ def _knee_length(design: dict, o: dict, seat: dict | None, seat_back: float,
     return float(e[0][0] - seat_back), first["id"]
 
 
+def seat_back_parts(design: dict, seat: dict) -> list[dict]:
+    """The seat's back and head restraint: of the parts of SEAT_BACK_KINDS whose box overlaps the seat's in y and
+    whose front face is at or behind the seat back (within 1e-6 mm), for each kind the one nearest the seat's middle
+    in y."""
+    lo, hi = _box(seat)
+    best: dict[str, tuple[float, dict]] = {}
+    for p in design.get("parts", []):
+        if p["kind"] not in SEAT_BACK_KINDS:
+            continue
+        plo, phi = _extent(p)
+        if phi[1] <= lo[1] or plo[1] >= hi[1] or phi[0] > lo[0] + 1e-6:
+            continue
+        d = abs(float(p["box"]["center_mm"][1]) - float(seat["box"]["center_mm"][1]))
+        if p["kind"] not in best or d < best[p["kind"]][0]:
+            best[p["kind"]] = (d, p)
+    return [p for _, p in best.values()]
+
+
 def slide_ends(design: dict) -> list[tuple[str, dict, set[str]]]:
     """The design with the driver's seat (the seat of each occupant with a pedal) at each end of its slide:
-    [("front" | "rear", design copy, {seat part ids moved})]; [] without a slide. The seat's box is at the middle
+    [("front" | "rear", design copy, {seat part ids moved, with the seat's back parts})]; [] without a slide. The seat's box is at the middle
     of the travel in the design itself, so the interference at rest there does not see its ends."""
     import copy
 
@@ -744,6 +766,7 @@ def slide_ends(design: dict) -> list[tuple[str, dict, set[str]]]:
     seats = [p for p in parts if p["kind"] == "seat"]
     moved = {s["id"] for o in occupants(design) for s in [_seat_of(o, seats)]
              if s is not None and _drives(design, o)}
+    moved |= {b["id"] for s in seats if s["id"] in moved for b in seat_back_parts(design, s)}  # the back goes with it
     out = []
     for label, dx in (("front", slide / 2.0), ("rear", -slide / 2.0)):
         d = copy.deepcopy(design)
