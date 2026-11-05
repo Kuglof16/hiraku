@@ -403,6 +403,23 @@ class Runs(unittest.TestCase):
         self.assertEqual(r["min_rear_wheel_load"], r["min_wheel_load"])  # load moves forward: a rear wheel is lightest
         self.assertGreater(r["max_pitch"], 0.0)  # nose down
 
+    def test_braking_scene_has_the_road_mu_and_the_criterion_stop_line(self):
+        # no criterion in the load case: the road with its mu only
+        scene = self.recs["braking"]["scene"]
+        self.assertEqual([o["kind"] for o in scene], ["ground"])
+        self.assertIn("μ 0.6", scene[0]["label"])
+        self.assertEqual(scene[0]["size_mm"][2], 0.0)
+        # a run through Tool.run takes the criterion from the load case
+        from hiraku.solvers.k2_vehicle.shelf.braking import BrakingTool
+        lc = {"load_case_id": "S4-t", "test_id": "S4", "domain": "handling", "title": "S4",
+              "params": {"loading": "empty", "speed": q(35.0, "km/h"), "mu": q(0.6, "1")},
+              "criterion": {"quantity": "stopping_distance", "op": "<=", "limit": {"value": 14.0, "unit": "m"}}}
+        rec = BrakingTool().run(demo_design(), lc, [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual([o["kind"] for o in rec["scene"]], ["ground", "gate"])
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+
+
     def test_launch_reaches_40(self):
         r = self.res("launch")
         self.assertEqual(r["reached_target"], 1.0)
@@ -433,6 +450,34 @@ class Runs(unittest.TestCase):
         self.assertEqual(self.res("lane_change")["two_wheel_lift"], 0.0)
         self.assertLess(self.res("lane_change")["max_path_error"], 1.0)
         self.assertGreaterEqual(self.res("offroad_roll")["two_wheel_lift_time"], 0.0)
+
+
+class BrakingScene(unittest.TestCase):
+    def test_the_stop_line_is_the_front_tyres_front_when_the_distance_starts_plus_the_limit(self):
+        from hiraku.solvers.k2_vehicle.shelf.braking import BrakingTool
+        tool = BrakingTool()
+        veh = build_vehicle(on_board(demo_design(), "two_cargo"), {"mu": 0.6})
+        front = max(float(c.pos[0]) + c.radius for c in veh.corners)
+        r = {"x_cmd": 4.86, "x_brake": 5.0, "x_stop": 15.0}
+        for quantity, start in (("stopping_distance", 4.86), ("braking_distance", 5.0)):
+            tool._criterion = {"quantity": quantity, "op": "<=", "limit": {"value": 14.0, "unit": "m"}}
+            got = tool._stop_scene(veh, r, None)
+            self.assertEqual([o["kind"] for o in got], ["ground", "gate"])
+            gate = got[1]
+            self.assertAlmostEqual(gate["position_mm"][0], round((start + front + 14.0) * 1000.0, 1), places=6)
+            self.assertEqual(gate["size_mm"][0], 0.0)
+            self.assertEqual(gate["size_mm"][2], 0.0)
+            self.assertGreater(gate["size_mm"][1], 0.0)
+            ground = got[0]
+            self.assertIn("μ 0.6", ground["label"])
+            self.assertGreater(ground["position_mm"][0] + ground["size_mm"][0] / 2.0, gate["position_mm"][0])
+            for o in got:
+                self.assertEqual(contract.errors("scene_object", o), [])
+        # a criterion on another quantity or unit draws no line; on a grade the slope carries the mu
+        tool._criterion = {"quantity": "peak_decel", "op": "<=", "limit": {"value": 9.0, "unit": "m/s^2"}}
+        got = tool._stop_scene(veh, r, 0.1)
+        self.assertEqual([o["kind"] for o in got], ["slope"])
+        self.assertIn("μ 0.6", got[0]["label"])
 
 
 if __name__ == "__main__":
