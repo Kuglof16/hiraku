@@ -25,8 +25,8 @@ Record = dict[str, Any]
 G = 9.80665  # m/s^2, standard gravity
 
 # name -> (label, unit, scope). scope: part | member | support | design | declared
-# "declared" names are part of the vocabulary but no design carries them yet (bend radius, hole
-# positions ...): a rule that uses one is reported as not evaluable, which tells the designer what to add.
+# "declared" names are part of the vocabulary; a part gives them in part["declared"] ({name: {value, unit, basis}}).
+# A rule that uses one the part does not declare is reported as not evaluable, which tells the designer what to add.
 FACTS: dict[str, tuple[str, str, str]] = {
     "mass_kg": ("質量", "kg", "part"),
     "size_x_mm": ("箱の前後の長さ", "mm", "part"),
@@ -111,6 +111,19 @@ def design_facts(design: Record, requirements: list[Record] | None = None) -> di
     return out
 
 
+def _declared_facts(part: Record) -> dict[str, float]:
+    """Values a part declares about itself (part["declared"]: {name: {value, unit "mm", basis}}), the names of the
+    "declared" scope (bend radius, hole positions, bolt diameter ...). A name outside that vocabulary, a value that is
+    not a number and a unit other than mm are not read: the rule that needs the fact stays not evaluable."""
+    out: dict[str, float] = {}
+    for name, d in (part.get("declared") or {}).items():
+        if FACTS.get(name, ("", "", ""))[2] != "declared" or not isinstance(d, dict):
+            continue
+        if _num(d.get("value")) and d.get("unit", "mm") == "mm":
+            out[name] = float(d["value"])
+    return out
+
+
 def _box_facts(part: Record) -> dict[str, float]:
     cx, cy, cz = part["box"]["center_mm"]
     sx, sy, sz = part["box"]["size_mm"]
@@ -191,7 +204,7 @@ def targets(design: Record, requirements: list[Record] | None = None) -> list[Re
     part_ids = set()
     for p in design.get("parts", []):
         part_ids.add(p["id"])
-        facts = {**shared, **_box_facts(p)}
+        facts = {**shared, **_box_facts(p), **_declared_facts(p)}
         if p["id"] in members_by_part:
             facts.update(_member_facts(design, members_by_part[p["id"]]))
         else:  # no member of its own: the section of the members it is connected to (connects_to names them)

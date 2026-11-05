@@ -59,6 +59,22 @@ class FactsTest(unittest.TestCase):
         d["parts"].append(lone)
         self.assertNotIn("wall_mm", by_id(facts.targets(d, []))["lone"]["facts"])  # nothing named: not evaluable, as before
 
+    def test_a_part_gives_the_values_it_declares_and_only_those_of_the_vocabulary_in_mm(self):
+        design = mini_design()
+        design["parts"][2]["declared"] = {
+            "bend_radius_mm": {"value": 2.0, "unit": "mm", "basis": "assumption"},
+            "hole_edge_mm": {"value": 9, "basis": "from the drawing"},  # no unit: mm
+            "hole_diameter_mm": {"value": 4, "unit": "in", "basis": "x"},  # not mm: not read
+            "thickness_mm": {"value": 99, "unit": "mm", "basis": "x"},  # not a declared name: not read (the box says 20)
+            "bolt_diameter_mm": {"value": "M6", "unit": "mm", "basis": "x"},  # not a number
+        }
+        f = by_id(facts.targets(design))["floor"]["facts"]
+        self.assertEqual((f["bend_radius_mm"], f["hole_edge_mm"]), (2.0, 9.0))
+        self.assertNotIn("hole_diameter_mm", f)
+        self.assertNotIn("bolt_diameter_mm", f)
+        self.assertEqual(f["thickness_mm"], 20)
+        self.assertNotIn("bend_radius_mm", by_id(facts.targets(design))["seat"]["facts"])  # only the part that says it
+
     def test_support_facts(self):
         total = 50 + 12 + 8 + 150
         fl, fr = self.t["support:FL"]["facts"], self.t["support:FR"]["facts"]
