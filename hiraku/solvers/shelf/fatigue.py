@@ -235,41 +235,64 @@ class Fatigue(BuiltinTool):
 
     def known_answers(self) -> list[Record]:
         out = []
-        cyc = rainflow([-2, 1, -3, 5, -1, 3, -4, 4, -2])
+        seq = [-2, 1, -3, 5, -1, 3, -4, 4, -2]
+        cyc = rainflow(seq)
         counts: dict[float, float] = {}
         for r, _, c in cyc:
             counts[r] = counts.get(r, 0.0) + c
         src = ("ASTM E1049-85 rainflow example [-2, 1, -3, 5, -1, 3, -4, 4, -2]: ranges 3 (0.5), 4 (1.5), 6 (0.5), 8 (1.0), "
                "9 (0.5); not checked against the standard text in this repository")
-        for rng, n in ((3.0, 0.5), (4.0, 1.5), (6.0, 0.5), (8.0, 1.0), (9.0, 0.5)):
+        expected_counts = ((3.0, 0.5), (4.0, 1.5), (6.0, 0.5), (8.0, 1.0), (9.0, 0.5))
+        src_ja = (f"ASTM E1049-85 のレインフローの例 {seq}: 幅と回数は "
+                  + "、".join(f"{r:g} ({n:g} 回)" for r, n in expected_counts)
+                  + " (ASTM E1049-85 の本文、確かめていない)")
+        for rng, n in expected_counts:
             out.append(check_record("ASTM E1049 rainflow example", f"count_of_range_{rng:g}", n, counts.get(rng, 0.0),
-                                    "1", 1e-12, src))
+                                    "1", 1e-12, src,
+                                    case_ja="ASTM E1049 のレインフロー (応力の繰り返しの数え方) の例", source_ja=src_ja))
         # FAT 71, m 3, knee 1e7 and 22: the shape of the IIW recommendations (Hobbacher 2016; not checked), used here
         # as test values (the checks compare with closed forms on the same numbers)
-        out.append(check_record("S-N curve, FAT 71, m 3", "cycles_at_FAT", 2e6, sn_cycles(71.0, 71.0, 3.0, 1e7, 22.0),
-                                "1", 1e-12, "the FAT class is the stress range at 2e6 cycles"))
-        D = miner([(100.0, 0.0, 1000.0)], 71.0, 3.0, 1e7, 22.0)
+        fat, m, nk = 71.0, 3.0, 1e7
+        sn_ja = f"S-N 曲線、FAT {fat:g}、m {m:g}"
+        out.append(check_record("S-N curve, FAT 71, m 3", "cycles_at_FAT", 2e6, sn_cycles(fat, fat, m, nk, 22.0),
+                                "1", 1e-12, "the FAT class is the stress range at 2e6 cycles",
+                                case_ja=sn_ja, source_ja="FAT の等級は、2e6 回でこわれる応力の幅"))
+        n_c, s_c = 1000.0, 100.0
+        D = miner([(s_c, 0.0, n_c)], fat, m, nk, 22.0)
         out.append(check_record("1000 cycles of 100 MPa, FAT 71, m 3", "damage", 1000.0 / (2e6 * (71.0 / 100.0) ** 3), D,
-                                "1", 1e-12, "Miner: D = n / N, N = 2e6 (FAT / range)^m"))
+                                "1", 1e-12, "Miner: D = n / N, N = 2e6 (FAT / range)^m",
+                                case_ja=f"{s_c:g} MPa の幅を {n_c:g} 回、FAT {fat:g}、m {m:g}",
+                                source_ja="マイナー則: D = n / N、N = 2e6 (FAT / 応力の幅)^m"))
         knee = 71.0 * (2e6 / 1e7) ** (1.0 / 3.0)
+        m2 = spectrum_slope(m)
         out.append(check_record("S-N curve below the knee for a spectrum, FAT 71, m 3", "cycles_at_half_the_knee_range",
-                                1e7 * 2.0**5, sn_cycles(knee / 2.0, 71.0, 3.0, 1e7, spectrum_slope(3.0)), "1", 1e-9,
+                                1e7 * 2.0**5, sn_cycles(knee / 2.0, fat, m, nk, spectrum_slope(m)), "1", 1e-9,
                                 "slope 2 m - 1 = 5 below the knee for Miner summation of a spectrum (IIW-1823-07 (2008) "
-                                "sec. 4.3.1, p.110): half the knee range lasts 2^5 times the knee cycles"))
+                                "sec. 4.3.1, p.110): half the knee range lasts 2^5 times the knee cycles",
+                                case_ja=f"幅の変わる繰り返し (スペクトル) の、曲がり点より下の {sn_ja}",
+                                source_ja=(f"スペクトルをマイナー則で足すときは、曲がり点より下の傾きを 2 m - 1 = {m2:g} にする "
+                                           f"(IIW-1823-07 (2008) 4.3.1 節、p.110)。曲がり点の幅の半分なら、曲がり点の回数の "
+                                           f"2^{m2:g} 倍もつ")))
         rng = np.random.default_rng(0)
         series = rng.normal(size=4000)
         out.append(check_record("rainflow of a random series", "sum_of_half_ranges",
                                 float(np.sum(np.abs(np.diff(_rev(series))))) / 2.0,
                                 sum(r * c for r, _, c in rainflow(series)), "1", 1e-9,
-                                "every reversal is counted once: sum over cycles of range * count = half the total travel"))
+                                "every reversal is counted once: sum over cycles of range * count = half the total travel",
+                                case_ja="でたらめな数の並びのレインフロー",
+                                source_ja="折り返しはどれも 1 回だけ数える: 繰り返しごとの 幅 × 回数 の和 = 動いた量の合計の半分"))
         x = np.arange(0.0, 2000.0, ROAD_DX)
         z = road_profile(x, ROAD_CLASSES["C"], 0)
         f, p = signal.welch(z, fs=1.0 / ROAD_DX, nperseg=4096)
-        band = (f > 0.05) & (f < 1.0)
+        n_lo, n_hi = 0.05, 1.0
+        band = (f > n_lo) & (f < n_hi)
         g_fit = float(np.mean(p[band] * (f[band] / N0) ** WAVINESS))
         out.append(check_record("ISO 8608 class C road made by the sum of cosines", "G_d_at_n0", 256e-6 * 1e6, g_fit * 1e6,
                                 "1", 0.15, "one-sided Welch PSD of the generated road over 0.05-1 cycle/m, "
-                                "scaled by (n/n0)^2 and averaged (x 1e6 m^3); random phases leave about 10 % scatter"))
+                                "scaled by (n/n0)^2 and averaged (x 1e6 m^3); random phases leave about 10 % scatter",
+                                case_ja="cos の和で作った ISO 8608 のクラス C の道",
+                                source_ja=(f"作った道の片側の Welch PSD を {n_lo:g}〜{n_hi:g} cycle/m で、(n/n0)^{WAVINESS:g} を"
+                                           "かけて平均した (x 1e6 m^3)。位相がでたらめなので 10 % ほどばらつく")))
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:

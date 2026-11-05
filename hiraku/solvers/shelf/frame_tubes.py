@@ -618,11 +618,25 @@ def tube_known_answers() -> list[Record]:
     out = []
     case = (f"T joint of rect tubes (40x80x2.3 through tube held at both ends, 40x40x2.3 branch square on its side "
             f"wall), {T_JOINT_P_N:g} N down at the branch's end, {T_SIZE_MM:g} mm elements")
+    secs = {k: v["dims_mm"] for k, v in t_joint_design()["sections"].items()}
+    rail, cross = secs["rail"], secs["cross"]
+
+    def case_ja(size: float) -> str:
+        return (f"角パイプの T 継手 ({rail['b']:g}x{rail['h']:g}x{rail['t']:g} の通しの管を両端で止め、"
+                f"{cross['b']:g}x{cross['h']:g}x{cross['t']:g} の枝をその横の壁に直角に当てた)、枝の先に "
+                f"{T_JOINT_P_N:g} N を下向きに、要素の大きさ {size:g} mm")
+
+    src_ja = ("同じ継手を節点を共有するメッシュにした k1_shell.stress.hot_spots の値 (frame_shell の読み方とメッシュ)。")
     fs, sol, hs = t_joint_tubes()
-    for size, tol, what in ((T_SIZE_MM, 1e-4, "at this size every ring node falls on a host node, so the joint is "
-                                              "shared nodes as k1_shell's: a check of the read-out rule on the same mesh"),
-                            (5.0, 0.03, "at 5 mm 10 of the ring's 48 nodes are tied: a cross-check of the tie, not a "
-                                        "closed form")):
+    fine = 5.0
+    for size, tol, what, what_ja in (
+            (T_SIZE_MM, 1e-4, "at this size every ring node falls on a host node, so the joint is "
+                              "shared nodes as k1_shell's: a check of the read-out rule on the same mesh",
+             "この大きさでは枝の切り口の輪の節点がすべて相手の管の節点に重なり、k1_shell と同じ節点を共有する継手になる。"
+             "同じメッシュで読み方を確かめる"),
+            (fine, 0.03, "at 5 mm 10 of the ring's 48 nodes are tied: a cross-check of the tie, not a "
+                         "closed form",
+             f"{fine:g} mm では輪の 48 個の節点のうち 10 個が tie でつながる。tie の確かめあわせで、式で出した答えではない")):
         c = case if size == T_SIZE_MM else case.replace(f"{T_SIZE_MM:g} mm elements", f"{size:g} mm elements")
         h_t = hs if size == T_SIZE_MM else t_joint_tubes(size)[2]
         ref = t_joint_k1(size)
@@ -632,18 +646,29 @@ def tube_known_answers() -> list[Record]:
             out.append(check_record(c, f"max_hot_spot_stress ({side} side)", abs(b["value"]),
                                     abs(a["value"]) if a else None, "MPa", tol,
                                     "k1_shell.stress.hot_spots on the same joint meshed with shared nodes (frame_shell's "
-                                    "rule and mesh); " + what))
+                                    "rule and mesh); " + what,
+                                    case_ja=case_ja(size),
+                                    source_ja=src_ja + what_ja))
     got, exp, s = branch_bending(fs, sol)
     out.append(check_record(case, f"branch top wall outer axial stress at s = {s:.0f} mm", exp, got, "MPa", 0.03,
-                            "beam theory M c / I (I of the shell's mid-line section)"))
+                            "beam theory M c / I (I of the shell's mid-line section)",
+                            case_ja=case_ja(T_SIZE_MM),
+                            source_ja="梁の式 M c / I (I はシェルの中面の断面のもの)"))
+    n_c = 16
     for ang in (60.0, 45.0):
-        a = checks.oblique_round_t(ang, 16)
+        a = checks.oblique_round_t(ang, n_c)
         tip, gap = _oblique_tie(ang)
         c = f"oblique round T at {ang:g} deg (fe check 9: 32 x 2 tube, 17 x 2 branch, 16 facets on the circle)"
+        c_ja = (f"丸パイプが {ang:g}° で斜めに当たる T 継手 (fe の確かめ 9: 32 x 2 の管に 17 x 2 の枝、円を {n_c} 角に)")
         out.append(check_record(c, "tip deflection (z)", float(a["tip"][2]), tip, "mm", 0.01,
-                                "fe.checks.oblique_round_t (the saddle cut and tie built by hand); rows rounded vs ceiled"))
+                                "fe.checks.oblique_round_t (the saddle cut and tie built by hand); rows rounded vs ceiled",
+                                case_ja=c_ja,
+                                source_ja="fe.checks.oblique_round_t (鞍形の切り口と tie を手で組んだもの)。"
+                                          "輪の数を四捨五入するか切り上げるかが違う"))
         out.append(check_record(c, "largest tie gap (saddle on the facets)", float(a["max_gap"]), gap, "mm", 1e-6,
-                                "fe.checks.oblique_round_t"))
+                                "fe.checks.oblique_round_t",
+                                case_ja=c_ja,
+                                source_ja="fe.checks.oblique_round_t (鞍形の切り口と tie を手で組んだもの)"))
     return out
 
 
