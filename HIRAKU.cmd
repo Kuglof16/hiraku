@@ -11,4 +11,9 @@ if not exist "%PY%" (
   exit /b 1
 )
 "%PY%" -m hiraku.webserve --open
-if errorlevel 1 pause
+if errorlevel 1 (
+  echo.
+  echo HIRAKU: the screen's server did not start - see the line above.
+  echo If HIRAKU is already open in another window, use that window, or close it and double-click this file again.
+  pause
+)
