@@ -2267,6 +2267,48 @@
               "type": "string"
             }
           }
+        },
+        "hot_spots": {
+          "type": "array",
+          "description": "The model's hottest places, highest utilisation first, whether or not the hand calculation predicted them (contract: CAE の役目). A row over 1 on the load case's criterion quantity makes the load case red even where nothing was predicted.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "where",
+              "quantity",
+              "value",
+              "limit",
+              "utilisation",
+              "predicted"
+            ],
+            "properties": {
+              "where": {
+                "type": "string",
+                "description": "member, part, joint or element group id"
+              },
+              "quantity": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/quantity"
+              },
+              "limit": {
+                "$ref": "#/$defs/quantity"
+              },
+              "utilisation": {
+                "type": "number",
+                "minimum": 0
+              },
+              "predicted": {
+                "type": "boolean",
+                "description": "a prediction of this run named this place"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },

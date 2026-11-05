@@ -118,6 +118,14 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "safe_side": True}), [])
         self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "ends_case": True}), [])
 
+    def test_analysis_hot_spots(self):
+        a = load("analysis.json")
+        row = {"where": "rail_R_BE", "quantity": "max_hot_spot_stress", "value": {"value": 151.0, "unit": "MPa"},
+               "limit": {"value": 143.3, "unit": "MPa"}, "utilisation": 1.054, "predicted": False}
+        self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [row]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{k: v for k, v in row.items() if k != "predicted"}]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": -1}]}), [])
+
     def test_bracket_joint_sizes(self):
         d = load("design.json")
         part = dict(d["parts"][0])
