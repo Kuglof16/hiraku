@@ -75,6 +75,16 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(f["thickness_mm"], 20)
         self.assertNotIn("bend_radius_mm", by_id(facts.targets(design))["seat"]["facts"])  # only the part that says it
 
+    def test_a_joint_gives_the_bolt_diameter_and_the_weld_throat_and_a_declared_value_wins(self):
+        design = mini_design()
+        design["parts"][2]["joint"] = {"bolt_d_mm": 8, "bolts": 2, "plate_t_mm": 4, "weld_leg_mm": 5}
+        design["parts"][3]["joint"] = {"bolt_d_mm": 8, "weld_leg_mm": 5}
+        design["parts"][3]["declared"] = {"bolt_diameter_mm": {"value": 10, "unit": "mm", "basis": "from the drawing"}}
+        t = by_id(facts.targets(design))
+        self.assertEqual((t["floor"]["facts"]["bolt_diameter_mm"], t["floor"]["facts"]["weld_throat_mm"]), (8.0, 3.5))
+        self.assertEqual((t["cargo"]["facts"]["bolt_diameter_mm"], t["cargo"]["facts"]["weld_throat_mm"]), (10.0, 3.5))
+        self.assertNotIn("bolt_diameter_mm", t["seat"]["facts"])
+
     def test_support_facts(self):
         total = 50 + 12 + 8 + 150
         fl, fr = self.t["support:FL"]["facts"], self.t["support:FR"]["facts"]

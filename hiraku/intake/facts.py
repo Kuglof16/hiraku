@@ -23,6 +23,7 @@ from typing import Any
 Record = dict[str, Any]
 
 G = 9.80665  # m/s^2, standard gravity
+WELD_THROAT_PER_LEG = 0.7  # a fillet weld's throat is 0.7 of its leg (the joint gives the leg)
 
 # name -> (label, unit, scope). scope: part | member | support | design | declared
 # "declared" names are part of the vocabulary; a part gives them in part["declared"] ({name: {value, unit, basis}}).
@@ -121,6 +122,12 @@ def _declared_facts(part: Record) -> dict[str, float]:
             continue
         if _num(d.get("value")) and d.get("unit", "mm") == "mm":
             out[name] = float(d["value"])
+    joint = part.get("joint")  # the joint a part carries gives the same facts once (declared wins when both say it)
+    if isinstance(joint, dict):
+        if _num(joint.get("bolt_d_mm")):
+            out.setdefault("bolt_diameter_mm", float(joint["bolt_d_mm"]))
+        if _num(joint.get("weld_leg_mm")):
+            out.setdefault("weld_throat_mm", WELD_THROAT_PER_LEG * float(joint["weld_leg_mm"]))
     return out
 
 
