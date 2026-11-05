@@ -10,6 +10,11 @@
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?on=joints      turn overlays on at load (joints: the joint marks, off by default; A7 follows it too)
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?tabs=A1:0,A2:44.5,bench:80
+//                   the tabs on the replay's time: from t seconds, that tab (so one URL films ① → ② → ③;
+//                   ?t= and seek, back or forth, show the tab of that time). Before the first entry the tab
+//                   is chosen as without it; an unknown tab name is left out; wins over ?tab=; a tab
+//                   pressed by hand ends it. Names as ?tab= (bench, grid, A1, A2, A4, A5, A7)
 //   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
 //                   見せる / 作業台 switch at the top right turns it on and off
@@ -60,9 +65,24 @@ const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), show
 const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
 let asmPanel = null; // mounted on first show
 
+// ?tabs=A1:0,A2:44.5,bench:80: from t seconds of the replay, that tab (sorted by t; an unknown tab or
+// time is left out). Before the first entry the tab is chosen as without it.
+function parseTabPlan(text) {
+  const plan = [];
+  for (const item of (text ?? "").split(",")) {
+    const at = item.lastIndexOf(":");
+    if (at < 1) continue;
+    const tab = item.slice(0, at).trim();
+    const t = Number(item.slice(at + 1));
+    if (TABS.includes(tab) && item.slice(at + 1).trim() !== "" && Number.isFinite(t)) plan.push({ t, tab });
+  }
+  return plan.sort((a, b) => a.t - b.t);
+}
+
 const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
+  tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false }, // joints: off at first; modules: modules, spaces (modules.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
@@ -189,7 +209,15 @@ function selectedLc(s) {
   return id;
 }
 
+function plannedTab(t) {
+  let tab = null;
+  for (const p of ui.tabPlan) if (p.t <= t + 1e-9) tab = p.tab;
+  return tab;
+}
+
 function currentTab(s) {
+  const planned = ui.tabPlan.length ? plannedTab(player.playhead) : null;
+  if (planned) return planned;
   if (ui.pinnedTab) return ui.pinnedTab;
   if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A4" || s.focus.screen === "A7") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
@@ -1616,6 +1644,7 @@ $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
   if (!b) return;
   ui.pinnedTab = b.dataset.tab;
+  ui.tabPlan = []; // a tab pressed by hand ends ?tabs=
 });
 window.addEventListener("keydown", (ev) => {
   if (ev.target.closest("input, textarea")) return;
@@ -2083,6 +2112,7 @@ $("runlist").addEventListener("click", (ev) => {
 // A new request: the intake tabs on the draft (whether Claude can be asked comes from the launcher).
 async function startDraft() {
   ui.pinnedTab = "A1";
+  ui.tabPlan = []; // no replay to follow
   try {
     const info = await (await fetch("/api/launch", { cache: "no-store" })).json();
     Object.assign(draft, { claudeReady: !!info.claude_ready, keyName: info.key_name });

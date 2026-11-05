@@ -1,7 +1,10 @@
 """The replay's time on the intake screens (web/js/app.js syncIntakeTime -> intake.setTime): a lit
 card's glow in A1 follows the playback time, so opening the same ?tab=A1 or ?tab=A2 with the same
 ?t= twice gives the same picture (shot at the stage's own size, 1920x1080: at 1280x720 the
-background grid's rounding moves, 0299313); seek and plain playback pass the time too.
+background grid's rounding moves, 0299313); seek and plain playback pass the time too. And
+?tabs=A1:0,A2:40,bench:55 (app.js tabPlan): the tab of the replay's time, at ?t=, through seek
+back and forth and while playing; it wins over ?tab=, unknown names are left out, a tab pressed by
+hand ends it.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -48,8 +51,9 @@ SHADOW = """() => {
 }"""
 
 
-@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
-class IntakeTimeBrowserTest(unittest.TestCase):
+class _RunPage(unittest.TestCase):
+    """The server on the timed run and a browser (no tests of its own)."""
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
@@ -79,6 +83,9 @@ class IntakeTimeBrowserTest(unittest.TestCase):
         page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
         return page, errors
 
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class IntakeTimeBrowserTest(_RunPage):
     def shot(self, query):
         page, errors = self.open(query)
         got = page.evaluate(SHADOW)
@@ -119,6 +126,74 @@ class IntakeTimeBrowserTest(unittest.TestCase):
         self.assertIn("1.20px", back["shadows"][0])  # 6 px * (1 - 0.4 / 0.5)
         self.assertGreater(played["lit"], 0)
         self.assertEqual((played["just"], played["shadows"]), (0, [""]))
+
+
+TAB_ON = """() => ({ on: document.querySelector('.tab.on')?.dataset.tab, intake: !document.getElementById('view-intake').hidden,
+  bench: !document.getElementById('view-bench').hidden,
+  screen: [...document.querySelectorAll('#view-intake .in-pane')].find((p) => !p.hidden)?.dataset.screen ?? null })"""
+
+SEEK_TAB = f"async (t) => {{ await window.hiraku.seek(t); return ({TAB_ON})(); }}"
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class TabPlanBrowserTest(_RunPage):
+    """?tabs=A1:0,A2:40,bench:55: the tab follows the replay's time, back and forth."""
+
+    PLAN = f"tabs=A1:0,A2:{ASKED_AT},bench:55"
+
+    def test_the_tab_at_t(self):
+        for t, tab in ((0, "A1"), (LIT_AT + 0.25, "A1"), (ASKED_AT, "A2"), (ASKED_AT + 2.5, "A2"), (57, "bench")):
+            page, errors = self.open(f"{self.PLAN}&t={t}")
+            got = page.evaluate(TAB_ON)
+            page.close()
+            self.assertEqual(errors, [])
+            self.assertEqual(got["on"], tab, t)
+            if tab == "bench":
+                self.assertEqual((got["intake"], got["bench"]), (False, True), t)
+            else:
+                self.assertEqual((got["intake"], got["screen"]), (True, tab), t)
+
+    def test_seek_back_and_forth(self):
+        page, errors = self.open(f"{self.PLAN}&t=0")
+        seen = [(t, page.evaluate(SEEK_TAB, t)) for t in (57, ASKED_AT + 1, 5, 60, ASKED_AT - 0.01, ASKED_AT)]
+        page.close()
+        self.assertEqual(errors, [])
+        want = {57: "bench", ASKED_AT + 1: "A2", 5: "A1", 60: "bench", ASKED_AT - 0.01: "A1", ASKED_AT: "A2"}
+        self.assertEqual([(t, g["on"]) for t, g in seen], list(want.items()))
+        for t, g in seen:
+            if g["on"] != "bench":
+                self.assertEqual(g["screen"], g["on"], t)  # the intake screen shown is the tab's
+
+    def test_tabs_wins_over_tab_and_playing_moves_it(self):
+        page, errors = self.open(f"tab=grid&{self.PLAN}&t={ASKED_AT - 0.5}")
+        first = page.evaluate(TAB_ON)
+        page.evaluate("() => document.getElementById('pb-play').click()")
+        page.wait_for_function(f"window.hiraku.player.playhead > {ASKED_AT + 0.2}", timeout=30000)
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A2'", timeout=5000)
+        page.close()
+        self.assertEqual(errors, [])
+        self.assertEqual(first["on"], "A1")
+
+    def test_unknown_names_are_left_out(self):
+        page, errors = self.open(f"tabs=nope:0,A2:{ASKED_AT},A9:45,bench:x,:3,grid&t=47")
+        at = page.evaluate(TAB_ON)
+        early = page.evaluate(SEEK_TAB, 5)  # before the only kept entry: as without ?tabs= (the run's own focus)
+        plain, errs = self.open("t=5")
+        alone = plain.evaluate(TAB_ON)
+        plain.close()
+        page.close()
+        self.assertEqual(errors + errs, [])
+        self.assertEqual(at["on"], "A2")
+        self.assertEqual(early["on"], alone["on"])
+
+    def test_a_tab_pressed_ends_the_plan(self):
+        page, errors = self.open(f"{self.PLAN}&t=5")
+        page.click('.tab[data-tab="grid"]')
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'grid'")
+        got = page.evaluate(SEEK_TAB, ASKED_AT + 1)
+        page.close()
+        self.assertEqual(errors, [])
+        self.assertEqual(got["on"], "grid")
 
 
 if __name__ == "__main__":
