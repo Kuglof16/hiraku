@@ -36,7 +36,7 @@ class FirstTimeBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         _write_run(cls.tmp / "runs", RUN_ID, firsttime_events())
-        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True)
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.pw = sync_playwright().start()

@@ -27,6 +27,31 @@ function ticks(min, max, count) {
   return out;
 }
 
+// Ticks of a log axis over [lo, hi] (log10 of the values): the powers of ten inside, every other one
+// when there are many; with fewer than two, 2 and 5 times them too. -> [{ v: log10 value, p: the power or null, m: 1, 2 or 5 }]
+function logTicks(lo, hi, most = 6) {
+  const out = [];
+  const p0 = Math.ceil(lo - 1e-9), p1 = Math.floor(hi + 1e-9);
+  const every = Math.max(1, Math.ceil((p1 - p0 + 1) / most));
+  for (let p = p0; p <= p1; p++) if ((p - p0) % every === 0) out.push({ v: p, p, m: 1 });
+  if (out.length < 2)
+    for (let p = Math.floor(lo); p <= Math.ceil(hi); p++)
+      for (const m of [2, 5]) {
+        const v = p + Math.log10(m);
+        if (v >= lo && v <= hi) out.push({ v, p, m });
+      }
+  return out.sort((a, b) => a.v - b.v);
+}
+// A tick's label: 10ⁿ as 10 with a raised n (m × 10ⁿ for 2 and 5); y: where the text's baseline is
+const SUP = (n) => `<tspan dy="-5" font-size="9">${n}</tspan>`;
+const logLabel = (t) => (t.m === 1 ? `10${SUP(t.p)}` : `${t.m}×10${SUP(t.p)}`);
+
+// A chart against a count of cycles (an S-N curve, the stress ranges counted) is drawn on log axes:
+// the counts span decades. The values are the record's; only the axes are log. y too when all its
+// values are above zero.
+const isCycles = (x) => /cycle/i.test(x?.quantity ?? "");
+const allPositive = (arrs) => arrs.every((a) => a.length > 0 && a.every((v) => v > 0));
+
 const shortName = seriesName;
 
 export class SeriesChart {
@@ -54,12 +79,18 @@ export class SeriesChart {
     }
     const series = group.channels.map((n) => channels.get(n));
     const timed = !group.x;
+    // log axes for a chart against cycles (isCycles), each when all its values are above zero
+    const logX = !timed && isCycles(group.x) && allPositive(series.map((s) => abscissa(s)));
+    const logY = logX && allPositive(series.map((s) => s.values));
+    this.log = { x: logX, y: logY };
+    const fx = logX ? Math.log10 : (v) => v; // value -> where on the axis
+    const fy = logY ? Math.log10 : (v) => v;
     const xs = series.map((s) => extent(abscissa(s)));
-    const t0 = Math.min(...xs.map((e) => e[0]));
-    const t1 = Math.max(...xs.map((e) => e[1]));
+    const t0 = fx(Math.min(...xs.map((e) => e[0])));
+    const t1 = fx(Math.max(...xs.map((e) => e[1])));
     const ys = series.map((s) => extent(s.values));
-    let lo = Math.min(...ys.map((e) => e[0]));
-    let hi = Math.max(...ys.map((e) => e[1]));
+    let lo = fy(Math.min(...ys.map((e) => e[0])));
+    let hi = fy(Math.max(...ys.map((e) => e[1])));
     if (lo === hi) {
       lo -= 1;
       hi += 1;
@@ -68,15 +99,21 @@ export class SeriesChart {
     lo -= pad;
     hi += pad;
     this.scale = { t0, t1, lo, hi };
-    const x = (t) => M.l + ((t - t0) / (t1 - t0 || 1)) * (W - M.l - M.r);
-    const y = (v) => H - M.b - ((v - lo) / (hi - lo)) * (H - M.t - M.b);
+    const X = (t) => M.l + ((t - t0) / (t1 - t0 || 1)) * (W - M.l - M.r); // axis position -> px
+    const Y = (v) => H - M.b - ((v - lo) / (hi - lo)) * (H - M.t - M.b);
+    const x = (t) => X(fx(t)); // a value -> px
+    const y = (v) => Y(fy(v));
     this.x = x;
 
-    const grid = ticks(lo, hi, 4)
-      .map((v) => `<line x1="${M.l}" x2="${W - M.r}" y1="${y(v)}" y2="${y(v)}" class="g"/><text x="${M.l - 6}" y="${y(v) + 4}" class="yl">${fmt(v, 3)}</text>`)
+    const yTicks = logY ? logTicks(lo, hi, 4).map((t) => ({ at: t.v, label: logLabel(t) })) : ticks(lo, hi, 4).map((v) => ({ at: v, label: esc(fmt(v, 3)) }));
+    const xTicks = logX ? logTicks(t0, t1, 6).map((t) => ({ at: t.v, label: logLabel(t) })) : ticks(t0, t1, 5).map((t) => ({ at: t, label: esc(fmt(t, 3)) }));
+    const grid = yTicks
+      .map(({ at, label }) => `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(at)}" y2="${Y(at)}" class="g"/><text x="${M.l - 6}" y="${Y(at) + 4}" class="yl">${label}</text>`)
       .join("");
-    const tgrid = ticks(t0, t1, 5)
-      .map((t) => `<line x1="${x(t)}" x2="${x(t)}" y1="${M.t}" y2="${H - M.b}" class="g"/><text x="${x(t)}" y="${H - 6}" class="xl">${fmt(t, 3)}</text>`)
+    // a label near the right edge ends at its tick (not centred on it: cut by the box)
+    const xAnchor = (px) => (px > W - M.r - 24 ? ` style="text-anchor: end"` : "");
+    const tgrid = xTicks
+      .map(({ at, label }) => `<line x1="${X(at)}" x2="${X(at)}" y1="${M.t}" y2="${H - M.b}" class="g"/><text x="${X(at)}" y="${H - 6}" class="xl"${xAnchor(X(at))}>${label}</text>`)
       .join("");
     const lines = series
       .map((s, i) => {
