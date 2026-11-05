@@ -1008,11 +1008,11 @@ class BrowserReplayTest(unittest.TestCase):
             button = "#view-intake .in-pane[data-screen=A2] button.in-btn"
             page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /標準の値のまま進める/.test(b.textContent) && !b.disabled)")
             self.assertEqual(page.locator(".stop-btn").count(), 0)  # not started here: no stop
-            page.locator(button, has_text="標準の値のまま進める").click()
-            for _ in range(100):
-                if (run / "hearing.answer.json").exists():
-                    break
-                page.wait_for_timeout(100)
+            # wait for the server's answer to the POST (written by then), not a fixed time: a busy
+            # PC (tests run side by side) took longer than the 10 s the loop used to give
+            with page.expect_response(lambda r: "/api/launch/hearing" in r.url, timeout=60000) as answered:
+                page.locator(button, has_text="標準の値のまま進める").click()
+            self.assertTrue(answered.value.ok, answered.value.status)
             self.assertTrue(json.loads((run / "hearing.answer.json").read_text(encoding="utf-8"))["use_defaults"])
             page.click('.tab[data-tab="A5"]')
             note = tmp / "曲げの決まり.md"
