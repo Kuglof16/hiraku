@@ -149,7 +149,7 @@ PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX
                                               "PLUGIN_ALIVE_FILE") if hasattr(layout, k)}
 UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
 PATH_CHECKED = "path_checked"  # the tool's value decides after the load path was checked by hand (contract 2fc1006)
-FREE_PARTS = "free_parts"  # the load_path hand count that checks the path (load_path.free_parts)
+PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
@@ -1196,15 +1196,16 @@ class RunChecker:
         if v.get("value") != c.get("analyzed"):
             self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
         ver = self.version_of("verdict", v)
+        # by its formula, whatever the quantity: free_parts (every part of the version) or unsupported_load
+        # (the parts the load case's force is on), as hiraku.tools.judge.path_check reads it
         hand = [p for j, p in self.recs["prediction"].values()
-                if j < i and p.get("design_version") == ver and p.get("quantity") == FREE_PARTS
-                and str(p.get("formula_id") or "").startswith("load_path.")]
+                if j < i and p.get("design_version") == ver and p.get("formula_id") == PATH_FORMULA]
         if not hand:
-            self.error(rule, w, f"{vid} is path_checked but v{ver} has no load_path prediction of {FREE_PARTS} "
-                                f"before it (the load path checked by hand)")
+            self.error(rule, w, f"{vid} is path_checked but v{ver} has no {PATH_FORMULA} prediction before it "
+                                f"(the load path checked by hand)")
         elif not any(isinstance(p.get("value"), (int, float)) and p["value"] == 0 for p in hand):
-            self.error(rule, w, f"{vid} is path_checked but v{ver}'s load_path predictions of {FREE_PARTS} "
-                                f"are not 0 (the path is not joined)")
+            self.error(rule, w, f"{vid} is path_checked but v{ver}'s {PATH_FORMULA} predictions are not 0 "
+                                f"(the path is not joined)")
         a = self.recs["analysis"].get(c.get("analysis_id"))
         loose = [r.get("value") for r in ((a[1] if a else {}).get("results") or [])
                  if r.get("quantity") == UNSUPPORTED and isinstance(r.get("value"), (int, float)) and r["value"] > 0]

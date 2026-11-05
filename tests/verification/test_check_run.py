@@ -1172,7 +1172,15 @@ class CheckRun(unittest.TestCase):
         ev = self.path_checked_flow()
         ev = renumber([e for e in ev if not (e["kind"] == "prediction.recorded"
                                              and e["data"].get("quantity") == "free_parts")])
-        self.assertTrue(any("no load_path prediction" in m for m in said(ev)))
+        self.assertTrue(any("no load_path.free_parts prediction" in m for m in said(ev)))
+        # the load case's own path check predicts unsupported_load with the same formula: it counts too
+        ev = self.path_checked_flow()
+        p = next(e for e in ev if e["kind"] == "prediction.recorded" and e["data"].get("quantity") == "free_parts")
+        p["data"]["quantity"] = "unsupported_load"
+        self.assertEqual(said(ev), [])
+        # another formula with a 0 does not
+        p["data"]["formula_id"] = "beam.cantilever_tip"
+        self.assertTrue(any("no load_path.free_parts prediction" in m for m in said(ev)))
 
     def test_path_checked_needs_a_cause_that_says_the_tool_decides(self):
         ev = self.path_checked_flow()
