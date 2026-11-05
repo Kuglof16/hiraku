@@ -3332,6 +3332,38 @@
           },
           "description": "Parts the check could not be evaluated on, with the values the design lacks."
         },
+        "checked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "values"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "part_id": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "The part's values the check used."
+              },
+              "unchecked": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Names among values whose source is not confirmed (a part.declared basis of 'not checked' or 'assumption')."
+              }
+            }
+          },
+          "description": "Every part the check was evaluated on, passing or not, with the values it used (hits says which of them break the rule)."
+        },
         "pass": {
           "type": "boolean"
         }

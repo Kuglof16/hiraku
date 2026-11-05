@@ -169,6 +169,16 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
         self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
 
+    def test_rule_check_keeps_the_values_it_checked(self):
+        rc = {"rule_check_id": "rchk-0001", "design_version": 5, "rule_id": "SM-01", "targets": ["bracket_lca_FL1"],
+              "hits": [], "pass": True}
+        row = {"part_id": "bracket_lca_FL1", "values": {"hole_edge_mm": 18.0, "hole_diameter_mm": 13.0},
+               "unchecked": ["hole_diameter_mm"]}
+        self.assertEqual(contract.errors("rule_check", rc), [])  # checked is optional
+        self.assertEqual(contract.errors("rule_check", {**rc, "checked": [row]}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**rc, "checked": [{**row, "values": {}}]}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**rc, "checked": [{**row, "values": {"hole_edge_mm": "18"}}]}), [])
+
     def test_fastening_tool_gap(self):
         step = {"order": 1, "part": "susp_FL", "direction": "-y", "no_interference": True, "tool_clearance": False,
                 "hand_reach": True}
