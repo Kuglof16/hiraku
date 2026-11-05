@@ -5,8 +5,9 @@
 //
 // Drawing is cut_pets.js's PetStage (the same as the cut pages): one WebGL renderer off the
 // page, each pet copied into its own 2D canvas. A pet is drawn again only when its pose
-// changes: a still pet (idle, waiting, blocked) once; a moving one at most PET_FPS times a
-// second, the pets' clocks staggered so they do not all draw in the same frame. Without
+// changes: a still pet (idle, and blocked once it has settled) once; a moving one at most PET_FPS
+// times a second, the pets' clocks staggered so they do not all draw in the same frame. The pets
+// are small (34-60 px): pet3d.js's light build (lite, v9). Without
 // /pets/pet3d.js (404) or n00's camera in /layout.json, the app keeps its circles and names.
 //
 // What the pets do comes from the record only, at the replay's time t (?t= draws the same):
@@ -24,22 +25,43 @@ export const SAY_S = 5; // seconds a bubble stays (as the 3D's bubble: app.js SH
 export const SAY_CHARS = 26; // a bubble shows at most this many characters of the line
 export const PET_FPS = 15; // a moving pet is drawn at most this many times a second
 const PET_SHADOW = 256; // the pets' shadow map (px a side): the list's pets are at most 60 px tall
+// pet3d.js v9 lite (fewer segments, no thin outlines, fewer shadow casters) and the stage's
+// antialias, chosen by comparing 60 px pictures of the 16 roles: lite looks the same as without;
+// without antialias the eyes and outlines break up into pixels, so it stays on.
+export const PET_LITE = true;
+export const PET_ANTIALIAS = true;
 export const PET_PAINTS = 1; // pets drawn in one frame while the replay plays (agent_pets.tick budget)
 const PASS_HOPS = 3; // a pass reaction: this many hops of pet3d's pass (n00.motion.hop_period_s each)
 
+const BLOCK_SETTLE_S = 0.8; // pet3d.js v9 blocked: the pose no longer changes from this long after the block (promo/pets/README.md)
+
 // How each motion is drawn: pet (pet3d.js state), still (one fixed pose, drawn once), react
-// (a reaction: how long it lasts, s; null: it lasts until the next event that changes it).
-// near: pet3d.js has no such motion; the nearest is drawn and a mark (css .petbox[data-pet-state])
-// tells it apart.
+// (a reaction: how long it lasts, s; null: it lasts until the next event that changes it),
+// settle (s after since from which the pose holds: drawn once more, then not again).
+// The marks above the head (…, the stop sign, ✓, ?) are pet3d.js's own (v9); the screen adds none.
 export const MOTIONS = {
   working: { ja: "作業中", pet: "working", still: false, react: null },
-  waiting: { ja: "待ち", pet: "idle", still: true, react: null, near: "idle に「…」の札" },
+  waiting: { ja: "待ち", pet: "waiting", still: false, react: null },
   idle: { ja: "終わり", pet: "idle", still: true, react: null },
   pass: { ja: "合格", pet: "pass", still: false, react: (hop) => PASS_HOPS * hop },
   mismatch: { ja: "食い違い", pet: "mismatch", still: false, react: () => 3 },
-  blocked: { ja: "止められた", pet: "idle", still: true, react: () => 3, near: "idle で止まり、赤い「止」の札" },
+  blocked: { ja: "止められた", pet: "blocked", still: false, react: () => 3, settle: BLOCK_SETTLE_S },
   report: { ja: "報告", pet: "report", still: false, react: () => SAY_S },
 };
+
+// The pet3d time of an agent's pose at t (tq: t stepped to PET_FPS) and the update options:
+// idle one fixed pose (idleT); waiting its own calm clock from 0, shifted by idleT (the pets do
+// not sway together); blocked as the others (poseTime) with o.since the pose time of the block
+// itself (ceil(since / hop + 1) hop, pet3d README), so the flinch comes at the event, and held
+// from settle on; the others poseTime.
+export function petPose(motion, since, tq, idleT, hop) {
+  const how = MOTIONS[motion];
+  if (how.pet === "idle") return { pose: idleT, o: null };
+  if (how.pet === "waiting") return { pose: idleT + tq, o: null };
+  const t = how.settle != null ? Math.min(tq, since + how.settle) : tq;
+  const pose = poseTime(how.pet, since, Math.max(since, t), idleT, hop);
+  return { pose, o: how.pet === "blocked" ? { since: Math.ceil(since / hop + 1) * hop } : null };
+}
 
 // Which event moves which pet: the one table. who: the event's agent (agent), data.agent_id
 // (agent_id), the agent of the judged domain (domain: cae.<domain>, packager for assembly) or
@@ -208,7 +230,7 @@ export class AgentPets {
     this.HP = HP;
     this.roles = new Set(HP.ROLES.map((r) => r.id));
     this.motion = layout.n00.motion;
-    this.stage = new PetStage(HP, layout.n00.camera, { W: 64, H: 64 }, { shadow: PET_SHADOW });
+    this.stage = new PetStage(HP, layout.n00.camera, { W: 64, H: 64 }, { shadow: PET_SHADOW, lite: PET_LITE, antialias: PET_ANTIALIAS });
     this.stage.setScale(1);
     this.pets = new Map(); // agent id -> { pet, i, boxes: { bench, grid } }
     this.timeline = { events: null, n: -1, per: new Map(), owners: new Map() };
@@ -303,16 +325,16 @@ export class AgentPets {
       const off = p.i / n;
       const tq = how.still ? t : (Math.floor(t * PET_FPS + off) - off) / PET_FPS;
       const idleT = this.motion.idle_shift_s * p.i;
-      const pose = how.still ? idleT : poseTime(how.pet, m.since, Math.max(m.since, tq), idleT, hop);
+      const { pose, o } = petPose(m.motion, m.since, tq, idleT, hop);
       const w = Math.max(1, Math.round(b.el.clientWidth * this.pixel));
       const h = Math.max(1, Math.round(b.el.clientHeight * this.pixel));
-      const k = `${how.pet}|${pose.toFixed(4)}|${w}x${h}`;
+      const k = `${how.pet}|${pose.toFixed(4)}|${o ? o.since.toFixed(4) : "-"}|${w}x${h}`;
       if (k === b.last) continue;
       const first = !b.last || b.last.split("|")[0] !== how.pet || !b.last.endsWith(`|${w}x${h}`);
-      due.push({ p, b, k, pose, pet: how.pet, w, h, first });
+      due.push({ p, b, k, pose, o, pet: how.pet, w, h, first });
     }
     due.sort((x, y) => Number(y.first) - Number(x.first) || (x.b.at ?? -1) - (y.b.at ?? -1));
-    for (const { p, b, k, pose, pet, w, h } of due.slice(0, budget)) {
+    for (const { p, b, k, pose, o, pet, w, h } of due.slice(0, budget)) {
       b.last = k;
       b.at = this.frame;
       if (b.canvas.width !== w || b.canvas.height !== h) {
@@ -321,10 +343,11 @@ export class AgentPets {
         this.stage.grow(w, h);
       }
       const t0 = performance.now();
-      this.stage.paint(p.pet, b.ctx, pose, pet);
+      this.stage.paint(p.pet, b.ctx, pose, pet, o);
       this.stats.ms += performance.now() - t0;
       this.stats.paints += 1;
       b.el.dataset.petDraws = String(Number(b.el.dataset.petDraws) + 1);
+      b.el.dataset.petLook = pet; // the pet3d.js state drawn last
     }
     this.says(s, t, place);
   }

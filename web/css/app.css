@@ -179,14 +179,6 @@ body.video .hint { display: none; }
 .petslot { display: block; position: relative; flex: none; }
 .petbox { position: absolute; inset: 0; display: block; }
 .petbox canvas.pet3d { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* motions pet3d.js has not got (agent_pets.js MOTIONS near): the nearest pose and a mark */
-.petbox[data-pet-state="blocked"]::after,
-.petbox[data-pet-state="waiting"]::after {
-  position: absolute; right: 0; top: 0; width: 18px; height: 18px; border-radius: 50%;
-  display: grid; place-items: center; font-size: 11px; font-weight: 700; line-height: 1;
-}
-.petbox[data-pet-state="blocked"]::after { content: "止"; background: var(--red); color: #fff; }
-.petbox[data-pet-state="waiting"]::after { content: "…"; background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
 .petrow { display: grid; grid-template-columns: 52px auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; align-items: center; }
 .petrow .petslot { grid-row: 1 / span 2; width: 52px; height: 52px; }
 .petrow .nm { font-size: 17px; white-space: nowrap; align-self: end; }

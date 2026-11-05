@@ -114,7 +114,7 @@ READ = """async ({ t, tab }) => {
     const c = b.querySelector("canvas.pet3d");
     let ink = 0;
     if (c && c.width) { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) ink += d[i] > 0 ? 1 : 0; }
-    return { agent: b.dataset.agent, role: b.dataset.role, state: b.dataset.petState, draws: Number(b.dataset.petDraws), ink,
+    return { agent: b.dataset.agent, role: b.dataset.role, state: b.dataset.petState, look: b.dataset.petLook ?? null, draws: Number(b.dataset.petDraws), ink,
              where: b.closest(".tile")?.dataset.domain ?? (b.closest("#grid-head") ? "head" : b.closest("#agents") ? "list" : null),
              pixels: c ? c.toDataURL() : null };
   });
@@ -195,7 +195,8 @@ class AgentPetsTest(unittest.TestCase):
 
     def test_each_motion_at_its_events_time(self):
         """At each time of EXPECT every pet is in its motion (agent_pets.js PET_EVENTS), in the
-        list and in the grid alike."""
+        list and in the grid alike, and drawn as pet3d.js's state of that name (v9 has waiting
+        and blocked: no motion is drawn as another state any more)."""
         self.need_pets()
         page, errors = self.open(self.serve(), "tab=bench&t=0")
         for tab in ("bench", "grid"):
@@ -204,6 +205,7 @@ class AgentPetsTest(unittest.TestCase):
                 states = {p["agent"]: p["state"] for p in got["pets"]}
                 want = {a: named.get(a, rest) for a in states}
                 self.assertEqual(states, want, (tab, t))
+                self.assertEqual({p["agent"]: p["look"] for p in got["pets"]}, want, (tab, t))
         self.assertEqual(errors, [])
         page.close()
 
@@ -237,21 +239,51 @@ class AgentPetsTest(unittest.TestCase):
         drawn once however often the frame is drawn."""
         self.need_pets()
         base = self.serve()
-        a, errors_a = self.open(base, "tab=bench&t=0")
-        a.evaluate(READ, {"t": 4.0, "tab": None})  # (Chrome moves a 2D canvas off the GPU at its first read)
-        sought = a.evaluate(READ, {"t": 4.6, "tab": None})
-        b, errors_b = self.open(base, "tab=bench&t=4.6")
-        b.evaluate(READ, {"t": None, "tab": None})
-        opened = b.evaluate(READ, {"t": None, "tab": None})
         by = lambda got: {p["agent"]: (p["state"], p["pixels"]) for p in got["pets"]}  # noqa: E731
-        self.assertEqual(by(sought), by(opened))
-        self.assertEqual(by(sought)["cae.strength"][0], "pass")
+        # a pass; the thermal agent 0.2 s into its block (the flinch); the lead waiting for answers
+        for t, agent, motion in ((4.6, "cae.strength", "pass"), (5.4, "cae.thermal", "blocked"), (0.6, "lead", "waiting")):
+            a, errors_a = self.open(base, "tab=bench&t=0")
+            a.evaluate(READ, {"t": 4.0, "tab": None})  # (Chrome moves a 2D canvas off the GPU at its first read)
+            sought = a.evaluate(READ, {"t": t, "tab": None})
+            b, errors_b = self.open(base, f"tab=bench&t={t}")
+            b.evaluate(READ, {"t": None, "tab": None})
+            opened = b.evaluate(READ, {"t": None, "tab": None})
+            self.assertEqual(by(sought), by(opened), t)
+            self.assertEqual(by(sought)[agent][0], motion)
+            self.assertEqual(errors_a + errors_b, [])
+            a.close()
+            if t != 0.6:
+                b.close()
         still = b.evaluate(READ, {"t": 1e6, "tab": None})
         again = b.evaluate(READ, {"t": 1e6, "tab": None})
         self.assertEqual({p["agent"]: p["draws"] for p in still["pets"]}, {p["agent"]: p["draws"] for p in again["pets"]})
-        self.assertEqual(errors_a + errors_b, [])
-        a.close()
+        self.assertEqual(errors_b, [])
         b.close()
+
+    def test_blocked_and_waiting_poses(self):
+        """blocked (pet3d.js v9) flinches from the event's time (o.since: the pose time of the block)
+        and holds still from 0.8 s on (drawn no more until its 3 s are over); waiting moves
+        all along (the lead between hearing.asked at 0.3 s and hearing.answered at 1.0 s)."""
+        self.need_pets()
+        page, errors = self.open(self.serve(), "tab=bench&t=0")
+        page.evaluate(READ, {"t": 4.0, "tab": None})
+        pick = lambda got, a: next(p for p in got["pets"] if p["agent"] == a)  # noqa: E731
+        at = {t: pick(page.evaluate(READ, {"t": t, "tab": None}), "cae.thermal") for t in (5.2, 5.3, 6.1, 7.0, 8.1)}
+        self.assertTrue(all(p["look"] == "blocked" for p in at.values()), at)
+        self.assertNotEqual(at[5.2]["pixels"], at[5.3]["pixels"])  # the flinch
+        self.assertEqual(at[6.1]["pixels"], at[7.0]["pixels"])  # settled
+        self.assertEqual(at[7.0]["pixels"], at[8.1]["pixels"])
+        self.assertEqual(at[6.1]["draws"], at[8.1]["draws"])  # not drawn again while it holds
+        # the block's first pose is the same however the screen got there (a seek straight to 5.2)
+        fresh, errors_f = self.open(self.serve(), "tab=bench&t=5.2")
+        fresh.evaluate(READ, {"t": None, "tab": None})
+        self.assertEqual(pick(fresh.evaluate(READ, {"t": None, "tab": None}), "cae.thermal")["pixels"], at[5.2]["pixels"])
+        lead = {t: pick(page.evaluate(READ, {"t": t, "tab": None}), "lead") for t in (0.35, 0.6, 0.9)}
+        self.assertTrue(all(p["look"] == "waiting" for p in lead.values()), lead)
+        self.assertEqual(len({p["pixels"] for p in lead.values()}), 3)  # it moves
+        self.assertEqual(errors + errors_f, [])
+        page.close()
+        fresh.close()
 
     def test_why_an_agent_stopped(self):
         """agent.stopped's stop_code in words (labels.js AGENT_STOP_JA) under the agent's name in the
