@@ -39,17 +39,15 @@ COMPARISON = (
     "7.5 kN, occupant space left +256 mm of 745 mm, not bottomed: the usable length is 819 mm), the energy "
     "balance (crash.plastic_crush: the same 489 mm, 15.3 g and 81.1 ms) and B (the K2 crash_beam tool: "
     "beams with plastic hinges, axial force up to A fy, no local buckling of the tubes: 536 mm, peak 64.0 g, "
-    "mean 11.9 g, 94.9 ms, battery mount force 15.4 kN, occupant space -272 mm). B's peak is about the "
+    "mean 11.9 g, 94.9 ms, battery mount force 15.4 kN, occupant_space_margin +194 mm). B's peak is about the "
     "rails' squash load A fy (531 mm^2 x 245 MPa = 130 kN per rail, 2.7 times the folding mean force), "
     "since without local buckling a tube does not fold; A's folding force is a mean over the folds and "
     "leaves out the first peak, so A's peak equals its mean. B crushes further at a lower mean deceleration, "
     "so after its peak its force is on average below A's folding force (how, in B's hinges, was not "
     "looked at). A stops the "
     "crush at 70 % of the crush zone's length (the folds' solid length) and then a stiff spring takes the "
-    "rest (crush_bottomed); B has no such limit; neither bottoms out here. The occupant spaces differ in "
-    "definition: A measures from the vehicle's front-most point to the occupants' front face (745 mm; "
-    "730 mm from the front of the frame); B's -272 mm with 536 mm of crush means B measures about 264 mm, "
-    "to another point (B's code was not read).")
+    "rest (crush_bottomed); B has no such limit; neither bottoms out here. The occupant space margins "
+    "compare: A's +256 mm and B's occupant_space_margin +194 mm (as K2 gave it; B crushes 47 mm further).")
 __doc__ += "\n" + COMPARISON + "\n"
 
 FRONT_VARS = {"bumper_stiffness": "N/mm", "bumper_stroke": "mm"}
