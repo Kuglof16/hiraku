@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from qa import run_tests, slot
+from qa import procs, run_tests, slot
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,8 +31,9 @@ class SlotTest(unittest.TestCase):
         self.addCleanup(patch.stop)
 
     def slot(self, what, cmd, *opts):
+        kw = {} if os.name == "nt" else {"start_new_session": True}  # its own group, so procs.kill_tree reaches all
         return subprocess.Popen([sys.executable, "-m", "qa.slot", what, *opts, "--", *cmd], cwd=ROOT, env=self.env,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **kw)
 
     def sleeper(self, seconds, stamp):
         # writes when it started and ended, then exits 0
@@ -94,8 +95,13 @@ class SlotTest(unittest.TestCase):
         a = self.slot("stopped", self.sleeper(60, self.tmp / "a.txt"))
         self.wait_held()
         self.assertFalse(self.free())
-        a.kill()  # the OS frees a lock whose holder ends
-        a.communicate(timeout=60)
+        # stopped from outside (no Ctrl+C, so no finally runs): the OS frees a lock whose holder ends. The
+        # whole tree is stopped: a.kill() alone would leave the sleeping command holding the output pipes,
+        # and reading them would wait for its 60 s
+        procs.kill_tree(a)
+        a.wait(timeout=60)
+        a.stdout.close()
+        a.stderr.close()
         end = time.time() + 30
         while not self.free() and time.time() < end:
             time.sleep(0.2)
