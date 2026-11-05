@@ -388,7 +388,7 @@ def untied_joints(res: dict) -> list[str]:
 def shell_hot_spots(tool, load_case: Record, res: dict) -> list[Record] | None:
     """analysis.hot_spots of the shell (hot_spots module). The judged quantity is max_hot_spot_stress
     (judged_as): one row per weld line group, a member at a joint (the largest size of the hot spots read
-    there, outer and inner surface; where = the member, as max_hot_spot_stress.<member>), against the
+    there, outer and inner surface; where = "<member>@<joint>", unique per weld line group), against the
     criterion's limit. The element peak (max_stress, at a sharp re-entrant corner, singular) is one more row
     of quantity max_stress with SHARP_NOTE: not the judged quantity, so it never makes a red. The wheel mounts'
     elements are not read (hot spots and member_max leave them out). None when the criterion is not a "<="
@@ -402,7 +402,7 @@ def shell_hot_spots(tool, load_case: Record, res: dict) -> list[Record] | None:
         k = (h["member"], h["joint"])
         if k not in groups or abs(h["value"]) > abs(groups[k]["value"]):
             groups[k] = h
-    rows = [hot_spots.row(h["member"], q, abs(h["value"]), limit,
+    rows = [hot_spots.row(f"{h['member']}@{h['joint']}", q, abs(h["value"]), limit,
                           note=(f"joint {h['joint']} ({h['kind']}), {SIDE[h['side']]}, {h['place']}, strip towards "
                                 f"{h['towards']}, {'outer' if h['surface'] == 'top' else 'inner'} surface"),
                           at_mm=h["position_mm"])

@@ -468,7 +468,7 @@ def tube_hot_spots(tool, load_case: Record, hs: list, per_member: dict[str, floa
     - max_stress (R1): one row per member, its largest element von Mises over all its tubes' elements (as
       max_stress is read: the mounts' elements included), where = the member;
     - max_hot_spot_stress (R1s): one row per weld line group, a member at a joint (the largest size of the hot
-      spots read there), where = the member, plus the element peak as a row of quantity max_stress with
+      spots read there), where = "<member>@<joint>", plus the element peak as a row of quantity max_stress with
       hot_spots.SHARP_NOTE (not the judged quantity there).
     The limit is the criterion's. None when the criterion is not a "<=" stress or is judged on another quantity."""
     judged = hot_spots.judged_limit(tool, load_case)
@@ -482,7 +482,7 @@ def tube_hot_spots(tool, load_case: Record, hs: list, per_member: dict[str, floa
         k = (h["member"], h["joint"])
         if k not in groups or abs(h["value"]) > abs(groups[k]["value"]):
             groups[k] = h
-    rows = [hot_spots.row(h["member"], q, abs(h["value"]), limit,
+    rows = [hot_spots.row(f"{h['member']}@{h['joint']}", q, abs(h["value"]), limit,
                           note=(f"joint {h['joint']} ({h['kind']}), {h['side']} side, {h['place']}, tube {h['tube']}, "
                                 f"{'outer' if h['surface'] == 'top' else 'inner'} surface"),
                           at_mm=h["position_mm"])
