@@ -149,7 +149,11 @@ def _span(b: Body, a: np.ndarray, e: np.ndarray) -> Body:
 def moved(b: Body, sid: str, m: dict) -> Body:
     """Body b of corner sid at the pose whose point maps are m (CornerKinematics.maps)."""
     r = role(b, sid)
-    if r in ("knuckle", "lower", "upper", "lbj", "ubj"):
+    if r in ("lbj", "ubj"):
+        # a ball joint sits in the knuckle: it goes where the knuckle takes it (to the bench's ball joint point)
+        # and turns with it, so the wheel and its joints keep their places to each other
+        return _rigid(b, m["knuckle"])
+    if r in ("knuckle", "lower", "upper"):
         return _rigid(b, m[r])
     if b.capsule is None:
         return _rigid(b, m["knuckle"])
