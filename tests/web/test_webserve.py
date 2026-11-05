@@ -456,6 +456,58 @@ class OpenTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_runs_default_is_the_repositorys(self):
+        from unittest import mock
+
+        from hiraku.webserve import __main__ as entry
+
+        class Fake:
+            server_address = ("127.0.0.1", 8765)
+            RequestHandlerClass = type("H", (), {"launcher": None})
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        with mock.patch.object(entry, "make_server", return_value=Fake()) as made, \
+                mock.patch.object(entry, "list_runs", return_value=[]), mock.patch("sys.stdout", new_callable=io.StringIO):
+            entry.main([])
+        self.assertEqual(made.call_args.args[2], webserver.REPO_DIR / "runs")
+
+
+class PortInUseTest(unittest.TestCase):
+    """A second server on a port in use fails (Windows binds exclusively), and the command says so."""
+
+    def test_second_server_on_the_same_port_fails(self):
+        first = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None, launcher=False)
+        try:
+            port = first.server_address[1]
+            with self.assertRaises(OSError):
+                second = make_server("127.0.0.1", port, "runs-none", quiet=True, saved_dir=None, launcher=False)
+                second.server_close()
+            from hiraku.webserve import __main__ as entry
+
+            err = io.StringIO()
+            with mock_stdio(err):
+                code = entry.main(["--port", str(port), "--runs", tempfile.gettempdir(), "--saved", tempfile.gettempdir()])
+            self.assertEqual(code, 1)
+            self.assertIn(f"port {port}", err.getvalue())
+            self.assertIn("in use", err.getvalue())
+        finally:
+            first.server_close()
+
+
+def mock_stdio(err):
+    from contextlib import ExitStack
+    from unittest import mock
+
+    stack = ExitStack()
+    stack.enter_context(mock.patch("sys.stderr", err))
+    stack.enter_context(mock.patch("sys.stdout", new_callable=io.StringIO))
+    return stack
+
 
 class ShelfTest(unittest.TestCase):
     """GET /api/shelf (the A4 shelf, computed once in the background) and a run's tool files."""
