@@ -793,7 +793,20 @@
               "topover_count",
               "lashing_pretension_N",
               "lashing_angle_deg",
-              "cargo_blocked_forward"
+              "cargo_blocked_forward",
+              "wire_current_A",
+              "wire_rated_current_A",
+              "wire_bundle_count",
+              "wire_fuse_rating_A",
+              "wire_insulation_max_degC",
+              "wire_place_max_degC",
+              "wire_voltage_rating_V",
+              "wire_bend_radius_mm",
+              "wire_outer_diameter_mm",
+              "wire_support_spacing_mm",
+              "wire_penetration_clearance_mm",
+              "wire_control_clearance_mm",
+              "battery_fuse_length_mm"
             ]
           },
           "additionalProperties": {
@@ -816,7 +829,10 @@
                   "N",
                   "N*m",
                   "1",
-                  "%"
+                  "%",
+                  "A",
+                  "V",
+                  "degC"
                 ],
                 "description": "Each name has one unit, the one in hiraku.intake.facts.FACTS (the rules check it)."
               },

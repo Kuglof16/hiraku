@@ -173,6 +173,11 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {**bend, "unit": "in"}}}), [])
         uj = {"value": 12.5, "unit": "deg", "basis": "computed from the shaft geometry"}
         self.assertEqual(contract.errors("part", {**part, "declared": {"uj_angle_max_deg": uj}}), [])
+        wire = {"wire_current_A": {"value": 60.0, "unit": "A", "basis": "computed from the motor's power"},
+                "wire_voltage_rating_V": {"value": 60.0, "unit": "V", "basis": "not checked"},
+                "wire_place_max_degC": {"value": 85.0, "unit": "degC", "basis": "assumption"}}
+        self.assertEqual(contract.errors("part", {**part, "kind": "electrical", "declared": wire}), [])
+        self.assertLessEqual(units, set(contract.UNITS))  # every declared unit is a contract unit
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {"value": 3.0, "unit": "mm"}}}), [])
         joint = {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}
         self.assertEqual(contract.errors("part", {**part, "joint": joint, "declared": {"hole_edge_mm": bend}}), [])
