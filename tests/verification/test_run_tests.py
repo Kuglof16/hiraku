@@ -345,11 +345,19 @@ class MemoryAware(unittest.TestCase):
         self.assertEqual(rt.memory_of("m.A.test_y", last), 5.0)  # split for the first time: the class's peak
         self.assertEqual(rt.memory_of("m.B.test_x", last), 1.0)
         self.assertEqual(rt.memory_of("tests.solvers.test_frame_tubes.MeshFlowTest", {}), 7.6)
-        # a known one is a floor: its levels run in child processes the worker's peak does not see
+        # a known one is a floor: its levels run in child processes the worker's peak does not see. One level
+        # at a time without HIRAKU_CONVERGENCE_JOBS, the n largest levels together with it (the EC2 suite sets 3)
+        from unittest import mock
+
         conv = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
-        self.assertEqual(rt.memory_of(conv, {conv: 0.6}), 15.7)
-        self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), 15.7)
-        self.assertEqual(rt.memory_of(conv, {conv: 20.0}), 20.0)
+        for jobs, floor in ((None, 15.7), ("3", 43.2)):
+            env = {k: v for k, v in os.environ.items() if k != rt.CONVERGENCE_JOBS}
+            if jobs:
+                env[rt.CONVERGENCE_JOBS] = jobs
+            with self.subTest(jobs=jobs), mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(rt.memory_of(conv, {conv: 0.6}), floor)
+                self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), floor)
+                self.assertEqual(rt.memory_of(conv, {conv: 50.0}), 50.0)
         self.assertIsNone(rt.memory_of("m.C", last))
 
     def test_this_process_peak_and_free_memory_read(self):
