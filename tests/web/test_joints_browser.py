@@ -715,16 +715,22 @@ class JointsBrowserTest(unittest.TestCase):
         for look in ("zu", "real"):
             shots = []
             for _ in range(2):
-                page = self.bench(look)
+                # zu: at the stage's own size (1920x1080, app.js STAGE_W/H), so the stage is not scaled.
+                # At 1280x720 the stage is scaled by 2/3 and the viewport's ruled paper (app.css
+                # .viewport, 1px lines every 32px) falls between device pixels: its lines are
+                # antialiased, and the browser rounds them differently each time it rasterises a
+                # region again. With 8 other screen tests running, 7 of 10 runs had 1469 pixels 1 step
+                # off (a rectangle x 0-403, y 139-540 of the viewport; at 1143 of them the canvas is
+                # fully clear, so it is the CSS paper, not the 3D). The canvas's own pixels
+                # (toDataURL) and the camera were the same in every load, and one page shot again 2 s
+                # later could change. At 1920x1080, 16 loads under the same load were one picture.
+                page = self.bench(look, size=(1920, 1080) if look == "zu" else (1280, 720))
                 shots.append(page.locator("#viewport").screenshot())
                 page.close()
             if look == "zu":
-                # bit for bit: no pixel differs. (Up to 7871fff a 1 in 10000 pixels was let pass: since
-                # the weld beads one pixel, (558,265), now and then 1 step off, with the hollow tubes 4
-                # pixels in 1 of 5 runs, only seen in runs of the whole suite. Not seen again: 22 loads
-                # of this page alone (12 with the marks opaque as they were, 10 with them in the
-                # see-through pass), 12 more with every core busy, and 5 runs of this class with no
-                # pixel let pass. If it comes back, the message names the pixels.)
+                # bit for bit: no pixel differs. (Up to 7871fff a 1 in 10000 pixels was let pass; the
+                # pixels seen then, (558,265) and 4 on the hollow tubes, were at 1280x720. If it comes
+                # back, the message names the pixels.)
                 self.assertEqual(pixel_steps(shots[0], shots[1]), (0, 0), (look, where_differ(shots[0], shots[1])))
             else:
                 # the real look's post (ambient occlusion, antialiasing) is not bit for bit the same
