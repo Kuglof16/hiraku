@@ -52,6 +52,9 @@ const OTHER = { mark: "dot", color: "#8a8577" };
 // otherwise share the faces' planes and the depth test would pick between them pixel by pixel.
 export const WELD_BEAD = { leg_mm: 5, round_segments: 16, end_ext: 1, round_end_ext: 0.3, lift_mm: 0.2 };
 const BEAD_POLYGON_OFFSET = { factor: -1, units: -4 };
+// The bead's material in the real look (screen choices, no source): a dark weld metal, not a
+// matt paint (metalness 0 lit the colour lighter than the painted frame it lies on).
+export const BEAD_REAL = { roughness: 0.55, metalness: 0.6 };
 export const BEAD_NOTE = `溶接のビードは脚 ${WELD_BEAD.leg_mm} mm の三角の断面で継ぎ目に沿う。寸法と色は画面の決め (出典なし)`;
 export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: String(via) };
 
@@ -606,8 +609,13 @@ export class JointMarks {
       const bead = shape === "bead";
       const n = bead ? list.reduce((a, { mk }) => a + mk.bead.seams.length, 0) : list.length;
       const mat = real
-        ? new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: bead ? 0.9 : 0.45, metalness: bead ? 0 : 0.15 })
+        ? new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: bead ? BEAD_REAL.roughness : 0.45, metalness: bead ? BEAD_REAL.metalness : 0.15 })
         : new THREE.MeshLambertMaterial({ color: "#ffffff" });
+      // In the see-through pass (opacity 1, so its colour is its own): three.js draws every opaque
+      // thing before every see-through one whatever its renderOrder, so an opaque mark was drawn
+      // first and the see-through parts (renderOrder 2, SEE_REAL / SEE_ZU) laid over it, a few
+      // layers of a light part tinting a dark bead to a light ochre. Here renderOrder 3 holds.
+      mat.transparent = true;
       if (bead) {
         mat.side = THREE.DoubleSide; // the bar's pieces are mirrored on some seams
         mat.polygonOffset = true; // drawn a little toward the eye (WELD_BEAD: off the faces' planes)

@@ -173,6 +173,12 @@ def lab(hexcol):
 
 
 COLOUR_APART = 25.0  # CIE76 distance a joint mark's colour keeps from every module colour on the same bench
+BEAD_REAL_APART = 10.0  # CIE76: the real look's drawn bead from its colour (light and tone mapping move it; 7 measured, the old ochre (131,110,81) 16)
+# the bench's camera 0.6 m from the frame node at x -2020 (body frame, mm), from above and the left
+LOOK_AT_NODE = """() => { const b = window.hiraku.bench; const t = b.camera.position.clone().set(-2020, 330, 400);
+  b.body.updateWorldMatrix(true, false); b.body.localToWorld(t);
+  const w = b.camera.position.clone().set(0.35, -0.6, 0.75).applyQuaternion(b.body.getWorldQuaternion(b.camera.quaternion.clone())).normalize();
+  b.lookFrom({ target: t, position: t.clone().addScaledVector(w, 0.6), near: 0.01, far: 50 }); }"""
 
 
 def dist_to_box(part, p):
@@ -499,6 +505,39 @@ class JointsBrowserTest(unittest.TestCase):
             bead, ring = np.asarray(got["bead"]["color"]), np.asarray(got["ring"]["color"])
             self.assertGreater(float(np.abs(bead - ring).max()), 0.05, look)
             self.assertGreater(float(bead[0] - bead[2]), 0.0, look)  # brown: more red than blue
+
+    def test_real_bead_in_its_own_colour(self):
+        # the real look, joints on (the parts see-through), close on the frame node at x -2020: the
+        # bead's pixels (where hiding the bead changes the picture) come out in the weld's colour, and
+        # black when the bead's material is black: nothing laid over them (the see-through parts were
+        # drawn after the opaque bead and tinted it a light ochre, whatever the bead's own colour)
+        import io
+
+        from PIL import Image
+
+        page = self.bench("real")
+        page.evaluate(LOOK_AT_NODE)
+
+        def shot(js):
+            page.evaluate(js)
+            page.evaluate("() => window.hiraku.bench.render()")
+            page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))")
+            return np.asarray(Image.open(io.BytesIO(page.locator("#viewport").screenshot())).convert("RGB"), dtype=int)
+
+        shown = shot("() => 0")
+        hidden = shot("() => { window.hiraku.bench.joints.meshes.bead.visible = false; }")
+        black = shot("() => { const m = window.hiraku.bench.joints.meshes.bead; m.visible = true; m.material.color.set('#000000'); }")
+        weld = page.evaluate("async () => (await import('/js/joints.js')).JOINT_KINDS.weld.color")
+        self.assertEqual(page.errors, [])
+        page.close()
+        bead = np.abs(shown - hidden).max(axis=2) > 24
+        self.assertGreater(int(bead.sum()), 200)
+        # black: near black (the metal's reflection of the sky and the antialiasing at the edges; laid
+        # over by the see-through parts it was about 125)
+        self.assertLess(float(np.median(black[bead].max(axis=1))), 45)
+        # the weld's colour: CIE76 within BEAD_REAL_APART of joints.js JOINT_KINDS.weld
+        got = np.median(shown[bead], axis=0)
+        self.assertLess(float(np.linalg.norm(lab("#%02x%02x%02x" % tuple(int(c) for c in got)) - lab(weld))), BEAD_REAL_APART, (got, weld))
 
     @staticmethod
     def unit(v):
