@@ -235,6 +235,18 @@ def pixel_steps(a, b):
     return int((d > 0).sum()), int(d.max())
 
 
+def where_differ(a, b, n=6):
+    """The first n pixels (x, y) where two PNGs differ, with their RGBA in each."""
+    import io
+
+    from PIL import Image
+
+    x = np.asarray(Image.open(io.BytesIO(a)).convert("RGBA"), dtype=int)
+    y = np.asarray(Image.open(io.BytesIO(b)).convert("RGBA"), dtype=int)
+    ys, xs = np.nonzero(np.abs(x - y).max(axis=2))
+    return [((int(i), int(j)), x[j, i].tolist(), y[j, i].tolist()) for i, j in zip(xs[:n], ys[:n])]
+
+
 def asm_events(events):
     """The assembly sample with joints on two parts: the battery bolted to node L1, the seat resting on it."""
     created = next(e for e in events if e["kind"] == "design.created")
@@ -703,17 +715,23 @@ class JointsBrowserTest(unittest.TestCase):
         for look in ("zu", "real"):
             shots = []
             for _ in range(2):
-                page = self.bench(look)
+                # zu: at the stage's own size (1920x1080, app.js STAGE_W/H), so the stage is not scaled.
+                # At 1280x720 the stage is scaled by 2/3 and the viewport's ruled paper (app.css
+                # .viewport, 1px lines every 32px) falls between device pixels: its lines are
+                # antialiased, and the browser rounds them differently each time it rasterises a
+                # region again. With 8 other screen tests running, 7 of 10 runs had 1469 pixels 1 step
+                # off (a rectangle x 0-403, y 139-540 of the viewport; at 1143 of them the canvas is
+                # fully clear, so it is the CSS paper, not the 3D). The canvas's own pixels
+                # (toDataURL) and the camera were the same in every load, and one page shot again 2 s
+                # later could change. At 1920x1080, 16 loads under the same load were one picture.
+                page = self.bench(look, size=(1920, 1080) if look == "zu" else (1280, 720))
                 shots.append(page.locator("#viewport").screenshot())
                 page.close()
             if look == "zu":
-                # not bit for bit either: with swiftshader a page now and then draws a few pixels
-                # otherwise. Since the weld beads (merge 0f871f7) one pixel, (558,265), sometimes came
-                # out 1 step off; lifting the bead off the faces (WELD_BEAD.lift_mm) with a
-                # polygonOffset did not stop it (199fa3b), so its cause is not found. With the hollow
-                # tubes (e512cc6) 4 pixels in 1 of 5 loads. At most 1 in 10000 pixels; more than that
-                # is a real change of the picture.
-                self.assertLess(differing(shots[0], shots[1]), 1e-4, look)
+                # bit for bit: no pixel differs. (Up to 7871fff a 1 in 10000 pixels was let pass; the
+                # pixels seen then, (558,265) and 4 on the hollow tubes, were at 1280x720. If it comes
+                # back, the message names the pixels.)
+                self.assertEqual(pixel_steps(shots[0], shots[1]), (0, 0), (look, where_differ(shots[0], shots[1])))
             else:
                 # the real look's post (ambient occlusion, antialiasing) is not bit for bit the same
                 # from one page to the next: nearly every pixel the same

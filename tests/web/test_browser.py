@@ -1043,7 +1043,7 @@ class BrowserReplayTest(unittest.TestCase):
 
     @unittest.skipUnless("rule_check.recorded" in contract.EVENT_KINDS, "contract without the intake events")
     def test_intake_screens_in_their_tabs(self):
-        """依頼・ヒアリング・ナレッジ show the intake screens (js/intake/) on the events so far;
+        """① 作りたいもの・② 確認したいこと・守るルール (A1, A2, A5) show the intake screens (js/intake/) on the events so far;
         a replay is read-only (the hearing's buttons are off) and a rewind redraws them."""
         events = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
         ex = {n: json.loads((contract.EXAMPLES_DIR / f"{n}.json").read_text(encoding="utf-8"))
