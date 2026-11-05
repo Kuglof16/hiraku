@@ -328,17 +328,36 @@ class MemoryAware(unittest.TestCase):
             os.environ[rt.CONVERGENCE_JOBS] = "3"  # set on purpose (a run of that class alone): kept
             self.assertEqual(rt.worker_env()[rt.CONVERGENCE_JOBS], "3")
 
+    def test_convergence_levels_side_by_side_count_their_peaks_together(self):
+        from unittest import mock
+
+        conv = rt.CONVERGENCE
+        for jobs, want in (("1", 15.7), ("2", 29.7), ("3", 43.2), ("9", 54.5), ("x", 15.7)):
+            with self.subTest(jobs=jobs), mock.patch.dict(os.environ, {rt.CONVERGENCE_JOBS: jobs}):
+                self.assertEqual(rt.memory_of(conv, {conv: 0.6}), want)
+        with mock.patch.dict(os.environ, {rt.CONVERGENCE_JOBS: "3"}):
+            self.assertEqual(rt.memory_of(conv, {conv: 50.0}), 50.0)  # a larger measured peak stands
+            self.assertEqual(rt.memory_of("m.A", {"m.A": 5.0}), 5.0)  # other classes as before
+
     def test_memory_of(self):
         last = {"m.A": 5.0, "m.B.test_x": 1.0}
         self.assertEqual(rt.memory_of("m.A", last), 5.0)
         self.assertEqual(rt.memory_of("m.A.test_y", last), 5.0)  # split for the first time: the class's peak
         self.assertEqual(rt.memory_of("m.B.test_x", last), 1.0)
         self.assertEqual(rt.memory_of("tests.solvers.test_frame_tubes.MeshFlowTest", {}), 7.6)
-        # a known one is a floor: its levels run in child processes the worker's peak does not see
+        # a known one is a floor: its levels run in child processes the worker's peak does not see. One level
+        # at a time without HIRAKU_CONVERGENCE_JOBS, the n largest levels together with it (the EC2 suite sets 3)
+        from unittest import mock
+
         conv = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
-        self.assertEqual(rt.memory_of(conv, {conv: 0.6}), 15.7)
-        self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), 15.7)
-        self.assertEqual(rt.memory_of(conv, {conv: 20.0}), 20.0)
+        for jobs, floor in ((None, 15.7), ("3", 43.2)):
+            env = {k: v for k, v in os.environ.items() if k != rt.CONVERGENCE_JOBS}
+            if jobs:
+                env[rt.CONVERGENCE_JOBS] = jobs
+            with self.subTest(jobs=jobs), mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(rt.memory_of(conv, {conv: 0.6}), floor)
+                self.assertEqual(rt.memory_of(conv + ".test_x", {conv: 0.6}), floor)
+                self.assertEqual(rt.memory_of(conv, {conv: 50.0}), 50.0)
         self.assertIsNone(rt.memory_of("m.C", last))
 
     def test_this_process_peak_and_free_memory_read(self):

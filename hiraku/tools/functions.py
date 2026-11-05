@@ -22,8 +22,8 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
-from hiraku.tools.judge import (OP_JA, STAND_IN_BELOW, failing_end, init_judgements, judged_quantity, make_verdict,
-                                prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
+from hiraku.tools.judge import (OP_JA, PATH_CHECKED, PATH_FORMULA, STAND_IN_BELOW, failing_end, init_judgements,
+                                judged_quantity, make_verdict, path_check, prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
                                 update_judgement)
 from hiraku.tools.summary import design_summary
 
@@ -971,13 +971,10 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     return out
 
 
-def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
-                     pred_quantity: str | None = None) -> None:
-    """Refuse safe_side unless the load case has a criterion on this quantity and the
-    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
-    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
-    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
-    criterion's quantity."""
+def _check_on_criterion(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None, pred_quantity: str | None,
+                        flag: str) -> Record:
+    """The load case's criterion, refusing flag (safe_side, tool_decides: both make a verdict from this comparison)
+    unless the comparison is of the quantity the criterion judges (see _check_safe_side)."""
     crit = (lc or {}).get("criterion")
     judged = judged_quantity(ctx, tool, crit["quantity"]) if crit else None
     on_criterion = bool(crit) and (cmp["quantity"] == judged
@@ -985,9 +982,20 @@ def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str 
     if not crit or not on_criterion or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
         what = f"{crit['quantity']} ({crit['limit']['unit']})" if crit else "なし"
         raise ToolError(
-            f"safe_side は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
-            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。safe_side を外して原因と直し方だけ書いてください"
+            f"{flag} は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
+            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。{flag} を外して原因と直し方だけ書いてください"
         )
+    return crit
+
+
+def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
+                     pred_quantity: str | None = None) -> None:
+    """Refuse safe_side unless the load case has a criterion on this quantity and the
+    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
+    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
+    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
+    criterion's quantity."""
+    crit = _check_on_criterion(ctx, cmp, lc, tool, pred_quantity, "safe_side")
     if prediction_is_unfavourable(cmp, crit["op"]):
         return
     side = "大きい" if unfavourable_side(crit["op"]) == "larger" else "小さい"
@@ -1025,13 +1033,30 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     lc = ctx.load_case(pred["load_case_id"]) if pred else None
     safe = bool(args.get("safe_side"))
     ends = bool(args.get("ends_case"))
+    decides = bool(args.get("tool_decides"))
     if safe and ends:
         raise ToolError("safe_side と ends_case は一緒に付けられません (safe_side は予測で合否を出し、ends_case は合否を出さずに終えます)")
+    if decides and (safe or ends):
+        raise ToolError("tool_decides は safe_side とも ends_case とも一緒に付けられません (tool_decides はツールの値で合否を"
+                        "出し、safe_side は予測の値で合否を出し、ends_case は合否を出さずに終えます)")
     if safe:
         if not (args.get("safe_side_reason") or "").strip():
             raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
         ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
         _check_safe_side(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None)
+    if decides:  # docs/contract.md 手計算の役目: the hand calculation does not reach the value, the path was checked
+        if not (args.get("tool_decides_reason") or "").strip():
+            raise ToolError("tool_decides を付けるときは、手計算が値に届かない理由を tool_decides_reason に書いてください")
+        ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
+        _check_on_criterion(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None, "tool_decides")
+        gap = path_check(ctx, lc, v, ana)
+        if gap:
+            raise ToolError(f"tool_decides は、力の道を手計算で確かめてあるときだけ付けられます。いまは{gap}。"
+                            f"{PATH_FORMULA} で部品から部材までの道を予測して記録し、道をたどるツール (load_path) で解析して"
+                            "つながりを確かめてから、もう一度書いてください")
+    if ends and lc is not None and lc.get("criterion") and path_check(ctx, lc, v) is None:
+        raise ToolError(f"{lc['load_case_id']} は、この版で力の道を手計算で確かめてあります。手計算が値に届かないときは、"
+                        "ends_case ではなく tool_decides と tool_decides_reason を付けてください (ツールの値で合否を出します)")
     domain = pred["domain"] if pred else None
     agent = agent or (ctx.owner(pred["load_case_id"]) if pred else "lead")
     cause = {
@@ -1045,12 +1070,15 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         cause.update(safe_side=True, safe_side_reason=args["safe_side_reason"].strip())
     if ends:
         cause["ends_case"] = True  # the load case ends not judged (rules.ended_cases: HK4 and HK5 do not wait for it)
+    if decides:
+        cause.update(tool_decides=True, tool_decides_reason=args["tool_decides_reason"].strip())
     ctx.store.add_record("cause", cause, design_version=v, agent=agent, domain=domain)
     ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]), design_version=v, agent=agent,
                          domain=domain)
     out: Record = {"cause": cause, "verdict": None}
-    if safe:
-        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"])
+    if safe or decides:
+        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"],
+                           basis=PATH_CHECKED if decides else None)
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=domain)
         out["verdict"] = ver
     if domain in ctx.picked:

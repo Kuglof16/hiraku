@@ -301,6 +301,8 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
         args.update(safe_side=True, safe_side_reason=expected["safe_side_reason"])
+    if expected.get("tool_decides"):  # docs/contract.md 手計算の役目: the plan's step records the path check first
+        args.update(tool_decides=True, tool_decides_reason=expected["tool_decides_reason"])
     if expected.get("end"):
         args["ends_case"] = True  # rules.ended_cases reads it: the load case holds no heavier stage nor the stop
     recorded = record_cause(ctx, args, agent)
@@ -309,8 +311,9 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if ver is not None:
         if retry is not None:
             raise ScriptError(f"the plan gives {hit['comparison_id']} both safe_side and a retry")
-        _say(ctx, agent, lc, f"安全側の食い違いとして、不利な方の値 (予測) で合否を出しました: "
-                             f"{'合格' if ver['pass'] else '不合格'} — {verdict_line(ver)}")
+        how = ("手計算は値に届かないが、力の道は手計算で確かめてあるので、ツールの値で" if expected.get("tool_decides")
+               else "安全側の食い違いとして、不利な方の値 (予測) で")
+        _say(ctx, agent, lc, f"{how}合否を出しました: {'合格' if ver['pass'] else '不合格'} — {verdict_line(ver)}")
         return
     if expected.get("end"):
         if retry is not None:

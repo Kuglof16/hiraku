@@ -31,6 +31,27 @@ export const DOMAIN_PLAIN_JA = {
 };
 
 
+// The top tabs (web/js/tabs.js), in the order of use, then the two on the side. no: the step's
+// number (the side ones have none); tip: what the tab is for, in one sentence (the tab's title,
+// and the bubble of a long press); id: the screen's name inside HIRAKU (shown under ?dev=1).
+export const TAB_FLOW = ["A1", "A2", "bench", "grid", "A7"];
+export const TAB_SIDE = ["A4", "A5"];
+export const TAB_JA = {
+  A1: { no: "①", name: "作りたいもの", tip: "作りたいものを書くと、HIRAKU が調べる点を選びます", id: "A1" },
+  A2: { no: "②", name: "確認したいこと", tip: "HIRAKU が足りない情報を聞きます。答えなくても標準の値で進めます", id: "A2" },
+  bench: { no: "③", name: "解析", tip: "予測と解析を照らし合わせる様子を 3D で見ます", id: "A3 (bench)" },
+  // the grid's tiles: the domains, and assembly (tiles.js TILE_ORDER); the count from DOMAINS
+  grid: { no: "④", name: "全分野の結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての結果を一度に見ます`, id: "A6 (grid)" },
+  A7: { no: "⑤", name: "組み立て", tip: "組み立ての順番を 3D で確かめます", id: "A7" },
+  A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、照合の結果を見ます", id: "A4" },
+  A5: { no: "", name: "守るルール", tip: "設計のチェックに使うルールを見ます。ファイルを置くと足せます", id: "A5" },
+};
+export const TAB_EMPTY_JA = "この実行ではまだありません";
+export const TAB_FLOW_JA = "使う順"; // the flow group's name (read aloud, aria-label)
+export const TAB_SIDE_JA = "脇のツール";
+// A tab's name as the other screens' sentences say it (「① 作りたいもの」).
+export const tabWord = (key) => `「${TAB_JA[key].no ? `${TAB_JA[key].no} ` : ""}${TAB_JA[key].name}」`;
+
 // The trade's words in the record's sentences, and what the video's pages say instead.
 const SENTENCE_PLAIN = [
   [/荷重条件の作り方/g, "試し方"],

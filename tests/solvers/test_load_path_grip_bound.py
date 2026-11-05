@@ -88,8 +88,17 @@ class AboveTheToolTest(unittest.TestCase):
             pred = next(p for p in step["predictions"] if p["quantity"] == quantity)
             self.assertEqual(pred["formula_id"], "load_path.grip_bound")
             entry = next(e for e in step["expected_mismatch"] if e["quantity"] == quantity)
-            self.assertTrue(entry["safe_side"])
             self.assertNotIn("end", entry)
+            self.assertNotIn("ends_case", entry)
+            if quantity == "grip_deflection":  # the bound is loose: the path checked, the tool's value decides
+                self.assertTrue(entry["tool_decides"])
+                self.assertTrue(entry["tool_decides_reason"])
+                self.assertNotIn("safe_side", entry)
+            else:  # the pedal passes on its bound
+                self.assertTrue(entry["safe_side"])
+                self.assertNotIn("tool_decides", entry)
+        # the path check of R7-hand: load_path.free_parts in the same step
+        self.assertIn("load_path.free_parts", [p["formula_id"] for p in step["predictions"]])
 
 
 if __name__ == "__main__":
