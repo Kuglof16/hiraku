@@ -38,17 +38,20 @@ import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
-import { esc, fmt } from "./labels.js";
+import { caseShortNames, esc, fmt } from "./labels.js";
 import { channelsOf, lerpAt } from "./series.js";
 import { verdictVersion } from "./state.js";
 
 export const ELEC_COLOR = "#2f7fd0"; // electric power (via wire)
 export const ROT_COLOR = "#7a5cc2"; // rotating power (via spline: torque)
-export const HEAT_COLOR = "#ee8a22"; // heat: losses and the temperature's scale (not the verdict's red)
+// heat: losses and the temperature's scale. A vivid red-orange, told apart from the verdict's red
+// (#c8402a, CIE76 dE 25) and from the caution / slip orange (#e9893a, dE 31) and the seats (#e9b872, dE 58)
+export const HEAT_COLOR = "#ff5a1f";
+export const CAUTION_ORANGE = "#e9893a"; // (colormap.js, chart.js: not used here; the tests compare with it)
 export const VERDICT_RED = "#c8402a"; // css --red: only for a temperature above its limit
 const DASH_TINT = { elec: "#eaf3ff", rot: "#f1ecff", heat: "#fff4e3" };
 // the temperature's scale: from the lowest recorded value to the limit (the last stop at the limit)
-const TEMP_STOPS = ["#fbf3e4", "#f8d896", "#f3b057", HEAT_COLOR];
+const TEMP_STOPS = ["#fdf1ea", "#fcc8ae", "#fd9468", HEAT_COLOR];
 
 export const HEAT_PLAY_S = 12; // a thermal record's run plays in this many seconds of the replay (as a test's motion)
 const MIN_W = 3; // px: a line without a value, and the thinnest valued one
@@ -158,7 +161,8 @@ export function flowModel({ design, thermal, energy = null, verdicts = [] }) {
   const byId = new Map((design?.parts ?? []).map((p) => [p.id, p]));
   const own = channelsOf(thermal);
   const other = energy ? channelsOf(energy) : new Map();
-  const notes = [];
+  const notes = []; // with the record's ids and channel names (?dev=1, the tests)
+  const notesJa = []; // the same in words only (the legend)
 
   // power by part: the thermal record's own series, else the other analysis' (its time mean)
   const power = new Map();
@@ -172,7 +176,7 @@ export function flowModel({ design, thermal, energy = null, verdicts = [] }) {
       power.set(at.id, isOwn ? src : { kind: "mean", w: timeMean(s) * src.k, from: energy.analysis_id, channel: name, unit: s.unit, peak: Math.abs(timeMean(s) * src.k) });
     }
   }
-  const links = flowLinks(design).map((e, i) => ({ ...e, i, a: center(byId.get(e.from)), b: center(byId.get(e.to)) }));
+  const links = flowLinks(design).map((e, i) => ({ ...e, i, a: center(byId.get(e.from)), b: center(byId.get(e.to)), fromName: short(byId.get(e.from)) }));
   for (const l of links) {
     const outs = links.filter((m) => m.from === l.from).length;
     l.source = outs === 1 ? power.get(l.from) ?? null : null; // a part's power on its one way out
@@ -217,6 +221,7 @@ export function flowModel({ design, thermal, energy = null, verdicts = [] }) {
     const at = partFor(design, key, s.part_id ?? null);
     if (!at.id) {
       notes.push(`${name} は部品につなげないので塗らない: ${at.why}`);
+      notesJa.push("温度の記録の一つは部品につなげないので塗らない");
       continue;
     }
     const p = byId.get(at.id);
@@ -230,7 +235,11 @@ export function flowModel({ design, thermal, energy = null, verdicts = [] }) {
   // parts of a coloured part's kind that no series is tied to (a second battery)
   for (const t of temps) {
     const kind = byId.get(t.part).kind;
-    for (const p of design.parts) if (p.kind === kind && !tempIds.has(p.id)) notes.push(`${p.id}・${short(p)}は温度の記録とつなげないので塗らない`);
+    for (const p of design.parts) {
+      if (p.kind !== kind || tempIds.has(p.id)) continue;
+      notes.push(`${p.id}・${short(p)}は温度の記録とつなげないので塗らない`);
+      notesJa.push(`${short(p)}は温度の記録とつなげないので塗らない`);
+    }
   }
 
   // the parts on the way whose loss is not recorded
@@ -243,12 +252,13 @@ export function flowModel({ design, thermal, energy = null, verdicts = [] }) {
     byKind.get(k).push(id);
   }
   const names = [...byKind.values()].map((ids) => (ids.length > 1 ? `${short(byId.get(ids[0]))} など ${ids.length} 個` : short(byId.get(ids[0]))));
-  if (names.length) notes.push(`${names.join("・")}の損失は記録に無いので、枝を描かない`);
-  if (links.some((l) => !l.source)) notes.push("細く薄い線は電力の記録が無い所");
+  for (const n of [names.length ? `${names.join("・")}の損失は記録に無いので、枝を描かない` : null, links.some((l) => !l.source) ? "細く薄い線は電力の記録が無い所" : null]) {
+    if (n) notes.push(n), notesJa.push(n);
+  }
 
   // the scale: the largest value of any line or branch over the whole run (W)
   const ref = Math.max(1e-9, ...links.filter((l) => l.source).map((l) => l.source.peak), ...branches.map((b) => b.source.peak));
-  return { analysisId: thermal.analysis_id, energyId: energy?.analysis_id ?? null, version: thermal.design_version, links, branches, temps, notes, ref, t0: Math.min(...[...own.values()].map((s) => s.t_s[0])), t1: Math.max(...[...own.values()].map((s) => s.t_s.at(-1))) };
+  return { analysisId: thermal.analysis_id, energyId: energy?.analysis_id ?? null, version: thermal.design_version, links, branches, temps, notes, notesJa, ref, t0: Math.min(...[...own.values()].map((s) => s.t_s[0])), t1: Math.max(...[...own.values()].map((s) => s.t_s.at(-1))) };
 }
 
 const widthOf = (w, ref) => (w == null ? MIN_W : MIN_W + (MAX_W - MIN_W) * Math.sqrt(Math.min(1, Math.abs(w) / ref)));
@@ -313,7 +323,15 @@ export function heatInputs(s, shown, design, force = false) {
   const v = thermal.design_version;
   const energy = Object.values(s.analyses ?? {}).filter((a) => a !== thermal && a.status === "ok" && a.design_version === v && [...channelsOf(a).keys()].some((n) => n.startsWith("power."))).at(-1) ?? null;
   const verdicts = Object.values(s.verdicts ?? {}).filter((x) => x.domain === "thermal" && verdictVersion(s, x) === v);
-  return { design, thermal, energy, verdicts, arrived: s.tOf?.[thermal.analysis_id] ?? 0, loadCase: thermal.load_case_id, energyCase: energy?.load_case_id ?? null };
+  // the load cases in words: the test's id and, for an id several cases share, the chips' short name (T2 制御器)
+  const cases = s.project?.load_cases ?? [];
+  const shorts = caseShortNames(cases);
+  const caseWord = (id) => {
+    const c = cases.find((x) => x.load_case_id === id);
+    return c ? `${c.test_id}${shorts.get(id) ? ` ${shorts.get(id)}` : ""}` : "";
+  };
+  return { design, thermal, energy, verdicts, arrived: s.tOf?.[thermal.analysis_id] ?? 0, loadCase: thermal.load_case_id, energyCase: energy?.load_case_id ?? null,
+    caseJa: caseWord(thermal.load_case_id), energyCaseJa: energy ? caseWord(energy.load_case_id) : null };
 }
 
 // ---- on the 3D -------------------------------------------------------------------------------
@@ -321,7 +339,9 @@ export function heatInputs(s, shown, design, force = false) {
 const KIND_COLOR = { elec: ELEC_COLOR, rot: ROT_COLOR, heat: HEAT_COLOR };
 
 export class EnergyFlow {
-  constructor(bench, host) {
+  // opts.dev: the record's ids and channel names in the legend (?dev=1)
+  constructor(bench, host, opts = {}) {
+    this.dev = !!opts.dev;
     this.bench = bench;
     this.host = host;
     this.group = new THREE.Group();
@@ -473,18 +493,24 @@ export class EnergyFlow {
     });
     const link = flow.links.find((l, i) => m.links[i].source);
     const src = link ? m.links[flow.links.indexOf(link)].source : null;
-    const powerNote = src
-      ? `電力 ${esc(fmt(link.w / 1000, 3))} kW: ${src.kind === "mean" ? `${esc(inputs.energyCase ?? "")} (${esc(m.energyId)}) の ${esc(src.channel)} の時間平均` : `${esc(src.channel)} (この記録)`}`
-      : "電力の記録が無い";
+    // the record's ids and channel names only with ?dev=1; else words
+    const dev = this.dev;
+    const from = link ? m.links[flow.links.indexOf(link)].fromName : "";
+    const powerNote = !src
+      ? "電力の記録が無い"
+      : dev
+        ? `電力 ${esc(fmt(link.w / 1000, 3))} kW: ${src.kind === "mean" ? `${esc(inputs.energyCase ?? "")} (${esc(m.energyId)}) の ${esc(src.channel)} の時間平均` : `${esc(src.channel)} (この記録)`}`
+        : `${esc(from)}の電力 ${esc(fmt(link.w / 1000, 3))} kW: ${src.kind === "mean" ? `${esc(inputs.energyCaseJa ?? "")} の走行の電力の記録の平均` : "この記録の値"}`;
     const lossMean = flow.branches.some((b) => b.mean);
+    const head = dev ? `${esc(inputs.loadCase ?? "")} (${esc(m.analysisId)})` : `${esc(inputs.caseJa ?? "")} の熱の解析`;
     const html =
-      `<div class="hl-ttl">エネルギーの流れ<small>${esc(inputs.loadCase ?? "")} (${esc(m.analysisId)})</small></div>` +
+      `<div class="hl-ttl">エネルギーの流れ<small>${head}</small></div>` +
       `<div class="hl-time">走って ${esc(fmt(flow.t - m.t0, 4))} s / ${esc(fmt(dur, 4))} s</div>` +
       `<div class="hl-keys"><span><i class="hl-ln" style="background:${ELEC_COLOR}"></i>電気</span><span><i class="hl-ln" style="background:${ROT_COLOR}"></i>回転</span><span><i class="hl-ln" style="background:${HEAT_COLOR}"></i>熱 (損失)</span></div>` +
       `<div class="hl-sub">太さ = √W (${esc(fmt(m.ref, 3))} W で ${MAX_W} px)</div>` +
       `<div class="hl-sub">箱の色 = 温度 (上限を超えたときだけ赤)</div>` +
       rows.join("") +
-      `<div class="hl-notes"><div>${powerNote}</div>${lossMean ? "<div>損失: 熱の解析の平均 (results)</div>" : ""}${m.notes.map((n) => `<div>${esc(n)}</div>`).join("")}</div>`;
+      `<div class="hl-notes"><div>${powerNote}</div>${lossMean ? `<div>損失: 熱の解析の平均${dev ? " (results)" : ""}</div>` : ""}${(dev ? m.notes : m.notesJa).map((n) => `<div>${esc(n)}</div>`).join("")}</div>`;
     if (this.legend.dataset.html !== html) {
       this.legend.dataset.html = html;
       this.legend.innerHTML = html;

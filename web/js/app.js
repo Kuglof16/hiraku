@@ -134,7 +134,7 @@ document.body.classList.add(`look-${look}`);
 const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 const bench = new Workbench3D(viewport, look, { quality });
 const modLayer = new ModuleLayer(bench); // modules:
-const heat = new EnergyFlow(bench, viewport); // heat:
+const heat = new EnergyFlow(bench, viewport, { dev: DEV }); // heat: ids in its legend only with ?dev=1
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;

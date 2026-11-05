@@ -33,6 +33,8 @@ OVER = hf.RUN_ID + "-over"
 TWO = hf.RUN_ID + "-two"
 MIN_W, MAX_W = 3, 14  # energy_flow.js
 VERDICT_RED = (0xC8, 0x40, 0x2A)  # css --red
+CAUTION_ORANGE = (0xE9, 0x89, 0x3A)  # colormap.js, chart.js: the caution / slip orange
+APART = 20  # CIE76 dE: the heat colour this far at least from both
 
 READ = """() => {
   const h = window.hiraku.heat.last;
@@ -53,8 +55,20 @@ def rgb(hex_or_css: str) -> tuple[int, int, int]:
     return tuple(int(float(x)) for x in s[s.index("(") + 1 : s.index(")")].split(",")[:3])
 
 
+def lab(c) -> tuple[float, float, float]:
+    """sRGB (a hex or css colour, or an (r, g, b) tuple) -> CIE L*a*b* (D65)."""
+    r, g, b = [v / 255 for v in (rgb(c) if isinstance(c, str) else c)]
+    lin = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in (r, g, b)]
+    x = (0.4124 * lin[0] + 0.3576 * lin[1] + 0.1805 * lin[2]) / 0.95047
+    y = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+    z = (0.0193 * lin[0] + 0.1192 * lin[1] + 0.9505 * lin[2]) / 1.08883
+    f = lambda t: t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+    return 116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))
+
+
 def far(a, b) -> float:
-    return math.dist(rgb(a) if isinstance(a, str) else a, rgb(b) if isinstance(b, str) else b)
+    """CIE76 colour difference (about 2.3 is just told apart; 20 and more is plainly another colour)."""
+    return math.dist(lab(a), lab(b))
 
 
 def trapezoid_mean(t, v) -> float:
@@ -177,15 +191,32 @@ class EnergyFlowBrowserTest(unittest.TestCase):
 
     def test_heat_colour_is_not_the_verdicts_red(self):
         page, got = self.at(self.t_last + 4.0)
-        heat = page.evaluate("import('/js/energy_flow.js').then((m) => [m.HEAT_COLOR, m.VERDICT_RED])")
+        heat = page.evaluate("import('/js/energy_flow.js').then((m) => [m.HEAT_COLOR, m.VERDICT_RED, m.CAUTION_ORANGE])")
         self.assertEqual(rgb(heat[1]), VERDICT_RED)
-        self.assertGreater(far(heat[0], VERDICT_RED), 60)
+        self.assertEqual(rgb(heat[2]), CAUTION_ORANGE)
+        self.assertGreater(far(heat[0], VERDICT_RED), APART)
+        self.assertGreater(far(heat[0], CAUTION_ORANGE), APART)
+        # the temperature scale ends on the heat colour (just under a limit: nearly it)
+        end = page.evaluate("import('/js/energy_flow.js').then((m) => [m.TEMP_SCALE.at(-1), m.tempColor(54.999, 40, 55, '<=')])")
+        self.assertEqual(end[0], heat[0])
+        self.assertLess(far(end[1], heat[0]), 1)
         self.assertTrue(got["branchColors"])
         for c in got["branchColors"]:
             self.assertEqual(c, heat[0])
         for x in got["tags"]:
             self.assertEqual(rgb(x["border"]), rgb(heat[0]))
         self.assertIn("熱 (損失)", got["legend"])
+
+    def test_legend_in_words_ids_only_with_dev(self):
+        _, got = self.at(self.t_last + 4.0)
+        legend = got["legend"]
+        self.assertIn("T2 制御器 の熱の解析", legend)
+        self.assertIn("P4 の走行の電力の記録の平均", legend)
+        for inner in ("ana-", "T2-40C", "P4-20km", "power.", "results"):
+            self.assertNotIn(inner, legend)
+        _, dev = self.at(self.t_last + 4.0, extra="&dev=1")
+        for inner in ("ana-0117", "T2-40C-controller", "ana-0114", "power.battery"):
+            self.assertIn(inner, dev["legend"])
 
     def test_temperature_reaches_the_red_end_only_above_its_limit(self):
         # as recorded every part stays under its limit: no box red, none near it, at the start and the end
@@ -195,7 +226,7 @@ class EnergyFlowBrowserTest(unittest.TestCase):
             for p in got["temps"]:
                 self.assertLess(p["T"], p["limit"])
                 self.assertFalse(p["over"])
-                self.assertGreater(far(p["color"], VERDICT_RED), 60, p)
+                self.assertGreater(far(p["color"], VERDICT_RED), APART, p)
         # 8 degC up (shape example): the battery is red once it is above 55 degC, not before
         _, early = self.at(self.t_last + 0.3, OVER)
         _, late = self.at(self.t_last + 30, OVER)

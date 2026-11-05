@@ -19,7 +19,7 @@ body.video .heat-legend { bottom: 12px; max-height: calc(100% - 70px); }
 /* the video layout (?video=1): no buttons over the flow (the toggles; the replay bar is gone already) */
 body.video .viewport.heat-on > .toggles { display: none; }
 .heat-legend .hl-ttl { font-weight: 600; font-size: 15px; }
-.heat-legend .hl-ttl small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 8px; }
+.heat-legend .hl-ttl small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
 .heat-legend .hl-time { font-variant-numeric: tabular-nums; margin: 2px 0 6px; }
 .heat-legend .hl-keys { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .heat-legend .hl-keys span { white-space: nowrap; }
@@ -37,5 +37,5 @@ body.video .viewport.heat-on > .toggles { display: none; }
 .heat-legend .hl-lim small { margin-left: 6px; }
 .heat-legend .hl-notes { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.35; }
 /* a loss tag: its border in the heat colour (not the verdict's red) */
-.lbl-heat { border: 1.5px solid #ee8a22; font-weight: 600; }
-.lbl-heat small { color: #9a520c; font-weight: 700; }
+.lbl-heat { border: 1.5px solid #ff5a1f; font-weight: 600; }
+.lbl-heat small { color: #8f2f0c; font-weight: 700; }
