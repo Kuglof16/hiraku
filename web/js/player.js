@@ -207,7 +207,7 @@ export class EventFeed {
   async readOnce() {
     const url = `/api/runs/${encodeURIComponent(this.runId)}/events?offset=${this.offset}`;
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`${res.status} ${url}`);
+    if (!res.ok) throw Object.assign(new Error(`${res.status} ${url}`), { status: res.status });
     const body = await res.json();
     const moved = body.next_offset !== this.offset || !!body.reset;
     this.offset = body.next_offset;

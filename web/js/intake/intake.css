@@ -176,3 +176,33 @@
 .in-card.draft { border-color: var(--i-line); border-style: dashed; background: transparent; color: var(--i-muted); }
 .in-card.draft .in-reason { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .in-draft { margin: 0; font-size: 12px; color: var(--i-muted); }
+/* A5: the values a check used */
+.in-vals table { border-collapse: collapse; font-size: 14px; width: 100%; }
+.in-vals td { padding: 4px 8px; border-bottom: 1px solid var(--i-line); vertical-align: top; }
+.in-vals tr.hit td:last-child { font-weight: 700; }
+.in-val.unchecked { color: var(--i-muted); font-style: italic; }
+
+/* the questions that need an answer, on top of A1 */
+.in-pane.a1.has-ask { grid-template-rows: auto minmax(0, 1fr); }
+.in-ask-top { grid-column: 1 / -1; border: 1.5px solid var(--i-ink); border-radius: 12px; background: var(--i-panel); padding: 12px 16px; max-height: 46vh; overflow: auto; }
+.in-ask-top h2 { margin: 0 0 8px; }
+.in-ask-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.in-ask-top .in-actions { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+.in-warn.soft { color: var(--i-ink); background: var(--i-paper); border: 1.5px dashed var(--i-muted); border-radius: 8px; padding: 6px 10px; }
+
+/* a narrow screen (a phone): one column, the pane scrolls */
+@media (max-width: 760px) {
+  .in-pane { display: block; padding: 12px; overflow: auto; }
+  .in-pane.a1, .in-pane.a2, .in-pane.a1.has-ask { grid-template-columns: 1fr; }
+  .in-pane > * { margin-bottom: 14px; }
+  .in-chat, .in-left, .in-right, .in-side { min-height: 0; overflow: visible; }
+  .in-msgs, .in-qs, .in-table { max-height: 50vh; }
+  .in-ask-top { max-height: none; }
+  .in-ask-list { grid-template-columns: 1fr; }
+  .in-body { grid-template-columns: 1fr; }
+}
+
+.in-ask-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.in-ask-head h2 { margin: 0; }
+.in-ask-head .in-actions { margin: 0; }
+.in-ask-top { max-height: 58vh; }

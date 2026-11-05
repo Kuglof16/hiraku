@@ -63,6 +63,7 @@ class Screen:
 
 
 SCREENS = (
+    Screen("最初の画面", "", wait="document.querySelector('#launch .lreq')", root="#runlist"),  # nothing in the URL: the run list
     Screen("一覧", "?list=1", wait="document.querySelector('#launch .lreq')", root="#runlist"),
     Screen("一覧 (保存なし)", "?list=1", wait="document.querySelector('#launch .pick')", root="#runlist", server="unsaved"),
     Screen("一覧 (dev)", "?list=1&dev=1", wait="document.querySelector('#launch .lreq') && document.querySelector('#runlist table')", root="#runlist"),

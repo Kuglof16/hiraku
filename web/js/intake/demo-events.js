@@ -6988,6 +6988,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7023,6 +7041,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7058,6 +7094,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7093,6 +7147,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7128,6 +7200,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7163,6 +7253,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7198,6 +7306,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7233,6 +7359,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7268,6 +7412,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7303,6 +7465,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7338,6 +7518,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7373,6 +7571,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7408,6 +7624,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7443,6 +7677,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7478,6 +7730,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7513,6 +7783,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7644,6 +7932,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7679,6 +7985,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7714,6 +8038,24 @@ export const DEMOS = {
       "carried_by": [
        "LAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7749,6 +8091,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7784,6 +8144,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7819,6 +8197,24 @@ export const DEMOS = {
       "carried_by": [
        "RAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7854,6 +8250,24 @@ export const DEMOS = {
       "carried_by": [
        "LBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7889,6 +8303,24 @@ export const DEMOS = {
       "carried_by": [
        "RBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7958,6 +8390,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -7999,6 +8438,13 @@ export const DEMOS = {
        "RAp2",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -8040,6 +8486,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -8081,6 +8534,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1405.0,
@@ -8122,6 +8582,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -8163,6 +8630,13 @@ export const DEMOS = {
        "LB",
        "LE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -8204,6 +8678,13 @@ export const DEMOS = {
        "RB",
        "RE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -8245,6 +8726,13 @@ export const DEMOS = {
        "LF",
        "RF"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         400.0,
@@ -8286,6 +8774,13 @@ export const DEMOS = {
        "LAp1",
        "LAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -8327,6 +8822,13 @@ export const DEMOS = {
        "RAp1",
        "RAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -8368,6 +8870,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -580.0,
@@ -8409,6 +8918,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1970.0,
@@ -8450,6 +8966,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -8491,6 +9014,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1320.0,
@@ -8532,6 +9062,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -8573,6 +9110,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -8614,6 +9158,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -9628,7 +10179,8 @@ export const DEMOS = {
       "nu": 0.3,
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
-      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "tensile_MPa": 400.0,
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; tensile: JIS G 3466 minimum tensile strength for STKR400 (400 MPa, the grade's name; used by R9's weld and bearing checks); E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "ss400": {
@@ -14408,6 +14960,9 @@ export const DEMOS = {
       ],
       "variables": [
        "front_spring_rate",
+       "mount_bolt_d",
+       "mount_plate_t",
+       "mount_weld_leg",
        "rear_spring_rate",
        "suspension_travel",
        "wheel_radius",
@@ -16182,6 +16737,9 @@ export const DEMOS = {
      "tower_b": "塔とダッシュの管の幅",
      "tower_t": "塔とダッシュの管の厚さ",
      "front_spring_rate": "前のばねの硬さ",
+     "mount_bolt_d": "サスペンションの取付の金具のピンの径",
+     "mount_plate_t": "サスペンションの取付の金具の板厚",
+     "mount_weld_leg": "サスペンションの取付の金具の溶接の脚長",
      "rear_spring_rate": "後ろのばねの硬さ",
      "suspension_travel": "車輪の上下の動く量",
      "wheel_radius": "タイヤの半径",
@@ -17323,7 +17881,303 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     }
+    ]
    }
   },
   {
@@ -17803,7 +18657,303 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     }
+    ]
    }
   },
   {
@@ -18782,7 +19932,21 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "size_y_mm": 500.0
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "size_y_mm": 500.0
+      }
+     }
+    ]
    }
   },
   {
@@ -18818,7 +19982,21 @@ export const DEMOS = {
      }
     ],
     "not_evaluable": [],
-    "pass": false
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "size_x_mm": 500.0
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "size_x_mm": 500.0
+      }
+     }
+    ]
    }
   },
   {
@@ -19201,7 +20379,15 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "req_Q19": 40.0
+      }
+     }
+    ]
    }
   },
   {
@@ -19221,7 +20407,15 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "var_battery_voltage": 51.2
+      }
+     }
+    ]
    }
   },
   {
@@ -19264,7 +20458,105 @@ export const DEMOS = {
      }
     ],
     "not_evaluable": [],
-    "pass": false
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "mass_kg": 50.0
+      }
+     },
+     {
+      "part_id": "motor",
+      "values": {
+       "mass_kg": 11.765134819548786
+      }
+     },
+     {
+      "part_id": "controller",
+      "values": {
+       "mass_kg": 4.0
+      }
+     },
+     {
+      "part_id": "aux",
+      "values": {
+       "mass_kg": 5.7
+      }
+     },
+     {
+      "part_id": "floor_front",
+      "values": {
+       "mass_kg": 11.183232626769652
+      }
+     },
+     {
+      "part_id": "floor",
+      "values": {
+       "mass_kg": 16.20795
+      }
+     },
+     {
+      "part_id": "deck",
+      "values": {
+       "mass_kg": 12.3078618
+      }
+     },
+     {
+      "part_id": "front_body",
+      "values": {
+       "mass_kg": 15.0
+      }
+     },
+     {
+      "part_id": "bulkhead",
+      "values": {
+       "mass_kg": 5.607737628591613
+      }
+     },
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "mass_kg": 2.5537001056615427
+      }
+     },
+     {
+      "part_id": "seat_R",
+      "values": {
+       "mass_kg": 11.0
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "mass_kg": 11.0
+      }
+     },
+     {
+      "part_id": "wheel_FL",
+      "values": {
+       "mass_kg": 14.0
+      }
+     },
+     {
+      "part_id": "wheel_FR",
+      "values": {
+       "mass_kg": 14.0
+      }
+     },
+     {
+      "part_id": "wheel_RL",
+      "values": {
+       "mass_kg": 14.0
+      }
+     },
+     {
+      "part_id": "wheel_RR",
+      "values": {
+       "mass_kg": 14.0
+      }
+     }
+    ]
    }
   },
   {
@@ -19430,7 +20722,891 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "bottom_z_mm": 230.0
+      }
+     },
+     {
+      "part_id": "main_switch",
+      "values": {
+       "bottom_z_mm": 260.0
+      }
+     },
+     {
+      "part_id": "motor",
+      "values": {
+       "bottom_z_mm": 158.0
+      }
+     },
+     {
+      "part_id": "reducer",
+      "values": {
+       "bottom_z_mm": 186.0
+      }
+     },
+     {
+      "part_id": "driveshaft_RL",
+      "values": {
+       "bottom_z_mm": 269.0
+      }
+     },
+     {
+      "part_id": "driveshaft_RR",
+      "values": {
+       "bottom_z_mm": 269.0
+      }
+     },
+     {
+      "part_id": "controller",
+      "values": {
+       "bottom_z_mm": 260.0
+      }
+     },
+     {
+      "part_id": "aux",
+      "values": {
+       "bottom_z_mm": 250.0
+      }
+     },
+     {
+      "part_id": "floor_front",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "pedal_accel",
+      "values": {
+       "bottom_z_mm": 482.0360923856119
+      }
+     },
+     {
+      "part_id": "pedal_brake",
+      "values": {
+       "bottom_z_mm": 482.0360923856119
+      }
+     },
+     {
+      "part_id": "brake_master",
+      "values": {
+       "bottom_z_mm": 457.0360923856119
+      }
+     },
+     {
+      "part_id": "floor",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "deck",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "front_body",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "bulkhead",
+      "values": {
+       "bottom_z_mm": 430.00000000000006
+      }
+     },
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "bottom_z_mm": 1013.6114925552308
+      }
+     },
+     {
+      "part_id": "steering_column",
+      "values": {
+       "bottom_z_mm": 958.5492310923179
+      }
+     },
+     {
+      "part_id": "steering_shaft",
+      "values": {
+       "bottom_z_mm": 511.40829946839347
+      }
+     },
+     {
+      "part_id": "steering_rack",
+      "values": {
+       "bottom_z_mm": 253.32962930738194
+      }
+     },
+     {
+      "part_id": "tie_rod_FL",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "tie_rod_FR",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "seat_R",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seat_belt_R",
+      "values": {
+       "bottom_z_mm": 543.2
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seat_belt_L",
+      "values": {
+       "bottom_z_mm": 543.2
+      }
+     },
+     {
+      "part_id": "occupant_R",
+      "values": {
+       "bottom_z_mm": 693.2
+      }
+     },
+     {
+      "part_id": "occupant_L",
+      "values": {
+       "bottom_z_mm": 693.2
+      }
+     },
+     {
+      "part_id": "cargo",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "occupant_R.neck",
+      "values": {
+       "bottom_z_mm": 1407.2000000000003
+      }
+     },
+     {
+      "part_id": "occupant_R.head",
+      "values": {
+       "bottom_z_mm": 1426.9
+      }
+     },
+     {
+      "part_id": "occupant_R.thigh_L",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_R.shank_L",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_R.arm_L",
+      "values": {
+       "bottom_z_mm": 1130.8614699970617
+      }
+     },
+     {
+      "part_id": "occupant_R.forearm_L",
+      "values": {
+       "bottom_z_mm": 1046.9813768629597
+      }
+     },
+     {
+      "part_id": "occupant_R.hand_L",
+      "values": {
+       "bottom_z_mm": 1179.2125514557747
+      }
+     },
+     {
+      "part_id": "occupant_R.foot_L",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "occupant_R.thigh_R",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_R.shank_R",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_R.arm_R",
+      "values": {
+       "bottom_z_mm": 1130.8614699970617
+      }
+     },
+     {
+      "part_id": "occupant_R.forearm_R",
+      "values": {
+       "bottom_z_mm": 1046.9813768629597
+      }
+     },
+     {
+      "part_id": "occupant_R.hand_R",
+      "values": {
+       "bottom_z_mm": 1179.2125514557747
+      }
+     },
+     {
+      "part_id": "occupant_R.foot_R",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "occupant_L.neck",
+      "values": {
+       "bottom_z_mm": 1407.2000000000003
+      }
+     },
+     {
+      "part_id": "occupant_L.head",
+      "values": {
+       "bottom_z_mm": 1426.9
+      }
+     },
+     {
+      "part_id": "occupant_L.thigh_L",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_L.shank_L",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_L.arm_L",
+      "values": {
+       "bottom_z_mm": 1120.5651043091689
+      }
+     },
+     {
+      "part_id": "occupant_L.forearm_L",
+      "values": {
+       "bottom_z_mm": 960.9526018100196
+      }
+     },
+     {
+      "part_id": "occupant_L.hand_L",
+      "values": {
+       "bottom_z_mm": 978.477673290301
+      }
+     },
+     {
+      "part_id": "occupant_L.foot_L",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "occupant_L.thigh_R",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_L.shank_R",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_L.arm_R",
+      "values": {
+       "bottom_z_mm": 1120.5651043091689
+      }
+     },
+     {
+      "part_id": "occupant_L.forearm_R",
+      "values": {
+       "bottom_z_mm": 960.9526018100196
+      }
+     },
+     {
+      "part_id": "occupant_L.hand_R",
+      "values": {
+       "bottom_z_mm": 978.477673290301
+      }
+     },
+     {
+      "part_id": "occupant_L.foot_R",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "wheel_FL",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "wheel_FR",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "wheel_RL",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "wheel_RR",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "knuckle_FL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "knuckle_FR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "knuckle_RL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "toe_link_RL",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "knuckle_RR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "toe_link_RR",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "caliper_FL",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "caliper_FR",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "caliper_RL",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "caliper_RR",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "lca_FL_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FL_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FL_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_FL_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_FL_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_FL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_FL",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_FL",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "lca_FR_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FR_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FR_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_FR_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_FR_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_FR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_FR",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_FR",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "lca_RL_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RL_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RL_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_RL_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_RL_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_RL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_RL",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_RL",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "lca_RR_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RR_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RR_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_RR_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_RR_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_RR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_RR",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_RR",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "bracket_uca_FL1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_FL2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_FR1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_FR2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RL1",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RL2",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RL1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RL2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RR1",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RR2",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RR1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RR2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_tie_FL",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_tie_FR",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_tie_RL",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_tie_RR",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_column",
+      "values": {
+       "bottom_z_mm": 829.0863569397414
+      }
+     },
+     {
+      "part_id": "rollbar",
+      "values": {
+       "bottom_z_mm": 1771.8500000000001
+      }
+     },
+     {
+      "part_id": "bracket_lca_FL1",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_FL2",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_FL",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_FR1",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_FR2",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_FR",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_RL",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_RR",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "pushrod_brake",
+      "values": {
+       "bottom_z_mm": 490.8881328648239
+      }
+     },
+     {
+      "part_id": "fit_floor_front_rail_L_AS1",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_floor_front_rail_R_AS1",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_floor_front_cross_S1",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_deck_cross_S2",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_deck_cross_B",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_deck_rail_L_BE",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_deck_rail_R_BE",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_front_body_cross_F",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_front_body_tower_post_LA1",
+      "values": {
+       "bottom_z_mm": 481.5
+      }
+     },
+     {
+      "part_id": "fit_front_body_tower_post_RA1",
+      "values": {
+       "bottom_z_mm": 481.5
+      }
+     },
+     {
+      "part_id": "fit_main_switch_rail_L_AS1",
+      "values": {
+       "bottom_z_mm": 330.0
+      }
+     },
+     {
+      "part_id": "fit_motor_cross_B",
+      "values": {
+       "bottom_z_mm": 368.0
+      }
+     },
+     {
+      "part_id": "fit_reducer_cross_B",
+      "values": {
+       "bottom_z_mm": 345.0
+      }
+     },
+     {
+      "part_id": "fit_controller_cross_S2",
+      "values": {
+       "bottom_z_mm": 340.0
+      }
+     },
+     {
+      "part_id": "fit_aux_cross_S1",
+      "values": {
+       "bottom_z_mm": 345.0
+      }
+     },
+     {
+      "part_id": "fit_pedal_accel_tower_post_RA2",
+      "values": {
+       "bottom_z_mm": 489.74017334403584
+      }
+     },
+     {
+      "part_id": "fit_pedal_brake_tower_post_RA2",
+      "values": {
+       "bottom_z_mm": 489.74017334403584
+      }
+     }
+    ]
    }
   },
   {
@@ -19453,7 +21629,37 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "support:FL",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     },
+     {
+      "part_id": "support:FR",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     },
+     {
+      "part_id": "support:RL",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     },
+     {
+      "part_id": "support:RR",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     }
+    ]
    }
   },
   {
@@ -19476,7 +21682,41 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "support:FL",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     },
+     {
+      "part_id": "support:FR",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     },
+     {
+      "part_id": "support:RL",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     },
+     {
+      "part_id": "support:RR",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     }
+    ]
    }
   },
   {
@@ -19544,7 +21784,303 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "wall_mm": 2.3
+      }
+     }
+    ]
    }
   },
   {
@@ -19951,7 +22487,15 @@ export const DEMOS = {
      }
     ],
     "not_evaluable": [],
-    "pass": false
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "mass_kg": 50.0
+      }
+     }
+    ]
    }
   }
  ],
@@ -20745,7 +23289,7 @@ export const DEMOS = {
      {
       "req_key": "Q30",
       "name": "人数と荷重の組み合わせ",
-      "text": "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。",
+      "text": "どの組み合わせを見ますか (空車・1 人だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。",
       "ask": "must",
       "allow_other": true,
       "choices": [
@@ -20754,7 +23298,7 @@ export const DEMOS = {
         "value": "empty"
        },
        {
-        "label": "運転者だけ",
+        "label": "1 人だけ",
         "value": "driver"
        },
        {
@@ -21804,7 +24348,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 4 件、答え 0 件、既定値 3 件、答えが無いまま 3 件",
+   "text": "質問 4 件、答え 0 件、既定値 3 件、答えが無いまま 3 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {
@@ -22685,7 +25229,7 @@ export const DEMOS = {
      {
       "req_key": "Q40",
       "name": "積載",
-      "text": "載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。",
+      "text": "載せる荷の重さの上限は。",
       "ask": "must",
       "allow_other": true
      },
@@ -22795,7 +25339,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件",
+   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {
@@ -29817,6 +32361,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -29852,6 +32414,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -29887,6 +32467,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -29922,6 +32520,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -29957,6 +32573,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -29992,6 +32626,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30027,6 +32679,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30062,6 +32732,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30097,6 +32785,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30132,6 +32838,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30167,6 +32891,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30202,6 +32944,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30237,6 +32997,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30272,6 +33050,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30307,6 +33103,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30342,6 +33156,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30473,6 +33305,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30508,6 +33358,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30543,6 +33411,24 @@ export const DEMOS = {
       "carried_by": [
        "LAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30578,6 +33464,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30613,6 +33517,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30648,6 +33570,24 @@ export const DEMOS = {
       "carried_by": [
        "RAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30683,6 +33623,24 @@ export const DEMOS = {
       "carried_by": [
        "LBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30718,6 +33676,24 @@ export const DEMOS = {
       "carried_by": [
        "RBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -30787,6 +33763,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -30828,6 +33811,13 @@ export const DEMOS = {
        "RAp2",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -30869,6 +33859,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -30910,6 +33907,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1405.0,
@@ -30951,6 +33955,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -30992,6 +34003,13 @@ export const DEMOS = {
        "LB",
        "LE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -31033,6 +34051,13 @@ export const DEMOS = {
        "RB",
        "RE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -31074,6 +34099,13 @@ export const DEMOS = {
        "LF",
        "RF"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         400.0,
@@ -31115,6 +34147,13 @@ export const DEMOS = {
        "LAp1",
        "LAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -31156,6 +34195,13 @@ export const DEMOS = {
        "RAp1",
        "RAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -31197,6 +34243,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -580.0,
@@ -31238,6 +34291,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1970.0,
@@ -31279,6 +34339,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -31320,6 +34387,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1320.0,
@@ -31361,6 +34435,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -31402,6 +34483,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -31443,6 +34531,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -32457,7 +35552,8 @@ export const DEMOS = {
       "nu": 0.3,
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
-      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "tensile_MPa": 400.0,
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; tensile: JIS G 3466 minimum tensile strength for STKR400 (400 MPa, the grade's name; used by R9's weld and bearing checks); E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "ss400": {
@@ -37237,6 +40333,9 @@ export const DEMOS = {
       ],
       "variables": [
        "front_spring_rate",
+       "mount_bolt_d",
+       "mount_plate_t",
+       "mount_weld_leg",
        "rear_spring_rate",
        "suspension_travel",
        "wheel_radius",
@@ -39011,6 +42110,9 @@ export const DEMOS = {
      "tower_b": "塔とダッシュの管の幅",
      "tower_t": "塔とダッシュの管の厚さ",
      "front_spring_rate": "前のばねの硬さ",
+     "mount_bolt_d": "サスペンションの取付の金具のピンの径",
+     "mount_plate_t": "サスペンションの取付の金具の板厚",
+     "mount_weld_leg": "サスペンションの取付の金具の溶接の脚長",
      "rear_spring_rate": "後ろのばねの硬さ",
      "suspension_travel": "車輪の上下の動く量",
      "wheel_radius": "タイヤの半径",
@@ -40152,7 +43254,303 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "section_ratio_rect_max": 34.78260869565218
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "section_ratio_rect_max": 17.39130434782609
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "section_ratio_rect_max": 13.043478260869566
+      }
+     }
+    ]
    }
   },
   {
@@ -40632,7 +44030,303 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "section_ratio_round_max": 0.0
+      }
+     }
+    ]
    }
   },
   {
@@ -41611,7 +45305,21 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "size_y_mm": 500.0
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "size_y_mm": 500.0
+      }
+     }
+    ]
    }
   },
   {
@@ -41647,7 +45355,21 @@ export const DEMOS = {
      }
     ],
     "not_evaluable": [],
-    "pass": false
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "seat_R",
+      "values": {
+       "size_x_mm": 500.0
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "size_x_mm": 500.0
+      }
+     }
+    ]
    }
   },
   {
@@ -42030,7 +45752,15 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "req_Q19": 40.0
+      }
+     }
+    ]
    }
   },
   {
@@ -42050,7 +45780,15 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "var_battery_voltage": 51.2
+      }
+     }
+    ]
    }
   },
   {
@@ -42093,7 +45831,105 @@ export const DEMOS = {
      }
     ],
     "not_evaluable": [],
-    "pass": false
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "mass_kg": 50.0
+      }
+     },
+     {
+      "part_id": "motor",
+      "values": {
+       "mass_kg": 11.765134819548786
+      }
+     },
+     {
+      "part_id": "controller",
+      "values": {
+       "mass_kg": 4.0
+      }
+     },
+     {
+      "part_id": "aux",
+      "values": {
+       "mass_kg": 5.7
+      }
+     },
+     {
+      "part_id": "floor_front",
+      "values": {
+       "mass_kg": 11.183232626769652
+      }
+     },
+     {
+      "part_id": "floor",
+      "values": {
+       "mass_kg": 16.20795
+      }
+     },
+     {
+      "part_id": "deck",
+      "values": {
+       "mass_kg": 12.3078618
+      }
+     },
+     {
+      "part_id": "front_body",
+      "values": {
+       "mass_kg": 15.0
+      }
+     },
+     {
+      "part_id": "bulkhead",
+      "values": {
+       "mass_kg": 5.607737628591613
+      }
+     },
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "mass_kg": 2.5537001056615427
+      }
+     },
+     {
+      "part_id": "seat_R",
+      "values": {
+       "mass_kg": 11.0
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "mass_kg": 11.0
+      }
+     },
+     {
+      "part_id": "wheel_FL",
+      "values": {
+       "mass_kg": 14.0
+      }
+     },
+     {
+      "part_id": "wheel_FR",
+      "values": {
+       "mass_kg": 14.0
+      }
+     },
+     {
+      "part_id": "wheel_RL",
+      "values": {
+       "mass_kg": 14.0
+      }
+     },
+     {
+      "part_id": "wheel_RR",
+      "values": {
+       "mass_kg": 14.0
+      }
+     }
+    ]
    }
   },
   {
@@ -42259,7 +46095,891 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "bottom_z_mm": 230.0
+      }
+     },
+     {
+      "part_id": "main_switch",
+      "values": {
+       "bottom_z_mm": 260.0
+      }
+     },
+     {
+      "part_id": "motor",
+      "values": {
+       "bottom_z_mm": 158.0
+      }
+     },
+     {
+      "part_id": "reducer",
+      "values": {
+       "bottom_z_mm": 186.0
+      }
+     },
+     {
+      "part_id": "driveshaft_RL",
+      "values": {
+       "bottom_z_mm": 269.0
+      }
+     },
+     {
+      "part_id": "driveshaft_RR",
+      "values": {
+       "bottom_z_mm": 269.0
+      }
+     },
+     {
+      "part_id": "controller",
+      "values": {
+       "bottom_z_mm": 260.0
+      }
+     },
+     {
+      "part_id": "aux",
+      "values": {
+       "bottom_z_mm": 250.0
+      }
+     },
+     {
+      "part_id": "floor_front",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "pedal_accel",
+      "values": {
+       "bottom_z_mm": 482.0360923856119
+      }
+     },
+     {
+      "part_id": "pedal_brake",
+      "values": {
+       "bottom_z_mm": 482.0360923856119
+      }
+     },
+     {
+      "part_id": "brake_master",
+      "values": {
+       "bottom_z_mm": 457.0360923856119
+      }
+     },
+     {
+      "part_id": "floor",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "deck",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "front_body",
+      "values": {
+       "bottom_z_mm": 430.0
+      }
+     },
+     {
+      "part_id": "bulkhead",
+      "values": {
+       "bottom_z_mm": 430.00000000000006
+      }
+     },
+     {
+      "part_id": "steering_wheel",
+      "values": {
+       "bottom_z_mm": 1013.6114925552308
+      }
+     },
+     {
+      "part_id": "steering_column",
+      "values": {
+       "bottom_z_mm": 958.5492310923179
+      }
+     },
+     {
+      "part_id": "steering_shaft",
+      "values": {
+       "bottom_z_mm": 511.40829946839347
+      }
+     },
+     {
+      "part_id": "steering_rack",
+      "values": {
+       "bottom_z_mm": 253.32962930738194
+      }
+     },
+     {
+      "part_id": "tie_rod_FL",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "tie_rod_FR",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "seat_R",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seat_belt_R",
+      "values": {
+       "bottom_z_mm": 543.2
+      }
+     },
+     {
+      "part_id": "seat_L",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seat_belt_L",
+      "values": {
+       "bottom_z_mm": 543.2
+      }
+     },
+     {
+      "part_id": "occupant_R",
+      "values": {
+       "bottom_z_mm": 693.2
+      }
+     },
+     {
+      "part_id": "occupant_L",
+      "values": {
+       "bottom_z_mm": 693.2
+      }
+     },
+     {
+      "part_id": "cargo",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "occupant_R.neck",
+      "values": {
+       "bottom_z_mm": 1407.2000000000003
+      }
+     },
+     {
+      "part_id": "occupant_R.head",
+      "values": {
+       "bottom_z_mm": 1426.9
+      }
+     },
+     {
+      "part_id": "occupant_R.thigh_L",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_R.shank_L",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_R.arm_L",
+      "values": {
+       "bottom_z_mm": 1130.8614699970617
+      }
+     },
+     {
+      "part_id": "occupant_R.forearm_L",
+      "values": {
+       "bottom_z_mm": 1046.9813768629597
+      }
+     },
+     {
+      "part_id": "occupant_R.hand_L",
+      "values": {
+       "bottom_z_mm": 1179.2125514557747
+      }
+     },
+     {
+      "part_id": "occupant_R.foot_L",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "occupant_R.thigh_R",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_R.shank_R",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_R.arm_R",
+      "values": {
+       "bottom_z_mm": 1130.8614699970617
+      }
+     },
+     {
+      "part_id": "occupant_R.forearm_R",
+      "values": {
+       "bottom_z_mm": 1046.9813768629597
+      }
+     },
+     {
+      "part_id": "occupant_R.hand_R",
+      "values": {
+       "bottom_z_mm": 1179.2125514557747
+      }
+     },
+     {
+      "part_id": "occupant_R.foot_R",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "occupant_L.neck",
+      "values": {
+       "bottom_z_mm": 1407.2000000000003
+      }
+     },
+     {
+      "part_id": "occupant_L.head",
+      "values": {
+       "bottom_z_mm": 1426.9
+      }
+     },
+     {
+      "part_id": "occupant_L.thigh_L",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_L.shank_L",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_L.arm_L",
+      "values": {
+       "bottom_z_mm": 1120.5651043091689
+      }
+     },
+     {
+      "part_id": "occupant_L.forearm_L",
+      "values": {
+       "bottom_z_mm": 960.9526018100196
+      }
+     },
+     {
+      "part_id": "occupant_L.hand_L",
+      "values": {
+       "bottom_z_mm": 978.477673290301
+      }
+     },
+     {
+      "part_id": "occupant_L.foot_L",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "occupant_L.thigh_R",
+      "values": {
+       "bottom_z_mm": 747.2299424023288
+      }
+     },
+     {
+      "part_id": "occupant_L.shank_R",
+      "values": {
+       "bottom_z_mm": 654.1891267806559
+      }
+     },
+     {
+      "part_id": "occupant_L.arm_R",
+      "values": {
+       "bottom_z_mm": 1120.5651043091689
+      }
+     },
+     {
+      "part_id": "occupant_L.forearm_R",
+      "values": {
+       "bottom_z_mm": 960.9526018100196
+      }
+     },
+     {
+      "part_id": "occupant_L.hand_R",
+      "values": {
+       "bottom_z_mm": 978.477673290301
+      }
+     },
+     {
+      "part_id": "occupant_L.foot_R",
+      "values": {
+       "bottom_z_mm": 477.33970345618746
+      }
+     },
+     {
+      "part_id": "wheel_FL",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "wheel_FR",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "wheel_RL",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "wheel_RR",
+      "values": {
+       "bottom_z_mm": 0.0
+      }
+     },
+     {
+      "part_id": "knuckle_FL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "knuckle_FR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "knuckle_RL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "toe_link_RL",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "knuckle_RR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "toe_link_RR",
+      "values": {
+       "bottom_z_mm": 273.664814653691
+      }
+     },
+     {
+      "part_id": "caliper_FL",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "caliper_FR",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "caliper_RL",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "caliper_RR",
+      "values": {
+       "bottom_z_mm": 255.0
+      }
+     },
+     {
+      "part_id": "lca_FL_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FL_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FL_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_FL_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_FL_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_FL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_FL",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_FL",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "lca_FR_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FR_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_FR_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_FR_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_FR_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_FR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_FR",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_FR",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "lca_RL_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RL_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RL_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_RL_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_RL_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_RL",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_RL",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_RL",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "lca_RR_f",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RR_r",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "lca_RR_x",
+      "values": {
+       "bottom_z_mm": 167.3
+      }
+     },
+     {
+      "part_id": "uca_RR_f",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "uca_RR_r",
+      "values": {
+       "bottom_z_mm": 472.8
+      }
+     },
+     {
+      "part_id": "bj_lower_RR",
+      "values": {
+       "bottom_z_mm": 160.0
+      }
+     },
+     {
+      "part_id": "bj_upper_RR",
+      "values": {
+       "bottom_z_mm": 473.0
+      }
+     },
+     {
+      "part_id": "damper_RR",
+      "values": {
+       "bottom_z_mm": 366.5
+      }
+     },
+     {
+      "part_id": "bracket_uca_FL1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_FL2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_FR1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_FR2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RL1",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RL2",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RL1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RL2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RR1",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_RR2",
+      "values": {
+       "bottom_z_mm": 165.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RR1",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_uca_RR2",
+      "values": {
+       "bottom_z_mm": 420.0
+      }
+     },
+     {
+      "part_id": "bracket_tie_FL",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_tie_FR",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_tie_RL",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_tie_RR",
+      "values": {
+       "bottom_z_mm": 253.32962930738196
+      }
+     },
+     {
+      "part_id": "bracket_column",
+      "values": {
+       "bottom_z_mm": 829.0863569397414
+      }
+     },
+     {
+      "part_id": "rollbar",
+      "values": {
+       "bottom_z_mm": 1771.8500000000001
+      }
+     },
+     {
+      "part_id": "bracket_lca_FL1",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_FL2",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_FL",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_FR1",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_lca_FR2",
+      "values": {
+       "bottom_z_mm": 150.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_FR",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_RL",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "bracket_damper_RR",
+      "values": {
+       "bottom_z_mm": 588.0
+      }
+     },
+     {
+      "part_id": "pushrod_brake",
+      "values": {
+       "bottom_z_mm": 490.8881328648239
+      }
+     },
+     {
+      "part_id": "fit_floor_front_rail_L_AS1",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_floor_front_rail_R_AS1",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_floor_front_cross_S1",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_deck_cross_S2",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_deck_cross_B",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_deck_rail_L_BE",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_deck_rail_R_BE",
+      "values": {
+       "bottom_z_mm": 415.0
+      }
+     },
+     {
+      "part_id": "fit_front_body_cross_F",
+      "values": {
+       "bottom_z_mm": 405.0
+      }
+     },
+     {
+      "part_id": "fit_front_body_tower_post_LA1",
+      "values": {
+       "bottom_z_mm": 481.5
+      }
+     },
+     {
+      "part_id": "fit_front_body_tower_post_RA1",
+      "values": {
+       "bottom_z_mm": 481.5
+      }
+     },
+     {
+      "part_id": "fit_main_switch_rail_L_AS1",
+      "values": {
+       "bottom_z_mm": 330.0
+      }
+     },
+     {
+      "part_id": "fit_motor_cross_B",
+      "values": {
+       "bottom_z_mm": 368.0
+      }
+     },
+     {
+      "part_id": "fit_reducer_cross_B",
+      "values": {
+       "bottom_z_mm": 345.0
+      }
+     },
+     {
+      "part_id": "fit_controller_cross_S2",
+      "values": {
+       "bottom_z_mm": 340.0
+      }
+     },
+     {
+      "part_id": "fit_aux_cross_S1",
+      "values": {
+       "bottom_z_mm": 345.0
+      }
+     },
+     {
+      "part_id": "fit_pedal_accel_tower_post_RA2",
+      "values": {
+       "bottom_z_mm": 489.74017334403584
+      }
+     },
+     {
+      "part_id": "fit_pedal_brake_tower_post_RA2",
+      "values": {
+       "bottom_z_mm": 489.74017334403584
+      }
+     }
+    ]
    }
   },
   {
@@ -42282,7 +47002,37 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "support:FL",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     },
+     {
+      "part_id": "support:FR",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     },
+     {
+      "part_id": "support:RL",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     },
+     {
+      "part_id": "support:RR",
+      "values": {
+       "travel_mm": 150.0,
+       "req_Q15": 100.0
+      }
+     }
+    ]
    }
   },
   {
@@ -42305,7 +47055,41 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "support:FL",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     },
+     {
+      "part_id": "support:FR",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     },
+     {
+      "part_id": "support:RL",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     },
+     {
+      "part_id": "support:RR",
+      "values": {
+       "static_load_N": 1440.1116625195161,
+       "stiffness_N_per_mm": 20.0,
+       "travel_mm": 150.0
+      }
+     }
+    ]
    }
   },
   {
@@ -42373,7 +47157,303 @@ export const DEMOS = {
     ],
     "hits": [],
     "not_evaluable": [],
-    "pass": true
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "wall_mm": 2.3
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "wall_mm": 2.3
+      }
+     }
+    ]
    }
   },
   {
@@ -42780,7 +47860,15 @@ export const DEMOS = {
      }
     ],
     "not_evaluable": [],
-    "pass": false
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "battery",
+      "values": {
+       "mass_kg": 50.0
+      }
+     }
+    ]
    }
   }
  ]

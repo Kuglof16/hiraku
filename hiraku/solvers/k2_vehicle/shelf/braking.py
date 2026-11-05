@@ -144,20 +144,25 @@ class BrakingTool(K2Tool):
                   "only the front wheels braked"))
 
     def own_checks(self) -> list[dict]:
+        mu_peak, kmh = 0.7, 40.0
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, wheel_mass=20.0, name="braking check",
-                       variables={"tire_mu": {"value": 0.7, "unit": "1"},
+                       variables={"tire_mu": {"value": mu_peak, "unit": "1"},
                                   "rolling_resistance": {"value": 0.0, "unit": "1"}})
         veh = build_vehicle(d)
-        v0 = 40.0 / 3.6
+        v0 = kmh / 3.6
         r = brake_stop(veh, v0)
         # a locked wheel slides at kappa = -1, past the peak of the Magic Formula
         mu_lock = sum(abs(c.mf.forces(c.static_load, -1.0, 0.0)[0]) for c in veh.corners) / sum(
             c.static_load for c in veh.corners)
         expected = v0 * v0 / (2.0 * mu_lock * G0)
-        return [_check(f"locked wheels from 40 km/h, peak mu 0.7, locked-wheel mu {mu_lock:.3f} (the tyre at kappa -1), "
-                       "no air drag or rolling resistance", "braking_distance", expected, r["braking"], "m", 2e-2,
+        return [_check(f"locked wheels from {kmh:g} km/h, peak mu {mu_peak:g}, locked-wheel mu {mu_lock:.3f} (the tyre at "
+                       "kappa -1), no air drag or rolling resistance", "braking_distance", expected, r["braking"], "m", 2e-2,
                        "s = v^2 / (2 mu_lock g), mu_lock = sum |Fx(kappa = -1)| / W at the static loads (the load moving "
-                       "to the front while braking is not in it)")]
+                       "to the front while braking is not in it)",
+                       case_ja=f"{kmh:g} km/h から輪をロックして止まるまでの距離 (摩擦係数のいちばん大きい値 {mu_peak:g}、"
+                               f"ロックして滑っているときは {mu_lock:.3f}。空気の抵抗と転がりの抵抗はなし)",
+                       source_ja="止まるまでの距離 s = v² / (2 μ g)。μ は、ロックした輪の前後の力の合計 / 車の重さ "
+                                 "(止まっているときの荷重で。ブレーキで荷重が前に移る分は入れていない)")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)

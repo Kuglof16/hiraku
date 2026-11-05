@@ -211,6 +211,31 @@ class _ScriptedRunTests:
         self.assertEqual({d: s for d, s in tiles.items() if d in held}, {d: "pending" for d in held}, str(tiles))
         self.assertEqual({d: s for d, s in tiles.items() if d not in held and s != "green"}, {}, str(tiles))
 
+    def test_each_version_has_its_rule_check(self):
+        # every scripted plan extends offroad-4w, whose rule_check: true applies the knowledge rules once on each
+        # design version, also on one a red stage revises (design 69408272): every version made has its
+        # rule_check.recorded (one per rule), none before its version's design.created, and no rule twice
+        name, run, proc = self.REQ.name, self.run_dir, self.proc
+        if name.endswith(CLAUDE_ONLY):
+            self.skipTest("a Claude-only scene stops before any version is checked")
+        with self._where():
+            self.assertMadeRun(run, proc)
+            with (run / layout.EVENTS_FILE).open(encoding="utf-8") as f:
+                events = [json.loads(s) for s in f if s.strip()]
+            made = {e["data"].get("design_version"): n for n, e in enumerate(events) if e["kind"] == "design.created"}
+            checked = {}
+            for n, e in enumerate(events):
+                if e["kind"] == "rule_check.recorded":
+                    checked.setdefault(e["data"].get("design_version", e.get("design_version")), []).append(n)
+            self.assertEqual(sorted(v for v in made if v not in checked), [], f"versions without a rule check: "
+                                                                              f"{sorted(checked)}")
+            self.assertEqual(sorted(v for v in checked if v not in made), [], "a rule check of a version never made")
+            rules = [(e["data"].get("design_version", e.get("design_version")), e["data"].get("rule_id"))
+                     for e in events if e["kind"] == "rule_check.recorded"]
+            self.assertEqual(sorted({r for r in rules if rules.count(r) > 1}), [], "a rule checked twice on one version")
+            self.assertEqual([v for v, ns in checked.items() if v in made and min(ns) < made[v]], [],
+                             "a rule check before its version's design.created")
+
     def test_each_denial_is_followed_as_the_hook_asks(self):
         name, run, proc = self.REQ.name, self.run_dir, self.proc
         with self._where():

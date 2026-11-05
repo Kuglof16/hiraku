@@ -173,6 +173,19 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
         self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
 
+    def test_scene_circle(self):
+        ring = {"kind": "circle", "label": "外側の前輪の円", "position_mm": [0.0, 4900.0, 0.0], "size_mm": [9800.0, 9800.0, 0.0]}
+        self.assertEqual(contract.errors("scene_object", ring), [])
+        self.assertNotEqual(contract.errors("scene_object", {**ring, "kind": "ring"}), [])
+
+    def test_tool_check_in_japanese(self):
+        chk = {"case": "static load FL", "quantity": "wheel_load", "expected": 1694.37, "got": 1694.93, "unit": "N",
+               "tolerance_rel": 0.001, "pass": True, "source": "moment balance"}
+        ja = {**chk, "case_ja": "止まっているときの左前輪の荷重", "source_ja": "前後の輪のまわりの力のつり合い"}
+        self.assertEqual(contract.errors("tool_check", chk), [])  # both optional
+        self.assertEqual(contract.errors("tool_check", ja), [])
+        self.assertNotEqual(contract.errors("tool_check", {**ja, "case_ja": ""}), [])
+
     def test_rule_check_keeps_the_values_it_checked(self):
         rc = {"rule_check_id": "rchk-0001", "design_version": 5, "rule_id": "SM-01", "targets": ["bracket_lca_FL1"],
               "hits": [], "pass": True}
