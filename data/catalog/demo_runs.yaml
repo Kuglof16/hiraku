@@ -60,7 +60,11 @@ runs:
       答えの分かっている例で確かめてから使う (台本の運転では、R4 は判定の無いまま止まる)
     file: offroad-4w-n13.claude.yaml
     modes: [claude]
-    estimates_usd: null  # its scripted run (20261103-153628) wrote no record before stopping at R4; Claude writing the tool is not in any record yet
+    # its scripted run (20261103-153628) wrote no record before stopping at R4. Claude writing the tool is in the record
+    # of the run through the Claude Code plugin 20261105-160725 (showcase/, run 4): tool.checked of rops_pushover, origin
+    # claude, usable, 3 checks of 3 passed. That run's file listed more tests (H1, H3, P1, R1, R4, R7, R8), so its cost is
+    # not this file's estimate
+    estimates_usd: null
     cuts: [N13]
   - id: n14
     title: ナレッジを渡して規則にする
