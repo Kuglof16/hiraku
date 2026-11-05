@@ -469,13 +469,14 @@ def _given_table(points: tuple, radius: float, travel: float, bushings: kinemati
 
 
 def hardpoints_for(support: dict, *, upper_joint_z_mm: float | None = None,
-                   damper_upper_y_mm: float | None = None) -> dict:
+                   damper_upper_y_mm: float | None = None, upper_pivot_spread_mm: float | None = None) -> dict:
     """Hardpoints a design can write as a support's suspension.hardpoints_mm (mm, design frame,
     a right wheel's mirrored in y): the builtin double wishbone for the support's wheel and
     travel, with the whole upper arm at the ball-joint height upper_joint_z_mm (its inner pivots
     15 mm lower, as the generic layout) and the damper's body mount at the side position
-    damper_upper_y_mm (|y|, as for the left wheel), and the tie rod placed again for the least
-    bump steer (kinematics.fitted_hardpoints). Clearing the frame is the design's choice; this
+    damper_upper_y_mm (|y|, as for the left wheel), the upper arm's inner pivots
+    upper_pivot_spread_mm apart along x (default kinematics.UPPER_PIVOT_SPREAD, 200 mm), and the tie
+    rod placed again for the least bump steer (kinematics.fitted_hardpoints). Clearing the frame is the design's choice; this
     only keeps the linkage working. Raises DesignError when it does not move through the travel."""
     sus = support["suspension"]
     pos = np.asarray(support["position_mm"], dtype=float) / 1000.0
@@ -486,7 +487,8 @@ def hardpoints_for(support: dict, *, upper_joint_z_mm: float | None = None,
         hp = kinematics.fitted_hardpoints(
             left, float(support["radius_mm"]) / 1000.0, _table_travel(travel),
             upper_joint_z=None if upper_joint_z_mm is None else upper_joint_z_mm / 1000.0,
-            damper_upper_y=None if damper_upper_y_mm is None else damper_upper_y_mm / 1000.0).to_json()
+            damper_upper_y=None if damper_upper_y_mm is None else damper_upper_y_mm / 1000.0,
+            upper_pivot_spread=None if upper_pivot_spread_mm is None else upper_pivot_spread_mm / 1000.0).to_json()
     except ValueError as e:
         raise DesignError(f"support {support['id']}: {e}") from e
     out = {k: v for k, v in hp.items() if isinstance(v, list) and k != "axle"}
