@@ -194,7 +194,7 @@
    "cuts": [
     "N17"
    ],
-   "video": "${WORK}/clips/real/n17_real_1080p.mp4",
+   "video": "${WORK}/clips/real/n17_next_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5
