@@ -849,13 +849,19 @@ body.video .mode .stop-btn { display: none; }
 .runlist.plain .rmeta .end { color: var(--ink); }
 .runlist.plain .rmeta .end[data-end="stopped"] { color: var(--red); }
 .runlist.plain .lreq { padding: 7px 6px; }
-.runlist.plain .more { display: inline; margin-left: 10px; }
-.runlist.plain .more summary { display: inline; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; list-style: none; }
-.runlist.plain .more[open] { display: block; margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); font-size: 14px; }
-.runlist.plain .more[open] summary { display: block; margin-bottom: 4px; }
-.runlist.plain .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.runlist.plain .more .cut { font-size: 12px; font-weight: 700; color: var(--blue); border: 1.5px solid var(--blue); border-radius: 999px; padding: 0 8px; }
-.runlist.plain .more .cost.over { color: var(--red); }
+/* a row's くわしく (the people's list and ?dev=1's demo rows): the tags, files and cost lines inside, after the line */
+.runlist .more { display: inline; margin-left: 10px; }
+.runlist .more summary { display: inline; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; list-style: none; }
+.runlist .more[open] { display: block; margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); font-size: 14px; }
+.runlist .more[open] summary { display: block; margin-bottom: 4px; }
+.runlist .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.runlist .more .cuts { display: flex; gap: 6px; margin-top: 2px; }
+.runlist .more .cut { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+.runlist .more .cost.over { color: var(--red); }
+.runlist .demo .dhead + .more { margin-left: 0; }
+/* a new request, first in the list */
+.runlist .fresh-top { display: flex; align-items: baseline; gap: 14px; margin: 0 0 10px; }
+.runlist .fresh-top .new-request { font-size: 17px; font-weight: 700; color: var(--panel); background: var(--ink); border-color: var(--ink); padding: 4px 18px; }
 .runlist.plain .lbtns a { margin-right: 0; }
 .runlist.plain .going { font-weight: 600; }
 .runlist.plain table td:nth-child(2) { width: 70px; color: var(--muted); }

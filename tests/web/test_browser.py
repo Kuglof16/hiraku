@@ -675,10 +675,11 @@ class BrowserReplayTest(unittest.TestCase):
             more = page.inner_text(f"{row('n12')} details.more")
             for w in ("offroad-4w-n12.yaml", "N11", "要件の誤りを見つけて直す", "上限 $2.00"):
                 self.assertIn(w, more)
-            # ?dev=1: as before
+            # ?dev=1: all there (the demo rows' files and tags inside their closed くわしく: the text, not
+            # only what is drawn)
             page.goto(f"{base}/?list=1&dev=1")
             page.wait_for_selector("#launch .demo-runs")
-            text = page.inner_text("#runlist")
+            text = page.text_content("#runlist")
             for w in self.DEV_WORDS:
                 self.assertIn(w, text)
             self.assertEqual(page.locator("#runlist .keyless").count(), 1)
@@ -1470,8 +1471,9 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(got, {"applied": 15, "list": False, "link": "?list=1"})
             page.goto(f"{base}/?list=1")
             page.wait_for_selector("#launch .pick")
+            # the recommendation comes first after 「＋ 新しく依頼する」 (the list's first line, test_runlist_order_browser)
             pick = page.evaluate("""() => { const p = document.querySelector("#launch .pick");
-                return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > *"),
+                return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > .fresh-top + *"),
                          run: p.dataset.run, href: p.querySelector("a.go").getAttribute("href"), verb: p.querySelector("a.go").textContent }; }""")
             self.assertEqual(pick, {"n": 1, "first": True, "run": run_id, "href": f"?run={run_id}", "verb": "見る"})
             page.goto(f"{base}/?list=1&dev=1")

@@ -1771,10 +1771,12 @@ async function renderLaunch(message = "") {
   const keyless = info.claude_ready
     ? ""
     : `<p class="keyless">HIRAKU を起こした窓に ${esc(info.key_name)} が無いので、使えるのは決まった手順の再現と、記録の再生だけです。Claude で走らせるには、キーを入れた窓から起こし直してください。</p>`;
-  const fresh = `<p><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
+  // a new request first: the way in for someone who brings their own product
+  const fresh = `<p class="fresh-top"><a class="new-request" href="${withDev("?new=1")}">＋ 新しく依頼する</a> <span class="why">依頼を書く → 分野 → ヒアリング → 始める</span></p>`;
   box.innerHTML =
+    fresh +
     demoSection(info, busy) +
-    `<h3>その場で走らせる</h3>${keyless}${fresh}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
+    `<h3>その場で走らせる</h3>${keyless}${message ? `<p class="err">${esc(message)}</p>` : ""}${running}${rows}`;
 }
 
 // 決まった手順で再現 / Claude で走らせる (?dev=1) for one requirements file r ({file, cost_limit_usd, round_limit}).
@@ -1818,27 +1820,30 @@ function demoSection(info, busy) {
   if (info.demo_runs_error) return `<h3>デモの実行</h3><p class="err">デモの一覧を読めなかった: ${esc(info.demo_runs_error)}</p>`;
   const list = info.demo_runs ?? [];
   if (!list.length) return "";
+  // The title first; what the developers read (what it shows, with its tab names and hooks; the
+  // cut tags; the cost line; the file) under くわしく, after it.
   const rows = list.map((d) => {
     const cuts = (d.cuts ?? []).map((c) => `<span class="cut">${esc(c)}</span>`).join("");
-    const head =
-      `<div class="dhead"><b>${esc(d.title || d.id)}</b>${cuts}</div>` +
-      (d.shows ? `<div class="shows">${prose(d.shows)}</div>` : "");
-    let left, right = "";
+    const head = `<div class="dhead"><b>${esc(d.title || d.id)}</b></div>`;
+    const detail = [d.shows ? `<div class="shows">${prose(d.shows)}</div>` : "", cuts ? `<div class="cuts">${cuts}</div>` : ""];
+    let left = "", right = "";
     if (d.error) left = `<div class="err">使えない: ${esc(d.error)}${d.file ? ` (${esc(d.file)})` : ""}</div>`;
     else if (d.file) {
       // (a file row carries its requirements' product too; file is what tells the two apart)
       const usd = (v) => (typeof v === "number" ? fmtUsd(v) : "—");
-      left =
+      detail.push(
         `<div class="cost${overLimit(d) ? " over" : ""}">本物の Claude の運転: 見込み ${usd(d.estimate_usd)}・上限 ${usd(d.cost_limit_usd)}</div>` +
-        `<div class="rid">${esc(d.file)}</div>`;
+          `<div class="rid">${esc(d.file)}</div>`,
+      );
       right = runButtons(info, d, `demo:${d.id}`, busy);
     } else {
-      left = `<div class="rid">${prose(d.want)} <span class="nw">(products/${esc(d.product)}.yaml)</span></div>`;
+      detail.push(`<div class="rid">${prose(d.want)} <span class="nw">(products/${esc(d.product)}.yaml)</span></div>`);
       right =
-        `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">A1 で依頼する</a>` +
+        `<div class="lbtns"><a class="demo-a1" href="${withDev(`?new=1&demo=${encodeURIComponent(d.id)}`)}">依頼する</a>` +
         `<span class="why">依頼の文が入った A1 が開く。送るのは押してから</span></div>`;
     }
-    return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}</div>${right}</div>`;
+    const more = `<details class="more"><summary>くわしく</summary>${detail.join("")}</details>`;
+    return `<div class="lreq demo" data-demo="${esc(d.id)}"><div>${head}${left}${more}</div>${right}</div>`;
   });
   return `<h3>デモの実行</h3><div class="demo-runs">${rows.join("")}</div>`;
 }
@@ -1927,7 +1932,7 @@ function plainButtons(info, d, busy) {
 function plainLaunch(info, message) {
   const busy = !!info.running;
   const pick = pickHtml(info, busy);
-  if (info.available === false) return pick + waysHtml(info);
+  if (info.available === false) return pick + waysHtml(info); // (no server to send a request to)
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えました</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
   const running = busy ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${rid ? stop : ""}</p>` : "";
@@ -1941,12 +1946,13 @@ function plainLaunch(info, message) {
         else btns = `<div class="lbtns"><a class="demo-a1" href="?new=1&demo=${encodeURIComponent(d.id)}">試す</a></div>`;
         return `<div class="lreq demo" data-demo="${esc(d.id)}"><div class="dline">${prose(line)}<details class="more"><summary>くわしく</summary>${demoDetail(d)}</details></div>${btns}</div>`;
       });
+  // a new request first (above the recommendation and the demos)
   const fresh =
-    `<div class="lreq fresh"><div class="dline">自分で頼む — 作りたいものを文で書いて、はじめから頼みます</div>` +
-    `<div class="lbtns"><a class="new-request" href="?new=1">書く</a></div></div>`;
+    `<div class="fresh-top"><a class="new-request" href="?new=1">＋ 新しく依頼する</a>` +
+    `<span class="dline">作りたいものを文で書いて、はじめから頼みます</span></div>`;
   return (
-    pick + waysHtml(info) + (message ? `<p class="err">${esc(message)}</p>` : "") + running +
-    `<h3>デモ</h3><div class="demo-runs">${rows.join("")}${fresh}</div>`
+    fresh + pick + waysHtml(info) + (message ? `<p class="err">${esc(message)}</p>` : "") + running +
+    `<h3>デモ</h3><div class="demo-runs">${rows.join("")}</div>`
   );
 }
 
