@@ -691,7 +691,7 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
         self.ctx.specs["frame_shell"] = {**tool.spec(), "usable": True, "checks": tool.check()}
         return tool
 
-    def beam_green(self, frame_factor=1.03):
+    def beam_green(self, frame_factor=1.03, state="green"):
         """P1 matched, R1 by frame_static: a match (or, frame_factor 0.7, a safe-side mismatch) and green."""
         ana, _, _ = self.run_p1()
         self.F = {"value": ana["results"][1]["value"], "unit": "N"}
@@ -704,7 +704,7 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
                                           "fix": "judge from the hand calculation", "safe_side": True,
                                           "safe_side_reason": "fixed joints overestimate the bending"})
         self.assertTrue(out["verdict"]["pass"])
-        self.assertEqual(self.tile()["state"], "green")
+        self.assertEqual(self.tile()["state"], state)
 
     def tile(self):
         return self.ctx.store.judgements()[0]
@@ -745,6 +745,29 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
         self.assertEqual(self.tile()["state"], "red")
         self.assertEqual(rules.pending(self.ctx), [])
         self.assert_events_fit()
+
+    def test_a_beam_pass_on_the_next_version_does_not_clear_an_earlier_shell_beyond(self):
+        """Contract 460043d, condition (d) (N13 run 094333): the shell was beyond on version 1; on version 2 the
+        beam's pass alone keeps the case pending (also with the shell failed), until the shell gives the quantity."""
+        from hiraku.tools.functions import revise_design
+
+        shell = self.add_shell(6.0)
+        self.beam_green()
+        self.shell(self.F)
+        revise_design(self.ctx, {"changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "test"}, "designer")
+        self.beam_green(state="pending")  # the beam passes, the tile waits for the shell
+        self.assertEqual(self.ctx.version, 2)
+        tile = self.tile()
+        self.assertEqual(tile["state"], "pending")
+        self.assertIn("版 1 で解析", tile["summary"])
+        self.assertIn("この版ではまだ回していない", tile["summary"])
+        orig = shell.run
+        shell.run = lambda *a: {"status": "failed", "base": "K1", "results": [], "error": "gusset at no T joint"}
+        _, failed = self.shell(self.F)
+        self.assertIn(f"この版の解析 {failed['analysis_id']} は失敗した", rules.stop_reason(self.ctx))
+        shell.run, shell.factor = orig, 0.9  # within the limit
+        self.shell(self.F)
+        self.assertEqual(self.tile()["state"], "green")
 
     def test_a_later_result_beyond_the_limit_voids_a_safe_side_verdict(self):
         self.beam_green(frame_factor=0.7)

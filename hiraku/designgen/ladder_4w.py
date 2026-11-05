@@ -940,8 +940,18 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     """A design record from variables ({name: quantity or number}; the others take their defaults).
 
     Raises DesignGenError when a value is out of its range or the layout does not close
-    (stations out of order, rails over the wheels). Interference of the parts is left to K4.
+    (stations out of order, rails over the wheels). Interference of the parts is left to K4, except the options'
+    members and parts (_check_options_clear); a clash of an option's member names the rollbar_width that clears it.
     """
+    kw = dict(version=version, parent=parent, reason=reason, name=name, _reference=_reference)
+    try:
+        return _build(values, **kw)
+    except _WidthClash as e:
+        raise DesignGenError(_width_advice(e, values, kw)) from None
+
+
+def _build(values: dict | None = None, *, version: int = 1, parent: int | None = None, reason: str | None = None,
+           name: str | None = None, _reference: bool | None = None) -> Record:
     v = _values(values)
     wb, track, r, ww = v["wheelbase"], v["track"], v["wheel_radius"], v["wheel_width"]
     rail_y, rail_z = v["rail_spacing"] / 2.0, v["rail_height"]
@@ -1963,9 +1973,49 @@ def _check_options_clear(design: Record) -> None:
                 continue
             ov = k4.shape_overlap(b, ob)
             if ov > k4.allowance(b, ob, design):
+                if k.startswith("member:"):
+                    raise _WidthClash(k.split(":", 1)[1], o.split(":", 1)[1], ov)
                 raise DesignGenError(f"{k.split(':', 1)[1]} goes {ov:.1f} mm into {o.split(':', 1)[1]}; "
-                                     + ("make rollbar_width wider (the side frame and the front posts stand at "
-                                        "rollbar_width / 2)" if k.startswith("member:") else "change the option's sizes"))
+                                     "change the option's sizes")
+
+
+class _WidthClash(DesignGenError):
+    """An option's member (the side frame, the front posts: at rollbar_width / 2) reaches into another body;
+    build() turns it into advice on rollbar_width."""
+
+    def __init__(self, member: str, other: str, mm: float):
+        super().__init__(f"{member} goes {mm:.1f} mm into {other}")
+        self.member, self.other, self.mm = member, other, mm
+
+
+WIDTH_STEP_MM = 50.0  # the steps build() tries rollbar_width in, after a clash of an option's member
+
+
+def _width_advice(e: _WidthClash, values: dict | None, kw: dict) -> str:
+    """The clash's message with the rollbar_width that clears it: the generator is rebuilt at wider widths
+    (WIDTH_STEP_MM steps up to the range's top) and the first that builds is named; else what stops it."""
+    var = VARIABLES["rollbar_width"]
+    now = _values(values)["rollbar_width"]
+    head = f"{e} at rollbar_width = {now:g} mm (the side frame and the front posts stand at rollbar_width / 2)"
+    tried = []
+    w = now
+    while w < var.hi:
+        w = min(w + WIDTH_STEP_MM, var.hi)
+        try:
+            _build({**(values or {}), "rollbar_width": w}, **kw)
+        except _WidthClash as c:
+            tried.append(f"{c.mm:.1f} mm at {w:g}")
+            continue
+        except DesignGenError as other:
+            seen = f" ({', '.join(tried)})" if tried else ""
+            return (f"{head}; wider{seen}, at {w:g} mm the design stops on something else: {other}; "
+                    "change the option or its sizes instead")
+        seen = f" (still {', '.join(tried)})" if tried else ""
+        return f"{head}; make rollbar_width at least {w:g} mm{seen}, the range is {var.lo:g} to {var.hi:g} mm"
+    if now >= var.hi:
+        return f"{head}; rollbar_width is at the top of its range ({var.hi:g} mm): change the option or its sizes instead"
+    return (f"{head}; widening rollbar_width to the top of its range ({var.hi:g} mm) does not clear it "
+            f"({', '.join(tried)}): change the option or its sizes instead")
 
 
 def fender_parts(support: Record, v: dict[str, float], density: float) -> list[Record]:
