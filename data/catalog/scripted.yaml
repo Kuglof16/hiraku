@@ -48,6 +48,10 @@
 
 offroad-4w:
   show_hk1: true   # call analyze once without a prediction, so the HK1 denial is recorded
+  # the knowledge rules on each version's parts (rule_check.recorded), as the packager does in a run with Claude: the
+  # stamp card reads them. On the N15 run 20261105-150416's version 5: 29 rules, 2 hit (HU-02 seat_R and seat_L,
+  # AS-01 battery), 8 not evaluable (values no design carries yet); no system rule hits, so the assembly tile is as before
+  rule_check: true
   # The designer's revisions, one per round, used when a tile comes out red
   # (revise_design: the variables of hiraku.designgen, absolute values; `choices` the generator's short ways).
   # With `fit: driver` the seat, steering and pedals are searched by code on the design with the entry's changes
