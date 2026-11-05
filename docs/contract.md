@@ -132,7 +132,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 
 MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更 `changes`、generator の選択 `choices` (例 `part_mounts: brackets`、選べる値は `get_context` の `design_choices`)、少なくとも一方と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
 
-## モジュールに分けた設計 (2026-11-04、本人の決め)
+## モジュールに分けた設計 (2026-11-04 の方針)
 
 設計を 1 人の設計役が一度に直すのではなく、モジュールに分けて、モジュールごとの設計役が並べて直し、パッケージ役が空間を配ってまとめる。実際の車の開発と同じ分け方。版 5 で、強度のために足したガセットが電池に 34.4 mm めり込んだのに誰も気づかなかったことから。
 
