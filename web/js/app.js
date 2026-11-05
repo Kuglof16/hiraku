@@ -31,7 +31,7 @@ import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
-import { AgentPets, PET_PAINTS, petRowHtml } from "./agent_pets.js";
+import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
@@ -575,8 +575,8 @@ function renderAgents(s) {
       const a = s.agents[id];
       const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
       // the role's name in full (操安の CAE 役), not the domain alone
-      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id) });
-      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span></li>`;
+      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
+      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
     })
     .join("");
   agentPets?.mount(ul, "bench");
@@ -606,7 +606,10 @@ function hookLogItem(e, hook, resolved) {
 function logItem(e, ctx = null) {
   if (e.level === "hook" && ctx) return hookLogItem(e, ctx.hooks.get(e.seq), ctx.resolved.has(e.seq));
   const who = e.level === "said" ? `<span class="who">${esc(agentLongName(e.agent))}:</span> ` : "";
-  const note = e.note ? `<span class="note">${keepAsides(e.note)}</span>` : "";
+  // more: words too long for a note (an agent.stopped's stop_reason), folded under くわしく
+  const note =
+    (e.note ? `<span class="note">${keepAsides(e.note)}</span>` : "") +
+    (e.more ? `<details class="more"><summary>くわしく</summary><span class="note">${keepAsides(e.more)}</span></details>` : "");
   const upd = e.updatedT != null ? `<span class="tm">・更新 ${fmtTime(e.updatedT)}s</span>` : "";
   // What an agent said can run long: the line shows its first lines, the record keeps all of it.
   // A short aside in brackets stays on one line: not "(形の見 / 本)".

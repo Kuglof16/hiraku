@@ -5,7 +5,9 @@
 import {
   DOMAINS,
   DOMAIN_JA,
+  AGENT_STOP_NOTE_CHARS,
   STOP_CODE_JA,
+  agentStopWhy,
   agentLongName,
   agentName,
   fmt,
@@ -292,14 +294,22 @@ export function applyEvent(s, ev) {
     }
     case "agent.started": {
       const a = ensureAgent(s, d.agent_id ?? ev.agent);
-      if (a) Object.assign(a, { active: true, stopped: false, status: "作業中" });
+      if (a) Object.assign(a, { active: true, stopped: false, stopWhy: null, status: "作業中" });
       log(s, ev, "muted", `${agentLongName(d.agent_id ?? ev.agent)}が動き始めた`);
       break;
     }
     case "agent.stopped": {
       const a = ensureAgent(s, d.agent_id ?? ev.agent);
-      if (a) Object.assign(a, { active: false, stopped: true, status: "終わり" });
-      log(s, ev, "muted", `${agentLongName(d.agent_id ?? ev.agent)}が手を止めた`);
+      // why (contract a31e520): stop_code in words on the line and in the agents' pane; stop_reason
+      // under the line (a long one under くわしく). A record without either says 手を止めた only.
+      const why = agentStopWhy(d);
+      if (a) Object.assign(a, { active: false, stopped: true, stopWhy: why, status: "終わり" });
+      log(s, ev, "muted", `${agentLongName(d.agent_id ?? ev.agent)}が手を止めた${why?.words ? ` (${why.words})` : ""}`);
+      if (why?.reason) {
+        const e = s.log[s.log.length - 1];
+        if ([...why.reason].length <= AGENT_STOP_NOTE_CHARS) e.note = why.reason;
+        else e.more = why.reason;
+      }
       break;
     }
     case "agent.said":

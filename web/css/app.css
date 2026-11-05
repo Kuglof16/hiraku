@@ -197,7 +197,13 @@ body.video .hint { display: none; }
   background: var(--card); border: 1.2px solid var(--ink); border-radius: 8px; padding: 0 8px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none;
 }
-.petrow .say { grid-column: 2 / span 2; align-self: start; margin-top: 2px; }
+.petrow .say { grid-column: 2 / span 2; grid-row: 2; align-self: start; margin-top: 2px; }
+/* why the agent stopped (agent.stopped stop_code): under the name, in the bubble's place while it has none */
+.agents li .why, .petrow .why { grid-column: 2 / span 2; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.petrow .why { grid-row: 2; align-self: start; margin-top: 2px; padding: 0 2px; }
+.petrow.saying .why { visibility: hidden; }
+.agents li .why[data-stop-code="error"] { color: var(--red); }
+.agents ul.pets.lots .petrow .why { font-size: 12px; margin-top: 0; }
 .agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
 .agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
 .agents ul.pets.many .petrow .petslot { width: 42px; height: 42px; }

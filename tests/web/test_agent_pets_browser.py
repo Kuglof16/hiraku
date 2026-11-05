@@ -58,6 +58,34 @@ def ten_agents() -> list[dict]:
     return out
 
 
+LONG_REASON = "解析の道具が入力のファイルを読めずに終わったので、この役はここで止まりました (形の見本、長い文はくわしくに入る)"
+# agent.stopped's stop_code and stop_reason (contract a31e520) per agent, and what the screen says:
+# (agent, data, the agents' pane's why line or None, the log line's words in brackets or None, the note or None)
+STOPS = [
+    ("cae.crash", {"stop_code": "done", "stop_reason": "仕事を終えた (形の見本)"}, "自分の仕事を終えた", "自分の仕事を終えた", "仕事を終えた (形の見本)"),
+    ("cae.nvh", {"stop_code": "run_ended"}, "動いている間に実行が終わった", "動いている間に実行が終わった", None),
+    ("cae.strength", {"stop_code": "user_stop"}, "人が止めた", "人が止めた", None),
+    ("cae.thermal", {"stop_code": "error", "stop_reason": LONG_REASON}, "エラーで終わった", "エラーで終わった", None),
+    ("cae.handling", {}, None, None, None),  # a record from before stop_code: 手を止めた only
+]
+
+
+def stopped_agents() -> list[dict]:
+    """domain_events() with the CAE agents started and five of them stopped (STOPS) at 2.0-2.4 s."""
+    events = domain_events()
+    base = events[0]
+
+    def ev(t, kind, agent, data):
+        return {"seq": 0, "ts": base["ts"], "t": t, "run_id": base["run_id"], "kind": kind, "agent": agent, "data": data}
+
+    extra = [ev(0.1 + 0.01 * i, "agent.started", a, {"agent_id": a}) for i, a in enumerate(AGENTS)]
+    extra += [ev(2.0 + 0.1 * i, "agent.stopped", a, {"agent_id": a, **d}) for i, (a, d, *_) in enumerate(STOPS)]
+    out = sorted(events + extra, key=lambda e: e["t"])
+    for i, e in enumerate(out):
+        e["seq"] = i
+    return out
+
+
 # (t, {agent: motion}) at pace=0 (display t = recorded t); agents not named: as `rest`.
 EXPECT = [
     (0.05, {}, "waiting"),  # nothing started yet
@@ -115,10 +143,11 @@ class AgentPetsTest(unittest.TestCase):
             s.server_close()
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def serve(self, pets_file=PETS_FILE):
+    def serve(self, pets_file=PETS_FILE, events=None):
         runs = self.tmp / f"runs-{len(self.servers)}"
         (runs / RUN).mkdir(parents=True)
-        (runs / RUN / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in ten_agents()), encoding="utf-8")
+        lines = events if events is not None else ten_agents()
+        (runs / RUN / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in lines), encoding="utf-8")
         server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False, pets_file=pets_file)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.servers.append(server)
@@ -223,6 +252,49 @@ class AgentPetsTest(unittest.TestCase):
         self.assertEqual(errors_a + errors_b, [])
         a.close()
         b.close()
+
+    def test_why_an_agent_stopped(self):
+        """agent.stopped's stop_code in words (labels.js AGENT_STOP_JA) under the agent's name in the
+        list and in brackets on the log's 手を止めた line, for each of the four codes; a short
+        stop_reason under the line and in the row's title, a long one under くわしく; a record
+        without either: 手を止めた only, no why line. With and without the pets file alike."""
+        for pets_file in (PETS_FILE, self.tmp / "no-such-pet3d.js"):
+            if pets_file == PETS_FILE and not PETS_FILE.is_file():
+                continue
+            page, errors = self.open(self.serve(pets_file, stopped_agents()), "tab=bench&t=1e6")
+            got = page.evaluate(
+                """() => ({
+                  why: Object.fromEntries([...document.querySelectorAll('#agents li')].map((li) => {
+                    const w = li.querySelector('.why');
+                    const id = li.dataset.agent ?? li.textContent;
+                    return [id, w ? { text: w.textContent, title: w.title, code: w.dataset.stopCode, shown: w.offsetParent !== null && getComputedStyle(w).visibility === 'visible' } : null];
+                  })),
+                  lines: [...document.querySelectorAll('#log li')].filter((li) => li.textContent.includes('が手を止めた')).map((li) => ({
+                    text: (() => { const c = li.cloneNode(true); c.querySelectorAll('.tm, .note, details').forEach((x) => x.remove()); return c.textContent.trim(); })(), note: [...li.querySelectorAll(':scope > .note')].map((n) => n.textContent),
+                    more: [...li.querySelectorAll('details.more .note')].map((n) => n.textContent) })),
+                  pets: document.documentElement.dataset.agentPets ?? null,
+                })"""
+            )
+            self.assertEqual(len(got["lines"]), len(STOPS), got["lines"])
+            for agent, data, row, words, note in STOPS:
+                line = [x for x in got["lines"] if x["text"].endswith(f"が手を止めた ({words})" if words else "が手を止めた")]
+                self.assertEqual(len(line), 1, (agent, got["lines"]))
+                self.assertEqual(line[0]["note"], [note] if note else [], agent)
+                self.assertEqual(line[0]["more"], [LONG_REASON] if data.get("stop_reason") == LONG_REASON else [], agent)
+                if got["pets"] == "on":
+                    why = got["why"][agent]
+                    if row is None:
+                        self.assertIsNone(why, agent)
+                        continue
+                    self.assertEqual(why["text"], row, agent)
+                    self.assertEqual(why["code"], data["stop_code"], agent)
+                    self.assertEqual(why["title"], data.get("stop_reason", ""), agent)
+                    self.assertTrue(why["shown"], agent)
+            if got["pets"] != "on":  # the circles' rows carry the same why lines
+                whys = sorted(w["text"] for w in got["why"].values() if w)
+                self.assertEqual(whys, sorted(r for *_, r, _w, _n in STOPS if r))
+            self.assertEqual(errors, [])
+            page.close()
 
     def test_without_the_pets_file_circles_and_names(self):
         """No pet3d.js (404): the list is the circles and names as before, the tiles keep their circles."""

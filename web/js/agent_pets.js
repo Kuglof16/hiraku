@@ -175,11 +175,23 @@ export function gridPlaceOf(id) {
 // A pet's row (the workbench's list, the grid's head): the pet, the agent's name and what it
 // does now (state.js status), and under them its bubble.
 // name: the words for the agent (default its short name; the agents' pane gives the role's long name)
-export function petRowHtml(id, status, { tag = "li", cls = "", name = null } = {}) {
+// why: state.js a.stopWhy (agent.stopped's stop_code / stop_reason): a line under the name while the
+// pet has no bubble (stopWhyHtml); none for a record without either.
+export function petRowHtml(id, status, { tag = "li", cls = "", name = null, why = null } = {}) {
   return (
     `<${tag} class="petrow ${cls}" data-agent="${esc(id)}" data-say-host><span class="petslot" data-pet-slot="${esc(id)}"></span>` +
-    `<span class="nm">${esc(name ?? agentName(id))}</span><span class="st">${esc(status ?? "")}</span><span class="say" data-say="${esc(id)}"></span></${tag}>`
+    `<span class="nm">${esc(name ?? agentName(id))}</span><span class="st">${esc(status ?? "")}</span><span class="say" data-say="${esc(id)}"></span>${stopWhyHtml(why)}</${tag}>`
   );
+}
+
+// Why an agent stopped, one line: the code's words (labels.js AGENT_STOP_JA), else the reason cut
+// short; the whole reason is the title.
+export function stopWhyHtml(why) {
+  if (!why) return "";
+  const chars = [...(why.words ?? why.reason ?? "")];
+  const text = chars.length > SAY_CHARS ? `${chars.slice(0, SAY_CHARS - 1).join("")}…` : chars.join("");
+  const title = why.reason && why.reason !== text ? why.reason : "";
+  return `<span class="why" data-stop-code="${esc(why.code ?? "")}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</span>`;
 }
 
 const fade = (dt) => (dt < 0 || dt >= SAY_S ? 0 : Math.min(1, dt / 0.25, (SAY_S - dt) / 0.6));
