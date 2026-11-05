@@ -293,7 +293,10 @@ def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | Non
             bad = outside_module(mods, "package", {"changes": args.get("changes") or {}}, "パッケージ役")
             if bad:
                 return Denial(HK6, "パッケージ役の changes はレイアウトの変数だけです: " + "; ".join(bad)
-                              + "。ほかのモジュールの変数は、そのモジュールの設計役が revise_design で提案します")
+                              + "。ほかのモジュールの変数は、そのモジュールの設計役が revise_design で提案します。"
+                              "次にすること: その変数を changes から外し、build_version を呼ばずに、まとめ役に「どの変数を・"
+                              "いくつに・なぜ (断りの文)」と、持ち主の設計役 (designer.<モジュール>) の名前を返す "
+                              "(その設計役の出し直しは前の提案を置き換える)")
         return None
     return None
 

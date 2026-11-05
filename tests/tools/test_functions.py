@@ -444,6 +444,23 @@ class UnsupportedLoadTest(RunCase, unittest.TestCase):
         self.assertEqual([v for v in self.ctx.store.records("verdict") if v["load_case_id"] == "R1-step100"], [])
 
 
+class CompactAnalysisTest(unittest.TestCase):
+    def test_many_per_place_results_are_trimmed_to_each_quantitys_extremes(self):
+        """Run 094333: get_context's records with a shell's per-place results went over Claude Code's limit."""
+        from hiraku.tools.functions import RESULTS_EACH_END, _compact_analysis
+
+        rs = [{"quantity": f"max_stress.m{i}", "value": float(i), "unit": "MPa", "where": f"m{i}"} for i in range(40)]
+        rs += [{"quantity": "max_deflection", "value": 1.0, "unit": "mm"}]
+        out = _compact_analysis({"analysis_id": "ana-0001", "tool": "frame_static", "results": rs, "fields": [1]})
+        kept = [r["value"] for r in out["results"] if r["quantity"].startswith("max_stress")]
+        self.assertEqual(kept, [0.0, 1.0, 2.0, 37.0, 38.0, 39.0][:2 * RESULTS_EACH_END])
+        self.assertIn("max_deflection", [r["quantity"] for r in out["results"]])
+        self.assertIn("41 件", out["results_note"])
+        self.assertNotIn("fields", out)
+        few = _compact_analysis({"analysis_id": "ana-0002", "results": rs[:5]})
+        self.assertEqual((few["results"], "results_note" in few), (rs[:5], False))
+
+
 class PickResultTest(unittest.TestCase):
     def test_several_places_give_the_unfavourable_one(self):
         from hiraku.tools.functions import _pick_result
