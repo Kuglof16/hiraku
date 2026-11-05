@@ -685,6 +685,22 @@ export function quantityName(q) {
   }
   return q;
 }
+// The words that tell the judged number from a value shown for reference (the present card,
+// the workbench's comparison card, the colour bar and the 3D's largest-value tag).
+export const JUDGED_JA = {
+  number: "判定の量", // before the judged quantity's name, over the card's large number
+  ref: "参考 (判定に使わない)", // over the values shown beside it that the verdict does not use
+  refTag: "参考", // before 最大 on the 3D's tag of a field the verdict does not use
+  refBar: "参考の色", // before a colour bar's title when the field is not the judged quantity
+  otherQuantity: "判定は別の量", // under such a colour bar, before the judged quantity's name
+  // Shown wherever strength is judged (the present card, the workbench's analysis card, the grid's
+  // strength tile): the suspension and wheel mounts are not judged. The records say it only in the
+  // analyses' free-text assumptions (no field marks the excluded elements), so it is always shown
+  // when the run has a strength load case.
+  // 取付点の荷重条件が入ったら消す (remove once a load case judges the mounts).
+  mountsNotJudged: "取付点 (金具・溶接・ボルト) は判定していない。取付の範囲は、金具が補強する仮定で判定から外している",
+};
+
 // The parts after the dot that a tool writes for one quantity, in words (a part not here is shown as written).
 // rops_occupant_clearance.<part>: rops_frame_pushover pushes the roll bar from the left top corner (side),
 // the right one (side_mirror), backwards near the left (rear) or the right (rear_mirror), and down (top).

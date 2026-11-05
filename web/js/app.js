@@ -40,6 +40,8 @@ import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLege
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
+import { judgedContour, referenceResults } from "./judged.js";
+import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
 import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
@@ -824,13 +826,19 @@ function renderChain(s, chain) {
     // the name wraps, the value and its unit do not (app.css .card td); the record's own name in the title
     // (a short aside in brackets at the name's end, 横・左の角, kept on one line)
     const nameHtml = (q) => esc(quantityName(q)).replace(/ \(([^()]{1,30})\)$/, ` <span class="nw">($1)</span>`);
-    const res = (ana.results ?? []).slice(0, 3).map((r) => `<tr title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    // the criterion's quantity where the tool is judged on another (frame_shell's element max_stress):
+    // a row of its own under 参考, small, so it does not read as the judged value against the allowable
+    const refs = referenceResults(ana, loadCase?.criterion);
+    const top = (ana.results ?? []).slice(0, 3);
+    const isRef = (r) => refs.includes(r);
+    const res = [...top, ...refs.filter((r) => !top.includes(r))].map((r) => `<tr class="${isRef(r) ? "ref" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
       `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
-      (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "");
+      (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "") +
+      (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "");
   } else if (running) {
     a.className = "card busy";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div title="${esc(running.tool)}">${esc(toolShort(s, running.tool))} で解析中…</div>`;
@@ -852,7 +860,8 @@ function renderChain(s, chain) {
       // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
         `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
-        `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
+        // the quantity compared and judged (frame_shell: the hot-spot stress for a max_stress criterion)
+        `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(cmp.quantity ?? verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
         `<span class="sub">余裕 ${esc(fmtMargin(verdict))}${loadCase?.title ? `・${esc(loadCase.title)}` : ""}</span>` +
         // the criterion's basis is the record's own words (English): folded
         (loadCase?.criterion?.basis ? `<details class="more" data-keep="cmp-basis"><summary>くわしく (基準の根拠)</summary><div class="sub basis">${esc(loadCase.criterion.basis)}</div></details>` : "") +
@@ -944,6 +953,9 @@ function buildContour(s, chain, withCompare = ui.compare) {
   return { ...ct, kinds: base?.kinds ?? [], fieldKind: base?.kind ?? null, variants: [], meshModes: modes, metrics, canCompare: false, compare: null, toolTitle: base?.toolTitle ?? "" };
 }
 
+// (a field is held to the allowable only when it is the judged quantity: judged.js judgedContour)
+const judgedContourOf = (s, ana, field, lcId) => judgedContour(s, ana, field, lcId, s.meshes);
+
 function fieldContour(s, chain, withCompare = ui.compare) {
   const anas = analysesBeside(s, chain.shown);
   const all = anas.flatMap((a) => fieldsOf(a).map((f) => ({ a, f })));
@@ -958,7 +970,8 @@ function fieldContour(s, chain, withCompare = ui.compare) {
     drawable.find((x) => x.f === preferredField(drawable.map((y) => y.f), s.meshes)) ??
     null;
   if (!pick) return null;
-  let ct = contourOf(pick.a, pick.f, chain.loadCase?.criterion, s.meshes);
+  const lcId = chain.loadCase?.load_case_id ?? null;
+  let ct = judgedContourOf(s, pick.a, pick.f, lcId);
   if (!ct) return null;
   const groups = anas.filter((a) => drawable.some((x) => x.a === a));
   const many = groups.length > 1;
@@ -975,7 +988,7 @@ function fieldContour(s, chain, withCompare = ui.compare) {
   const prev = previousOf(s, pick.a, pick.f);
   let compare = null;
   if (prev && withCompare) {
-    const before = contourOf(prev.ana, prev.field, chain.loadCase?.criterion, s.meshes);
+    const before = judgedContourOf(s, prev.ana, prev.field, lcId);
     if (before) {
       const [after, was] = onSharedScale([ct, before]);
       ct = { ...after, key: `${after.key}|compare ${prev.ana.analysis_id}` };
@@ -1053,7 +1066,10 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     return;
   }
   const swatch = `<span style="display:inline-block;width:12px;height:12px;background:${OVER_COLOR};margin-right:6px"></span>`;
-  const over = ct.limitKnown
+  // a field that is not the judged quantity: no allowable line; the bar says whose quantity is judged
+  const over = ct.reference
+    ? `<div class="ref-note" data-role="reference">${esc(JUDGED_JA.otherQuantity)}: ${esc(quantityName(ct.reference.quantity))}</div>`
+    : ct.limitKnown
     ? `<div class="lim">${swatch}許容 ${fmt(ct.max, 4)} ${esc(unit)} を超えた所</div>`
     : ct.partLimit
       ? `<div class="lim">${swatch}${esc(ct.partLimit.part)} の許容 ${fmt(ct.partLimit.value, 4)} ${esc(unit)} を超えたとき</div>`
@@ -1073,7 +1089,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
     ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
-    : `${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
+    : `${ct.reference ? `${esc(JUDGED_JA.refBar)}: ` : ""}${esc(ct.field.label ?? FIELD_JA[ct.kind])} [${esc(unit || "1")}]`;
   // before / after: each version's largest recorded value on the one scale above
   const cmp = ct.compare
     ? `<div class="cmp" data-compare="${ct.compare.version}-${ct.compare.nowVersion}">` +
