@@ -110,6 +110,45 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
 
+    def test_with_rule_check_every_version_gets_its_rules_once(self):
+        """QA, the video run on 6d86a75e: rule_check.recorded on version 5 only; a version a red stage revised
+        before the last stage had none."""
+        from hiraku.agent import scripted as S
+
+        plan = dict(copy.deepcopy(load_plan("offroad-4w")), rule_check=True)
+        plan["revise"] = [{"say": "段の赤を直します (試験)", "changes": {"track": {"value": 1400.0, "unit": "mm"}},
+                           "reason": "P1: 赤 (試験)"}]
+        real = S.stage_reds
+        red = {"verdict_id": "ver-9999", "test_id": "P1", "load_case_id": "P1-step100", "domain": "powertrain",
+               "pass": False}
+
+        def first_stage_red(ctx, group):  # version 1's first stage is red once, so the plan revises mid-stages
+            return [red] if ctx.version == 1 else real(ctx, group)
+
+        seen: list[int] = []
+        with mock.patch.object(S, "_check_rules", side_effect=lambda ctx, agent: seen.append(ctx.version) or {"hits": []}), \
+                mock.patch.object(S, "stage_reds", side_effect=first_stage_red):
+            run_scripted(self.ctx, plan)
+        self.assertEqual(self.ctx.project["design_versions"], [1, 2])
+        self.assertEqual(seen, [1, 2])  # version 1, left by the red stage, has its rules too
+
+    def test_the_shared_design_and_its_summary_are_not_written_into(self):
+        """RunStore.design_shared and the plan's design_summary are shared between callers: after a whole scripted
+        run, every version's shared design is still its file, and the kept summary is still design_summary's."""
+        from hiraku.contract import layout
+        from hiraku.tools import plan as plan_mod
+
+        self.assertEqual(run_scripted(self.ctx), "done")
+        for v in self.ctx.project["design_versions"]:
+            with self.subTest(version=v):
+                stamp, shared = self.ctx.store.design_shared(v)
+                on_disk = json.loads((layout.version_dir(self.ctx.store.path, v) / layout.DESIGN_FILE)
+                                     .read_text(encoding="utf-8"))
+                self.assertEqual(shared, on_disk)
+                kept = plan_mod._SUMMARIES.get((str(self.ctx.store.path), stamp))
+                if kept is not None:
+                    self.assertEqual(kept, design_summary(on_disk))
+
     def test_a_fit_driver_revision_takes_the_values_found_by_code(self):
         from unittest import mock
 
@@ -453,9 +492,11 @@ class PlanOfARequirementsFileTest(unittest.TestCase):
         own = {"extends": "offroad-4w", "rule_check": True,
                "steps": [{"load_case": "R1-step100", "tool": "frame_static", "say": "B"},
                          {"load_case": "R1-step100", "tool": "frame_shell", "say": "C"}]}
+        from hiraku.tools.plan import load_plan as real_load_plan  # not the stand-in (it turns rule_check off)
+
         with self.plans({"offroad-4w": self.BASE, "offroad-4w-n14": own}):
-            plan = load_plan("offroad-4w", "offroad-4w-n14")
-            self.assertEqual(load_plan("offroad-4w", "offroad-4w-video"), self.BASE)  # no entry: the product's
+            plan = real_load_plan("offroad-4w", "offroad-4w-n14")
+            self.assertEqual(real_load_plan("offroad-4w", "offroad-4w-video"), self.BASE)  # no entry: the product's
         self.assertEqual([s["say"] for s in plan["steps"]], ["a", "B", "C"])  # replaced in place, then the new one
         self.assertEqual((plan["show_hk1"], plan["revise"], plan["rule_check"]), (True, ["r"], True))
         self.assertNotIn("extends", plan)

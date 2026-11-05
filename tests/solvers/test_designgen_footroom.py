@@ -42,13 +42,13 @@ class BulkheadTest(unittest.TestCase):
 
 
 class DriverFitTest(unittest.TestCase):
-    """The search finds a driver's place with every margin at least 0 where H3 was red, in under its time limit."""
+    """The search finds a driver's place with every margin at least 0 where H3 was red, before its count of designs (driver_fit.MAX_EVALS)."""
 
     def check(self, changes, label):
         d = designgen.regenerate(V1, changes)
         before = driver_fit.margins(d)
         self.assertLess(min(v for v, _ in before.values()), 0.0, label)  # H3 red as the runs saw it
-        got = driver_fit.best_driver_place(d, time_limit_s=280)
+        got = driver_fit.best_driver_place(d)
         print(f"\n{label}: smallest {got['smallest']}, {got['evaluations']} designs, {got['seconds']:.0f} s, "
               f"{got['stopped']}; changes {({k: v['value'] for k, v in got['changes'].items()})}")
         self.assertEqual(got["stopped"], "converged", label)

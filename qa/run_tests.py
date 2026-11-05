@@ -151,7 +151,7 @@ def _take_lock(jobs: int) -> None:
 
 BROWSER_SWITCH = "HIRAKU_WEB_BROWSER"  # the screen's browser tests run only with it set (tests/web/browser.py)
 BROWSER_PREFIX = "tests.web"
-BROWSER_JOBS = 4  # Chromium and a server per class; the screen's pictures may change under a heavier load
+BROWSER_JOBS = 2  # Chromium and a server per class; at 4 beside other heavy work, 38 of 368 waits timed out (t22)
 # --map (with --browser): what each browser test used, to pick the tests a change touches (qa.browser_pick)
 PY_MAP = "HIRAKU_PY_MAP"  # "1": a worker records the repository files it opens or imports (_watch_files)
 WEB_MAP = "HIRAKU_WEB_MAP"  # a folder: the screen's test helper writes each page's JS coverage there

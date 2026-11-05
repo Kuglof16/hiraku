@@ -46,7 +46,7 @@
 .sh-chk { font-size: 13px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--line); white-space: nowrap; justify-self: start; }
 .sh-chk.ok { color: var(--green); border-color: var(--green); }
 .sh-chk.bad { color: var(--red); border-color: var(--red); background: var(--red-pale); }
-.sh-chk.wait { border-style: dashed; border-color: var(--ink); background: var(--orange-pale); }
+.sh-chk.noval { border-style: dashed; border-color: var(--red); color: var(--red); background: var(--orange-pale); }
 .sh-chk.none { color: var(--muted); }
 
 .sh-detail header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1.5px solid var(--ink); padding-bottom: 8px; }
@@ -57,14 +57,27 @@
 .sh-detail dt { color: var(--muted); }
 .sh-detail dd { margin: 0; }
 .sh-fl code { margin-left: 8px; }
-.sh-fl .sh-expr { display: block; margin: 0; color: var(--ink-2); }
+/* 式を見る beside the formula's title (shut at first); open: the expression with its signs on its own line */
+.sh-see { display: inline; margin-left: 10px; }
+.sh-see > summary { display: inline; cursor: pointer; list-style: none; font-size: 13px; color: var(--muted); text-decoration: underline; }
+.sh-see > summary::-webkit-details-marker { display: none; }
+.sh-see .sh-expr { display: block; margin: 2px 0 6px; padding: 4px 10px; border-left: 3px solid var(--rule); color: var(--ink-2);
+  font-family: "Cambria Math", "Times New Roman", serif; font-size: 16px; }
+.sh-see .sh-expr sub { font-size: 0.7em; }
 
 .sh-checks { width: 100%; border-collapse: collapse; font-size: 14px; }
 .sh-checks th { text-align: left; font-weight: 600; border-bottom: 1.5px solid var(--ink); padding: 4px 6px; white-space: nowrap; }
 .sh-checks td { border-bottom: 1px solid var(--rule); padding: 4px 6px; vertical-align: top; }
 .sh-checks td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
 .sh-checks td.src { color: var(--muted); font-size: 13px; }
+.sh-checks td.qty { min-width: 8em; }
 .sh-checks tr.bad td { background: var(--red-pale); }
-.sh-checks tr.wait td { background: var(--orange-pale); }
+.sh-checks tr.noval td { background: var(--orange-pale); }
+.sh-what { margin: 0 0 8px; font-size: 14px; color: var(--ink-2); }
+
+/* ?dev=1 only: the ids and the English folded under くわしく */
+.sh-more summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 400; }
+.sh-checks .sh-more, .sh-fl .sh-more { font-size: 12px; }
+.sh-en { color: var(--muted); }
 
 .sh-code { margin: 0; max-height: 420px; overflow: auto; padding: 12px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 8px; font-family: var(--mono); font-size: 13px; line-height: 1.45; white-space: pre; }

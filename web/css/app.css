@@ -60,17 +60,15 @@ body.video { --band: 170px; }
 body.video .statusrow, body.no-status .statusrow { display: none; }
 body.no-status .stage, body.video .stage { grid-template-rows: 64px 56px minmax(0, 1fr) 0 var(--band); }
 body.video .hint { display: none; }
-/* the video has no replay bar (the bench's, A7's assembly bar): ?t= and window.hiraku.seek move
-   the replay without it. What stood above a bar comes down by the bar's height. */
-body.video .playbar, body.video .asm-bar { display: none; }
+/* the video has no replay bar (the bench's): ?t= and window.hiraku.seek move the replay without
+   it. What stood above it comes down by the bar's height. A7's assembly bar stays (its track and
+   "手順 n / N" show the steps one by one), only its ▶ goes. */
+body.video .playbar, body.video .asm-bar .as-play { display: none; }
 body.video .legend, body.video .running { bottom: 12px; }
 body.video .animbar { bottom: 12px; }
 body.video .viewport.has-anim .running, body.video .viewport.has-anim .legend, body.video .graph { bottom: 60px; }
 body.video .viewport > .modlegend { bottom: 12px; }
 body.video .viewport.has-anim > .modlegend { bottom: 60px; }
-body.video .asm-3d > .asm-joints-btn { bottom: 12px; }
-body.video .asm-3d > .joint-legend { bottom: 50px; max-height: calc(100% - 116px); }
-body.video .asm-3d .modlegend { bottom: 26px; }
 .subband { background: var(--paper); }
 
 /* top row */
@@ -405,6 +403,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .legend .when { font-size: 13px; color: var(--muted); max-width: 220px; margin: -2px 0 6px; }
 .legend .conv, .card .conv { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
 .legend .lim { color: var(--red); font-weight: 600; margin-top: 6px; }
+.legend .ref-note { color: var(--muted); margin-top: 6px; }
 .legend .src { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .legend .ttl small { font-weight: 400; color: var(--muted); font-size: 11px; }
 .legend .kinds { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -894,17 +893,29 @@ body.video .mode .stop-btn { display: none; }
 .runlist.plain .pick .pline { flex: 1; }
 .runlist.plain .pick .sub { font-size: 14px; color: var(--muted); margin-top: 2px; }
 .runlist.plain .pick .go, .runlist.plain .pick a.go { font-size: 17px; padding: 4px 22px; color: var(--panel); background: var(--ink); border: 1.5px solid var(--ink); margin: 0; }
-.runlist.plain .ways { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 12px 0 4px; padding: 0; font-size: 15px; }
-.runlist.plain .ways .vb { display: inline-block; font-size: 13px; font-weight: 700; border: 1.5px solid var(--ink); border-radius: 999px; padding: 0 10px; margin-right: 6px; }
-.runlist.plain .vb.claude, .runlist.plain button.claude { border-color: #c77d1f; }
+.runlist.plain button.claude { border-color: #c77d1f; }
 .runlist.plain button.claude:not(:disabled) { color: #8a4f0a; }
 .runlist.plain button.go.claude { color: var(--panel); background: #c77d1f; }
-.runlist.plain .keyless { margin: 6px 0 4px; padding: 6px 12px; }
-.runlist.plain .keyless a.readme { margin-left: 8px; padding: 0 10px; font-size: 14px; }
+.runlist.plain .needs-key { white-space: nowrap; }
 .runlist.plain .dline { font-size: 16px; }
+.runlist.plain .rsum { font-size: 16px; font-weight: 600; }
 .runlist.plain .rmeta { font-size: 14px; color: var(--muted); margin-top: 2px; }
-.runlist.plain .rmeta .end { color: var(--ink); }
-.runlist.plain .rmeta .end[data-end="stopped"] { color: var(--red); }
+.runlist.plain td.state[data-state="stopped"], .runlist.plain td.state[data-state="failed"] { color: var(--red); }
+.runlist.plain details.older { margin-top: 14px; }
+.runlist.plain details.older summary { cursor: pointer; font-size: 15px; color: var(--muted); }
+/* app.js placeRunList: a narrow window (a phone) has the list on the page at its own size, not on the stage */
+.runlist.plain.narrow { position: fixed; inset: 0; transform: none; width: auto; max-height: none; border: none; border-radius: 0;
+  padding: 14px 14px 40px; box-shadow: none; z-index: 60; font-size: 15px; word-break: normal; line-break: strict; }
+.runlist.plain.narrow h2 { font-size: 21px; }
+.runlist.plain.narrow .lead { font-size: 15px; }
+.runlist.plain.narrow .pick { flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; font-size: 16px; }
+.runlist.plain.narrow .pick .pline { flex-basis: 100%; }
+.runlist.plain.narrow .lreq { flex-direction: column; align-items: stretch; gap: 6px; }
+.runlist.plain.narrow .lbtns { justify-content: flex-start; max-width: none; }
+.runlist.plain.narrow .dline { font-size: 15px; }
+.runlist.plain.narrow .rsum { font-size: 15px; }
+.runlist.plain.narrow table td:nth-child(2) { width: auto; font-size: 13px; }
+.runlist.plain.narrow table td:last-child { width: auto; }
 .runlist.plain .lreq { padding: 7px 6px; }
 /* a row's くわしく (the people's list and ?dev=1's demo rows): the tags, files and cost lines inside, after the line */
 .runlist .more { display: inline; margin-left: 10px; }
@@ -960,6 +971,10 @@ body.video .mode .stop-btn { display: none; }
 /* app.js loadingNote: while a record is read */
 .loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
   border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }
+.loading-note .ln-sub { font-size: 15px; margin-top: 6px; color: var(--ink-2, #555); }
+.loading-note a { pointer-events: auto; margin-left: 10px; font-weight: 600; }
+.loading-note.failed { border-color: #b3261e; }
+body.video .loading-note { display: none; }
 
 /* the verdict in one sentence, then the value beside its criterion */
 .verdict .verdict-big { font-size: 24px; font-weight: 800; margin-bottom: 2px; }
@@ -1058,6 +1073,14 @@ body.present .asm-caption { font-size: 24px; font-weight: 700; }
 .pc-verdict.ok { color: var(--green); }
 .pc-verdict.bad { color: var(--red); }
 .pc-extra { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.45; }
+.pc-ref { color: var(--muted); font-size: 15px; line-height: 1.4; }
+.pc-ref .pc-ref-h { font-weight: 700; }
+.pc-ref ul { margin: 2px 0 0; padding-left: 20px; }
+.pc-note { color: var(--muted); font-size: 15px; line-height: 1.4; }
+.card tr.ref td { color: var(--muted); font-size: 12px; }
+.card .ref-tag { font-size: 11px; }
+.card .not-judged { color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }
+.tile .not-judged { color: var(--muted); font-size: 11px; line-height: 1.3; }
 
 /* 詳しく: the log at the left and the chain at the right, over the view */
 body.present.present-detail .col-left,

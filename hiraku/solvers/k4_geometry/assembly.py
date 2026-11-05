@@ -415,6 +415,14 @@ def _step(design: dict, bs: dict[str, Body], unit: list[Body], d_in: str, moves:
         step["note"] += f"; the hands' way is taken by {', '.join(b.split(':', 1)[1] for b in hands['in_way'])}"
     moves = _clear_of(unit, moves, extent)
     plain = [{key: v for key, v in f.items() if key != "owner"} for f in fast]
+    # each hand-made fastening: the side the hands come from and the narrowest gap there (shown, not judged)
+    tools = hands.get("tools", {})
+    for f in plain:
+        if f["to"] in tools and "at_mm" in f and f.get("kind") not in NOT_BY_HAND:
+            n_used, gap = tools[f["to"]]
+            f["tool_side"] = n_used
+            if gap is not None:
+                f["tool_gap_mm"] = round(float(gap), 1)
     if attach:
         sid = attach.split(":", 1)[1]
         what = "・".join(names.get(b.id.split(":", 1)[1], b.id.split(":", 1)[1]) for b in unit)
@@ -484,6 +492,29 @@ def hand_way(point, side: np.ndarray, around: list[Body], skip: set[str],
     return edge - float(p @ s), sorted(o.id for o in met if o.id not in skip)
 
 
+def hand_gap(point, side: np.ndarray, around: list[Body], skip: set[str],
+             own: set[str] = frozenset()) -> float | None:
+    """tool_gap_mm (contract, shown, not judged): the smallest gap (mm) between the hands' way to
+    `point` from `side` (hand_sweep out past everything, as in hand_way) and the bodies that can
+    be in it: not in `skip` or `own`, reaching in front of the point along `side`, and starting
+    within REACH_MM out along it. Negative: how deep the deepest of them reaches into the way
+    (shape_overlap, the boxes' or capsules' separating-axis gap). None when no body is there."""
+    p = np.asarray(point, float)
+    s = np.asarray(side, float)
+    ps = float(p @ s)
+    far = max(float(np.max(o.obb.corners() @ s)) for o in around) if around else ps
+    way = hand_sweep(p, s, far + TOOL_DEPTH_MM)
+    gaps = []
+    for o in around:
+        if o.id in skip or o.id in own:
+            continue
+        proj = o.obb.corners() @ s
+        if float(np.max(proj)) <= ps or float(np.min(proj)) - ps > REACH_MM:
+            continue  # behind the point, or farther out than the arm reaches straight
+        gaps.append(-shape_overlap(way, o))
+    return min(gaps) if gaps else None
+
+
 def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.ndarray,
            at_node: dict[str, set[str]] | None = None) -> dict:
     """Whether the hands get to every fastening point of the unit, each from the side the unit
@@ -521,6 +552,7 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
         reach_out = float(np.sum(b.obb.half * np.abs(b.obb.axes @ d_from)))
         targets.append(("its face", b.obb.center + d_from * reach_out, {b.id for b in unit}, {b.id for b in unit}))
     seen = set()
+    tools: dict[str, tuple[str, float | None]] = {}
     done, failed, depth = [], [], 0.0
     sph = spheres(around)  # hand_way's bounding spheres of `around`, made once
     for where, p, skip, own in targets:
@@ -541,12 +573,15 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
             done.append(free)
         else:
             failed.append((where, *tried))
+        # the side the hands use (the free one, else the first tried) and its narrowest gap
+        n_used = free[1] if free is not None else tried[0]
+        tools[where] = (n_used, hand_gap(p, np.asarray(DIRECTIONS[n_used], float), around, skip, own))
     depth = max([d for *_, d in done] + [d for *_, d in failed] + [0.0])
     parts = [f"hands to {w} from {SIDE_NAMES[n]}, {d:.0f} mm in" for w, n, d in done]
     parts += [f"the hands' way to {w} is taken from every side; from {SIDE_NAMES[n]} by "
               f"{', '.join(i.split(':', 1)[1] for i in iw)}" for w, n, iw, _ in failed]
     in_way = sorted({i for *_, iw, _ in failed for i in iw})
-    return {"ok": not failed, "depth": depth, "in_way": in_way, "note": "; ".join(parts)}
+    return {"ok": not failed, "depth": depth, "in_way": in_way, "note": "; ".join(parts), "tools": tools}
 
 
 def _ends_near(member: Body, point) -> bool:

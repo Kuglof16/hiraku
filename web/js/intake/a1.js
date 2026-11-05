@@ -2,6 +2,7 @@
 
 import { FLAGS, SPEED_CLASSES } from "./data.js";
 import { fill, h } from "./dom.js";
+import { askingPanel } from "./a2.js";
 import { domainCards } from "./model.js";
 
 const GLOW_S = 0.5; // seconds the glow of a newly lit card lasts
@@ -76,7 +77,16 @@ export function renderA1(el, m, api, ui) {
   const draftN = cards.filter((c) => c.state === "draft").length;
   const assembly = m.domains?.assembly_test_ids || [];
   const reasons = Object.entries(m.domains?.flag_reasons || {});
+  const ask = askingPanel(m, api, ui);
+  el.classList?.[ask ? "add" : "remove"]("has-ask");
+  const want = m.want || m.domains?.want || [...m.chat].reverse().find((c) => c.who === "user")?.text || "";
+  const nothingRead = !!m.domains && !m.domainsFromProject && FLAGS.every((f) => !m.flags?.[f.name]) && !!want;
+  const limitPills = [
+    m.limits.round != null ? h("span", { class: "in-pill" }, `やり直しは ${m.limits.round} 回まで`) : null,
+    m.limits.cost != null ? h("span", { class: "in-pill" }, `費用は ${m.limits.cost} USD まで`) : null,
+  ].filter(Boolean);
   fill(el,
+    ask,
     h("section", { class: "in-chat" },
       h("h2", {}, "作りたいものを伝える"),
       h("div", { class: "in-msgs", dataset: { keepScroll: "a1-msgs" } },
@@ -85,6 +95,9 @@ export function renderA1(el, m, api, ui) {
     h("section", { class: "in-side", dataset: { keepScroll: "a1-side" } },
       h("div", { class: "in-block" },
         h("h2", {}, "読み取ったこと", h("small", {}, api.editFlags ? "違っていたら押して直せます" : "")),
+        nothingRead
+          ? h("p", { class: "in-warn soft", role: "status" }, `言葉から読み取れたことがありません。Claude を使わないときは、決まった言葉でしか読めません。「${want.length > 24 ? want.slice(0, 24) + "…" : want}」からは読み取れなかったので、下の印から、当てはまるものを選んでください。`)
+          : null,
         h("div", { class: "in-chips" }, chips(m, api), h("span", { class: "in-sep" }), speedChips(m)),
         reasons.length
           ? h("ul", { class: "in-why" }, reasons.map(([f, why]) => h("li", {}, h("b", {}, FLAGS.find((x) => x.name === f)?.symbol || f), why)))
@@ -94,8 +107,8 @@ export function renderA1(el, m, api, ui) {
         h("div", { class: "in-cards" }, cards.map((c) => card(c, api, ui))),
         assembly.length ? h("p", { class: "in-foot" }, "組み立てやすさ・人への当たりは、上の 7 つとは別に見ます ",
           h("details", { class: "in-tests" }, h("summary", {}, "くわしく"), assembly.map((t) => h("code", {}, t)))) : null),
-      h("div", { class: "in-block limits" },
-        h("span", { class: "in-pill" }, `やり直しは ${m.limits.round ?? "—"} 回まで`),
-        h("span", { class: "in-pill" }, `費用は ${m.limits.cost ?? "—"} USD まで`),
-        api.setLimits ? h("button", { class: "in-btn small", onclick: () => api.setLimits(m.limits) }, "上限を変える") : null)));
+      limitPills.length // not shown until they are decided (a dash says nothing)
+        ? h("div", { class: "in-block limits" }, limitPills,
+            api.setLimits ? h("button", { class: "in-btn small", onclick: () => api.setLimits(m.limits) }, "上限を変える") : null)
+        : null));
 }

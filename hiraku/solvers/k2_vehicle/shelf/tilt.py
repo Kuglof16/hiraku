@@ -11,6 +11,7 @@ from ..model import box_design, build_vehicle
 from ..scenario import tilt_sweep
 from ..units import G0
 from .base import K2Tool, P, Pair, _box, _half_width, _res, _ssf
+from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
 
 def tilt_closed_form(m_s: float, h_s: float, m_u: float, h_u: float, track: float, k_roll: float,
@@ -45,6 +46,10 @@ class TiltTool(K2Tool):
     positions and the design CG, not the vehicle settled on its springs), body_roll_at_tip (deg),
     cg_shift_at_tip (mm, lateral CG shift against the contact line from suspension roll),
     friction_demand_at_tip (1, tan of the tip angle), slides_first (1: 1 if mu < the demand).
+    With K&C corners, the side that tips first also gives the force the body receives at each
+    suspension mount up to the tip: the mount_* series of mounts.mount_series (with gravity_x/y/z,
+    the turned gravity), mount_force_peak (N, where '<support>.<mount> at t <s> s') and the joint
+    vectors at that instant.
     """
 
     name = "tilt"
@@ -71,21 +76,28 @@ class TiltTool(K2Tool):
         veh = build_vehicle(d)
         r = tilt_sweep(veh, left_up=True, **CHECK_TILT)
         got = None if r["tip_angle"] is None else math.degrees(r["tip_angle"])
-        k_roll = 4.0 * 20e3 * 0.6 ** 2
-        expected = math.degrees(tilt_closed_form(500.0, 0.5, 80.0, 0.3, 1.2, k_roll, 4.0 * 20e3))
-        return [_check("tilt table, springs 20 N/mm (roll stiffness 28.8 kN m/rad), roll axis on the ground", "tilt_angle",
-                       expected, got, "deg", 2e-3,
+        k_w = 20e3
+        k_roll = 4.0 * k_w * 0.6 ** 2
+        expected = math.degrees(tilt_closed_form(500.0, 0.5, 80.0, 0.3, 1.2, k_roll, 4.0 * k_w))
+        return [_check(f"tilt table, springs {k_w / 1e3:g} N/mm (roll stiffness {k_roll / 1e3:g} kN m/rad), roll axis on "
+                       "the ground", "tilt_angle", expected, got, "deg", 2e-3,
                        "body rises m_s g (1 - cos theta) / k_heave; body and carriers roll k phi = g S sin(theta + phi), "
-                       "S = m_s h_s + m_u h_u; tip when cos(theta)(t/2 - S sin(phi)/M) = sin(theta) S cos(phi)/M")]
+                       "S = m_s h_s + m_u h_u; tip when cos(theta)(t/2 - S sin(phi)/M) = sin(theta) S cos(phi)/M",
+                       case_ja=f"ばねのある車 (ばね {k_w / 1e3:g} N/mm、傾きにくさ {k_roll / 1e3:g} kN·m/rad、傾く軸は地面の上) "
+                               "を傾斜台に載せて倒れる角度",
+                       source_ja="台が傾くと車体はばねで浮き、車体と輪は傾きにくさに応じて傾く。下の輪の接地線まわりの"
+                                 "回る力が 0 になる角度: cos θ (t/2 - S sin φ / M) = sin θ S cos φ / M、"
+                                 "S = 車体の重さ × 重心の高さ + 輪の重さ × 輪の高さ")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         table_mu = self.q(lp, "table_mu", "1")
         veh = build_vehicle(design, {"mu": table_mu})
         sides = {"both": ["right", "left"], "right": ["right"], "left": ["left"]}[self.text(lp, "direction")]
+        log = LoadLog if any(has_mounts(c) for c in veh.corners) else None
         angles, runs = {}, {}
         for side in sides:
             # tipping to the right = left side up
-            r = tilt_sweep(veh, left_up=(side == "right"), record_hz=10.0)
+            r = tilt_sweep(veh, left_up=(side == "right"), record_hz=10.0, load_log=log)
             if r["tip_angle"] is None:
                 return {"error": f"the vehicle did not tip up to 80 deg toward the {side}; check the mass and supports",
                         "assumptions": veh.assumptions}
@@ -126,5 +138,21 @@ class TiltTool(K2Tool):
         hw = _half_width(veh) + 0.5
         scene = [_box("tilt_table", "傾斜台 (table_angle が + のとき左が上、x のまわりに回る)",
                       (min(xs) - r_max - 0.5, -hw, -0.02), (max(xs) + r_max + 0.5, hw, 0.0), angle_channel="table_angle")]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(run["snapshot"]), "scene": scene,
-                "assumptions": veh.assumptions + [f"table surface friction {table_mu:g} so the tyres do not slide"]}
+        notes = veh.assumptions + [f"table surface friction {table_mu:g} so the tyres do not slide"]
+        series, vectors = rec.series(), rec.vectors(run["snapshot"])
+        states = run["log"].states if run["log"] is not None else []
+        if states:
+            # the body's loads at the mounts while the table turns, closer over the last slow turn to the tip
+            series += mount_series(veh, states, [(run["t_slow"] if run["t_slow"] is not None else 0.0, run["t_tip"])])
+            top = mount_peak(series)
+            if top is not None:
+                res.append(top[0])
+                vectors += mount_vectors(veh, state_at(states, top[1]))
+            notes.append(f"mount forces up to the tip ({math.degrees(angles[worst]):.1f} deg) stand for a steady "
+                         f"turn at a_y = tan(tip) g = {demand:.3f} g just before rolling over: on the table gravity "
+                         f"is g cos(theta) down and g sin(theta) across, so they are cos(theta) = "
+                         f"{math.cos(angles[worst]):.3f} times those of that turn (quasi-static)")
+        places = [{"where": f"tipping to the {s}", "quantity": "tilt_angle", "value": math.degrees(angles[s]),
+                   "unit": "deg", "judged": True} for s in sides]
+        return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes,
+                "places": places}

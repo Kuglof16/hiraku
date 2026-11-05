@@ -734,8 +734,109 @@
         },
         "module": {
           "$ref": "#/$defs/module_id"
+        },
+        "joint": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "description": "A bracket's joint to the frame (suspension mounts): the sizes the designer may change and the mount load case (R9) checks: bolts or pins in shear and bearing, the bracket plate in bending, the fillet weld to the frame. The bracket's mass comes from these sizes.",
+          "properties": {
+            "bolt_d_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "bolt or pin diameter"
+            },
+            "bolts": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "bolts or pins carrying the mount force"
+            },
+            "plate_t_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "bracket plate thickness"
+            },
+            "weld_leg_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "fillet weld leg length (throat = 0.7 leg)"
+            }
+          }
+        },
+        "declared": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Sizes the design states for the knowledge rules (rule_check), written by the code that builds the design. The names are the intake vocabulary's declared facts (hiraku.intake.facts.FACTS, scope declared); a new name is added there and here together. A part with joint gives bolt_diameter_mm and weld_throat_mm from joint (bolt_d_mm, 0.7 weld_leg_mm), not here.",
+          "propertyNames": {
+            "enum": [
+              "bend_radius_mm",
+              "hole_edge_mm",
+              "hole_diameter_mm",
+              "bolt_diameter_mm",
+              "thread_engagement_mm",
+              "weld_length_mm",
+              "weld_throat_mm",
+              "clearance_mm",
+              "tolerance_stack_mm",
+              "clearance_hole_mm",
+              "position_tolerance_mm",
+              "closing_gap_mm"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "value",
+              "unit",
+              "basis"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unit": {
+                "const": "mm"
+              },
+              "basis": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Where the value comes from: a design variable (e.g. 'variable rollbar_t'), a standard (edition and table, or 'not checked'), or 'assumption'."
+              }
+            }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "joint"
+            ]
+          },
+          "then": {
+            "properties": {
+              "declared": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "bolt_diameter_mm"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "weld_throat_mm"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "node": {
       "type": "object",
@@ -1255,6 +1356,16 @@
         "source": {
           "type": "string",
           "description": "Where the expected value comes from (closed form, textbook, ...)."
+        },
+        "case_ja": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The case in plain Japanese for the screen, built by the same code as case (its numbers from the same values)."
+        },
+        "source_ja": {
+          "type": "string",
+          "minLength": 1,
+          "description": "source in plain Japanese for the screen, built by the same code as source."
         },
         "code_hash": {
           "type": "string",
@@ -2239,6 +2350,54 @@
               "type": "string"
             }
           }
+        },
+        "hot_spots": {
+          "type": "array",
+          "description": "The model's hottest places, highest utilisation first, whether or not the hand calculation predicted them (contract: CAE の役目). A row over 1 on the load case's criterion quantity makes the load case red even where nothing was predicted.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "where",
+              "quantity",
+              "value",
+              "limit",
+              "utilisation",
+              "predicted"
+            ],
+            "properties": {
+              "where": {
+                "type": "string",
+                "description": "member, part, joint or element group id"
+              },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "The point the value was read at, in design coordinates (mm): on a shell model the point on the weld line where the hot spot was read, on a beam model the point on the member."
+              },
+              "quantity": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/quantity"
+              },
+              "limit": {
+                "$ref": "#/$defs/quantity"
+              },
+              "utilisation": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "The ratio that goes over 1 exactly when the row fails the load case's criterion: value / limit for <= and <, limit / value for >= and >. Where that ratio is undefined or outside 0 to 1000 (a limit or a value at or below 0, or a very small limit), it is written as 1000 when the row fails the criterion and 0 when it passes."
+              },
+              "predicted": {
+                "type": "boolean",
+                "description": "a prediction of this run named this place"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -2313,7 +2472,6 @@
       "type": "object",
       "required": [
         "cause_id",
-        "comparison_id",
         "cause",
         "fix",
         "resolved"
@@ -2361,6 +2519,14 @@
         "tool_decides_reason": {
           "type": "string",
           "description": "Why the hand calculation does not reach the quantity, for people."
+        },
+        "where": {
+          "type": "string",
+          "description": "the place the cause is about (a hot_spot verdict's where, when the cause answers one)"
+        },
+        "verdict_id": {
+          "type": "string",
+          "description": "the hot_spot verdict this cause answers (a red the tool found where nothing was predicted: there is no comparison)"
         }
       },
       "allOf": [
@@ -2436,6 +2602,20 @@
               }
             }
           }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "comparison_id"
+              ]
+            },
+            {
+              "required": [
+                "verdict_id"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -2516,9 +2696,10 @@
             "match",
             "explained_safe_side",
             "unsupported_load",
-            "path_checked"
+            "path_checked",
+            "hot_spot"
           ],
-          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false). path_checked: from a mismatch whose cause has tool_decides true, with the version's load path checked by hand (value = analysis, pass or fail by the criterion)."
+          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false). path_checked: from a mismatch whose cause has tool_decides true, with the version's load path checked by hand (value = analysis, pass or fail by the criterion). hot_spot: the tool found a place the hand calculation did not predict where the criterion's quantity is over the limit (made by analyze from analysis.hot_spots; value = that row, pass false)."
         },
         "value_from": {
           "enum": [
@@ -2533,6 +2714,10 @@
         "margin": {
           "$ref": "#/$defs/quantity",
           "description": "How far the value is from the limit in its own unit, positive when passing."
+        },
+        "where": {
+          "type": "string",
+          "description": "the place a hot_spot verdict (or a per-place one) is about: member, part, joint or element group id"
         }
       },
       "allOf": [
@@ -2540,7 +2725,10 @@
           "if": {
             "properties": {
               "basis": {
-                "const": "unsupported_load"
+                "enum": [
+                  "unsupported_load",
+                  "hot_spot"
+                ]
               }
             },
             "required": [
@@ -2579,6 +2767,32 @@
               "cause_id"
             ],
             "properties": {
+              "value_from": {
+                "const": "analysis"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "hot_spot"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "analysis_id",
+              "where"
+            ],
+            "properties": {
+              "pass": {
+                "const": false
+              },
               "value_from": {
                 "const": "analysis"
               }
@@ -3133,6 +3347,38 @@
             }
           },
           "description": "Parts the check could not be evaluated on, with the values the design lacks."
+        },
+        "checked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "values"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "part_id": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "The part's values the check used."
+              },
+              "unchecked": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Names among values whose source is not confirmed (a part.declared basis of 'not checked' or 'assumption')."
+              }
+            }
+          },
+          "description": "Every part the check was evaluated on, passing or not, with the values it used (hits says which of them break the rule)."
         },
         "pass": {
           "type": "boolean"
@@ -4135,7 +4381,6 @@
     "tool_input.record_cause": {
       "type": "object",
       "required": [
-        "comparison_id",
         "cause",
         "fix"
       ],
@@ -4167,6 +4412,14 @@
         "tool_decides_reason": {
           "type": "string",
           "description": "Why the hand calculation does not reach the quantity."
+        },
+        "verdict_id": {
+          "type": "string",
+          "description": "the hot_spot verdict this cause answers (a red the tool found where nothing was predicted: there is no comparison)"
+        },
+        "where": {
+          "type": "string",
+          "description": "the place the cause is about (the hot_spot verdict's where)"
         }
       },
       "allOf": [
@@ -4201,6 +4454,20 @@
               }
             }
           }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "comparison_id"
+              ]
+            },
+            {
+              "required": [
+                "verdict_id"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -4281,6 +4548,14 @@
               },
               "at_mm": {
                 "$ref": "#/$defs/vec3"
+              },
+              "tool_side": {
+                "type": "string",
+                "description": "The side the hands and tool come from to this fastening, as a direction (e.g. +z): the free side used, or, when no side is free, the first side tried."
+              },
+              "tool_gap_mm": {
+                "type": "number",
+                "description": "Smallest gap between the space the hands and tool need on tool_side and anything else in the way, computed by the assembly tool; negative = how deep something reaches into that space. Shown, not judged (the hands' way rule has no source yet)."
               }
             }
           }
@@ -4420,8 +4695,10 @@
             "gate",
             "wall",
             "ramp",
-            "ground"
-          ]
+            "ground",
+            "circle"
+          ],
+          "description": "circle: a path drawn on the ground (e.g. the turning circle of the outer front wheel or of the body's outermost point): position_mm its centre, size_mm [diameter, diameter, 0]."
         },
         "label": {
           "type": "string"
