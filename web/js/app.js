@@ -28,6 +28,7 @@ import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from ".
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
+import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
@@ -131,6 +132,7 @@ document.body.classList.add(`look-${look}`);
 const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 const bench = new Workbench3D(viewport, look, { quality });
 const modLayer = new ModuleLayer(bench); // modules:
+const nodeView = new NodeMotionView(bench, viewport); // node_motion: the nodes' motion (js/node_motion.js)
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -183,7 +185,7 @@ const PACE_MIN = {
 const motionSpans = new Map(); // analysis_id -> seconds of motion (or null)
 function motionSpanOf(ev) {
   const id = ev.data?.analysis_id;
-  if (!motionSpans.has(id)) motionSpans.set(id, ev.data?.series ? motionSpan(ev.data) : null);
+  if (!motionSpans.has(id)) motionSpans.set(id, (ev.data?.series ? motionSpan(ev.data) : null) ?? nodeMotionPlaySpan(ev.data));
   return motionSpans.get(id);
 }
 function paceAfter(ev) {
@@ -1502,6 +1504,8 @@ function draw() {
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
+  const nm = nodeMotionOf(chain.shown); // node_motion: at the replay's time (nodeMotionTau)
+  nodeView.set(nm, nm ? nodeMotionAt(nm, nodeMotionTau(nm, player.playhead, s.tOf[nm.analysisId])) : null);
   // modules: the round's proposals (or the version built from them) at the replay's time, under the now line
   const rc = renderRoundCard(viewport, tab === "bench" ? roundCardHtml(s, player.playhead) : "");
   if (!rc.hidden) rc.style.top = `${$("now").hidden ? 10 : $("now").offsetTop + $("now").offsetHeight + 8}px`;
@@ -1573,6 +1577,7 @@ window.hiraku = {
   state: () => player.state,
   bench,
   modules: modLayer, // modules: what the module layer draws (for the tests)
+  nodeMotion: nodeView, // node_motion: what the nodes' motion draws (for the tests)
   pets: () => agentPets,
   // Replace what is shown with these events (parsed objects) and stop at t.
   load: (events, t = 0) => {
