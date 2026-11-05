@@ -209,14 +209,20 @@ class LaunchTool(K2Tool):
                                   "rolling_resistance": {"value": 0.0, "unit": "1"}})
         veh = build_vehicle(d)
         motor = Motor(torque=50.0, power=math.inf, gear=8.0, efficiency=1.0)
-        r = launch_run(veh, motor, 5.0, max_time=3.0)
+        v_to = 5.0
+        r = launch_run(veh, motor, v_to, max_time=3.0)
         re = driven_rolling_radius(veh)
         m_eff = veh.m_total + sum(c.j_w / c.rolling_radius ** 2 for c in veh.corners if c.kind == "wheel")
-        expected = 5.0 * m_eff / peak_tractive_force(motor, re)
-        return [_check("constant wheel torque 400 N m, no rolling resistance or drag: time to 5 m/s", "time_to_speed",
-                       expected, r["time"], "s", 1e-2,
+        expected = v_to * m_eff / peak_tractive_force(motor, re)
+        wheel_t = motor.torque * motor.gear
+        return [_check(f"constant wheel torque {wheel_t:g} N m, no rolling resistance or drag: time to {v_to:g} m/s",
+                       "time_to_speed", expected, r["time"], "s", 1e-2,
                        "v = F t / (m + sum J / r^2), F = T i eta / r (launch.peak_tractive_force) with r = K2's "
-                       "effective rolling radius, the loaded radius at the static load")]
+                       "effective rolling radius, the loaded radius at the static load",
+                       case_ja=f"輪に一定の {wheel_t:g} N·m を掛けて (転がりの抵抗と空気の抵抗はなし)、"
+                               f"{v_to:g} m/s になるまでの時間",
+                       source_ja="速さ = 押す力 × 時間 / (車の重さ + 輪の回る重さの分)。押す力 = モーターのトルク × ギア比 × "
+                                 "効率 / 輪の転がる半径 (半径は、止まっているときの荷重で沈んだ半径)")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)

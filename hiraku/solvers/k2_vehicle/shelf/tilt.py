@@ -76,12 +76,18 @@ class TiltTool(K2Tool):
         veh = build_vehicle(d)
         r = tilt_sweep(veh, left_up=True, **CHECK_TILT)
         got = None if r["tip_angle"] is None else math.degrees(r["tip_angle"])
-        k_roll = 4.0 * 20e3 * 0.6 ** 2
-        expected = math.degrees(tilt_closed_form(500.0, 0.5, 80.0, 0.3, 1.2, k_roll, 4.0 * 20e3))
-        return [_check("tilt table, springs 20 N/mm (roll stiffness 28.8 kN m/rad), roll axis on the ground", "tilt_angle",
-                       expected, got, "deg", 2e-3,
+        k_w = 20e3
+        k_roll = 4.0 * k_w * 0.6 ** 2
+        expected = math.degrees(tilt_closed_form(500.0, 0.5, 80.0, 0.3, 1.2, k_roll, 4.0 * k_w))
+        return [_check(f"tilt table, springs {k_w / 1e3:g} N/mm (roll stiffness {k_roll / 1e3:g} kN m/rad), roll axis on "
+                       "the ground", "tilt_angle", expected, got, "deg", 2e-3,
                        "body rises m_s g (1 - cos theta) / k_heave; body and carriers roll k phi = g S sin(theta + phi), "
-                       "S = m_s h_s + m_u h_u; tip when cos(theta)(t/2 - S sin(phi)/M) = sin(theta) S cos(phi)/M")]
+                       "S = m_s h_s + m_u h_u; tip when cos(theta)(t/2 - S sin(phi)/M) = sin(theta) S cos(phi)/M",
+                       case_ja=f"ばねのある車 (ばね {k_w / 1e3:g} N/mm、傾きにくさ {k_roll / 1e3:g} kN·m/rad、傾く軸は地面の上) "
+                               "を傾斜台に載せて倒れる角度",
+                       source_ja="台が傾くと車体はばねで浮き、車体と輪は傾きにくさに応じて傾く。下の輪の接地線まわりの"
+                                 "回る力が 0 になる角度: cos θ (t/2 - S sin φ / M) = sin θ S cos φ / M、"
+                                 "S = 車体の重さ × 重心の高さ + 輪の重さ × 輪の高さ")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         table_mu = self.q(lp, "table_mu", "1")

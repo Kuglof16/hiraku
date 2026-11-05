@@ -93,10 +93,15 @@ class CrosswindTool(K2Tool):
         expected = math.sqrt(w * 1.2 / (RHO_AIR * 1.0 * veh.side_area * veh.side_cp[2]))
         src = "moment about the downwind contact line: 1/2 rho C_y A v^2 h_cp = W t / 2"
         return [_check(f"rigid vehicle at rest, side area {veh.side_area:.3f} m^2 at {veh.side_cp[2]:.3f} m",
-                       "critical_wind_speed", expected, got, "m/s", 5e-3, src),
+                       "critical_wind_speed", expected, got, "m/s", 5e-3, src,
+                       case_ja=f"止まっているサスペンションの無い車 (横から見た面積 {veh.side_area:.3f} m²、"
+                               f"風を受ける中心の高さ {veh.side_cp[2]:.3f} m) の風上の輪が浮く風速",
+                       source_ja="風下の輪の接地線まわりの回る力のつり合い: 1/2 ρ C_y A v² × 風の中心の高さ = 車の重さ × 輪の幅 / 2"),
                 _check("wind from the left - wind from the right (bit for bit)", "critical_wind_speed_difference", 0.0,
                        None if got is None or got_r is None else got - got_r, "m/s", 0.0, "symmetry",
-                       passed=got is not None and got == got_r)]
+                       passed=got is not None and got == got_r,
+                       case_ja="左からの風と右からの風で、輪が浮く風速の差",
+                       source_ja="左右で 1 ビットも違わない (形が左右対称なので)")]
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)

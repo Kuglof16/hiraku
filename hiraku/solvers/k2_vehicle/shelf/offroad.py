@@ -69,22 +69,31 @@ class OffroadRollTool(K2Tool):
         f, pxx = welch(z, fs=1.0 / dx, nperseg=4096)
         band = (f >= 0.05) & (f <= 2.0)
         ratio = float(np.mean(pxx[band] / iso8608_psd(f[band], "C")))
+        gd = ISO8608_GD_N0["C"]
         out = [_check("generated ISO 8608 class C track, Welch PSD / G_d(n0)(n/n0)^-2 over 0.05-2 cycle/m", "psd_ratio",
                       1.0, ratio, "1", 0.10, "G_d(n) = G_d(n0) (n / n0)^-w, n0 = 0.1 cycle/m, w = 2, "
-                      f"G_d(n0) = {ISO8608_GD_N0['C']:g} m^3 (class C, not checked against the ISO text)")]
+                      f"G_d(n0) = {gd:g} m^3 (class C, not checked against the ISO text)",
+                      case_ja="作った ISO 8608 クラス C の凸凹の路面: 凸凹の細かさごとの強さ (Welch の方法で測る) が、"
+                              "決めた形と合うか (0.05〜2 回/m の平均の比)",
+                      source_ja=f"ISO 8608 の路面の形 G_d(n) = G_d(n0) (n / n0)^-2、n0 = 0.1 回/m、"
+                                f"クラス C は G_d(n0) = {gd:g} m³ (ISO の本文で確かめていない)")]
         d = box_design(mass=500.0, cg_x=-0.9, cg_z=0.5, track=1.2, susp="rigid",
                        variables={"tyre_stiffness": {"value": 10000.0, "unit": "N/mm"},
                                   "tire_mu": {"value": 2.0, "unit": "1"}}, name="side slope check, rigid")
         veh = build_vehicle(d)
         sim = new_sim(veh, settle_s=1.0)
-        beta = math.radians(15.0)
+        deg, t = 15.0, 1.2
+        beta = math.radians(deg)
         _ramp_gravity(sim, side_gravity, beta)
         up = sum(sim.out["ntot"][i] for i in _side_ids(sim, True))
         w = veh.m_total * G0
         h = float(veh.cg_total[2])
-        expected = w * (math.cos(beta) * 0.6 - math.sin(beta) * h) / 1.2
-        out.append(_check("rigid vehicle at rest on a 15 deg side slope: uphill wheel loads", "uphill_load", expected, up,
-                          "N", 5e-3, "moment about the downhill contact line: W (cos b t/2 - sin b h) / t"))
+        expected = w * (math.cos(beta) * t / 2.0 - math.sin(beta) * h) / t
+        out.append(_check(f"rigid vehicle at rest on a {deg:g} deg side slope: uphill wheel loads", "uphill_load", expected,
+                          up, "N", 5e-3, "moment about the downhill contact line: W (cos b t/2 - sin b h) / t",
+                          case_ja=f"サスペンションの無い車が {deg:g}° の横の斜面に止まっているときの、上の側の輪の荷重の合計",
+                          source_ja="下の側の輪の接地線まわりの回る力のつり合い: "
+                                    "車の重さ × (cos β × 輪の幅 / 2 - sin β × 重心の高さ) / 輪の幅"))
         return out
 
     def _run(self, design: dict, lp: dict) -> dict:
