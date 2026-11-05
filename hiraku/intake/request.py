@@ -264,7 +264,24 @@ def _file(d: Record, res: Any) -> Record:
             rf["beyond"] = list(own["beyond"])
     rf.update(d["limits"])
     if d["exclude"]:  # the catalog runs the tests of the domains left, and no others
-        tests = [t for t in tests if t in kept] if tests else kept
+        if tests:
+            # a test the file lists but the flags do not pick (R1s) stays unless its own domain was taken off
+            from hiraku.catalog import load_catalog
+
+            catalog = load_catalog()
+            gone = set(d["exclude"])
+
+            def stays(t: str) -> bool:
+                if t in kept:
+                    return True
+                try:
+                    return catalog.test(t)["domain"] not in gone
+                except KeyError:
+                    return False
+
+            tests = [t for t in tests if stays(t)]
+        else:
+            tests = kept
     if tests:
         rf["tests"] = list(tests)
     if "beyond" in rf and "tests" in rf:
