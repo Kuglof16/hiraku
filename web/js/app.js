@@ -8,7 +8,8 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?on=joints      turn overlays on at load (joints: the joint marks, off by default; A7 follows it too)
+//   ?on=modules     turn overlays on at load (modules, spaces: off by default)
+//   ?off=joints     turn overlays off at load (joints: the joint marks, on by default; A7 follows it too)
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 //   ?tabs=A1:0,A2:44.5,bench:80
 //                   the tabs on the replay's time: from t seconds, that tab (so one URL films ① → ② → ③;
@@ -85,7 +86,7 @@ const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false }, // joints: off at first; modules: modules, spaces (modules.js)
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -107,7 +108,7 @@ const ui = {
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
-// joints, modules: ?on=joints,modules,spaces turns those on at load (modules and spaces take the contour's place)
+// modules: ?on=modules,spaces turns those on at load (?on=joints is still read, joints being on at first) (modules and spaces take the contour's place)
 for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
 if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
 
