@@ -679,6 +679,13 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .draftbar .why { color: var(--muted); font-size: 13px; }
 .draftbar .confirm, .draftbar .err { color: var(--red); font-weight: 600; }
 .draftbar .busy { color: var(--blue); }
+/* a way to start: its button and one line on what it is */
+.draftbar .way { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+/* a start on its way (app.js draftStart): the buttons greyed, the line and the seconds */
+.draftbar.starting .way button { opacity: 0.45; cursor: progress; }
+.draftbar .starting { flex-basis: 100%; color: var(--blue); }
+.draftbar .starting .secs { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.draftbar .err a { font-weight: 600; }
 .runlist .new-request { font-weight: 700; color: var(--ink); }
 .grid-head { display: flex; align-items: center; gap: 20px; font-size: 18px; flex-wrap: nowrap; min-width: 0; }
 .grid-head h2 { font-size: 28px; margin: 0; white-space: nowrap; }

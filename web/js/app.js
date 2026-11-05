@@ -206,7 +206,7 @@ const intakeApi = {
   // answer goes to the run's folder as hearing.answer.json, which the run waits for; a
   // dropped file goes to its knowledge/ with a request in its inbox/ (the run imports it).
   get answerHearing() {
-    if (draft) return draft.state && !draft.busy ? draftAnswer : undefined;
+    if (draft) return draft.state && !draft.busy && !draft.starting ? draftAnswer : undefined;
     return runGoing() ? answerHearing : undefined;
   },
   get dropFile() {
@@ -214,16 +214,16 @@ const intakeApi = {
   },
   // a new request (?new=1): A1 sends and changes it, A2 answers it, all on the server's draft
   get send() {
-    return draft && !draft.busy ? draftSend : undefined;
+    return draft && !draft.busy && !draft.starting ? draftSend : undefined;
   },
   get editFlags() {
-    return draft?.state && !draft.busy ? (flags) => draftChange({ flags }) : undefined;
+    return draft?.state && !draft.busy && !draft.starting ? (flags) => draftChange({ flags }) : undefined;
   },
   get exclude() {
-    return draft?.state && !draft.busy ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
+    return draft?.state && !draft.busy && !draft.starting ? (domain) => draftChange({ exclude: [...draft.excluded, domain] }) : undefined;
   },
   get setLimits() {
-    return draft?.state && !draft.busy ? (limits) => draftChange({ limits }) : undefined;
+    return draft?.state && !draft.busy && !draft.starting ? (limits) => draftChange({ limits }) : undefined;
   },
 };
 
@@ -245,16 +245,27 @@ function draftEvents() {
   return list.map((e, i) => ({ seq: i, t: 0, ts: "", run_id: "request", ...e }));
 }
 
+// A refused call throws an Error with the server's English message, its status and body (for
+// the screen to say it in Japanese; the English stays for the record, e.g. in a title).
 async function postRequest(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const got = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(got.error ?? `${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(got.error ?? `${res.status}`), { status: res.status, body: got });
   return got;
+}
+
+// 409 from /api/launch (launch.py: a run started here is still going): the words for people, with
+// a link to that run when the server knows its id yet (null until the run prints its folder).
+function goingHtml(e) {
+  if (e?.status !== 409 || !("running_run_id" in (e.body ?? {}))) return null;
+  const rid = e.body.running_run_id;
+  const link = rid ? ` <a class="going-run" href="${withDev(`?run=${encodeURIComponent(rid)}`)}">その運転を開く</a>` : ` <a class="going-run" href="${withDev("?list=1")}">一覧で見る</a>`;
+  return `<span class="err" title="${esc(e.message)}">いま走っている運転があります。終わってから始めてください。${link}</span>`;
 }
 
 // One call at a time; the bar says what is going on, and an error stays there in its words.
 async function draftCall(busy, fn) {
-  Object.assign(draft, { busy, error: "" });
+  Object.assign(draft, { busy, error: "", errorHtml: "" });
   renderDraft();
   try {
     await fn();
@@ -304,10 +315,31 @@ async function draftStart(mode) {
     return;
   }
   draft.confirm = false;
-  await draftCall("走らせています…", async () => {
+  if (draft.starting) return; // one start at a time (the buttons are disabled meanwhile)
+  // /api/launch returns once the run has printed its folder, after the tools it uses are
+  // checked; until then the bar says so, counts the seconds, and the buttons cannot be pressed.
+  // On success they stay so while the page moves to the run.
+  Object.assign(draft, { starting: { mode, at: performance.now() }, error: "", errorHtml: "" });
+  renderDraft();
+  const tick = setInterval(renderStartingSeconds, 1000);
+  try {
     const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
     location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
-  });
+  } catch (e) {
+    clearInterval(tick);
+    draft.starting = null;
+    draft.errorHtml = goingHtml(e) ?? "";
+    draft.error = draft.errorHtml ? "" : `始められませんでした: ${e.message ?? e}`;
+    renderDraft();
+  }
+}
+
+function startingSeconds() {
+  return draft?.starting ? Math.floor((performance.now() - draft.starting.at) / 1000) : 0;
+}
+function renderStartingSeconds() {
+  const el = document.querySelector("#draftbar .starting .secs");
+  if (el) el.textContent = `${startingSeconds()} 秒`;
 }
 
 // The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
@@ -322,15 +354,24 @@ function renderDraft() {
   if (draft.busy) body = `<span class="busy">${esc(draft.busy)}</span>`;
   else if (d?.ready && d.designable === false) body = `<span class="err">この製品の設計の作り方がまだ無いので、走らせられません</span>`;
   else if (d?.ready) {
+    // while a start is on its way (draftStart) both buttons stay, disabled, with what is going on
+    const st = draft.starting;
+    const off = st ? " disabled" : "";
+    // what each way is, in one line (the run list's words for them: DRIVEN_JA)
     const scripted =
-      `<button data-start="scripted">台本で始める (Claude は呼ばない)</button>` +
-      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`);
+      `<span class="way"><button data-start="scripted"${off}>台本で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`) +
+      `</span>`;
+    const claudeWhy = `<span class="why">Claude が考えて進めます。費用がかかります</span>`;
     const claude = !keyed
-      ? `<button disabled>Claude で始める</button><span class="why">HIRAKU を起こした窓に ${esc(draft.keyName ?? "ANTHROPIC_API_KEY")} が無い</span>`
-      : draft.confirm
+      ? `<span class="way"><button disabled title="${esc(`${draft.keyName ?? "ANTHROPIC_API_KEY"} が HIRAKU を起こした窓に無い`)}">Claude で始める</button>${claudeWhy}<span class="why">Claude で始めるには準備が要ります (<a class="readme" href="${README_RUN}" target="_blank" rel="noopener">くわしく</a>)</span></span>`
+      : draft.confirm && !st
         ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
-        : `<button data-start="claude">Claude で始める (費用の上限 ${usd})</button>`;
-    body = `<b>要件がそろいました</b>${scripted}${claude}`;
+        : `<span class="way"><button data-start="claude"${off}>Claude で始める (費用の上限 ${usd})</button>${claudeWhy}</span>`;
+    const starting = st
+      ? `<span class="starting" role="status"><b>${st.mode === "claude" ? "Claude で" : "台本で"}運転を始めています。</b>最初は、使うツールの確かめに時間がかかります (数十秒)。<span class="secs">${startingSeconds()} 秒</span></span>`
+      : "";
+    body = `<b>要件がそろいました</b>${scripted}${claude}${starting}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
   else if (draft.state) body = `<span>分野が決まりました。ヒアリングのタブで答えるか、標準の値のまま進めてください</span>`;
   else
@@ -339,7 +380,8 @@ function renderDraft() {
         ? `<span>デモ「${esc(draft.demoTitle)}」の依頼の文を入れました。直してもかまいません。送ると分野を選びます</span>`
         : `<span>依頼のタブで、作りたいものを書いて送ってください</span>`) +
       (keyed ? `<label><input type="checkbox" data-use-claude="1" ${draft.useClaude ? "checked" : ""}> Claude に分野と理由を書かせる (費用は最大 $0.5)</label>` : "");
-  bar.innerHTML = body + (draft.error ? `<span class="err">${esc(draft.error)}</span>` : "");
+  bar.innerHTML = body + (draft.errorHtml || (draft.error ? `<span class="err">${esc(draft.error)}</span>` : ""));
+  bar.classList.toggle("starting", !!draft.starting);
   intake?.update();
   fillPrefill();
 }
@@ -1914,10 +1956,12 @@ async function launch(file, mode) {
   try {
     const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
     const out = await res.json();
-    if (!res.ok) throw new Error(out.error ?? String(res.status));
+    if (!res.ok) throw Object.assign(new Error(out.error ?? String(res.status)), { status: res.status, body: out });
     location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
   } catch (e) {
-    renderLaunch(`走らせられなかった: ${e.message ?? e}`);
+    // a run started here still going (409): in words, the list's own line links to it
+    const going = e.status === 409 && "running_run_id" in (e.body ?? {});
+    renderLaunch(going ? "いま走っている運転があります。終わってから始めてください。" : `走らせられなかった: ${e.message ?? e}`);
   }
 }
 

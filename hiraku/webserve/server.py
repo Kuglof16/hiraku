@@ -538,7 +538,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send_json(self.launcher.start(body.get("requirements"), body.get("mode"), body.get("request")))
         except LaunchError as e:
-            self._send_json({"error": str(e)}, HTTPStatus(e.status))
+            self._send_json({"error": str(e), **e.extra}, HTTPStatus(e.status))
 
     def do_HEAD(self) -> None:  # noqa: N802 (stdlib name)
         # Answer like GET without a body (used by tools that probe the server).
