@@ -151,6 +151,20 @@ UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from 
 PATH_CHECKED = "path_checked"  # the tool's value decides after the load path was checked by hand (contract 2fc1006)
 HOT_SPOT = "hot_spot"  # a place the hand calculation did not predict, over the limit (contract d761e77)
 SPIKE = "尖り"  # a hot_spots note on a point that keeps rising with the mesh: listed, not red (contract cc6f396)
+UTIL_CAP = 1000.0  # a hot_spots utilisation is written within 0 to 1000 (contract 46306b5)
+
+
+def utilisation(value, limit, op) -> float | None:
+    """A hot_spots row's utilisation (contract 46306b5): the ratio that goes over 1 exactly when the row fails
+    the criterion, value / limit for <= and <, limit / value for >= and >; where it is undefined (a limit or a
+    value at or below 0) or outside 0 to 1000, 1000 when failing and 0 when passing. None: not numbers or no op."""
+    if not isinstance(value, (int, float)) or not isinstance(limit, (int, float)) or op not in OPS:
+        return None
+    num, den = (value, limit) if op in ("<=", "<") else (limit, value)
+    ratio = num / den if den > 0 and num >= 0 else None
+    if ratio is None or not 0 <= ratio <= UTIL_CAP:
+        return 0.0 if OPS[op](value, limit) else UTIL_CAP
+    return ratio
 MOUNT_TEST = "R9"  # suspension mounts (contract 40645e0): a bracket's bolts, plate and weld at the mount force
 MOUNT_QUANTITIES = ("bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
                     "weld_utilisation")
@@ -1108,18 +1122,23 @@ class RunChecker:
             utils = [r.get("utilisation") for r in rows]
             if all(isinstance(u, (int, float)) for u in utils) and utils != sorted(utils, reverse=True):
                 self.error("analysis.hot_spots", w, f"{aid} hot_spots are not highest utilisation first")
-            for r in rows:
-                val, lim = (r.get("value") or {}), (r.get("limit") or {})
-                if (isinstance(val.get("value"), (int, float)) and isinstance(lim.get("value"), (int, float))
-                        and lim["value"] != 0 and val.get("unit") == lim.get("unit")
-                        and isinstance(r.get("utilisation"), (int, float))
-                        and not _close(r["utilisation"], abs(val["value"] / lim["value"]))):
-                    self.error("analysis.hot_spots", w, f"{aid} {r.get('where')} utilisation {r['utilisation']} "
-                                                        f"but {val['value']} / {lim['value']}")
             crit = (self.lc(a.get("load_case_id"), a.get("design_version")) or {}).get("criterion")
-            if a.get("status") != "ok" or not isinstance(crit, dict):
+            q = (JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
+                 if isinstance(crit, dict) else None)
+            for r in rows:
+                u = r.get("utilisation")
+                if isinstance(u, (int, float)) and not 0 <= u <= UTIL_CAP:
+                    self.error("analysis.hot_spots", w, f"{aid} {r.get('where')} utilisation {u} is outside 0 to {UTIL_CAP:g}")
+                val, lim = (r.get("value") or {}).get("value"), (r.get("limit") or {}).get("value")
+                if (q is None or r.get("quantity") not in (q, crit.get("quantity")) or not isinstance(u, (int, float))
+                        or (r.get("value") or {}).get("unit") != (r.get("limit") or {}).get("unit")):
+                    continue
+                want = utilisation(val, lim, crit.get("op"))
+                if want is not None and not _close(u, want):
+                    self.error("analysis.hot_spots", w, f"{aid} {r.get('where')} utilisation {u} but {want:.6g} "
+                                                        f"({val} {crit.get('op')} {lim}, contract 46306b5)")
+            if a.get("status") != "ok" or q is None:
                 continue
-            q = JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
             for r in rows:
                 if (r.get("quantity") == q and r.get("predicted") is False and SPIKE not in (r.get("note") or "")
                         and isinstance(r.get("utilisation"), (int, float)) and r["utilisation"] > 1

@@ -767,6 +767,18 @@ class CheckRun(unittest.TestCase):
         self.assertFlags(self._hot_spot(value={"value": 190.0, "unit": "MPa"}), "verdict.values")
         self.assertFlags(self._hot_spot(row={"utilisation": 1.1}), "analysis.hot_spots")  # not 200 / limit
 
+    def test_utilisation_goes_over_1_when_the_criterion_fails(self):
+        # contract 46306b5: value / limit for <= and <, limit / value for >= and >; 1000 failing, 0 passing
+        # where the ratio is undefined or outside 0 to 1000
+        self.assertAlmostEqual(cr.utilisation(200.0, 100.0, "<="), 2.0)
+        self.assertAlmostEqual(cr.utilisation(15.0, 20.0, ">="), 20.0 / 15.0)  # a critical wind speed short of 20
+        self.assertAlmostEqual(cr.utilisation(25.0, 20.0, ">"), 0.8)
+        self.assertEqual(cr.utilisation(0.0, 20.0, ">="), 1000.0)  # undefined and failing
+        self.assertEqual(cr.utilisation(-5.0, 0.0, "<="), 0.0)  # a limit of 0, passing
+        self.assertEqual(cr.utilisation(1e-3, 1e-7, "<="), 1000.0)  # past 1000, failing
+        self.assertIsNone(cr.utilisation(1.0, 2.0, "=="))
+        self.assertFlags(self._hot_spot(row={"utilisation": 1000.5}), "analysis.hot_spots")
+
     def test_an_unpredicted_row_over_the_limit_needs_its_verdict(self):
         ev = self._hot_spot()
         ev = [e for e in ev if not (e["kind"] == "verdict.recorded" and e["data"]["verdict_id"] == "ver-0002")]
