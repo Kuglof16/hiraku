@@ -9,14 +9,13 @@ is missing and what to call next, because Claude reads it and acts on it.
 from __future__ import annotations
 
 import re
-from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
 from hiraku import contract
 from hiraku.contract.protocols import HOOK_RULES
 from hiraku.tools.context import RunContext
-from hiraku.tools.judge import beyond_text, held_cases, latest_verdicts
+from hiraku.tools.judge import beyond_text, held_cases, latest_verdicts, reading  # noqa: F401 (reading: hooks use rules.reading)
 from hiraku.catalog import is_beyond
 from hiraku.tools.shelf import NOT_CHECKED, STAGE_NAMES_JA, load_case_stage, tool_stage
 
@@ -309,12 +308,6 @@ def check_call(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | No
             return check_hk6(ctx, tool, args, agent)
         check = CHECKS.get(tool)
         return check(ctx, args) if check else None
-
-
-def reading(ctx: RunContext) -> Any:
-    """The store's reading() (each record file read once, the records not to be changed), if it has one."""
-    got = getattr(ctx.store, "reading", None)
-    return got() if got is not None else nullcontext()
 
 
 def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
