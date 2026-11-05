@@ -31,7 +31,9 @@ _CURRENT = (0, 0, 0, 1, 0, 0)
 _TEMP = (0, 0, 0, 0, 1, 0)
 _THERMAL_R = (-2, -1, 3, 0, 1, 0)
 
-STANDARD_GRAVITY = 9.80665  # m/s^2, the defined value of 1 g (3rd CGPM, 1901; not checked in this repository)
+# m/s^2, the defined value of 1 g (3rd CGPM, 1901; ISO 80000-3; also listed by NIST CODATA,
+# https://physics.nist.gov/cgi-bin/cuu/Value?gn). Not checked against those texts in this repository.
+STANDARD_GRAVITY = 9.80665
 
 # unit -> (factor to SI, offset to SI, dimension)
 UNIT_TABLE: dict[str, tuple[float, float, tuple[int, ...]]] = {

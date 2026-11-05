@@ -6988,6 +6988,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7023,6 +7041,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7058,6 +7094,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7093,6 +7147,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7128,6 +7200,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7163,6 +7253,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7198,6 +7306,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7233,6 +7359,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7268,6 +7412,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7303,6 +7465,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7338,6 +7518,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7373,6 +7571,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7408,6 +7624,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7443,6 +7677,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7478,6 +7730,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7513,6 +7783,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7644,6 +7932,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7679,6 +7985,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7714,6 +8038,24 @@ export const DEMOS = {
       "carried_by": [
        "LAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7749,6 +8091,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7784,6 +8144,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7819,6 +8197,24 @@ export const DEMOS = {
       "carried_by": [
        "RAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7854,6 +8250,24 @@ export const DEMOS = {
       "carried_by": [
        "LBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7889,6 +8303,24 @@ export const DEMOS = {
       "carried_by": [
        "RBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -7958,6 +8390,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -7999,6 +8438,13 @@ export const DEMOS = {
        "RAp2",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -8040,6 +8486,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -8081,6 +8534,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1405.0,
@@ -8122,6 +8582,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -8163,6 +8630,13 @@ export const DEMOS = {
        "LB",
        "LE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -8204,6 +8678,13 @@ export const DEMOS = {
        "RB",
        "RE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -8245,6 +8726,13 @@ export const DEMOS = {
        "LF",
        "RF"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         400.0,
@@ -8286,6 +8774,13 @@ export const DEMOS = {
        "LAp1",
        "LAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -8327,6 +8822,13 @@ export const DEMOS = {
        "RAp1",
        "RAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -8368,6 +8870,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -580.0,
@@ -8409,6 +8918,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1970.0,
@@ -8450,6 +8966,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -8491,6 +9014,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1320.0,
@@ -8532,6 +9062,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -8573,6 +9110,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -8614,6 +9158,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -9628,7 +10179,8 @@ export const DEMOS = {
       "nu": 0.3,
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
-      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "tensile_MPa": 400.0,
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; tensile: JIS G 3466 minimum tensile strength for STKR400 (400 MPa, the grade's name; used by R9's weld and bearing checks); E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "ss400": {
@@ -14408,6 +14960,9 @@ export const DEMOS = {
       ],
       "variables": [
        "front_spring_rate",
+       "mount_bolt_d",
+       "mount_plate_t",
+       "mount_weld_leg",
        "rear_spring_rate",
        "suspension_travel",
        "wheel_radius",
@@ -16182,6 +16737,9 @@ export const DEMOS = {
      "tower_b": "塔とダッシュの管の幅",
      "tower_t": "塔とダッシュの管の厚さ",
      "front_spring_rate": "前のばねの硬さ",
+     "mount_bolt_d": "サスペンションの取付の金具のピンの径",
+     "mount_plate_t": "サスペンションの取付の金具の板厚",
+     "mount_weld_leg": "サスペンションの取付の金具の溶接の脚長",
      "rear_spring_rate": "後ろのばねの硬さ",
      "suspension_travel": "車輪の上下の動く量",
      "wheel_radius": "タイヤの半径",
@@ -22731,7 +23289,7 @@ export const DEMOS = {
      {
       "req_key": "Q30",
       "name": "人数と荷重の組み合わせ",
-      "text": "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。",
+      "text": "どの組み合わせを見ますか (空車・1 人だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。",
       "ask": "must",
       "allow_other": true,
       "choices": [
@@ -22740,7 +23298,7 @@ export const DEMOS = {
         "value": "empty"
        },
        {
-        "label": "運転者だけ",
+        "label": "1 人だけ",
         "value": "driver"
        },
        {
@@ -24671,7 +25229,7 @@ export const DEMOS = {
      {
       "req_key": "Q40",
       "name": "積載",
-      "text": "載せる荷の重さの上限は (乗る人とは別に数えてよいか、も教えてください)。",
+      "text": "載せる荷の重さの上限は。",
       "ask": "must",
       "allow_other": true
      },
@@ -31803,6 +32361,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -31838,6 +32414,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -31873,6 +32467,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -31908,6 +32520,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -31943,6 +32573,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -31978,6 +32626,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32013,6 +32679,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32048,6 +32732,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32083,6 +32785,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32118,6 +32838,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32153,6 +32891,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32188,6 +32944,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32223,6 +32997,24 @@ export const DEMOS = {
       "carried_by": [
        "LAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32258,6 +33050,24 @@ export const DEMOS = {
       "carried_by": [
        "RAu2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32293,6 +33103,24 @@ export const DEMOS = {
       "carried_by": [
        "LB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32328,6 +33156,24 @@ export const DEMOS = {
       "carried_by": [
        "RB"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32459,6 +33305,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32494,6 +33358,24 @@ export const DEMOS = {
       "carried_by": [
        "LAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32529,6 +33411,24 @@ export const DEMOS = {
       "carried_by": [
        "LAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32564,6 +33464,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl1"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32599,6 +33517,24 @@ export const DEMOS = {
       "carried_by": [
        "RAl2"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32634,6 +33570,24 @@ export const DEMOS = {
       "carried_by": [
        "RAd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32669,6 +33623,24 @@ export const DEMOS = {
       "carried_by": [
        "LBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32704,6 +33676,24 @@ export const DEMOS = {
       "carried_by": [
        "RBd"
       ],
+      "joint": {
+       "bolt_d_mm": 10.0,
+       "bolts": 1,
+       "plate_t_mm": 3.2,
+       "weld_leg_mm": 3.0
+      },
+      "declared": {
+       "hole_diameter_mm": {
+        "value": 12.0,
+        "unit": "mm",
+        "basis": "variable mount_bolt_d + 2 mm, the normal clearance of EN 1090-2 Table 11 (not checked)"
+       },
+       "hole_edge_mm": {
+        "value": 14.4,
+        "unit": "mm",
+        "basis": "assumption: 1.2 d0, the smallest end and edge distance R9's bearing check takes (EN 1993-1-8 Table 3.3, not checked)"
+       }
+      },
       "system": "frame",
       "connects_to": [
        {
@@ -32773,6 +33763,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -32814,6 +33811,13 @@ export const DEMOS = {
        "RAp2",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -527.5,
@@ -32855,6 +33859,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -32896,6 +33907,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1405.0,
@@ -32937,6 +33955,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -32978,6 +34003,13 @@ export const DEMOS = {
        "LB",
        "LE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -33019,6 +34051,13 @@ export const DEMOS = {
        "RB",
        "RE"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2220.0,
@@ -33060,6 +34099,13 @@ export const DEMOS = {
        "LF",
        "RF"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         400.0,
@@ -33101,6 +34147,13 @@ export const DEMOS = {
        "LAp1",
        "LAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -33142,6 +34195,13 @@ export const DEMOS = {
        "RAp1",
        "RAt1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         285.0,
@@ -33183,6 +34243,13 @@ export const DEMOS = {
        "LAp2",
        "LS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -580.0,
@@ -33224,6 +34291,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1970.0,
@@ -33265,6 +34339,13 @@ export const DEMOS = {
        "LB",
        "RB"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -2020.0,
@@ -33306,6 +34387,13 @@ export const DEMOS = {
        "LS2",
        "RS2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -1320.0,
@@ -33347,6 +34435,13 @@ export const DEMOS = {
        "LS1",
        "RS1"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -770.0,
@@ -33388,6 +34483,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -33429,6 +34531,13 @@ export const DEMOS = {
        "RAp2",
        "RAt2"
       ],
+      "declared": {
+       "weld_length_mm": {
+        "value": 62.832,
+        "unit": "mm",
+        "basis": "shape: the perimeter of the 20 mm strut's section welded to the member (kit/joints.STRUT_D_MM, HIRAKU's choice)"
+       }
+      },
       "box": {
        "center_mm": [
         -319.68199399802495,
@@ -34443,7 +35552,8 @@ export const DEMOS = {
       "nu": 0.3,
       "density_kg_m3": 7850.0,
       "yield_MPa": 245.0,
-      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+      "tensile_MPa": 400.0,
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; tensile: JIS G 3466 minimum tensile strength for STKR400 (400 MPa, the grade's name; used by R9's weld and bearing checks); E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
       "verified": false
      },
      "ss400": {
@@ -39223,6 +40333,9 @@ export const DEMOS = {
       ],
       "variables": [
        "front_spring_rate",
+       "mount_bolt_d",
+       "mount_plate_t",
+       "mount_weld_leg",
        "rear_spring_rate",
        "suspension_travel",
        "wheel_radius",
@@ -40997,6 +42110,9 @@ export const DEMOS = {
      "tower_b": "塔とダッシュの管の幅",
      "tower_t": "塔とダッシュの管の厚さ",
      "front_spring_rate": "前のばねの硬さ",
+     "mount_bolt_d": "サスペンションの取付の金具のピンの径",
+     "mount_plate_t": "サスペンションの取付の金具の板厚",
+     "mount_weld_leg": "サスペンションの取付の金具の溶接の脚長",
      "rear_spring_rate": "後ろのばねの硬さ",
      "suspension_travel": "車輪の上下の動く量",
      "wheel_radius": "タイヤの半径",

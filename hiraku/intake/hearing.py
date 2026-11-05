@@ -83,6 +83,21 @@ class Plan:
     present: list[str] = field(default_factory=list)  # keys the file already has
 
 
+def _question_text(it: Record, flags: dict[str, bool]) -> str:
+    """The item's question; `question_if: {when, text}` replaces it when the flags say so (a question about the people
+    on a vehicle or a bed is not asked of a table)."""
+    alt = it.get("question_if")
+    return alt["text"] if alt and applies(alt["when"], flags) else it["question"]
+
+
+def _choices_for(it: Record, flags: dict[str, bool]) -> list[Record] | None:
+    """The item's choices; `choices_if: {when, labels}` renames some of them for these flags (values stay)."""
+    own, alt = it.get("choices"), it.get("choices_if")
+    if own and alt and applies(alt["when"], flags):
+        return [{**c, "label": alt["labels"].get(str(c["value"]), c["label"])} for c in own]
+    return own
+
+
 def plan_hearing(
     req: Record,
     *,
@@ -123,11 +138,11 @@ def plan_hearing(
         q: Record = {
             "req_key": key,
             "name": it["name"],
-            "text": (wording.get(key) or it["question"]).strip(),
+            "text": (wording.get(key) or _question_text(it, flags)).strip(),
             "ask": it["ask"],
             "allow_other": True,
         }
-        offered = choices.get(key) or it.get("choices")
+        offered = choices.get(key) or _choices_for(it, flags)
         if offered:
             q["choices"] = [dict(c) for c in offered]
         if default is not None and it["ask"] == "confirm":

@@ -154,11 +154,35 @@ def _load_case_of(ctx: RunContext, ref: str, load_case: Record) -> str:
     return (feeding or of_test)[0]["load_case_id"]
 
 
+def _design(ctx: RunContext) -> tuple[Any, Record]:
+    """(stamp, the version's design) from the store's shared copy (read only), or a fresh read (stamp None)."""
+    shared = getattr(ctx.store, "design_shared", None)
+    return shared() if shared else (None, ctx.store.design())
+
+
+_SUMMARIES: dict[tuple, Record] = {}  # (store path, stamp) -> design_summary; a new stamp when design.json changes
+
+
+def _summary(ctx: RunContext, stamp: Any, design: Record) -> Record:
+    """design_summary of the version's design, worked out once per design file (run 283a934: 496 times, 32 s).
+    Read only."""
+    if stamp is None:
+        return design_summary(design)
+    key = (str(ctx.store.path), stamp)
+    got = _SUMMARIES.get(key)
+    if got is None:
+        if len(_SUMMARIES) > 64:
+            _SUMMARIES.clear()
+        got = _SUMMARIES[key] = design_summary(design)
+    return got
+
+
 def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None = None) -> Any:
     """What one plan ref points at: a quantity record, or a name (e.g. load.rail_joint.support).
     `given` is what the prediction's inputs_from read off the design (from.<name>)."""
     head, _, rest = ref.partition(".")
-    design = ctx.store.design()
+    if head in ("load", "summary", "design"):  # only these read the design (run 283a934: 2 932 reads, 34 s)
+        stamp, design = _design(ctx)
     if head == "from":
         if given is None:
             raise ScriptError(f"{ref!r}: the prediction has no inputs_from")
@@ -168,7 +192,7 @@ def _lookup(ctx: RunContext, ref: str, load_case: Record, given: Record | None =
     if head == "req":
         return next(x for x in ctx.project["requirements"] if x["key"] == rest)
     if head in ("load", "summary"):
-        node: Any = design_summary(design)
+        node: Any = _summary(ctx, stamp, design)
         if head == "load":
             node = node["loadings"][loading_of(load_case)]
         for part in rest.split("."):

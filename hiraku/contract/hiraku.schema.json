@@ -1357,6 +1357,16 @@
           "type": "string",
           "description": "Where the expected value comes from (closed form, textbook, ...)."
         },
+        "case_ja": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The case in plain Japanese for the screen, built by the same code as case (its numbers from the same values)."
+        },
+        "source_ja": {
+          "type": "string",
+          "minLength": 1,
+          "description": "source in plain Japanese for the screen, built by the same code as source."
+        },
         "code_hash": {
           "type": "string",
           "description": "Hash of the hiraku package's source the check ran on (every .py file). A check may be reused by a later run only while this hash is unchanged."
@@ -2360,6 +2370,10 @@
                 "type": "string",
                 "description": "member, part, joint or element group id"
               },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "The point the value was read at, in design coordinates (mm): on a shell model the point on the weld line where the hot spot was read, on a beam model the point on the member."
+              },
               "quantity": {
                 "type": "string"
               },
@@ -2371,7 +2385,9 @@
               },
               "utilisation": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "The ratio that goes over 1 exactly when the row fails the load case's criterion: value / limit for <= and <, limit / value for >= and >. Where that ratio is undefined or outside 0 to 1000 (a limit or a value at or below 0, or a very small limit), it is written as 1000 when the row fails the criterion and 0 when it passes."
               },
               "predicted": {
                 "type": "boolean",
@@ -4679,8 +4695,10 @@
             "gate",
             "wall",
             "ramp",
-            "ground"
-          ]
+            "ground",
+            "circle"
+          ],
+          "description": "circle: a path drawn on the ground (e.g. the turning circle of the outer front wheel or of the body's outermost point): position_mm its centre, size_mm [diameter, diameter, 0]."
         },
         "label": {
           "type": "string"

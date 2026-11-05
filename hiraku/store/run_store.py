@@ -45,6 +45,17 @@ ID_PREFIX = {**layout.ID_PREFIX, MODULE_CHANGE: "chg"}
 READING_DROPS = ("fields", "series", "scene")
 
 
+MESH_SAMPLE = 256  # items kept from each end of a mesh's long arrays when it is validated
+
+
+def _sampled(mesh: Record) -> Record:
+    """A mesh with each array longer than 2 x MESH_SAMPLE cut to its first and last MESH_SAMPLE items, for the
+    schema check: every item of an array has the same shape, and the whole of a shell mesh took most of 128 s of
+    validation in run 283a934 (four meshes). The record written is the whole mesh."""
+    return {k: (v[:MESH_SAMPLE] + v[-MESH_SAMPLE:] if isinstance(v, list) and len(v) > 2 * MESH_SAMPLE else v)
+            for k, v in mesh.items()}
+
+
 class StoreError(RuntimeError):
     pass
 
@@ -118,6 +129,12 @@ class RunStore:
         # what reading() read, kept across stretches: path -> ((mtime_ns, size), record); a file whose stat changed
         # (written since, by this process or another) is read again. Analyses are kept without READING_DROPS
         self._kept: dict[str, tuple[tuple[int, int], Any]] = {}
+        self._lists: dict[tuple[str, int], list[Record]] = {}  # inside reading(): (kind, version) -> its records
+        # events.jsonl read so far: (bytes consumed, the events); appends (this process or the hooks') are read
+        # from where the last read stopped, a shorter file is read again
+        self._events_read: tuple[int, list[Record]] = (0, [])
+        self._built: dict[int, tuple[tuple[int, int], list[str]]] = {}  # version -> (design.json stat, change ids)
+        self._designs: dict[int, tuple[tuple[int, int, int], Record]] = {}  # design_shared: version -> (stamp, design)
 
     # ------------------------------------------------------------------ create / open
 
@@ -187,6 +204,7 @@ class RunStore:
             if self._read_cache:
                 self._read_cache.clear()  # the event goes with a write (or a hook's answer): read the files again
             self._ids.clear()
+            self._lists.clear()
             if kind == "run.started":
                 # t counts from run.started, so its own t is exactly 0
                 self._t0_mono, self._t_offset = self._mono(), 0.0
@@ -210,7 +228,9 @@ class RunStore:
                 event["text"] = text
             if data is not None:
                 event["data"] = data
-            if data_checked and isinstance(data, dict) and any(k in data for k in READING_DROPS):
+            if data_checked and isinstance(data, dict) and kind == "mesh.created":
+                contract.validate("event", {**event, "data": _sampled(data)})
+            elif data_checked and isinstance(data, dict) and any(k in data for k in READING_DROPS):
                 contract.validate("event", {**event, "data": {k: v for k, v in data.items() if k not in READING_DROPS}})
             else:
                 contract.validate("event", event)
@@ -222,10 +242,26 @@ class RunStore:
             return event
 
     def events(self) -> list[Record]:
-        if not self.events_path.exists():
-            return []
-        with self.events_path.open(encoding="utf-8") as f:
-            return [json.loads(line) for line in f if line.strip()]
+        """Every event of events.jsonl, in order. The file is read from where the last call stopped (it only grows,
+        by this store and by the hooks' process); a file shorter than what was read is read again from the start.
+        The events are shared between calls: read them, do not change them."""
+        with self._lock:
+            if not self.events_path.exists():
+                self._events_read = (0, [])
+                return []
+            done, got = self._events_read
+            size = self.events_path.stat().st_size
+            if size < done:
+                done, got = 0, []
+            if size > done:
+                with self.events_path.open("rb") as f:
+                    f.seek(done)
+                    chunk = f.read(size - done)
+                end = chunk.rfind(b"\n") + 1  # a line still being written is left for the next call
+                got = got + [json.loads(line) for line in chunk[:end].decode("utf-8").splitlines() if line.strip()]
+                done += end
+                self._events_read = (done, got)
+            return list(got)
 
     # ------------------------------------------------------------------ project
 
@@ -306,6 +342,10 @@ class RunStore:
             if v != self.design_version + 1:
                 raise StoreError(f"next design version must be {self.design_version + 1}, got {v}")
             _write_json(layout.version_dir(self.path, v) / layout.DESIGN_FILE, design)
+            # the only writer of design.json (a version is written once): what was kept of v is dropped here, so the
+            # shared design and the built ids never rest on the file's stat alone
+            self._designs.pop(v, None)
+            self._built.pop(v, None)
             self._project.setdefault("design_versions", []).append(v)
             self._save_project()
             self.emit("design.created", agent=agent, design_version=v, data=design, text=design.get("change_reason"))
@@ -347,6 +387,23 @@ class RunStore:
             raise StoreError(f"no design version {v}")
         return _read_json(path)
 
+    def design_shared(self, version: int | None = None) -> tuple[tuple[int, int, int], Record]:
+        """(stamp, design) of a version, read once while design.json's stat holds: the design is shared between
+        calls, so read it and do not change it (design() gives a copy of one's own). The stamp (version, mtime,
+        size) changes when the file does, for a caller that keeps what it worked out from the design (run
+        283a934: design_kind read the whole design 8 980 times, 76 s; the plan's refs 2 932 times, 34 s)."""
+        with self._lock:
+            v = version or self.design_version
+            path = layout.version_dir(self.path, v) / layout.DESIGN_FILE
+            if not path.exists():
+                raise StoreError(f"no design version {v}")
+            st = path.stat()
+            stamp = (v, st.st_mtime_ns, st.st_size)
+            kept = self._designs.get(v)
+            if kept is None or kept[0] != stamp:
+                kept = self._designs[v] = (stamp, _read_json(path))
+            return kept
+
     # ------------------------------------------------------------------ records
 
     def next_id(self, kind: str) -> str:
@@ -363,7 +420,7 @@ class RunStore:
         again (the update rule in the module docstring).
         """
         with self._lock:
-            contract.validate(kind, record)
+            contract.validate(kind, _sampled(record) if kind == "mesh" else record)
             rid = record[f"{kind}_id"]
             path = layout.record_path(self.path, design_version, kind, rid)
             _write_json(path, record)
@@ -392,6 +449,7 @@ class RunStore:
                 if self._reading_depth == 0:
                     self._read_cache = None
                     self._ids.clear()
+                    self._lists.clear()
 
     def _read_record(self, path: Path) -> Any:
         cache = self._read_cache
@@ -429,9 +487,13 @@ class RunStore:
             versions = [design_version] if design_version else sorted(self._project.get("design_versions") or [])
             out = []
             for v in versions:
-                folder = layout.version_dir(self.path, v) / layout.RECORD_DIRS[kind]
-                if folder.is_dir():
-                    out.extend(self._read_record(p) for p in sorted(folder.glob("*.json")))
+                listed = self._lists.get((kind, v)) if self._read_cache is not None else None
+                if listed is None:
+                    folder = layout.version_dir(self.path, v) / layout.RECORD_DIRS[kind]
+                    listed = [self._read_record(p) for p in sorted(folder.glob("*.json"))] if folder.is_dir() else []
+                    if self._read_cache is not None:  # inside reading(): one listing per stretch (an event ends it)
+                        self._lists[(kind, v)] = listed
+                out.extend(listed)
             return out
 
     def find(self, kind: str, record_id: str) -> tuple[int, Record] | None:
@@ -474,8 +536,18 @@ class RunStore:
     def built_change_ids(self) -> set[str]:
         """The change_ids some version was built from (its design's module_changes)."""
         with self._lock:
-            return {c["change_id"] for v in self._project.get("design_versions") or []
-                    for c in self.design(v).get("module_changes") or []}
+            out: set[str] = set()
+            for v in self._project.get("design_versions") or []:
+                path = layout.version_dir(self.path, v) / layout.DESIGN_FILE
+                if not path.exists():
+                    raise StoreError(f"no design version {v}")
+                st = path.stat()
+                stamp = (st.st_mtime_ns, st.st_size)
+                kept = self._built.get(v)
+                if kept is None or kept[0] != stamp:  # a design is read once (run 283a934: 39 s in re-reading them)
+                    kept = self._built[v] = (stamp, [c["change_id"] for c in _read_json(path).get("module_changes") or []])
+                out.update(kept[1])
+            return out
 
     def proposals(self, design_version: int | None = None, *, pending: bool = False) -> list[Record]:
         """The module designers' proposals, in id order: those based on one version (or all); with pending,

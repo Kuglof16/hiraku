@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# Round values for steel (E 205 GPa, nu 0.3, 7850 kg/m^3, yield 245 MPa), not taken from a standard or a table: the
+# known-answer checks compare the tool with a closed form on the same numbers, so any values do (an assumption, no
+# source; the materials of the designs are in data/materials/materials.json with their sources).
 STEEL = {"name": "steel for checks", "E_MPa": 205000.0, "nu": 0.3, "density_kg_m3": 7850.0,
          "yield_MPa": 245.0, "source": "round numbers for known-answer checks", "verified": True}
 

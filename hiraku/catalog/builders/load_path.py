@@ -204,6 +204,8 @@ def r8_load_path(spec: Record, req: Record, design: Record) -> list[Record]:
     push_miss = _missing(req, ("Q77", "Q78"))
     if not push_miss and OCCUPANTS[load] and occupant_trunks(design):
         F, lim = number(req, "Q77", "N"), number(req, "Q78", "mm")
+        # The barrier taken off before the tests: 79 FR 68964 sec. 1422.5(c)(4) as the intake department read it
+        # (2026-11-03, Q77's basis); not in the README's table of values checked.
         cases.append({
             **base,
             "load_case_id": f"R8-push-{F:g}N",
@@ -333,6 +335,7 @@ def chain_inputs(design: Record, part_id: str, point, F: float, directions=None)
     s = props[mid]["section"]
     mat = props[mid]["material"]
     E = float(mat["E_MPa"])
+    # nu 0.3 when the material gives none (here and below): the usual value for steel, an assumption, no source
     G = E / (2.0 * (1.0 + float(mat.get("nu", 0.3))))
     r_t, d_root = 0.0, 0.0
     if chain is not None and L > 0.0:
@@ -520,6 +523,10 @@ def _node_turning(design: Record, props: dict, root: str, mid: str, p, Fv) -> fl
     return Mn / k * lever
 
 
+# The defaults when a load case has no force (the builders always give one): hand 300 N, foot 500 N, push 725 N, the
+# values of Q66, Q68 and Q77 in data/requirements/offroad-4w*.yaml, whose basis gives their sources (UN R79's table,
+# an assumption; UN R13-H Annex 3; CPSC's NPR 79 FR 68964 sec. 1422.5(c), read by the intake department on
+# 2026-11-03). None of them is in the README's table of values checked.
 def _force(load_case: Record, name: str, default: float) -> float:
     from hiraku.solvers.k0_handcalc import units
 

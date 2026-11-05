@@ -275,6 +275,11 @@ def _fit(design: dict, parts: dict, p: dict, me, other, bs=None) -> str:
         else:
             carried = list(parts.get(to_id, {}).get("carried_by") or [])
         extra = {"carried_by": carried} if carried else {}
+        if other.kind == "member":  # welded round the strut where it meets the member (part.declared, shape only)
+            extra["declared"] = {"weld_length_mm": {
+                "value": round(math.pi * STRUT_D_MM, 3), "unit": "mm",
+                "basis": f"shape: the perimeter of the {STRUT_D_MM:g} mm strut's section welded to the member "
+                         "(kit/joints.STRUT_D_MM, HIRAKU's choice)"}}
         # a strut that crosses a sheet of the body is an anchor: a bolt through the sheet into the frame
         # (k4_geometry.model.THROUGH_PANEL_KINDS lets it pass)
         from hiraku.solvers.k4_geometry.obb import from_box, overlap

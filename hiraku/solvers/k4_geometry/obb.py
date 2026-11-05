@@ -48,13 +48,18 @@ def from_member(a, b, width: float, height: float, name: str = "") -> OBB:
     x = b - a
     L = float(np.linalg.norm(x))
     x = x / L
-    up = np.array([0.0, 0.0, 1.0])
-    if abs(x @ up) > 0.999:
-        up = np.array([1.0, 0.0, 0.0])
-    z = np.cross(x, up)
+    # (x . up) with up = z is x[2] exactly; the cross products as np.cross works them (the same products and
+    # differences, one by one), without its general array handling
+    up = (1.0, 0.0, 0.0) if abs(float(x[2])) > 0.999 else (0.0, 0.0, 1.0)
+    z = np.array(_cross(x.tolist(), up))
     z /= np.linalg.norm(z)
-    y = np.cross(z, x)
+    y = np.array(_cross(z.tolist(), x.tolist()))
     return OBB((a + b) / 2.0, np.array([x, y, z]), np.array([L / 2.0, height / 2.0, width / 2.0]), name)
+
+
+def _cross(u, v) -> list[float]:
+    """u x v of two 3-vectors as np.cross works it: (u1 v2 - u2 v1, u2 v0 - u0 v2, u0 v1 - u1 v0)."""
+    return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
 
 
 def ray_box(origin, direction, box: OBB) -> tuple[float, float] | None:
@@ -76,6 +81,13 @@ def ray_box(origin, direction, box: OBB) -> tuple[float, float] | None:
     return float(t_in), float(t_out)
 
 
+_EYE3 = np.eye(3)
+_ZERO = np.zeros(1)
+# indices into [R.ravel() (0..8, R[r, j] at 3 r + j), -R.ravel() (9..17), 0 (18)] for the rows of overlap's c
+_CROSS_IDX = np.array([[[18, 9 + 6 + j, 3 + j], [6 + j, 18, 9 + j], [9 + 3 + j, j, 18]][i]
+                       for i in range(3) for j in range(3)])
+
+
 def overlap(a: OBB, b: OBB) -> float:
     """Positive: smallest overlap over the axes (they intersect). Negative: minus the largest gap.
 
@@ -83,11 +95,12 @@ def overlap(a: OBB, b: OBB) -> float:
     and a_i x b_j is e_i x R[:, j] (the sign of an axis does not matter).
     """
     R = a.axes @ b.axes.T
-    z = np.zeros(3)
-    c = np.array([[z, -R[2], R[1]], [R[2], z, -R[0]], [-R[1], R[0], z]]).transpose(0, 2, 1).reshape(9, 3)
+    # row 3 i + j of c is e_i x R[:, j]: (0, -R[2, j], R[1, j]), (R[2, j], 0, -R[0, j]), (-R[1, j], R[0, j], 0),
+    # picked from R, -R and a 0
+    c = np.concatenate([R.ravel(), -R.ravel(), _ZERO])[_CROSS_IDX]
     n = np.sqrt(np.einsum("ij,ij->i", c, c))
     keep = n > 1e-9  # parallel edges give no axis
-    axes = np.concatenate([np.eye(3), R.T, c[keep] / n[keep, None]])
+    axes = np.concatenate([_EYE3, R.T, c[keep] / n[keep, None]])
     o = np.abs(axes) @ a.half + np.abs(axes @ R) @ b.half - np.abs(axes @ (a.axes @ (b.center - a.center)))
     gaps = o[o < 0]
     return float(gaps.min()) if gaps.size else float(o.min())

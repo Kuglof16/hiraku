@@ -20,11 +20,13 @@ occupant in the parts list, as in ladder_4w). The frame is made of three pieces 
   to the rear damper tops.
 
 Everything is placed by rule from the variables. The tube sizes are JIS G 3444 standard sizes
-(kit.sections.pick; the size list's source is in data/sections/standard_tubes.json): the smallest
+(kit.sections.pick; the size list's source is in data/sections/standard_tubes.json, checked against
+JIS G 3444 Table 6 on 2026-11-03, README, the table of values checked): the smallest
 standard outside diameter at or above the one asked for, with the lightest standard wall at or above
 the wall asked for. The material is STKM13A (data/materials/materials.json, JIS G 3445): that the
-G 3444 sizes are made in STKM13A is assumed, not checked; its yield (215 MPa in that file) is the
-one the frame is judged against.
+G 3444 sizes are made in STKM13A is assumed, not checked; its yield (215 MPa in that file, cited as
+JIS G 3445's minimum, not checked) is the one the frame is judged against. The variables carried
+from ladder_4w (SHARED) keep ladder_4w's sources.
 
 Parts are mass-equivalent boxes as in ladder_4w; the battery sits on the floor under the seats (the
 seats stand on it), the motor on the rear subframe's lower cross tubes, the controller on the floor
@@ -116,7 +118,7 @@ CHOICES: dict[str, tuple[str, ...]] = {}
 TITLE = "2 人乗り 4 輪の丸パイプ立体フレームの電動 UTV (前輪で操舵、後輪で駆動、右ハンドル、ダブルウィッシュボーン)"
 DESCRIPTION = "2-seat electric UTV, round-tube space frame with a cage, double wishbones, rear drive"
 
-# Sizes and clearances of the layout (design choices, assumptions)
+# Sizes and clearances of the layout (design choices, assumptions, no source)
 SEAT_SIZE = (500.0, 500.0, 260.0)  # as ladder_4w
 OCCUPANT_SIZE = (450.0, 450.0, 520.0)  # as ladder_4w
 OCCUPANT_BACK_MM = 55.0  # the occupant's box centre this far behind the seat centre (as ladder_4w)
@@ -657,7 +659,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
             x=hp["FL"]["lca_front"][0], y=0.0, z=bottom_at(top_a + rb + ON_TUBES_MM),
             carried_by=["LA_damper_upper", "RA_damper_upper", "LA_uca_front", "RA_uca_front"])
     # the steering hangs below the dash bar, its rear face a 95th percentile knee length ahead of the
-    # seat back (K4's knee_room: AIST item J5, hiraku.solvers.k4_geometry.people)
+    # seat back (K4's knee_room: AIST item J5, hiraku.solvers.k4_geometry.people; its source and the date it was
+    # read: people.SOURCE)
     from hiraku.solvers.k4_geometry.people import AIST
 
     ad = frame.nodes["LAd"]

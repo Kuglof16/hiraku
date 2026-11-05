@@ -19,7 +19,11 @@ Why each is there (the rule that asks for it):
 - the battery's main switch between the battery and the controller: HIRAKU's systems check (a
   fuse, switch, contactor or breaker in the chain from the battery to the motor). UN Regulation
   No. 100 (electric power trains) covers working voltages above 60 V DC; the 51.2 V pack is below
-  that, so it does not ask for the switch here (not checked).
+  that, so it does not ask for the switch here. The 60 V: R100 para. 2.17 "High Voltage", read on
+  2026-11-03 for data/knowledge/battery.yaml (BT-02; README, the knowledge rules' row). R100 para. 2.38
+  takes the highest working voltage (at full charge), not the nominal 51.2 V; whether the pack's
+  full-charge voltage stays at or below 60 V, and the rest of this reading, are not checked here.
+  The regulations' article numbers above are as cited; their texts were not read in this repository.
 - lamps (headlamps, tail lamps, stop lamps, turn signals) only on public roads: Safety Regulations
   for Road Vehicles articles 32 (headlamps), 37 (tail lamps), 39 (stop lamps) and 41 (direction
   indicators) (not checked). Off public roads none are placed.
@@ -44,6 +48,7 @@ from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, rear
 
 Record = dict[str, Any]
 
+# Masses, sizes and offsets below: HIRAKU's choices (assumptions, no source)
 # brakes (assumptions)
 MASTER_KG = 0.8  # master cylinder with its reservoir
 MASTER_SIZE_MM = (120.0, 70.0, 70.0)  # along x (its bore), across, high

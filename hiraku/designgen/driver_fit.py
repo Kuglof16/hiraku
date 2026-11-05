@@ -25,8 +25,10 @@ How it searches (deterministic, no random numbers), within each variable's range
 "Better" is a smallest margin larger by more than TIE_MM; among sets whose smallest margins are within
 TIE_MM, the one nearer the design (the sum over the variables of the change over the range) is kept, so a
 variable that does not raise the smallest margin stays as the design has it. A set the generator cannot
-build (DesignGenError) is not a candidate. The search stops at time_limit_s (or max_evals) and returns the
-best set found so far, saying that it stopped there. Values are on a lattice of RESOLUTION (0.5 mm,
+build (DesignGenError) is not a candidate. The search stops after max_evals designs measured (MAX_EVALS by
+default) and returns the best set found so far, saying that it stopped there: the same input gives the same
+answer and the same stop on any machine, however busy. time_limit_s (TIME_LIMIT_S) is only a guard far above
+what a search takes. Values are on a lattice of RESOLUTION (0.5 mm,
 0.25 deg; design choices of this search).
 """
 
@@ -53,7 +55,10 @@ RESOLUTION = {"deg": 0.25, "mm": 0.5}  # the lattice the values are on (by unit)
 SCAN_LEVELS = 9  # levels across each variable's range in step 2
 FIRST_STEP_SHARE = 1.0 / 8.0  # the compass search's first step: this share of the range
 TIE_MM = 0.01  # smallest margins closer than this are equal when two sets are compared
-TIME_LIMIT_S = 120.0
+# the stop: a count of designs measured, so the answer does not depend on the machine's speed. The searches of
+# tests/solvers/test_designgen_footroom.py and test_driver_knee_angle.py converge at 268 to 626 designs.
+MAX_EVALS = 1500
+TIME_LIMIT_S = 3600.0  # a guard only (a search that goes on this long has gone wrong); max_evals ends it first
 
 
 class _Stop(Exception):
@@ -105,7 +110,7 @@ def _pairs(design: Record) -> set[tuple[str, str]]:
 
 
 def best_driver_place(design: Record, *, variables: tuple[str, ...] = VARIABLES, names: tuple[str, ...] = MARGINS,
-                      time_limit_s: float = TIME_LIMIT_S, max_evals: int | None = None,
+                      time_limit_s: float = TIME_LIMIT_S, max_evals: int | None = MAX_EVALS,
                       load_case: Record | None = None) -> Record:
     """The values of `variables` (within their ranges, the design's other variables as they are) whose smallest
     margin of `names` is the largest. load_case: the occupants on board as the tool's load case has them

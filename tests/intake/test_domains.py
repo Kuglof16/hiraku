@@ -226,15 +226,62 @@ class FlagsTest(unittest.TestCase):
         self.assertEqual(flags_text({}), "なし")
 
 
+class LoadChoiceWordsTest(unittest.TestCase):
+    """Q30's choices keep the contract's names (empty, driver, two, two_cargo); the words a person reads follow the flags."""
+
+    def labels(self, flags):
+        from hiraku.intake.hearing import plan_hearing
+
+        q = {q["req_key"]: q for q in plan_hearing({"flags": flags, "speed_class": "static", "requirements": []}).questions}["Q30"]
+        return [c["value"] for c in q["choices"]], [c["label"] for c in q["choices"]], q["text"]
+
+    def test_a_vehicle_has_a_driver_and_something_lain_on_has_one_person(self):
+        values, labels, text = self.labels({"ride": True, "self_propelled": True})
+        self.assertEqual(values, ["empty", "driver", "two", "two_cargo"])
+        self.assertEqual(labels[1], "運転者だけ")
+        self.assertIn("運転者だけ", text)
+        values, labels, text = self.labels({"lean": True, "standing": True})
+        self.assertEqual(values, ["empty", "driver", "two", "two_cargo"])  # the value is the contract's, unchanged
+        self.assertEqual(labels[1], "1 人だけ")
+        self.assertIn("1 人だけ", text)
+        self.assertNotIn("運転者", text)
+        self.assertEqual(self.labels({"lean": True, "ride": True})[1][1], "運転者だけ")  # a ridden bed (a wheelchair): a driver
+
+    def test_the_screen_gets_the_same_rule_as_data(self):
+        from hiraku.intake import webdata
+
+        self.assertEqual(webdata.tables()["ITEM_CHOICES_ALT"]["Q30"],
+                         {"labels": {"driver": "1 人だけ"}, "on": ["lean"], "off": ["ride"]})
+        with self.assertRaises(ValueError):
+            webdata._flag_terms("lean or ride")
+
+
 class TableWordsTest(unittest.TestCase):
-    def test_a_table_or_a_desk_is_read_as_something_to_sit_at_and_to_stand(self):
+    def test_a_table_or_a_desk_stands_on_the_floor_and_carries_things_and_nobody_rides_it(self):
         from hiraku.intake.guess import guess_flags
 
         for word in ("テーブル", "デスク", "作業台", "机"):
             flags, why, _ = guess_flags(f"{word}を作りたい")
-            self.assertEqual((flags.get("lean"), flags.get("standing")), (True, True), word)
+            self.assertEqual((flags.get("standing"), flags.get("cargo")), (True, True), word)
+            self.assertNotIn("lean", flags, word)  # nobody lies on it: the questions about people on a bed or a vehicle stay out
+            self.assertNotIn("ride", flags, word)
             self.assertIn(word, why["standing"])
+        self.assertEqual(guess_flags("ソファを作りたい")[0].get("lean"), True)
         self.assertEqual(guess_flags("台車を作りたい")[0].get("standing"), None)  # a bare 台 is not a word of this list
+
+    def test_a_table_is_not_asked_how_many_people_ride_it_but_how_much_it_carries(self):
+        from hiraku.intake.guess import guess_flags
+        from hiraku.intake.hearing import plan_hearing
+
+        flags, _, speed = guess_flags("テーブルを作りたい")
+        asked = {q["req_key"]: q for q in plan_hearing({"flags": flags, "speed_class": speed or "static", "requirements": []}).questions}
+        self.assertNotIn("Q30", asked)  # the people-and-load combination is for what is ridden or lain on
+        self.assertNotIn("乗る人", asked["Q40"]["text"])
+        self.assertIn("載せる荷の重さの上限", asked["Q40"]["text"])
+        bed, _, _ = guess_flags("介護ベッドを作りたい (荷物も載せる)")
+        asked = {q["req_key"]: q for q in plan_hearing({"flags": bed, "speed_class": "static", "requirements": []}).questions}
+        self.assertIn("Q30", asked)
+        self.assertIn("乗る人とは別に", asked["Q40"]["text"])  # for a bed or a vehicle the question keeps its extra sentence
 
 
 if __name__ == "__main__":

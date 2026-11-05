@@ -31,7 +31,7 @@ from .shell import MITC4
 from .solid import Hex20, solid_stresses
 from ..k1_shell import element as mitc4
 
-ALPHA_ST = 1.2e-5  # 1/K, a round value for steel (not from a standard)
+ALPHA_ST = 1.2e-5  # 1/K, a round value for steel: an assumption for the checks, no source
 
 
 # ------------------------------------------------------------------ prescribed displacement
