@@ -94,7 +94,7 @@ runs:
     title: デモの車の 11 の試験
     shows: >-
       段差・フレームとつなぎ目・振動・組み立て・乗り降り・加速。赤を設計役が 4 回直し (配置、乗り降りの網、
-      モーター、レールのつなぎ目)、版 5 で全部緑
+      モーター、レールのつなぎ目)、v5 で全部緑
     file: offroad-4w.yaml
     modes: [scripted, claude]
     # scripted run 20261106-081501-offroad-4w-scripted on main 1a155201: done on version 5, every tile green; 11 tests
