@@ -31,7 +31,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 5,
+    "round_limit": 6,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
@@ -23027,7 +23027,7 @@ export const DEMOS = {
      "assembly": true
     },
     "status": "running",
-    "round_limit": 5,
+    "round_limit": 6,
     "cost_limit_usd": 2.0,
     "cost_usd": 0.0,
     "requirements": [
