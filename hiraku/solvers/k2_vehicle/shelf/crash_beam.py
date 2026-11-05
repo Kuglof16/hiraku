@@ -29,8 +29,11 @@ class CrashBeamTool(K2Tool):
     Results: peak_decel and mean_decel (g; the whole mass's deceleration, from the wall's impulse,
     averaged over 1 ms; the mean is the speed lost over the time to the stop), max_crush (mm, the largest
     shortening between the front-most nodes and the occupants' seat mount nodes, or the rear-most nodes
-    without occupants), occupant_space_left (mm, where = the occupant part; crash_beam.measure says how it
-    is measured), battery_mount_force (N, where = node), broken_members (1, where = the ids),
+    without occupants), crumple_length (mm, the front-most node to the front face of the front-most
+    occupant part box, along x, at the start) and occupant_space_margin (mm, crumple_length less max_crush:
+    the quantity the hand calculation predicts), occupant_space_left (mm, the least room between the moving
+    structure and any occupant part box, where = the occupant part; crash_beam.measure says how it is
+    measured), battery_mount_force (N, where = node), broken_members (1, where = the ids),
     max_plastic_rotation (deg, where = member). Series deceleration (g) and crush (mm) every 1 ms. A field
     of kind node_motion when the contract has that kind (read from the schema at run time) and the mesh
     has at most 300 nodes.
@@ -130,6 +133,17 @@ class CrashBeamTool(K2Tool):
                _res("mean_decel", mean, "g"),
                _res("max_crush", float(crush.max()) * 1000.0, "mm", "front-most nodes to " + ("seat mounts" if seat
                                                                                                else "rear-most nodes"))]
+        if occ:
+            # the crush the structure ahead of the occupants can take, as the hand calculation reads it: from the
+            # front-most node back to the front face of the front-most occupant part box, along x
+            front_occ = max(occ, key=lambda p: p["box"]["center_mm"][0] + p["box"]["size_mm"][0] / 2.0)
+            face = (front_occ["box"]["center_mm"][0] + front_occ["box"]["size_mm"][0] / 2.0) / 1000.0
+            crumple = float(mesh.x0[:, 0].max()) - face
+            res.append(_res("crumple_length", crumple * 1000.0, "mm", front_occ["id"]))
+            res.append(_res("occupant_space_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
+            notes.append("occupant_space_margin: crumple_length (the front-most node to the front face of the "
+                         "front-most occupant part box, along x, at the start) less max_crush; the hand calculation "
+                         "crash_beam.occupant_margin reads the same")
         room = measure.occupant_room(run, occ, mesh.node_parts)
         if room is not None:
             res.append(_res("occupant_space_left", room["room"] * 1000.0, "mm", room["part"]))
