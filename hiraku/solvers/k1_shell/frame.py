@@ -28,7 +28,12 @@ mesh of the tube walls:
   in the mount) are left out of the peak stress, the safety factors and
   everything read at the peak: there the bracket is welded over the wall
   and reinforces it, so the local stress where the load is put in is not a
-  measure of the joint. Their stresses stay in the fields.
+  measure of the joint. Their stresses stay in the fields. This is how the
+  suspension mounts are treated until the bracket plates are meshed into
+  the shell (like gussets, with welds along the plates' bases and the pin
+  loads spread over the hole edges) and judged by load case R9; until then
+  R9 shows the hand calculation of the pins, plates and welds only
+  (k0_handcalc.library_bracket, not judged).
 - gusset parts (kind "gusset") are shell elements of the mesh, so their
   mass is in the shell's element masses and not added again as parts; so
   are the through parts (shell_parts) at the joints meshed as through.

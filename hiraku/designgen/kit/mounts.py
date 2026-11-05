@@ -31,7 +31,10 @@ What place() adds at each corner (a support on the builtin K&C table), every nod
   front), hanging from the rail node below the nearer upper arm pivot (the leg down to the lower
   arm's pivot arrives beside the pivot, where a clamp on the lower cross member would stand).
 Bracket masses: two plates (BRACKET_T_MM thick, steel of the frame's density) the size of the
-bracket's box face across the car (assumption, the plates' shape not drawn).
+bracket's box face across the car (assumption, the plates' shape not drawn). The suspension brackets carry
+part.joint (joint_sizes: the pin, one per bracket, the plates and the weld; the design variables mount_bolt_d,
+mount_plate_t, mount_weld_leg) and part.declared (joint_declared: the pin hole and its edge distance); their
+plates are joint["plate_t_mm"] thick (the default BRACKET_T_MM, so the default design's mass is as before).
 """
 
 from __future__ import annotations
@@ -62,6 +65,13 @@ BRACKET_PAD_MM = 15.0  # the bracket's box this far beyond its point
 SINGLE_POST_LEAN_MM = 20.0  # a tower of one post leans out this much at its top (assumption: not square to the rail)
 SINGLE_POST_LEAN_X_MM = 2.0  # and back this much (any lean will do; more brings it to the upper arm's legs)
 RACK_RADIUS_MM = 25.0  # the rack housing (kit/steering.RACK_RADIUS_MM): the clamp reaches over it
+# the suspension brackets' joint (part.joint; R9): defaults of the design variables mount_plate_t (BRACKET_T_MM),
+# mount_bolt_d and mount_weld_leg (ladder_4w.VARIABLES)
+BOLT_D_MM = 10.0  # the pin's diameter: HIRAKU's assumption (not sized; R9 sizes it)
+WELD_LEG_MM = 3.0  # the fillet weld's leg: HIRAKU's assumption (not sized; R9 sizes it)
+PINS_PER_BRACKET = 1  # one pin through the clevis (the bracket's shape, not a variable)
+HOLE_CLEARANCE_MM = 2.0  # d0 = d + 2 mm: EN 1090-2 Table 11 normal clearance (not checked)
+HOLE_EDGE_FACTOR = 1.2  # the hole's edge distance 1.2 d0: the minimum R9 assumes (EN 1993-1-8 Table 3.3, not checked)
 
 
 class MountError(ValueError):
@@ -223,13 +233,38 @@ def split_rail(frame, xyz, nid: str, station_nodes: set[str], corner: str) -> st
     return frame.split(mid, nid, xyz, ids)
 
 
-def _bracket(pid: str, name: str, lo, hi, carried_by: list[str], rho: float) -> Record:
+def joint_sizes(plate_t_mm: float = BRACKET_T_MM, bolt_d_mm: float = BOLT_D_MM,
+                weld_leg_mm: float = WELD_LEG_MM) -> Record:
+    """A suspension bracket's part.joint (docs/contract.md 金具の継ぎ手): one pin per bracket (the clevis's shape)."""
+    return {"bolt_d_mm": float(bolt_d_mm), "bolts": PINS_PER_BRACKET, "plate_t_mm": float(plate_t_mm),
+            "weld_leg_mm": float(weld_leg_mm)}
+
+
+def joint_declared(joint: Record) -> Record:
+    """part.declared of a suspension bracket from its joint (shape only): the pin hole and its distance to the edge."""
+    d0 = float(joint["bolt_d_mm"]) + HOLE_CLEARANCE_MM
+    return {"hole_diameter_mm": {"value": d0, "unit": "mm",
+                                 "basis": f"variable mount_bolt_d + {HOLE_CLEARANCE_MM:g} mm, the normal clearance of "
+                                          "EN 1090-2 Table 11 (not checked)"},
+            "hole_edge_mm": {"value": round(HOLE_EDGE_FACTOR * d0, 3), "unit": "mm",
+                             "basis": f"assumption: {HOLE_EDGE_FACTOR:g} d0, the smallest end and edge distance R9's "
+                                      "bearing check takes (EN 1993-1-8 Table 3.3, not checked)"}}
+
+
+def _bracket(pid: str, name: str, lo, hi, carried_by: list[str], rho: float, joint: Record | None = None) -> Record:
+    """A bracket part: two plates the size of its box's face across the car. With `joint` (a suspension mount's,
+    joint_sizes) the plates are joint["plate_t_mm"] thick and the part carries joint and declared; else BRACKET_T_MM."""
     lo, hi = np.asarray(lo, float), np.asarray(hi, float)
     size = hi - lo
-    mass = rho * 1e-9 * 2.0 * BRACKET_T_MM * float(size[1]) * float(size[2])
-    return {"id": pid, "name": name, "kind": "bracket",
-            "box": {"center_mm": [float(v) for v in (lo + hi) / 2.0], "size_mm": [float(v) for v in size]},
-            "mass_kg": float(mass), "carried_by": list(carried_by)}
+    t = float(joint["plate_t_mm"]) if joint else BRACKET_T_MM
+    mass = rho * 1e-9 * 2.0 * t * float(size[1]) * float(size[2])
+    out = {"id": pid, "name": name, "kind": "bracket",
+           "box": {"center_mm": [float(v) for v in (lo + hi) / 2.0], "size_mm": [float(v) for v in size]},
+           "mass_kg": float(mass), "carried_by": list(carried_by)}
+    if joint:
+        out["joint"] = dict(joint)
+        out["declared"] = joint_declared(joint)
+    return out
 
 
 def _corner_name(s: Record) -> str:
@@ -238,15 +273,17 @@ def _corner_name(s: Record) -> str:
 
 def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: float, post_dx: float,
           rail: Record, avoid: tuple[str, ...] = (), lower_cross: bool = True, whole: tuple[str, ...] = (),
-          rear_post_dx: dict[str, float] | None = None) -> Record:
+          rear_post_dx: dict[str, float] | None = None, joint: Record | None = None) -> Record:
     """Add each corner's tower, lower arm legs and cross members to the frame and its brackets to the
     parts (see the module doc). sections: {"tower", "leg", "lower"} section keys of the frame; rail:
     {"y", "z", "b", "h"}; whole: rail members not to split (a post there stands on the wheel's station
     node, a bracket there is carried by it); rear_post_dx: {axle station: dx} puts that axle's rear posts
     dx behind the wheel centre instead of post_dx (the lower arm's rear leg still starts from the rail
-    node post_dx behind, a node of its own). Returns {"members": [ids], "brackets": [ids], "skipped_cross": [why]}."""
+    node post_dx behind, a node of its own); joint: the suspension brackets' part.joint (joint_sizes(), the
+    default; it sets their plates' thickness and so their mass). Returns {"members": [ids], "brackets": [ids], "skipped_cross": [why]}."""
     from hiraku.solvers.k4_geometry.obb import from_box, from_member, overlap
 
+    joint = joint_sizes() if joint is None else joint
     stations = {n for n in frame.nodes}  # nodes before this: the ladder's stations (and any others)
     rail_top = rail["z"] + rail["h"] / 2.0
     out = {"members": [], "brackets": [], "skipped_cross": []}
@@ -313,7 +350,7 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
                 hi = [float(p[0]) + BRACKET_HALF_X_MM, ys[1], zs[1]]
                 pid = f"bracket_lca_{s['id']}{i}"
                 lay.parts.append(_bracket(pid, f"{corner}の下の腕の付け根の金具 ({'前' if i == 1 else '後'})", lo, hi,
-                                          [s["frame_node"]], rho))
+                                          [s["frame_node"]], rho, joint))
                 out["brackets"].append(pid)
                 continue
             n = frame.node(f"{tag}l{i}", hp[k].tolist())
@@ -328,7 +365,7 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
             hi = [float(p[0]) + BRACKET_HALF_X_MM, ys[1], max(rail_top, float(p[2]) + BRACKET_PAD_MM)]
             pid = f"bracket_uca_{s['id']}{i}"
             lay.parts.append(_bracket(pid, f"{corner}の上の腕の付け根の金具 ({'前' if i == 1 else '後'})", lo, hi,
-                                      [under_u[i]], rho))
+                                      [under_u[i]], rho, joint))
             out["brackets"].append(pid)
     # lower cross members joining the pivots left and right, where nothing in `avoid` is in the way
     avoid_boxes = [from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"), p["id"])
@@ -365,7 +402,7 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
         hi = [float(p[0]) + BRACKET_HALF_X_MM, ys[1], zs[1]]
         what = "ラックの留め金具 (タイロッドの内の端)" if s["actuation"]["steer"] else "トーのリンクの内の端の金具"
         pid = f"bracket_tie_{s['id']}"
-        lay.parts.append(_bracket(pid, f"{_corner_name(s)}の{what}", lo, hi, [node], rho))
+        lay.parts.append(_bracket(pid, f"{_corner_name(s)}の{what}", lo, hi, [node], rho, joint))
         out["brackets"].append(pid)
     return out
 

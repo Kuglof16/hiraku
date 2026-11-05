@@ -1178,7 +1178,8 @@ class RunChecker:
         if not rows:
             self.error(rule, w, f"{vid}: {v.get('analysis_id')} has no hot_spots row of {q} at {v.get('where')}")
         else:
-            r = rows[0]
+            # one place may give several rows (two weld lines on one member): the verdict is one of them
+            r = next((x for x in rows if x.get("value") == v.get("value") and x.get("limit") == v.get("limit")), rows[0])
             if r.get("predicted") is not False:
                 self.error(rule, w, f"{vid}: the hand calculation predicted {v.get('where')}")
             if not (isinstance(r.get("utilisation"), (int, float)) and r["utilisation"] > 1):
@@ -1538,11 +1539,17 @@ class RunChecker:
                                                  f"{len(misses)} system rules hitting a part")
             if state == "green" and not j.get("verdict_ids"):
                 self.error("judgement.state", w, "green without any verdict")
-            unlisted = [x for x in self._standing_hot_spots(i, j.get("domain"), j.get("design_version"))
-                        if x not in j.get("verdict_ids", [])]
+            # a tile lists one verdict per load case (judge.latest_verdicts: the newest failing one when any
+            # fails), so a load case with a standing hot_spot red needs a failing verdict of its own listed
+            listed_red = {(self.recs["verdict"].get(x) or (0, {}))[1].get("load_case_id")
+                          for x in j.get("verdict_ids", [])
+                          if (self.recs["verdict"].get(x) or (0, {"pass": True}))[1].get("pass") is False}
+            standing = self._standing_hot_spots(i, j.get("domain"), j.get("design_version"))
+            unlisted = sorted({self.recs["verdict"][x][1].get("load_case_id") for x in standing} - listed_red)
             if unlisted:
-                self.error("judgement.hot_spot", w, f"{', '.join(unlisted)} (hot_spot, red) still stand in "
-                                                    f"{j.get('domain')} v{j.get('design_version')} but are not listed")
+                self.error("judgement.hot_spot", w, f"{', '.join(unlisted)}: a hot_spot red still stands in "
+                                                    f"{j.get('domain')} v{j.get('design_version')} but the tile lists "
+                                                    f"no failing verdict of it")
             missing = [lc_id for lc_id, lc in self.lcs(j.get("design_version")).items()
                        if lc.get("domain") == j.get("domain") and "criterion" in lc and lc_id not in judged]
             if state == "green" and missing:

@@ -80,6 +80,7 @@ def lug_lever(design: Record, which: str) -> float:
 
 def use_fatigue_known_answers() -> list[Record]:
     out = []
+    # FAT 71, m 3, knee 1e7: the shape of the IIW recommendations (Hobbacher 2016; not checked), here test values
     fat, m, nk = 71.0, 3.0, 1e7
     knee = fat * (2e6 / nk) ** (1.0 / m)
     src_sn = "IIW-type S-N curve N = 2e6 (FAT / range)^m above the knee and Miner's rule D = n / N"

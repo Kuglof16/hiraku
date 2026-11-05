@@ -43,10 +43,10 @@ from .base import (LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record,
                    param_value, result)
 
 ROAD_CLASSES = {c: 16e-6 * 4**i for i, c in enumerate("ABCDEFGH")}  # ISO 8608 (see above)
-N0 = 0.1  # cycle/m
-WAVINESS = 2.0
-# Band of the road model (wavelengths 0.35 m to 91 m): a modelling choice, not
-# checked against the bands ISO 8608 reports.
+N0 = 0.1  # cycle/m, ISO 8608's reference spatial frequency (see above; not checked)
+WAVINESS = 2.0  # ISO 8608's waviness (see above; not checked)
+# Band of the road model (wavelengths 0.35 m to 91 m): a modelling choice (HIRAKU's choice,
+# an assumption), not checked against the bands ISO 8608 reports.
 N_BAND = (0.011, 2.83)  # cycle/m
 SN_VARS = {"fatigue_fat_class": "MPa", "fatigue_slope": "1", "fatigue_knee_cycles": "1"}
 CONSTANT_AMPLITUDE_SLOPE = "fatigue_slope_after_knee_constant_amplitude"  # not used for the road spectrum (see above)
@@ -244,6 +244,8 @@ class Fatigue(BuiltinTool):
         for rng, n in ((3.0, 0.5), (4.0, 1.5), (6.0, 0.5), (8.0, 1.0), (9.0, 0.5)):
             out.append(check_record("ASTM E1049 rainflow example", f"count_of_range_{rng:g}", n, counts.get(rng, 0.0),
                                     "1", 1e-12, src))
+        # FAT 71, m 3, knee 1e7 and 22: the shape of the IIW recommendations (Hobbacher 2016; not checked), used here
+        # as test values (the checks compare with closed forms on the same numbers)
         out.append(check_record("S-N curve, FAT 71, m 3", "cycles_at_FAT", 2e6, sn_cycles(71.0, 71.0, 3.0, 1e7, 22.0),
                                 "1", 1e-12, "the FAT class is the stress range at 2e6 cycles"))
         D = miner([(100.0, 0.0, 1000.0)], 71.0, 3.0, 1e7, 22.0)

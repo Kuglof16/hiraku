@@ -94,7 +94,7 @@ def sprung_items(design: dict, items: list) -> list:
         k = kind.get(it.id, "")
         if k in UNSPRUNG_KINDS:
             continue
-        if k in HALF_UNSPRUNG_KINDS:
+        if k in HALF_UNSPRUNG_KINDS:  # half sprung: K2's assumption, no source (k2_vehicle/model.py)
             it = dataclasses.replace(it, mass_kg=0.5 * it.mass_kg,
                                      inertia_kg_mm2=None if it.inertia_kg_mm2 is None else 0.5 * it.inertia_kg_mm2)
         out.append(it)
