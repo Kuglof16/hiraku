@@ -25,7 +25,8 @@ was HEAVY_GB or more (or one of KNOWN_HEAVY_GB, whose value is a floor) is heavy
 --max-heavy (default 2) heavy classes run at once, and a heavy class waits while another
 runs and free memory is under its peak plus RESERVE_GB ("waiting for memory: ..."); the
 lighter classes after it go first meanwhile. A scripted run's own process is not in its
-class's peak on Windows.
+class's peak on Windows. Each worker gets HIRAKU_CONVERGENCE_JOBS=1 unless it is set: the
+convergence test's mesh levels run one at a time, as its KNOWN_HEAVY_GB value counts them.
 
 A class that failed for lack of memory (MemoryError, numpy's _ArrayMemoryError,
 Windows' "paging file too small" WinError 1455: the machine was full, often
@@ -74,6 +75,7 @@ KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
                   "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest": 14.4,
                   "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
                   "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
+CONVERGENCE_JOBS = "HIRAKU_CONVERGENCE_JOBS"  # mesh levels the convergence test runs side by side (worker_env)
 # started first when there are no times yet
 HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verification.test_tools_protocol",
          "tests.solvers.test_frame_shell", "tests.solvers.test_k1_shell", "tests.tools.test_made_tools")
@@ -441,12 +443,21 @@ def schedule(names: list[str], jobs: int, run, memory: dict, max_heavy: int = 2,
     return results
 
 
+def worker_env() -> dict:
+    """A worker's environment: one BLAS thread (qa.procs), and one mesh level at a time in the convergence
+    test (HIRAKU_CONVERGENCE_JOBS=1 unless set): KNOWN_HEAVY_GB counts that class as one level, and levels
+    side by side (up to 46.9 GB for four) would not be seen by the heavy classes started after it."""
+    env = procs.one_blas_thread()
+    env.setdefault(CONVERGENCE_JOBS, "1")
+    return env
+
+
 def _run_one(name: str, tmp: Path, timeout: float, tag: str = "") -> dict:
     out = tmp / f"{name}{tag}.json"
     t0 = time.perf_counter()
     try:  # on timeout the worker and the runs it started are stopped; one BLAS thread each (qa.procs)
         proc = procs.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out), name], cwd=ROOT,
-                         env=procs.one_blas_thread(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
+                         env=worker_env(), text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"name": name, "s": time.perf_counter() - t0, "crash": f"no result within {timeout:g} s"}
     s = time.perf_counter() - t0
