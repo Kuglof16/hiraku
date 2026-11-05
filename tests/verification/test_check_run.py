@@ -435,6 +435,17 @@ class CheckRun(unittest.TestCase):
         ev = self._finish(self._unjudged_case(self._red(sample_events())), "stopped", "not_judged")
         self.assertEqual(self.rules(ev), set())
 
+    def test_not_judged_after_a_case_ended_without_a_verdict(self):
+        # a load case whose mismatch was ended (cause ends_case, contract 08cf4d6) is named by the stop as not
+        # judged, a -beyond case without a criterion too (the video run of t17's candidate): not_judged agrees
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "the hand calculation stops short",
+                 "fix": "none in this run", "resolved": False, "ends_case": True}
+        ev = self._insert(sample_events(), "comparison.recorded", "cause.recorded", cause)
+        self.assertNotIn("run.stop_code", self.rules(self._finish(ev, "stopped", "not_judged")))
+        # resolved later, it no longer stands
+        ev = self._insert(ev, "cause.recorded", "cause.recorded", dict(cause, resolved=True, resolved_by="cmp-0001"))
+        self.assertIn("run.stop_code", self.rules(self._finish(ev, "stopped", "not_judged")))
+
     def test_round_limit_needs_the_revisions_used(self):
         # one design version and round_limit 1: no revision was made
         self.assertIn("run.stop_code", self.rules(self._finish(sample_events(), "stopped", "round_limit", "pending")))
