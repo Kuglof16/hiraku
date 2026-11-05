@@ -1,6 +1,10 @@
 // Names shown on the screen and number formatting. Formatting only rounds
 // recorded values for display; it never makes a new number.
 
+// The cuts' words for a pass and a fail (one wording on every cut).
+export const OK_WORD = "✓ OK";
+export const NG_WORD = "✕ NG";
+
 export const DOMAINS = ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"];
 
 export const DOMAIN_JA = {

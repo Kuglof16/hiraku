@@ -614,6 +614,8 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .card .terms { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; font-size: 15px; margin-top: 4px; }
 .card .terms .barw { height: 8px; background: var(--rule); border-radius: 4px; overflow: hidden; }
 .card .terms .barw i { display: block; height: 100%; background: var(--blue); }
+/* what the bars are (app.js renderChain): one line above them */
+.card .terms-cap { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.3; }
 .card.wait { border-style: dashed; color: var(--muted); }
 .card.wait h3 { color: var(--muted); }
 .card.ok { border: 2px solid var(--green); }
@@ -679,6 +681,13 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .draftbar .why { color: var(--muted); font-size: 13px; }
 .draftbar .confirm, .draftbar .err { color: var(--red); font-weight: 600; }
 .draftbar .busy { color: var(--blue); }
+/* a way to start: its button and one line on what it is */
+.draftbar .way { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+/* a start on its way (app.js draftStart): the buttons greyed, the line and the seconds */
+.draftbar.starting .way button { opacity: 0.45; cursor: progress; }
+.draftbar .starting { flex-basis: 100%; color: var(--blue); }
+.draftbar .starting .secs { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.draftbar .err a { font-weight: 600; }
 .runlist .new-request { font-weight: 700; color: var(--ink); }
 .grid-head { display: flex; align-items: center; gap: 20px; font-size: 18px; flex-wrap: nowrap; min-width: 0; }
 .grid-head h2 { font-size: 28px; margin: 0; white-space: nowrap; }
@@ -734,6 +743,18 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .tile .tb.safe { color: var(--blue); border-color: var(--blue); font-size: 13px; padding: 1px 8px; white-space: nowrap; }
 .grid-banner { display: flex; flex-direction: column; gap: 2px; border: 1.5px solid #e9b872; background: var(--orange-pale); border-radius: 12px; padding: 8px 16px; font-size: 16px; }
 .grid-banner span { color: var(--muted); font-size: 14px; }
+/* the newest report's next changes (js/report_next.js): the domain, the change large, the reason under くわしく */
+.report-next { flex: none; max-height: 34%; overflow: auto; border: 1.5px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 16px; }
+.report-next[hidden] { display: none; }
+.report-next h3 { margin: 0 0 4px; font-size: 18px; }
+.report-next .rn-src { margin-left: 10px; font-size: 13px; font-weight: 400; color: var(--muted); }
+.report-next ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.report-next li { display: grid; grid-template-columns: 7em minmax(0, 1fr); column-gap: 10px; align-items: baseline; }
+.report-next .rn-dom { font-size: 15px; color: var(--muted); }
+.report-next .rn-change { font-size: 19px; font-weight: 700; line-height: 1.35; }
+.report-next details { font-size: 13px; color: var(--muted); }
+.report-next details summary { cursor: pointer; }
+.report-next .rn-rule { display: block; }
 /* held: a load case without a criterion whose count is not 0 (js/held.js): a 保留 band over the tile's colour */
 .tile.held { border-color: #d98a1c; border-style: solid; }
 .tile.held .state { color: var(--muted); text-decoration: line-through; }
@@ -830,13 +851,19 @@ body.video .mode .stop-btn { display: none; }
 .runlist.plain .rmeta .end { color: var(--ink); }
 .runlist.plain .rmeta .end[data-end="stopped"] { color: var(--red); }
 .runlist.plain .lreq { padding: 7px 6px; }
-.runlist.plain .more { display: inline; margin-left: 10px; }
-.runlist.plain .more summary { display: inline; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; list-style: none; }
-.runlist.plain .more[open] { display: block; margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); font-size: 14px; }
-.runlist.plain .more[open] summary { display: block; margin-bottom: 4px; }
-.runlist.plain .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.runlist.plain .more .cut { font-size: 12px; font-weight: 700; color: var(--blue); border: 1.5px solid var(--blue); border-radius: 999px; padding: 0 8px; }
-.runlist.plain .more .cost.over { color: var(--red); }
+/* a row's くわしく (the people's list and ?dev=1's demo rows): the tags, files and cost lines inside, after the line */
+.runlist .more { display: inline; margin-left: 10px; }
+.runlist .more summary { display: inline; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; list-style: none; }
+.runlist .more[open] { display: block; margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line); font-size: 14px; }
+.runlist .more[open] summary { display: block; margin-bottom: 4px; }
+.runlist .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.runlist .more .cuts { display: flex; gap: 6px; margin-top: 2px; }
+.runlist .more .cut { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+.runlist .more .cost.over { color: var(--red); }
+.runlist .demo .dhead + .more { margin-left: 0; }
+/* a new request, first in the list */
+.runlist .fresh-top { display: flex; align-items: baseline; gap: 14px; margin: 0 0 10px; }
+.runlist .fresh-top .new-request { font-size: 17px; font-weight: 700; color: var(--panel); background: var(--ink); border-color: var(--ink); padding: 4px 18px; }
 .runlist.plain .lbtns a { margin-right: 0; }
 .runlist.plain .going { font-weight: 600; }
 .runlist.plain table td:nth-child(2) { width: 70px; color: var(--muted); }

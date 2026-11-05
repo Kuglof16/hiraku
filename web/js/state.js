@@ -16,6 +16,7 @@ import {
   fmtVU,
   opLabel,
   plainText,
+  plainToolName,
   quantityName,
   ruleOf,
 } from "./labels.js";
@@ -144,6 +145,21 @@ function who(ev) {
   return agentName(ev.agent) || "HIRAKU";
 }
 
+// A tool in the log's words: labels.js's name for viewers, else the record's own title
+// (tool.checked, up to its bracket: "フレームの静的 (3D の梁)" -> "フレームの静的"), else the
+// name as written.
+function toolWord(s, name) {
+  const title = String(s.tools[name]?.title ?? "").replace(/\s*[（(].*$/, "");
+  return plainToolName(name) ?? (title || name);
+}
+
+// A load case in the log's words: its title in the record (the version's load cases, else the
+// project's), else its id as written.
+function caseWord(s, id, version = null) {
+  const lc = [...(s.versionLoadCases[version] ?? []), ...(s.project?.load_cases ?? [])].find((c) => c.load_case_id === id);
+  return lc?.title ? `「${lc.title}」` : id ?? "";
+}
+
 // Apply one event (mutates and returns s). Unknown kinds are counted, not fatal.
 export function applyEvent(s, ev) {
   const d = ev.data ?? {};
@@ -215,6 +231,11 @@ export function applyEvent(s, ev) {
         const n = (c) => ras.filter((a) => a.choice === c).length;
         said.push(`規則の当たりの答え: 設計を直す ${n("revise_design")}・規則を外す ${n("drop_rule")}`);
       }
+      // asked (hearing.asked), with neither an answer nor a default in hearing.answered: the
+      // record's "答えが無いまま" (hiraku/intake/hearing.py unresolved), said what it is
+      const got = new Set(ans.map((a) => a.key));
+      const left = (s.intake.questions ?? []).filter((q) => q.req_key && !got.has(q.req_key)).length;
+      if (left) said.push(`答えが無いまま ${left} 個 (聞いたが、答えも既定値も無いので要件に入っていない)`);
       const txt = said.join("・");
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
@@ -349,7 +370,7 @@ export function applyEvent(s, ev) {
       s.running[d.analysis_id] = { ...d, agent: ev.agent, t: ev.t, design_version: ev.design_version ?? null };
       focusLoadCase(s, d.load_case_id, ev.t);
       if (agent) agent.status = "解析中";
-      const txt = `${d.tool} で解析を始めた (${d.load_case_id})`;
+      const txt = `${toolWord(s, d.tool)} で解析を始めた: ${caseWord(s, d.load_case_id, ev.design_version)}`;
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -360,7 +381,7 @@ export function applyEvent(s, ev) {
       focusLoadCase(s, d.load_case_id, ev.t);
       if (d.status === "failed") {
         if (agent) agent.status = "解析が通らない";
-        logRecord(s, ev, d.analysis_id, "bad", `${who(ev)}: ${d.tool} の解析が通らなかった: ${d.error ?? ""}`);
+        logRecord(s, ev, d.analysis_id, "bad", `${who(ev)}: ${toolWord(s, d.tool)} の解析が通らなかった: ${d.error ?? ""}`);
         setActivity(s, ev, `解析が通らなかった: ${d.error ?? ""}`);
       } else {
         if (agent) agent.status = "解析した";

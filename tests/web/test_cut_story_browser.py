@@ -172,7 +172,7 @@ SIZES = """() => {
     others: [...document.querySelectorAll("#stage *")].filter((el) => own(el) && shown(el) && !el.closest(big) && !el.closest(".n06-big") && !el.classList.contains("story-over")).map(px),
     grid: q(".grid-tile").map((el) => ({ featured: el.dataset.featured === "1", area: area(el) })),
     n06: { big: q(".n06-big").map(area), small: q(".n06-tile").map(area) },
-    label: document.querySelector(".n07-label")?.textContent ?? null,
+    label: [...document.querySelectorAll(".n07-label")].map((el) => [...el.querySelectorAll(".name, .fixed")].map((x) => x.textContent).join(" ")).join(" / ") || null,
     fixed: q(".n07-label .fixed").map((el) => [el.textContent, getComputedStyle(el).color]),
   };
 }"""
@@ -505,23 +505,44 @@ class CutStoryTest(unittest.TestCase):
         for got in seen.values():
             self.assertEqual(got["counts"].get("legend"), 1)
             self.assertNotIn("number", got["counts"])  # the legend is the stress and the allowable only
-            self.assertEqual(got["counts"].get("label"), 1)
-            self.assert_larger(got, 1)
+            self.assertEqual(got["counts"].get("label"), 2)  # 補強の前 and 補強の後, side by side
+            self.assert_larger(got, 2)
             self.assertEqual(got["sizes"]["fixed"], [])  # no verdict in this run: nothing added
 
+    def test_n02_legend_at_one_and_a_half_times_the_small_text(self):
+        """The legend's words (重心, the red of the case past the limit) and their marks are at
+        least 1.5 x the small text (max(min_text_px, pane.rate.size_px)) and stay in their pane."""
+        L = self.layout
+        small = max(L["min_text_px"], L["n02"]["pane"]["rate"]["size_px"])
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        page.goto(f"{self.base}/cut.html?cut=n02&run=sample&t=0")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        got = page.evaluate("""() => {
+          const ul = document.querySelector(".n02-legend");
+          const pane = ul.closest(".n02-pane").getBoundingClientRect();
+          return { px: parseFloat(getComputedStyle(ul).fontSize), words: [...ul.querySelectorAll("li span")].map((s) => s.textContent),
+                   marks: [...ul.querySelectorAll("li > svg, li > i")].map((m) => m.getBoundingClientRect().height),
+                   right: Math.max(...[...ul.querySelectorAll("li span")].map((s) => s.getBoundingClientRect().right)), paneRight: pane.right };
+        }""")
+        page.close()
+        self.assertEqual(got["words"], ["重心", "半透明の赤: 限界の外の条件の動き"])
+        self.assertGreaterEqual(got["px"], 1.5 * small)
+        self.assertGreaterEqual(min(got["marks"]), 1.5 * 16)  # the marks grow with the words (16 px the smallest before)
+        self.assertLessEqual(got["right"], got["paneRight"])
+
     def test_n07_fixed_only_when_the_verdict_passes(self):
-        """補強の後 says "✓ 直った" in green only when the record judges version 2 a pass."""
+        """補強の後 says "✓ OK" in green only when the record judges version 2 a pass."""
         swap_to = self.layout["n07"]["times"]["swap_to_s"]
         for key, passed in (("n07_pass", True), ("n07_fail", False)):
             seen = self.check_cut("n07", self.base, self.runs[key], tag=key)
             for t, got in seen.items():
                 sz = got["sizes"]
                 if t >= swap_to and passed:
-                    self.assertEqual(sz["fixed"], [["✓ 直った", "rgb(47, 125, 79)"]], (key, t))
-                    self.assertEqual(sz["label"], "補強の後 ✓ 直った")
+                    self.assertEqual(sz["fixed"], [["✓ OK", "rgb(47, 125, 79)"]], (key, t))
+                    self.assertEqual(sz["label"], "補強の前 / 補強の後 ✓ OK")
                 else:
                     self.assertEqual(sz["fixed"], [], (key, t))
-                    self.assertNotIn("直った", sz["label"], (key, t))
+                    self.assertNotIn("OK", sz["label"], (key, t))
 
     def test_n15(self):
         seen = self.check_cut("n15", self.base, self.runs["n15"])
