@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from hiraku import contract
 from hiraku.catalog import REPO_ROOT, build_tests, load_catalog, load_requirements, project_fields, read_data, skipped_text
@@ -109,8 +109,11 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
               root: Path | str = layout.RUNS_DIR, slug: str | None = None,
               formulas: FormulaRegistry | None = None, tools: dict[str, AnalysisTool] | None = None,
               designgen: Any = None, intake: bool = False, intake_events: list[Record] | None = None,
-              driver: str | None = None, **store_kw: Any) -> RunContext:
+              driver: str | None = None, on_folder: Callable[[Path], None] | None = None,
+              **store_kw: Any) -> RunContext:
     """Make the run folder and everything the agents start from.
+
+    on_folder: called with the run folder as soon as it exists (with events.jsonl), before the tool shelf is checked.
 
     Tests: see build_tests; the ones left out are named in an agent.said of system.
     Without a design file the run starts at version 0 with no load cases and the
@@ -171,6 +174,8 @@ def start_run(requirements_path: Path | str, *, design_path: Path | str | None =
                          if e["kind"] == "domains.picked" else e for e in intake_events]
     close_ownerless_plugin_runs(Path(root))
     store = RunStore.create(fields, root=Path(root), slug=slug, **store_kw)
+    if on_folder is not None:  # the folder and events.jsonl exist from here: the screen can open the run while the
+        on_folder(store.path)  # tool shelf is checked below (about 30 s idle, 250 s on a busy machine)
     ctx = RunContext(store=store, formulas=formulas, tools=dict(tools),
                      designgen=designgen if designgen is not None else load_designgen(), requirements_file=req,
                      requirements_path=Path(requirements_path))
