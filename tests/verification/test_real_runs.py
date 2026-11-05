@@ -45,12 +45,12 @@ CLAUDE_ONLY = ".claude.yaml"  # requirements only Claude can run (no scripted wa
 NO_SCRIPT = "台本の予測のしかたが無いので回せない荷重条件"  # what the scripted run says for them
 VIDEO = "offroad-4w-video.yaml"  # the requirements whose run is also made twice and compared
 # load cases the scripted plan ends not judged: their mismatch cause says ends_case (contract 08cf4d6),
-# so the run stops not_judged with every other tile of the last version green. R7-hand: the grip's movement
-# with the frame has no hand calculation; R7-foot: the pedal on a rail strut, the ladder's twist is not in the
-# hand calculation (R7_PLAN expected_mismatch in hiraku/catalog/builders/load_path.py). The N15 plan's last
-# version has no red (tests/agent/test_scene_n15.py ENDED_CASES).
-_R7_ENDED = {"R7-hand-300N", "R7-foot-500N"}
-ENDED = {"offroad-4w.yaml": _R7_ENDED, "offroad-4w-n15.yaml": _R7_ENDED}
+# so the run stops not_judged with every other tile of the last version green. R7-hand is judged on its hand
+# bound (load_path.grip_bound) and the plans' rev_controls answers it, putting the pedal on its post too. On the
+# post the demo's R7-foot still differs (K0 0.252 mm, the tool 0.402 mm, 0.595 against 0.3) and its plan has no
+# red that thickens the rails, so the demo ends with R7-foot not judged (version 5). The N15 plan's version 6
+# thickens the rails for R1s, and R7-foot agrees there (0.296): the N15 run ends done (tests/agent/test_scene_n15.py).
+ENDED = {"offroad-4w.yaml": {"R7-foot-500N"}}
 # requirements whose scripted plan ends behind a red of a lower stage (HK5): the plan's next revision is not for
 # the red's modules, so the run stops not_judged and says the lower stage's red is left (none at present)
 BEHIND_RED: set[str] = set()
