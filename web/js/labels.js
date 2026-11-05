@@ -90,6 +90,26 @@ export const STOP_CODE_JA = {
   red_left: "赤の分野を残したまま終わった", // rounds were left, but the hooks' stop limit ended it with red domains
 };
 
+// Why a role stopped (agent.stopped stop_code, contract a31e520), in words. run_ended: the run
+// ended while the role was still working (the run's own reason is run.finished's stop_code).
+export const AGENT_STOP_JA = {
+  done: "自分の仕事を終えた",
+  run_ended: "動いている間に実行が終わった",
+  user_stop: "人が止めた",
+  error: "エラーで終わった",
+};
+export const AGENT_STOP_NOTE_CHARS = 40; // a stop_reason up to this long is shown as it is; a longer one goes under くわしく / into the title
+
+// agent.stopped's data said for people: { code, words, reason } (words: AGENT_STOP_JA of stop_code;
+// reason: stop_reason, trimmed), or null when the record says neither (records from before a31e520).
+export function agentStopWhy(d) {
+  const code = typeof d?.stop_code === "string" ? d.stop_code : null;
+  const reason = typeof d?.stop_reason === "string" && d.stop_reason.trim() ? d.stop_reason.trim() : null;
+  const words = AGENT_STOP_JA[code] ?? null;
+  if (!words && !reason) return null;
+  return { code, words, reason };
+}
+
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
