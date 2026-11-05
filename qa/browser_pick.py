@@ -43,7 +43,8 @@ ALWAYS_PATTERNS = [
     "tests/web/browser.py",
     "tests/web/_*.py",
     "tests/web/helpers*.py",
-    "tests/web/*.js",          # scripts the test helpers put into pages (layout_lint.js)
+    # not tests/web/*.js: a script a test puts into its pages (layout_lint.js) is opened by that test's process,
+    # so the map names its tests (four classes for layout_lint.js on 11/5)
 ]
 
 # Untracked files in these folders count as changed.

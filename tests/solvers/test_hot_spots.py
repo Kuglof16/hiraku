@@ -141,6 +141,8 @@ class FrameShellTest(Shape, unittest.TestCase):
                 self.assertEqual(len(weld) + len(sharp), len(hot))
                 self.assertEqual(weld[0]["value"]["value"], value(rec, "max_hot_spot_stress"))
                 self.assertTrue(all(h["note"].startswith("joint ") for h in weld))
+                self.assertEqual(len({h["where"] for h in weld}), len(weld))  # one place per weld line group (member@joint)
+                self.assertTrue(all("@" in h["where"] for h in weld))
                 self.assertEqual(len(sharp), 1)
                 self.assertEqual(sharp[0]["note"], hot_spots.SHARP_NOTE)
                 self.assertIn("尖り", sharp[0]["note"])  # the judge and check_run skip rows whose note says so

@@ -236,13 +236,21 @@ class LaneChangeTool(K2Tool):
         tf, tr = front[0].mf.trail(front[0].static_load), rear[0].mf.trail(rear[0].static_load)
         big_l = a + b
         expected = delta / (big_l / v + veh.m_total * v / (big_l + tr - tf) * ((b + tr) / cf - (a - tf) / cr))
-        out.append(_check(f"steady cornering 10 m/s, steer 1.5 deg, rigid, cornering stiffness proportional to axle load, "
-                          f"pneumatic trail {tf * 1000:.1f} mm front / {tr * 1000:.1f} mm rear",
+        deg = math.degrees(delta)
+        out.append(_check(f"steady cornering {v:g} m/s, steer {deg:g} deg, rigid, cornering stiffness proportional to "
+                          f"axle load, pneumatic trail {tf * 1000:.1f} mm front / {tr * 1000:.1f} mm rear",
                           "yaw_rate", expected, rates[0], "rad/s", 2e-2,
                           "bicycle model with the side forces acting the trail behind the axles: r = delta / (L / v "
-                          "+ m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))"))
+                          "+ m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))",
+                          case_ja=f"サスペンションの無い車が {v:g} m/s、ハンドル {deg:g}° で回り続けるときの向きの変わる速さ "
+                                  f"(タイヤの曲がる硬さは車軸の荷重に比例。横の力が掛かる点は接地点の前輪 "
+                                  f"{tf * 1000:.1f} mm・後輪 {tr * 1000:.1f} mm 後ろ)",
+                          source_ja="前後 2 輪の自転車モデル (横の力は車軸の少し後ろに掛かる): "
+                                    "r = δ / (L / v + m v ((b + t_r) / C_f - (a - t_f) / C_r) / (L + t_r - t_f))"))
         out.append(_check("steady cornering left + right (bit for bit)", "yaw_rate_mirror_error", 0.0, rates[0] + rates[1],
-                          "rad/s", 0.0, "symmetry", passed=rates[0] == -rates[1]))
+                          "rad/s", 0.0, "symmetry", passed=rates[0] == -rates[1],
+                          case_ja="左に回るときと右に回るときの、向きの変わる速さの和",
+                          source_ja="左右で 1 ビットも違わない (形が左右対称なので)"))
         return out
 
     def _lift(self, veh, speed, y_ref, x_end) -> bool:

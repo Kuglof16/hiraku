@@ -43,7 +43,8 @@ skills:
    - 手計算が値に届かない (式が無い、上から押さえる式がゆるくて限界を超える、など) ときは、手計算で力の道を確かめる: その版で load_path.free_parts の予測 (つながらない部品 0) を記録し、道をたどるツールの解析 (load_path など) に支えのない荷重 (unsupported_load) が無いことを見て、record_cause に tool_decides と tool_decides_reason を付ける。ツールの値で合否が付く (合格も赤もある)。道の確かめもできないときだけ ends_case を付ける。
    - 一致させるために式を作り込まない。式を変えるのは、抜けていた物理を入れるときだけ。
    - シェル (frame_shell) のホットスポット (max_hot_spot_stress) が、梁の式の予測を大きく超えたときは、つなぎ目の壁の曲げを予測し直す: get_context(sections=["joint_wall_inputs"], load_case_id=...) の inputs で、式 frame_static.joint_wall_bending (output sigma) を記録する。
-7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。
+   - 解析の hot_spots (利用率の高い順の場所) を見る。ツールはモデルの全体を見ていて、手計算が見ていない場所 (predicted false) で基準を超えると、その荷重条件は赤になる (合否の basis hot_spot、where つき。ツールが解析のときに作る)。その場所で何が起きているか (どの力が、どの部材や金具を、どう曲げ・引っぱるか) を解析の結果で確かめ、record_cause に verdict_id (その赤の合否の ID) と cause・fix を書いて、設計役に直しを渡す。照合が無いので safe_side・tool_decides・ends_case は付けない。直した版で、その場所が許しの内になれば赤は消える。タイルが道の確かめ (load_path.free_parts) も求めていれば、それも記録する。
+7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。手計算が予測していない場所の赤は、場所と値と原因の ID も書く。
 
 パッケージ役だけがすること:
 - 版ごとに 1 回、rule_check でナレッジの規則を今の版の部品に当てる。当たった規則 (hits の規則の番号と部品) と、当てられなかった規則 (not_evaluable) を、報告に 1 行ずつ入れる。

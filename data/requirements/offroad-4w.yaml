@@ -423,7 +423,7 @@ requirements:
     basis: 'ISO 2867:1980 7.3 (38 mm max) and ISO 2867:1994 Table 2 A (38 mm max), read 2026-11-04. Both are an older edition
       of a standard for agricultural tractors or earth-moving machinery, borrowed for this vehicle (an assumption: no standard
       for a small open off-road vehicle could be read)'
-tests: [P1, R1, N1, R8, R7, H1, H3, H6, H7, P3]
+tests: [P1, R1, R1s, N1, R8, R7, H1, H3, H6, H7, P3]  # R1s: the rail joints' hot spot on the shells (stage 3), as in the video file
 design_file: data/designs/offroad-4w-v1.json
-round_limit: 6  # HK5: one revision per red stage, H7's opening one of its own (data/catalog/scripted.yaml), and one spare for a run with Claude
+round_limit: 6  # HK5: one revision per red stage (layout, the opening, the motor, the joints: data/catalog/scripted.yaml uses 4), and spares for a run with Claude
 cost_limit_usd: 2.0

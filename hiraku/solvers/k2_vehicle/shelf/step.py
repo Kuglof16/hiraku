@@ -215,19 +215,26 @@ class StepClimbTool(K2Tool):
                                   "rolling_resistance": {"value": 0.0, "unit": "1"}}, name="step check, rigid")
         veh = build_vehicle(d)
         front = [i for i, c in enumerate(veh.corners) if c.steer]
-        r = step_push(veh, 0.10, front)
-        dd = math.sqrt(2 * 0.3 * 0.1 - 0.1 ** 2)
-        k = dd / (0.3 - 0.1)
-        out = [_check("stiff wheel r = 300 mm on a 100 mm step", "force_ratio", k, r["ratio"], "1", 2e-2,
-                      "rigid wheel on a step corner: d = sqrt(2 r h - h^2), F/W = d / (r - h)")]
+        rad, hh, big_l = 0.3, 0.10, 2.0
+        r = step_push(veh, hh, front)
+        dd = math.sqrt(2 * rad * hh - hh ** 2)
+        k = dd / (rad - hh)
+        out = [_check(f"stiff wheel r = {rad * 1e3:g} mm on a {hh * 1e3:g} mm step", "force_ratio", k, r["ratio"], "1", 2e-2,
+                      "rigid wheel on a step corner: d = sqrt(2 r h - h^2), F/W = d / (r - h)",
+                      case_ja=f"硬い輪 (半径 {rad * 1e3:g} mm) が {hh * 1e3:g} mm の段差に乗り上がり始めるときの、"
+                              "押す力 / 輪の荷重",
+                      source_ja="段差の角に当たった硬い輪: 角までの前後の距離 d = √(2 r h - h²)、押す力 / 荷重 = d / (r - h)")]
         snap = r["snap"]
         wf = sum(snap["f"][i][2] for i in front)
         w = veh.m_total * G0
         a = 1.0
-        expected = w * (2.0 - a) / 2.0 / (1.0 + k * 0.3 / 2.0)
-        out.append(_check("both front wheels on a 100 mm step, pushed by the rear: front axle load at lift-off",
+        expected = w * (big_l - a) / big_l / (1.0 + k * rad / big_l)
+        out.append(_check(f"both front wheels on a {hh * 1e3:g} mm step, pushed by the rear: front axle load at lift-off",
                           "front_axle_load", expected, wf, "N", 3e-2,
-                          "moment balance with the push at axle height: W_f = m g (L - a) / L / (1 + k r / L)"))
+                          "moment balance with the push at axle height: W_f = m g (L - a) / L / (1 + k r / L)",
+                          case_ja=f"前の 2 輪が {hh * 1e3:g} mm の段差に当たり、後ろから押されて浮く瞬間の、前の車軸の荷重",
+                          source_ja="車軸の高さで押されるときの回る力のつり合い: "
+                                    "前の荷重 = 車の重さ × (L - a) / L / (1 + 押す力の比 × 輪の半径 / L)"))
         return out
 
     def _run(self, design: dict, lp: dict) -> dict:
