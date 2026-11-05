@@ -948,6 +948,8 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
         return _build(values, **kw)
     except _WidthClash as e:
         raise DesignGenError(_width_advice(e, values, kw)) from None
+    except _GussetClash as e:
+        raise DesignGenError(_gusset_advice(e, values, kw)) from None
 
 
 def _build(values: dict | None = None, *, version: int = 1, parent: int | None = None, reason: str | None = None,
@@ -1223,6 +1225,8 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     _check_tubes_through(design)
+    if v["gusset_leg"] > 0:
+        _check_gussets_meshable(design)
     from .kit import joints
 
     joints.join(design)  # every part's joints touch, with where (at_mm) and the axis of the turning ones
@@ -1233,6 +1237,57 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
 
     # module on every part and member, joint on the nodes, design.modules; then the members' and variables' names
     return write_names(split(design))
+
+
+class _GussetClash(DesignGenError):
+    """A gusset the shell mesh cannot place (k1_shell.mesh.joint_layout); build() adds the gusset_leg that fits."""
+
+
+GUSSET_STEP_MM = 10.0  # the steps build() tries gusset_leg down in, after a gusset the shell mesh cannot place
+
+
+def _check_gussets_meshable(design: Record) -> None:
+    """Every gusset sits on a T joint as the shell mesh lays the joints out at its default element size
+    (k1_shell.mesh.joint_layout: a joint whose grid lines clash with a neighbour's, often a long gusset's legs over
+    the tower posts' joints next to it, becomes tied and loses its gussets); else _GussetClash with the mesh's
+    reason. Without a gusset, or a frame the mesh cannot read, nothing is checked here (the mesh reports it)."""
+    from hiraku.solvers.k1_shell import mesh as shell_mesh
+
+    try:
+        shell_mesh.joint_layout(design)
+    except shell_mesh.DesignError as e:
+        if str(e).startswith("gusset "):
+            raise _GussetClash(f"the shell mesh cannot place the gussets: {e}") from None
+    except Exception:  # noqa: BLE001 - the shell mesh's own errors are reported when it is made
+        return
+
+
+def _gusset_advice(e: _GussetClash, values: dict | None, kw: dict) -> str:
+    """The clash's message with what places the gussets: the same gussets with cross_members_through = 0 (with the
+    side frame's feet on the rails' outer walls, the cross members through to those walls clash with them), else the
+    largest gusset_leg (GUSSET_STEP_MM steps down to GUSSET_LEG_MIN_MM), else gusset_leg 0."""
+    v = _values(values)
+    now = v["gusset_leg"]
+    head = f"{e} at gusset_leg = {now:g} mm"
+    if v["cross_members_through"] == 1:
+        try:
+            _build({**(values or {}), "cross_members_through": 0.0}, **kw)
+            return (f"{head}; with cross_members_through = 0 these gussets are placed (the cross members through the "
+                    f"rails clash with the joints next to them, such as the side frame's feet on the outer walls): make "
+                    f"cross_members_through 0 to keep the gussets, or gusset_leg 0 to keep the through members")
+        except DesignGenError:
+            pass
+    leg = now
+    while leg - GUSSET_STEP_MM >= GUSSET_LEG_MIN_MM - 1e-9:
+        leg -= GUSSET_STEP_MM
+        try:
+            _build({**(values or {}), "gusset_leg": leg}, **kw)
+        except _GussetClash:
+            continue
+        except DesignGenError as other:
+            return f"{head}; at {leg:g} mm the design stops on something else: {other}"
+        return f"{head}; make gusset_leg {leg:g} mm or less (or 0: no gussets)"
+    return f"{head}; no gusset_leg down to {GUSSET_LEG_MIN_MM:g} mm is placed: make it 0 (no gussets)"
 
 
 def _check_tubes_through(design: Record) -> None:
