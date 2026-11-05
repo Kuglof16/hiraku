@@ -111,6 +111,12 @@ class SchemaTest(unittest.TestCase):
         self.assertEqual(contract.errors("cause", {**c, "tool_decides": True, "tool_decides_reason": "no plates by hand"}), [])
         self.assertNotEqual(contract.errors("cause", {**c, "tool_decides": True, "ends_case": True}), [])
         self.assertEqual(contract.errors("cause", {**c, "tool_decides": False, "ends_case": True}), [])
+        self.assertNotEqual(contract.errors("cause", {**c, "tool_decides": True, "safe_side": True}), [])
+        call = {"comparison_id": "cmp-0001", "cause": "plates by hand: no", "fix": "the tool decides"}
+        self.assertEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True,
+                                                                      "tool_decides_reason": "x"}), [])
+        self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "safe_side": True}), [])
+        self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "ends_case": True}), [])
 
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
