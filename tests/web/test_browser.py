@@ -22,7 +22,7 @@ from tests.web.mesh_fixture import mesh_events
 from tests.web.safe_side_fixture import safe_side_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -139,7 +139,8 @@ def n05_layout():
 class BrowserReplayTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -151,6 +152,7 @@ class BrowserReplayTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, query):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
@@ -394,7 +396,7 @@ class BrowserReplayTest(unittest.TestCase):
                 if tmp:
                     shutil.rmtree(tmp)
                 self.skipTest(f"the solvers do not import in this Python ({e}); set HIRAKU_WEB_DEV_RUNS")
-        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None)
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
@@ -1456,7 +1458,11 @@ class BrowserReplayTest(unittest.TestCase):
         run_id = "20261106-100000-offroad-4w"
         (tmp / "showcase" / run_id).mkdir(parents=True)
         shutil.copyfile(SAMPLE_EVENTS, tmp / "showcase" / run_id / "events.jsonl")
-        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=tmp / "showcase")
+        from hiraku.webserve.launch import Launcher
+
+        # the list's launcher without an API key, whatever the window running the test has (nothing is started)
+        lau = Launcher(tmp / "runs", env={})
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=tmp / "showcase", launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:

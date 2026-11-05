@@ -6,13 +6,16 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 """
 
 import os
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku.webserve.server import make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -38,9 +41,18 @@ PROBE = """() => {
 class RunListOrderBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
-        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        from hiraku.webserve.launch import Launcher
+
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the servers have no runs of their own
+        # the list's launcher with and without an API key, whatever the window running the test has
+        # (the key changes the list's buttons; nothing is started here)
+        cls.servers, cls.bases = [], {}
+        for name, env in (("no key", {}), ("key", {"ANTHROPIC_API_KEY": "test-value-not-a-real-key"})):
+            lau = Launcher(cls.tmp / "runs", env=env)
+            server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            cls.servers.append(server)
+            cls.bases[name] = f"http://127.0.0.1:{server.server_address[1]}"
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
 
@@ -48,14 +60,16 @@ class RunListOrderBrowserTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.browser.close()
         cls.pw.stop()
-        cls.server.shutdown()
-        cls.server.server_close()
+        for server in cls.servers:
+            server.shutdown()
+            server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def probe(self, query):
+    def probe(self, query, key):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.bases[key]}/?{query}")
         page.wait_for_selector("#launch .demo-runs")
         got = page.evaluate(PROBE)
         page.close()
@@ -63,21 +77,25 @@ class RunListOrderBrowserTest(unittest.TestCase):
         return got
 
     def test_a_new_request_first_for_people(self):
-        got = self.probe("list=1")
-        self.assertEqual(got["first"], "fresh-top")
-        self.assertEqual(got["firstLink"], "＋ 新しく依頼する")
-        self.assertEqual(got["freshCount"], 1)
+        for key in self.bases:
+            with self.subTest(key):
+                got = self.probe("list=1", key)
+                self.assertEqual(got["first"], "fresh-top")
+                self.assertEqual(got["firstLink"], "＋ 新しく依頼する")
+                self.assertEqual(got["freshCount"], 1)
 
     def test_dev_rows_title_first_tags_under_more(self):
-        got = self.probe("list=1&dev=1")
-        self.assertEqual(got["first"], "fresh-top")
-        self.assertEqual(got["firstLink"], "＋ 新しく依頼する")
-        self.assertGreater(got["rows"], 0)
-        self.assertTrue(got["tagsAny"])  # the demo runs have cut tags (data/catalog/demo_runs.yaml)
-        self.assertTrue(got["tagsInside"])
-        for text in got["outside"]:
-            for w in (".yaml", "(A1)", "HK1", "N09", "N13"):
-                self.assertNotIn(w, text)
+        for key in self.bases:
+            with self.subTest(key):
+                got = self.probe("list=1&dev=1", key)
+                self.assertEqual(got["first"], "fresh-top")
+                self.assertEqual(got["firstLink"], "＋ 新しく依頼する")
+                self.assertGreater(got["rows"], 0)
+                self.assertTrue(got["tagsAny"])  # the demo runs have cut tags (data/catalog/demo_runs.yaml)
+                self.assertTrue(got["tagsInside"])
+                for text in got["outside"]:
+                    for w in (".yaml", "(A1)", "HK1", "N09", "N13"):
+                        self.assertNotIn(w, text)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from tests.web.firsttime_fixture import RUN_ID, firsttime_events
 from tests.web.test_layout_lint_browser import ENABLED, _write_run
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -36,7 +36,7 @@ class FirstTimeBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         _write_run(cls.tmp / "runs", RUN_ID, firsttime_events())
-        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None)
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         cls.pw = sync_playwright().start()
