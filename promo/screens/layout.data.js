@@ -2889,7 +2889,7 @@ window.PROMO_LAYOUT = {
         }
       },
       "n01": {
-        "message": "越えられる段差 (100 mm) と、越えられない段差 (250 mm)",
+        "message": "越えられる段差 (100 mm) と、走って向かっても越えられない段差 (330 mm、車輪の半径より高い)",
         "limits": {
           "number": 2,
           "why": "the two step heights are the comparison"
