@@ -55,8 +55,10 @@ offroad-4w:
   # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
   # version 1 layout and the hand hold to get in by (stage 0) -> version 2 the opening, shut by the bolted net
   # (stage 0, H7) -> version 3 the controls (stage 1: R7-hand red on the grip's bound, R7-foot ended: rev_controls)
-  # -> version 4 the vehicle's motion (stage 2, P3) -> version 5: every tile green (expected; to be confirmed on a
-  # real scripted run). No revision adds the parts' brackets by hand: no red of a version asks for them.
+  # -> version 4 the vehicle's motion (stage 2, P3) -> version 5: no red tile; R7-hand passes on its bound (safe side),
+  # R7-foot still ends without a verdict (on the post the rails under it move, which K0 takes as rigid; N15's thicker
+  # rails make it agree), so the run stops not_judged (the EC2 scripted run of 6c55e4d, 20261105-001239).
+  # No revision adds the parts' brackets by hand: no red of a version asks for them.
   revise:
     - &rev_layout
       say: 組み立て (レイアウト) の赤を、ほかの何よりも先に直すため、トレッドを広げ、運転席の位置を直し、横の守りと握り棒を付けます
@@ -126,7 +128,10 @@ offroad-4w:
         9.66 mm (tool 0.815); tower_t 3.2 alone 8.05; tower_b 35 and tower_t 3.2 5.60; tower_b 38 and tower_t 3.2 4.72
         (tool 0.788); 38 x 4.5 4.13. On N15's version 5 (rails and gussets): 9.10, with 38 x 3.2 4.23. tower_b must stay
         under rail_b (40 mm). The pedal (load_path.control_deflection): on the rail strut K0 0.0427 against 0.1888 mm
-        (demo version 4, cmp-0102); with the post 0.581 against 0.640 mm (-9 %); N15 version 5 0.581 against 0.564 (+3 %)
+        (demo version 4, cmp-0102); on the post with the thicker towers K0 0.252 against 0.402 mm (diff_rel +0.595, past
+        0.3: the rails under the post, which K0 takes as rigid, still move), so the demo's R7-foot still ends without a
+        verdict; with N15's rails (rail_t 4.5 mm, version 6) 0.252 against 0.327 mm (+0.296, a match). The EC2 scripted
+        runs of 6c55e4d: demo v004 cmp-0100, N15 v006 cmp-0258 (R7-hand 4.72 and 4.23 mm, safe side)
     - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
         motor_peak_power: {value: 15, unit: kW}
