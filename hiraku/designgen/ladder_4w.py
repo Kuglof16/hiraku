@@ -813,6 +813,31 @@ VARIABLES["battery_split"] = Var(
     "on its side, wired in series (the second to the first). build() refuses when the packs do not fit between the "
     "rails or between the seat cross members. Written into design.variables only when it is 2")
 OPTIONAL["battery_split"] = ("battery_split",)
+# The suspension brackets' joint (part.joint, docs/contract.md 金具の継ぎ手; load case R9 サスペンション取付):
+# the clevis plates' thickness, the pin's diameter and the fillet weld's leg, revisable by the suspension's
+# designer. The number of pins is not a variable: one through each clevis (kit/mounts.PINS_PER_BRACKET). The
+# brackets' mass follows from mount_plate_t (kit/mounts._bracket). Written into design.variables only when one
+# of the three is not its default (so the default design is as before).
+VARIABLES["mount_plate_t"] = Var(
+    "mm", mounts.BRACKET_T_MM, 2.3, 9.0,
+    "the suspension brackets' plate thickness (two plates per clevis): the default 3.2 mm is the brackets' plate as "
+    "before (kit/mounts.BRACKET_T_MM, an assumption, not sized); the range is HIRAKU's for R9 to size it")
+VARIABLES["mount_bolt_d"] = Var(
+    "mm", mounts.BOLT_D_MM, 6.0, 20.0,
+    "the suspension brackets' pin (bolt) diameter, grade 8.8: the default 10 mm is HIRAKU's assumption (not sized); "
+    "the range is HIRAKU's for R9 to size it")
+VARIABLES["mount_weld_leg"] = Var(
+    "mm", mounts.WELD_LEG_MM, 2.0, 8.0,
+    "the fillet weld's leg along each bracket plate's base (throat 0.7 leg): the default 3 mm is HIRAKU's assumption "
+    "(not sized); the range is HIRAKU's for R9 to size it")
+OPTIONAL["mount_joint"] = ("mount_plate_t", "mount_bolt_d", "mount_weld_leg")
+
+
+def mount_joint(v: dict) -> Record:
+    """The suspension brackets' part.joint from the variables (missing ones at their defaults)."""
+    def get(k):
+        return float(v.get(k, VARIABLES[k].default))
+    return mounts.joint_sizes(get("mount_plate_t"), get("mount_bolt_d"), get("mount_weld_leg"))
 INTEGERS = INTEGERS + ("battery_split",)
 # The net without side bars (build_side_net), assumptions without a source:
 SIDE_NET_CLIP_MM = 20.0  # a quick-release clip's size (a cube), between the net's edge and the post
@@ -1139,7 +1164,8 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
                                                      "dims": {"lower": {"b": v["lower_b"], "h": v["lower_b"]}}},
                               rho, post_dx, rail, avoid=("motor", "reducer"), lower_cross=v["lower_cross"] == 1,
                               whole=REAR_OVERHANG_RAILS,
-                              rear_post_dx={"A": x_a - post_x} if x_a - post_x != post_dx else None)
+                              rear_post_dx={"A": x_a - post_x} if x_a - post_x != post_dx else None,
+                              joint=mount_joint(v))
     except (mounts.MountError, ValueError) as e:
         raise DesignGenError(str(e)) from None
     _check_rear_post(supports, post_x, v["tower_b"])
@@ -1242,7 +1268,7 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     add_options(design, v, guard, rho, net, closure)
     if v["seat_slide"] > 0 and BODY_PARTS:
         _driver_on_the_slide(design, "occupant_R")
-    arms.pivot_brackets(design, rho)  # clevis brackets at the lower arm pivots and damper tops on bare nodes
+    arms.pivot_brackets(design, rho, mount_joint(v))  # clevis brackets at the lower arm pivots and damper tops on bare nodes
     _floors_clear_of_brackets(design)  # each floor can be lowered in from above
     systems.write(design)  # system and connects_to of every part, when the contract has them
     if x_a - post_x != post_dx:

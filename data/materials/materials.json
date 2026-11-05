@@ -5,7 +5,8 @@
     "nu": 0.3,
     "density_kg_m3": 7850.0,
     "yield_MPa": 245.0,
-    "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
+    "tensile_MPa": 400.0,
+    "source": "yield: JIS G 3466 minimum yield point for STKR400; tensile: JIS G 3466 minimum tensile strength for STKR400 (400 MPa, the grade's name; used by R9's weld and bearing checks); E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository.",
     "verified": false
   },
   "stkm13a": {
