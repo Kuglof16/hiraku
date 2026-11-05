@@ -233,6 +233,55 @@ class SuiteQueue(unittest.TestCase):
         self.assertEqual(len(said), 1, said)  # said once per holder, not at every poll
         self.assertTrue(said[0].startswith("waiting for ") and str(rt.ROOT) in said[0], said)
 
+    def test_the_browser_suite_has_a_lock_of_its_own(self):
+        # beside the plain suite (another lock file), not beside another browser suite
+        p = self._holder(30)
+        try:
+            b = rt.take_queue(4, wait=False, queue="browser")
+            self.assertIsNotNone(b, "the browser suite waited for the plain suite")
+            self.assertIsNone(rt.take_queue(4, wait=False, queue="browser"))
+            b.close()
+        finally:
+            procs.kill_tree(p)
+            p.wait()
+
+    def test_a_mapping_worker_lists_the_repository_files_its_test_used(self):
+        # PY_MAP=1: the worker's audit hook collects the repository files opened or imported (qa.browser_pick's input)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "w.json"
+            env = dict(os.environ, **{rt.PY_MAP: "1"})
+            subprocess.run([sys.executable, "-m", "qa.run_tests", "--worker", str(out),
+                            "tests.verification.test_run_tests._ReadsAFile"], cwd=rt.ROOT, env=env, check=True,
+                           capture_output=True)
+            files = json.loads(out.read_text(encoding="utf-8"))["py_files"]
+        self.assertIn("data/catalog/scripted.yaml", files)  # opened by the test
+        self.assertIn("qa/procs.py", files)  # imported
+        self.assertFalse(any(f.startswith(("..", "/")) or ":" in f for f in files), files[:5])
+
+    def test_browser_switches_the_browser_tests_on_for_tests_web(self):
+        from unittest import mock
+
+        seen = {}
+
+        def stop_after_discovery(only=None, split=None):
+            seen.update(only=only, switch=os.environ.get(rt.BROWSER_SWITCH))
+            raise SystemExit(0)
+
+        with mock.patch.dict(os.environ, {}, clear=False), mock.patch.object(rt, "discover", stop_after_discovery), \
+                mock.patch.object(rt, "_take_lock"), mock.patch.object(rt, "_others", return_value=[]):
+            os.environ.pop(rt.BROWSER_SWITCH, None)
+            with self.assertRaises(SystemExit):
+                rt.main(["--browser", "--no-wait"])
+        self.assertEqual(seen, {"only": [rt.BROWSER_PREFIX], "switch": "1"})
+
+
+class _ReadsAFile(unittest.TestCase):
+    """Run only by name from test_a_mapping_worker_lists_the_repository_files_its_test_used (a leading
+    underscore: discovery still finds it, so it does nothing but read a file)."""
+
+    def test_read(self):
+        (rt.ROOT / "data" / "catalog" / "scripted.yaml").read_bytes()
+
 
 class _Alone:  # stands for a TestCase (not one, so discovery does not run it)
     def test_a(self): pass
