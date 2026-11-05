@@ -2356,7 +2356,7 @@
         },
         "tool_decides": {
           "type": "boolean",
-          "description": "The hand calculation does not reach the quantity (no formula, only a loose bound, or a cause it cannot model), but the load path was checked by hand in this version (a load_path prediction that every loaded part is joined to the frame, and the tool's analysis found no unsupported load): the tool's value decides the verdict (basis path_checked, pass or fail). Not with ends_case."
+          "description": "The hand calculation does not reach the quantity (no formula, only a loose bound, or a cause it cannot model), but the load path was checked by hand in this version (a load_path prediction that every loaded part is joined to the frame, and the tool's analysis found no unsupported load): the tool's value decides the verdict (basis path_checked, pass or fail). Not with ends_case or safe_side (one verdict: safe_side's from the prediction, tool_decides' from the analysis)."
         },
         "tool_decides_reason": {
           "type": "string",
@@ -2416,6 +2416,22 @@
                 "const": true
               },
               "ends_case": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "safe_side"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "safe_side": {
                 "const": true
               }
             }
@@ -4143,8 +4159,50 @@
         "ends_case": {
           "type": "boolean",
           "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
+        },
+        "tool_decides": {
+          "type": "boolean",
+          "description": "The hand calculation does not reach the quantity; the version's load path was checked by hand, so the tool's value decides (cause.tool_decides). Not with ends_case or safe_side."
+        },
+        "tool_decides_reason": {
+          "type": "string",
+          "description": "Why the hand calculation does not reach the quantity."
         }
-      }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "safe_side"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "safe_side": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "ends_case"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "ends_case": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
     },
     "assembly_step": {
       "description": "One step of the assembly order (A7).",
