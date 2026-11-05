@@ -69,6 +69,11 @@ class TyreCurvesTest(unittest.TestCase):
             self.assertEqual(ser[f"slip_ratio.{c.id}"]["t_s"], ser["speed"]["t_s"])
             curves = [s for n, s in ser.items() if n.startswith(f"tyre_fy_curve.{c.id}.")]
             self.assertEqual(len(curves), len(TYRE_CURVE_LOADS))
+            fx = ser[f"tyre_fx_curve.{c.id}.{float(c.static_load):.0f}"]
+            self.assertEqual((fx["x"]["quantity"], fx["x"]["unit"]), ("slip_ratio", "%"))
+            k10 = fx["x"]["values"].index(10.0)
+            self.assertAlmostEqual(fx["values"][k10], c.mf.forces(float(c.static_load), 0.1, 0.0)[0], delta=1e-3 * 1e3)
+            self.assertEqual(ser[f"slip_ratio.{c.id}"]["unit"], "%")
             for s in curves:
                 self.assertEqual((s["x"]["quantity"], s["x"]["unit"], s["x"]["values"]), ("slip_angle", "deg", TYRE_CURVE_DEG))
                 self.assertNotIn("t_s", s)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from .. import kinematics
@@ -75,6 +77,68 @@ def _mount_checks() -> list[dict]:
                case_ja=f"よくある形のサスペンションを 30 mm 縮め、タイヤに ({fs}) N: 車体の取付点の力の合計がタイヤの力と同じか",
                source_ja="隅全体の力のつり合い: 路面から受けた力を、車体がそのまま受ける"),
     ]
+
+
+STEER_SWEEP_DEG = 35.0  # the left wheel is turned this far each way for the steering curves
+
+
+def _travel_and_steer(design: dict, veh, corner, travel: list, notes: list) -> list:
+    """Against travel: wheelbase_change (mm, the wheel centre along x), damper_length (mm, between its mounts)
+    and motion_ratio (1, the damper's shortening per mm of wheel travel); against rack_travel (mm, the tie
+    rod's inner end along y): steer_left and steer_right (deg, + front to the left) of a pair of steered
+    wheels mirrored left and right, and steer_outer_ackermann (deg): the outer wheel's angle for the inner
+    one's on the Ackermann line (cot outer = cot inner + t / L). Points of the K4 corner kinematics
+    (k4_geometry.corner_motion: the corner's hard points, the tie rod's length held); none when the corner
+    has no damper points."""
+    from hiraku.solvers.k4_geometry.corner_motion import CornerKinematics
+
+    hp = corner.table["hardpoints_mm"]
+    if "damper_lower" not in hp or "damper_upper" not in hp:
+        return []
+    kin = CornerKinematics(design, corner.id)
+    out = []
+    lows = [np.asarray(kin.maps(t, 0.0)["lower"](kin_mm(kin, "damper_lower")), float) for t in travel]
+    top = kin.maps(0.0, 0.0)["damper_upper"]
+    length = [float(np.linalg.norm(top - p)) for p in lows]
+    wc = [float(kin.maps(t, 0.0)["knuckle"](kin_mm(kin, "wheel_center"))[0]) for t in travel]
+    zero = min(range(len(travel)), key=lambda k: abs(travel[k]))
+    mr = list(np.gradient(-np.array(length), np.array(travel, float)))
+    out += [_series("wheelbase_change", "mm", "travel", "mm", travel, [x - wc[zero] for x in wc]),
+            _series("damper_length", "mm", "travel", "mm", travel, length),
+            _series("motion_ratio", "1", "travel", "mm", travel, mr)]
+    steered = [c for c in veh.corners if c.steer and c.kind == "wheel"]
+    if corner.steer and len(steered) >= 2:
+        ys = [float(c.pos[1]) for c in steered]
+        t_tr, length_l = max(ys) - min(ys), abs(veh.l_steer)
+        angles = np.linspace(-STEER_SWEEP_DEG, STEER_SWEEP_DEG, 71)
+        ti = kin.maps(0.0, 0.0)["tie_inner"][1]
+        rack = np.array([kin.maps(0.0, float(a))["rack"][1] - ti for a in angles])  # this (left-hand) wheel
+        sign = -1.0 if kin.right else 1.0  # a right corner's points are mirrored back to its side
+        rack_l = rack * sign
+        order = np.argsort(rack_l)
+        xs, left = rack_l[order], angles[order]
+        right = [-float(np.interp(-x, xs, left)) for x in xs]  # the mirrored wheel at the same rack travel
+        acker = []
+        for a_l, a_r in zip(left, right):
+            inner = a_l if abs(a_l) >= abs(a_r) else a_r
+            if abs(inner) < 1e-9:
+                acker.append(0.0)
+                continue
+            o = math.degrees(math.atan(1.0 / (1.0 / math.tan(math.radians(abs(inner))) + t_tr / length_l)))
+            acker.append(math.copysign(o, inner))
+        out += [_series("steer_left", "deg", "rack_travel", "mm", list(xs), list(left)),
+                _series("steer_right", "deg", "rack_travel", "mm", list(xs), right),
+                _series("steer_outer_ackermann", "deg", "rack_travel", "mm", list(xs), acker)]
+        notes.append(f"steering curves: the wheels turn about their kingpin axes at the design travel, the rack "
+                     f"moves the tie rods' inner ends along y; Ackermann line with t {t_tr * 1000:.0f} mm and "
+                     f"L {length_l * 1000:.0f} mm")
+    return out
+
+
+def kin_mm(kin, name: str) -> np.ndarray:
+    """A hard point of the corner (mm, its own side)."""
+    p = getattr(kin.hp, name) * 1000.0
+    return p * np.array([1.0, -1.0, 1.0]) if kin.right else p
 
 
 def _series(channel: str, unit: str, x_name: str, x_unit: str, xs, ys) -> dict:
@@ -216,5 +280,6 @@ class KcBenchTool(K2Tool):
                                           [per[f"camber_per_{keys[0]}"] * x * scale for x in xs]))
         else:
             notes.append(f"the K&C table of {corner.id} has no compliance columns: kinematics only")
+        series += _travel_and_steer(design, veh, corner, travel, notes)
         notes.append(f"bench of support {corner.id}, as a left wheel (a right wheel is its mirror image)")
         return {"results": res, "series": series, "assumptions": notes}

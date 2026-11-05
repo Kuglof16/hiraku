@@ -70,6 +70,29 @@ class KcBench(unittest.TestCase):
         self.assertAlmostEqual(lat["values"][-1], res["toe_at_1kN_lateral"] * lat["x"]["values"][-1])
         self.assertGreater(res["roll_center_height"], 0.0)
 
+    def test_bench_damper_and_steering_curves(self):
+        d = box_design(susp="kc_table", wheel_mass=15.0)
+        rec = TOOLS["kc_bench"].run(d, {"load_case_id": "kc", "params": {}}, [{"prediction_id": "pred-0001"}], {})
+        s = {x["channel"]: x for x in rec["series"]}
+        self.assertEqual(s["damper_length"]["x"]["quantity"], "travel")
+        dl = s["damper_length"]["values"]
+        self.assertGreater(dl[0], dl[-1])  # rebound to bump: the damper shortens
+        mr = s["motion_ratio"]["values"]
+        self.assertTrue(all(0.3 < m < 1.2 for m in mr))
+        # its integral over the travel is the damper's shortening
+        tr = s["damper_length"]["x"]["values"]
+        np.testing.assert_allclose(dl[0] - dl[-1], np.trapezoid(mr, tr), rtol=0.02)
+        left, right, acker = s["steer_left"], s["steer_right"], s["steer_outer_ackermann"]
+        self.assertEqual(left["x"]["quantity"], "rack_travel")
+        xs = left["x"]["values"]
+        # mirror pair: the right wheel at rack x is minus the left wheel at rack -x
+        for k in (5, 20, 40):
+            np.testing.assert_allclose(right["values"][k], -np.interp(-xs[k], xs, left["values"]), atol=1e-9)
+        # turning left the inner (left) wheel turns more than the outer one; Ackermann asks less of the outer
+        k = int(np.argmax(left["values"]))
+        self.assertGreater(left["values"][k], right["values"][k])
+        self.assertLess(acker["values"][k], left["values"][k])
+
     def test_k0_predicts_the_bench(self):
         from hiraku import solvers
         from hiraku.solvers.k2_vehicle.shelf.kc_bench import k0_inputs
