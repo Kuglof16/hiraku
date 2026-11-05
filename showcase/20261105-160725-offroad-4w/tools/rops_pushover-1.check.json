@@ -1,0 +1,58 @@
+{
+ "name": "rops_pushover",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "rops_pushover",
+  "title": "横転の保護枠: 車の骨組全体を梁にし、塑性ヒンジを一つずつ入れてロールバーを横・後ろ・上から押し、乗員の空間との隙間を測る",
+  "domain": "strength",
+  "base": "K1",
+  "tests": [
+   "R4"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "1000 N across the tip of a 1000 mm cantilever, rect tube 40 x 80 x 2",
+    "quantity": "tip_deflection",
+    "expected": 4.172068104172202,
+    "got": 4.172055016661347,
+    "unit": "mm",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "closed form delta = P L^3 / (3 E I), I = (b h^3 - (b - 2t)(h - 2t)^3) / 12 (textbook beam theory)"
+   },
+   {
+    "case": "fixed-base portal 1000 x 1000 mm, tube 42.7 x 2.3, sideways load at a corner",
+    "quantity": "collapse_load",
+    "expected": 3231.9003533333353,
+    "got": 3231.9287976990163,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "plastic analysis, sway mechanism of a fixed-base portal H_c = 4 M_p / h, M_p = Z_p f_y, Z_p = (d^3 - (d - 2t)^3) / 6 (Neal, The Plastic Methods of Structural Analysis)"
+   },
+   {
+    "case": "the same portal, vertical load at mid-span of the beam",
+    "quantity": "collapse_load",
+    "expected": 6463.8007066666705,
+    "got": 6463.805459364477,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "plastic analysis, beam mechanism of a fixed-ended beam V_c = 8 M_p / w (Neal)"
+   }
+  ],
+  "formulas": [
+   "frame_static.rops_occupant_clearance",
+   "frame_static.portal_frame_side",
+   "frame_static.portal_frame_rear",
+   "frame_static.portal_frame_top"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-05T07:23:47+00:00",
+ "reason": "R4-rops (横転の保護枠、OECD Code 4 の静的試験) を解けるツールが棚に無い (list_tools(test_id=\"R4\") が空)。手計算 (frame_static.portal_frame_*) はロールバーだけの門形で足をレールの片持ちとみるので、車の骨組全体 (横の部材・反対のレール・柱) で塑性ヒンジを入れて押し、乗員の空間との隙間を測るツールを足す。"
+}
