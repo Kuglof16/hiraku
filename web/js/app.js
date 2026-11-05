@@ -15,7 +15,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, quantityName, unitLabel } from "./labels.js";
+import { DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -698,10 +698,21 @@ function renderChain(s, chain) {
       .map(([k, q]) => `<span>${esc(k)}</span><span>${esc(fmtQ(q))}</span>`)
       .join("");
     const terms = (pred.terms ?? []).filter((t) => typeof t.share === "number");
+    // What a bar is (hiraku/solvers/k0_handcalc/registry.py _terms): a formula with additive
+    // terms gives each term's value / the prediction; one without gives each input's elasticity
+    // (how many % the prediction moves for 1 % more of that input). The record does not say
+    // which: terms that are all the inputs, at the inputs' values, are elasticities.
+    const sameAsInput = (t) => { const q = pred.inputs?.[t.name]; return !!q && (t.value === undefined || Math.abs(t.value - q.value) <= 1e-9 * Math.max(1, Math.abs(q.value))); };
+    const elastic = terms.length > 0 && terms.every(sameAsInput);
+    const what = quantityName(pred.quantity);
+    const caption = elastic
+      ? `棒: その入力を 1 % 大きくすると、${what}が何 % 変わるか`
+      : `棒: ${what}のうち、その項が占める割合 (項の値 ÷ ${what})`;
+    const termName = (t) => formulaInputName(pred.formula_id, t.name) ?? t.name;
     const termsHtml = terms.length
-      ? `<div class="terms">${terms
+      ? `<div class="terms-cap" data-terms="${elastic ? "elasticity" : "share"}">${esc(caption)}</div><div class="terms">${terms
           .slice(0, 4)
-          .map((t) => `<span>${esc(t.name)}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${fmtPct(t.share, 0)}</span>`)
+          .map((t) => `<span title="${esc(t.name)}">${esc(termName(t))}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${elastic ? fmtSigned(t.share, 0) : fmtPct(t.share, 0)}</span>`)
           .join("")}</div>`
       : "";
     const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(a)}</li>`).join("");
@@ -731,12 +742,12 @@ function renderChain(s, chain) {
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
-      `<div class="sub">${esc(ana.tool)}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
+      `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
       (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "");
   } else if (running) {
     a.className = "card busy";
-    a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${esc(running.tool)} で解析中…</div>`;
+    a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div title="${esc(running.tool)}">${esc(toolShort(s, running.tool))} で解析中…</div>`;
   } else {
     a.className = "card wait";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${pred ? "予測を受けて解析を待っている" : "予測のあとに走る"}</div>`;
@@ -790,6 +801,8 @@ function renderChain(s, chain) {
 }
 
 const toolTitle = (s, tool) => s.tools[tool]?.title ?? tool;
+// short, as the log says it (state.js toolWord): labels.js's name, else the title up to its bracket, else the name
+const toolShort = (s, tool) => plainToolName(tool) ?? (String(toolTitle(s, tool)).replace(/\s*[（(].*$/, "") || tool);
 
 // The ok analyses of the shown one's load case and design version, the newest of each
 // tool, in the order their tools first came (e.g. the beam analysis, then the shell one).
@@ -1243,7 +1256,10 @@ function renderTransient(s, playhead, chain, resolved) {
   r.style.opacity = run ? 1 : 0;
   if (run) {
     const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(playhead * Math.PI * 2));
-    r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(run.tool)} で解析中 (${esc(run.load_case_id)})`;
+    // the tool by the record's title up to its bracket (the log's words, state.js toolWord); the id under the pointer
+    const tool = toolShort(s, run.tool);
+    r.title = `${run.tool} (${run.load_case_id})`;
+    r.innerHTML = `<span class="dot" style="opacity:${pulse.toFixed(2)}"></span>${esc(tool)} で解析中`;
   }
   renderHooks(s, playhead, resolved);
 }
