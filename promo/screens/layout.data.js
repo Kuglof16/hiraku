@@ -58,71 +58,8 @@ window.PROMO_LAYOUT = {
     },
     "title_pets": {
       "h_em": 0.6,
-      "_note": "the ten pets sitting on the top edge of the six letters of the name (shared with N18, which uses the same seats on its own name). All lengths are relative to the name: a seat box is h_em x the name's font size high and as wide as pets.w / pets.h of that; letter is the index of the letter in HIRAKU (0 = H ... 5 = U); at is where the pet's feet stand across that letter's ink, 0 = the left edge of the ink, 1 = the right edge (the ink box of each letter is measured with canvas measureText (actualBoundingBoxLeft / Right) in the name's font and size, from the left edge of the letter's own span); the feet stand on the letter's ink top (baseline - actualBoundingBoxAscent of that letter; baseline = the name's top + (font size - (fontBoundingBoxAscent + fontBoundingBoxDescent)) / 2 + fontBoundingBoxAscent, as line-height is 1). The feet point (the pet's origin, projected with the n00 camera) is put on (x of at, ink top) plus lift_px up. yaw_deg turns the pet about its vertical axis (positive: its front turns towards screen right); the camera is n00.camera. At 0.6 em the pet's body is about 0.4 of the letter height, so the letters stay readable under it",
       "lift_px": 0,
-      "seats": [
-        {
-          "role": "designer",
-          "letter": 0,
-          "at": 0.12,
-          "yaw_deg": 18
-        },
-        {
-          "role": "cae.handling",
-          "letter": 0,
-          "at": 0.88,
-          "yaw_deg": 0
-        },
-        {
-          "role": "cae.powertrain",
-          "letter": 1,
-          "at": 0.5,
-          "yaw_deg": 0
-        },
-        {
-          "role": "cae.aero",
-          "letter": 2,
-          "at": 0.06,
-          "yaw_deg": 0
-        },
-        {
-          "role": "cae.crash",
-          "letter": 2,
-          "at": 0.72,
-          "yaw_deg": 0
-        },
-        {
-          "role": "lead",
-          "letter": 3,
-          "at": 0.5,
-          "yaw_deg": 0
-        },
-        {
-          "role": "cae.strength",
-          "letter": 4,
-          "at": 0.12,
-          "yaw_deg": 0
-        },
-        {
-          "role": "cae.nvh",
-          "letter": 4,
-          "at": 0.88,
-          "yaw_deg": 0
-        },
-        {
-          "role": "cae.thermal",
-          "letter": 5,
-          "at": 0.12,
-          "yaw_deg": 0
-        },
-        {
-          "role": "packager",
-          "letter": 5,
-          "at": 0.88,
-          "yaw_deg": -12
-        }
-      ],
-      "_seats_note": "lead on the apex of the A in the middle; designer and packager on the outer stems of H and U; the seven domains fill the rest from left to right in the order their chips light, so the jumps go from left to right"
+      "_note": "the size of a pet on (and around) the name, and where the feet stand on a letter. A pet box on the name, on the floor or behind a letter is h_em x the name's font size high and as wide as pets.w / pets.h of that (at 0.6 em the body is about 0.4 of the letter height, so the letters stay readable under it). A seat {seat: letter, at} in a route (n00.cast) is on the top edge of that letter of HIRAKU (0 = H ... 5 = U): at is where the feet stand across the letter's ink, 0 = its left edge, 1 = its right edge (the ink box is measured with canvas measureText (actualBoundingBoxLeft / Right) in the name's font and size, from the left edge of the letter's own span); the feet stand on the letter's ink top (baseline - actualBoundingBoxAscent; baseline = the name's top + (font size - (fontBoundingBoxAscent + fontBoundingBoxDescent)) / 2 + fontBoundingBoxAscent, as line-height is 1) plus lift_px up, and ride the letter's play (n00.play). Until 2026-11-04 (pets everywhere) all ten sat here in seats; now four end on the name and the rest live about the screen (n00.cast)"
     },
     "camera": {
       "fov_deg": 24,
@@ -139,28 +76,38 @@ window.PROMO_LAYOUT = {
     "motion": {
       "pass_dur_s": 0.9,
       "hop_period_s": 0.9,
-      "jump_over_px": 36,
-      "_note": "a domain's pet is idle in the row until its chip lights at light_s + k x step_s, then jumps onto its seat on the name (title_pets) in pass_dur_s and stays there in report (leans to tell). The jump: the feet point goes from the row (its box's feet point) to the seat on one parabola in time (linear in x, the box size linear from the row's to the seat's), topping out jump_over_px above the seat, so the pet comes down onto the letter; the pet does its pass hop (pet3d: squash, a small hop, the tick) on the way. hop_period_s is pet3d.js's pass period (0.9 s, inside update; not exported): each CAE pet's clock is shifted so its hop starts from the ground when its chip lights. Lead, designer and packager sit on the name from the start: each comes in with its letter (the letter's letter-in, the same delay) and stays idle, with clocks shifted by idle_shift_s x index so they do not blink together. The pose is pet.update(t + shift, state) and the place a function of t, with t from timeline.js only",
+      "_note": "a domain pet stands in the row over its chip until its chip lights at light_s + k x step_s (it shows the tick then), and goes off by its route (n00.cast). pass_dur_s and hop_period_s (pet3d.js's pass period, 0.9 s) are also read by the app's cut view (web/js/cut_pets.js). Every pet's clock is shifted by idle_shift_s x index so they do not blink together (also N18's). The pose is pet.update(clock + shift, state, camera, pose terms) and the place a function of t, with t from timeline.js only",
       "idle_shift_s": 1.3
     },
     "play": {
       "from_s": 1.4,
-      "still_s": 7.5,
+      "still_s": 7.4,
+      "hop": {
+        "crouch_s": 0.18,
+        "crouch": 0.22,
+        "air_s": 0.52,
+        "over_px": 40,
+        "stretch": 0.16,
+        "land_sq": 0.3,
+        "land_s": 0.12,
+        "bounces": [
+          [
+            10,
+            0.16
+          ]
+        ],
+        "settle_s": 0.3,
+        "lean_k": 0.8,
+        "antenna_k": 2.0,
+        "antenna_lag_s": 0.06,
+        "look_up": 0.03,
+        "shadow_air": 0.45,
+        "weight": 1.0
+      },
       "land": {
         "dur_s": 0.45,
         "sink_px": 8,
         "squash": 0.05
-      },
-      "crash": {
-        "dur_s": 0.6,
-        "sink_px": 18,
-        "squash": 0.12,
-        "toss": {
-          "role": "cae.aero",
-          "delay_s": 0.1,
-          "dur_s": 0.42,
-          "up_px": 30
-        }
       },
       "shake": {
         "letter": 4,
@@ -169,31 +116,37 @@ window.PROMO_LAYOUT = {
         "hz": 8,
         "rot_deg": 3,
         "dx_px": 20,
-        "tilt_deg": 5
+        "tilt_deg": 5,
+        "over": 0.15
       },
       "push": {
         "roles": [
-          "cae.thermal",
-          "packager"
+          "cae.thermal"
         ],
         "start_s": 5.75,
         "dur_s": 0.6,
         "lean_deg": 16,
         "step_px": [
-          16,
-          20
-        ]
+          16
+        ],
+        "lag_s": [
+          0
+        ],
+        "wind_s": 0.15,
+        "wind_deg": 7,
+        "wind_px": 5,
+        "push_in": 0.4,
+        "hold_to": 0.6,
+        "over": 0.25,
+        "letter_from": 0.15,
+        "letter_over": 0.12
       },
-      "cheer": {
-        "role": "lead",
-        "start_s": 6.2,
-        "dur_s": 0.9,
-        "up_px": 44,
-        "land_dur_s": 0.3,
-        "sink_px": 6,
-        "squash": 0.04
+      "stop": {
+        "from_s": 6.99,
+        "still_s": 7.37,
+        "_note": "every pet's clock is t + motion.idle_shift_s x index, slowing to a halt from from_s to still_s (the speed falls linearly to 0), so the breathing, the report sway and the blinks stop. pet3d blinks while clock % 4.3 < 0.16; the slowing clocks run from from_s to from_s + (still_s - from_s) / 2 = 7.18, which for all ten (shifts 0, 1.3, ... 11.7) lies between two blinks (index 8 ends one at about 6.96 s, index 1 starts one at 7.3 s), so no pet holds still with its eyes shut"
       },
-      "_note": "the pets play with the letters of the name after the name has been said (the voice says HIRAKU from 0.3 s; the letters stand still and in line until from_s, and everything is back in line and still at still_s). Each letter is a box inside its span, moved by translate / rotate / scale about the bottom centre of the letter's line box; a pet on a letter moves with that point of the letter. land: when a domain pet lands on its letter (lit + motion.pass_dur_s) the letter sinks sink_px and comes back (d(u) = sin(3 pi u) (1 - u)^2 scaled to a peak of 1, u = time since landing / dur_s; the letter squashes by squash x d at the same time). crash: the crash pet lands harder (its own dur, sink and squash), and the pet already on that letter (toss.role) is tossed up_px on a parabola delay_s after the landing. shake: after the NVH pet lands, the letter (index into HIRAKU, 4 = K) shakes (rot_deg at hz, dying out) and slides dx_px right and tilts tilt_deg (eased) in dur_s, the two pets on it riding along; it stays so until push. push: the two pets on the next letter (roles) lean towards it (lean_deg, about their feet) and step left (step_px each) and the letter goes back in line (eased) in dur_s. cheer: lead does the pass hop (pet3d pass, the tick over its head) from start_s with its clock at 0, lifted up_px on a parabola, and its letter gives a small land when it comes down (land_dur_s, sink_px, squash)"
+      "_note": "the play with the letters, after the name has been said (the voice says HIRAKU from 0.3 s; the letters stand still and in line until from_s, and everything is back in line and still at still_s). hop: the defaults of every hop in n00.cast (pet3d.js anim.hop: a crouch of crouch_s squashing to crouch, a flight of air_s on a parabola in time topping out over_px above the higher end, stretched by stretch x its speed, a landing squash land_sq over land_s, the small bounces [up_px, dur_s] each landing softer, a settle of settle_s; the antenna follows antenna_lag_s behind; look_up: the eyes go up while crouching; shadow_air: the contact shadow in the air; weight: how hard it lands on a letter). land: when a pet lands on a letter the letter sinks sink_px x weight and comes back (d(u) = sin(3 pi u) (1 - u)^2 scaled to a peak of 1, u = time since landing / dur_s), squashing by squash x weight x d. shake: after the NVH pet lands, the letter (index into HIRAKU, 4 = K) shakes (rot_deg at hz, dying out) and slides dx_px right and tilts tilt_deg in dur_s, easing out past it by over and back; it stays so until push. push: the pet on the next letter (roles) winds up for wind_s (lean back wind_deg, step back wind_px), shoves (lean_deg, step_px left) in push_in of dur_s, holds to hold_to and comes back with an overshoot of over; the letter starts back at letter_from of dur_s and goes back in line, overshooting by letter_over. stop: the clocks slow to a halt (see its note)"
     },
     "times": {
       "name_s": 0.25,
@@ -202,7 +155,496 @@ window.PROMO_LAYOUT = {
       "light_s": 2.0,
       "step_s": 0.42,
       "_note": "name: first letter; tagline: the line under the rule fades in (0.6 s); row: pets, chips and tags come in, unlit (0.5 s; 1.1 s until 2026-11-03, moved for the tagline); light: first chip lights; step: gap between chips (light_s and step_s are read by bgm.py)"
-    }
+    },
+    "cast": {
+      "lead": {
+        "_who": "walks in from the left along the foot of the name, meets handling and both bow, walks on to the H, turns to the viewer",
+        "start": {
+          "at": [
+            160,
+            346
+          ],
+          "yaw_deg": 110,
+          "alpha": 0
+        },
+        "beats": [
+          {
+            "do": "fade",
+            "t": 1.3,
+            "to": 1,
+            "dur_s": 0.45
+          },
+          {
+            "do": "walk",
+            "t": 1.3,
+            "to": [
+              215,
+              346
+            ],
+            "dur_s": 2.45,
+            "swing": 0.4
+          },
+          {
+            "do": "act",
+            "t": 3.95,
+            "kind": "bow",
+            "dur_s": 0.7,
+            "amp_deg": 30
+          },
+          {
+            "do": "walk",
+            "t": 4.7,
+            "to": [
+              364,
+              346
+            ],
+            "dur_s": 2.1,
+            "swing": 0.7
+          },
+          {
+            "do": "turn",
+            "t": 6.85,
+            "yaw_deg": 12,
+            "dur_s": 0.45
+          }
+        ]
+      },
+      "designer": {
+        "_who": "lives behind the H: peeks out from behind its left stem, goes back, and leans out again to stay",
+        "layer": "behind",
+        "start": {
+          "at": [
+            502,
+            339
+          ],
+          "yaw_deg": 0,
+          "alpha": 0
+        },
+        "beats": [
+          {
+            "do": "fade",
+            "t": 1.5,
+            "to": 1,
+            "dur_s": 0.3
+          },
+          {
+            "do": "act",
+            "t": 1.8,
+            "kind": "peek",
+            "dur_s": 1.5,
+            "roll_deg": 24,
+            "dx_px": -44,
+            "amp_deg": 20
+          },
+          {
+            "do": "act",
+            "t": 4.6,
+            "kind": "peek",
+            "dur_s": 1.2,
+            "roll_deg": 20,
+            "dx_px": -40,
+            "amp_deg": 18,
+            "stay": true
+          }
+        ]
+      },
+      "packager": {
+        "_who": "carries its box in from the right along the foot of the name, stops by the U, turns to the viewer and turns the box about",
+        "start": {
+          "at": [
+            1760,
+            346
+          ],
+          "yaw_deg": -66,
+          "alpha": 0
+        },
+        "beats": [
+          {
+            "do": "fade",
+            "t": 1.6,
+            "to": 1,
+            "dur_s": 0.45
+          },
+          {
+            "do": "walk",
+            "t": 1.6,
+            "to": [
+              1590,
+              346
+            ],
+            "dur_s": 3.9,
+            "swing": 0.55,
+            "carry_deg": 35
+          },
+          {
+            "do": "turn",
+            "t": 5.6,
+            "yaw_deg": -12,
+            "dur_s": 0.45
+          },
+          {
+            "do": "act",
+            "t": 6.1,
+            "kind": "fiddle",
+            "dur_s": 0.7,
+            "amp_deg": 25
+          }
+        ]
+      },
+      "cae.handling": {
+        "_who": "steady: hops up off the left end of the row to the foot of the name, meets lead and bows, walks to the left and sits",
+        "start": {
+          "at": {
+            "row": 0
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 2.0,
+            "dur_s": 0.9
+          },
+          {
+            "do": "hop",
+            "t": 2.08,
+            "to": [
+              350,
+              346
+            ],
+            "h": "seat",
+            "yaw_deg": 60,
+            "crouch_s": 0.18,
+            "air_s": 0.55,
+            "over_px": 60,
+            "bounces": [
+              [
+                8,
+                0.14
+              ]
+            ],
+            "settle_s": 0.24
+          },
+          {
+            "do": "walk",
+            "t": 3.1,
+            "to": [
+              300,
+              346
+            ],
+            "dur_s": 0.9,
+            "swing": 0.7
+          },
+          {
+            "do": "act",
+            "t": 4.05,
+            "kind": "bow",
+            "dur_s": 0.7,
+            "amp_deg": 26
+          },
+          {
+            "do": "walk",
+            "t": 4.75,
+            "to": [
+              165,
+              346
+            ],
+            "dur_s": 1.4,
+            "swing": 0.7
+          },
+          {
+            "do": "turn",
+            "t": 6.2,
+            "yaw_deg": 10,
+            "dur_s": 0.4
+          },
+          {
+            "do": "sit",
+            "t": 6.5,
+            "to": 1,
+            "dur_s": 0.5,
+            "thump": 0.1
+          }
+        ]
+      },
+      "cae.powertrain": {
+        "_who": "eager: short crouch, the highest jump, two bounces, onto the H; nods, looks about",
+        "start": {
+          "at": {
+            "row": 1
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 2.42,
+            "dur_s": 0.2
+          },
+          {
+            "do": "hop",
+            "t": 2.45,
+            "to": {
+              "seat": 0,
+              "at": 0.6
+            },
+            "h": "seat",
+            "yaw_deg": 8,
+            "crouch_s": 0.13,
+            "crouch": 0.25,
+            "air_s": 0.4,
+            "over_px": 26,
+            "stretch": 0.22,
+            "bounces": [
+              [
+                12,
+                0.16
+              ],
+              [
+                4,
+                0.1
+              ]
+            ],
+            "weight": 1.1
+          },
+          {
+            "do": "act",
+            "t": 4.4,
+            "kind": "nod",
+            "dur_s": 0.6,
+            "amp_deg": 8
+          },
+          {
+            "do": "act",
+            "t": 6.0,
+            "kind": "look",
+            "dur_s": 0.7,
+            "amp_deg": 16
+          }
+        ]
+      },
+      "cae.aero": {
+        "_who": "light: slow crouch, a floating jump onto the I, lands soft; looks about",
+        "start": {
+          "at": {
+            "row": 2
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 2.84,
+            "dur_s": 0.3
+          },
+          {
+            "do": "hop",
+            "t": 2.9,
+            "to": {
+              "seat": 1,
+              "at": 0.5
+            },
+            "h": "seat",
+            "yaw_deg": -8,
+            "crouch_s": 0.2,
+            "crouch": 0.16,
+            "air_s": 0.4,
+            "over_px": 24,
+            "stretch": 0.14,
+            "land_sq": 0.2,
+            "bounces": [],
+            "weight": 0.6
+          },
+          {
+            "do": "act",
+            "t": 5.0,
+            "kind": "look",
+            "dur_s": 0.8,
+            "amp_deg": 20
+          }
+        ]
+      },
+      "cae.crash": {
+        "_who": "heavy: a low-arched jump onto the R that lands hard, then turns its prop about",
+        "start": {
+          "at": {
+            "row": 3
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 3.26,
+            "dur_s": 0.9
+          },
+          {
+            "do": "hop",
+            "t": 3.3,
+            "to": {
+              "seat": 2,
+              "at": 0.45
+            },
+            "h": "seat",
+            "yaw_deg": 4,
+            "crouch_s": 0.24,
+            "crouch": 0.28,
+            "air_s": 0.36,
+            "over_px": 16,
+            "land_sq": 0.4,
+            "bounces": [
+              [
+                6,
+                0.12
+              ]
+            ],
+            "weight": 1.4
+          },
+          {
+            "do": "act",
+            "t": 5.2,
+            "kind": "fiddle",
+            "dur_s": 0.7,
+            "amp_deg": 25
+          }
+        ]
+      },
+      "cae.strength": {
+        "_who": "careful: a long crouch, then a measured jump onto the A; turns and looks about",
+        "start": {
+          "at": {
+            "row": 4
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 3.68,
+            "dur_s": 0.9
+          },
+          {
+            "do": "hop",
+            "t": 3.85,
+            "to": {
+              "seat": 3,
+              "at": 0.5
+            },
+            "h": "seat",
+            "yaw_deg": 14,
+            "crouch_s": 0.26,
+            "crouch": 0.2,
+            "air_s": 0.36,
+            "over_px": 34,
+            "bounces": [
+              [
+                6,
+                0.12
+              ]
+            ],
+            "settle_s": 0.3
+          },
+          {
+            "do": "turn",
+            "t": 5.25,
+            "yaw_deg": -15,
+            "dur_s": 0.45
+          },
+          {
+            "do": "act",
+            "t": 6.0,
+            "kind": "look",
+            "dur_s": 0.7,
+            "amp_deg": 16
+          }
+        ]
+      },
+      "cae.nvh": {
+        "_who": "springy: quick crouch, a bounce, onto the K, which then shakes out of line",
+        "start": {
+          "at": {
+            "row": 5
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 4.1,
+            "dur_s": 0.2
+          },
+          {
+            "do": "hop",
+            "t": 4.12,
+            "to": {
+              "seat": 4,
+              "at": 0.85
+            },
+            "h": "seat",
+            "yaw_deg": 0,
+            "crouch_s": 0.12,
+            "crouch": 0.2,
+            "air_s": 0.38,
+            "over_px": 22,
+            "stretch": 0.2,
+            "bounces": [
+              [
+                10,
+                0.14
+              ]
+            ],
+            "settle_s": 0.2,
+            "weight": 0.9
+          },
+          {
+            "do": "act",
+            "t": 6.5,
+            "kind": "sway",
+            "dur_s": 0.5,
+            "amp_deg": 5
+          }
+        ]
+      },
+      "cae.thermal": {
+        "_who": "quick, the last to go: onto the U, then pushes the K back in line",
+        "start": {
+          "at": {
+            "row": 6
+          },
+          "h": "row"
+        },
+        "beats": [
+          {
+            "do": "tick",
+            "t": 4.52,
+            "dur_s": 0.2
+          },
+          {
+            "do": "hop",
+            "t": 4.52,
+            "to": {
+              "seat": 5,
+              "at": 0.3
+            },
+            "h": "seat",
+            "yaw_deg": -10,
+            "crouch_s": 0.15,
+            "crouch": 0.2,
+            "air_s": 0.4,
+            "over_px": 20,
+            "bounces": [
+              [
+                8,
+                0.14
+              ]
+            ],
+            "settle_s": 0.14,
+            "weight": 0.9
+          }
+        ]
+      }
+    },
+    "_cast_note": "where each of the ten pets lives and what it does (2026-11-04: pets everywhere, not only on the name). start: the first place (at), the box height (h: seat = title_pets.h_em x the name size, row = pets.h; default seat), yaw_deg (0 faces the viewer, + turns the front to screen right) and alpha; layer: front (default) or behind (under the name: it peeks out from behind a letter and never covers it). beats: pet3d.js anim.route, each {do, t (start, s), ...} in time order (walk: on foot in whole steps that match the ground covered, turned along the way, the speed easing in and out, swing the legs' swing, carry_deg the prop held up in front; hop: one pet3d anim.hop there, n00.play.hop with the beat's values on top, the box going to h; turn; sit (to 0..1, thump: a squash as it lands); act: look, nod, sway, fiddle, bow, peek (leans out roll_deg and dx_px, back unless stay); fade; tick: the tick over the head when its chip lights). Places: [x, y] the feet in design px (the floor under the chips at y 893 in front and 884 behind: a seat box 126 high then ends at 907.6 and 898.6, above the subtitle band), {row: k} the feet in row spot k (the domain pets' places over their chips at the start), {seat: letter, at} on a letter (title_pets). Who and where (2026-11-05: all ten end about the name): lead and packager walk in from the left and right along the foot of the name (y 346; packager carrying its box); handling hops up to the foot of the name, bows to lead as they pass, and sits at the left; powertrain, aero, crash, strength, nvh and thermal jump onto H, I, R, A, K and U (each onto the letter nearest its chip); designer peeks from behind the H. No pet is on or in front of the name while the voice says it (0.3-1.3 s)"
   },
   "n01": {
     "duration_s": 4.0,
@@ -1851,62 +2293,518 @@ window.PROMO_LAYOUT = {
       "_note": "centred, ink, under the name as on N00; grows from the centre with the name (0.6 s from times.name_s + 0.55 s)"
     },
     "pets": {
-      "_note": "the ten 3D pets of promo/pets/pet3d.js (v8) on the top edge of the name, in the seats of n00.title_pets (read from there, not copied, so N00 and N18 always have the same order; lengths relative to the name, so they scale with n18.title.name.size_px), seen with n00.camera, in a box of n00.pets' aspect, idle clocks shifted by n00.motion.idle_shift_s x index as on N00. Each pet comes in with its letter (title.css letter-in: 0.7 s, 0.07 s a letter from times.name_s). fix: the letter (index into HIRAKU, 4 = K) stands tilted tilt_deg and moved dx_px right (about the bottom centre of its line box, as n00.play) from the start; when it is in (settle_s = name_s + 4 x 0.07 + 0.7) it wobbles settle_deg at settle_hz, dying out over settle_dur_s. try: the pet on the next letter (role) leans lean_deg towards it and steps step_px left (a hump over dur_s, from start_s); the letter goes back give of the way and springs out again. help: a second pet (role) hops left to_px (up_px high, hop_dur_s) from start_s, to just behind the first; push: from start_s both lean (lean_deg) and step (step_px, in roles order) over dur_s and the letter goes back in line (eased); help.back_s: the helper hops back to its seat. report: from start_s, one pet every step_s in order (left to right on the name), each does a small hop (up_px over hop_dur_s) and stays in report (pet3d: leans to tell). stop: from from_s the pets' clocks slow to a halt at still_s (the clock's speed falls linearly to 0), so from still_s nothing on the screen moves. Every pose is a function of t only",
-      "fix": {
-        "letter": 4,
-        "tilt_deg": 7,
-        "dx_px": 10,
-        "settle_s": 4.38,
-        "settle_dur_s": 0.45,
-        "settle_hz": 3.5,
-        "settle_deg": 2.5
+      "_note": "the ten 3D pets of promo/pets/pet3d.js (v8) on the paper once the door has opened (2026-11-04: pets everywhere, as N00's, instead of all ten on the name): N00's size (n00.title_pets.h_em x this name's font size), camera (n00.camera), box aspect (n00.pets) and idle clocks (n00.motion.idle_shift_s x index). cast: where each lives and what it does, as n00.cast (pet3d.js anim.route; hop: the defaults of every hop here; places: [x, y] the feet in design px, {seat: letter, at} on the top edge of a letter of this name). The lines the pets stand on: the foot of the name (y 535, the baseline; left of the H and right of the U), beside the line under the name (y 681, the tag's bottom; left and right of it), the vehicle's ground line (y 300; left and right of the vehicle) and the floor under the words (y 892: a box 102 high ends at 903.8, above the subtitle band). Nobody comes in before the door has gone (1.45 s); a pet goes onto a letter only once the name is in (times.name_s + 5 x 0.07 + 0.7 = 4.45 s). At the end they stand about the words: lead on the A, handling on the H, thermal on the U, nvh behind the U, designer and strength at the foot of the name, crash and powertrain beside the tag, aero by the vehicle, packager on the floor. stop: from from_s the pets' clocks slow to a halt at still_s (the clock's speed falls linearly to 0), so from still_s nothing on the screen moves. Every pose is a function of t only",
+      "hop": {
+        "crouch_s": 0.12,
+        "crouch": 0.2,
+        "air_s": 0.34,
+        "over_px": 22,
+        "stretch": 0.16,
+        "land_sq": 0.24,
+        "land_s": 0.1,
+        "bounces": [],
+        "settle_s": 0.2,
+        "lean_k": 0.8,
+        "antenna_k": 2.0,
+        "antenna_lag_s": 0.06,
+        "look_up": 0.03,
+        "shadow_air": 0.45
       },
-      "try": {
-        "role": "cae.thermal",
-        "start_s": 4.85,
-        "dur_s": 0.75,
-        "lean_deg": 22,
-        "step_px": 16,
-        "give": 0.55
-      },
-      "help": {
-        "role": "packager",
-        "start_s": 5.3,
-        "hop_dur_s": 0.35,
-        "to_px": 34,
-        "up_px": 18,
-        "back_s": 6.5
-      },
-      "push": {
-        "roles": [
-          "cae.thermal",
-          "packager"
-        ],
-        "start_s": 5.7,
-        "dur_s": 0.7,
-        "lean_deg": 20,
-        "step_px": [
-          14,
-          14
-        ]
-      },
-      "report": {
-        "order": [
-          "designer",
-          "cae.handling",
-          "cae.powertrain",
-          "cae.aero",
-          "cae.crash",
-          "lead",
-          "cae.strength",
-          "cae.nvh",
-          "cae.thermal",
-          "packager"
-        ],
-        "start_s": 6.9,
-        "step_s": 0.1,
-        "hop_dur_s": 0.35,
-        "up_px": 14
+      "cast": {
+        "lead": {
+          "_who": "hops in from the left along the vehicle's ground line, watches it being drawn, then hops down onto the I and on over R to the A",
+          "start": {
+            "at": [
+              150,
+              300
+            ],
+            "yaw_deg": 60,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 2.3,
+              "to": 1,
+              "dur_s": 0.3
+            },
+            {
+              "do": "hops",
+              "t": 2.3,
+              "to": [
+                520,
+                300
+              ],
+              "n": 4,
+              "every_s": 0.58,
+              "yaw_deg": 60,
+              "over_px": 26
+            },
+            {
+              "do": "turn",
+              "t": 4.82,
+              "yaw_deg": 20,
+              "dur_s": 0.4
+            },
+            {
+              "do": "hop",
+              "t": 5.45,
+              "to": {
+                "seat": 1,
+                "at": 0.5
+              },
+              "yaw_deg": 50,
+              "air_s": 0.42,
+              "over_px": 30
+            },
+            {
+              "do": "hop",
+              "t": 6.0,
+              "to": {
+                "seat": 2,
+                "at": 0.5
+              },
+              "yaw_deg": 50,
+              "air_s": 0.34,
+              "over_px": 26
+            },
+            {
+              "do": "hop",
+              "t": 6.5,
+              "to": {
+                "seat": 3,
+                "at": 0.5
+              },
+              "yaw_deg": 40,
+              "air_s": 0.36,
+              "over_px": 30,
+              "bounces": [
+                [
+                  8,
+                  0.12
+                ]
+              ]
+            },
+            {
+              "do": "turn",
+              "t": 7.5,
+              "yaw_deg": 0,
+              "dur_s": 0.45
+            }
+          ]
+        },
+        "designer": {
+          "_who": "walks in from the left at the foot of the name and stops by the H, turns to the viewer",
+          "start": {
+            "at": [
+              140,
+              535
+            ],
+            "yaw_deg": 110,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 3.6,
+              "to": 1,
+              "dur_s": 0.4
+            },
+            {
+              "do": "walk",
+              "t": 3.6,
+              "to": [
+                380,
+                535
+              ],
+              "dur_s": 3.4,
+              "swing": 0.6
+            },
+            {
+              "do": "turn",
+              "t": 7.1,
+              "yaw_deg": 20,
+              "dur_s": 0.45
+            }
+          ]
+        },
+        "packager": {
+          "_who": "carries its box in from the left along the floor under the words, turns and turns the box about",
+          "start": {
+            "at": [
+              140,
+              892
+            ],
+            "yaw_deg": 110,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 1.6,
+              "to": 1,
+              "dur_s": 0.4
+            },
+            {
+              "do": "walk",
+              "t": 1.6,
+              "to": [
+                560,
+                892
+              ],
+              "dur_s": 5.0,
+              "swing": 0.7,
+              "carry_deg": 35
+            },
+            {
+              "do": "turn",
+              "t": 6.7,
+              "yaw_deg": 15,
+              "dur_s": 0.45
+            },
+            {
+              "do": "act",
+              "t": 7.2,
+              "kind": "fiddle",
+              "dur_s": 0.65,
+              "amp_deg": 25
+            }
+          ]
+        },
+        "cae.handling": {
+          "_who": "steady: hops in from the left at the foot of the name, waits, then jumps up onto the H",
+          "start": {
+            "at": [
+              140,
+              535
+            ],
+            "yaw_deg": 60,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 1.8,
+              "to": 1,
+              "dur_s": 0.3
+            },
+            {
+              "do": "hops",
+              "t": 1.8,
+              "to": [
+                440,
+                535
+              ],
+              "n": 3,
+              "every_s": 0.56,
+              "yaw_deg": 60,
+              "over_px": 24
+            },
+            {
+              "do": "turn",
+              "t": 3.7,
+              "yaw_deg": 25,
+              "dur_s": 0.4
+            },
+            {
+              "do": "hop",
+              "t": 4.65,
+              "to": {
+                "seat": 0,
+                "at": 0.3
+              },
+              "yaw_deg": 30,
+              "crouch_s": 0.18,
+              "air_s": 0.4,
+              "over_px": 28,
+              "bounces": [
+                [
+                  8,
+                  0.12
+                ]
+              ]
+            },
+            {
+              "do": "act",
+              "t": 6.2,
+              "kind": "sway",
+              "dur_s": 0.7,
+              "amp_deg": 6
+            }
+          ]
+        },
+        "cae.powertrain": {
+          "_who": "eager: hops in high from the right beside the line under the name",
+          "start": {
+            "at": [
+              1770,
+              681
+            ],
+            "yaw_deg": -60,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 2.3,
+              "to": 1,
+              "dur_s": 0.3
+            },
+            {
+              "do": "hops",
+              "t": 2.3,
+              "to": [
+                1405,
+                681
+              ],
+              "n": 4,
+              "every_s": 0.48,
+              "yaw_deg": -60,
+              "over_px": 34,
+              "air_s": 0.3,
+              "crouch_s": 0.08
+            },
+            {
+              "do": "turn",
+              "t": 4.55,
+              "yaw_deg": -15,
+              "dur_s": 0.4
+            },
+            {
+              "do": "act",
+              "t": 5.9,
+              "kind": "nod",
+              "dur_s": 0.6,
+              "amp_deg": 8
+            }
+          ]
+        },
+        "cae.aero": {
+          "_who": "light: floats in from the right in three long hops and stands by the vehicle",
+          "start": {
+            "at": [
+              1770,
+              300
+            ],
+            "yaw_deg": -60,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 2.7,
+              "to": 1,
+              "dur_s": 0.3
+            },
+            {
+              "do": "hops",
+              "t": 2.7,
+              "to": [
+                1275,
+                300
+              ],
+              "n": 3,
+              "every_s": 0.74,
+              "yaw_deg": -60,
+              "over_px": 40,
+              "air_s": 0.5,
+              "crouch_s": 0.12,
+              "land_sq": 0.16
+            },
+            {
+              "do": "turn",
+              "t": 5.12,
+              "yaw_deg": -30,
+              "dur_s": 0.45
+            },
+            {
+              "do": "act",
+              "t": 6.7,
+              "kind": "look",
+              "dur_s": 0.8,
+              "amp_deg": 18
+            }
+          ]
+        },
+        "cae.crash": {
+          "_who": "heavy: plods in from the left beside the line under the name and sits down with a thump",
+          "start": {
+            "at": [
+              140,
+              681
+            ],
+            "yaw_deg": 110,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 1.6,
+              "to": 1,
+              "dur_s": 0.4
+            },
+            {
+              "do": "walk",
+              "t": 1.6,
+              "to": [
+                470,
+                681
+              ],
+              "dur_s": 4.6,
+              "swing": 0.7
+            },
+            {
+              "do": "turn",
+              "t": 6.25,
+              "yaw_deg": 20,
+              "dur_s": 0.45
+            },
+            {
+              "do": "sit",
+              "t": 6.75,
+              "to": 1,
+              "dur_s": 0.55,
+              "over": 0.12,
+              "thump": 0.16
+            }
+          ]
+        },
+        "cae.strength": {
+          "_who": "careful: walks in from the right at the foot of the name and stops by the U",
+          "start": {
+            "at": [
+              1770,
+              535
+            ],
+            "yaw_deg": -66,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 3.4,
+              "to": 1,
+              "dur_s": 0.4
+            },
+            {
+              "do": "walk",
+              "t": 3.4,
+              "to": [
+                1530,
+                535
+              ],
+              "dur_s": 3.6,
+              "swing": 0.55
+            },
+            {
+              "do": "turn",
+              "t": 7.1,
+              "yaw_deg": -20,
+              "dur_s": 0.45
+            }
+          ]
+        },
+        "cae.nvh": {
+          "_who": "lives behind the U: peeks out from behind its right side, goes back, and leans out again to stay",
+          "layer": "behind",
+          "start": {
+            "at": [
+              1338,
+              535
+            ],
+            "yaw_deg": 0,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 4.5,
+              "to": 1,
+              "dur_s": 0.3
+            },
+            {
+              "do": "act",
+              "t": 4.8,
+              "kind": "peek",
+              "dur_s": 1.3,
+              "roll_deg": -22,
+              "dx_px": 40,
+              "amp_deg": 18
+            },
+            {
+              "do": "act",
+              "t": 6.4,
+              "kind": "peek",
+              "dur_s": 1.2,
+              "roll_deg": -20,
+              "dx_px": 36,
+              "amp_deg": 16,
+              "stay": true
+            }
+          ]
+        },
+        "cae.thermal": {
+          "_who": "quick: hops in from the right at the foot of the name, then jumps up onto the U",
+          "start": {
+            "at": [
+              1770,
+              535
+            ],
+            "yaw_deg": -60,
+            "alpha": 0
+          },
+          "beats": [
+            {
+              "do": "fade",
+              "t": 2.1,
+              "to": 1,
+              "dur_s": 0.3
+            },
+            {
+              "do": "hops",
+              "t": 2.1,
+              "to": [
+                1480,
+                535
+              ],
+              "n": 3,
+              "every_s": 0.56,
+              "yaw_deg": -60,
+              "over_px": 22
+            },
+            {
+              "do": "turn",
+              "t": 4.0,
+              "yaw_deg": -25,
+              "dur_s": 0.4
+            },
+            {
+              "do": "hop",
+              "t": 5.0,
+              "to": {
+                "seat": 5,
+                "at": 0.75
+              },
+              "yaw_deg": -30,
+              "crouch_s": 0.15,
+              "air_s": 0.42,
+              "over_px": 30,
+              "bounces": [
+                [
+                  9,
+                  0.12
+                ]
+              ]
+            },
+            {
+              "do": "act",
+              "t": 6.9,
+              "kind": "look",
+              "dur_s": 0.7,
+              "amp_deg": 16
+            }
+          ]
+        }
       },
       "stop": {
         "from_s": 7.92,
@@ -2252,6 +3150,16 @@ window.PROMO_LAYOUT = {
         4.5,
         5.8
       ],
+      "n17b_3d": [
+        0.5,
+        1.5,
+        2.4,
+        2.8,
+        3.6,
+        4.5,
+        4.9,
+        5.8
+      ],
       "n18": [
         0,
         0.3,
@@ -2299,6 +3207,57 @@ window.PROMO_LAYOUT = {
         15
       ]
     },
+    "n17b_3d": {
+      "_note": "The 3D values of n17b_3d.html (N17b shown in depth). Placement, sizes, times, colours and content are n17b's (the page loads layout.js with data-cut n17b and the same n17b.data.js); only the depth, the camera and the extrusion are here. Kept under check because promo/tests/test_layout.py fixes the set of top-level keys and the number of story cuts; the page takes n17b's story limits through <body data-cut=\"n17b\">",
+      "duration_s": 5.8,
+      "view": {
+        "perspective_px": 1800,
+        "origin_x": 960,
+        "origin_y": 500,
+        "_note": "CSS perspective of the stage and the point the camera looks at (design px). origin_y is the middle of the content (amount top 110, stamp bottom 890)"
+      },
+      "planes": {
+        "lanes_z_px": -360,
+        "amount_z_px": 0,
+        "cards_z_px": 40,
+        "stamp_z_px": 0,
+        "_note": "depth of each layer (+ toward the camera). Each layer is scaled by (perspective - z) / perspective about the origin, so with the camera at rest every box falls where n17b puts it; the depth shows as the camera moves (the graph behind moves less than the figures in front)"
+      },
+      "camera": {
+        "from_s": 0.0,
+        "to_s": 4.9,
+        "ease": [
+          0.45,
+          0,
+          0.55,
+          1
+        ],
+        "yaw_from_deg": -4.0,
+        "yaw_to_deg": 0.0,
+        "pitch_from_deg": -1.6,
+        "pitch_to_deg": -0.6,
+        "roll_deg": 0,
+        "dolly_from_px": 0,
+        "dolly_to_px": 40,
+        "_note": "one slow move over the cut: the camera comes round from the right to the middle (yaw, so the still end is framed as n17b), looks up a little less (pitch, negative = from below) and comes 40 px nearer (dolly), eased in and out, and holds still from to_s as n17b does from 4.9 s. World transform: translateZ(dolly) rotateX(pitch) rotateY(yaw) about the origin; no roll"
+      },
+      "extrude": {
+        "amount_px": 48,
+        "card_px": 18,
+        "rule_px": 20,
+        "step_px": 0.5,
+        "max_layers": 48,
+        "near_mix": 0.42,
+        "far_mix": 0.16,
+        "rule_mix": 0.24,
+        "_note": "depth of the extruded figures (the lines written, each card's figure; the units, Japanese, are not extruded) and of each card's rule, in px behind the face; the side is drawn as layers every step_px on the screen (at most max_layers), coloured from near_mix to far_mix of the glow over the night ground (rule_mix of the light for the rule). The screen offset of the back is the projection, through the camera at t, of the point the depth behind the anchor of the figure"
+      },
+      "limits": {
+        "face_deg": 8,
+        "swing_deg": 6,
+        "_note": "the faces turn at most face_deg from the screen (|yaw| and |pitch| of the camera), and the camera's swing (yaw range + pitch range) stays within swing_deg: N17b shown in depth without tilting"
+      }
+    },
     "band_exempt": [
       {
         "selector": ".guide-band",
@@ -2332,10 +3291,16 @@ window.PROMO_LAYOUT = {
     ],
     "allow_overlap": [
       {
+        "cut": "n17b_3d",
+        "a": "n17b_3d.amount.num",
+        "b": "n17b_3d.amount.sub",
+        "why": "the two boxes touch in n17b (the figure's box ends where the line under it starts); seen in depth by the turned camera each is a trapezoid and their bounding boxes overlap by up to 3 px, while the letters stay far apart"
+      },
+      {
         "cut": "n00",
         "a": "n00.pet.*",
         "b": "n00.*",
-        "why": "a pet's box is a transparent canvas bigger than the pet in it. Seated, the box's lower edge reaches past the letter's ink top into the name's line box, and the two pets on one letter (and on neighbouring letters) have boxes that touch; while a pet jumps from the row onto its letter, its box passes over the line, the tagline and the chips. The pet is drawn on the letter's top edge and never inside the letter (title_pets puts the feet on the ink top)"
+        "why": "a pet's box is a transparent canvas bigger than the pet in it. On a letter, the box's lower edge reaches past the letter's ink top into the name's line box (title_pets puts the feet on the ink top); the pet behind the H is under the name and never covers it; pets near one another have boxes that touch; the floor pets' boxes reach up to the chips' lower edge, and while a pet jumps from the row onto its letter its box passes over the line, the tagline and the chips. promo/tests/test_layout.py checks the drawn pets against the letters' ink, the tagline's and the chips' text (at most 0.2 s over the name or the tagline for each pet, never over a chip's words)"
       },
       {
         "cut": "n07",
@@ -2359,13 +3324,19 @@ window.PROMO_LAYOUT = {
         "cut": "n18",
         "a": "n18.pet.*",
         "b": "n18.pet.*",
-        "why": "as on N00: a pet's box is a transparent canvas bigger than the pet; the two pets on one letter (and on neighbouring letters) have boxes that touch, and the helper hops to just behind the first pusher (n18.pets.help)"
+        "why": "as on N00: a pet's box is a transparent canvas bigger than the pet; pets near one another (on neighbouring letters, nvh behind the U under thermal on it) have boxes that touch"
       },
       {
         "cut": "n18",
         "a": "n18.pet.*",
         "b": "n18.title.name",
-        "why": "as on N00: seated, the box's lower edge reaches past the letter's ink top into the name's line box; the pet is drawn on the letter's top edge and never inside the letter (n00.title_pets puts the feet on the ink top)"
+        "why": "as on N00: on a letter, the box's lower edge reaches past the letter's ink top into the name's line box (the feet stand on the ink top), and the pets at the foot of the name stand beside the H and the U in its line box; the pet behind the U is under the name and never covers it. promo/tests/test_layout.py checks the drawn pets against the letters' ink, not these boxes"
+      },
+      {
+        "cut": "n18",
+        "a": "n18.pet.*",
+        "b": "n18.title.tag",
+        "why": "the tag's box is the whole width of the stage (centred text); crash and powertrain stand beside its words, left and right of them. promo/tests/test_layout.py checks the drawn pets against the words' own text box"
       },
       {
         "cut": "n05",

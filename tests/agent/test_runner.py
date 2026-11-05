@@ -43,7 +43,8 @@ class OptionsTest(RunCase, unittest.TestCase):
         for name in ("pick_domains", "ask_user", "import_knowledge", "rule_check"):  # the intake department's
             self.assertIn(f"mcp__hiraku__{name}", o.allowed_tools)
         self.assertIn("mcp__hiraku__get_tool_template", o.allowed_tools)
-        self.assertEqual(len(o.allowed_tools), 19)
+        self.assertIn("mcp__hiraku__build_version", o.allowed_tools)  # the run tools (the tool refuses designs without modules)
+        self.assertEqual(len(o.allowed_tools), 20)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])

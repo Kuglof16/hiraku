@@ -65,9 +65,12 @@ class SpanTest(unittest.TestCase):
 
 class DefaultsTest(unittest.TestCase):
     def test_off_by_default(self):
-        self.assertEqual(GEN.build(), V1)
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, GEN.build(), V1)
         self.assertEqual(GEN.choices_of(V1), {"joints": "butt", "part_mounts": "none", "pedal_mount": "none",
-                                              "side_guard": "none", "rops": "hoop", "fenders": "none"})
+                                              "side_guard": "none", "rops": "hoop", "fenders": "none",
+                                              "side_opening": "none", "grab_bar": "none"})
         for k in ("mount_floor", "pedal_mount", "side_bars", "rollbar_stays", "rollbar_front_posts", "fenders",
                   "rollbar_foot_b"):
             self.assertTrue(GEN.VARIABLES[k].revisable, k)
@@ -101,10 +104,12 @@ class MountsTest(unittest.TestCase):
             self.assertGreater(p["mass_kg"], 0.0)
 
     def test_every_part_but_the_pedals_is_held(self):
+        # every part is held since designgen joins them in shape (kit/joints.py: the pedals on struts or stands);
+        # before, the pedals floated here and 16 parts on version 1
         held, free = attach.free_parts(self.d)
-        self.assertEqual(free, {"pedal_accel", "pedal_brake"})
+        self.assertEqual(free, set())
         _, free_v1 = attach.free_parts(V1)
-        self.assertEqual(len(free_v1), 16)
+        self.assertEqual(len(free_v1), 0)
 
     def test_each_mount_touches_its_part_and_member(self):
         for p in self.mounts:
@@ -223,7 +228,7 @@ class LoadPathTest(unittest.TestCase):
             got = results(rec).get(lc["criterion"]["quantity"])
             self.assertTrue(judged(lc, rec), f"{k}: {got}")
             self.assertEqual(results(rec)["free_parts"]["value"], 0.0)
-            self.assertNotIn("unsupported_load", results(rec))
+            self.assertEqual(results(rec)["unsupported_load"]["value"], 0.0)
         contract.validate("design", self.d)
 
     def test_bulkhead_stands_move_more_than_q69(self):

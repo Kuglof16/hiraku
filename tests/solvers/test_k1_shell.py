@@ -460,7 +460,8 @@ class GussetMeshTest(unittest.TestCase):
         ms = self.mesh
         self.assertEqual(set(ms.element_member) - {m["id"] for m in self.design["members"]}, set(self.gussets))
         self.assertEqual(set(ms.part_material), set(self.gussets))
-        self.assertEqual(ms.part_material["gusset_LS1_rear_lower"], "cross_S1")
+        # LS1's rear gussets are left off on the battery's side (kit/frame.Frame.gussets avoid): its front ones
+        self.assertEqual(ms.part_material["gusset_LS1_front_lower"], "cross_S1")
         self.assertLessEqual(ms.edge_lengths().max(), 10.0 + 1e-9)
         self.assertEqual(n_components(ms), 1)
         tubes = {int(i) for e, m in zip(ms.elements, ms.element_member) if m not in self.gussets for i in e}

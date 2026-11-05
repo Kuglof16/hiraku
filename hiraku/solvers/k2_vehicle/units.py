@@ -9,7 +9,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-# Standard gravity, a defined value (3rd CGPM, 1901; ISO 80000-3).
+# Standard gravity, a defined value (3rd CGPM, 1901; ISO 80000-3). Not checked against those texts in this
+# repository.
 G0 = 9.80665
 
 TO_SI = {

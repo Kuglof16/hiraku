@@ -1,0 +1,61 @@
+/* The joints' legend (js/joints.js renderJointLegend): on the workbench under the toggles, on A7
+   above the seek bar; one row per kind: the mark's swatch, its name and how many. */
+.joint-legend {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  z-index: 5;
+  max-width: 270px;
+  max-height: calc(100% - 140px);
+  overflow: auto;
+  background: rgba(251, 249, 244, 0.94);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px 8px;
+  font-size: 13px;
+}
+.joint-legend[hidden] { display: none; }
+/* js/joints.js hoverTag: the mark pointed at */
+.joint-tag { position: absolute; z-index: 7; pointer-events: none; background: rgba(251, 249, 244, 0.96); border: 1.5px solid var(--ink);
+  border-radius: 8px; padding: 3px 8px; font-size: 13px; white-space: nowrap; }
+.joint-tag[hidden] { display: none; }
+.joint-legend .jl-ttl { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.joint-legend .jl-ttl small { font-weight: 400; color: var(--muted); }
+.joint-legend .jl-rows { display: grid; grid-template-columns: 16px auto auto; column-gap: 8px; row-gap: 2px; align-items: center; }
+.joint-legend .jl-nm { white-space: nowrap; }
+.joint-legend .jl-nm small { color: var(--muted); margin-left: 4px; }
+.joint-legend .jl-n { text-align: right; font-variant-numeric: tabular-nums; }
+.joint-legend .jl-note { color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 4px; }
+.joint-legend .jl-more { margin-top: 4px; }
+.joint-legend .jl-more summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+/* the swatches: the shape of each mark (MARK_SHAPES), in its colour */
+.jl-sw { width: 14px; height: 14px; box-sizing: border-box; justify-self: center; }
+/* the weld: a fillet's section, the bead's triangle in the corner of two grey plates (the tube's side, the face) */
+.jl-bead {
+  background:
+    linear-gradient(#a7a39a, #a7a39a) left top / 3px 100% no-repeat,
+    linear-gradient(#a7a39a, #a7a39a) left bottom / 100% 3px no-repeat,
+    linear-gradient(to top right, var(--jc) 50%, rgba(0, 0, 0, 0) 50%) 3px calc(100% - 3px) / 9px 9px no-repeat;
+}
+.jl-hex { background: var(--jc); clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%); }
+.jl-ring { border-radius: 50%; border: 4px solid var(--jc); }
+.jl-ball { border-radius: 50%; background: var(--jc); }
+.jl-pin { width: 4px; height: 14px; background: var(--jc); border-radius: 2px; }
+.jl-spline { width: 9px; height: 14px; background: repeating-linear-gradient(to bottom, var(--jc) 0 2px, rgba(0, 0, 0, 0) 2px 3px); }
+.jl-dot { width: 9px; height: 9px; background: var(--jc); transform: rotate(45deg); }
+
+/* A7: its own 接合 switch, above the seek bar at the right, and the legend above it */
+.asm-3d > .asm-joints-btn {
+  position: absolute;
+  right: 14px;
+  bottom: 66px;
+  z-index: 5;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 13px;
+  font-size: 15px;
+  background: rgba(251, 249, 244, 0.9);
+  color: var(--muted);
+}
+.asm-3d > .asm-joints-btn.on { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.asm-3d > .joint-legend { top: auto; bottom: 104px; max-height: calc(100% - 170px); }

@@ -33,6 +33,8 @@ class OffroadRollTool(K2Tool):
     title = "凸凹の横斜面 (K2 で ISO 8608 の路面)"
     domain = "handling"
     tests = ["S5"]
+    # side_slope 15 deg and speed 20 km/h: the defaults when a load case has none (the catalog's load cases give
+    # them; S5's 20 km/h is cited in catalog/builders/k2_tests.py); test values
     params = (P("road_class", None, "C", "ISO 8608 road class (values not checked against the ISO text)",
                 choices=tuple("ABCDEFGH")),
               P("side_slope", "deg", 15.0, "side slope"),

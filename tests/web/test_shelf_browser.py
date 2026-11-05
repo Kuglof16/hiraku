@@ -109,8 +109,8 @@ class ShelfBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        # The code of a run's tool is asked for until a 404 (tools/<name>-<n+1>.py); the browser
-        # logs those 404s, so they are kept apart and checked by URL.
+        # The code of a run's tool: the newest of the versions GET /api/runs/<id>/tools lists, so no
+        # 404 is asked for; any 404 is kept apart (the browser logs it) and checked by URL.
         page.not_found = []
         page.on("response", lambda r: r.status == 404 and page.not_found.append(r.url.split("/api/", 1)[-1]))
         page.on("console", lambda m: m.type == "error" and "status of 404" not in m.text and errors.append(m.text))
@@ -246,7 +246,7 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertEqual(page.text_content("#view-shelf .sh-code"), CODE_2)
         self.assertIn("tools/rollbar-2.py", page.text_content("#view-shelf .sh-detail"))
 
-        self.assertEqual(sorted(page.not_found), [f"runs/{self.run_id}/tools/rollbar-3.py", f"runs/{self.run_id}/tools/roof_crush-1.py"])
+        self.assertEqual(page.not_found, [])  # (before: tools/rollbar-3.py and tools/roof_crush-1.py, guessed)
         self.assertEqual(errors, [])
         page.close()
 

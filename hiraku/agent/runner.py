@@ -8,8 +8,9 @@ from typing import Any
 
 from hiraku import contract
 from hiraku.agent import inbox, prompts
-from hiraku.agent.hooks import Hooks
-from hiraku.agent.roles import PLUGIN_DIR, agent_id_from_sdk, plugin_skills, subagents
+from hiraku.agent.hooks import Hooks, stopped_data
+from hiraku.agent.roles import (PLUGIN_DIR, agent_id_from_sdk, all_plugin_skills, has_modules, plugin_skills, routing_text,
+                                subagents)
 from hiraku.catalog.mixes import Mix, get_mix
 from hiraku.agent.session import STOPPED_BY_BUTTON, STOPPED_BY_USER
 from hiraku.tools import Attribution, RunContext, rules
@@ -76,6 +77,8 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str | No
 
     budget = ctx.project["cost_limit_usd"] if max_budget_usd is None else max_budget_usd
     model, effort = lead_model(mix, model, effort)
+    modules = has_modules(ctx)  # docs/contract.md モジュールに分けた設計: module designers, build_version
+    run_tools = (*RUN_TOOLS, *(t for t in contract.MCP_TOOLS_PACKAGER if modules and t not in RUN_TOOLS))
     return ClaudeAgentOptions(
         # Only Agent (to start the role subagents) and Skill (the procedures in
         # plugins/hiraku) of the built-in set; Bash, Read, Write and the rest
@@ -83,15 +86,16 @@ def build_options(ctx: RunContext, server: Any, hooks: Hooks, *, model: str | No
         tools=[AGENT_TOOL, SKILL_TOOL],
         setting_sources=[],  # never read this machine's CLAUDE.md, settings or hooks
         plugins=[{"type": "local", "path": str(PLUGIN_DIR)}],
-        skills=plugin_skills(),  # only HIRAKU's skills, not the ones bundled with the CLI
+        # only HIRAKU's skills, not the ones bundled with the CLI; the module designers' only with modules
+        skills=all_plugin_skills() if modules else plugin_skills(),
         mcp_servers={contract.MCP_SERVER: server},
         strict_mcp_config=True,  # no MCP servers but hiraku (no connectors of a logged-in account)
         # Exact names, not a wildcard: under dontAsk anything not listed is denied.
-        allowed_tools=[contract.mcp_name(t) for t in RUN_TOOLS] + [AGENT_TOOL, SKILL_TOOL],
+        allowed_tools=[contract.mcp_name(t) for t in run_tools] + [AGENT_TOOL, SKILL_TOOL],
         permission_mode="dontAsk",
         hooks=hooks.matchers(),
         agents=subagents(ctx, mix),
-        system_prompt=prompts.LEAD_PROMPT,
+        system_prompt=prompts.lead_prompt(modules),
         model=model,
         effort=effort,
         max_budget_usd=budget,
@@ -198,6 +202,28 @@ def end_status(ctx: RunContext, blocks: int = 0) -> tuple[str, str | None, str]:
     return rules.judged_end(ctx)
 
 
+def new_routing(ctx: RunContext, hooks: Hooks, routed: dict[int, str]) -> str | None:
+    """The routing of the latest version's reds (roles.routing_text, designs with modules) when no
+    role is at work and it differs from what the lead was told for that version (kept in routed);
+    else None. A failure here is said once as agent.said (system) and never ends the run."""
+    if hooks.running or not ctx.version:
+        return None
+    try:
+        if rules.revisions_used_up(ctx):  # no round left: nothing to route
+            return None
+        text = routing_text(ctx)
+    except Exception as e:  # the routing helps the lead; a bug behind it must not end the run
+        if routed.get(-1) is None:
+            routed[-1] = repr(e)
+            ctx.store.emit("agent.said", agent="system",
+                           text=f"赤の振り分けを出せませんでした ({type(e).__name__}: {e})")
+        return None
+    if not text or routed.get(ctx.version) == text:
+        return None
+    routed[ctx.version] = text
+    return text
+
+
 async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) -> None:
     """Give the lead its task and read messages until its turn ends with no role at work.
 
@@ -242,6 +268,9 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
         while not hooks.stopping():
             await asyncio.sleep(STOP_POLL_S)
             told = await asyncio.to_thread(inbox.take, ctx)
+            routing = await asyncio.to_thread(new_routing, ctx, hooks, routed)
+            if routing:  # told on the lead's next tool call, like the inbox (not a turn of its own)
+                hooks.for_lead.append(routing)
             if told:
                 hooks.for_lead.extend(told)  # the hooks tell the lead on its next tool call or stop
                 if state["idle"]:  # the lead's turn has ended while roles work: a turn of its own for them
@@ -256,6 +285,7 @@ async def converse(client: Any, ctx: RunContext, hooks: Hooks, log: MessageLog) 
         cut["done"] = True
         main.cancel()
 
+    routed: dict[int, str] = {}  # version -> the routing text told to the lead (new_routing)
     hooks.on_roles_done = roles_done
     watcher = loop.create_task(watch_stop())
     try:
@@ -302,9 +332,9 @@ async def run_with_claude(ctx: RunContext, *, model: str | None = None, effort: 
         # roles the CLI never reported stopped (cut off with the run) stop with it, then the lead
         for agent in sorted(set(hooks.running.values())):
             domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-            ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
+            ctx.store.emit("agent.stopped", agent=agent, domain=domain, data=stopped_data(agent, code, cut_off=True))
         hooks.running.clear()
-        ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+        ctx.store.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
         ctx.store.finish(status, stop_reason=reason, stop_code=code)
 
     if ctx.store.stop_requested():  # pressed while the tools were checked: the CLI is not started

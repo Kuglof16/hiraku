@@ -32,7 +32,7 @@ MOUNT_MM = 25.0  # a bolted part's box may sink this far into the member it is m
 # Part kinds held as capsules: shafts, steering links and rods. Kinds not in a design yet
 # are listed so that designs using them get capsules without a change here.
 SLENDER_KINDS = ("driveshaft", "propshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "steering_column",
-                 "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper")
+                 "steering_shaft", "steering_rack", "stabilizer_link", "link", "rod", "damper", "pushrod")
 WELDED = {"frame", "gusset", "rollbar", "bracket"}  # part kinds welded into the frame at their carried_by joints
 # The parts of a person (kind occupant, one person per id before the first ".": hiraku.contract.loading.
 # person_of) touch each other and what the person sits on, rests the feet on and holds any amount; anything
@@ -45,10 +45,12 @@ OCCUPANT_REST_KINDS = ("seat", "seat_belt", "body", "accelerator_pedal", "brake_
 FRAME_PIECES = ("frame", "rollbar", "side_rail")
 # Links with a joint at each end, fixed at the inner end and moving with the wheel at the outer
 # end (motion.sweep turns them about the inner end).
-LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link")
+# links with an inner end on the body and an outer end on the wheel (the arms' legs, designgen kit/arms.py: link)
+LINK_KINDS = ("driveshaft", "halfshaft", "axle_shaft", "tie_rod", "drag_link", "stabilizer_link", "link")
 # Kinds that go through a hole in a panel (a part of kind body) on their way: the steering column
 # through the floor (assumption: the panel has the hole).
-THROUGH_PANEL_KINDS = ("steering_column", "steering_shaft")
+# anchor: a bolt through a sheet, pushrod: the brake pedal's through the bulkhead (designgen kit/joints)
+THROUGH_PANEL_KINDS = ("steering_column", "steering_shaft", "anchor", "pushrod")
 PANEL_KINDS = ("body",)
 
 
@@ -151,6 +153,10 @@ def allowance(a: Body, b: Body, design: dict) -> float:
             return float("inf")
         if part.nodes & mem.nodes:
             return MOUNT_MM
+        if part.kind == "gusset" and _on_the_line_of(part, mem, design):
+            return MOUNT_MM  # welded along a through tube that goes on in another member past the joint's node
+        if part.capsule is not None and _ends_in_bracket_on(part, mem, design):
+            return float("inf")  # a link or damper pinned in a bracket welded on this member's end
         if part.support and part.kind == "suspension":  # arms are bolted to the frame at the mount
             fn = next((s.get("frame_node") for s in design["supports"] if s["id"] == part.support), None)
             return MOUNT_MM if fn in mem.nodes else TOUCH_MM
@@ -175,6 +181,39 @@ def _person(body_id: str) -> str:
     return body_id.split(":", 1)[-1].split(".", 1)[0]
 
 
+def _on_the_line_of(part: Body, mem: Body, design: dict) -> bool:
+    """Whether the member lies on the straight line of a member that ends at one of the part's carried_by
+    nodes (the same tube going on past another node)."""
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    ms = {m["id"]: m for m in design.get("members", [])}
+    me = ms.get(mem.id.split(":", 1)[-1])
+    if me is None:
+        return False
+    a, b = nodes[me["node_a"]], nodes[me["node_b"]]
+    d = (b - a) / max(float(np.linalg.norm(b - a)), 1e-12)
+    for m in ms.values():
+        if m is me or not {m["node_a"], m["node_b"]} & part.nodes:
+            continue
+        p, q = nodes[m["node_a"]], nodes[m["node_b"]]
+        e = (q - p) / max(float(np.linalg.norm(q - p)), 1e-12)
+        if abs(abs(float(d @ e)) - 1.0) < 1e-9 and float(np.linalg.norm(np.cross(p - a, d))) < 1e-6:
+            return True
+    return False
+
+
+def _ends_in_bracket_on(part: Body, mem: Body, design: dict) -> bool:
+    """Whether an end of a long thin part's capsule lies in a bracket part welded (carried_by) at a node of
+    the member: the link is pinned in that clevis, which sits on the member's end."""
+    for p in design.get("parts", []):
+        if p.get("kind") != "bracket" or not set(p.get("carried_by") or []) & mem.nodes:
+            continue
+        o = from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"), p["id"])
+        br = Body(f"part:{p['id']}", o, "bracket", None, set(p.get("carried_by") or []))
+        if _inside(part.capsule.a, br) or _inside(part.capsule.b, br):
+            return True
+    return False
+
+
 def _inside(point: np.ndarray, b: Body) -> bool:
     """Whether a point is in a body's shape (its capsule, else its box), within TOUCH_MM."""
     if b.capsule is not None:
@@ -194,13 +233,36 @@ def joined(a: Body, b: Body) -> bool:
     return False
 
 
+def reach(bs: dict[str, Body], keys: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    """(centres (n, 3), radii (n,)): a sphere about each body's box centre holding its shape (the box's half diagonal,
+    or its capsule's farther end plus the capsule's radius when that is larger)."""
+    return spheres([bs[k] for k in keys])
+
+
+def spheres(items: list[Body]) -> tuple[np.ndarray, np.ndarray]:
+    """reach() of a list of bodies, in its order."""
+    C = np.array([b.obb.center for b in items], float).reshape(-1, 3)
+    R = np.empty(len(items))
+    for i, b in enumerate(items):
+        r = float(np.linalg.norm(b.obb.half))
+        if b.capsule is not None:
+            r = max(r, max(float(np.linalg.norm(b.capsule.a - C[i])), float(np.linalg.norm(b.capsule.b - C[i])))
+                    + b.capsule.r)
+        R[i] = r
+    return C, R
+
+
 def interferences(design: dict, items: dict[str, Body] | None = None) -> list[tuple[str, str, float]]:
     """Pairs whose shapes overlap by more than they are allowed to: (a, b, overlap mm)."""
     bs = items or bodies(design)
     keys = sorted(bs)
+    C, R = reach(bs, keys)
+    # shapes whose bounding spheres are apart overlap by a negative amount, never more than an allowance (>= TOUCH_MM)
+    near = np.sqrt(((C[:, None, :] - C[None, :, :]) ** 2).sum(axis=2)) <= R[:, None] + R[None, :]
     out = []
     for i, ka in enumerate(keys):
-        for kb in keys[i + 1:]:
+        for j in np.nonzero(near[i, i + 1:])[0] + i + 1:
+            kb = keys[j]
             a, b = bs[ka], bs[kb]
             allowed = allowance(a, b, design)
             if allowed == float("inf"):

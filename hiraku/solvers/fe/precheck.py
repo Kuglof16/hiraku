@@ -48,14 +48,15 @@ def group_rigid_modes(model: FEModel, lay: Layout, labels: np.ndarray) -> tuple[
 
 
 def rigid_body_check(model: FEModel, lay: Layout | None = None, fixed: dict | None = None,
-                     tol: float = 1e-10) -> dict:
+                     tol: float = 1e-10, K=None) -> dict:
     """How many rigid-body motions the supports, constraints and grounded elements leave free.
 
     For every connected group the six rigid motions Phi are tested against the
     fixed DOFs (rows of Phi there), the constraint equations (C Phi) and the
     stiffness (Phi^T K Phi, for springs to ground). A combination of the
     motions that none of them resists is a free rigid-body motion. The test
-    works on 6 x groups columns, before any factorisation.
+    works on 6 x groups columns, before any factorisation. K: the model's stiffness on `lay`, when the caller
+    has assembled it already (a large model's assembly is not repeated).
     """
     lay = lay or model.layout()
     fixed = model.fixed_dofs(lay) if fixed is None else fixed
@@ -99,7 +100,7 @@ def rigid_body_check(model: FEModel, lay: Layout | None = None, fixed: dict | No
         Cn = sp.diags(1.0 / np.where(rn > 0, rn, 1.0)) @ C
         CQ = (Cn @ Q).tocsc()
         S += (CQ.T @ CQ).toarray()
-    K = model.stiffness(lay)
+    K = model.stiffness(lay) if K is None else K
     dmax = float(np.abs(K.diagonal()).max()) if K.shape[0] else 1.0
     S += (Q.T @ (K @ Q)).toarray() / dmax
     S = 0.5 * (S + S.T)

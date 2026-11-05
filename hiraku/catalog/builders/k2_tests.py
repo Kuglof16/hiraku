@@ -47,10 +47,10 @@ Record = dict[str, Any]
 # https://www.mlit.go.jp/jidosha/content/S171.pdf), borrowed: the table is not
 # for this vehicle class. Not checked in this repository.
 S4_SPEED_KMH = 35.0
-# S1': static stability factor T/2h >= 1.0 of ROHVA 1-2011 and ANSI B71.9-2012, as
-# summarized in 79 FR 68964 (2014, CPSC's proposed ROV rule,
-# https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm). Not
-# checked in this repository.
+# S1': static stability factor T/2h >= 1.0 at curb weight, the value of ROHVA 1-2011 and ANSI B71.9-2012 as
+# 79 FR (2014, CPSC's proposed ROV rule, https://www.govinfo.gov/content/pkg/FR-2014-11-19/html/2014-26500.htm)
+# states it: 68981 (Kst no less than 1.0), 68982 (the standards' value), 68968 (SSF = T/2H). Checked
+# against that text on 2026-11-03 (README, the table of values checked).
 SSF_MIN = 1.0
 # S5: design speed of a class 3 forest road, 林道規程 (林野庁,
 # https://www.rinya.maff.go.jp/hokkaido/keikaku/other/attach/pdf/sinrinkeikaku_taikei-32.pdf).
@@ -170,7 +170,8 @@ def _s1p_ssf(spec: Record, req: Record, design: Record) -> Record:
     return _case(spec, "S1'", "handling", "S1'-ssf-empty", "静的安定係数 T/2h (空車)",
                  {"loading": on, "direction": "right"}, keys,
                  _crit("static_stability_factor", ">=", q(SSF_MIN, "1"),
-                       "T/2h >= 1.0 (ROHVA 1-2011, ANSI B71.9-2012 as summarized in 79 FR 68964; not checked)", []))
+                       "T/2h >= 1.0 at curb weight (ROHVA 1-2011, ANSI B71.9-2012 as stated in 79 FR 68981; "
+                       "checked 2026-11-03)", []))
 
 
 def _f1_wind(spec: Record, req: Record, design: Record) -> Record:

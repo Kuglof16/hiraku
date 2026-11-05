@@ -43,6 +43,23 @@ FRAMES_ASSUMPTION = (
     "返すトルク (body_torque) は、その支持の節にかけた。判定はこれまでどおり上流の vectors の瞬間の値で、時刻ごとの最大は参考")
 
 
+NO_LOST_LOAD = ("どの部品の重さと慣性も、carried_by の節 (無ければいちばん近い支え) に載せた: 支えのない荷重は 0 "
+                "(部品の形が枠に触れているかは見ていない。それは手計算の道の確かめ load_path.free_parts が見る)")
+
+
+PATH_FORMULA = "load_path.free_parts"
+PATH_PREDICTS = Predicts("unsupported_load", PATH_FORMULA, "n",
+                         "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the parts the load case "
+                         "loads, followed by their contacts to the members; the tool itself loses no load (0)")
+
+
+def lost_load_outputs() -> tuple[Record, Record]:
+    """The contract's unsupported_load of a frame tool, always 0, and the effect saying why (docs/contract.md
+    手計算の役目): every part's load goes on its carried_by nodes or the nearest support (k0_handcalc.vehicle
+    .mass_items; a carried_by node no member uses is refused before the solve)."""
+    return result("unsupported_load", 0.0, "1"), {"name": NO_LOST_LOAD, "value": 0.0, "unit": "1"}
+
+
 def frame_outputs(res: dict) -> Record:
     """results / fields / vectors / effects shared by the K1-based tools."""
     fm = res["model"]
@@ -77,7 +94,9 @@ def frame_outputs(res: dict) -> Record:
     for t in terms:  # the worst member's stress split into axial, the bendings and torsion (MPa each)
         part = t["name"].split(" (", 1)[0]
         results.append(result(f"max_stress_{part}", t["value"], "MPa", worst))
-    return {"results": results, "fields": fields, "vectors": vectors, "effects": terms}
+    lost, said = lost_load_outputs()
+    results.append(lost)
+    return {"results": results, "fields": fields, "vectors": vectors, "effects": terms + [said]}
 
 
 def member_results(quantity: str, per_member: dict[str, float], unit: str = "MPa") -> list[Record]:
@@ -188,6 +207,7 @@ class FrameStatic(BuiltinTool):
     tests = ["R1"]
     formulas = [
         "frame_static.rail_joint_stress",
+        "frame_static.rail_joint_stress_closed",
         "frame_static.rail_step_bending",
         "frame_static.rail_bending",
         "frame_static.simple_beam_point_load",
@@ -196,6 +216,7 @@ class FrameStatic(BuiltinTool):
         "frame_static.cantilever_tip_load",
         "frame_static.bending_stress",
         "mass_props.static_wheel_loads",
+        PATH_FORMULA,
     ]
     load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
     predicts = (
@@ -204,6 +225,7 @@ class FrameStatic(BuiltinTool):
         Predicts("max_stress", "frame_static.rail_bending", "sigma", "one rail as a simply supported beam, one wheel force"),
         Predicts("wheel_load_<support>", "mass_props.static_wheel_loads", "wheel_load_<support>",
                  "at rest only (no step_height, no upstream forces)"),
+        PATH_PREDICTS,
     )
     upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
                 "its ground forces load the frame instead of step_height")

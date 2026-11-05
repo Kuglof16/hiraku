@@ -5,11 +5,14 @@
 // interferences in red, and a small chart of its first series group. Every
 // number printed is a recorded value.
 
-import { DOMAINS, DOMAIN_JA, esc, fmt, fmtVU, unitLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, esc, fmt, fmtQ, fmtVU, keepAsides, opLabel, quantityName, unitLabel } from "./labels.js";
 import { OVER_COLOR, colorOf } from "./colormap.js";
 import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fields.js";
-import { abscissa, channelsOf, chartGroups, extent, wheelName, xSeriesOf } from "./series.js";
+import { abscissa, channelsOf, chartGroups, extent, seriesName, xSeriesOf } from "./series.js";
 import { domainVerdicts, isSafeSide, judgementState, roundsUsed } from "./state.js";
+import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
+import { heldBandHtml, heldCases, referenceCases, referenceRowsHtml } from "./held.js";
+import { builtLine } from "./proposals.js"; // modules:
 
 const W = 300;
 const H = 150;
@@ -19,6 +22,8 @@ const LINE_COLORS = ["#2b59c3", "#8e6bbf", "#2f7d4f", "#e9893a", "#c8402a", "#2f
 const STATE_WORD = { green: "緑 ✓", red: "赤", pending: "まだ", off: "選んでいない" };
 // Top row: domains drawn as contours; bottom row: as charts, then assembly (interference).
 export const TILE_ORDER = ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"];
+
+const caseTitle = (s, id) => (s.project?.load_cases ?? []).find((c) => c.load_case_id === id)?.title ?? "";
 
 // A part's name for people (before any bracket), or the id of a member or anything else.
 function thingName(design, id) {
@@ -118,17 +123,36 @@ function wheels(design, view) {
     .join("");
 }
 
+// The width of a tag's text in the side view's units (font 10: a CJK letter 10, others 5.6).
+const tagWidth = (s) => [...s].reduce((w, ch) => w + (/[　-鿿＀-￯]/.test(ch) ? 10 : 5.6), 0);
+
+// Each part's value over its box. Tags that would cross one already placed go up a line (up to
+// TAG_LIFTS lines), else are left out: the caption and the workbench keep every value.
+const TAG_LIFTS = 3;
 function partValueTags(design, view, ct) {
   if (!ct?.parts) return "";
-  return (design.parts ?? [])
-    .filter((p) => typeof ct.parts[p.id] === "number")
-    .map((p) => {
-      const c = p.box.center_mm;
-      const over = overOf(ct, p.id, ct.parts[p.id]);
-      const name = String(p.name ?? p.id).replace(/\s*[（(].*$/, "");
-      return `<text x="${view.X(c[0]).toFixed(1)}" y="${(view.Y(c[2] + p.box.size_mm[2] / 2) - 4).toFixed(1)}" class="tv${over ? " over" : ""}">${esc(name)} ${esc(fmtVU(ct.parts[p.id], ct.field.unit, 3))}</text>`;
-    })
-    .join("");
+  const placed = [];
+  const out = [];
+  const parts = (design.parts ?? []).filter((p) => typeof ct.parts[p.id] === "number").sort((a, b) => ct.parts[b.id] - ct.parts[a.id]);
+  for (const p of parts) {
+    const c = p.box.center_mm;
+    const over = overOf(ct, p.id, ct.parts[p.id]);
+    const name = String(p.name ?? p.id).replace(/\s*[（(].*$/, "");
+    const text = `${name} ${fmtVU(ct.parts[p.id], ct.field.unit, 3)}`;
+    const x = view.X(c[0]);
+    const w = tagWidth(text);
+    let y = view.Y(c[2] + p.box.size_mm[2] / 2) - 4;
+    let k = 0;
+    const hits = () => placed.some((b) => x - w / 2 < b.x1 && x + w / 2 > b.x0 && y - 10 < b.y1 && y > b.y0);
+    while (hits() && k < TAG_LIFTS) {
+      y -= 12;
+      k += 1;
+    }
+    if (hits()) continue;
+    placed.push({ x0: x - w / 2, x1: x + w / 2, y0: y - 10, y1: y });
+    out.push(`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="tv${over ? " over" : ""}" data-part="${esc(p.id)}">${esc(text)}</text>`);
+  }
+  return out.join("");
 }
 
 // The first chart group of an analysis' series (against time, else against another quantity).
@@ -155,16 +179,13 @@ function sparkline(ana) {
       return `<polyline points="${pts.join(" ")}" fill="none" stroke="${LINE_COLORS[i % LINE_COLORS.length]}" stroke-width="1.8"/>`;
     })
     .join("");
-  const names = series.map((s) => {
-    const dot = s.channel.indexOf(".");
-    return dot > 0 ? wheelName(s.channel.slice(dot + 1)) : s.channel;
-  });
+  const names = series.map((s) => seriesName(s.channel)).filter((n) => n !== g.ja); // (a lone channel is the chart's own name)
   return (
     `<svg class="spark" viewBox="0 0 ${SPARK.w} ${SPARK.h}" width="100%" preserveAspectRatio="xMidYMid meet">` +
     `<line x1="30" y1="${SPARK.h - 6}" x2="${SPARK.w - 6}" y2="${SPARK.h - 6}" stroke="#1d1d1f" stroke-width="1"/>` +
     `<line x1="30" y1="6" x2="30" y2="${SPARK.h - 6}" stroke="#1d1d1f" stroke-width="1"/>` +
     `<text x="26" y="12" class="ax">${esc(fmt(hi, 3))}</text><text x="26" y="${SPARK.h - 6}" class="ax">${esc(fmt(lo, 3))}</text>` +
-    `${lines}<text x="34" y="12" class="lg">${esc(g.ja)} [${esc(unitLabel(g.unit) || "1")}]・${esc(names.slice(0, 4).join("・"))}</text></svg>`
+    `${lines}<text x="34" y="12" class="lg">${esc(g.ja)} [${esc(unitLabel(g.unit) || "1")}]${names.length ? `・${esc(names.slice(0, 4).join("・"))}` : ""}</text></svg>`
   );
 }
 
@@ -192,6 +213,15 @@ function tileSvg(s, domain, design, info) {
   return { body, ct, view };
 }
 
+// The tile's pet: its domain's agent when the record has it (agent_pets.js), else none; without
+// pets the circle as before.
+function tilePet(s, d, pets) {
+  if (!pets) return `<span class="pet" style="--pet:#4cbf7a"></span>`;
+  const id = s.agentOrder.find((x) => gridPlaceOf(x) === d);
+  if (!id || !pets.has(id)) return "";
+  return `<span class="say tilesay" data-say="${esc(id)}"></span><span class="petslot tilepet" data-pet-slot="${esc(id)}"></span>`;
+}
+
 export class TileBoard {
   constructor(head, tiles) {
     this.head = head;
@@ -200,20 +230,40 @@ export class TileBoard {
     this.key = null;
   }
 
-  render(s) {
+  // pets (js/agent_pets.js, or null without them): { has(id), order (the agents in the list's
+  // order) }. With pets, each domain's agent stands in its tile's corner (when the record has
+  // that agent) and the other agents in the head; without, the tiles keep their circles.
+  render(s, pets = null) {
     const v = s.currentVersion;
     const reds = DOMAINS.filter((d) => judgementState(s, d).state === "red");
+    // each version's failed load cases (its verdicts as recorded): their ids in the box, and in its
+    // tooltip which were fixed since the version before and which are still red
+    const redCases = (ver) => new Set(DOMAINS.flatMap((d) => domainVerdicts(s, d, ver).filter((x) => x.pass === false).map((x) => x.test_id ?? x.load_case_id)));
+    let before = null;
     const flow = s.versions
       .map((ver) => {
         const r = DOMAINS.filter((d) => s.judgements[`${ver}|${d}`]?.state === "red").length;
-        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "now" : ""}">版 ${ver} 赤 ${r}</span>`;
+        const now = redCases(ver);
+        const fixed = before ? [...before].filter((x) => !now.has(x)) : [];
+        const kept = before ? [...now].filter((x) => before.has(x)) : [];
+        const tip = [now.size ? `赤の試験: ${[...now].join("・")}` : "赤の試験なし", fixed.length ? `前の版から直った: ${fixed.join("・")}` : "", kept.length ? `前の版から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
+        before = now;
+        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">版 ${ver} 赤 ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
       })
       .join(`<span class="varrow">→</span>`);
     const design = v != null ? s.designs[v] : null;
-    const change = design && design.parent_version != null && design.change_reason ? `<span class="change">版 ${design.parent_version} → ${v} で変えたこと: ${esc(design.change_reason)}</span>` : "";
+    // modules: a version built from module designers' proposals names each module's change (proposals.js)
+    const built = design ? builtLine(s, v) : "";
+    const change = built
+      ? `<span class="change" data-built="${v}">${built}</span>`
+      : design && design.parent_version != null && design.change_reason ? `<span class="change long" title="${esc(design.change_reason)}">版 ${design.parent_version} → ${v} で変えたこと: ${keepAsides(design.change_reason)}</span>` : "";
+    const headIds = pets ? pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)) : [];
+    const headN = headIds.length;
     this.head.innerHTML =
       `<h2>版 ${v ?? "—"} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
-      `<span class="flow">${flow}</span>${change}`;
+      `<span class="flow">${flow}</span>${change}` +
+      (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div", why: s.agents[id]?.stopWhy })).join("")}</div>` : "");
+    this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
 
     const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
     this.modeViews = [];
@@ -232,17 +282,45 @@ export class TileBoard {
         }
       }
       const spark = info.ana ? sparkline(info.ana) : "";
-      const summary = j.judgement?.summary ?? picks[d]?.reason ?? "";
+      // The verdicts of the version as recorded (pass, value, limit: not judged again here), each
+      // with the limit it was held against; the record's own summary is the tooltip.
+      const verdicts = v != null ? domainVerdicts(s, d, v) : [];
+      const failed = verdicts.filter((x) => x.pass === false);
+      const vline = (x) => `${x.test_id ?? x.load_case_id} ${quantityName(x.quantity)} ${fmtQ(x.value)} ${opLabel(x.op)} ${fmtQ(x.limit)}${x.pass === false ? " ✕" : ""}`;
+      const recorded = j.judgement?.summary ?? picks[d]?.reason ?? "";
+      // a tile still まだ with no word from the record: why, as far as the record tells
+      const why = j.state === "pending" && !j.judgement?.summary
+        ? info.ana ? "この版の解析は記録にあるが、判定がまだ記録に無い" : "この版の解析がまだ記録に無い"
+        : "";
+      // (a tile still まだ with some verdicts: those are the ones judged so far, not the tile's pass)
+      const lead = failed.length ? `不合格 ${failed.length} 件: ` : j.state === "green" ? "合格: " : "判定のある分: ";
+      const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why;
       const nv = j.judgement?.verdict_ids?.length ?? 0;
       const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
       const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
       const safe = ns ? `<span class="tb safe" title="一致ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
+      // a load case without a criterion whose count is not 0: a 保留 band over the tile's colour (held.js)
+      const held = heldCases(s, d, v);
+      // the other quantities without a criterion (渡すだけ・比べるだけ・参考): rows not coloured (held.js)
+      const refs = referenceCases(s, d, v);
+      // the state as recorded, with what goes with it: green while a count is held says both; red
+      // names the load cases whose verdict failed
+      const failedIds = [...new Set(failed.map((x) => x.test_id ?? x.load_case_id))];
+      const word =
+        j.state === "green" && held.length
+          ? `緑 (判定のある分だけ)・保留 ${held.length}`
+          : j.state === "red" && failedIds.length
+            ? `赤・${failedIds.join("・")}`
+            : STATE_WORD[j.state];
+      const wordTitle = j.state === "red" && failed.length ? ` title="${esc(failed.map((x) => `${x.load_case_id}: ${caseTitle(s, x.load_case_id)}`).join("\n"))}"` : "";
       return (
-        `<div class="tile ${j.state}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state">${STATE_WORD[j.state]}</span></div>` +
+        `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state"${wordTitle}>${esc(word)}</span></div>` +
+        (held.length ? `<div class="heldband">${heldBandHtml(held)}</div>` : "") +
+        referenceRowsHtml(refs) +
         `<div class="draw">${drawing}</div>${spark}` +
         `<div class="cap">${esc(caption)}</div>` +
-        `<div class="tf"><span class="sum">${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}<span class="pet" style="--pet:#4cbf7a"></span></div></div>`
+        `<div class="tf" data-say-host><span class="sum"${recorded && recorded !== summary ? ` title="${esc(`記録の要約: ${recorded}`)}"` : ""}>${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}${tilePet(s, d, pets)}</div></div>`
       );
     }).join("");
     this.tiles.innerHTML = html;

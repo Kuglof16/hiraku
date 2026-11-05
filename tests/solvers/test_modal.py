@@ -53,14 +53,19 @@ class ModalTest(unittest.TestCase):
         s = next(x for x in rec["series"] if x["channel"].startswith("frequency_response."))
         self.assertEqual((s["x"]["quantity"], s["x"]["unit"], len(s["x"]["values"])), ("frequency", "Hz", len(s["values"])))
         self.assertAlmostEqual(s["values"][0], 1.0, places=4)  # over its value at 0 Hz
-        peak = s["x"]["values"][max(range(len(s["values"])), key=s["values"].__getitem__)]
-        # the peak is at one of the modes: on the demo (wheelbase 2020 mm, suspension towers) the frame's first
-        # mode near 9 Hz now moves the seat more than the body bouncing on its springs (1.7 Hz); the first
-        # v1 (wheelbase 1700 mm) peaked at the bounce
+        xs, vs = s["x"]["values"], s["values"]
+        peak = xs[max(range(len(vs)), key=vs.__getitem__)]
+        # the peak is at one of the modes. On the demo (wheelbase 2020 mm, suspension towers) the response has two
+        # nearly equal peaks: the body bouncing on its springs (about 1.5 Hz) and the frame's first mode near 9 Hz.
+        # Which one is higher has flipped with small changes (with the plates of their real thickness, 318ea65, the
+        # seat 16.8 mm lower: 1.697 at 1.48 Hz against 1.687 at 8.93 Hz; before it, 1.651 against 1.749), so the
+        # test asks for a local peak at the frame's first mode, not for the highest one
         r = results(rec)
         modes_hz = [r[k]["value"] for k in r if k.startswith("mode_")]
         self.assertLess(min(abs(peak - f) / f for f in modes_hz), 0.15)
-        self.assertLess(abs(peak - r["first_frame_mode"]["value"]) / r["first_frame_mode"]["value"], 0.15)
+        local = [xs[j] for j in range(1, len(vs) - 1) if vs[j] > vs[j - 1] and vs[j] >= vs[j + 1]]
+        f1 = r["first_frame_mode"]["value"]
+        self.assertLess(min(abs(x - f1) / f1 for x in local), 0.15)
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
 
     def test_ladder_twist_formula(self):

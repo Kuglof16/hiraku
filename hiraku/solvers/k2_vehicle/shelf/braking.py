@@ -114,6 +114,7 @@ class BrakingTool(K2Tool):
     title = "急制動 (K2 で急ブレーキ)"
     domain = "handling"
     tests = ["S4", "S4b"]
+    # speed 35 km/h: the default when a load case has none (S4's 35 km/h is cited in catalog/builders/k2_tests.py)
     params = (P("speed", "km/h", 35.0, "speed when the brake command comes"),
               MU,
               P("reaction_time", "s", 0.0, "coasting from the command until the brakes come on"),

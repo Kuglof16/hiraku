@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 from pathlib import Path
 
 from hiraku import contract
+from unittest import mock
+
 from hiraku.agent.session import start_run
+from hiraku.tools import plan as _plan_mod
 from hiraku.catalog import REPO_ROOT, read_data
 from tests.tools import fakes
 
@@ -30,6 +34,37 @@ def requirements_with_tests(folder: Path, tests: list[str] | None, beyond: list[
     return path
 
 
+_REAL_LOAD_PLAN = _plan_mod.load_plan
+
+# The stand-in design and frame tool of these tests: the design has no end cross member, and the tool mismatches R1's second prediction on purpose (frame_factor 1.8), to drive the
+# scripted run through a safe-side cause. The demo plan's real retry (rail_joint_stress_closed) matches the real tool,
+# so its plan no longer explains a mismatch there; the tests add the explanation the plan used to carry.
+R1_RETRY_SAFE_SIDE = {
+    "quantity": "max_stress",
+    "source": "the tests' stand-in frame tool against the rail-joint prediction (frame_factor 1.8)",
+    "cause": "今度は手計算が大きい。鉛直の曲げは合い、横の曲げとねじりが倍に出る。式が隣の継ぎ手を固定とみなしているのに、フレームではそこも回るため",
+    "fix": "合否は安全側の手計算の値で出す。もっと近い値が要るときは、隣の継ぎ手も回るとみた式で予測し直す",
+    "safe_side": True,
+    "safe_side_reason": ("鉛直の曲げは合っていて、外れているのは隣の継ぎ手を固定とみた分だけ。継ぎ手を固定とみるとレールは実際より硬く、"
+                         "手計算の応力は大きく出る側にしかずれない。だから手計算の値は本当の応力を上から押さえている"),
+}
+
+def stand_in_plan(product, requirements=None):
+    """The scripted plan as the stand-in design and tools of RunCase need it (see R1_RETRY_SAFE_SIDE)."""
+    plan = copy.deepcopy(_REAL_LOAD_PLAN(product, requirements))
+    for step in plan.get("steps") or []:
+        retry = (step.get("expected_mismatch") or {}).get("retry")
+        if step.get("load_case") in ("R1-step100", "R1-step250-beyond") and retry is not None:
+            for p in retry.get("predictions") or []:  # the stand-in design has no end cross member (cross_E)
+                if p.get("formula_id") == "frame_static.rail_joint_stress_closed":
+                    p["formula_id"] = "frame_static.rail_joint_stress"
+                    for k in ("a", "L_e", "b_e", "h_e", "t_e"):
+                        p["inputs"].pop(k, None)
+            if "expected_mismatch" not in retry:
+                retry["expected_mismatch"] = copy.deepcopy(R1_RETRY_SAFE_SIDE)
+    return plan
+
+
 class RunCase:
     """Mixin for unittest.TestCase: self.ctx is a fresh run of P1 and R1 with fake solvers
     and a stand-in design generator (the real builders and designgen are not used)."""
@@ -39,6 +74,12 @@ class RunCase:
     frame_checks_pass = True
 
     def setUp(self):
+        import hiraku.agent.scripted as scripted_mod
+
+        for mod in (_plan_mod, scripted_mod):  # the stand-in plan (stand_in_plan) for every scripted run of these tests
+            patcher = mock.patch.object(mod, "load_plan", stand_in_plan)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
         self.design_path = self.root / "design.json"

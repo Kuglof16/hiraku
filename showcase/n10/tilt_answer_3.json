@@ -1,0 +1,27 @@
+{
+ "result": "## 答え: 約 39°\n\n剛体として計算すると約 42.8° になります。実際はサスペンションとタイヤがたわんで車体が谷側へロールするので、それより約 4° 低くなります。\n\n## 根拠\n\n**1. 剛体の場合**\n\ntan θ = (トレッド/2) / 重心高 = 550 / 593.5 = 0.927 → θ ≈ 42.8°\n\n**2. ばねのたわみを入れる**\n\n- 1 輪の合成ばね (サスペンションとタイヤの直列): k = 20×150/(20+150) = 17.65 N/mm\n- ロール剛性: K = k·t² = 17.65 × 1100² ≈ 21,350 N·m/rad\n- 重量: W = 591.5 × 9.81 ≈ 5,803 N\n\n**3. 釣り合いの条件** (車体が台に対して φ だけ谷側へロールし、重心が h·φ だけ谷側へずれる)\n\n- ロールのモーメント: K·φ = W·h·sinθ + W·h·φ·cosθ\n- 上側の車輪が浮く条件 (上側の荷重 = 0): K·φ = W·cosθ·(t/2)\n\n**4. 解く**\n\n2 つ目の式から φ = 0.149·cosθ となります。これを 1 つ目の式に入れると:\n\n0.55·cosθ − 0.0887·cos²θ = 0.5935·sinθ\n\nこれを解くと θ ≈ 39.0° (このとき車体のロール φ ≈ 6.7°) です。\n\n## 前提\n\n- ばねは台の面に垂直に働くものとしました。\n- ロールの中心は地面の高さとしました。\n- 横方向のたわみとばね下の質量は無視しました。\n\nロールの中心を高く取るなど条件を変えても、結果は 39° 前後になります。",
+ "total_cost_usd": 0.0438162,
+ "modelUsage": {
+  "claude-opus-5-5": {
+   "inputTokens": 2,
+   "outputTokens": 1910,
+   "cacheReadInputTokens": 2721,
+   "cacheCreationInputTokens": 633,
+   "webSearchRequests": 0,
+   "costUSD": 0.0438162,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 128000,
+   "thinkingTokens": 1283,
+   "cacheCreationEphemeral5mInputTokens": 0,
+   "cacheCreationEphemeral1hInputTokens": 633,
+   "canonicalModel": "claude-opus-5-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "num_turns": 1,
+ "permission_denials": [],
+ "duration_ms": 27551,
+ "is_error": false,
+ "stop_reason": "end_turn"
+}

@@ -59,6 +59,8 @@ class CrosswindTool(K2Tool):
     title = "横風 (K2 に横風の力を入れる)"
     domain = "aero"
     tests = ["F1"]
+    # wind_speed 30 m/s: the default when a load case has none (the catalog's load cases give it from the
+    # requirements); a test value. The gust rises in 0.2 s (in _run): HIRAKU's choice, an assumption
     params = (P("wind_speed", "m/s", 30.0, "the gust (relative to the ground, across the vehicle)"),
               P("speed", "km/h", 0.0, "vehicle speed when the gust arrives"),
               P("cy", "1", 1.0, "side force coefficient (1.0 assumed when neither the load case nor the "

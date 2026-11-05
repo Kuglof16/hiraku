@@ -6,9 +6,14 @@ setlocal
 cd /d "%~dp0"
 set "PY=%~dp0.venv\Scripts\python.exe"
 if not exist "%PY%" (
-  echo HIRAKU: .venv\Scripts\python.exe was not found. Make the venv first (see README).
+  echo HIRAKU: .venv\Scripts\python.exe was not found. Make the venv first, as the README says.
   pause
   exit /b 1
 )
 "%PY%" -m hiraku.webserve --open
-if errorlevel 1 pause
+if errorlevel 1 (
+  echo.
+  echo HIRAKU: the screen's server did not start - see the line above.
+  echo If HIRAKU is already open in another window, use that window, or close it and double-click this file again.
+  pause
+)

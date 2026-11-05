@@ -1,4 +1,11 @@
-// N03 (cut.html?cut=n03&run=<id>): the long drive and the launch, in 3D.
+// N03 (cut.html?cut=n03&run=<id>): two scenes in 3D, each under its question in one line at
+// the head of the popup, with the numbers from the record:
+//   drive  "<distance> 走ると、電池は何度になる?" (the thermal load case's params.distance)
+//   launch "<grade> の坂で発進できる?" (the launch load case's params.grade)
+// and each one's answer "✓ OK" / "✕ NG" (answerOf: the newest verdict on the load case, else
+// the record's result against its criterion; the drive without either: whether every
+// recorded battery temperature keeps to the limit) under the reading: the drive's from
+// times.ok_s, the launch's from the middle of accel_s .. the end.
 //
 // From times.lead_s to times.loop_to_s the drive-pattern records play, squeezed: the
 // battery's box is coloured by the thermal record's battery temperature (T1, temp.<part>)
@@ -6,14 +13,13 @@
 // upper limit (else the highest recorded one). The vehicle stands on the plain ground:
 // the drive_energy (P4) and thermal (T1) records hold no positions, so no course is drawn
 // and the vehicle does not move; its centre of gravity is marked. From times.accel_s to
-// the end the acceleration record plays (?accel=<load case id>, else the straight run on the
-// flat, P3, else the launch on the slope, P2): its motion with each wheel's road reaction
+// the end the acceleration record plays (?accel=<load case id>, else the launch on the slope,
+// P2, else the straight run on the flat, P3): its motion with each wheel's road reaction
 // and grip arrows and the centre of gravity. The popup charts one graph at a time (the
 // story's limit): the battery's temperature (drive), then the speed against time
-// (acceleration), with a cursor at the record time; its title is in words only (the
-// tests' ids are for the makers, in data-tests). The battery's chart has the load case's
-// limit as a dashed line that says "上限 <value> <unit>", and when every recorded value
-// keeps to it, "✓ 上限より下" by the reading from loop_to_s (the drive has played out).
+// (acceleration), with a cursor at the record time; its title is the question in words
+// only (the tests' ids are for the makers, in data-tests). The battery's chart has the load
+// case's limit as a dashed line that says "上限 <value> <unit>".
 // The representative shown large is the recorded sample nearest to the cursor, under the
 // title (the one emphasised number): the message is "長く走っても熱くならず、どこまで
 // 速いか", so the value itself is what is read; the graph under it is the small context.
@@ -24,8 +30,6 @@
 // slow at the head and the tail, 0.5 - 0.5 cos(pi p); "linear"), so the battery's colour
 // and the cursor come to rest by loop_to_s; the corner says the mean squeeze. The vehicle
 // stands still in the drive (its records hold no positions), so no course or arc is shown.
-// "✓ 上限より下" shows from times.ok_s; through the acceleration (from accel_s, when the
-// popup charts the speed) the same check stays as "✓ 電池の温度は上限より下" under the speed.
 //
 // Positions, sizes, times and colours come only from layout.json n03 (N03_KEYS); a
 // missing key is named on the page.
@@ -33,7 +37,7 @@
 import * as THREE from "three";
 import { clearOfBand, rateLabel, squeeze } from "./compose.js";
 import { contourOf } from "./fields.js";
-import { esc, fmt, unitLabel } from "./labels.js";
+import { NG_WORD, OK_WORD, esc, fmt, unitLabel } from "./labels.js";
 import { channelsOf, extent, motionOf, nearestAt, nearestIndex } from "./series.js";
 import { VIEWS, cutView } from "./workbench3d.js";
 
@@ -112,7 +116,7 @@ export const LOOP_EASES = { "in-out": (p) => 0.5 - 0.5 * Math.cos(Math.PI * p), 
 // view's and the popup's border and the popup's corner, the padding inside the popup and
 // around the rate (a fraction of popup.text_px), and the rate's text size (popup.text_px).
 // The reading's largest size is layout.json n03.popup.reading_of_title x title_px (it is
-// also held to the popup's width); "✓ 上限より下" is popup.ok_of_reading x the reading's size.
+// also held to the popup's width); the answer is popup.ok_of_reading x the reading's size.
 export const N03_STYLE = { border_px: 1, popup_radius_px: 8, pad_of_text: 0.5, rate_of_text: 1 };
 
 // ---- records ----------------------------------------------------------------------
@@ -187,6 +191,17 @@ function chartSvg(s, w, h, textPx, name, limit, floor = 0) {
   return { svg, X };
 }
 
+// The answer of a scene from the record: the newest verdict on its load case, else its
+// analysis's result against the load case's criterion; null when neither says.
+export function answerOf(s, { lc, ana }) {
+  const v = s.order.verdicts.map((id) => s.verdicts[id]).filter((x) => x.load_case_id === lc.load_case_id).at(-1);
+  if (v) return v.pass === true;
+  const c = lc.criterion;
+  const r = (ana?.results ?? []).find((x) => x.quantity === c?.quantity);
+  if (!r || !c?.limit || r.unit !== c.limit.unit) return null;
+  return { "<=": r.value <= c.limit.value, "<": r.value < c.limit.value, ">=": r.value >= c.limit.value, ">": r.value > c.limit.value }[c.op] ?? null;
+}
+
 // An upper limit of a criterion in a unit (the load case's own), else null.
 function upperLimit(criterion, unit) {
   const lim = criterion?.limit;
@@ -209,10 +224,10 @@ export class CutN03 {
     const has = (...names) => (a) => names.every((n) => channelsOf(a).has(n));
     this.drive = newestOf(s, { test: "P4" }, has("soc"));
     this.heat = newestOf(s, { test: "T1" }, (a) => [...channelsOf(a).keys()].some((n) => n.startsWith("temp.")));
-    // the straight run on the flat (P3) when it was recorded, else the launch on the slope (P2)
+    // the launch on the slope (P2) when it was recorded, else the straight run on the flat (P3)
     const accel = params.get("accel");
     const moving = (a) => !!motionOf(a);
-    this.launch = accel ? newestOf(s, { lcId: accel }, moving) : newestOf(s, { test: "P3" }, moving) ?? newestOf(s, { test: "P2" }, moving);
+    this.launch = accel ? newestOf(s, { lcId: accel }, moving) : newestOf(s, { test: "P2" }, moving) ?? newestOf(s, { test: "P3" }, moving);
     this.build();
   }
 
@@ -258,7 +273,7 @@ export class CutN03 {
     this.popup = pop;
     const chartW = P.w - 2 * pad - 2 * S.border_px;
     // a page of the popup: its title with the tests whose records it charts, then the charts
-    const page = (key, title, charts, also = null) => {
+    const page = (key, title, charts, answer = null) => {
       const el = document.createElement("div");
       el.className = "n03-page";
       el.dataset.page = key;
@@ -268,11 +283,16 @@ export class CutN03 {
       h3.dataset.box = "n03.popup.title";
       h3.dataset.kind = "label";
       h3.dataset.tests = tests.join(" ");
-      Object.assign(h3.style, { fontSize: `${titlePx}px`, marginBottom: `${pad}px` });
-      // the viewers do not know the tests' ids: the title only (the ids stay in data-tests)
+      Object.assign(h3.style, { fontSize: `${titlePx}px`, marginBottom: `${pad}px`, whiteSpace: "nowrap" });
+      // the scene's question in one line (the tests' ids stay in data-tests, for the makers),
+      // a pixel smaller at a time until it fits the popup's width (not below the body text)
       h3.textContent = title;
       el.append(h3);
       pop.append(el);
+      for (let px = titlePx; h3.scrollWidth > chartW && px > this.story.bodyPx; ) {
+        px -= 1;
+        h3.style.fontSize = `${px}px`;
+      }
       if (!list.length) {
         el.insertAdjacentHTML("beforeend", `<p class="none" style="font-size:${P.text_px}px">記録がまだ無い (${esc(charts.map((c) => c.test).join("・"))})</p>`);
         return { el, charts: [] };
@@ -297,45 +317,21 @@ export class CutN03 {
         r.dataset.px = String(px);
         return r;
       });
-      // a chart with a limit: whether every recorded value keeps to it (the criterion's op),
-      // said with "✓ 上限より下" on its own line under the reading, about half the
-      // reading's size (it is shown for under a second: loop_to_s .. accel_s), from
-      // loop_to_s (the drive has played out); its room is kept while it is hidden
-      const keeps = (c) => {
-        if (c.limit === null || c.limit === undefined) return null;
-        const test = { "<=": (v) => v <= c.limit, "<": (v) => v < c.limit }[c.op];
-        return test ? c.s.values.every(test) : null;
-      };
+      // the scene's answer from the record (answerOf: ✓ OK / ✕ NG), on its own line under
+      // the reading at popup.ok_of_reading x its size; its room is kept while it is hidden
       const oks = list.map((c, i) => {
-        if (!keeps(c)) return null;
+        if (i > 0 || answer === null) return null;
         const ok = document.createElement("div");
         ok.className = "n03-ok";
         ok.dataset.box = `n03.popup.${c.key}.ok`;
         ok.dataset.kind = "label";
+        ok.dataset.ok = answer ? "1" : "0";
         const px = Math.max(textPx, Math.round(Number(readings[i].dataset.px) * P.ok_of_reading));
-        Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px` });
-        ok.textContent = "✓ 上限より下";
+        Object.assign(ok.style, { fontSize: `${px}px`, color: answer ? OK_GREEN : RED, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px` });
+        ok.textContent = answer ? OK_WORD : NG_WORD;
         readings[i].after(ok);
         return ok;
       });
-      // a check carried over from another page (the battery's, through the acceleration)
-      if (also && readings[0]) {
-        const ok = document.createElement("div");
-        ok.className = "n03-ok";
-        ok.dataset.box = `n03.popup.${key}.${also.key}`;
-        ok.dataset.kind = "label";
-        let px = Math.max(textPx, Math.round(Number(readings[0].dataset.px) * P.ok_of_reading));
-        Object.assign(ok.style, { fontSize: `${px}px`, color: OK_GREEN, visibility: "hidden", fontWeight: "700", lineHeight: "1.1", marginBottom: `${pad}px`, whiteSpace: "nowrap" });
-        ok.textContent = also.text;
-        readings[0].after(ok);
-        while (ok.scrollWidth > chartW && px > textPx) {
-          px -= 1;
-          ok.style.fontSize = `${px}px`;
-        }
-        oks[0] = oks[0] ?? null;
-        oks.push(ok);
-        this.carried = ok;
-      }
       const room = P.h - 2 * pad - 2 * S.border_px - h3.offsetHeight - pad - readings.reduce((a, r) => a + r.offsetHeight + pad, 0) - oks.reduce((a, o) => a + (o ? o.offsetHeight + pad : 0), 0);
       const h = Math.floor((room - (list.length - 1) * pad) / list.length);
       return {
@@ -351,23 +347,38 @@ export class CutN03 {
     const heatCh = this.heat ? channelsOf(this.heat.ana) : new Map();
     const launchCh = this.launch ? channelsOf(this.launch.ana) : new Map();
     this.battery = this.batteryChannel(heatCh, design);
-    // one graph at a time (story): the battery's temperature on the long drive, then the speed
-    const drive = page("drive", "長く走ったときの電池の温度", [
-      { key: "temp", name: "電池の温度", s: this.battery?.s, test: "T1", limit: this.battery?.limit ?? null, op: this.heat?.lc.criterion?.op ?? null,
-        floor: this.ambient(this.battery?.s?.unit) },
-    ]);
-    const kept = drive.charts.some((c) => c.ok);
-    this.carried = null;
+    // two scenes, one graph at a time (story), each under its question in one line: how hot
+    // the battery gets over the drive's distance, then whether it starts up the slope
+    const battery = this.battery;
+    const keeps = battery?.limit != null
+      ? battery.s.values.every({ "<=": (v) => v <= battery.limit, "<": (v) => v < battery.limit }[this.heat.lc.criterion?.op] ?? (() => false))
+      : null;
     this.pages = {
-      drive,
-      launch: page("launch", "加速の速さ", [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P3・P2" }],
-        kept ? { key: "battery_ok", text: "✓ 電池の温度は上限より下" } : null),
+      drive: page("drive", this.driveQuestion(), [
+        { key: "temp", name: "電池の温度", s: battery?.s, test: "T1", limit: battery?.limit ?? null, floor: this.ambient(battery?.s?.unit) },
+      ], this.heat ? answerOf(this.s, this.heat) ?? keeps : null),
+      launch: page("launch", this.launchQuestion(), [{ key: "speed", name: "速さ", s: launchCh.get("speed"), test: this.launch?.lc.test_id ?? "P2・P3" }],
+        this.launch ? answerOf(this.s, this.launch) : null),
     };
 
     // the record time spans the two phases play
     const spans = [this.drive, this.heat].filter(Boolean).flatMap((r) => [...channelsOf(r.ana).values()].flatMap((c) => [c.t_s[0], c.t_s.at(-1)]));
     this.driveSpan = spans.length ? [Math.min(...spans), Math.max(...spans)] : null;
     this.launchSpan = this.launch ? [this.launchView.motion.t0, this.launchView.motion.t1] : null;
+  }
+
+  // The drive's question, with the distance of the thermal load case (params.distance, else
+  // the drive's), as recorded.
+  driveQuestion() {
+    const d = [this.heat, this.drive].map((r) => r?.lc.params?.distance).find((x) => x && Number.isFinite(x.value));
+    return d ? `${fmt(d.value, 3)} ${unitLabel(d.unit)} 走ると、電池は何度になる?` : "長く走ると、電池は何度になる?";
+  }
+
+  // The launch's question, with the slope of its load case (params.grade) when it has one.
+  launchQuestion() {
+    const g = this.launch?.lc.params?.grade;
+    if (g && Number.isFinite(g.value) && g.value > 0) return `${fmt(g.value, 3)} ${unitLabel(g.unit)} の坂で発進できる?`;
+    return this.launch?.lc.test_id === "P3" ? "平らな道で発進できる?" : "坂で発進できる?";
   }
 
   // The surroundings' temperature of the thermal load case (its params.ambient_temperature,
@@ -464,10 +475,10 @@ export class CutN03 {
       c.cur.setAttribute("transform", `translate(${c.X(tau).toFixed(1)} 0)`);
       c.now.firstChild.nodeValue = `${fmt(nearestAt(c.s, tau), 3)} ${c.unit}`.trim();
     }
-    // the ✓ from ok_s when the long drive kept to the limit (on the drive's page only)
+    // each scene's answer: the drive's from ok_s, the launch's from the middle of its time
+    const launchOk = T.accel_s + (this.spec.duration_s - T.accel_s) / 2;
     for (const c of this.pages.drive.charts) if (c.ok) c.ok.style.visibility = phase === "drive" && t >= T.ok_s ? "visible" : "hidden";
-    // and through the acceleration, under the speed
-    if (this.carried) this.carried.style.visibility = phase === "launch" && t >= T.ok_s ? "visible" : "hidden";
+    for (const c of this.pages.launch.charts) if (c.ok) c.ok.style.visibility = phase === "launch" && t >= launchOk ? "visible" : "hidden";
     let view;
     if (launch) {
       view = this.launchView;

@@ -25,11 +25,15 @@ export function emptyModel() {
     designVersion: 0,
     domains: null, // the domains_picked data, or the project's picks until one arrives
     domainsFromProject: false,
-    hearing: { asked: null, answered: null },
+    hearing: { asked: null, answered: null, ruleQuestions: [] },
     requirements: [], // {key, name, value, unit, source, trust, basis, note, fresh}
     docs: new Map(), // doc_id -> {doc, rules}
     checks: new Map(), // rule_id -> rule_check
     knowledgeSeq: 0,
+    domainsDraft: false, // the picks on screen are the code's candidates (from the product's properties), not Claude's choice
+    litAt: new Map(), // domain -> t (s) of the event that lit it, for a glow that follows the playback time
+    finished: false,
+    runEnd: null,
   };
 }
 
@@ -70,11 +74,23 @@ export function apply(m, e) {
       break;
     case "domains.picked":
       m.domains = d;
+      m.domainsDraft = !(d.flag_reasons && Object.keys(d.flag_reasons).length); // Claude's choice comes with the reasons for the flags
       m.domainsFromProject = false;
+      if (!m.domainsDraft) for (const p of d.picks || []) if (!m.litAt.has(p.domain)) m.litAt.set(p.domain, e.t);
       m.flags = d.flags;
       m.speedClass = d.speed_class || m.speedClass;
       break;
+    case "run.finished":
+      m.finished = true;
+      m.runEnd = { status: d.status || "", stop_code: d.stop_code || "", stop_reason: d.stop_reason || "" }; // questions still open now will never be read
+      break;
     case "hearing.asked":
+      {
+        // the rule hits not answered yet stay on the screen when others are asked later; the answered ones go
+        const kept = ruleRows(m).filter((r) => !r.answer).map(({ rule_id, parts, text, choices }) => ({ rule_id, parts, text, choices }));
+        const fresh = d.rule_questions || [];
+        m.hearing.ruleQuestions = [...fresh, ...kept.filter((k) => !fresh.some((f) => f.rule_id === k.rule_id))];
+      }
       m.hearing.asked = d;
       m.hearing.answered = null; // a new asking: the earlier answers are in the requirements already
       break;
@@ -99,8 +115,9 @@ export function apply(m, e) {
   if (NOTE_KINDS.has(e.kind) && e.text) m.chat.push({ who: "note", text: e.text, t: e.t, kind: e.kind });
 }
 
-export function buildModel(events) {
+export function buildModel(events, options = {}) {
   const m = emptyModel();
+  m.picksFinal = !!options.picksFinal; // a sample made by the code alone: its picks are the final ones
   for (const e of events) apply(m, e);
   return m;
 }
@@ -114,7 +131,8 @@ export function domainCards(m) {
   return DOMAINS.map(({ name, ja }) => {
     const p = picks.get(name);
     if (p) {
-      return { domain: name, ja, state: "lit", shownName: p.shown_name, renamed: p.shown_name !== ja, reason: p.reason,
+      const draft = m.domainsDraft && !m.finished && !m.picksFinal;
+      return { domain: name, ja, state: draft ? "draft" : "lit", litAt: m.litAt.get(name) ?? null, shownName: p.shown_name, renamed: p.shown_name !== ja, reason: p.reason,
                testIds: p.test_ids, testCount: p.test_ids ? p.test_ids.length : null };
     }
     const o = off.get(name);
@@ -126,7 +144,9 @@ export function domainCards(m) {
 
 // ----------------------------------------------------------------------------- A2
 
-export const SOURCE_JA = { user: "ユーザー", hearing: "ヒアリング", default: "既定値" };
+export const SOURCE_JA = { user: "あなたが指定", hearing: "あなたが答えた", default: "標準の値" };
+/** 確かさ: 1 and 2 differ in where the value was seen. */
+export const TRUST_JA = ["", "出典の本文で確かめた", "ほかの資料で確かめた", "仮の値 (確かめていない)"];
 
 /** The hearing as screen rows: each question with its answer once there is one. */
 export function hearingRows(m) {
@@ -134,21 +154,21 @@ export function hearingRows(m) {
   const answers = new Map((m.hearing.answered?.answers || []).map((a) => [a.key, a]));
   return asked.map((q) => {
     const a = answers.get(q.req_key);
-    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : "asking" };
+    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
 }
 
 /** The rule hits the lead asked about (hearing.asked rule_questions), each with the person's answer once there is one. */
 export function ruleRows(m) {
-  const asked = m.hearing.asked?.rule_questions || [];
+  const asked = m.hearing.ruleQuestions || [];
   const answers = new Map((m.hearing.answered?.rule_answers || []).map((a) => [a.rule_id, a]));
   return asked.map((q) => {
     const a = answers.get(q.rule_id) || null;
-    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : "asking" };
+    return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
 }
 
-export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "この規則を外す" };
+export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "このルールを使わない" };
 
 /** Requirements that rest on an assumption (trust 3): they stay in the report as "not checked". */
 export function assumptions(m) {
@@ -233,7 +253,11 @@ export function ruleNeeds(rule, facts = {}) {
                    label: facts[n]?.label || (n.startsWith("req_") ? `要件 ${n.slice(4)} の数値` : "設計の変数の値") }));
 }
 
+/** Units as a person reads them (the requirement keeps deg, degC, s: those are for the code). */
+export const UNIT_JA = { deg: "度", degC: "℃", s: "秒", min: "分", h: "時間" };
+
 export function showValue(v, unit) {
-  if (typeof v === "number") return unit && unit !== "1" ? `${+v.toFixed(4)} ${unit}` : `${+v.toFixed(4)}`;
-  return unit && unit !== "1" ? `${v} ${unit}` : String(v);
+  const u = unit && unit !== "1" ? UNIT_JA[unit] || unit : "";
+  const body = typeof v === "number" ? +v.toFixed(4) : v;
+  return u ? `${body} ${u}` : String(body);
 }

@@ -16,11 +16,11 @@
 // shows more than its limits (checkStory).
 
 import * as THREE from "three";
-import { BAND_COLORS, OVER_COLOR } from "./colormap.js";
+import { BAND_COLORS } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
 import { CutN04, CutN15 } from "./cut_grid.js";
-import { esc, fmt } from "./labels.js";
+import { NG_WORD, OK_WORD, esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
@@ -275,14 +275,14 @@ class Cut {
 // grip arrows and the centre of gravity. The higher step's motion runs on the same clock
 // as a red see-through overlay. Cases: ?ok= and ?over= (load case ids), else the P1 load
 // cases with the lowest and the highest step. The pane says only what the story asks: per
-// case its step's height (one number a card) and, large, "問題なし" or "直しが要る" (verdict),
+// case its step's height (one number a card) and, large, "✓ OK" or "✕ NG" (verdict),
 // and the colour bar of the stress.
 
-// The large word of a card or pane: "✓ 問題なし" when every check the records allow passes,
-// "✕ 直しが要る" when one fails, nothing when the records say nothing. ok: true / false / null.
+// The large word of a card or pane: "✓ OK" when every check the records allow passes,
+// "✕ NG" when one fails, nothing when the records say nothing. ok: true / false / null.
 function verdictHtml(ok) {
   if (ok === null) return "";
-  return ok ? `<span class="ok">✓ 問題なし</span>` : `<span class="miss">✕ 直しが要る</span>`;
+  return ok ? `<span class="ok">${OK_WORD}</span>` : `<span class="miss">${NG_WORD}</span>`;
 }
 
 // Whether a recorded result meets a criterion ({quantity, op, limit}); null when it cannot say.
@@ -304,8 +304,8 @@ function fitWidth(el, room, least) {
   }
 }
 
-// The size the large words start from: the box's width shared by the longest of them
-// ("✕ 直しが要る", six characters and a space).
+// The size the large words start from: the box's width shared by seven characters (the
+// size the cards were laid out for; "✕ NG" is shorter and stays at that size).
 const VERDICT_CHARS = 7;
 
 const N01_KEYS = ["duration_s", "view", "pane", "card", "times", "zoom", "overlay", "colors"];
@@ -436,19 +436,17 @@ class CutN01 {
     Object.assign(pane.style, { left: `${P.x}px`, top: `${P.y}px`, width: `${P.w}px`, height: `${P.h}px` });
     const ct = this.contour;
     const px = Math.max(sp.card.text_px, this.story.bodyPx);
-    const small = this.layout.min_text_px;
-    // the band says whose stress it colours, and what its top is (the allowable or the maximum)
+    // the band says whose stress it colours, and what its top is (the allowable or the maximum);
+    // no explaining notes under it (the review of the cut: the picture and the cards say it)
     const top = ct?.limitKnown ? `許容 ${fmt(ct.max, 4)}` : fmt(ct?.max, 3);
     const legend = ct
       ? `<div class="n01-legend" data-box="n01.legend" data-kind="legend" style="font-size:${px}px"><span>フレームの応力 [MPa]</span>` +
-        `<i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${top}</span></div>` +
-        (ct.limitKnown ? `<p class="n01-note" style="font-size:${small}px;margin-bottom:${sp.card.gap}px"><i style="display:inline-block;width:14px;height:14px;background:${OVER_COLOR};vertical-align:-2px"></i> 許容を超えた部材</p>` : "")
+        `<i style="background:linear-gradient(90deg, ${BAND_COLORS.join(",")})"></i><span>${fmt(ct.min, 3)}</span><span>${top}</span></div>`
       : "";
     pane.innerHTML =
       this.card(this.ok, "ok") +
       (this.over && this.over !== this.ok ? this.card(this.over, "over") : "") +
-      legend +
-      `<p class="n01-note" data-box="n01.note" style="font-size:${small}px">半透明の赤: 高い方の段差での動き</p>`;
+      legend;
     this.stage.append(pane);
     const room = sp.pane.w - 2 * sp.card.pad - 2 * sp.card.border_px;
     for (const v of pane.querySelectorAll(".verdict")) fitWidth(v, room, this.story.bodyPx);
@@ -490,7 +488,7 @@ class CutN01 {
 // test's load case with the centre of gravity; the load case of the same test whose id
 // ends in -beyond (the K2 team's "限界の外" conditions) runs on the same clock as a red
 // see-through overlay. Each pane has one tag: the test's name and, large under it, the
-// verdict of its load case ("問題なし" / "直しが要る": the run's verdicts when it judged the
+// verdict of its load case ("✓ OK" / "✕ NG": the run's verdicts when it judged the
 // case, else the record's result against the load case's criterion; nothing when neither
 // says). No figures (the story: which test it falls in, at a glance).
 //
@@ -511,6 +509,8 @@ const N02_TESTS = {
   brake: { test: "S4", name: "急ブレーキ" },
 };
 const BEYOND = /-beyond$/;
+// The legend's words and marks, this many times the small text (min_text_px or pane.rate).
+const N02_LEGEND_SCALE = 1.5;
 
 class CutN02 {
   constructor(layout, s) {
@@ -625,16 +625,21 @@ class CutN02 {
     return meetsCriterion(c.lc.criterion, c.ana);
   }
 
+  // The legend pane: the centre of gravity's mark and the red of the case past the limit, at
+  // N02_LEGEND_SCALE x the small text's size (the review of the cut: 18 px read too small).
   legendHtml() {
     const sp = this.spec;
     const st = sp.pane;
-    const cg = `<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#fbf9f4" stroke="#1d1d1f" stroke-width="2"/><path d="M11 11 L11 2 A9 9 0 0 1 20 11 Z M11 11 L11 20 A9 9 0 0 1 2 11 Z" fill="#1d1d1f"/></svg>`;
-    const ghost = `<i style="display:inline-block;width:30px;height:16px;background:${sp.overlay.color};opacity:${Math.min(1, sp.overlay.opacity * 2.5)};border-radius:3px"></i>`;
+    const k = N02_LEGEND_SCALE;
+    const px = Math.round(k * Math.max(this.layout.min_text_px, st.rate.size_px));
+    const d = Math.round(22 * k);
+    const cg = `<svg width="${d}" height="${d}" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="#fbf9f4" stroke="#1d1d1f" stroke-width="2"/><path d="M11 11 L11 2 A9 9 0 0 1 20 11 Z M11 11 L11 20 A9 9 0 0 1 2 11 Z" fill="#1d1d1f"/></svg>`;
+    const ghost = `<i style="display:inline-block;flex:none;width:${Math.round(30 * k)}px;height:${Math.round(16 * k)}px;background:${sp.overlay.color};opacity:${Math.min(1, sp.overlay.opacity * 2.5)};border-radius:3px"></i>`;
     const rows = [
       [cg, "重心"],
       [ghost, "半透明の赤: 限界の外の条件の動き"],
     ];
-    return `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y}px;right:${st.label.x}px;font-size:${Math.max(this.layout.min_text_px, st.rate.size_px)}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`;
+    return `<ul class="n02-legend" style="left:${st.label.x}px;top:${st.label.y}px;right:${st.label.x}px;font-size:${px}px">${rows.map(([i, t]) => `<li>${i}<span>${t}</span></li>`).join("")}</ul>`;
   }
 
   resize(scale) {

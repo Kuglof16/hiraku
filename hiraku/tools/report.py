@@ -132,18 +132,22 @@ def domain_parts(ctx: RunContext) -> list[Record]:
         tile = tiles.get(domain, {})
         cases = []
         for lc in ctx.load_cases:
+            if lc["domain"] == domain and "criterion" not in lc:
+                line = shown_count_line(ctx, lc, v)
+                if line:  # measured, not judged: said in the domain's line, so the domain does not read as all passed
+                    cases.append({"load_case_id": lc["load_case_id"], "verdict_id": None, "line": line, "effects": [],
+                                  "assumptions": [], "differences": []})
             if lc["domain"] != domain or "criterion" not in lc:
                 continue
             ver = next((x for x in reversed(verdicts) if x["load_case_id"] == lc["load_case_id"]), None)
-            cmp = s.get("comparison", ver["comparison_id"]) if ver else None
+            cmp, ana = verdict_sources(ctx, ver)
             pred = ctx.prediction(cmp["prediction_id"]) if cmp else None
-            ana = s.get("analysis", cmp["analysis_id"]) if cmp else None
             mismatches = [c for c in comparisons if c["status"] == "mismatch"
                           and (ctx.prediction(c["prediction_id"]) or {}).get("load_case_id") == lc["load_case_id"]]
             cases.append({
                 "load_case_id": lc["load_case_id"],
                 "verdict_id": ver["verdict_id"] if ver else None,
-                "line": verdict_line(ver) if ver else "まだ判定していない",
+                "line": verdict_line(ver) if ver else unjudged_line(ctx, lc, v),
                 "effects": _effects(ana),
                 "assumptions": list((pred or {}).get("assumptions", [])),
                 "differences": [{"comparison_id": c["comparison_id"], "quantity": c["quantity"], "diff_rel": c["diff_rel"],
@@ -153,6 +157,48 @@ def domain_parts(ctx: RunContext) -> list[Record]:
         out.append({"domain": domain, "state": tile.get("state", "pending"), "summary": tile.get("summary", ""),
                     "cases": cases})
     return out
+
+
+NOT_JUDGED_MARK = "判定なし: "
+
+
+def shown_count_line(ctx: RunContext, lc: Record, version: int) -> str | None:
+    """The report's line for a load case without a criterion (measured and shown, not judged) whose latest
+    analysis of the version has a count that is not 0: which load case, why it is not judged (its title's
+    「判定なし: …」 up to the first 。, else the title) and the counts. None when every count is 0 or nothing ran."""
+    ana = next((a for a in reversed(ctx.store.records("analysis", version))
+                if a.get("load_case_id") == lc["load_case_id"] and a.get("status", "ok") == "ok"), None)
+    counts = [r for r in (ana or {}).get("results", []) if r.get("unit") == "1" and r.get("value")]
+    counts = [r for r in counts if not r.get("where")] or counts[:3]  # the totals, else a few places
+    if not counts:
+        return None
+    title = lc.get("title") or ""
+    reason = title.split(NOT_JUDGED_MARK, 1)[1].split("。", 1)[0] if NOT_JUDGED_MARK in title else title
+    what = "、".join(f"{r['quantity']} {r['value']:g}" + (f" ({r['where']})" if r.get("where") else "") for r in counts)
+    return f"{lc['load_case_id']} は判定していない (理由: {reason}) が、{what} ({ana['analysis_id']})"
+
+
+def unjudged_line(ctx: RunContext, lc: Record, version: int) -> str:
+    """The report's line for a load case without a verdict: what holds it (an analysis result past the
+    criterion, an unexplained mismatch), and that no K0 formula predicts it when none does, so a result
+    past the limit is not hidden behind 'not judged'."""
+    from hiraku.tools.judge import NO_FORMULA_NOTE, blockers, no_formula_cases
+
+    why = blockers(ctx, lc, version)
+    if lc["load_case_id"] in no_formula_cases(ctx):
+        why.append(NO_FORMULA_NOTE)
+    return "まだ判定していない" + (f": {'、'.join(why)}" if why else "")
+
+
+def verdict_sources(ctx: RunContext, ver: Record | None) -> tuple[Record | None, Record | None]:
+    """(comparison, analysis) a verdict came from: through its comparison_id, or, for a verdict with no
+    comparison (basis unsupported_load: analysis_id instead, contract 01ddb8a), (None, its analysis)."""
+    if not ver:
+        return None, None
+    if ver.get("comparison_id"):
+        cmp = ctx.store.get("comparison", ver["comparison_id"])
+        return cmp, (ctx.store.get("analysis", cmp["analysis_id"]) if cmp else None)
+    return None, (ctx.store.get("analysis", ver["analysis_id"]) if ver.get("analysis_id") else None)
 
 
 def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
@@ -171,9 +217,8 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
         if crit is None:
             raise ToolError(f"{lc['load_case_id']} には合否の基準が無いので、感度を出す量がありません")
         ver = verdicts.get(lc["load_case_id"])
-        cmp = ctx.store.get("comparison", ver["comparison_id"]) if ver else None
-        ana = ctx.store.get("analysis", cmp["analysis_id"]) if cmp else None
-        if ana is None or ana["tool"] not in ctx.tools:
+        cmp, ana = verdict_sources(ctx, ver)
+        if cmp is None or ana is None or ana["tool"] not in ctx.tools:  # a verdict with no comparison has no margin to move
             raise ToolError(f"{lc['load_case_id']} には版 {ctx.version} の合否がまだ無いので、感度は出せません "
                             f"(感度は合否の元になった解析のツールで出します)")
         upstream = {}
@@ -239,6 +284,37 @@ def _report_before_a_design(ctx: RunContext, args: Record, agent: str) -> Record
     }
 
 
+# A clause that gives the person's decision (人が…選んだ / 人の答え / revise_design・drop_rule を選んだ ...)
+PERSON_CHOSE = re.compile(r"(人|利用者|画面)(が|は|の)[^。]{0,40}?(選|答)|(revise_design|drop_rule)\s*を選|人の(判断|答え|選択)")
+_RULE_ID = re.compile(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9]{0,3}-\d{2}(?![0-9])")  # HU-02, U1-04 (next to Japanese too)
+
+
+def answered_rules(ctx: RunContext) -> set[str]:
+    """The rule ids the person answered in this run (hearing.answered data.rule_answers, ask_user's rule_hits)."""
+    out: set[str] = set()
+    for e in ctx.store.events():
+        if e["kind"] == "hearing.answered":
+            out |= {a["rule_id"] for a in (e.get("data") or {}).get("rule_answers") or [] if a.get("rule_id")}
+    return out
+
+
+def _clauses(text: str) -> list[str]:
+    """The sentences of a text, each parenthesised part apart from the sentence around it."""
+    inner = re.findall(r"[(（]([^()（）]*)[)）]", text)
+    outer = re.sub(r"[(（][^()（）]*[)）]", " ", text)
+    return [c for part in [outer, *inner] for c in re.split(r"[。\n]", part) if c.strip()]
+
+
+def unanswered_choices(ctx: RunContext, texts: list[str]) -> list[str]:
+    """Rule ids a text says the person chose for, though the person was not asked (not in answered_rules)."""
+    answered, out = answered_rules(ctx), []
+    for t in texts:
+        for c in _clauses(t):
+            if PERSON_CHOSE.search(c):
+                out += [r for r in _RULE_ID.findall(c) if r not in answered and r not in out]
+    return out
+
+
 def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Record] | None = None) -> Record:
     """The report record (contract `report`). args: summary (text), next [{domain, change, reason}],
     and optional sensitivity [{load_case_id, paths}] (design paths as hiraku.solvers.k5_sensitivity
@@ -255,6 +331,11 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
     if bad:
         raise ToolError("報告の文に、記録に無い数があります: " + "、".join(bad)
                         + "。数は記録 (予測・解析・照合・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
+    claimed = unanswered_choices(ctx, texts)
+    if claimed:
+        raise ToolError(f"報告の文が、人に聞いていない規則 {', '.join(claimed)} について「人が選んだ」と書いています。"
+                        f"人の答えは ask_user の rule_hits で聞いて答えがあった規則 ({', '.join(sorted(answered_rules(ctx))) or 'なし'}) "
+                        "だけです。ほかの当たりは、聞いていないとそのまま書いてください")
     parts = domain_parts(ctx)
     domains = {d["domain"] for d in parts}
     hit = rule_hits(ctx)
@@ -401,8 +482,9 @@ def scripted_next(ctx: RunContext) -> tuple[list[Record], list[Record]]:
     revisable = {v["name"] for v in found} if found is not None else None
     for domain in ctx.picked:
         for ver in governing_verdicts(ctx, domain):
-            cmp = s.get("comparison", ver["comparison_id"])
-            ana = s.get("analysis", cmp["analysis_id"])
+            cmp, ana = verdict_sources(ctx, ver)
+            if cmp is None or ana is None:  # unsupported_load: no comparison, no sensitivity of a margin
+                continue
             tool = ctx.tools.get(ana["tool"])
             heavy = ana["tool"] in K5_HEAVY_TOOLS or (ctx.specs.get(ana["tool"]) or {}).get("stage", 1) >= K5_MAX_STAGE
             head =(f"{ver['test_id']} {ver['quantity']} の余裕 {_margin_text(ver)} ({ver['verdict_id']}、"

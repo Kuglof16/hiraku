@@ -42,7 +42,8 @@ class RunContext:
 
     @property
     def load_cases(self) -> list[Record]:
-        return self.project["load_cases"]
+        """The latest version's load cases (rebuilt per version from 2 on: v00N/load_cases.json)."""
+        return self.store.version_load_cases(self.version)
 
     @property
     def picked(self) -> list[str]:

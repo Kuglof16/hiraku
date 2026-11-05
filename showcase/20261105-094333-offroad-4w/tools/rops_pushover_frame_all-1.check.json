@@ -1,0 +1,38 @@
+{
+ "name": "rops_pushover_frame_all",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "rops_pushover_frame_all",
+  "title": "横転の保護枠: 骨組全体 (シャシーとロールバー) を塑性ヒンジで押し、全部の節を動かして乗員の空間との隙間を測る",
+  "domain": "strength",
+  "base": "K1",
+  "tests": [
+   "R4"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "fixed-base portal h 1000 mm, round tube 48.6 x 2.3, f_y 215 MPa, side load at a corner",
+    "quantity": "side_collapse_load",
+    "expected": 4243.706693333334,
+    "got": 4243.706693334451,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "plastic analysis of a fixed-base portal, sway mechanism H h = 4 M_p with M_p = Z_p f_y and Z_p = (d^3 - (d - 2t)^3)/6 for a round tube (Neal, The Plastic Methods of Structural Analysis; textbook plastic theory)"
+   }
+  ],
+  "formulas": [
+   "frame_static.rops_occupant_clearance",
+   "frame_static.portal_frame_side",
+   "frame_static.portal_frame_rear",
+   "frame_static.portal_frame_top"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-05T00:59:04+00:00",
+ "reason": "R4-rops。先に入れた rops_pushover_frame (ana-0022) は push の watch に荷重の点だけを渡していたため、follow の U が荷重の点しか持たず、ロールバーの角が動かないまま隙間を測っていた (3 つの荷重で隙間が同じ値)。watch を全部の節にした版"
+}

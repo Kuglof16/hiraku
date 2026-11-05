@@ -73,7 +73,7 @@ class AssumedMaterialTest(unittest.TestCase):
     def test_none_named_when_every_plate_has_one(self):
         out = LP.analyse_load_path(V1, "inertia", VALUES)
         self.assertFalse([e for e in out["effects"] if "part.material" in e["name"]])
-        self.assertEqual(len(out["free"]), 16)
+        self.assertEqual(len(out["free"]), 0)  # every part joined in shape (kit/joints.py); 16 floated before
 
 
 class Version2SetTest(unittest.TestCase):

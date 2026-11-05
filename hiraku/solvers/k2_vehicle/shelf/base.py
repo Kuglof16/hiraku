@@ -134,7 +134,7 @@ class K2Tool(ABC):
     params: tuple[P, ...] = ()
     pairs: tuple[Pair, ...] = ()
 
-    @lru_cache(maxsize=1)
+    @lru_cache(maxsize=None)  # one entry per tool: a method's cache is shared by every instance (keyed on self)
     def _own_checks(self) -> tuple:
         return tuple(cached(self.name, self.own_checks))
 
@@ -380,7 +380,8 @@ def _ssf(veh) -> float:
     return t / (2.0 * (float(veh.cg_total[2]) - ground))
 
 
-TIPPED_ROLL = math.radians(60.0)  # a body rolled this far has tipped over (K2 has no body-ground contact)
+# a body rolled this far has tipped over (K2 has no body-ground contact): HIRAKU's choice, an assumption
+TIPPED_ROLL = math.radians(60.0)
 
 
 def _ramp_gravity(sim, grav_of, angle: float, seconds: float = 1.0, rec: Recorder | None = None,

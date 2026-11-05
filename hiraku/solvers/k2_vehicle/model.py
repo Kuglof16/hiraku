@@ -21,7 +21,9 @@ from .mass import combine, items_symmetric, member_items, part_items
 from .units import G0, si
 
 UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
-HALF_UNSPRUNG_KINDS = {"suspension"}
+# arms, dampers, ball joints (kit/arms.py): half of each one's mass moves with the wheel (an assumption, no
+# source: one end on the wheel, the other on the body)
+HALF_UNSPRUNG_KINDS = {"suspension", "link", "damper", "ball_joint"}
 
 # Defaults used when the design does not say. They are modelling choices,
 # not values from a source; each one used is reported in Vehicle.assumptions
@@ -81,6 +83,9 @@ class Corner:
     radius: float
     width: float
     susp: str            # rigid | spring | kc_table
+    # The defaults below (travel, tyre stiffness, relaxation length, friction, rolling resistance) are the
+    # assumptions of DEFAULTS, for a Corner made without a design; build_vehicle sets every one from the design
+    # or from DEFAULTS (and reports it there).
     k_w: float = 0.0     # wheel rate N/m
     c_w: float = 0.0     # damper at the wheel N s/m
     preload: float = 0.0 # spring force at design travel (N)

@@ -5,9 +5,10 @@ from unittest import mock
 from hiraku.agent.hooks import Hooks
 from hiraku.agent.roles import agent_id_from_sdk, sdk_name
 from hiraku.tools import Attribution, rules
-from hiraku.tools.functions import analyze, compare
+from hiraku.tools.functions import analyze, build_version, compare, revise_design
 from tests.agent.test_builders_revise import BuildersCase
 from tests.tools.helpers import RunCase
+from tests.tools.modules import ModuleCase
 
 
 def run(coro):
@@ -96,6 +97,24 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assertEqual([e["data"]["count"] for e in blocked], [1, 2])
         self.assertEqual(blocked[0]["data"]["rule"], rules.HK4)
         self.assert_events_fit()
+
+    def test_the_leads_stop_while_a_role_runs(self):
+        """The SDK run lets it through (its runner waits for the role); the plugin blocks it, not counted against
+        HK4, and tells the lead to wait with its wait tool, at most MAX_WAIT_BLOCKS times."""
+        from hiraku.agent import hooks as H
+
+        self.hooks.running["a1"] = "cae.strength"
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
+        self.hooks.wait_tool = "wait_tool_name"
+        out = run(self.hooks.stop({"stop_hook_active": False}, None, None))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("wait_tool_name", out["reason"])
+        self.assertIn("cae.strength", out["reason"])
+        self.assertEqual((self.hooks.stop_blocks, self.hooks.wait_blocks), (0, 1))
+        self.assertEqual([e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"], [])
+        self.assertEqual(self.hooks.state()["wait_blocks"], 1)
+        self.hooks.wait_blocks = H.MAX_WAIT_BLOCKS
+        self.assertEqual(run(self.hooks.stop({"stop_hook_active": True}, None, None)), {})
 
     def test_stop_passes_when_judged(self):
         ana, _, _ = self.run_p1()
@@ -212,7 +231,20 @@ class HooksTest(RunCase, unittest.TestCase):
         kinds = [(e["kind"], e.get("agent")) for e in self.ctx.store.events()
                  if e["kind"] in ("agent.started", "agent.stopped")]
         self.assertEqual(kinds, [("agent.started", "cae.strength"), ("agent.stopped", "cae.strength")])
+        stopped = [e for e in self.ctx.store.events() if e["kind"] == "agent.stopped"][0]
+        self.assertEqual(stopped["data"], {"agent_id": "cae.strength", "stop_code": "done"})  # ended its own work
         self.assert_events_fit()
+
+    def test_stopped_data_says_why(self):
+        from hiraku.agent.hooks import stopped_data
+
+        for run_code, cut_off, want in ((None, False, "done"), ("not_judged", False, "done"),
+                                        ("not_judged", True, "run_ended"), ("cost_limit", False, "run_ended"),
+                                        ("turn_limit", True, "run_ended"), ("user_stop", True, "user_stop"),
+                                        ("user_stop", False, "user_stop"), ("error", True, "error")):
+            with self.subTest(run_code=run_code, cut_off=cut_off):
+                self.assertEqual(stopped_data("cae.nvh", run_code, cut_off=cut_off),
+                                 {"agent_id": "cae.nvh", "stop_code": want})
 
     def test_the_latest_version_is_judged_although_the_revisions_are_used_up(self):
         """Contract HOOK_RULES HK4: the round limit ends revisions only; the latest version's pending cases
@@ -258,6 +290,17 @@ class HooksTest(RunCase, unittest.TestCase):
 
     def hooks_reason(self):
         return [e for e in self.ctx.store.events() if e["kind"] == "hook.blocked_stop"][-1]["text"]
+
+    def test_a_case_no_formula_predicts_does_not_hold_a_stop_even_past_its_limit(self):
+        """Run N13: R8-stress (no K0 formula) had a result past the limit; HK4 held the strength role's stop on it twice,
+        though no comparison could settle it. It is left to end not judged."""
+        from unittest import mock
+
+        held = {"R1-step100": ["解析 ana-0010 の max_stress が基準を超えている"]}
+        with mock.patch.object(rules, "unpredictable_cases", return_value={"R1-step100": "max_stress"}),                 mock.patch.object(rules, "held_cases", return_value=held):
+            self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        with mock.patch.object(rules, "held_cases", return_value=held):  # a case a formula predicts is still held
+            self.assertIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
 
     def test_with_the_revisions_used_up_a_mismatch_with_its_cause_lets_the_lead_stop(self):
         """HK4 once round_limit is used up: a pending case held only by mismatches whose cause is written (no
@@ -330,6 +373,57 @@ class RoleStopReasonTest(BuildersCase, unittest.TestCase):
         self.assertEqual(out["decision"], "block")
         self.assertIn("R1-step100", out["reason"])
         self.assertNotIn("H1-steer30", out["reason"])  # assembly's case is not the strength role's
+
+
+class ModuleScopeHookTest(ModuleCase, unittest.TestCase):
+    """HK6 in PreToolUse on a design with modules (the caller is the running role of agent_id a1)."""
+
+    def setUp(self):
+        super().setUp()
+        self.attribution = Attribution()
+        self.hooks = Hooks(self.ctx, self.attribution)
+
+    def pre(self, tool, args, agent):
+        self.hooks.running["a1"] = agent
+        data = {"hook_event_name": "PreToolUse", "tool_name": f"mcp__hiraku__{tool}", "tool_input": args,
+                "agent_type": agent.replace(".", "-"), "agent_id": "a1"}
+        return run(self.hooks.pre_tool_use(data, "tu1", None))
+
+    def assert_denied(self, out, word):
+        hso = out["hookSpecificOutput"]
+        self.assertEqual(hso["permissionDecision"], "deny")
+        self.assertIn(word, hso["permissionDecisionReason"])
+        ev = self.ctx.store.events()[-1]
+        self.assertEqual((ev["kind"], ev["data"]["rule"]), ("hook.denied", rules.HK6))
+
+    def test_denials(self):
+        seat = {"seat_x": {"value": -1000.0, "unit": "mm"}}
+        self.assert_denied(self.pre("revise_design", {"changes": seat, "reason": "x"}, "designer.occupant"), "module")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "changes": seat, "reason": "x"},
+                                    "designer.frame"), "designer.occupant")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "reason": "x",
+                                                      "changes": {"battery_x": {"value": -950.0, "unit": "mm"}}},
+                                    "designer.occupant"), "powertrain")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "choices": {"battery_pack": "big"},
+                                                      "reason": "x"}, "designer.occupant"), "battery_pack")
+        self.assert_denied(self.pre("revise_design", {"module": "occupant", "changes": seat, "reason": "x"},
+                                    "packager"), "build_version")
+        self.assert_denied(self.pre("build_version", {"reason": "x"}, "designer.occupant"), "packager")
+        self.assert_denied(self.pre("build_version", {"reason": "x", "changes": seat}, "packager"), "occupant")
+        self.assertEqual(self.ctx.version, 1)
+        self.assert_events_fit()
+
+    def test_allowed_calls_and_the_hint_after_a_proposal(self):
+        args = {"module": "occupant", "changes": {"seat_x": {"value": -1000.0, "unit": "mm"}}, "reason": "x"}
+        self.assertEqual(self.pre("revise_design", args, "designer.occupant"), {})
+        self.assertEqual(self.attribution.take("mcp__hiraku__revise_design", args), "designer.occupant")
+        revise_design(self.ctx, args, "designer.occupant")
+        hint = self.hooks.next_step("revise_design", args)
+        self.assertIn("chg-0001", hint)
+        self.assertIn("build_version", hint)
+        self.assertEqual(self.pre("build_version", {"reason": "まとめ"}, "packager"), {})
+        build_version(self.ctx, {"reason": "まとめ"}, "packager")
+        self.assertIn("版 2", self.hooks.next_step("build_version", {"reason": "まとめ"}))
 
 
 if __name__ == "__main__":

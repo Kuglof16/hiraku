@@ -16,7 +16,8 @@ from hiraku.solvers.shelf import load_path as LP
 from tests.solvers.test_load_path import VALUES, quantity
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the free parts these tests are about
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 # the version 2 set of the design options (part mounts, pedals on the bulkhead, side bars and nets)
 SET2 = {"part_mounts": "brackets", "pedal_mount": "bulkhead", "side_guard": "bars_net"}
 
@@ -71,12 +72,12 @@ class Version2SetTest(unittest.TestCase):
 
     def test_which_parts_are_plates(self):
         plates = LP.plate_parts(self.d)
-        self.assertEqual(set(plates), {"floor_front", "floor", "deck", "bulkhead", "side_net_L", "side_net_R"})
+        # the side nets are cable nets (LP.net_parts, tests/solvers/test_load_path_nets.py), not plates
+        self.assertEqual(set(plates), {"floor_front", "floor", "deck", "bulkhead"})
         self.assertAlmostEqual(plates["floor"].t, 3.2)  # the box is the sheet (designgen.ladder_4w.PLATE_T_MM)
         self.assertEqual(plates["floor"].material, "ss400")
         self.assertFalse(any(pl.assumed for pl in plates.values()))
-        self.assertEqual(plates["side_net_L"].material, "ss400")
-        self.assertAlmostEqual(plates["side_net_L"].t, 3.0)
+        self.assertEqual(set(LP.net_parts(self.d)), {"side_net_L", "side_net_R"})
         np.testing.assert_allclose(np.abs(plates["floor"].normal), [0.0, 0.0, 1.0])
 
     def test_plates_are_softer_than_rigid_floors(self):

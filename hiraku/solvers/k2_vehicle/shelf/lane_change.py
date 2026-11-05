@@ -13,16 +13,17 @@ from ..units import G0
 from .base import MU, TIPPED_ROLL, K2Tool, P, Pair, _box, _half_width, _min_load, _ramp_gravity, _res, _side_ids
 from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
-# Section lengths (m) and lane offset of a double lane change in the layout of
-# ISO 3888-1: 15 / 30 / 25 / 25 / 15 / 15 m, offset 3.5 m. NOT checked against the
-# ISO 3888-1 text; the course here is a smooth centre line, not the cone gates.
+# Section lengths (m) and lane offset of a double lane change: 15 / 30 / 25 / 25 / 15 / 15 m, offset
+# 3.5 m. Source: ISO 3888-1:2018 Table 1 (the public sample,
+# https://cdn.standards.iteh.ai/samples/67973/daa839ed4aca420788d9b4a51cd6cc95/ISO-3888-1-2018.pdf),
+# checked against it on 2026-11-03 (README, the table of values checked). The course here is a smooth
+# centre line, not the cone gates.
 DLC_SECTIONS = (15.0, 30.0, 25.0, 25.0, 15.0, 15.0)
 DLC_OFFSET = 3.5
 
 
-# Lane widths of sections 1, 3 and 5 for a vehicle of width W (m): 1.1 W + 0.25,
-# 1.2 W + 0.25, 1.3 W + 0.25. Source: ISO 3888-1:2018 (the sample pages), as the plan
-# quotes them; not checked in this repository.
+# Lane widths of sections 1, 3 and 5 for a vehicle of width W (m, without mirrors): 1.1 W + 0.25,
+# 1.2 W + 0.25, 1.3 W + 0.25. The same source and check.
 DLC_LANE_WIDTH = ((1.1, 0.25), (1.2, 0.25), (1.3, 0.25))
 
 
@@ -191,9 +192,10 @@ class LaneChangeTool(K2Tool):
     title = "ダブルレーンチェンジ (K2 + 運転のモデル)"
     domain = "handling"
     tests = ["S3"]
+    # speed 40 km/h: the default when a load case has none (the catalog's load cases give it); a test value
     params = (P("speed", "km/h", 40.0, "held speed"),
               MU,
-              P("offset", "m", DLC_OFFSET, "sideways shift of the lane (ISO 3888-1 layout, not checked)"),
+              P("offset", "m", DLC_OFFSET, "sideways shift of the lane (ISO 3888-1:2018 Table 1, checked 2026-11-03)"),
               P("direction", None, "left", "the first lane change goes toward", choices=("left", "right")),
               P("find_limit", None, True, "also search max_speed_no_lift"),
               P("v_min", "km/h", 10.0, "lowest speed of the search"),
@@ -249,8 +251,9 @@ class LaneChangeTool(K2Tool):
 
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)
-        notes = list(veh.assumptions) + ["double lane change course in the ISO 3888-1 layout (15/30/25/25/15/15 m, "
-                                         "offset 3.5 m); not checked against the ISO text; a centre line, not cone gates"]
+        notes = list(veh.assumptions) + ["double lane change course of ISO 3888-1:2018 Table 1 (15/30/25/25/15/15 m, "
+                                         "offset 3.5 m; checked against the public sample on 2026-11-03); a centre "
+                                         "line, not cone gates"]
         if not any(c.steer for c in veh.corners):
             return {"error": "no support has actuation.steer; a lane change needs a steered wheel"}
         speed = self.q(lp, "speed", "m/s")

@@ -7,6 +7,13 @@ from hiraku.agent.scripted import ScriptError, _reader, has_plan, load_plan, res
 from hiraku.tools.summary import design_summary
 from tests.tools.helpers import RunCase
 
+from tests.tools.helpers import stand_in_plan
+
+
+def setUpModule():
+    # this module's helpers call load_plan directly: the stand-in plan as RunCase's runs have it
+    globals()["load_plan"] = stand_in_plan
+
 
 def denied_rules(ctx):
     return [e["data"]["rule"] for e in ctx.store.events() if e["kind"] == "hook.denied"]
@@ -112,16 +119,92 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
 
         found = {"changes": {"steering_x": {"value": -509.5, "unit": "mm"}, "seat_height": {"value": 317.0, "unit": "mm"}},
                  "smallest": {"name": "knee_room", "value": 12.0, "unit": "mm", "where": "steering_column"}}
-        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit:
+        with mock.patch.object(designgen, "regenerate", return_value={"design": "with track"}) as regen,                 mock.patch.object(driver_fit, "best_driver_place", return_value=found) as fit,                 mock.patch.object(scripted, "range_ends", return_value=["seat_slide 300 mm (上限)"]):
             changes, reason = scripted.fit_driver(self.ctx, {"track": {"value": 1220, "unit": "mm"},
                                                              "steering_x": {"value": -200, "unit": "mm"}}, "H3: 膝", 5)
         self.assertEqual(fit.call_args.args[0], {"design": "with track"})  # measured on the design with the plan's changes
         self.assertEqual(fit.call_args.kwargs["time_limit_s"], 5.0)
+        self.assertEqual(fit.call_args.kwargs["max_evals"], scripted.FIT_EVALS)  # a fixed count by default
         self.assertEqual(regen.call_args.args[1]["track"]["value"], 1220)
         self.assertEqual(changes["steering_x"]["value"], -509.5)  # the fit wins for its variables
         self.assertEqual(changes["track"]["value"], 1220)
         self.assertIn("driver_fit", reason)
         self.assertIn("knee_room 12.0 mm", reason)
+        self.assertIn("範囲の端 (確かめていない値) で決まった: seat_slide 300 mm (上限)", reason)
+
+    def test_range_ends_names_the_bounds(self):
+        import json
+
+        from hiraku import designgen
+        from hiraku.agent import scripted
+
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        d = json.loads((root / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+        spec = {s["name"]: s for s in designgen.variables(d)}
+        lo = spec["steering_column_angle"]["min"]
+        got = scripted.range_ends(d, {"steering_column_angle": {"value": lo, "unit": "deg"},
+                                      "seat_height": {"value": spec["seat_height"]["value"], "unit": "mm"}})
+        self.assertEqual(got, [f"steering_column_angle {lo:g} deg (下限)"])
+
+    def test_a_prediction_whose_inputs_cannot_be_read_is_skipped_and_said(self):
+        """R8-push's K0 (load_path.bar_on_posts) has no inputs on a design with nothing outside point R: the scripted
+        run skips that prediction, says why (agent.said of system), and goes on with the others."""
+        from hiraku.agent import scripted
+
+        def no_point_r(design, load_case):
+            raise ValueError("nothing outside point R")
+
+        lc = self.ctx.load_case("R1-step100")
+        bad = {"quantity": "occupant_push_deflection", "formula_id": "frame_static.rail_bending", "output": "sigma",
+               "inputs": {}, "inputs_from": no_point_r}
+        self.assertEqual(scripted._predict(self.ctx, lc, "cae.strength", [bad]), [])
+        said = [e for e in self.ctx.store.events() if e["kind"] == "agent.said" and (e.get("data") or {}).get("skipped_prediction")]
+        self.assertEqual(said[-1]["data"]["quantity"], "occupant_push_deflection")
+        self.assertIn("nothing outside point R", said[-1]["text"])
+        self.assert_events_fit()
+        # a step left with no prediction is not analysed (HK1 would refuse it); the run goes on
+        before = len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"])
+        scripted._run_step(self.ctx, lc, "cae.strength", "frame_static", {"predictions": [bad]})
+        self.assertEqual(len([e for e in self.ctx.store.events() if e["kind"] == "analysis.started"]), before)
+
+    def test_a_load_case_the_analysis_judged_is_not_compared(self):
+        """A load with no path: the analysis's unsupported_load makes the verdict (judge); the scripted step says so and
+        compares nothing (run 20261104-091550: R8-stress on version 2 with parts not yet mounted)."""
+        from hiraku.agent import scripted
+
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def floating(design, load_case, predictions, params):
+            out = run(design, load_case, predictions, params)
+            out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": 3.0, "unit": "1", "where": "seat_L"}]
+            return out
+
+        tool.run = floating
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        lc = self.ctx.load_case("R1-step100")
+        before = len(self.ctx.store.records("comparison"))
+        self.assertIsNone(scripted._analyze_and_compare(self.ctx, lc, "cae.strength", "frame_static", [r1["prediction_id"]]))
+        self.assertEqual(len(self.ctx.store.records("comparison")), before)
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("荷重の通り道が無いので不合格" in t for t in said))
+
+    def test_expected_mismatches_by_side(self):
+        """One step, two entries for one quantity: the prediction below the analysis ends the step, above it is
+        judged safe side (R7-hand: no mounts yet, then a stiffer frame)."""
+        from hiraku.agent.scripted import expected_for
+
+        low = {"quantity": "max_stress", "when": "low", "end": True}
+        high = {"quantity": "max_stress", "when": "high", "safe_side": True}
+        cmp = lambda p, a: {"quantity": "max_stress", "predicted": {"value": p}, "analyzed": {"value": a}}  # noqa: E731
+        self.assertIs(expected_for([low, high], cmp(0.77, 1.09)), low)
+        self.assertIs(expected_for([low, high], cmp(1.2, 0.7)), high)
+        self.assertIs(expected_for({"quantity": "max_stress"}, cmp(1.2, 0.7))["quantity"], "max_stress")  # no side: either
+        self.assertIsNone(expected_for([low], cmp(1.2, 0.7)))
+        self.assertIsNone(expected_for(None, cmp(1.2, 0.7)))
 
     def test_plan_notes_are_said_and_reported(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
@@ -197,6 +280,31 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertNotIn("no next prediction", self.ctx.project["stop_reason"])
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any("判定の無いまま次へ進みます" in t for t in said))
+        # contract 110b991: a load case ended by its cause cannot be judged; no heavier stage waits for it (HK5)
+        from hiraku.tools import rules
+
+        self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})
+        self.assertEqual([c.get("ends_case") for c in self.ctx.store.records("cause")][-1:], [True])  # contract 08cf4d6
+        self.assertNotIn("R1-step100", [lc["load_case_id"] for _, lc, _ in rules.lower_stage_left(self.ctx, 9)])
+        self.assertNotIn("R1-step100", [lc for _, lcs in rules.holding(self.ctx) for lc in lcs])
+        self.assert_events_fit()
+
+    def test_a_revision_for_an_ended_case_is_used_only_when_no_red_is_left(self):
+        """answers_ended: with no red tile and R1 ended without a verdict, the plan's entry for R1 makes the next
+        version (the designer's change, the ended case in the reason, no load_case_ids); it is never used for a red."""
+        plan = plan_without_safe_side()
+        r1_second(plan)["expected_mismatch"]["end"] = True
+        plan["revise"] = [{"say": "R1 が判定なしで終わったので直します (試験)", "answers_ended": ["R1-step100"],
+                           "changes": {"track": {"value": 1400.0, "unit": "mm"}}, "reason": "R1: 判定なしで終わった (試験)"}]
+        run_scripted(self.ctx, plan)
+        designs = [e for e in self.ctx.store.events() if e["kind"] == "design.created"]
+        self.assertEqual([e["data"]["design_version"] for e in designs], [1, 2])
+        self.assertIn("R1: 判定なしで終わった (試験)", designs[1]["data"]["change_reason"])
+        said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
+        self.assertTrue(any("版 1 に赤はありません。R1-step100 は判定なしで終わりました" in t for t in said))
+        self.assertIn("R1 が判定なしで終わったので直します (試験)", said)
+        self.assertEqual(len([t for t in said if "判定なしで終わりました (食い違いの原因の記録)" in t]), 1)  # used once
+        self.assert_events_fit()
 
     def test_end_and_retry_together_are_a_plan_error(self):
         plan = copy.deepcopy(load_plan("offroad-4w"))
@@ -404,6 +512,57 @@ class ScriptedKnowledgeDropTest(RunCase, unittest.TestCase):
         if mine:
             self.assertFalse([r["rule_id"] for r in hits if r not in mine and r["rule_id"] in asks[0]])
         self.assert_events_fit()
+
+
+class SplitByModuleTest(unittest.TestCase):
+    """A plan's revision on a design with modules: each variable and choice goes to the module that lists it,
+    the package variables to the packager (contract d9631a5)."""
+
+    DESIGN = {"modules": [
+        {"module_id": "package", "variables": ["track"], "choices": []},
+        {"module_id": "steering", "variables": ["steering_column_angle"], "choices": ["pedal_mount"]},
+        {"module_id": "occupant", "variables": ["seat_height"], "choices": ["side_guard"]},
+        {"module_id": "body", "variables": [], "choices": ["fenders"]},
+    ]}
+
+    def test_each_part_goes_to_its_owner(self):
+        from hiraku.agent.scripted import split_by_module
+
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        by, package, stray = split_by_module(
+            self.DESIGN, {"track": mm(1220), "seat_height": mm(233.5), "steering_column_angle": {"value": 20, "unit": "deg"}},
+            {"fenders": "wheel", "pedal_mount": "post", "side_guard": "bars_net"})
+        self.assertEqual(list(by), ["steering", "occupant", "body"])  # the contract's module order
+        self.assertEqual(by["steering"], {"changes": {"steering_column_angle": {"value": 20, "unit": "deg"}},
+                                          "choices": {"pedal_mount": "post"}})
+        self.assertEqual(by["occupant"], {"changes": {"seat_height": mm(233.5)}, "choices": {"side_guard": "bars_net"}})
+        self.assertEqual(by["body"], {"choices": {"fenders": "wheel"}})
+        self.assertEqual((package, stray), ({"track": mm(1220)}, []))
+
+    def test_a_name_no_module_owns_is_named(self):
+        from hiraku.agent.scripted import split_by_module
+
+        self.assertEqual(split_by_module(self.DESIGN, {"wheelbase": {"value": 1, "unit": "mm"}}, {"roof": "x"})[2],
+                         ["wheelbase", "roof"])
+
+    def test_an_entry_hits_only_the_reds_of_its_modules(self):
+        """Run 142135 (the tests picked without H7): version 2's only red, R7-hand, goes to the steering designer;
+        the plan's next entry, the occupant's opening, hits none, the controls' entry after it does."""
+        from hiraku.agent.scripted import revision_hits
+
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        routed = {"designer.steering": ["R7-hand"]}
+        opening = {"choices": {"side_guard": "bars_net"}, "reason": "H7"}
+        controls = {"changes": {"steering_column_angle": {"value": 20, "unit": "deg"}}, "reason": "R7"}
+        layout = {"changes": {"track": mm(1220)}, "reason": "P1"}
+        self.assertFalse(revision_hits(self.DESIGN, routed, opening))
+        self.assertTrue(revision_hits(self.DESIGN, routed, controls))
+        self.assertFalse(revision_hits(self.DESIGN, routed, layout))
+        self.assertTrue(revision_hits(self.DESIGN, {"packager": ["P1-step100"]}, layout))
+        # as before the check: no routed red (a rule's red tile), a name no module owns, a driver fit
+        self.assertTrue(revision_hits(self.DESIGN, {}, opening))
+        self.assertTrue(revision_hits(self.DESIGN, routed, {"changes": {"wheelbase": mm(1)}, "reason": "x"}))
+        self.assertTrue(revision_hits(self.DESIGN, routed, {"fit": "driver", "reason": "x"}))
 
 
 if __name__ == "__main__":

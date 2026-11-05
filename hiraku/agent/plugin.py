@@ -36,7 +36,7 @@ from typing import Any, Iterator
 
 from hiraku import contract
 from hiraku.agent import inbox, prompts
-from hiraku.agent.hooks import Hooks
+from hiraku.agent.hooks import PLUGIN_PREFIX, Hooks, stopped_data
 from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
 from hiraku.store import RunStore
@@ -57,7 +57,11 @@ UNPREDICTABLE_KEY = "unpredictable"
 # in STATE_FILE, written by the server: shelf.stages_of (HK5 stages; the hook command has no tools)
 STAGES_KEY = "stages"
 
-STOPPED_SESSION_CLOSED = "Claude Code のセッションが閉じたので、実行を止めました"
+# The screen's default port (hiraku.webserve.server.DEFAULT_PORT; the agent layer does not import webserve, a
+# higher layer): tests/agent/test_plugin_path checks the two are the same
+SCREEN_PORT = 8765
+
+STOPPED_SESSION_CLOSED ="Claude Code のセッションが閉じたので、実行を止めました"
 STOPPED_NEW_RUN = "同じセッションで新しい実行を始めたので、この実行は止めました"
 NO_RUN = "実行がありません。start_run(requirements_file=...) で実行を始めるか、open_run(run_id=...) で走っている実行を開いてください"
 
@@ -208,15 +212,18 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
             notes.append({"op": "emit", "kind": kind, **kw})
 
         hooks = Hooks(ctx, _NoteAttribution(notes), emit=emit)  # type: ignore[arg-type]
+        hooks.tell_routing = True  # no runner here to send the lead the routing of a version's reds
+        hooks.wait_tool = PLUGIN_PREFIX + WAIT_TOOL  # no runner here to wait for roles still running
         hooks.load_state(state)
         ended: list[bool] = []
         hooks.on_end = lambda: (notes.append({"op": "end"}), ended.append(True))
         out = hooks.decide(event, input_data)
         new_state = {**state, **hooks.state(), **({END_KEY: True} if ended else {})}
         write_state(run_dir, new_state)
-        if ended and not server_alive(run_dir):
-            # the lead's stop is let through and no server serves the run (Claude Code stopped it first):
-            # the hook command is the only one left to write, so it ends the run itself, under the lock
+        if ended:
+            # the lead's stop is let through: the hook command ends the run itself, under the lock, whether or
+            # not a server still serves it (a server may go without its shutdown, e.g. when claude -p exits;
+            # it then finds the run finished on disk and writes nothing more: PluginServer.finished_on_disk)
             finish_without_server(run_dir, ctx, new_state, notes)
         else:
             put_notes(run_dir, notes)
@@ -243,11 +250,11 @@ def finish_without_server(run_dir: Path, ctx: RunContext, state: Record, notes: 
     for n in take_notes(run_dir) + [n for n in notes if n.get("op") == "emit"]:
         if n.get("op") == "emit":
             store.emit(n["kind"], agent=n.get("agent"), domain=n.get("domain"), text=n.get("text"), data=n.get("data"))
+    status, reason, code = end_status(ctx, int(state.get("stop_blocks") or 0))
     for agent in sorted(set((state.get("running") or {}).values())):
         domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-        store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
-    store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
-    status, reason, code = end_status(ctx, int(state.get("stop_blocks") or 0))
+        store.emit("agent.stopped", agent=agent, domain=domain, data=stopped_data(agent, code, cut_off=True))
+    store.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
     store.finish(status, stop_reason=reason, stop_code=code)
     (Path(run_dir) / layout.PLUGIN_ALIVE_FILE).unlink(missing_ok=True)
 
@@ -295,6 +302,19 @@ OWN_TOOLS: dict[str, tuple[str, Record]] = {
         OPEN_RUN_SCHEMA,
     ),
 }
+# The lead waits with this tool for roles still running (the Stop hook tells it to: hooks.WAIT_REASON). It returns
+# when no role runs, the run ends or the stop button is pressed, or after WAIT_S; the lead calls it again if needed.
+WAIT_TOOL = "wait_for_roles"
+WAIT_S = 300.0
+WAIT_POLL_S = 2.0
+OWN_TOOLS[WAIT_TOOL] = (
+    "動いている役 (サブエージェント) が終わるまで待つ (長くて 5 分)。役の結果は、終わった役から届く。まだ動いている役があれば、"
+    "もう一度呼ぶ",
+    {"type": "object", "additionalProperties": False, "properties": {}},
+)
+WAIT_DONE = "動いている役はもうありません。役の結果を受け取って続けてください"
+WAIT_MORE = "役 ({roles}) はまだ動いています。もう一度 " + WAIT_TOOL + " を呼んで待ってください"
+WAIT_ENDED = "実行は終わったか、止めるボタンが押されました。ツールを呼ばずに番を終えてください"
 
 
 def resolve_requirements(name: str) -> Path:
@@ -333,6 +353,8 @@ class PluginServer:
         from hiraku.tools.mcp import HANDLERS, make_handler
 
         await asyncio.to_thread(self.drain)
+        if name == WAIT_TOOL:
+            return {"content": [{"type": "text", "text": await asyncio.to_thread(self.wait_for_roles)}]}
         if name in OWN_TOOLS:
             try:
                 got = await asyncio.to_thread(self.start if name == "start_run" else self.open, args)
@@ -342,7 +364,7 @@ class PluginServer:
         if name not in HANDLERS:
             return {"content": [{"type": "text", "text": f"ツール {name!r} はありません"}], "is_error": True}
         ctx = self.ctx
-        if ctx is None or ctx.project["status"] != "running":
+        if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk():
             return {"content": [{"type": "text", "text": NO_RUN}], "is_error": True}
         out = await make_handler(ctx, self.attribution, name, HANDLERS[name])(args)
         await asyncio.to_thread(self.note_unpredictable, ctx)  # a version, a prediction or a verdict changes it
@@ -360,7 +382,8 @@ class PluginServer:
     def _answer(self, ctx: RunContext) -> Record:
         return {"run_id": ctx.project["run_id"], "run_dir": str(ctx.store.path.resolve()),
                 "design_version": ctx.version, "driver": ctx.project.get("driver"),
-                "screen": f"画面 (python -m hiraku.webserve) の ?run={ctx.project['run_id']} で見られます",
+                "screen": (f"画面で見られます: リポジトリのフォルダで .venv の python -m hiraku.webserve を始め、"
+                           f"http://127.0.0.1:{SCREEN_PORT}/?run={ctx.project['run_id']} を開く"),
                 "task": prompts.lead_task(ctx)}
 
     def start(self, args: Record) -> Record:
@@ -420,6 +443,23 @@ class PluginServer:
         self.note_unpredictable(ctx)
         return self._answer(ctx)
 
+    def wait_for_roles(self, wait_s: float | None = None, poll_s: float = WAIT_POLL_S) -> str:
+        """WAIT_TOOL: until the hooks' state has no running role (SubagentStop takes them out), the run ends or
+        the stop button is pressed, or wait_s (WAIT_S) passes."""
+        deadline = time.monotonic() + (WAIT_S if wait_s is None else wait_s)
+        while True:
+            ctx = self.ctx
+            if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk() \
+                    or ctx.store.stop_requested():
+                return WAIT_ENDED
+            with locked(ctx.store.path):
+                running = sorted(set((read_state(ctx.store.path).get("running") or {}).values()))
+            if not running:
+                return WAIT_DONE
+            if time.monotonic() >= deadline:
+                return WAIT_MORE.format(roles="、".join(running))
+            time.sleep(poll_s)
+
     @staticmethod
     def touch_alive(ctx: RunContext | None) -> None:
         """layout.PLUGIN_ALIVE_FILE: this server serves the run (the screen holds a plugin run while the
@@ -438,6 +478,8 @@ class PluginServer:
         server lets go of it (its alive file goes)."""
         with self._lock:
             ctx = self.ctx
+            if self.finished_on_disk():  # the Stop hook's command ended it: nothing to add
+                return
             self.let_go(ctx)
             if ctx is None or ctx.project["status"] != "running":
                 return
@@ -446,8 +488,8 @@ class PluginServer:
                 state = read_state(run_dir)
             for agent in sorted(set((state.get("running") or {}).values())):
                 domain = agent.split(".", 1)[1] if agent.startswith("cae.") else None
-                ctx.store.emit("agent.stopped", agent=agent, domain=domain, data={"agent_id": agent})
-            ctx.store.emit("agent.stopped", agent="lead", data={"agent_id": "lead"})
+                ctx.store.emit("agent.stopped", agent=agent, domain=domain, data=stopped_data(agent, code, cut_off=True))
+            ctx.store.emit("agent.stopped", agent="lead", data=stopped_data("lead", code))
             ctx.store.finish(status, stop_reason=reason, stop_code=code)
 
     def end(self) -> None:
@@ -492,11 +534,29 @@ class PluginServer:
 
     # ------------------------------------------------------------------ notes, inbox, stop button
 
+    def finished_on_disk(self) -> bool:
+        """The current run was finished by another process (the Stop hook's command): its project.json no
+        longer says running. The server then takes that status and lets the run go, writing nothing more
+        (each process numbers the events from its own count)."""
+        ctx = self.ctx
+        if ctx is None or ctx.project["status"] != "running":
+            return False
+        try:
+            with locked(ctx.store.path):
+                on_disk = json.loads((ctx.store.path / layout.PROJECT_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if on_disk.get("status") == "running":
+            return False
+        ctx.project.update({k: on_disk[k] for k in ("status", "stop_reason", "cost_usd") if k in on_disk})
+        self.let_go(ctx)
+        return True
+
     def drain(self) -> None:
         """Turn the hook commands' notes into events (and the callers' agents into Attribution)."""
         with self._lock:
             ctx = self.ctx
-            if ctx is None or ctx.project["status"] != "running":
+            if ctx is None or ctx.project["status"] != "running" or self.finished_on_disk():
                 return
             with locked(ctx.store.path):
                 notes = take_notes(ctx.store.path)

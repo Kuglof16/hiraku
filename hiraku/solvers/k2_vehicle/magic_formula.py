@@ -19,7 +19,7 @@ factors are 1.
 
 Inflation pressure: the one coefficient file (data/tyres/pacejka_tvd3_205_60r15.json) is a
 205/60R15 passenger car tyre fitted at 2.2 bar, not a measured UTV tyre. The vehicles K2
-models run 25x8-12 UTV tyres at about 0.5 bar (7 psi), far outside the pressure the
+models run 25x8-12 UTV tyres at about 0.5 bar (7 psi; a typical value, no source read), far outside the pressure the
 coefficients were fitted at, so the MF 6.1 pressure terms (NOMPRES, PPX*, PPY*, PPZ*, ...)
 would only extrapolate. K2 therefore keeps the tyre at its nominal pressure: MF61 reads only
 the longitudinal, lateral and aligning groups (PRESSURE_TERMS_READ is False) and the size,
@@ -31,6 +31,10 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+
+import numpy as np
+
+from .jit import ENABLED as JIT, njit
 
 EPS = 1e-6           # the book's epsilon against division by zero (4.E6a)
 TWO_OVER_PI = 2.0 / math.pi
@@ -82,6 +86,8 @@ class MF61:
         self.fz0 = float(coeffs["FNOMIN"] if fz0 is None else fz0)
         self.r0 = float(coeffs["UNLOADED_RADIUS"] if r0 is None else r0)
         self.lmux, self.lmuy, self.lkx, self.lky = float(lmux), float(lmuy), float(lkx), float(lky)
+        # the coefficients in the order of _KERNEL_COEFFS, for the compiled forces_and_peaks
+        self._p = np.array([getattr(self, k) for k in _KERNEL_COEFFS], dtype=np.float64)
 
     # ------------------------------------------------------------ pure slip
     def mu_x(self, fz: float, gamma: float = 0.0) -> float:
@@ -147,7 +153,14 @@ class MF61:
         return self.forces_and_peaks(fz, kappa, tan_alpha, gamma)[:3]
 
     def forces_and_peaks(self, fz: float, kappa: float, tan_alpha: float, gamma: float = 0.0) -> tuple:
-        """Fx, Fy, Mz and the peaks Dx, Dy and the slip stiffness Kxk the formula used (one evaluation)."""
+        """Fx, Fy, Mz and the peaks Dx, Dy and the slip stiffness Kxk the formula used (one evaluation).
+        Compiled (_combined, the same equations in the same order) when numba is there."""
+        if JIT:
+            return _combined(self._p, float(fz), float(kappa), float(tan_alpha), float(gamma))
+        return self.forces_and_peaks_py(fz, kappa, tan_alpha, gamma)
+
+    def forces_and_peaks_py(self, fz: float, kappa: float, tan_alpha: float, gamma: float = 0.0) -> tuple:
+        """forces_and_peaks in plain Python: the reference the compiled kernel is tested against."""
         if fz <= 0.0:
             return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         dfz = (fz - self.fz0) / self.fz0
@@ -230,6 +243,131 @@ class MF61:
         by = abs(self.kya(fz)) / (cy * self.mu_y(fz) * fz)
         ey = min(1.0, (self.PEY1 + self.PEY2 * dfz) * (1.0 - self.PEY3))
         return _peak(by, cy, ey)
+
+
+# ---------------------------------------------------------------- compiled combined slip
+# MF61.forces_and_peaks_py's equations over an array of the coefficients: the per-step tyre force of
+# every K2 simulation. Each coefficient's index is a module constant _<NAME> (numba reads globals as
+# constants when it compiles).
+_KERNEL_COEFFS = tuple("""
+PCX1 PDX1 PDX2 PDX3 PKX1 PKX2 PKX3 PHX1 PHX2 PVX1 PVX2 PEX1 PEX2 PEX3 PEX4
+REX1 REX2 RHX1 RBX1 RBX2 RBX3 RCX1
+PKY1 PKY2 PKY3 PKY4 PKY5 PKY6 PKY7 PVY1 PVY2 PVY3 PVY4 PHY1 PHY2 PCY1 PDY1 PDY2 PDY3 PEY1 PEY2 PEY3 PEY4 PEY5
+REY1 REY2 RHY1 RHY2 RBY1 RBY2 RBY3 RBY4 RCY1 RVY1 RVY2 RVY3 RVY4 RVY5 RVY6
+QHZ1 QHZ2 QHZ3 QHZ4 QDZ1 QDZ2 QDZ3 QDZ4 QDZ6 QDZ7 QDZ8 QDZ9 QDZ10 QDZ11 QBZ1 QBZ2 QBZ3 QBZ4 QBZ5 QBZ9 QBZ10
+QCZ1 QEZ1 QEZ2 QEZ3 QEZ4 QEZ5 SSZ1 SSZ2 SSZ3 SSZ4
+fz0 r0 lmux lmuy lkx lky
+""".split())
+for _i, _name in enumerate(_KERNEL_COEFFS):
+    globals()["_" + _name] = _i
+del _i, _name
+
+
+@njit
+def _k_sgn(x):
+    return -1.0 if x < 0.0 else 1.0
+
+
+@njit
+def _k_mf(b, c, d, e, x):
+    bx = b * x
+    return d * math.sin(c * math.atan(bx - e * (bx - math.atan(bx))))
+
+
+@njit
+def _k_weight(b, c, e, x):
+    bx = b * x
+    return math.cos(c * math.atan(bx - e * (bx - math.atan(bx))))
+
+
+@njit
+def _k_kya(p, fz, gs):
+    """MF61.kya at gs = sin(gamma)."""
+    fz0 = p[_fz0]
+    return (p[_PKY1] * fz0 * (1.0 - p[_PKY3] * abs(gs))
+            * math.sin(p[_PKY4] * math.atan((fz / fz0) / (p[_PKY2] + p[_PKY5] * gs * gs))) * p[_lky])
+
+
+@njit
+def _k_fy0(p, fz, ta, gs):
+    """MF61._fy0."""
+    fz0, lmuy = p[_fz0], p[_lmuy]
+    dfz = (fz - fz0) / fz0
+    kya = _k_kya(p, fz, gs)
+    svyg = fz * (p[_PVY3] + p[_PVY4] * dfz) * gs * lmuy
+    kyg0 = fz * (p[_PKY6] + p[_PKY7] * dfz)
+    shy = (p[_PHY1] + p[_PHY2] * dfz) + (kyg0 * gs - svyg) / (kya + EPS * _k_sgn(kya))
+    svy = fz * (p[_PVY1] + p[_PVY2] * dfz) * lmuy + svyg
+    ay = ta + shy
+    cy = p[_PCY1]
+    muy = (p[_PDY1] + p[_PDY2] * dfz) * (1.0 - p[_PDY3] * gs * gs) * lmuy
+    dy = muy * fz
+    ey = min(1.0, (p[_PEY1] + p[_PEY2] * dfz) * (1.0 + p[_PEY5] * gs * gs - (p[_PEY3] + p[_PEY4] * gs) * _k_sgn(ay)))
+    by = kya / (cy * dy + EPS * _k_sgn(dy))
+    return _k_mf(by, cy, dy, ey, ay) + svy, muy, kya, shy, svy, by * cy
+
+
+@njit
+def _combined(p, fz, kappa, ta, gamma):
+    """MF61.forces_and_peaks_py: Fx, Fy, Mz, Dx, Kxk, Dy."""
+    if fz <= 0.0:
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    fz0, r0, lmux, lmuy, lky = p[_fz0], p[_r0], p[_lmux], p[_lmuy], p[_lky]
+    dfz = (fz - fz0) / fz0
+    gs = math.sin(gamma)
+    cos_a = 1.0 / math.sqrt(1.0 + ta * ta)
+
+    # MF61._fx0
+    cx = p[_PCX1]
+    dx = (p[_PDX1] + p[_PDX2] * dfz) * (1.0 - p[_PDX3] * gamma * gamma) * lmux * fz
+    kxk = fz * (p[_PKX1] + p[_PKX2] * dfz) * math.exp(p[_PKX3] * dfz) * p[_lkx]
+    bx = kxk / (cx * dx + EPS * _k_sgn(dx))
+    shx = p[_PHX1] + p[_PHX2] * dfz
+    svx = fz * (p[_PVX1] + p[_PVX2] * dfz) * lmux
+    kx = kappa + shx
+    ex = min(1.0, (p[_PEX1] + p[_PEX2] * dfz + p[_PEX3] * dfz * dfz) * (1.0 - p[_PEX4] * _k_sgn(kx)))
+    fx0 = _k_mf(bx, cx, dx, ex, kx) + svx
+    dx_peak = dx
+
+    exa = min(1.0, p[_REX1] + p[_REX2] * dfz)
+    shxa = p[_RHX1]
+    bxa = (p[_RBX1] + p[_RBX3] * gs * gs) * math.cos(math.atan(p[_RBX2] * kappa))
+    gxa = _k_weight(bxa, p[_RCX1], exa, ta + shxa) / _k_weight(bxa, p[_RCX1], exa, shxa)
+    fx = gxa * fx0
+
+    fy0, muy, kya, shy, svy, bycy = _k_fy0(p, fz, ta, gs)
+    eyk = min(1.0, p[_REY1] + p[_REY2] * dfz)
+    shyk = p[_RHY1] + p[_RHY2] * dfz
+    byk = (p[_RBY1] + p[_RBY4] * gs * gs) * math.cos(math.atan(p[_RBY2] * (ta - p[_RBY3])))
+    gyk = _k_weight(byk, p[_RCY1], eyk, kappa + shyk) / _k_weight(byk, p[_RCY1], eyk, shyk)
+    dvyk = muy * fz * (p[_RVY1] + p[_RVY2] * dfz + p[_RVY3] * gs) * math.cos(math.atan(p[_RVY4] * ta))
+    svyk = dvyk * math.sin(p[_RVY5] * math.atan(p[_RVY6] * kappa))
+    fy = gyk * fy0 + svyk
+
+    kya_p = kya + EPS * _k_sgn(kya)
+    sht = p[_QHZ1] + p[_QHZ2] * dfz + (p[_QHZ3] + p[_QHZ4] * dfz) * gs
+    alpha_t = ta + sht
+    alpha_r = ta + shy + svy / kya_p
+    dt = ((p[_QDZ1] + p[_QDZ2] * dfz) * (1.0 + p[_QDZ3] * gamma + p[_QDZ4] * gamma * gamma)
+          * fz * (r0 / fz0))
+    bt = ((p[_QBZ1] + p[_QBZ2] * dfz + p[_QBZ3] * dfz * dfz) * (1.0 + p[_QBZ4] * gamma + p[_QBZ5] * abs(gamma))
+          * lky / lmuy)
+    ct = p[_QCZ1]
+    et = min(1.0, (p[_QEZ1] + p[_QEZ2] * dfz + p[_QEZ3] * dfz * dfz)
+             * (1.0 + (p[_QEZ4] + p[_QEZ5] * gs) * TWO_OVER_PI * math.atan(bt * ct * alpha_t)))
+    dr = (fz * r0 * ((p[_QDZ6] + p[_QDZ7] * dfz)
+                     + ((p[_QDZ8] + p[_QDZ9] * dfz) + (p[_QDZ10] + p[_QDZ11] * dfz) * abs(gs)) * gs)
+          * lmuy * cos_a)
+    br = p[_QBZ9] * lky / lmuy + p[_QBZ10] * bycy
+    k2 = (kxk / kya_p) ** 2 * kappa * kappa
+    ar_eq = math.atan(math.sqrt(math.tan(alpha_r) ** 2 + k2)) * _k_sgn(alpha_r)
+    at_eq = math.atan(math.sqrt(math.tan(alpha_t) ** 2 + k2)) * _k_sgn(alpha_t)
+    s = r0 * (p[_SSZ1] + p[_SSZ2] * (fy / fz0) + (p[_SSZ3] + p[_SSZ4] * dfz) * gamma)
+    mzr = dr * math.cos(math.atan(br * ar_eq))
+    fy0_g0 = fy0 if gs == 0.0 else _k_fy0(p, fz, ta, 0.0)[0]
+    t = dt * math.cos(ct * math.atan(bt * at_eq - et * (bt * at_eq - math.atan(bt * at_eq)))) * cos_a
+    mz = -t * (gyk * fy0_g0) + mzr + s * fx
+    return fx, fy, mz, dx_peak, kxk, muy * fz
 
 
 def _peak(b: float, c: float, e: float) -> float:
