@@ -57,9 +57,10 @@ PATH_CHECKED = "path_checked"
 def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Record | None = None) -> str | None:
     """docs/contract.md 手計算の役目, the load path checked by hand, in this version: (1) a load_path.free_parts
     prediction of 0, of the load case's loaded parts (one of its own predictions) or of every part of the version
-    (contract 947969a: the quantity free_parts, of any load case, as qa.check_run reads it); (2) an ok analysis
-    of the load case that follows the path (a free_parts or unsupported_load result) finds no unsupported load,
-    nor does the analysis that decides (given: the compared one). None when it holds, else why not (for people)."""
+    (contract 947969a: the quantity free_parts, of any load case, as qa.check_run reads it); (2) the newest ok
+    analysis of the load case that follows the path gives unsupported_load 0, and so does the analysis that
+    decides (given: the compared one); a free_parts result of either, where given, is 0. None when it holds, else
+    why not (for people)."""
     lc_id = load_case["load_case_id"]
     hand = [p for p in ctx.store.records("prediction", version) if p.get("formula_id") == PATH_FORMULA
             and (p["load_case_id"] == lc_id or p["quantity"] == "free_parts")]
@@ -70,14 +71,20 @@ def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Recor
         p = hand[-1]
         return f"手計算 {p['prediction_id']} ({PATH_FORMULA}) で、つながらない部品が {p['value']:g} ある"
     seen = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == lc_id and a["status"] == "ok"
-            and any(r.get("quantity") in ("free_parts", UNSUPPORTED_LOAD) for r in a.get("results") or [])]
+            and any(r.get("quantity") == UNSUPPORTED_LOAD for r in a.get("results") or [])]
     if not seen:
-        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (free_parts か unsupported_load を出すもの、"
-                "load_path など) がまだ回っていない")
-    for a in [seen[-1]] + ([analysis] if analysis is not None else []):
-        lost = [r for r in a.get("results") or [] if r.get("quantity") == UNSUPPORTED_LOAD and r.get("value", 0) > 0]
-        if lost:
-            return f"解析 {a['analysis_id']} ({a['tool']}) で、支えのない荷重が {max(r['value'] for r in lost):g} ある"
+        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (unsupported_load を出すもの、load_path など) が"
+                "まだ回っていない")
+    for a in [seen[-1]] + ([analysis] if analysis is not None and analysis is not seen[-1] else []):
+        res = a.get("results") or []
+        lost = [r["value"] for r in res if r.get("quantity") == UNSUPPORTED_LOAD]
+        if not lost:  # the deciding tool must say it found every load a path (contract 手計算の役目)
+            return f"解析 {a['analysis_id']} ({a['tool']}) が、支えのない荷重 ({UNSUPPORTED_LOAD}) を出していない"
+        if max(lost) > 0:
+            return f"解析 {a['analysis_id']} ({a['tool']}) で、支えのない荷重が {max(lost):g} ある"
+        free = [r["value"] for r in res if r.get("quantity") == "free_parts"]
+        if free and max(free) > 0:
+            return f"解析 {a['analysis_id']} ({a['tool']}) で、つながらない部品が {max(free):g} ある"
     return None
 
 
@@ -143,10 +150,23 @@ def unsupported_load_verdict(verdict_id: str, analysis: Record, load_case: Recor
 
 
 def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
-    """The newest verdict per load case for one design version."""
-    out: dict[str, Record] = {}
+    """The verdict that stands for each load case in one design version (docs/contract.md 分野が緑になる条件 (a)):
+    per load case, verdict quantity and place (the compared result's where, from a per-place prediction
+    `<quantity>.<place>`), the newest verdict replaces the earlier ones; of what is left, the newest failing one
+    when any fails (a failing place is not hidden by a newer pass at another place or of another quantity), else
+    the newest."""
+    newest: dict[str, dict[tuple, Record]] = {}
     for v in ctx.store.records("verdict", version):
-        out[v["load_case_id"]] = v
+        cmp = ctx.store.get("comparison", v["comparison_id"]) if v.get("comparison_id") else None
+        key = (v.get("quantity"), (cmp or {}).get("where"))
+        per = newest.setdefault(v["load_case_id"], {})
+        per.pop(key, None)  # re-insert so the dict's order stays the order the verdicts were made
+        per[key] = v
+    out: dict[str, Record] = {}
+    for lc_id, per in newest.items():
+        kept = list(per.values())
+        failing = [v for v in kept if not v.get("pass")]
+        out[lc_id] = (failing or kept)[-1]
     return out
 
 
@@ -232,13 +252,20 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
             if abs(c["predicted"]["value"]) < tiny and abs(c["analyzed"]["value"]) < tiny:
                 latest[q] = stand_in  # both too small to compare: the stand-in's comparison decides (b)
     causes = ctx.causes_by_comparison()
+    made = {(v.get("cause_id"), v.get("basis")) for v in ctx.store.records("verdict", version) if v.get("cause_id")}
     out = []
     for c in latest.values():
         if c["status"] != "mismatch":
             continue
         cause = causes.get(c["comparison_id"])
-        # (b): settled by a resolved cause, a safe-side one, or one where the tool decides after the path check
-        if cause is None or not (cause.get("resolved") or cause.get("safe_side") or cause.get("tool_decides")):
+        # (b): settled by a resolved cause, or by a safe-side one or one where the tool decides after the path
+        # check, each with the verdict it made (explained_safe_side, path_checked)
+        cid = (cause or {}).get("cause_id")
+        settled = cause is not None and (
+            cause.get("resolved")
+            or (cause.get("safe_side") and (cid, "explained_safe_side") in made)
+            or (cause.get("tool_decides") and (cid, PATH_CHECKED) in made))
+        if not settled:
             out.append((c, cause))
     return out
 
@@ -253,6 +280,8 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
             why = "原因がまだ書かれていない"
         elif cause.get("ends_case"):  # contract 08cf4d6: the load case ends not judged
             why = f"原因 {cause['cause_id']} が、この実行の手計算では届かないとして、判定なしで終えた"
+        elif cause.get("safe_side") or cause.get("tool_decides"):
+            why = f"原因 {cause['cause_id']} に合う合否がまだ無い"
         else:
             why = f"原因 {cause['cause_id']} がまだ解けていない"
         out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
