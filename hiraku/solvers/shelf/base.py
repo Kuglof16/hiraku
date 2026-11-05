@@ -332,7 +332,7 @@ class BuiltinTool(ABC):
                 rec["error"] = str(e)
                 rec["results"] = []
         if rec.get("hot_spots"):  # predicted: from this run's predictions (hot_spots.mark_predicted)
-            mark_predicted(rec["hot_spots"], predictions)
+            mark_predicted(rec["hot_spots"], predictions, self)
         dropped = [r["quantity"] for r in rec["results"] if not math.isfinite(r["value"])]
         if dropped:  # JSON has no infinity; say what was left out instead
             rec["results"] = [r for r in rec["results"] if math.isfinite(r["value"])]

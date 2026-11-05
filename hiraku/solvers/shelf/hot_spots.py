@@ -90,12 +90,17 @@ def top(rows: list[Record], keep: list[Record] = (), n: int = TOP_N) -> list[Rec
     return sorted(ranked + keep, key=lambda r: -r["utilisation"])[:n]
 
 
-def mark_predicted(hot: list[Record], predictions: list[Record]) -> None:
+def mark_predicted(hot: list[Record], predictions: list[Record], tool=None) -> None:
     """Set predicted on the rows from this run's predictions (module notes): for each quantity a prediction
-    names, the largest row of that quantity is the place of the tool's main result, so it is predicted."""
+    names, the largest row of that quantity is the place of the tool's main result, so it is predicted. With the
+    tool, a predicted quantity the tool judges as another (judged_as: frame_shell's max_stress is judged as
+    max_hot_spot_stress) marks the row of that judged quantity too, as the comparison is made on it."""
     for r in hot:
         r["predicted"] = False
-    for q in {p.get("quantity") for p in predictions or [] if p.get("quantity")}:
+    named = {p.get("quantity") for p in predictions or [] if p.get("quantity")}
+    if tool is not None:
+        named |= {judged_quantity(tool, q) for q in named}
+    for q in named:
         rows = [r for r in hot if r["quantity"] == q]
         if rows:
             max(rows, key=lambda r: r["value"]["value"])["predicted"] = True
