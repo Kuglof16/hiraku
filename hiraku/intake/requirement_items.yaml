@@ -6,6 +6,8 @@
 #               confirm  = asked once with a default, the default is used when there is no answer
 #               default  = not asked; the default is used and shown, the person can change it
 #   question    what the hearing says (must and confirm)
+#   choices_if  {when, labels: {value: label}}: the labels of the choices that change when the flags satisfy `when` (the value is
+#               the contract's, only the words the person reads change: 運転者だけ -> 1 人だけ for something lain on)
 #   question_if {when, text}: what it says instead when the flags satisfy `when` (the same expression as applies_if)
 #   why         one line for a first-time reader: why the question is needed (shown on the screen with the question)
 #   example     an example answer (shown on the screen)
@@ -118,7 +120,9 @@ items:
     why: 人数と荷の組み合わせで、重さのかかり方が変わるためです。
     example: 2 人 + 荷
     question: "どの組み合わせを見ますか (空車・運転者だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。"
+    question_if: {when: lean and not ride, text: "どの組み合わせを見ますか (空車・1 人だけ・2 人・2 人 + 荷)。乗る人だけを数え、介助者のように乗らない人は数えません。"}
     choices: [{label: 空車, value: empty}, {label: 運転者だけ, value: driver}, {label: 2 人, value: two}, {label: 2 人 + 荷, value: two_cargo}]
+    choices_if: {when: lean and not ride, labels: {driver: 1 人だけ}}
 
   - key: Q31
     name: 体格の範囲

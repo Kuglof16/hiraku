@@ -603,6 +603,22 @@ console.log(JSON.stringify({ at, again }));
 
 @unittest.skipUnless(NODE, "node is not installed")
 class ChoiceNameTest(unittest.TestCase):
+    def test_something_lain_on_has_one_person_in_the_table_and_a_vehicle_a_driver(self):
+        got = node(f"""{FAKE_DOM}
+import {{ buildModel }} from "{url('model.js')}";
+import {{ renderA2 }} from "{url('a2.js')}";
+const e = (seq, kind, data) => ({{ seq, t: seq, ts: 'x', run_id: 'r', kind, data }});
+const draw = (flags) => {{
+  const m = buildModel([e(1, 'domains.picked', {{ want: 'w', flags, picks: [], off: [], assembly_test_ids: [] }}),
+    e(2, 'hearing.answered', {{ answers: [{{ key: 'Q30', name: '人数と荷重の組み合わせ', value: 'driver', source: 'hearing', trust: 1, basis: 'x' }}], rule_answers: [] }})]);
+  const el = new El('div');
+  renderA2(el, m, {{ events: () => [] }}, {{ answers: {{}}, ruleAnswers: {{}}, rerender() {{}} }});
+  return el.text();
+}};
+console.log(JSON.stringify({{ bed: draw({{ lean: true }}).includes('1 人だけ'), vehicle: draw({{ ride: true }}).includes('運転者だけ') }}));
+""")
+        self.assertEqual(got, {"bed": True, "vehicle": True})
+
     def test_the_requirements_table_shows_the_name_of_a_choice_and_the_value_when_there_is_no_name(self):
         got = node(f"""{FAKE_DOM}
 import {{ mountIntake }} from "{url('index.js')}";

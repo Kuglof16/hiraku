@@ -90,6 +90,14 @@ def _question_text(it: Record, flags: dict[str, bool]) -> str:
     return alt["text"] if alt and applies(alt["when"], flags) else it["question"]
 
 
+def _choices_for(it: Record, flags: dict[str, bool]) -> list[Record] | None:
+    """The item's choices; `choices_if: {when, labels}` renames some of them for these flags (values stay)."""
+    own, alt = it.get("choices"), it.get("choices_if")
+    if own and alt and applies(alt["when"], flags):
+        return [{**c, "label": alt["labels"].get(str(c["value"]), c["label"])} for c in own]
+    return own
+
+
 def plan_hearing(
     req: Record,
     *,
@@ -134,7 +142,7 @@ def plan_hearing(
             "ask": it["ask"],
             "allow_other": True,
         }
-        offered = choices.get(key) or it.get("choices")
+        offered = choices.get(key) or _choices_for(it, flags)
         if offered:
             q["choices"] = [dict(c) for c in offered]
         if default is not None and it["ask"] == "confirm":
