@@ -3,7 +3,8 @@
 // URL parameters
 //   ?run=<run_id>   read runs/<run_id>/events.jsonl from the server (run=sample: the contract sample)
 //   ?src=<url>      read an events.jsonl from any URL instead
-//   ?t=12.5         stop at t = 12.5 s and draw that frame (for frame-by-frame video export)
+//   ?t=12.5         stop at t = 12.5 s and draw that frame (for frame-by-frame video export; the intake
+//                   screens get the time too, intake.setTime, so their lit cards' glow is the same at the same t)
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
@@ -438,6 +439,7 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
   const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
   if (now !== intakeApplied) {
@@ -445,6 +447,41 @@ function renderIntake(tab) {
     const last = player.events[player.applied - 1] ?? null;
     for (const fn of intakeListeners) fn(last);
   }
+}
+
+// The replay's time goes to the intake screens (intake.setTime): a lit card's glow follows it, so the
+// frame at ?t= (or seek, load) is the same picture every time. Live (a new request, or following the
+// running run at its edge) passes null: the glow plays once as a CSS animation. setTime draws the
+// screen again by itself; the model does not read the time, so no intake.update() is needed (the
+// events reach it through intakeApi's listeners). While playing, a new time is passed only when it
+// can change the picture: near a lit card's moment (INTAKE_GLOW_NEAR seconds after it, wider than
+// the glow) or on the other side of one, so the screen is not drawn again at every frame for
+// nothing; a stopped frame (?t=, seek, load) always gets its exact time.
+const INTAKE_GLOW_NEAR = 2;
+let intakeTimeSent;
+function intakeTimeNow() {
+  if (draft || (player.live && player.liveAttached && !ui.frozen)) return null;
+  return player.playhead;
+}
+// where t stands against the lit cards' moments: "n" when near one, else how many are still ahead
+function intakeGlowPlace(t) {
+  let ahead = 0;
+  for (const at of intake?.model?.litAt?.values?.() ?? []) {
+    if (t < at) ahead += 1;
+    else if (t - at <= INTAKE_GLOW_NEAR) return "n";
+  }
+  return ahead;
+}
+function syncIntakeTime() {
+  if (!intake) return;
+  const t = intakeTimeNow();
+  if (t === intakeTimeSent) return;
+  if (!ui.frozen && t !== null && typeof intakeTimeSent === "number") {
+    const place = intakeGlowPlace(t);
+    if (place !== "n" && place === intakeGlowPlace(intakeTimeSent)) return;
+  }
+  intakeTimeSent = t;
+  intake.setTime(t);
 }
 
 // A rule hit pointed at in A2 (its part ids; [] when the person leaves it): the workbench
@@ -1437,6 +1474,7 @@ function draw() {
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (tab === "bench" || tab === "grid")) agentPets.tick(s, player.events, player.playhead, tab, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
+  if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 

@@ -1,0 +1,125 @@
+"""The replay's time on the intake screens (web/js/app.js syncIntakeTime -> intake.setTime): a lit
+card's glow in A1 follows the playback time, so opening the same ?tab=A1 or ?tab=A2 with the same
+?t= twice gives the same picture (shot at the stage's own size, 1920x1080: at 1280x720 the
+background grid's rounding moves, 0299313); seek and plain playback pass the time too.
+
+Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+from hiraku import contract
+from hiraku.webserve.server import make_server
+from tests.web.intake_cut_fixture import n09_claude_events, write_run
+from tests.web.test_browser import ENABLED, sync_playwright
+from tests.web.test_cut_n09_n14_browser import CATALOG_OFF, CATALOG_PICKS, CLAUDE_ASM, CLAUDE_PICKS, FLAG_REASONS, WANT
+
+RUN = "20261105-120000-intake-time"
+STEP = 10.0  # seconds between the events (pace=0 keeps them)
+LIT_AT = 3 * STEP  # Claude's domains.picked: the cards light here
+ASKED_AT = 4 * STEP  # hearing.asked
+STAGE = {"width": 1920, "height": 1080}
+
+
+def timed_events(run_id):
+    """n09_claude_events with the hearing asked after Claude's pick, an event every STEP seconds:
+    0 run.started, 10 the catalog's pick, 20 agent.started, 30 Claude's pick, 40 hearing.asked,
+    50 agent.stopped, 60 run.finished."""
+    events = n09_claude_events(run_id, WANT, (CATALOG_PICKS, CATALOG_OFF), (CLAUDE_PICKS, []), FLAG_REASONS, CLAUDE_ASM)
+    asked = json.loads((contract.EXAMPLES_DIR / "hearing_asked.json").read_text(encoding="utf-8"))
+    events.insert(4, {**events[3], "kind": "hearing.asked", "text": "確かめたいことがあります", "data": asked})
+    for i, e in enumerate(events):
+        e["seq"] = i
+        e["t"] = i * STEP
+    return events
+
+
+SHADOW = """() => {
+  const cards = [...document.querySelectorAll('#view-intake .in-card')];
+  return { lit: cards.filter((c) => c.classList.contains('lit')).length, just: cards.filter((c) => c.classList.contains('just')).length,
+           shadows: [...new Set(cards.filter((c) => c.classList.contains('lit')).map((c) => c.style.boxShadow))] };
+}"""
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class IntakeTimeBrowserTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        runs = cls.tmp / "runs"
+        write_run(runs, RUN, timed_events(RUN))
+        cls.server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False)
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        cls.pw = sync_playwright().start()
+        cls.browser = cls.pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+        cls.server.shutdown()
+        cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def open(self, query):
+        page = self.browser.new_page(viewport=STAGE)
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{self.base}/?run={RUN}&live=0&pace=0&{query}")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
+        page.evaluate("window.hiraku.ready")
+        page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
+        return page, errors
+
+    def shot(self, query):
+        page, errors = self.open(query)
+        got = page.evaluate(SHADOW)
+        png = page.screenshot()
+        page.close()
+        self.assertEqual(errors, [], query)
+        return got, png
+
+    def test_the_glow_at_t_is_a_function_of_t(self):
+        mid, _ = self.shot(f"tab=A1&t={LIT_AT + 0.25}")
+        self.assertGreater(mid["lit"], 0)
+        self.assertEqual(mid["just"], 0)  # no CSS animation: the glow is drawn from the time
+        self.assertEqual(len(mid["shadows"]), 1)
+        self.assertIn("3.00px", mid["shadows"][0])  # half of the 0.5 s glow: 6 px * 0.5
+        late, _ = self.shot(f"tab=A1&t={LIT_AT + 1}")
+        self.assertEqual((late["just"], late["shadows"]), (0, [""]))  # the glow is over
+
+    def test_the_same_t_twice_is_the_same_picture(self):
+        for query in (f"tab=A1&t={LIT_AT + 0.25}", f"tab=A2&t={ASKED_AT + 2.5}"):
+            _, first = self.shot(query)
+            _, again = self.shot(query)
+            self.assertTrue(first == again, f"{query}: the two pictures differ")
+
+    def test_seek_and_playing_pass_the_time(self):
+        page, errors = self.open(f"tab=A1&t={LIT_AT - 5}")
+        before = page.evaluate(SHADOW)
+        at = page.evaluate(f"async () => {{ await window.hiraku.seek({LIT_AT + 0.25}); return ({SHADOW})(); }}")
+        back = page.evaluate(f"async () => {{ await window.hiraku.seek({LIT_AT + 0.4}); return ({SHADOW})(); }}")
+        # plain playback from just before the pick: once past the glow, the cards are drawn without it
+        page.evaluate(f"() => {{ window.hiraku.player.seek({LIT_AT - 0.5}); document.getElementById('pb-play').click(); }}")
+        page.wait_for_function(f"window.hiraku.player.playhead > {LIT_AT + 1}", timeout=30000)
+        page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+        played = page.evaluate(SHADOW)
+        page.close()
+        self.assertEqual(errors, [])
+        self.assertEqual(before["lit"], 0)  # Claude has not picked yet
+        self.assertIn("3.00px", at["shadows"][0])
+        self.assertIn("1.20px", back["shadows"][0])  # 6 px * (1 - 0.4 / 0.5)
+        self.assertGreater(played["lit"], 0)
+        self.assertEqual((played["just"], played["shadows"]), (0, [""]))
+
+
+if __name__ == "__main__":
+    unittest.main()
