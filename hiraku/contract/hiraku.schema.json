@@ -734,6 +734,34 @@
         },
         "module": {
           "$ref": "#/$defs/module_id"
+        },
+        "joint": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "description": "A bracket's joint to the frame (suspension mounts): the sizes the designer may change and the mount load case (R9) checks: bolts or pins in shear and bearing, the bracket plate in bending, the fillet weld to the frame. The bracket's mass comes from these sizes.",
+          "properties": {
+            "bolt_d_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "bolt or pin diameter"
+            },
+            "bolts": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "bolts or pins carrying the mount force"
+            },
+            "plate_t_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "bracket plate thickness"
+            },
+            "weld_leg_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "fillet weld leg length (throat = 0.7 leg)"
+            }
+          }
         }
       }
     },

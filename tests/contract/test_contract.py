@@ -118,6 +118,16 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "safe_side": True}), [])
         self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "ends_case": True}), [])
 
+    def test_bracket_joint_sizes(self):
+        d = load("design.json")
+        part = dict(d["parts"][0])
+        ok = {**part, "joint": {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}}
+        self.assertEqual(contract.errors("part", ok), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolt_d_mm": 0}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolts": 0}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"nut": 1}}), [])
+
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
         ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
