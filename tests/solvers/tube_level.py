@@ -56,6 +56,34 @@ def peak_memory_mb() -> float:
         return float("nan")
 
 
+def free_memory_gb() -> float:
+    """The memory free for new work now (GB): Windows' available physical memory, Linux's MemAvailable; nan if
+    not known."""
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            class Status(ctypes.Structure):
+                _fields_ = [("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            s = Status()
+            s.dwLength = ctypes.sizeof(s)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s)):
+                return s.ullAvailPhys / 2**30
+            return float("nan")
+        with open("/proc/meminfo", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 2**20  # kB
+        return float("nan")
+    except Exception:
+        return float("nan")
+
+
 if __name__ == "__main__":
     os.environ["HIRAKU_TUBE_LEVEL_CHILD"] = "1"  # nothing started from here starts levels again
     print(json.dumps(level(float(sys.argv[1]))))
