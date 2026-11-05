@@ -455,9 +455,11 @@ class ConvergenceLevelsGuardTest(unittest.TestCase):
                 convergence_levels((40.0,), 1)
 
 
-# Each level's peak working set (GB), measured one level at a time on the development PC (Windows, one BLAS
-# thread, 2026-11-05 02:26, commit 86e05ac): 40 mm 9.6, 30 mm 10.5, 20 mm 12.4, 14 mm 14.4 GB.
-LEVEL_PEAK_GB = {40.0: 9.6, 30.0: 10.5, 20.0: 12.4, 14.0: 14.4}
+# Each level's peak (MB, tube_level.peak_memory_mb), measured one level at a time with one BLAS thread:
+# on the development PC (Windows peak working set, 2026-11-05 02:26, commit 86e05ac) and on the EC2 machine
+# (Linux peak resident size, 2026-11-05 10:55, commit e53f7d1). The larger of the two is taken.
+LEVEL_PEAK_MB = {40.0: (9608, 13371), 30.0: (10509, 11064), 20.0: (12365, 12998), 14.0: (14380, 15714)}
+LEVEL_PEAK_GB = {s: max(mb) / 1024.0 for s, mb in LEVEL_PEAK_MB.items()}  # GiB, as free_memory_gb
 KEEP_FREE_GB = 15.0  # memory left free for the rest of the machine while the levels run
 
 
@@ -485,11 +487,13 @@ class ConvergenceJobsTest(unittest.TestCase):
 
     def test_jobs_by_free_memory(self):
         sizes = (40.0, 30.0, 20.0, 14.0)
+        heavy_first = sorted(LEVEL_PEAK_GB.values(), reverse=True)
         self.assertEqual(convergence_jobs(sizes, 20.0, {}), 1)  # not even one fits: still one
-        self.assertEqual(convergence_jobs(sizes, 15.0 + 14.4, {}), 1)
-        self.assertEqual(convergence_jobs(sizes, 15.0 + 14.4 + 12.4, {}), 2)
-        self.assertEqual(convergence_jobs(sizes, 15.0 + 14.4 + 12.4 + 10.5, {}), 3)
-        self.assertEqual(convergence_jobs(sizes, 62.0, {}), 4)
+        for n in (1, 2, 3, 4):
+            just = KEEP_FREE_GB + sum(heavy_first[:n])
+            self.assertEqual(convergence_jobs(sizes, just, {}), n)  # the n heaviest just fit
+            if n < 4:
+                self.assertEqual(convergence_jobs(sizes, just + heavy_first[n] - 0.01, {}), n)  # one more does not
         self.assertEqual(convergence_jobs(sizes, float("nan"), {}), 1)
         self.assertEqual(convergence_jobs(sizes, 62.0, {"HIRAKU_CONVERGENCE_JOBS": "1"}), 1)
         self.assertEqual(convergence_jobs(sizes, 20.0, {"HIRAKU_CONVERGENCE_JOBS": "3"}), 3)
