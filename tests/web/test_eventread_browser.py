@@ -41,6 +41,8 @@ def tricky_record() -> bytes:
         b"   \n",
         b" \t" + _ev(4, text="white space around") + b"  \n",
         b"\x0b" + _ev(5, text="vertical tab and form feed") + b"\x0c\n",
+        b" \x0b\t" + _ev(16, text="space, vertical tab, tab") + b"\x0c \n",
+        b"\x0b\x0c\n",
         b"\xef\xbb\xbf" + _ev(6, text="a BOM in front") + b"\n",
         b'{"seq": 7, "text": "\xff not UTF-8"}\n',
         _ev(8, text="先にレールを梁とみて応力を見積もります", big=12345678901234567890, f=1.0, tiny=1e-300) + b"\n",
@@ -124,7 +126,7 @@ class EventReadBrowserTest(unittest.TestCase):
                 # one read and than the line limit; 7 lines are bad as JSON
                 skipped = read < 1000 and line < 1000
                 seqs = [e["seq"] for e in every]
-                self.assertEqual(seqs, [0, 1, 2, 3, 4, 5, 8, 10] + ([] if skipped else [11]) + [12, 13, 14])
+                self.assertEqual(seqs, [0, 1, 2, 3, 4, 5, 16, 8, 10] + ([] if skipped else [11]) + [12, 13, 14])
                 self.assertEqual(sum(s["json"]["bad_lines"] for s in got["steps"]), 7 + skipped)
 
     def test_the_contract_sample_reads_the_same(self):

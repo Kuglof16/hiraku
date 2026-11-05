@@ -10,17 +10,25 @@
 const ASCII_SPACE = /^[ \t\n\r\v\f]+|[ \t\n\r\v\f]+$/g;
 const LINE_BREAK = /\r\n|\r|\n/;
 
+// JSON.parse itself allows space, tab, CR and LF around the value, so the strip is needed only
+// when a line does not parse as it is (a vertical tab or form feed at an end, or only white space).
 function parseLine(s, out) {
-  s = s.replace(ASCII_SPACE, "");
-  if (!s) return 0;
+  let obj;
   try {
-    const obj = JSON.parse(s);
-    if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-      out.push(obj);
-      return 0;
-    }
+    obj = JSON.parse(s);
   } catch {
-    /* counted below */
+    const t = s.replace(ASCII_SPACE, "");
+    if (!t) return 0; // an empty line: skipped, not bad
+    if (t === s) return 1;
+    try {
+      obj = JSON.parse(t);
+    } catch {
+      return 1;
+    }
+  }
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+    out.push(obj);
+    return 0;
   }
   return 1;
 }
