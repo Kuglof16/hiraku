@@ -696,6 +696,7 @@ export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (A
 
 // How a run was driven, in the run list's words: 決まった手順で再現 (scripted) or Claude で実行.
 export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
+export const SCRIPTED_CUT_JA = `${DRIVEN_JA.scripted} (Claude なし)`; // the video cuts' corner tag on a scripted run (cut.js)
 
 // run.finished stop_code, said short in the run list: 途中で止まった (…) (the words of STOP_CODE_JA, shorter).
 export const STOP_SHORT_JA = {
