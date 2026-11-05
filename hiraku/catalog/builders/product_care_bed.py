@@ -22,9 +22,12 @@ import re
 from hiraku.catalog.builders.common import BuildError, Record, entry, number, q, tolerance
 
 PRODUCT = "care-bed"
-G0 = 9.80665  # m/s^2 (hiraku.solvers.k0_handcalc.units.STANDARD_GRAVITY)
+# m/s^2, standard gravity, a defined value (3rd CGPM, 1901), as hiraku.solvers.k0_handcalc.units.STANDARD_GRAVITY;
+# not checked against that text in this repository
+G0 = 9.80665
 
-# S1: JIS T 9254 (copy, not checked in this repository; the requirement Q60 cites it) puts the edge load on a
+# S1: JIS T 9254 (copy, not checked in this repository (README, the table of values not checked, the care bed's
+# edge load row); the requirement Q60 cites it) puts the edge load on a
 # 475 x 250 mm area at the side edge; the force is taken at the area's centre, 125 mm in from the deck's edge
 # (half of 250 mm), at the knee hinge's station (where a person sits on the edge: an assumption, the standard's
 # position along the bed is not checked here).
@@ -538,6 +541,8 @@ def r3_inputs(design: Record, load_case: Record) -> Record:
             "N_knee": design["variables"]["fatigue_knee_cycles"]}
 
 
+# The slope 2 m - 1 below the knee: IIW-1823-07 (2008) sec. 4.3.1, as cited; not checked against that text in this
+# repository (README, the table of values not checked). FAT, m and the knee are design variables (designgen.care_bed).
 R3_INPUTS = ("n1", "dS1", "n2", "dS2", "n3", "dS3", "n4", "dS4", "FAT", "m", "N_knee")
 R3_PREDICTIONS = [{"quantity": "fatigue_damage", "formula_id": "bed.use_damage", "output": "D_worst",
                    "assumptions": ["着座: 利用者が乗り降りするたびに床の枠の応力が 0 から載せた分まで 1 回振れる",

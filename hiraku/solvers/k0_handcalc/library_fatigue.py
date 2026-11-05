@@ -33,8 +33,12 @@ def _damage(v: dict) -> dict:
     return {"D": v["n"] / N, "N": N}
 
 
-N0_PER_M = 0.1  # reference spatial frequency of ISO 8608 (cycle/m)
-ROAD_BAND = (0.011, 2.83)  # cycle/m: the road model's band (a modelling choice, as in shelf/fatigue.py)
+# reference spatial frequency n0 of ISO 8608 (cycle/m), as cited; the ISO 8608 text was not read in this repository
+# (not checked)
+N0_PER_M = 0.1
+# cycle/m: the road model's band, HIRAKU's choice as in shelf/fatigue.py, meant as ISO 8608's band; whether
+# ISO 8608 gives this band was not checked in this repository
+ROAD_BAND = (0.011, 2.83)
 BAND_POINTS = 4000
 
 
@@ -53,7 +57,7 @@ def _tyre_force_gain(W: float, m_u: float, k_s_N_mm: float, zeta: float, k_t_N_m
     """Dynamic tyre force per road height (N/m, complex) of a linear quarter car at s = 2 pi i f."""
     import math
 
-    g = 9.80665
+    g = 9.80665  # standard gravity, the value of units.STANDARD_GRAVITY (not checked, see there)
     m_s = W / g - m_u
     if m_s <= 0:
         raise ValueError("the wheel load must be more than the unsprung weight")
@@ -68,13 +72,28 @@ def _rayleigh_damage(sigma_s: float, cycles: float, v: dict) -> float:
     """Miner damage of `cycles` cycles whose amplitudes are Rayleigh with spread sigma_s (narrow band)."""
     import numpy as np
 
-    from ..k1_frame.fatigue import sn_cycles
-
     a = np.linspace(sigma_s * 1e-4, 8.0 * sigma_s, BAND_POINTS)  # stress amplitudes, Rayleigh
     p = a / sigma_s**2 * np.exp(-a**2 / (2.0 * sigma_s**2))
     m2 = spectrum_slope(v["m"])  # a spectrum, not constant amplitude: the design's m2 is not used
-    inv_n = np.array([1.0 / sn_cycles(2.0 * x, v["FAT"], v["m"], v["N_knee"], m2) for x in a])
+    inv_n = np.array(_inv_cycles([2.0 * x for x in a.tolist()], v["FAT"], v["m"], v["N_knee"], m2))
     return cycles * float(np.trapezoid(p * inv_n, a))
+
+
+def _inv_cycles(ranges: list[float], fat: float, m: float, n_knee: float, m2: float) -> list[float]:
+    """[1 / k1_frame.fatigue.sn_cycles(r, fat, m, n_knee, m2) for r in ranges], worked as sn_cycles works each one
+    (the same operations on the same floats), with the parts that do not depend on r worked once."""
+    import math
+
+    s_knee = fat * (2e6 / n_knee) ** (1.0 / m)
+    log_2e6, log_knee = math.log(2e6), math.log(n_knee)
+    out = []
+    for r in ranges:
+        if r <= 0:
+            out.append(0.0)  # 1 / inf
+            continue
+        log_n = log_2e6 + m * math.log(fat / r) if r >= s_knee else log_knee + m2 * math.log(s_knee / r)
+        out.append(1.0 / math.exp(log_n) if log_n < 700.0 else 0.0)
+    return out
 
 
 def _road_damage(v: dict) -> dict:

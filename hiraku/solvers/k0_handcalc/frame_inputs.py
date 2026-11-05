@@ -494,6 +494,7 @@ def members_flexibility(design: dict, member: str, t: float, holds: dict[str, st
     for mid, mp in props.items():
         a, b = mp["member"]["node_a"], mp["member"]["node_b"]
         E = float(mp["material"]["E_MPa"])
+        # nu 0.3 when the material gives none: the usual value for steel, an assumption (no source read)
         G = E / (2.0 * (1.0 + float(mp["material"].get("nu", 0.3))))
         pieces = [(idx[a], idx[b], nodes[a], nodes[b])]
         if mid == member and inner:

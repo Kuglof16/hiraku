@@ -691,10 +691,13 @@ class ToolDecidesTest(RunCase, unittest.TestCase):
 
         def with_path(design, load_case, predictions, params):  # as the analysis department's frame tools will
             out = run(design, load_case, predictions, params)
-            out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": self.lost, "unit": "1"}]
+            extra = [] if self.lost is None else [{"quantity": "unsupported_load", "value": self.lost, "unit": "1"}]
+            if self.free is not None:
+                extra.append({"quantity": "free_parts", "value": self.free, "unit": "1"})
+            out["results"] = out["results"] + extra
             return out
 
-        self.lost = 0.0
+        self.lost, self.free = 0.0, None
         tool.run = with_path
 
     def path_prediction(self, n, load_case_id="R1-step100", quantity="free_parts"):
@@ -754,6 +757,50 @@ class ToolDecidesTest(RunCase, unittest.TestCase):
             record_cause(self.ctx, self.decides(cmp))
         self.assertIn("支えのない荷重が 1", str(cm.exception))
 
+    def test_refused_when_the_analysis_does_not_say_every_load_has_a_path(self):
+        self.lost = None  # a tool (one Claude writes, say) that gives no unsupported_load
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("unsupported_load を出すもの", str(cm.exception))  # free_parts alone no longer counts
+
+    def test_refused_when_the_analysis_finds_a_free_part(self):
+        self.free = 2.0  # unsupported_load 0 but two parts joined to nothing
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("つながらない部品が 2", str(cm.exception))
+
+    def test_ends_case_stays_open_for_a_comparison_tool_decides_cannot_take(self):
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        side = dict(cmp, comparison_id=self.ctx.store.next_id("comparison"), quantity="max_displacement",
+                    predicted={"value": 1.0, "unit": "mm"}, analyzed={"value": 2.0, "unit": "mm"})
+        self.ctx.store.add_record("comparison", side, design_version=self.ctx.version, agent="cae.strength",
+                                  domain="strength")
+        with self.assertRaises(ToolError) as cm:  # an intermediate quantity: tool_decides is refused ...
+            record_cause(self.ctx, self.decides(side))
+        self.assertIn("合否の基準のある量にだけ", str(cm.exception))
+        out = record_cause(self.ctx, self.args(side, ends_case=True))  # ... so ends_case is not sent back to it
+        self.assertTrue(out["cause"]["ends_case"])
+
+    def test_a_flagged_cause_without_its_verdict_does_not_settle_b(self):
+        from hiraku.tools.judge import unresolved_mismatches
+
+        cmp = self.r1_mismatch(1.5)
+        cause = {"cause_id": self.ctx.store.next_id("cause"), "comparison_id": cmp["comparison_id"],
+                 "cause": "the joint is taken as fixed", "fix": "none", "resolved": False,
+                 "tool_decides": True, "tool_decides_reason": "the joint's twist is not in the formula"}
+        self.ctx.store.add_record("cause", cause, design_version=self.ctx.version, agent="cae.strength",
+                                  domain="strength")  # the flag alone, with no path_checked verdict
+        self.ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]),
+                                  design_version=self.ctx.version, agent="cae.strength", domain="strength")
+        lc = self.ctx.load_case("R1-step100")
+        held = unresolved_mismatches(self.ctx, lc, self.ctx.version)
+        self.assertEqual([c["comparison_id"] for c, _ in held], [cmp["comparison_id"]])
+
     def test_needs_a_reason_and_goes_alone(self):
         cmp = self.r1_mismatch(1.5)
         self.path_prediction(0)
@@ -769,6 +816,39 @@ class ToolDecidesTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError) as cm:
             record_cause(self.ctx, self.args(cmp, ends_case=True))
         self.assertIn("tool_decides", str(cm.exception))
+
+
+class VerdictsPerPlaceTest(RunCase, unittest.TestCase):
+    """docs/contract.md 分野が緑になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
+    must pass; a later verdict of the same quantity and place replaces the earlier one."""
+
+    def place_verdict(self, base_cmp, base_ver, where, passed):
+        """A comparison at `where` and its verdict, copied from a real pair (the store keeps them in order)."""
+        st, v = self.ctx.store, self.ctx.version
+        cmp = dict(base_cmp, comparison_id=st.next_id("comparison"), quantity=f"{base_cmp['quantity']}.{where}",
+                   where=where)
+        st.add_record("comparison", cmp, design_version=v, agent="cae.strength", domain="strength")
+        ver = dict(base_ver, verdict_id=st.next_id("verdict"), comparison_id=cmp["comparison_id"], **{"pass": passed})
+        st.add_record("verdict", ver, design_version=v, agent="cae.strength", domain="strength")
+        return ver
+
+    def test_a_failing_place_is_not_hidden_by_a_later_pass_elsewhere(self):
+        from hiraku.tools import judge
+
+        ana, _, _ = self.run_p1()
+        r1 = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        ana2 = analyze(self.ctx, {"tool": "frame_static", "load_case_id": "R1-step100",
+                                  "prediction_ids": [r1["prediction_id"]]})
+        out = compare(self.ctx, {"prediction_id": r1["prediction_id"], "analysis_id": ana2["analysis_id"]})
+        cmp, ver = out["comparison"], out["verdict"]
+        self.assertTrue(ver["pass"])
+        red = self.place_verdict(cmp, ver, "LE", False)
+        self.place_verdict(cmp, ver, "RE", True)  # newer, another place
+        self.assertEqual(judge.latest_verdicts(self.ctx, self.ctx.version)["R1-step100"]["verdict_id"],
+                         red["verdict_id"])
+        again = self.place_verdict(cmp, ver, "LE", True)  # the same place again: it replaces the red
+        self.assertEqual(judge.latest_verdicts(self.ctx, self.ctx.version)["R1-step100"]["verdict_id"],
+                         again["verdict_id"])
 
 
 class FakeShell(fakes.FakeTool):

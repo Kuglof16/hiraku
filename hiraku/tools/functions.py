@@ -988,6 +988,16 @@ def _check_on_criterion(ctx: RunContext, cmp: Record, lc: Record | None, tool: s
     return crit
 
 
+def _on_criterion(ctx: RunContext, cmp: Record, lc: Record, pred: Record | None) -> bool:
+    """True when _check_on_criterion passes for the comparison (it is of the quantity the load case is judged on)."""
+    ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
+    try:
+        _check_on_criterion(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None, "tool_decides")
+    except ToolError:
+        return False
+    return True
+
+
 def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
                      pred_quantity: str | None = None) -> None:
     """Refuse safe_side unless the load case has a criterion on this quantity and the
@@ -1054,7 +1064,10 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
             raise ToolError(f"tool_decides は、力の道を手計算で確かめてあるときだけ付けられます。いまは{gap}。"
                             f"{PATH_FORMULA} で部品から部材までの道を予測して記録し、道をたどるツール (load_path) で解析して"
                             "つながりを確かめてから、もう一度書いてください")
-    if ends and lc is not None and lc.get("criterion") and path_check(ctx, lc, v) is None:
+    if ends and lc is not None and lc.get("criterion") and _on_criterion(ctx, cmp, lc, pred) \
+            and path_check(ctx, lc, v) is None:
+        # only where tool_decides could be put instead (a comparison of the judged quantity), so the two refusals
+        # never point at each other
         raise ToolError(f"{lc['load_case_id']} は、この版で力の道を手計算で確かめてあります。手計算が値に届かないときは、"
                         "ends_case ではなく tool_decides と tool_decides_reason を付けてください (ツールの値で合否を出します)")
     domain = pred["domain"] if pred else None

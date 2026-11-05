@@ -41,6 +41,8 @@ from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predict
 from .frame_static import (PATH_FORMULA, PATH_PREDICTS, STEP_HEIGHT, STEP_SUPPORTS, add_frames, front_supports,
                            g_factor, lost_load_outputs, upstream_mount_series)
 
+# Standard gravity, a defined value (3rd CGPM, 1901; ISO 80000-3), as k0_handcalc.units.STANDARD_GRAVITY. Not checked
+# against those texts in this repository.
 STANDARD_GRAVITY = 9.80665
 ELEMENT_SIZE_RANGE_MM = (5.0, 40.0)  # HIRAKU's choice: past 40 mm a 34 mm tube has the fewest facets (8)
 ELEMENT_SIZE = Param("element_size", "mm", f"target edge of the shell elements; {ELEMENT_SIZE_RANGE_MM[0]:g} to "

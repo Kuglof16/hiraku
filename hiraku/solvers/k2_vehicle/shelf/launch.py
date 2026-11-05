@@ -11,6 +11,7 @@ from ..model import DesignError, box_design, build_vehicle
 from ..record import Recorder
 from ..scenario import new_sim, slope_gravity
 from .base import CD, FRONT_AREA, MOTOR, MU, RHO, K2Tool, P, Pair, _length, _ramp_gravity, _res, _slope
+from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
 STEADY_GAIN = 0.02     # m/s in 1 s: below this gain the speed has stopped rising (the top speed)
 AT_SPEED_LIMIT = 0.99  # share of motor_max_speed at which the motor counts as held by it (the cut-off
@@ -69,6 +70,7 @@ def launch_run(veh, motor: Motor, target: float, *, grade: float = 0.0, max_time
     if grade:
         _ramp_gravity(sim, slope_gravity, math.atan(grade))
     rec = Recorder(sim, rec_hz) if rec_hz > 0 else None
+    log = LoadLog(sim) if rec is not None and any(has_mounts(c) for c in veh.corners) else None
     driven = [i for i, c in enumerate(veh.corners) if c.drive]
     if not driven:
         raise DesignError("no support has actuation.drive; a driven wheel is needed")
@@ -90,6 +92,8 @@ def launch_run(veh, motor: Motor, target: float, *, grade: float = 0.0, max_time
             if main:
                 if rec is not None:
                     rec.tick({"wheel_torque": ("N*m", total)})
+                if log is not None:
+                    log.tick()
                 for i in driven:
                     re = veh.corners[i].rolling_radius
                     hit["slip_max"] = max(hit["slip_max"], abs(sim.om[i] * re - v) / max(abs(v), 0.5))
@@ -120,7 +124,7 @@ def launch_run(veh, motor: Motor, target: float, *, grade: float = 0.0, max_time
             power = {"vmax": v2, "stop": stop2, "limit": _limit(sim, free, driven), "carried_on": True}
     return {"time": hit["t"], "distance": hit["x"], "vmax": vmax, "end_speed": limit["speed"], "stop": stop,
             "limit": limit, "power_top": power, "slip_max": hit["slip_max"], "recorder": rec, "moved": moved,
-            "sim": sim}
+            "sim": sim, "states": log.states if log is not None else [], "t_start": t_start}
 
 
 _UNTIL = ("how far the run goes, and so which results come out. target (default): full throttle from rest, "
@@ -145,6 +149,10 @@ class LaunchTool(K2Tool):
     highest speed, where = what held it) and top_speed_power (km/h, motor_max_speed lifted).
     The run ends 1 s after target_speed (until "target"), or when the speed gains less than
     0.02 m/s in 1 s, or at max_time.
+    With K&C corners the run also gives the force the body receives at each suspension mount
+    (the drive torque's reaction on the body is in body_torque_*): the mount_* series of
+    mounts.mount_series, mount_force_peak (N, where '<support>.<mount> at t <s> s') and the joint
+    vectors at that instant.
     """
 
     name = "launch"
@@ -256,8 +264,15 @@ class LaunchTool(K2Tool):
             rec.keep_snapshot()
         scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)", veh, -_length(veh) - 1.0,
                         max(r["moved"], 0.0) + _length(veh) + 2.0, front_up=math.atan(grade))] if grade else []
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-                "assumptions": notes}
+        series, vectors = rec.series(), rec.vectors(-1)
+        if r["states"]:
+            # the body's loads at the mounts from rest: closer over the first second (the torque's step)
+            series += mount_series(veh, r["states"], [(r["t_start"], r["t_start"] + 1.0)])
+            top = mount_peak(series)
+            if top is not None:
+                res.append(top[0])
+                vectors += mount_vectors(veh, state_at(r["states"], top[1]))
+        return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}
 
     def _tractive(self, veh, motor: Motor, lp: dict, notes: list) -> list[dict]:
         """rolling_radius (mm) and peak_tractive_force (N) as K2 drives, and the F_max the radius K0

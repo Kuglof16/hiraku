@@ -3,19 +3,25 @@
 // URL parameters
 //   ?run=<run_id>   read runs/<run_id>/events.jsonl from the server (run=sample: the contract sample)
 //   ?src=<url>      read an events.jsonl from any URL instead
-//   ?t=12.5         stop at t = 12.5 s and draw that frame (for frame-by-frame video export)
+//   ?t=12.5         stop at t = 12.5 s and draw that frame (for frame-by-frame video export; the intake
+//                   screens get the time too, intake.setTime, so their lit cards' glow is the same at the same t)
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?on=joints      turn overlays on at load (joints: the joint marks, off by default; A7 follows it too)
 //   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?tabs=A1:0,A2:44.5,bench:80
+//                   the tabs on the replay's time: from t seconds, that tab (so one URL films ① → ② → ③;
+//                   ?t= and seek, back or forth, show the tab of that time). Before the first entry the tab
+//                   is chosen as without it; an unknown tab name is left out; wins over ?tab=; a tab
+//                   pressed by hand ends it. Names as ?tab= (bench, grid, A1, A2, A4, A5, A7)
 //   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
 //                   見せる / 作業台 switch at the top right turns it on and off
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, endingJa, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -59,9 +65,24 @@ const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), show
 const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
 let asmPanel = null; // mounted on first show
 
+// ?tabs=A1:0,A2:44.5,bench:80: from t seconds of the replay, that tab (sorted by t; an unknown tab or
+// time is left out). Before the first entry the tab is chosen as without it.
+function parseTabPlan(text) {
+  const plan = [];
+  for (const item of (text ?? "").split(",")) {
+    const at = item.lastIndexOf(":");
+    if (at < 1) continue;
+    const tab = item.slice(0, at).trim();
+    const t = Number(item.slice(at + 1));
+    if (TABS.includes(tab) && item.slice(at + 1).trim() !== "" && Number.isFinite(t)) plan.push({ t, tab });
+  }
+  return plan.sort((a, b) => a.t - b.t);
+}
+
 const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
+  tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false }, // joints: off at first; modules: modules, spaces (modules.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
@@ -188,7 +209,15 @@ function selectedLc(s) {
   return id;
 }
 
+function plannedTab(t) {
+  let tab = null;
+  for (const p of ui.tabPlan) if (p.t <= t + 1e-9) tab = p.tab;
+  return tab;
+}
+
 function currentTab(s) {
+  const planned = ui.tabPlan.length ? plannedTab(player.playhead) : null;
+  if (planned) return planned;
   if (ui.pinnedTab) return ui.pinnedTab;
   if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A4" || s.focus.screen === "A7") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
@@ -438,6 +467,7 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
   const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
   if (now !== intakeApplied) {
@@ -445,6 +475,41 @@ function renderIntake(tab) {
     const last = player.events[player.applied - 1] ?? null;
     for (const fn of intakeListeners) fn(last);
   }
+}
+
+// The replay's time goes to the intake screens (intake.setTime): a lit card's glow follows it, so the
+// frame at ?t= (or seek, load) is the same picture every time. Live (a new request, or following the
+// running run at its edge) passes null: the glow plays once as a CSS animation. setTime draws the
+// screen again by itself; the model does not read the time, so no intake.update() is needed (the
+// events reach it through intakeApi's listeners). While playing, a new time is passed only when it
+// can change the picture: near a lit card's moment (INTAKE_GLOW_NEAR seconds after it, wider than
+// the glow) or on the other side of one, so the screen is not drawn again at every frame for
+// nothing; a stopped frame (?t=, seek, load) always gets its exact time.
+const INTAKE_GLOW_NEAR = 2;
+let intakeTimeSent;
+function intakeTimeNow() {
+  if (draft || (player.live && player.liveAttached && !ui.frozen)) return null;
+  return player.playhead;
+}
+// where t stands against the lit cards' moments: "n" when near one, else how many are still ahead
+function intakeGlowPlace(t) {
+  let ahead = 0;
+  for (const at of intake?.model?.litAt?.values?.() ?? []) {
+    if (t < at) ahead += 1;
+    else if (t - at <= INTAKE_GLOW_NEAR) return "n";
+  }
+  return ahead;
+}
+function syncIntakeTime() {
+  if (!intake) return;
+  const t = intakeTimeNow();
+  if (t === intakeTimeSent) return;
+  if (!ui.frozen && t !== null && typeof intakeTimeSent === "number") {
+    const place = intakeGlowPlace(t);
+    if (place !== "n" && place === intakeGlowPlace(intakeTimeSent)) return;
+  }
+  intakeTimeSent = t;
+  intake.setTime(t);
 }
 
 // A rule hit pointed at in A2 (its part ids; [] when the person leaves it): the workbench
@@ -755,7 +820,10 @@ function renderChain(s, chain) {
   // 2. analysis
   const a = $("card-ana");
   if (ana) {
-    const res = (ana.results ?? []).slice(0, 3).map((r) => `<tr><td>${esc(quantityName(r.quantity))}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    // the name wraps, the value and its unit do not (app.css .card td); the record's own name in the title
+    // (a short aside in brackets at the name's end, 横・左の角, kept on one line)
+    const nameHtml = (q) => esc(quantityName(q)).replace(/ \(([^()]{1,30})\)$/, ` <span class="nw">($1)</span>`);
+    const res = (ana.results ?? []).slice(0, 3).map((r) => `<tr title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
@@ -1437,6 +1505,7 @@ function draw() {
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (tab === "bench" || tab === "grid")) agentPets.tick(s, player.events, player.playhead, tab, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
+  if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 
@@ -1460,10 +1529,14 @@ function loop(ts) {
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
+// A time the bar shows as the end (fmtTime: 0.1 s) is the end: ?t=2656 on a record whose last
+// event is at 2656.009 shows it finished, as the bar's "2656.0 / 2656.0" says.
+const END_SNAP_S = 0.05;
+
 async function seekAndDraw(t) {
   ui.frozen = true;
   player.pause();
-  player.seek(t);
+  player.seek(t >= player.duration - END_SNAP_S ? player.duration : t);
   draw();
   await nextFrame();
   draw();
@@ -1578,6 +1651,7 @@ $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
   if (!b) return;
   ui.pinnedTab = b.dataset.tab;
+  ui.tabPlan = []; // a tab pressed by hand ends ?tabs=
 });
 window.addEventListener("keydown", (ev) => {
   if (ev.target.closest("input, textarea")) return;
@@ -1738,7 +1812,7 @@ async function showRunList(message = "", runs = null) {
         `<span class="nw end" data-end="${tone}">${esc(ending)}</span>`,
         DRIVEN_JA[r.driver] ? `<span class="nw how" data-driver="${esc(r.driver)}">${DRIVEN_JA[r.driver]}</span>` : "",
       ].filter(Boolean);
-      return `<tr data-run="${esc(r.run_id)}"><td>${prose(r.want || "(依頼の文なし)")}<div class="rmeta">${meta.join('<span class="sep"> · </span>')}</div></td><td class="state">${r.finished ? "完了" : "実行中"}</td><td><a href="${href}">見る</a></td></tr>`;
+      return `<tr data-run="${esc(r.run_id)}"><td>${prose(r.want || "(依頼の文なし)")}<div class="rmeta">${meta.join('<span class="sep"> · </span>')}</div></td><td class="state" data-state="${runState(r)}">${RUN_STATE_JA[runState(r)]}</td><td><a href="${href}">見る</a></td></tr>`;
     };
     const table = (title, list) => (list.length ? `<h3>${title}</h3><table>${list.map(row).join("")}</table>` : "");
     box.innerHTML =
@@ -2045,6 +2119,7 @@ $("runlist").addEventListener("click", (ev) => {
 // A new request: the intake tabs on the draft (whether Claude can be asked comes from the launcher).
 async function startDraft() {
   ui.pinnedTab = "A1";
+  ui.tabPlan = []; // no replay to follow
   try {
     const info = await (await fetch("/api/launch", { cache: "no-store" })).json();
     Object.assign(draft, { claudeReady: !!info.claude_ready, keyName: info.key_name });

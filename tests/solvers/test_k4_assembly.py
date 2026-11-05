@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from hiraku.solvers.k4_geometry import bodies, corners, disassemble, from_box, interferences
-from hiraku.solvers.k4_geometry.assembly import STAGES, blocker, hand_way, is_attach, stage, steps
+from hiraku.solvers.k4_geometry.assembly import STAGES, blocker, hand_gap, hand_way, is_attach, stage, steps
 from hiraku.solvers.k4_geometry.capsule import (_box_sdf, capsule_box_overlap, capsule_overlap, from_obb, from_points,
                                                 seg_box, seg_seg, swept_distance)
 
@@ -226,6 +226,34 @@ class HandsTest(unittest.TestCase):
         deep, in_way = hand_way([0, 0, 0], np.array([0, 0, 1.0]), list(bs.values()), set())
         self.assertEqual((deep, in_way), (150.0, ["part:lid"]))  # from above: through the lid, its top 150 mm up
         self.assertEqual(hand_way([0, 0, 0], np.array([1.0, 0, 0]), list(bs.values()), set()), (0.0, []))
+
+    def test_the_gap_around_the_way(self):
+        # tool_gap_mm: from above the lid lies across the way; how deep it reaches in is the shortest
+        # push that frees it, sideways along the way's 125 mm side: 62.5 + 50 = 112.5 mm. From the side
+        # the lid's underside is 100 mm up and the way 125 mm tall about the point: 37.5 mm clear
+        bs = bodies(plain([part("lid", "body", [0, 0, 125], [100, 100, 50])]))
+        self.assertAlmostEqual(hand_gap([0, 0, 0], np.array([0, 0, 1.0]), list(bs.values()), set()), -112.5)
+        self.assertAlmostEqual(hand_gap([0, 0, 0], np.array([1.0, 0, 0]), list(bs.values()), set()), 37.5)
+        self.assertIsNone(hand_gap([0, 0, 0], np.array([0, 0, 1.0]), list(bs.values()), {"part:lid"}))
+        self.assertIsNone(hand_gap([0, 0, 0], np.array([0, 0, -1.0]), list(bs.values()), set()))  # behind the point
+
+    def test_the_steps_give_the_side_and_the_gap(self):
+        from hiraku import contract
+
+        unit = next(s for s in steps(boxed_in()) if s["part"] == "unit")
+        f = unit["fastenings"][0]
+        self.assertFalse(unit["tool_clearance"])
+        self.assertEqual(f["tool_side"], "+z")  # no side is free: the first tried, the side it comes from
+        self.assertLess(f["tool_gap_mm"], 0.0)  # the top plates reach into the hands' way
+        bare = next(s for s in steps(boxed_in(walls=False)) if s["part"] == "unit")
+        fb = bare["fastenings"][0]
+        self.assertTrue(bare["tool_clearance"])
+        self.assertIn(fb["tool_side"], ("+z", "-z", "+x", "-x", "+y", "-y"))
+        self.assertTrue("tool_gap_mm" not in fb or fb["tool_gap_mm"] >= 0.0)
+        for s in (unit, bare):
+            ana = {"analysis_id": "ana-0001", "tool": "assembly", "base": "K4", "design_version": 1, "load_case_id": "x",
+                   "prediction_ids": [], "status": "ok", "results": [], "assembly": [s]}
+            self.assertEqual([e for e in contract.errors("analysis", ana) if "fastenings" in e], [])
 
     def test_no_room_names_what_takes_it(self):
         seq = steps(boxed_in())

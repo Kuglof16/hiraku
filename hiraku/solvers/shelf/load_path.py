@@ -586,24 +586,27 @@ def _closest_in(obb: OBB, x: np.ndarray) -> np.ndarray:
 def member_slices(design: Record) -> dict[str, list[tuple[float, k4.Body]]]:
     """Each member cut into slices of at most SLICE_MM: [(t of the slice's middle, its body)]."""
     bs = k4.bodies(design)
-    out = {}
-    for mid, mp in member_props(design).items():
-        whole = bs[f"member:{mid}"].obb
-        w, h = 2.0 * whole.half[2], 2.0 * whole.half[1]
-        n = max(1, int(math.ceil(mp["length"] / SLICE_MM)))
-        a, b = mp["a"], mp["b"]
-        out[mid] = [((k + 0.5) / n, k4.Body(f"member:{mid}", from_member(a + (b - a) * k / n, a + (b - a) * (k + 1) / n,
-                                                                        w, h, mid), "member"))
-                    for k in range(n)]
-    return out
+    return {mid: _slices_of(bs, mid, mp) for mid, mp in member_props(design).items()}
+
+
+def _slices_of(bs: dict, mid: str, mp: Record) -> list[tuple[float, k4.Body]]:
+    """One member's slices (member_slices)."""
+    whole = bs[f"member:{mid}"].obb
+    w, h = 2.0 * whole.half[2], 2.0 * whole.half[1]
+    n = max(1, int(math.ceil(mp["length"] / SLICE_MM)))
+    a, b = mp["a"], mp["b"]
+    return [((k + 0.5) / n, k4.Body(f"member:{mid}", from_member(a + (b - a) * k / n, a + (b - a) * (k + 1) / n,
+                                                                 w, h, mid), "member"))
+            for k in range(n)]
 
 
 def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
     """Every contact between a modelled part and a member or another modelled part."""
     bs = k4.bodies(design)
     parts = [f"part:{p['id']}" for p in modelled_parts(design)]
-    slices = member_slices(design)
     props = member_props(design)
+    # a member's slices are made when a part first comes near the whole member (the same slices member_slices gives)
+    slices: dict[str, list[tuple[float, k4.Body]] | None] = dict.fromkeys(props)
     pinned: dict[str, set[str]] = {}
     for p in design.get("parts", []):
         for c in p.get("connects_to", []):
@@ -618,19 +621,24 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
         return True
 
     out: list[Contact] = []
+    rad = {k: _radius(b.obb) for k, b in bs.items()}  # each body's radius once (the tests below compare many pairs)
+    slice_rad: dict[str, list[float]] = {}
     for i, pk in enumerate(parts):
         P = bs[pk]
-        rp = _radius(P.obb)
+        rp = rad[pk]
         for mid, sl in slices.items():
             if not bears(pk, f"member:{mid}"):
                 continue
             M = bs[f"member:{mid}"]
-            if np.linalg.norm(P.obb.center - M.obb.center) > rp + _radius(M.obb) + touch:
+            if np.linalg.norm(P.obb.center - M.obb.center) > rp + rad[f"member:{mid}"] + touch:
                 continue
             if k4.shape_overlap(P, M) < -touch:
                 continue
-            hit = [(t, s) for t, s in sl if np.linalg.norm(P.obb.center - s.obb.center) <= rp + _radius(s.obb) + touch
-                   and k4.shape_overlap(P, s) >= -touch]
+            if sl is None:
+                sl = slices[mid] = _slices_of(bs, mid, props[mid])
+                slice_rad[mid] = [_radius(s.obb) for _, s in sl]
+            hit = [(t, s) for (t, s), rs in zip(sl, slice_rad[mid])
+                   if np.linalg.norm(P.obb.center - s.obb.center) <= rp + rs + touch and k4.shape_overlap(P, s) >= -touch]
             if not hit:
                 continue
             t = float(np.mean([t for t, _ in hit]))
@@ -644,7 +652,7 @@ def find_contacts(design: Record, touch: float = TOUCH_MM) -> list[Contact]:
             if not bears(pk, qk):
                 continue
             Q = bs[qk]
-            if np.linalg.norm(P.obb.center - Q.obb.center) > rp + _radius(Q.obb) + touch:
+            if np.linalg.norm(P.obb.center - Q.obb.center) > rp + rad[qk] + touch:
                 continue
             if k4.shape_overlap(P, Q) < -touch:
                 continue
@@ -1673,6 +1681,9 @@ def plate_strip_known_answer() -> Record:
 
 # ------------------------------------------------------------------ the tool
 
+# Defaults when a load case has none: hand 300 N, foot 500 N and push 725 N are the values of Q66, Q68 and Q77 in
+# data/requirements/offroad-4w.yaml, whose basis gives the sources: Q66 UN R79 (1988 text) steering effort table, an
+# assumption to use it as a load; Q68 UN R13-H Annex 3, 2.1.1 and 2.3.4; Q77 CPSC NPR 79 FR 68964, § 1422.5(c).
 LOAD_KIND = Param("load_kind", None, "which loads: hand (Q66 at the grip), foot (Q68 on the pedals), inertia (m a of "
                   "every part and the occupants), push (Q77 outward at point R)", default="inertia", choices=LOAD_KINDS)
 HAND_FORCE = Param("hand_force", "N", "hand force at the grip of the hand control, in each of three directions (Q66)",
