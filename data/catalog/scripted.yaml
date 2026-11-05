@@ -54,7 +54,8 @@ offroad-4w:
   # (hiraku.designgen.driver_fit; `fit_evals` the designs it measures, `fit_time_s` a time guard) and added to them.
   # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
   # version 1 layout and the hand hold to get in by (stage 0) -> version 2 the opening, shut by the bolted net
-  # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3) -> version 4: every tile green expected. R7-hand
+  # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3) -> version 4 the shells (stage 3) red at R1s, the
+  # rail joints -> version 5: every tile green expected. R7-hand
   # passes on the tool's value at stage 1 (docs/contract.md 手計算の役目: the grip's bound is loose, the load path is
   # checked by hand, tool_decides, basis path_checked), so no revision thickens the towers for it (the entry
   # rev_controls of the runs up to 4275bfe); R7-foot passes on its bound (safe side).
@@ -99,14 +100,36 @@ offroad-4w:
         the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json with the previous
         revision's choices and values (no fit): entry_blocked 3; with this choice 0, entry_handhold 3. The analysis department:
         clip_net and door both open (not counted by H7, not pushed on or stiffening in R8); the opening is 703 mm either way
-    - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
+    # The motor and the joints: the same entries as the video and N15 plans (R1s is in every offroad-4w file's
+    # tests since the standard file listed it; 15 kW passed P3 at version 4 of the demo run but not after the joints'
+    # reinforcement, which adds weight: see the source)
+    - &rev_motor
+      say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
       changes:
-        motor_peak_power: {value: 15, unit: kW}
+        motor_peak_power: {value: 17, unit: kW}
       reason: >-
-        P3: 最高速度までの時間が長すぎるので、モーターの最大出力を上げる
+        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
+        このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
       source: >-
-        the demo scripted run 20261104-093402-offroad-4w-scripted, version 3: P3 ver-0026 (time_to_speed 7.332 s against 6 s); version 4 with this change (15 kW):
-        P3 ver-0038 (5.855 s). On version 3 of run 20261104-080230 the launch tool gave 6.184 s at 13 kW and 5.986 s at 14 kW
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
+        (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
+        With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
+        the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
+    - &rev_joints
+      say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
+      changes:
+        rail_t: {value: 4.5, unit: mm}
+        gusset_leg: {value: 80, unit: mm}
+        gusset_thickness: {value: 3.2, unit: mm}
+        cross_h: {value: 50, unit: mm}
+      reason: >-
+        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
+        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
+        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
+      source: >-
+        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
+        at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
+        The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
   steps:
     - &p1_step
       load_case: P1-step100
@@ -293,31 +316,8 @@ offroad-4w-video:
   revise:
     - *rev_layout
     - *rev_opening
-    - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
-      changes:
-        motor_peak_power: {value: 17, unit: kW}
-      reason: >-
-        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
-        このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
-      source: >-
-        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
-        (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
-        With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
-        the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
-    - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
-      changes:
-        rail_t: {value: 4.5, unit: mm}
-        gusset_leg: {value: 80, unit: mm}
-        gusset_thickness: {value: 3.2, unit: mm}
-        cross_h: {value: 50, unit: mm}
-      reason: >-
-        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
-        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
-      source: >-
-        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
-        at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
-        The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
+    - *rev_motor
+    - *rev_joints
 
 # Video scene N15, data/requirements/offroad-4w-n15.yaml: the offroad-4w plan on the demo vehicle
 # (roll bar, floors, parts with their systems) with the video file's tests, R1s included, revised
@@ -336,31 +336,8 @@ offroad-4w-n15:
   revise:
     - *rev_layout
     - *rev_opening
-    - say: 動力 (段 2、車の動き) の赤を直すため、モーターを強くします
-      changes:
-        motor_peak_power: {value: 17, unit: kW}
-      reason: >-
-        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
-        このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
-      source: >-
-        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
-        (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
-        With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
-        the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
-    - say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
-      changes:
-        rail_t: {value: 4.5, unit: mm}
-        gusset_leg: {value: 80, unit: mm}
-        gusset_thickness: {value: 3.2, unit: mm}
-        cross_h: {value: 50, unit: mm}
-      reason: >-
-        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
-        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
-      source: >-
-        the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
-        at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
-        The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
+    - *rev_motor
+    - *rev_joints
 
 # Video scenes N11 and N12, data/requirements/offroad-4w-n12.yaml: S1 on the design with a tall
 # load, whose requirement Q41 (the load's CG height above the deck) carries a unit mistake
