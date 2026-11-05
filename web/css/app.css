@@ -748,6 +748,10 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .draftbar.starting .way button { opacity: 0.45; cursor: progress; }
 .draftbar .starting { flex-basis: 100%; color: var(--blue); }
 .draftbar .starting .secs { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.draftbar .starting .step, .runlist .starting .step { margin-left: 6px; }
+/* the list's note while a start is on its way (app.js launchStartingNote) */
+.runlist .starting { margin: 0 0 10px; padding: 8px 12px; border: 2px solid var(--blue); border-radius: 10px; color: var(--blue); font-size: 16px; background: var(--card, #fffdf8); }
+.runlist .starting .secs { margin-left: 8px; font-variant-numeric: tabular-nums; }
 .draftbar .err a { font-weight: 600; }
 .runlist .new-request { font-weight: 700; color: var(--ink); }
 .grid-head { display: flex; align-items: center; gap: 20px; font-size: 18px; flex-wrap: nowrap; min-width: 0; }

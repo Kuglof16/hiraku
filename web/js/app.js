@@ -351,15 +351,19 @@ async function draftStart(mode) {
   }
   draft.confirm = false;
   if (draft.starting) return; // one start at a time (the buttons are disabled meanwhile)
-  // /api/launch returns once the run has printed its folder, after the tools it uses are
-  // checked; until then the bar says so, counts the seconds, and the buttons cannot be pressed.
-  // On success they stay so while the page moves to the run.
-  Object.assign(draft, { starting: { mode, at: performance.now() }, error: "", errorHtml: "" });
+  // /api/launch answers at once (202); the run has a folder only after the tools it uses are
+  // checked (followStart). Until then the bar says so, counts the seconds, and the buttons cannot be
+  // pressed. On success they stay so while the page moves to the run.
+  Object.assign(draft, { starting: { mode, at: performance.now(), line: "" }, error: "", errorHtml: "" });
   renderDraft();
   const tick = setInterval(renderStartingSeconds, 1000);
   try {
-    const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
-    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
+    await postRequest("/api/launch", { request: draft.done.request_id, mode });
+    const runId = await followStart((l) => {
+      draft.starting.line = startLineJa(l);
+      renderStartingSeconds();
+    });
+    location.href = withDev(`?run=${encodeURIComponent(runId)}`); // follow it live
   } catch (e) {
     clearInterval(tick);
     draft.starting = null;
@@ -375,6 +379,36 @@ function startingSeconds() {
 function renderStartingSeconds() {
   const el = document.querySelector("#draftbar .starting .secs");
   if (el) el.textContent = `${startingSeconds()} 秒`;
+  const line = document.querySelector("#draftbar .starting .step");
+  if (line && draft?.starting) line.textContent = draft.starting.line || START_WAIT_JA;
+}
+
+// ---- following a start (POST /api/launch answers 202 at once) ------------------------------------
+// GET /api/launch's "launch" (launch.py Launcher.begin): state starting, then started with the
+// run_id once the child printed its folder, or failed (error_status 500 / 504, error). onTick gets
+// the info while it starts.
+const START_WAIT_JA = "運転の準備をしています…";
+// the child's output lines known here, in words; any other line: START_WAIT_JA (the child prints
+// nothing else before its folder unless it fails; hiraku/__main__.py _cmd_run)
+const START_LINES_JA = [[/^run folder:/, "記録を開いています…"]];
+function startLineJa(l) {
+  const line = l?.last_line ?? "";
+  return START_LINES_JA.find(([re]) => re.test(line))?.[1] ?? START_WAIT_JA;
+}
+async function followStart(onTick) {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 500));
+    let l;
+    try {
+      l = (await (await fetch("/api/launch", { cache: "no-store" })).json()).launch;
+    } catch (e) {
+      continue; // asked again in a moment
+    }
+    if (!l) continue;
+    if (l.state === "started" && l.run_id) return l.run_id;
+    if (l.state === "failed") throw Object.assign(new Error(l.error ?? String(l.error_status)), { status: l.error_status, body: l });
+    onTick?.(l);
+  }
 }
 
 // The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
@@ -394,8 +428,8 @@ function renderDraft() {
     const off = st ? " disabled" : "";
     // what each way is, in one line (the run list's words for them: DRIVEN_JA)
     const scripted =
-      `<span class="way"><button data-start="scripted"${off}>台本で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
-      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`) +
+      `<span class="way"><button data-start="scripted"${off}>決まった手順で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には決まった手順の計画が無いので、手順が少ない</span>`) +
       `</span>`;
     const claudeWhy = `<span class="why">Claude が考えて進めます。費用がかかります</span>`;
     const claude = !keyed
@@ -404,7 +438,7 @@ function renderDraft() {
         ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
         : `<span class="way"><button data-start="claude"${off}>Claude で始める (費用の上限 ${usd})</button>${claudeWhy}</span>`;
     const starting = st
-      ? `<span class="starting" role="status"><b>${st.mode === "claude" ? "Claude で" : "台本で"}運転を始めています。</b>最初は、使うツールの確かめに時間がかかります (数十秒)。<span class="secs">${startingSeconds()} 秒</span></span>`
+      ? `<span class="starting" role="status"><b>${st.mode === "claude" ? "Claude で" : "決まった手順で"}運転を始めています。</b><span class="step">${esc(st.line || START_WAIT_JA)}</span> 最初は、使うツールの確かめに時間がかかります。<span class="secs">${startingSeconds()} 秒</span></span>`
       : "";
     body = `<b>要件がそろいました</b>${scripted}${claude}${starting}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
@@ -2039,7 +2073,10 @@ async function renderLaunch(message = "") {
     .join("");
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えた</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
-  const running = busy ? `<p>走っている: <a href="${withDev(`?run=${encodeURIComponent(rid)}`)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
+  // (a run still starting has no id yet: no link until it has)
+  const running = !busy ? "" : rid
+    ? `<p>走っている: <a href="${withDev(`?run=${encodeURIComponent(rid)}`)}">${esc(rid)} を追いかける</a> ${stop}</p>`
+    : `<p>${START_WAIT_JA}</p>`;
   // without the key in the server's window, only scripted runs and replays are there (the key is never asked for)
   const keyless = info.claude_ready
     ? ""
@@ -2187,7 +2224,10 @@ function plainLaunch(info, message) {
   if (info.available === false) return pick; // (no server to send a request to)
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えました</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
-  const running = busy ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${rid ? stop : ""}</p>` : "";
+  // (a run still starting has no id yet: no link until it has)
+  const running = !busy ? "" : rid
+    ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${stop}</p>`
+    : `<p class="going">${START_WAIT_JA}</p>`;
   const rows = info.demo_runs_error
     ? [`<p class="err">デモの一覧を読めませんでした</p>`]
     : (info.demo_runs ?? []).map((d) => {
@@ -2206,15 +2246,43 @@ function plainLaunch(info, message) {
   );
 }
 
+// While a start from the list is on its way: a note on top of the list at once (what the child is
+// at, the seconds), until the page moves to the run.
+function launchStartingNote(mode, at) {
+  let el = $("launch-starting");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "launch-starting";
+    el.className = "starting";
+    el.setAttribute("role", "status");
+    $("launch").prepend(el);
+  }
+  const how = mode === "claude" ? "Claude で" : "決まった手順で";
+  return (line) => {
+    el.innerHTML = `<b>${how}運転を始めています。</b><span class="step">${esc(line || START_WAIT_JA)}</span> ` +
+      `最初は、使うツールの確かめに時間がかかります。<span class="secs">${Math.floor((performance.now() - at) / 1000)} 秒</span>`;
+  };
+}
+
 async function launch(file, mode) {
   launchConfirm = null;
   for (const b of $("launch").querySelectorAll("button")) b.disabled = true;
+  const at = performance.now();
+  let line = "";
+  const show = launchStartingNote(mode, at);
+  show(line);
+  const tick = setInterval(() => show(line), 1000);
   try {
     const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
     const out = await res.json();
     if (!res.ok) throw Object.assign(new Error(out.error ?? String(res.status)), { status: res.status, body: out });
-    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
+    const runId = await followStart((l) => {
+      line = startLineJa(l);
+      show(line);
+    });
+    location.href = withDev(`?run=${encodeURIComponent(runId)}`); // follow it live
   } catch (e) {
+    clearInterval(tick);
     // a run started here still going (409): in words, the list's own line links to it
     const going = e.status === 409 && "running_run_id" in (e.body ?? {});
     renderLaunch(going ? "いま走っている運転があります。終わってから始めてください。" : `走らせられなかった: ${e.message ?? e}`);

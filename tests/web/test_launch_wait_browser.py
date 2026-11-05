@@ -2,8 +2,9 @@
 
 - the two ways say what they are (台本: 決まった手順で再現・費用なし / Claude: Claude が考える・費用がかかる),
   and without the key the Claude way says a setup is needed, without the key's name on the page;
-- while /api/launch has not returned (the run checks its tools first), the bar says the run is
-  starting with the seconds counted, and both buttons are disabled;
+- /api/launch answers at once (202); until GET /api/launch says the run printed its folder (it checks
+  its tools first), the bar (and the list's note) says the run is starting with the seconds counted,
+  within a second of the press, and both buttons are disabled; a child that ends first is said;
 - a start while a run started here is still going (409) is said in Japanese with a link to that run;
   the server's English stays only in the title.
 
@@ -15,6 +16,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -65,6 +67,7 @@ class LaunchWaitBrowserTest(unittest.TestCase):
 
         tmp = Path(tempfile.mkdtemp())
         (tmp / "requirements").mkdir()
+        (tmp / "requirements" / "offroad-4w.yaml").write_text("product: offroad-4w\n", encoding="utf-8")  # (a row of the list under ?dev=1)
 
         def command(req, mode, runs, intake_events=None):
             return [sys.executable, "-c", _CODE, str(SAMPLE_EVENTS), str(runs), RUN_ID + ("-claude" if mode == "claude" else ""), str(WAIT_S)]
@@ -102,7 +105,7 @@ class LaunchWaitBrowserTest(unittest.TestCase):
         base, _ = self.serve({})
         page, errors = self.settled(base)
         text = page.inner_text("#draftbar")
-        for words in ("要件がそろいました", "台本で始める", "決まった手順で再現します", "費用はかかりません",
+        for words in ("要件がそろいました", "決まった手順で始める", "決まった手順で再現します", "費用はかかりません",
                       "Claude で始める", "Claude が考えて進めます。費用がかかります", "Claude で始めるには準備が要ります"):
             self.assertIn(words, text)
         self.assertNotIn("ANTHROPIC_API_KEY", text)
@@ -126,20 +129,58 @@ class LaunchWaitBrowserTest(unittest.TestCase):
     def test_while_it_starts_the_bar_says_so_and_the_buttons_wait(self):
         base, lau = self.serve({})
         page, errors = self.settled(base)
+        replies = []
+        page.on("response", lambda r: replies.append((r.status, time.monotonic())) if r.url.endswith("/api/launch") and r.request.method == "POST" else None)
+        t0 = time.monotonic()
         page.click("#draftbar button[data-start='scripted']")
-        page.wait_for_selector("#draftbar .starting")
+        page.wait_for_selector("#draftbar .starting", timeout=1000)  # the bar changes at once
         page.wait_for_function("document.querySelector('#draftbar .starting .secs')?.textContent === '1 秒'", timeout=5000)
         got = page.evaluate("""() => ({
             text: document.querySelector('#draftbar .starting').textContent,
             disabled: [...document.querySelectorAll('#draftbar .way button')].map((b) => b.disabled),
             opacity: getComputedStyle(document.querySelector("#draftbar button[data-start='scripted']")).opacity,
         })""")
-        self.assertIn("台本で運転を始めています", got["text"])
+        self.assertIn("決まった手順で運転を始めています", got["text"])
+        self.assertIn("運転の準備をしています…", got["text"])  # the stand-in prints nothing before its folder
         self.assertIn("使うツールの確かめ", got["text"])
         self.assertEqual(got["disabled"], [True, True])
         self.assertLess(float(got["opacity"]), 1.0)
+        # the POST came back at once (202), long before the stand-in printed its folder (WAIT_S)
+        self.assertEqual(replies[0][0], 202)
+        self.assertLess(replies[0][1] - t0, 1.5)
         page.wait_for_url(f"**/?run={RUN_ID}", timeout=30000)
         self.assertEqual(len(lau.started), 1)
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_the_list_shows_the_start_at_once_and_opens_the_run(self):
+        base, lau = self.serve({})
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/?list=1&dev=1")
+        page.wait_for_selector("#launch .lreq button[data-launch='scripted']")
+        t0 = time.monotonic()
+        page.click("#launch .lreq button[data-launch='scripted']")
+        page.wait_for_selector("#launch-starting", timeout=1000)
+        self.assertLess(time.monotonic() - t0, 1.0)
+        self.assertIn("決まった手順で運転を始めています。運転の準備をしています…", page.inner_text("#launch-starting"))
+        page.wait_for_function("document.querySelector('#launch-starting .secs')?.textContent === '1 秒'", timeout=5000)
+        page.wait_for_url(f"**/?run={RUN_ID}&dev=1", timeout=30000)
+        self.assertEqual(len(lau.started), 1)
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_a_child_that_ends_before_its_folder_is_said(self):
+        base, lau = self.serve({})
+        lau.command = lambda req, mode, runs, intake_events=None: [sys.executable, "-c", "print('cannot start the run: no solvers'); raise SystemExit(2)"]
+        page, errors = self.settled(base)
+        page.click("#draftbar button[data-start='scripted']")
+        page.wait_for_selector("#draftbar .err", timeout=15000)
+        err = page.inner_text("#draftbar .err")
+        self.assertIn("始められませんでした", err)
+        self.assertIn("the run ended before it started: cannot start the run: no solvers", err)  # (the 500's reason, as before)
+        self.assertFalse(page.is_disabled("#draftbar button[data-start='scripted']"))
         self.assertEqual(errors, [])
         page.close()
 

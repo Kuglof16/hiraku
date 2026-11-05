@@ -881,7 +881,7 @@ class BrowserReplayTest(unittest.TestCase):
         page.close()
 
     def test_a_new_request_from_A1_to_a_run(self):
-        """?new=1: write the request in A1 and send it, answer the hearing, then 台本で始める starts a
+        """?new=1: write the request in A1 and send it, answer the hearing, then 決まった手順で始める starts a
         run on the saved request (with its intake events) and the screen follows it."""
         from hiraku.webserve.launch import Launcher
         from tests.web.fake_launch import fake_command, fake_reader
