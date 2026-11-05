@@ -1787,7 +1787,7 @@ export const DEMOS = {
       "name": "段差に当たるときの速さ",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "basis": "A design condition (HIRAKU's default value), set for the strength check of the step. It is not taken from a standard or a catalogue, so it has no outside source. What it gives, by the K2 calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest",
       "value": 10,
       "unit": "km/h"
      },
@@ -28330,7 +28330,7 @@ export const DEMOS = {
       "name": "段差に当たるときの速さ",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "basis": "A design condition (HIRAKU's default value), set for the strength check of the step. It is not taken from a standard or a catalogue, so it has no outside source. What it gives, by the K2 calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest",
       "value": 10,
       "unit": "km/h"
      },
@@ -28671,7 +28671,7 @@ export const DEMOS = {
       "name": "段差に当たるときの速さ",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "basis": "A design condition (HIRAKU's default value), set for the strength check of the step. It is not taken from a standard or a catalogue, so it has no outside source. What it gives, by the K2 calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest",
       "value": 10,
       "unit": "km/h"
      },
@@ -30406,7 +30406,7 @@ export const DEMOS = {
       "name": "段差に当たるときの速さ",
       "source": "default",
       "trust": 3,
-      "basis": "assumption: not taken from a standard or a catalogue; a speed for the first strength check. The factor it gives is the K2 team's calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest. A speed from a rule or a test method was not checked",
+      "basis": "A design condition (HIRAKU's default value), set for the strength check of the step. It is not taken from a standard or a catalogue, so it has no outside source. What it gives, by the K2 calculation for the demo vehicle (offroad-4w-v1, two people and cargo): the front wheel force at the step is 3.6 times (100 mm step, 5.7 kN against 1.6 kN) to 4.4 times (250 mm step, 17.6 kN against 4.0 kN) the force of pushing up from rest",
       "value": 10,
       "unit": "km/h"
      },
