@@ -694,30 +694,11 @@ export function fmtVU(value, unit, sig) {
 // with the user's ANTHROPIC_API_KEY; Claude Code = the user's own Claude Code with the HIRAKU plugin).
 export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (API キー)", claude_code_plugin: "Claude Code" };
 
-// How a run was driven, in the run list's words: 決まった手順で再現 (scripted) or Claude で実行.
+// How a run is driven, in A1's words for its start buttons: 決まった手順で再現 (scripted) or Claude で実行.
 export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
 
-// run.finished stop_code, said short in the run list: 途中で止まった (…) (the words of STOP_CODE_JA, shorter).
-export const STOP_SHORT_JA = {
-  not_judged: "判定の無い分野を残した",
-  round_limit: "繰り返しの上限に達した",
-  red_left: "赤の分野を残した",
-  cost_limit: "上限の費用に達した",
-  turn_limit: "ターン数の上限に達した",
-  user_stop: "人が止めた",
-};
+// a run that ended at the domain picks (its stop_reason says so; stop_after "picks" in newer records)
 const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
-
-// A stop_reason said short: the code's words, else (records older than stop_code) the reason's
-// known opening, else its first sentence up to 18 characters.
-export function stopShort(code, reason) {
-  if (STOP_SHORT_JA[code]) return STOP_SHORT_JA[code];
-  const s = (reason || "").trim();
-  if (/^まだ判定の無い分野/.test(s)) return STOP_SHORT_JA.not_judged;
-  if (!s) return "";
-  const first = s.split(/[。(（]/)[0].trim() || s;
-  return [...first].length > 18 ? [...first].slice(0, 18).join("") + "…" : first;
-}
 
 // The run list's state column (for people): how the run ended in one word, from /api/runs' summary
 // (finished, end_status of run.finished). A run that stops after the picks as asked is 完了.
@@ -728,25 +709,41 @@ export function runState(r) {
   return r.end_status === "stopped" || r.end_status === "failed" ? r.end_status : "done";
 }
 
-// How a run ended, one phrase for its row in the run list, from /api/runs' summary
-// (hiraku/webserve/server.py _run_summary): finished, end_status, stop_code, stop_reason,
-// stop_after, last_version, judged {green, red, pending}.
-export function endingJa(r) {
-  if (!r.finished) return "実行中";
-  const v = Number.isInteger(r.last_version) ? `・版 ${r.last_version}` : "";
-  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return "分野を選ぶところまで";
+// The run list's row title for people (no ?dev=1): what replaying the record shows, from /api/runs'
+// summary (hiraku/webserve/server.py _run_summary: driver, finished, end_status, stop_reason,
+// stop_after, last_version, judged {green, red, pending}) — how it was driven, then how far the design went (last_version) and how it was judged.
+// The state column says 完了 / 途中で止まった, so a stopped row here says only how far it got
+// (and a red domain left over): 「決まった手順で最後まで・5 回目の設計で全部合格」
+// 「Claude の運転・4 回目の設計まで」.
+const HOW_JA = { scripted: "決まった手順", agent_sdk: "Claude の運転", claude_code_plugin: "Claude の運転" };
+export function runSummaryJa(r) {
+  const how = HOW_JA[r.driver] ?? "";
+  const v = Number.isInteger(r.last_version) ? r.last_version : null;
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return [how, "分野を選ぶところまで"].filter(Boolean).join("・");
+  if (!r.finished) return [how, v ? `いま ${v} 回目の設計` : ""].filter(Boolean).join("・");
+  const state = runState(r);
   const j = r.judged;
-  if (r.end_status === "stopped") {
-    const why = stopShort(r.stop_code, r.stop_reason);
-    return `途中で止まった${why ? ` (${why})` : ""}${v}`;
+  let far = "";
+  if (state === "done") {
+    const head = how ? `${how}で最後まで` : "";
+    if (v && j && j.green > 0 && !j.red && !j.pending) far = `${v} 回目の設計で全部合格`;
+    else if (v && j) far = `${v} 回目の設計で` + [j.green ? `合格 ${j.green}` : "", j.red ? `不合格 ${j.red}` : "", j.pending ? `合否の出ていない分野 ${j.pending}` : ""].filter(Boolean).join("・");
+    else if (v) far = `${v} 回目の設計まで`;
+    return [head, far].filter(Boolean).join("・");
   }
-  if (r.end_status === "failed") return `エラーで止まった${v}`;
-  if (j && j.green > 0 && !j.red && !j.pending) return `全部合格${v}`;
-  if (j) {
-    const parts = [j.green ? `合格 ${j.green}` : "", j.red ? `赤 ${j.red}` : "", j.pending ? `判定なし ${j.pending}` : ""].filter(Boolean);
-    return `完了${v}・${parts.join("・")}`;
-  }
-  return `完了${v}・判定なし`;
+  if (v) far = `${v} 回目の設計まで` + (j?.red ? `・不合格が残った` : "");
+  return [how, far].filter(Boolean).join("・");
+}
+
+// A record the list for people keeps under the closed 「この PC の記録」: one this PC ran that has no
+// project.driver (made before the field, while HIRAKU was being built), no design version, or that
+// ended at the domain picks. Saved records always stay on the list.
+export function isOlderRecord(r) {
+  if (r.saved) return false;
+  if (r.sample) return true;
+  if (!r.driver) return true;
+  if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return true;
+  return r.finished && !Number.isInteger(r.last_version);
 }
 
 // The run list for people (no ?dev=1): one line per demo run of data/catalog/demo_runs.yaml, by its id,

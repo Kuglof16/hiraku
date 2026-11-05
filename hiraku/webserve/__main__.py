@@ -17,7 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port (default {DEFAULT_PORT})")
     p.add_argument("--runs", default="runs", help="folder that holds runs/<run_id>/ (default ./runs)")
     p.add_argument("--saved", default=str(SAVED_DIR), help="folder of saved runs kept in the repository (default: showcase/ of this repository)")
-    p.add_argument("--default-run", default=None, help="run the screen opens when the URL names none (default: the newest saved run)")
+    p.add_argument("--default-run", default=None, help="run the run list recommends at its top (default: the newest saved run)")
     p.add_argument("--web", default=str(WEB_DIR), help="folder of the screen files (default: web/ of this repository)")
     p.add_argument("--layout", default=str(LAYOUT_FILE), help="the video's layout rules served as /layout.json (default: promo/screens/layout.json)")
     p.add_argument("--pets", default=str(PETS_FILE), help="the 3D pets' script served as /pets/pet3d.js (default: promo/pets/pet3d.js; without it the cut pages draw no pets)")
@@ -34,9 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"HIRAKU screen: http://{host}:{port}/  (runs: {Path(args.runs).resolve()})", flush=True)
     default = next((r["run_id"] for r in list_runs(Path(args.runs), Path(args.saved), args.default_run) if r["default"]), None)
     if default:
-        print(f"  opens on: {default}  (run list: http://{host}:{port}/?list=1)", flush=True)
+        print(f"  the run list recommends: {default}  (replay: http://{host}:{port}/?run={default})", flush=True)
     elif args.default_run:
-        print(f"  default run {args.default_run} not found; the screen opens on the run list", flush=True)
+        print(f"  default run {args.default_run} not found; the run list recommends none", flush=True)
     print(f"  sample replay: http://{host}:{port}/?run=sample", flush=True)
     launcher = server.RequestHandlerClass.launcher
     if launcher:

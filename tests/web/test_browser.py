@@ -643,11 +643,12 @@ class BrowserReplayTest(unittest.TestCase):
             close()
 
     DEV_WORDS = ("products/", ".yaml", "ANTHROPIC_API_KEY", "A1", "N0")
-    KEYLESS = "Claude で実行するには、API キーを設定して HIRAKU を起動し直してください。"
+    NEEDS_KEY = "Claude のキーが要ります"
 
     def test_run_list_for_people_without_the_key(self):
-        """No ?dev=1: no files, key names, intake tab names or cut numbers on the list; the line about
-        the key once at the top (the Claude buttons only look unpressable); ?dev=1 shows them all."""
+        """No ?dev=1: no files, key names, intake tab names or cut numbers on the list; no list of the
+        ways and no README link — one short word beside each 実行する that cannot be pressed; ?dev=1
+        shows them all."""
         base, lau, _, close = self._demo_server({})
         try:
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
@@ -658,15 +659,18 @@ class BrowserReplayTest(unittest.TestCase):
             text = page.inner_text("#runlist")
             for w in self.DEV_WORDS:
                 self.assertNotIn(w, text)
-            self.assertEqual(text.count(self.KEYLESS), 1)
-            self.assertEqual(page.locator("#runlist .keyless").count(), 1)
-            self.assertIn("README の「動かし方」", page.text_content("#runlist .keyless a.readme"))
-            self.assertEqual(text.count("記録を再生する (無料・すぐ)"), 1)
-            self.assertEqual(text.count("Claude で新しく実行する (Anthropic の API キーが要ります・1 回 $2 まで)"), 1)  # every fake file: $2
+            self.assertEqual(page.locator("#runlist .keyless, #runlist ul.ways, #runlist a.readme").count(), 0)
+            for w in ("README", "動かし方", "(無料・すぐ)", "記録を再生する", "はじめから頼みます"):
+                self.assertNotIn(w, text)
             row = lambda i: f"#launch .lreq.demo[data-demo='{i}']"
             # one line per row: an id without a line of its own shows its title; one verb per button
             self.assertIn("要件の間違い", page.inner_text(row("n12")))
             self.assertTrue(page.is_disabled(f"{row('n12')} button.claude"))
+            # beside each 実行する that cannot be pressed: one short word, nothing else about the key
+            disabled = page.locator("#launch button.claude:disabled").count()
+            self.assertGreater(disabled, 0)
+            self.assertEqual(page.locator("#launch button.claude:disabled + .needs-key").count(), disabled)
+            self.assertEqual(text.count(self.NEEDS_KEY), disabled)
             self.assertEqual(page.locator("#launch button[data-launch-ask]").count(), 0)
             self.assertEqual([page.text_content(f"{row('n12')} button[data-launch='scripted']"), page.text_content(f"{row('n09')} a.demo-a1")], ["再現する", "試す"])
             self.assertEqual(page.locator("#launch .pick").count(), 0)  # no saved run, no demo row `video`
@@ -683,7 +687,7 @@ class BrowserReplayTest(unittest.TestCase):
             for w in self.DEV_WORDS:
                 self.assertIn(w, text)
             self.assertEqual(page.locator("#runlist .keyless").count(), 1)
-            self.assertNotIn(self.KEYLESS, text)
+            self.assertNotIn(self.NEEDS_KEY, text)
             self.assertEqual(errors, [])
             page.close()
         finally:
@@ -699,7 +703,7 @@ class BrowserReplayTest(unittest.TestCase):
             page.goto(f"{base}/?list=1")
             page.wait_for_selector("#launch .demo-runs")
             text = page.inner_text("#runlist")
-            self.assertEqual(page.locator("#runlist .keyless").count(), 0)
+            self.assertEqual(page.locator("#runlist .keyless, #runlist .needs-key").count(), 0)
             for w in self.DEV_WORDS:
                 self.assertNotIn(w, text)
             row = lambda i: f"#launch .lreq.demo[data-demo='{i}']"
@@ -1451,7 +1455,9 @@ class BrowserReplayTest(unittest.TestCase):
             server.server_close()
             shutil.rmtree(tmp)
 
-    def test_opens_the_saved_run_without_run_in_the_url(self):
+    def test_opens_the_run_list_without_run_in_the_url(self):
+        """No ?run= (nor ?src=, ?list=, a draft): the run list, the same as ?list=1, with the saved run
+        recommended; its 見る replays it."""
         tmp = Path(tempfile.mkdtemp())
         run_id = "20261106-100000-offroad-4w"
         (tmp / "showcase" / run_id).mkdir(parents=True)
@@ -1461,14 +1467,23 @@ class BrowserReplayTest(unittest.TestCase):
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/?pace=0&t=9")
+            asked = []
+            page.on("request", lambda r: asked.append(r.url) if "/events" in r.url else None)
+            page.goto(f"{base}/")
+            page.wait_for_selector("#launch .pick")
+            first = page.evaluate("""() => ({ list: !document.getElementById("runlist").hidden,
+                                              head: document.querySelector("#runlist h2").textContent })""")
+            self.assertEqual(first, {"list": True, "head": "HIRAKU でできること"})
+            self.assertEqual(asked, [])  # no record is read before 見る
+            page.click("#launch .pick a.go")
+            page.wait_for_url(f"**/?run={run_id}")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
-            page.evaluate("window.hiraku.ready")
-            got = page.evaluate(
-                """() => ({ applied: window.hiraku.player.applied, list: !document.getElementById("runlist").hidden,
-                           link: document.querySelector("#mode a.runid").getAttribute("href") })"""
-            )
-            self.assertEqual(got, {"applied": 15, "list": False, "link": "?list=1"})
+            page.wait_for_function("document.getElementById('runlist').hidden && !document.getElementById('loading-note')")
+            # back to the list by 「☰ 一覧へ」; the run's id is not on the screen without ?dev=1
+            back = page.evaluate("""() => ({ link: [...document.querySelectorAll("#mode a")].map((a) => [a.textContent, a.getAttribute("href")]),
+                                             text: document.getElementById("mode").textContent })""")
+            self.assertEqual(back["link"], [["☰ 一覧へ", "?list=1"]])
+            self.assertNotIn(run_id, back["text"])
             page.goto(f"{base}/?list=1")
             page.wait_for_selector("#launch .pick")
             # the recommendation comes first after 「＋ 新しく依頼する」 (the list's first line, test_runlist_order_browser)
