@@ -236,10 +236,14 @@ def joined(a: Body, b: Body) -> bool:
 def reach(bs: dict[str, Body], keys: list[str]) -> tuple[np.ndarray, np.ndarray]:
     """(centres (n, 3), radii (n,)): a sphere about each body's box centre holding its shape (the box's half diagonal,
     or its capsule's farther end plus the capsule's radius when that is larger)."""
-    C = np.array([bs[k].obb.center for k in keys], float).reshape(-1, 3)
-    R = np.empty(len(keys))
-    for i, k in enumerate(keys):
-        b = bs[k]
+    return spheres([bs[k] for k in keys])
+
+
+def spheres(items: list[Body]) -> tuple[np.ndarray, np.ndarray]:
+    """reach() of a list of bodies, in its order."""
+    C = np.array([b.obb.center for b in items], float).reshape(-1, 3)
+    R = np.empty(len(items))
+    for i, b in enumerate(items):
         r = float(np.linalg.norm(b.obb.half))
         if b.capsule is not None:
             r = max(r, max(float(np.linalg.norm(b.capsule.a - C[i])), float(np.linalg.norm(b.capsule.b - C[i])))
