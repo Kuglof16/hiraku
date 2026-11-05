@@ -806,6 +806,26 @@
               }
             }
           }
+        },
+        "rating": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "working_load_N",
+            "basis"
+          ],
+          "description": "The force a bought part is rated to carry in use (a strap's or a lashing point's working load, e.g. EN 12195-2 LC), written by the code that builds the design; the cargo restraint load case (R10) compares the force it gives the part with it.",
+          "properties": {
+            "working_load_N": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "basis": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Where the rating comes from: a standard or a maker's sheet (edition and table, or 'not checked'), or 'assumption'."
+            }
+          }
         }
       },
       "allOf": [
@@ -1491,9 +1511,10 @@
             "temperature",
             "mode_shape",
             "damage",
-            "error_estimate"
+            "error_estimate",
+            "node_motion"
           ],
-          "description": "error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
+          "description": "node_motion: where the nodes of a deforming model are over time (e.g. the soft-body crash, C1 B): nodes and members give the model, frames.t_s and frames.positions_mm the positions at each kept moment, frames.broken the members broken by then; unit mm. error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
         },
         "label": {
           "type": "string"
@@ -1566,6 +1587,34 @@
           ],
           "description": "For shell stresses: which surface of the wall (max = the larger of top and bottom)."
         },
+        "nodes": {
+          "type": "array",
+          "maxItems": 300,
+          "items": {
+            "type": "string"
+          },
+          "description": "For node_motion: the node ids, in the order of each frame's positions_mm."
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "For node_motion: the members drawn as lines, each [node id, node id, member id]."
+        },
         "frames": {
           "type": "object",
           "additionalProperties": false,
@@ -1609,10 +1658,64 @@
                 "type": "number"
               },
               "description": "The largest value at each moment."
+            },
+            "positions_mm": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/vec3"
+                }
+              },
+              "description": "For node_motion: one list per moment, one position (mm, design coordinates moved with the test) per node in nodes order."
+            },
+            "broken": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "description": "For node_motion: one list per moment, the member ids broken by then."
             }
           }
         }
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "node_motion"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "nodes",
+              "members",
+              "frames"
+            ],
+            "properties": {
+              "frames": {
+                "required": [
+                  "t_s",
+                  "positions_mm"
+                ],
+                "properties": {
+                  "t_s": {
+                    "maxItems": 150
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
       "dependentRequired": {
         "per_element": [
           "mesh_id"
