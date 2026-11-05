@@ -51,5 +51,39 @@ class FrictionChannelsTest(unittest.TestCase):
             self.assertTrue(moving and min(moving) == 1.0, cid)
 
 
+class TyreCurvesTest(unittest.TestCase):
+    """slip_angle / slip_ratio per wheel over time, and the tyre's Fy against slip angle at four loads."""
+
+    def test_the_curves_and_the_slips(self):
+        import math
+
+        from hiraku.solvers.k2_vehicle.model import build_vehicle
+        from hiraku.solvers.k2_vehicle.record import TYRE_CURVE_DEG, TYRE_CURVE_LOADS
+        d = box_design(wheel_mass=15.0)
+        lc = {"load_case_id": "S3", "params": {"speed": {"value": 30.0, "unit": "km/h"}, "find_limit": False}}
+        rec = TOOLS["lane_change"].run(d, lc, [{"prediction_id": "pred-0001"}], {})
+        ser = {s["channel"]: s for s in rec["series"]}
+        veh = build_vehicle(d)
+        for c in veh.corners:
+            self.assertEqual(ser[f"slip_angle.{c.id}"]["unit"], "deg")
+            self.assertEqual(ser[f"slip_ratio.{c.id}"]["t_s"], ser["speed"]["t_s"])
+            curves = [s for n, s in ser.items() if n.startswith(f"tyre_fy_curve.{c.id}.")]
+            self.assertEqual(len(curves), len(TYRE_CURVE_LOADS))
+            for s in curves:
+                self.assertEqual((s["x"]["quantity"], s["x"]["unit"], s["x"]["values"]), ("slip_angle", "deg", TYRE_CURVE_DEG))
+                self.assertNotIn("t_s", s)
+            # at the static load and +3 deg, the curve is the Magic Formula's side force (mirrored on the right)
+            fz = float(c.static_load)
+            s = ser[f"tyre_fy_curve.{c.id}.{fz:.0f}"]
+            ta = math.tan(math.radians(3.0))
+            want = -c.mf.forces(fz, 0.0, -ta)[1] if c.side < 0 else c.mf.forces(fz, 0.0, ta)[1]
+            self.assertAlmostEqual(s["values"][TYRE_CURVE_DEG.index(3.0)], want, delta=1e-3 * max(1.0, abs(want)))
+        # a turn's slip angles and side forces have one sign relation on both sides (the points lie on the curves)
+        for cid in ("FL", "FR"):
+            a, fy = ser[f"slip_angle.{cid}"]["values"], ser[f"wheel_fy.{cid}"]["values"]
+            k = max(range(len(a)), key=lambda j: abs(a[j]))
+            self.assertLess(a[k] * fy[k], 0.0, cid)
+
+
 if __name__ == "__main__":
     unittest.main()
