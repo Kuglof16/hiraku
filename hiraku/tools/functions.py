@@ -22,8 +22,8 @@ from hiraku import contract
 from hiraku.tools import rules
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.shelf import NOT_CHECKED, NOT_YET, check_shelf, load_case_stage, tool_stage, unchecked_tools
-from hiraku.tools.judge import (OP_JA, STAND_IN_BELOW, failing_end, init_judgements, judged_quantity, make_verdict,
-                                prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
+from hiraku.tools.judge import (OP_JA, PATH_CHECKED, PATH_FORMULA, STAND_IN_BELOW, failing_end, init_judgements,
+                                judged_quantity, make_verdict, path_check, prediction_is_unfavourable, unfavourable_side, unsupported_load_verdict,
                                 update_judgement)
 from hiraku.tools.summary import design_summary
 
@@ -37,11 +37,11 @@ def _check_input(name: str, args: dict[str, Any]) -> None:
 
 
 def _gate(ctx: RunContext, name: str, args: dict[str, Any], agent: str | None = None) -> None:
-    """HK1-HK3 and HK5 again inside the tool. A call that gets here was not denied by a PreToolUse hook
+    """HK1-HK3, HK5 and HK6 again inside the tool. A call that gets here was not denied by a PreToolUse hook
     (that hook records its own denial and the call never runs), so a denial here is recorded
     once, as hook.denied, the same way: a direct call, a hook that did not run or answered
     allow on an older state (the plugin's hook command is a separate process)."""
-    denial = rules.check_call(ctx, name, args)
+    denial = rules.check_call(ctx, name, args, agent)
     if denial:
         ctx.store.emit("hook.denied", agent=agent or "lead", domain=denial.domain, text=denial.reason,
                        data={"hook": "PreToolUse", "tool": contract.mcp_name(name), "rule": denial.rule,
@@ -63,13 +63,38 @@ def _compact_prediction(p: Record) -> Record:
 
 def _compact_analysis(a: Record) -> Record:
     keys = ("analysis_id", "tool", "design_version", "load_case_id", "prediction_ids", "status", "error", "results")
-    return {k: a[k] for k in keys if k in a}
+    out = {k: a[k] for k in keys if k in a}
+    results = out.get("results") or []
+    if len(results) > RESULTS_SHOWN_MAX:
+        out["results"] = _extreme_results(results)
+        out["results_note"] = (f"結果 {len(results)} 件のうち、量ごとに大きい方と小さい方の {RESULTS_EACH_END} 件ずつ "
+                               f"({len(out['results'])} 件)。照合 (compare) は全部の結果を読む")
+    return out
+
+
+# get_context's records list an analysis's results whole up to this many; beyond it (a shell's per-place results,
+# run 094333: a designer's answer of 80 000 characters went over Claude Code's limit) each quantity's extremes
+RESULTS_SHOWN_MAX = 24
+RESULTS_EACH_END = 3
+
+
+def _extreme_results(results: list[Record]) -> list[Record]:
+    """Of each quantity's results, the RESULTS_EACH_END largest and smallest values, in their first order. A
+    per-place result <q>.<place> counts as q (its places are what is trimmed)."""
+    by: dict[str, list[int]] = {}
+    for i, r in enumerate(results):
+        by.setdefault(r["quantity"].partition(".")[0], []).append(i)
+    keep: set[int] = set()
+    for idx in by.values():
+        ranked = sorted(idx, key=lambda i: results[i]["value"])
+        keep.update(ranked[:RESULTS_EACH_END] + ranked[-RESULTS_EACH_END:])
+    return [results[i] for i in sorted(keep)]
 
 
 # get_context answers with the small parts unless asked for more: every call goes into the
 # caller's context, so the design (large) and the designer's variables come only on request.
 CONTEXT_SECTIONS = ("requirements", "load_cases", "judgements", "records", "design_summary", "design",
-                    "design_variables", "design_choices", "archetypes", "joint_wall_inputs", "formula_inputs")
+                    "design_variables", "design_choices", "archetypes", "joint_wall_inputs", "formula_inputs", "modules")
 DEFAULT_CONTEXT_SECTIONS = ()  # no sections asked: context_overview (counts and ids), every section by name
 JOINT_WALL_FORMULA = "frame_static.joint_wall_bending"
 
@@ -204,6 +229,7 @@ SECTION_HINTS = {
     "archetypes": "設計の型 (archetype で 1 つに絞れる)",
     "joint_wall_inputs": "つなぎ目の壁の曲げの式の入力 (load_case_id が要る)",
     "formula_inputs": "荷重条件ごとの式の入力 (load_case_id か domain で絞れる)",
+    "modules": "モジュールに分けた設計だけ: 自分のモジュールの変数・近道・空間・取付点と、その回の提案",
 }
 
 
@@ -330,10 +356,75 @@ def get_context(ctx: RunContext, args: dict[str, Any] | None = None, agent: str 
         "archetypes": kinds,
         "joint_wall_inputs": lambda: joint_wall_inputs(ctx, args.get("load_case_id")),
         "formula_inputs": formula_inputs,
+        "modules": lambda: modules_section(ctx, agent),
     }
     for name in wanted:
         out[name] = parts[name]()
     return out
+
+
+MODULES_HOW = ("モジュールの設計役は revise_design に module を付けて、自分のモジュールの variables と choices だけを変える提案を出す "
+               "(版は作らない)。空間 (envelope) と取付点 (interfaces) はパッケージ役が決め、build_version がその回の提案をまとめて次の版にする")
+
+
+def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
+    """For a design with modules: the caller's module (designer.<module>) or every module (others), each with
+    its variables (current values), choices (the values the generator offers), envelope and interfaces, and the
+    round's pending proposals. None for a design without modules."""
+    mods = rules.design_modules(ctx)
+    if mods is None:
+        return None
+    mine = agent.split(".", 1)[1] if agent and agent.startswith("designer.") else None
+    values = {x["name"]: x["value"] for x in design_variables(ctx) or []}
+    offered = (design_choices(ctx) or {}).get("choices") or {}
+
+    def one(m: Record, whole: bool) -> Record:
+        out: Record = {"module_id": m["module_id"], "owner": m["owner"],
+                       "variables": {k: values.get(k) for k in m.get("variables") or []}}
+        if m.get("choices"):
+            out["choices"] = {k: offered.get(k) for k in m["choices"]}
+        out["envelope"] = (m.get("envelope") or []) if whole else _envelope_outline(m.get("envelope") or [])
+        if m.get("interfaces"):
+            out["interfaces"] = _interface_groups(m["interfaces"])
+        return out
+
+    whole = mine in mods
+    shown = [mods[mine]] if whole else list(mods.values())
+    out = {"design_version": ctx.version, "how": MODULES_HOW, "modules": [one(m, whole) for m in shown],
+           "pending": [_proposal_line(c) for c in ctx.store.pending_proposals()]}
+    if not whole:
+        out["shown"] = MODULES_OUTLINE_SAID
+    return out
+
+
+# Every module at once (the packager, the lead) is shown in outline: run 094333's packager asked for it six times
+# and each answer (62 000 characters, the boxes and the 115 interfaces) was over Claude Code's limit, saved to a file
+# the role could not read
+MODULES_OUTLINE_SAID = ("全部のモジュールを見るときは、空間 (envelope) を箱の数と全体の範囲 (bounds) で、取付点 (interfaces) を "
+                        "モジュールの組と付け方ごとの節の並びで示す。build_version の regrow は箱を書かずに空間を作り直す")
+
+
+def _envelope_outline(boxes: list[Record]) -> Record:
+    """A module's envelope as the number of boxes and the axis-aligned bounds of all of them (mm)."""
+    if not boxes:
+        return {"boxes": 0}
+    lo = [min(b["center_mm"][i] - b["size_mm"][i] / 2.0 for b in boxes) for i in range(3)]
+    hi = [max(b["center_mm"][i] + b["size_mm"][i] / 2.0 for b in boxes) for i in range(3)]
+    return {"boxes": len(boxes), "bounds_mm": {"min": [round(x, 1) for x in lo], "max": [round(x, 1) for x in hi]}}
+
+
+def _interface_groups(interfaces: list[Record]) -> list[Record]:
+    """Interfaces grouped by the pair of modules and how they join: each group's ids with their node or point
+    ("if-001@RS1"), in the order given."""
+    groups: dict[tuple, Record] = {}
+    for i in interfaces:
+        key = (tuple(i["between"]), i.get("via"))
+        g = groups.setdefault(key, {"between": list(i["between"]), **({"via": i["via"]} if i.get("via") else {}),
+                                    "at": []})
+        where = i.get("node") or ("(" + ", ".join(f"{round(x, 1):g}" for x in i["point_mm"]) + ")"
+                                  if i.get("point_mm") else "")
+        g["at"].append(f"{i['id']}@{where}" if where else i["id"])
+    return list(groups.values())
 
 
 PAIRS_HOW = ("predicts: ツールのどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
@@ -348,15 +439,27 @@ def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: st
     describe(); [] when it has none), "how"}."""
     args = args or {}
     out = ctx.formulas.list_formulas()
-    tool = args.get("tool")
+    tool, ids = args.get("tool"), args.get("formula_ids")
+    if ids:  # the whole entries of the formulas named
+        missing = [i for i in ids if i not in {f["formula_id"] for f in out}]
+        if missing:
+            raise ToolError(f"式 {', '.join(missing)} はありません (list_formulas の formula_id)")
+        return [f for f in out if f["formula_id"] in ids]
     if tool:
         named = (ctx.specs.get(tool) or {}).get("formulas") or []
         out = [f for f in out if f["formula_id"] in named or f["formula_id"].split(".", 1)[0] == tool]
     if args.get("domain"):
         out = [f for f in out if f["domain"] == args["domain"]]
-    if not tool:
-        return out
+    if not tool:  # the short list (run N13: the whole strength list did not fit an answer); formula_ids gives the rest
+        return [formula_line(f) for f in out]
     return {"tool": tool, "formulas": out, "predicts": tool_predicts(ctx, tool), "how": PAIRS_HOW}
+
+
+def formula_line(f: Record) -> Record:
+    """One formula in short: id, title, domain, and the names and units of its inputs and outputs."""
+    names = lambda d: {k: v.get("unit") for k, v in (d or {}).items()} if isinstance(d, dict) else d  # noqa: E731
+    return {"formula_id": f["formula_id"], "title": f.get("title"), "domain": f.get("domain"),
+            "inputs": names(f.get("inputs")), "outputs": names(f.get("outputs"))}
 
 
 # A tool's notes may name the Python function that reads a formula's inputs off the design; a role
@@ -868,13 +971,10 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     return out
 
 
-def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
-                     pred_quantity: str | None = None) -> None:
-    """Refuse safe_side unless the load case has a criterion on this quantity and the
-    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
-    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
-    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
-    criterion's quantity."""
+def _check_on_criterion(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None, pred_quantity: str | None,
+                        flag: str) -> Record:
+    """The load case's criterion, refusing flag (safe_side, tool_decides: both make a verdict from this comparison)
+    unless the comparison is of the quantity the criterion judges (see _check_safe_side)."""
     crit = (lc or {}).get("criterion")
     judged = judged_quantity(ctx, tool, crit["quantity"]) if crit else None
     on_criterion = bool(crit) and (cmp["quantity"] == judged
@@ -882,9 +982,20 @@ def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str 
     if not crit or not on_criterion or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
         what = f"{crit['quantity']} ({crit['limit']['unit']})" if crit else "なし"
         raise ToolError(
-            f"safe_side は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
-            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。safe_side を外して原因と直し方だけ書いてください"
+            f"{flag} は合否の基準のある量にだけ付けられます。照合 {cmp['comparison_id']} は {cmp['quantity']} "
+            f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。{flag} を外して原因と直し方だけ書いてください"
         )
+    return crit
+
+
+def _check_safe_side(ctx: RunContext, cmp: Record, lc: Record | None, tool: str | None = None,
+                     pred_quantity: str | None = None) -> None:
+    """Refuse safe_side unless the load case has a criterion on this quantity and the
+    prediction is the unfavourable value (larger for <=, smaller for >=). The quantity is the
+    compared result's (cmp["quantity"]): the criterion's own, the one the tool is judged on
+    (judge.judged_quantity), or a result named by result_quantity for a prediction of the
+    criterion's quantity."""
+    crit = _check_on_criterion(ctx, cmp, lc, tool, pred_quantity, "safe_side")
     if prediction_is_unfavourable(cmp, crit["op"]):
         return
     side = "大きい" if unfavourable_side(crit["op"]) == "larger" else "小さい"
@@ -903,7 +1014,8 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     With safe_side true (and safe_side_reason), the CAE role says the cause explains
     the gap and the prediction bounds the true value from the safe side. The numbers
     are checked first; then a verdict is made from the prediction (the unfavourable
-    value), and the domain's judgement is updated.
+    value), and the domain's judgement is updated. With ends_case true, no prediction checkable
+    in this run reaches the quantity: the load case ends not judged (not with safe_side).
     """
     _check_input("record_cause", args)
     hit = ctx.store.find("comparison", args["comparison_id"])
@@ -920,11 +1032,31 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     pred = ctx.prediction(cmp["prediction_id"])
     lc = ctx.load_case(pred["load_case_id"]) if pred else None
     safe = bool(args.get("safe_side"))
+    ends = bool(args.get("ends_case"))
+    decides = bool(args.get("tool_decides"))
+    if safe and ends:
+        raise ToolError("safe_side と ends_case は一緒に付けられません (safe_side は予測で合否を出し、ends_case は合否を出さずに終えます)")
+    if decides and (safe or ends):
+        raise ToolError("tool_decides は safe_side とも ends_case とも一緒に付けられません (tool_decides はツールの値で合否を"
+                        "出し、safe_side は予測の値で合否を出し、ends_case は合否を出さずに終えます)")
     if safe:
         if not (args.get("safe_side_reason") or "").strip():
             raise ToolError("safe_side を付けるときは、予測が本当の値を安全側から押さえている理由を safe_side_reason に書いてください")
         ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
         _check_safe_side(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None)
+    if decides:  # docs/contract.md 手計算の役目: the hand calculation does not reach the value, the path was checked
+        if not (args.get("tool_decides_reason") or "").strip():
+            raise ToolError("tool_decides を付けるときは、手計算が値に届かない理由を tool_decides_reason に書いてください")
+        ana = ctx.store.get("analysis", cmp["analysis_id"]) or {}
+        _check_on_criterion(ctx, cmp, lc, ana.get("tool"), pred["quantity"] if pred else None, "tool_decides")
+        gap = path_check(ctx, lc, v, ana)
+        if gap:
+            raise ToolError(f"tool_decides は、力の道を手計算で確かめてあるときだけ付けられます。いまは{gap}。"
+                            f"{PATH_FORMULA} で部品から部材までの道を予測して記録し、道をたどるツール (load_path) で解析して"
+                            "つながりを確かめてから、もう一度書いてください")
+    if ends and lc is not None and lc.get("criterion") and path_check(ctx, lc, v) is None:
+        raise ToolError(f"{lc['load_case_id']} は、この版で力の道を手計算で確かめてあります。手計算が値に届かないときは、"
+                        "ends_case ではなく tool_decides と tool_decides_reason を付けてください (ツールの値で合否を出します)")
     domain = pred["domain"] if pred else None
     agent = agent or (ctx.owner(pred["load_case_id"]) if pred else "lead")
     cause = {
@@ -936,12 +1068,17 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     }
     if safe:
         cause.update(safe_side=True, safe_side_reason=args["safe_side_reason"].strip())
+    if ends:
+        cause["ends_case"] = True  # the load case ends not judged (rules.ended_cases: HK4 and HK5 do not wait for it)
+    if decides:
+        cause.update(tool_decides=True, tool_decides_reason=args["tool_decides_reason"].strip())
     ctx.store.add_record("cause", cause, design_version=v, agent=agent, domain=domain)
     ctx.store.add_record("comparison", dict(cmp, cause_id=cause["cause_id"]), design_version=v, agent=agent,
                          domain=domain)
     out: Record = {"cause": cause, "verdict": None}
-    if safe:
-        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"])
+    if safe or decides:
+        ver = make_verdict(ctx, ctx.store.next_id("verdict"), cmp, lc, cause_id=cause["cause_id"],
+                           basis=PATH_CHECKED if decides else None)
         ctx.store.add_record("verdict", ver, design_version=v, agent=agent, domain=domain)
         out["verdict"] = ver
     if domain in ctx.picked:
@@ -1129,26 +1266,38 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
     }
 
 
-def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
-    """The designer changes design variables; hiraku.designgen builds the next version from them.
+def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
+    """Build the run's load cases again on a new version's design (a criterion may read the design,
+    e.g. H5's number of parts) and write them for that version (load_cases.created). The same load
+    case ids as the version before: a test that no longer builds keeps its earlier load case, and
+    the run says so."""
+    from hiraku.catalog import load_catalog
+    from hiraku.catalog.build import build_load_cases
 
-    Checks: only the designer; every variable is a revisable one of the
-    design (hiraku.designgen.variables), keeps its unit and stays in its
-    range; a reason; the number of revisions stays within round_limit; and the
-    project's cost_usd is below cost_limit_usd. cost_usd is the cost as of the lead's
-    last finished turn (written when a ResultMessage ends a turn, runner.MessageLog),
-    so inside a turn this check sees the previous turn's cost; what stops a run in the
-    middle of a turn is the SDK's max_budget_usd. hiraku.designgen.regenerate rebuilds the
-    design; then design.created (parent_version, change_reason) and pending
-    tiles for the new version, whose load cases are all redone.
-    """
-    _check_input("revise_design", args)
-    agent = agent or "designer"
-    if agent != "designer":
-        raise ToolError("設計を直せるのは設計役 (designer) だけです。まとめ役から設計役に、どの試験をなぜ直すかを伝えてください")
-    reason = args["reason"].strip()
-    if not reason:
-        raise ToolError("reason に、どの試験が通らず、変更がそれにどう効くかを書いてください")
+    v = design["design_version"]
+    before = ctx.store.version_load_cases(v - 1)
+    tests = list(dict.fromkeys(lc["test_id"] for lc in before if not lc["load_case_id"].endswith("-beyond")))
+    req = requirements_now(ctx)
+    skipped: list = []
+    try:
+        built = build_load_cases(load_catalog(), req, design, tests, skipped, beyond=req.get("beyond", []))
+    except ValueError as e:
+        built, skipped = [], [("*", str(e))]
+    by_id = {lc["load_case_id"]: lc for lc in built}
+    kept = [lc["load_case_id"] for lc in before if lc["load_case_id"] not in by_id]
+    load_cases = [by_id.get(lc["load_case_id"], lc) for lc in before]
+    changed = [new["load_case_id"] for old, new in zip(before, load_cases) if old != new]
+    text = (f"版 {v} の荷重条件を、この版の設計で作り直しました"
+            + (f" (変わったもの: {'、'.join(changed)})" if changed else " (前の版と同じ)"))
+    if kept:
+        text += f"。この版では作れなかったので前の版のままのもの: {'、'.join(kept)}"
+    ctx.store.write_version_load_cases(v, load_cases, text=text)
+    return load_cases
+
+
+def _round_and_cost_left(ctx: RunContext) -> None:
+    """revise_design's and build_version's limits: the revisions stay within round_limit (each new version is one
+    round) and the project's cost_usd is below cost_limit_usd (see revise_design)."""
     p, v = ctx.project, ctx.version
     if v - 1 >= p["round_limit"]:
         raise ToolError(f"設計の直しは round_limit ({p['round_limit']} 回) まで使い切りました (今の版は {v})。"
@@ -1156,15 +1305,18 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     if p["cost_usd"] is not None and p["cost_usd"] >= p["cost_limit_usd"]:  # null: the plugin path, not known
         raise ToolError(f"まとめ役の最後に終わった番の時点で、費用 ({p['cost_usd']:.4g} USD) が上限 "
                         f"{p['cost_limit_usd']} USD に達しているので、設計は直せません")
-    design = ctx.store.design()
+
+
+def _checked_changes(ctx: RunContext, design: Record, given: Record, choices: Record) -> tuple[dict, list[str], dict]:
+    """(variable spec by name, revisable names, changes as floats) after checking every variable is a revisable
+    one of the design (hiraku.designgen.variables), keeps its unit and stays in its range, and every choice is
+    one of the generator's with one of its values; a ToolError lists every problem."""
     found = _variables(ctx, design)
     if found is None:
         raise ToolError("この設計を変数から組み直す関数 (hiraku.designgen) が無いので、設計は直せません")
     spec = {s["name"]: s for s in found}
     revisable = [n for n, s in spec.items() if s.get("revisable")]
     problems = []
-    given = args.get("changes") or {}
-    choices = dict(args.get("choices") or {})
     known = (design_choices(ctx) or {}).get("choices") or {}
     for name, opt in choices.items():  # contract tool_input.revise_design.choices: the generator's short ways
         if name not in known:
@@ -1182,21 +1334,58 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
             problems.append(f"{name} は {s['min']:g}〜{s['max']:g} {s['unit']} の範囲で選んでください ({q['value']:g} は外)")
     if problems:
         raise ToolError("設計の変数の指定が合いません: " + "; ".join(problems))
-    changes = {k: {"value": float(q["value"]), "unit": q["unit"]} for k, q in given.items()}
+    return spec, revisable, {k: {"value": float(q["value"]), "unit": q["unit"]} for k, q in given.items()}
+
+
+def _regenerate(ctx: RunContext, design: Record, merged: Record, tool: str) -> Record:
     try:
-        new = dict(ctx.designgen.regenerate(copy.deepcopy(design), {**changes, **choices}))
+        return dict(ctx.designgen.regenerate(copy.deepcopy(design), merged))
     except ValueError as e:
-        raise ToolError(f"この変数では設計を組めません: {e}。値を変えて revise_design を呼び直してください") from None
-    new.update(design_version=v + 1, parent_version=v, change_reason=reason)
+        raise ToolError(f"この変数では設計を組めません: {e}。{_who_changes(design, str(e), tool)}") from None
+
+
+def _who_changes(design: Record, said: str, tool: str) -> str:
+    """The next step after the generator refused: on a design with modules, who changes the variables its words
+    name (run 094333: the packager was told to call build_version again over an occupant variable it cannot
+    change, and spent its rounds on it)."""
+    mods = {m["module_id"]: m for m in design.get("modules") or []}
+    named = [(k, mid) for mid, m in mods.items() for k in list(m.get("variables") or []) + list(m.get("choices") or [])
+             if re.search(rf"\b{re.escape(k)}\b", said)]
+    if not named:
+        return f"値を変えて {tool} を呼び直してください"
+    by: dict[str, list[str]] = {}
+    for k, mid in named:
+        by.setdefault(mid, []).append(k)
+    steps = []
+    for mid, keys in by.items():
+        if mid == "package":
+            steps.append(f"{'・'.join(keys)} はレイアウトの変数: パッケージ役が build_version の changes で変える")
+        else:
+            steps.append(f"{'・'.join(keys)} は{contract.MODULE_NAMES_JA.get(mid, mid)}の変数: designer.{mid} が "
+                         f"revise_design (module={mid}) で出し直す (前の提案は置き換わる。パッケージ役はまとめ役に返す)")
+    return "次にすること: " + "。".join(steps) + f"。そのあと {tool} を呼び直す"
+
+
+def _moved(ctx: RunContext, spec: dict, revisable: list[str], new: Record, changes: Record) -> tuple[list[str], dict]:
+    """The revisable variables whose value or unit the new design has changed (read back from it), and the new
+    design's variables by name; the given changes count as moved even when designgen does not list them."""
+    after = {x["name"]: x for x in (_variables(ctx, new) or [])}
+    moved = [k for k in revisable if k in after and (after[k]["value"], after[k]["unit"]) != (spec[k]["value"], spec[k]["unit"])]
+    moved += [k for k in changes if k not in moved]
+    return moved, after
+
+
+def _new_version(ctx: RunContext, new: Record, agent: str) -> None:
     errs = contract.errors("design", new)
     if errs:
         raise ToolError("組み直した設計が契約の形に合いません (hiraku.designgen の不具合): " + "; ".join(errs)[:2000])
     ctx.store.write_design(new, agent=agent)
-    init_judgements(ctx, v + 1)
-    # every variable that moved: those given, and those a choice set (read back from the new design)
-    after = {x["name"]: x for x in (_variables(ctx, new) or [])}
-    moved = [k for k in revisable if k in after and (after[k]["value"], after[k]["unit"]) != (spec[k]["value"], spec[k]["unit"])]
-    moved += [k for k in changes if k not in moved]
+    rebuild_load_cases(ctx, new)
+    init_judgements(ctx, new["design_version"])
+
+
+def _version_summary(ctx: RunContext, v: int, reason: str, spec: dict, moved: list[str], after: dict,
+                     changes: Record, choices: Record) -> Record:
     return {
         "design_version": v + 1,
         "parent_version": v,
@@ -1206,8 +1395,339 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
                     for k in moved],
         **({"choices": choices} if choices else {}),
         "redo": [lc["load_case_id"] for lc in ctx.load_cases],
-        "revisions_left": p["round_limit"] - v,
+        "revisions_left": ctx.project["round_limit"] - v,
     }
+
+
+def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """The designer changes design variables; hiraku.designgen builds the next version from them.
+
+    Checks: only the designer; every variable is a revisable one of the
+    design (hiraku.designgen.variables), keeps its unit and stays in its
+    range; a reason; the number of revisions stays within round_limit; and the
+    project's cost_usd is below cost_limit_usd. cost_usd is the cost as of the lead's
+    last finished turn (written when a ResultMessage ends a turn, runner.MessageLog),
+    so inside a turn this check sees the previous turn's cost; what stops a run in the
+    middle of a turn is the SDK's max_budget_usd. hiraku.designgen.regenerate rebuilds the
+    design; then design.created (parent_version, change_reason) and pending
+    tiles for the new version, whose load cases are all redone.
+
+    On a design with modules (design.modules) the call is a module designer's proposal instead
+    (propose_module_change): no version is made; build_version builds the round's proposals.
+    """
+    _check_input("revise_design", args)
+    if rules.design_modules(ctx) is not None:
+        return propose_module_change(ctx, args, agent)
+    agent = agent or "designer"
+    if agent != "designer":
+        raise ToolError("設計を直せるのは設計役 (designer) だけです。まとめ役から設計役に、どの試験をなぜ直すかを伝えてください")
+    if args.get("module"):
+        raise ToolError("この設計はモジュールに分かれていないので、module は付けません。module を外して呼び直してください")
+    reason = args["reason"].strip()
+    if not reason:
+        raise ToolError("reason に、どの試験が通らず、変更がそれにどう効くかを書いてください")
+    v = ctx.version
+    _round_and_cost_left(ctx)
+    design = ctx.store.design()
+    choices = dict(args.get("choices") or {})
+    spec, revisable, changes = _checked_changes(ctx, design, args.get("changes") or {}, choices)
+    new = _regenerate(ctx, design, {**changes, **choices}, "revise_design")
+    new.update(design_version=v + 1, parent_version=v, change_reason=reason)
+    _new_version(ctx, new, agent)
+    # every variable that moved: those given, and those a choice set (read back from the new design)
+    moved, after = _moved(ctx, spec, revisable, new, changes)
+    return _version_summary(ctx, v, reason, spec, moved, after, changes, choices)
+
+
+def _proposal_line(c: Record) -> Record:
+    """A pending proposal, short: who, which module, what it changes."""
+    out: Record = {"change_id": c["change_id"], "module_id": c["module_id"], "agent_id": c["agent_id"], "reason": c["reason"]}
+    if c.get("changes"):
+        out["changes"] = {k: f"{q['value']:g} {q['unit']}" for k, q in c["changes"].items()}
+    if c.get("choices"):
+        out["choices"] = dict(c["choices"])
+    if c.get("load_case_ids"):
+        out["load_case_ids"] = list(c["load_case_ids"])
+    return out
+
+
+def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """revise_design on a design with modules (HK6): a proposal of one module's designer (designer.<module>)
+    that changes only that module's variables and choices (design.modules[].variables and choices), checked
+    like a revision (revisable, unit, range, the generator's choices). It is recorded as a module_change
+    (design.change_proposed; the event's design_version and the record's are the version it was based on) and makes no version;
+    build_version (the packager) builds the round's proposals into the next one. The round limit and the
+    cost limit apply as to a revision, since a proposal is only of use if a version can still be built.
+
+    The scripted run's `fit: driver` (scripted.fit_driver) runs before this call and puts the fitted values
+    into `changes`, so a fit that moves a variable outside the module is refused here like any other."""
+    module = args.get("module")
+    agent = agent or (f"designer.{module}" if module else None)
+    v = ctx.version
+    _gate(ctx, "revise_design", args, agent)
+    if not module or agent != f"designer.{module}":  # _gate's HK6 denies these; kept so a skipped check cannot pass
+        raise ToolError("この設計はモジュールに分かれているので、revise_design は module を付けて、そのモジュールの設計役が呼びます")
+    reason = args["reason"].strip()
+    if not reason:
+        raise ToolError("reason に、どの試験が通らず、変更がそれにどう効くかを書いてください")
+    _round_and_cost_left(ctx)
+    design = ctx.store.design()
+    choices = dict(args.get("choices") or {})
+    _, _, changes = _checked_changes(ctx, design, args.get("changes") or {}, choices)
+    if args.get("load_case_ids"):
+        # the contract's module_change.load_case_ids: "The red load cases this change answers" (red on version v)
+        from hiraku.tools.judge import latest_verdicts
+
+        verdicts = latest_verdicts(ctx, v)
+        not_red = [i for i in args["load_case_ids"] if i not in verdicts or verdicts[i]["pass"]]
+        if not_red:
+            raise ToolError(
+                f"load_case_ids には、版 {v} で赤 (合否の記録が不合格) の荷重条件だけを書きます。赤でないもの: "
+                f"{', '.join(not_red)}。前に合格した試験を戻さないための変更や、照合が保留で合否の無いものは、"
+                "load_case_ids から外して reason に書いてください")
+    change: Record = {"change_id": ctx.store.next_id("module_change"), "module_id": module, "agent_id": agent,
+                      "reason": reason, "design_version": v}  # the version it was made on (contract 18c2679)
+    if args.get("load_case_ids"):
+        change["load_case_ids"] = list(args["load_case_ids"])
+    if changes:
+        change["changes"] = changes
+    if choices:
+        change["choices"] = choices
+    errs = contract.errors("module_change", change)
+    if errs:
+        raise ToolError("提案が契約の形に合いません: " + "; ".join(errs))
+    before_ids = [c["change_id"] for c in ctx.store.pending_proposals(v) if c["module_id"] == module]
+    ctx.store.propose_change(change, design_version=v, agent=agent,
+                             text=f"{contract.MODULE_NAMES_JA.get(module, module)}の提案 {change['change_id']}: {reason}")
+    pending = ctx.store.pending_proposals(v)
+    replaced = [c for c in ctx.store.superseded_change_ids(v) if c in before_ids]
+    return {
+        "change_id": change["change_id"],
+        "module": module,
+        "based_on_version": v,
+        **({"changes": changes} if changes else {}),
+        **({"choices": choices} if choices else {}),
+        "pending": [c["change_id"] for c in pending],
+        **({"replaced": replaced} if replaced else {}),
+        "note": (f"提案として記録しました (版はまだ作っていません)。"
+                 + (f"同じモジュールの前の提案 {'、'.join(replaced)} は、この提案に置き換わりました (1 回の直しで、"
+                    "モジュールの提案は 1 つ)。" if replaced else "")
+                 + f"パッケージ役が build_version で、版 {v} への提案を全部まとめて版 {v + 1} を作ります"),
+    }
+
+
+# ---------------------------------------------------------------------------- build_version (designs with modules)
+
+ENVELOPE_TOL_MM = 0.5  # a corner this close outside an envelope box counts as inside (rounding of the boxes)
+
+
+def _box_frame(box: Record):
+    """(centre, rotation, half sizes) of a box; rotation by hiraku.solvers.k4_geometry's rpy convention."""
+    import numpy as np
+
+    from hiraku.solvers.k0_handcalc.rigid import rpy_matrix
+
+    rpy = box.get("rpy_deg")
+    R = rpy_matrix(rpy) if rpy is not None and any(rpy) else np.eye(3)
+    return np.asarray(box["center_mm"], float), R, np.asarray(box["size_mm"], float) / 2.0
+
+
+def _box_corners(box: Record) -> list:
+    import itertools
+
+    import numpy as np
+
+    c, R, h = _box_frame(box)
+    return [c + R @ (np.asarray(s) * h) for s in itertools.product((-1.0, 1.0), repeat=3)]
+
+
+def _outside_mm(point, envelope: list[Record]) -> float:
+    """How far (mm) a point lies outside the nearest envelope box (0 inside one)."""
+    import numpy as np
+
+    best = None
+    for box in envelope:
+        c, R, h = _box_frame(box)
+        local = R.T @ (np.asarray(point, float) - c)
+        d = float(np.linalg.norm(np.maximum(np.abs(local) - h, 0.0)))
+        best = d if best is None else min(best, d)
+    return best or 0.0
+
+
+def envelope_breaches(design: Record, modules: list[str]) -> list[tuple[str, str, float]]:
+    """(module, part or member id, mm outside) for every part box corner and member end node of the modules
+    given that lies outside all of its module's envelope boxes (modules with an empty envelope are not checked).
+    hiraku.designgen has no envelope check yet, so this small one stands in (see .notes/contract-questions.md)."""
+    mods = {m["module_id"]: m for m in design.get("modules") or []}
+    nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes") or []}
+    out = []
+    for m in modules:
+        env = (mods.get(m) or {}).get("envelope") or []
+        if not env:
+            continue
+        for part in design.get("parts") or []:
+            if part.get("module") == m and part.get("box"):
+                far = max(_outside_mm(p, env) for p in _box_corners(part["box"]))
+                if far > ENVELOPE_TOL_MM:
+                    out.append((m, part["id"], far))
+        for mem in design.get("members") or []:
+            if mem.get("module") == m:
+                ends = [nodes[k] for k in (mem.get("node_a"), mem.get("node_b")) if k in nodes]
+                far = max((_outside_mm(p, env) for p in ends), default=0.0)
+                if far > ENVELOPE_TOL_MM:
+                    out.append((m, mem["id"], far))
+    return out
+
+
+def _modules_moved(old: Record, new: Record) -> list[str]:
+    """The modules with a part box or a member end node that differs between two designs (added and removed
+    parts and members count)."""
+    def shapes(d: Record) -> dict[tuple[str, str], tuple[str | None, Any]]:
+        nodes = {n["id"]: n["xyz_mm"] for n in d.get("nodes") or []}
+        out = {("part", p["id"]): (p.get("module"), p.get("box")) for p in d.get("parts") or []}
+        out.update({("member", m["id"]): (m.get("module"), [nodes.get(m.get("node_a")), nodes.get(m.get("node_b"))])
+                    for m in d.get("members") or []})
+        return out
+
+    a, b = shapes(old), shapes(new)
+    return list(dict.fromkeys(m for k in sorted(set(a) | set(b)) if a.get(k) != b.get(k)
+                              for m, _ in (a.get(k) or (None, None), b.get(k) or (None, None)) if m))
+
+
+def _outside_envelopes(ctx: RunContext, design: Record, modules: list[str]) -> list[tuple[str, str, float]]:
+    """(module, part or member id, mm outside) of the modules given: hiraku.designgen.modules.outside (the check
+    H1-envelope makes) when the run's designgen has it, else the stand-in envelope_breaches (test designgens)."""
+    outside = None
+    if getattr(ctx.designgen, "__name__", "") == "hiraku.designgen":
+        from hiraku.designgen.modules import outside
+    if outside is None:
+        return envelope_breaches(design, modules)
+    envs = {m["module_id"]: m.get("envelope") or [] for m in design.get("modules") or []}
+    return [(m, body.split(":", 1)[-1], float(mm)) for body, m, mm in outside(design, envs) if m in modules]
+
+
+def _apply_layout(modules: list[Record], envelopes: Record, interfaces: list[Record]) -> list[Record]:
+    """The modules with the packager's new envelopes (module_id -> boxes) and interfaces (each put into both
+    modules it is between, replacing one of the same id)."""
+    out = copy.deepcopy(modules)
+    by_id = {m["module_id"]: m for m in out}
+    for m, boxes in envelopes.items():
+        by_id[m]["envelope"] = copy.deepcopy(boxes)
+    for itf in interfaces:
+        for m in itf["between"]:
+            if m in by_id:
+                kept = [i for i in by_id[m].get("interfaces") or [] if i["id"] != itf["id"]]
+                by_id[m]["interfaces"] = kept + [copy.deepcopy(itf)]
+    return out
+
+
+def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """The packager builds the next version of a design with modules (HK6) from every pending proposal based on
+    the current version (store.pending_proposals) and its own `changes` (package variables only), `envelopes` and
+    `interfaces`, through the same regenerate path as revise_design, as one round of round_limit. Refused while
+    two proposals (or a proposal and the packager's changes) change the same variable or set the same choice, and
+    when a proposing module's parts or members (every module's, when the packager changed package variables or
+    interfaces; the module's, when its envelope changed) would leave its envelope. The new design's module_changes
+    lists every proposal used and, when the build moved package variables, one module_change of the packager's
+    (module package, agent packager) whose changes hold every package variable the build moved. Returns what
+    revise_design returns for a new version, with module_changes (their ids)."""
+    _check_input("build_version", args)
+    agent = agent or "packager"
+    mods = rules.design_modules(ctx)
+    if mods is None:
+        raise ToolError("build_version は、モジュールに分かれた設計だけで使います。この設計は設計役が revise_design で直します")
+    _gate(ctx, "build_version", args, agent)
+    if agent != "packager":  # _gate's HK6 denies this; kept so a skipped check cannot pass
+        raise ToolError("次の版を作る build_version はパッケージ役 (packager) だけが使えます")
+    reason = args["reason"].strip()
+    if not reason:
+        raise ToolError("reason に、その回の提案をどうまとめたか (レイアウトを変えたなら、その理由も) を書いてください")
+    _round_and_cost_left(ctx)
+    v = ctx.version
+    design = ctx.store.design()
+    pending = ctx.store.pending_proposals(v)
+    own = args.get("changes") or {}
+    envelopes = args.get("envelopes") or {}
+    interfaces = list(args.get("interfaces") or [])
+    regrow = list(args.get("regrow") or [])  # contract 6f56356: spaces the code makes again around the parts
+    problems = [f"モジュール {m} はこの設計にありません ({', '.join(mods)})" for m in [*envelopes, *regrow] if m not in mods]
+    problems += [f"{m} は envelopes と regrow の両方にあります (どちらか 1 つにしてください)" for m in regrow if m in envelopes]
+    problems += ["package には空間がありません (regrow に入れられません)" for m in regrow if m == "package"]
+    problems += [f"取付点 {i['id']} のモジュール {m} はこの設計にありません" for i in interfaces for m in i["between"] if m not in mods]
+    if problems:
+        raise ToolError("空間・取付点の指定が合いません: " + "; ".join(problems))
+    # the same variable or choice from two sources
+    who: dict[tuple[str, str], list[str]] = {}
+    for c in pending:
+        for k in c.get("changes") or {}:
+            who.setdefault(("変数", k), []).append(c["change_id"])
+        for k in c.get("choices") or {}:
+            who.setdefault(("近道", k), []).append(c["change_id"])
+    for k in own:
+        who.setdefault(("変数", k), []).append("パッケージ役の changes")
+    clash = [f"{word} {k}: {' と '.join(ids)}" for (word, k), ids in who.items() if len(ids) > 1]
+    if clash:
+        raise ToolError("同じものを 2 つの提案が変えているので、版を作れません: " + "; ".join(clash)
+                        + "。どちらにするかを決め、要らない方の設計役に出し直してもらうか、まとめ役に伝えてください")
+    merged_changes: Record = {}
+    merged_choices: Record = {}
+    for c in pending:
+        merged_changes.update(c.get("changes") or {})
+        merged_choices.update(c.get("choices") or {})
+    merged_changes.update(own)
+    spec, revisable, changes = _checked_changes(ctx, design, merged_changes, merged_choices)
+    new = _regenerate(ctx, design, {**changes, **merged_choices}, "build_version")
+    fresh = copy.deepcopy(new.get("modules") or design["modules"])
+    grown = {m["module_id"]: copy.deepcopy(m.get("envelope") or []) for m in fresh}  # made around the new parts
+    envelopes = {**{m: grown.get(m, []) for m in regrow}, **envelopes}
+    if not own:  # no layout change: every module keeps the previous version's space and mounts (designgen.modules)
+        before = {m["module_id"]: m for m in design["modules"]}
+        for m in fresh:
+            if m["module_id"] in before:
+                m["envelope"] = copy.deepcopy(before[m["module_id"]].get("envelope") or [])
+                m["interfaces"] = copy.deepcopy(before[m["module_id"]].get("interfaces") or [])
+    new["modules"] = _apply_layout(fresh, envelopes, interfaces)
+    moved, after = _moved(ctx, spec, revisable, new, changes)
+    package_vars = set((mods.get("package") or {}).get("variables") or [])
+    own_moved = {k: (dict(changes[k]) if k in own else {"value": after[k]["value"], "unit": after[k]["unit"]})
+                 for k in moved if k in package_vars}
+    stray = [k for k in own_moved if k not in own]
+    if stray:  # a module's choice moved a layout variable: only the packager changes those
+        raise ToolError(f"提案の近道がレイアウトの変数 ({', '.join(stray)}) を動かします。レイアウトの変数を変えるのはパッケージ役だけなので、"
+                        f"changes にその値を書いて変えるか、近道を出した設計役に別の値を頼んでください")
+    # a module's change can move another module's parts (a steering proposal moves the frame's dash posts and
+    # column bracket): those modules are checked too
+    touched = list(dict.fromkeys([c["module_id"] for c in pending] + list(envelopes)
+                                 + _modules_moved(design, new)))
+    if own or interfaces:  # the layout moved: every module's parts may have moved with it
+        touched = [m for m in mods if m != "package"]
+    breaches = _outside_envelopes(ctx, new, touched)
+    if breaches:
+        by_module: dict[str, list[str]] = {}
+        for c in pending:
+            by_module.setdefault(c["module_id"], []).append(c["change_id"])
+        lines = [f"{contract.MODULE_NAMES_JA.get(m, m)} ({m}) の {pid} が空間から {far:.1f} mm はみ出す"
+                 + (f" (提案 {', '.join(by_module[m])})" if m in by_module else "") for m, pid, far in breaches]
+        raise ToolError("部品がモジュールの空間 (envelope) からはみ出すので、版を作れません: " + "; ".join(lines)
+                        + "。その設計役に収まる値で出し直してもらうか、regrow (モジュールの並び) か envelopes で空間を配り直してください")
+    used = [copy.deepcopy(c) for c in pending]
+    if own_moved:
+        used.append({"change_id": ctx.store.next_id("module_change"), "module_id": "package", "agent_id": "packager",
+                     "reason": reason, "design_version": v, "changes": own_moved})
+    ids = [c["change_id"] for c in pending]
+    parts = [f"その回の提案をまとめた ({', '.join(ids) if ids else 'なし'})", reason]
+    if regrow:
+        parts.append("空間を部品の形から作り直した: " + "、".join(regrow))
+    if [m for m in envelopes if m not in regrow]:
+        parts.append("空間を配り直した: " + "、".join(m for m in envelopes if m not in regrow))
+    if interfaces:
+        parts.append("取付点を変えた: " + "、".join(i["id"] for i in interfaces))
+    change_reason = "。".join(parts)
+    new.update(design_version=v + 1, parent_version=v, change_reason=change_reason, module_changes=used)
+    _new_version(ctx, new, agent)
+    out = _version_summary(ctx, v, change_reason, spec, moved, after, changes, merged_choices)
+    out["module_changes"] = [c["change_id"] for c in used]
+    return out
 
 
 # ---------------------------------------------------------------------------- the report (N17)
@@ -1412,6 +1932,7 @@ FUNCTIONS = {
     "compare": compare,
     "record_cause": record_cause,
     "revise_design": revise_design,
+    "build_version": build_version,
     "propose_design": propose_design,
     "make_tool": make_tool,
     "check_tool": check_tool,
@@ -1436,5 +1957,5 @@ def rule_check(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
 INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design), tool
 # making (with its template), the report and the intake tools.
-RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, "propose_design", "make_tool", "check_tool",
+RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, *contract.MCP_TOOLS_PACKAGER, "propose_design", "make_tool", "check_tool",
              "get_tool_template", "write_report", *INTAKE_TOOLS)

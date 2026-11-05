@@ -390,11 +390,18 @@ class ServeApi(unittest.TestCase):
         self.assertIn("WAV", res["error"])
         self.assertFalse(self.out.exists())
 
+    def refused(self, method, path, body=None, headers=None):
+        """True when the server answers 403 or drops the connection first. On Windows the server
+        closing before the client has sent the whole body shows up as WinError 10053/10054."""
+        try:
+            return self.s.request(method, path, body, headers)[0] == 403
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            return True
+
     def test_other_hosts_and_origins_are_refused(self):
-        self.assertEqual(self.s.request("GET", "/api/status", headers={"Host": "evil.example:80"})[0], 403)
-        code, _, _ = self.s.request("PUT", "/api/take/N00_1.wav", tone_wav(0.3),
-                                    {"Origin": "http://evil.example"})
-        self.assertEqual(code, 403)
+        self.assertTrue(self.refused("GET", "/api/status", headers={"Host": "evil.example:80"}))
+        self.assertTrue(self.refused("PUT", "/api/take/N00_1.wav", tone_wav(0.3),
+                                     {"Origin": "http://evil.example"}))
         self.assertFalse(self.out.exists())
         code, _, _ = self.s.request("PUT", "/api/take/N00_1.wav", tone_wav(0.3),
                                     {"Origin": f"http://localhost:{self.s.port}"})

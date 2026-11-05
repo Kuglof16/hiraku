@@ -30,10 +30,20 @@ def max_steer(design: dict) -> float:
     return units.to_unit(q, "deg", "max_steer_angle") if q is not None else 0.0
 
 
-def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) -> list[tuple[str, str, float]]:
+def _spheres(bs: dict[str, Body]) -> tuple[list[str], np.ndarray, np.ndarray]:
+    """Every body's sphere (_sphere), in the order of bs: (keys, centres (n, 3), radii (n,))."""
+    keys = list(bs)
+    got = [_sphere(bs[k]) for k in keys]
+    return (keys, np.array([c for c, _ in got], float).reshape(-1, 3), np.array([r for _, r in got], float))
+
+
+def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float,
+          spheres: tuple[list[str], np.ndarray, np.ndarray] | None = None) -> list[tuple[str, str, float]]:
+    """spheres: _spheres(bs), when the caller asks for many positions of the same bodies."""
     s = next(x for x in design["supports"] if x["id"] == sid)
     c = np.asarray(s["position_mm"], float)
     group = {k: b for k, b in bs.items() if b.support == sid}
+    keys, C, Rad = spheres or _spheres(bs)
     R = _rz(steer)
     out = []
     for k, b in group.items():
@@ -43,13 +53,29 @@ def _hits(design: dict, bs: dict[str, Body], sid: str, dz: float, steer: float) 
             o = _link_moved(b, R, c, dz, steer)
         else:
             o = (b.turned(R, c) if steer else b).moved([0.0, 0.0, dz])
-        for k2, other in bs.items():
-            if k2 in group or mounted(b, other, design):
+        c_o, r_o = _sphere(o)
+        # spheres round the two shapes apart by more than the touch: they cannot overlap (a quick test first)
+        near = np.sqrt(((C - c_o) ** 2).sum(axis=1)) <= r_o + Rad + TOUCH_MM
+        for i in np.flatnonzero(near):
+            k2 = keys[i]
+            if k2 in group:
+                continue
+            other = bs[k2]
+            if mounted(b, other, design):
                 continue
             ov = shape_overlap(o, other)
             if ov > TOUCH_MM:
                 out.append((k, k2, ov))
     return out
+
+
+def _sphere(b: Body) -> tuple[np.ndarray, float]:
+    """A sphere round the shape the overlap test uses: the capsule's (a moved link's box is not moved), else the
+    box's."""
+    if b.capsule is not None:
+        c = b.capsule
+        return (c.a + c.b) / 2.0, float(np.linalg.norm(c.b - c.a)) / 2.0 + c.r
+    return b.obb.center, float(np.linalg.norm(b.obb.half))
 
 
 def _link_moved(b: Body, R: np.ndarray, c: np.ndarray, dz: float, steer: float) -> Body:
@@ -71,17 +97,18 @@ def sweep(design: dict, bs: dict[str, Body] | None = None) -> dict:
     steer_max = max_steer(design)
     hits: dict[tuple[str, str], tuple[float, str]] = {}
     free = {}
+    sph = _spheres(bs)
     for s in design["supports"]:
         travel = float(s.get("suspension", {}).get("travel_mm") or 0.0)
         dzs = np.linspace(-travel / 2.0, travel / 2.0, STEPS) if travel > 0 else [0.0]
         steers = np.linspace(-steer_max, steer_max, STEPS) if s["actuation"]["steer"] and steer_max > 0 else [0.0]
         for dz in dzs:
             for st in steers:
-                for a, b, ov in _hits(design, bs, s["id"], float(dz), float(st)):
+                for a, b, ov in _hits(design, bs, s["id"], float(dz), float(st), sph):
                     if ov > hits.get((a, b), (0.0, ""))[0]:
                         hits[(a, b)] = (ov, f"steer {st:+.0f} deg, wheel travel {dz:+.0f} mm")
         if s["actuation"]["steer"] and steer_max > 0:
-            free[s["id"]] = free_steer(design, bs, s["id"], steer_max, dzs)
+            free[s["id"]] = free_steer(design, bs, s["id"], steer_max, dzs, sph)
     return {"hits": sorted(((a, b, o, c) for (a, b), (o, c) in hits.items()), key=lambda t: -t[2]), "free_steer": free}
 
 
@@ -123,18 +150,19 @@ def steer_room(design: dict, bs: dict[str, Body] | None = None) -> dict[str, dic
     return out
 
 
-def free_steer(design: dict, bs: dict[str, Body], sid: str, limit: float, dzs) -> float:
+def free_steer(design: dict, bs: dict[str, Body], sid: str, limit: float, dzs, spheres=None) -> float:
     """Largest steer angle (deg, both ways, whole travel) that adds no contact to what the
-    straight-ahead wheel already has, by bisection."""
+    straight-ahead wheel already has, by bisection. spheres: _spheres(bs), when already made."""
+    sph = spheres or _spheres(bs)
     base = {}
     for dz in dzs:
-        for a, b, o in _hits(design, bs, sid, float(dz), 0.0):
+        for a, b, o in _hits(design, bs, sid, float(dz), 0.0, sph):
             base[(a, b)] = max(base.get((a, b), 0.0), o)
 
     def clear(ang: float) -> bool:
         for dz in dzs:
             for sgn in (1, -1):
-                for a, b, o in _hits(design, bs, sid, float(dz), sgn * ang):
+                for a, b, o in _hits(design, bs, sid, float(dz), sgn * ang, sph):
                     if o > base.get((a, b), 0.0) + TOUCH_MM:
                         return False
         return True

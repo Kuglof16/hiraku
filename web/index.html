@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HIRAKU</title>
+<link rel="icon" href="data:,"><!-- no icon file: without this the browser asks for /favicon.ico (404) -->
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/shelf.css">
 <link rel="stylesheet" href="css/assembly.css">
+<link rel="stylesheet" href="css/joints.css"><!-- joints: -->
 <!-- three.js r170 (0.170.0) from jsDelivr; the version is pinned here and nowhere else. -->
 <script type="importmap">
 {
@@ -34,15 +36,8 @@
   </header>
 
   <nav class="tabsrow">
-    <div class="tabs" id="tabs">
-      <button class="tab" data-tab="A1">依頼</button>
-      <button class="tab" data-tab="A2">ヒアリング</button>
-      <button class="tab" data-tab="bench">作業台</button>
-      <button class="tab" data-tab="grid">全分野</button>
-      <button class="tab" data-tab="A4">ツール</button>
-      <button class="tab" data-tab="A5">ナレッジ</button>
-      <button class="tab" data-tab="A7">組み立て</button>
-    </div>
+    <!-- the tabs: ① to ⑤ in the order of use, then the tool shelf and the rules (js/tabs.js, words in js/labels.js TAB_JA) -->
+    <div class="tabs" id="tabs"></div>
     <div class="chips" id="chips"></div>
   </nav>
 
@@ -107,6 +102,8 @@
       <div class="grid-head" id="grid-head"></div>
       <div class="tiles" id="tiles"></div>
       <div class="grid-banner" id="grid-banner" hidden></div>
+      <!-- the newest report's next changes (js/report_next.js) -->
+      <div class="report-next" id="report-next" data-kind="label" hidden></div>
     </section>
 
     <section class="col-right">

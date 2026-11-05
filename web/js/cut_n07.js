@@ -1,14 +1,17 @@
-// N07: the contour of a stress analysis on the frame's plate mesh. The vehicle turns
-// slowly in the colours of the version before the reinforcement, the camera comes to
-// that version's largest element, and the colours go over to the version after it, on
-// one colour scale; then it stays there. The viewers do not know CAE: the words on the
-// page are only "補強の前" / "補強の後", and a legend of two things, "応力 [MPa]" and
-// "許容 <the load case's criterion limit>" (no names of analyses or of stress measures).
-// The tag is large (label.of_view_h), and with the version after it says in green
-// "✓ 直った" when the records judge that version a pass on the load case (its verdicts,
+// N07: the contour of a stress analysis on the frame's plate mesh, the version before the
+// reinforcement and the version after it side by side in the view's box (left and right, on
+// one colour scale, through one camera). The vehicle turns slowly, the camera comes to the
+// version before's largest element, and it stays there. What the version after added or
+// changed is boxed in the highlight's colour (DIFF_COLOR), found from the two design records
+// (designDiff: parts and members by id; nothing is drawn that the design has no shape for).
+// The viewers do not know CAE: the words on the page are only "補強の前" / "補強の後" (with
+// "足した部品 N・変えた部品 M" under the second), and a legend of two things, "応力 [MPa]"
+// and "許容 <the load case's criterion limit>" (no names of analyses or of stress measures).
+// The tags are large (label.of_view_h), and from the swap's middle the version after's says
+// in green "✓ OK" when the records judge that version a pass on the load case (its verdicts,
 // else the domain's judgement of the version); otherwise nothing is added. Positions,
-// sizes, colours, the length and the times come from layout.json n07; a missing key is
-// named on the page.
+// sizes, colours, the length and the times come from layout.json n07 (label.x / label.y
+// from the view's top left are kept on each side); a missing key is named on the page.
 // cut.html?cut=n07&run=<id>&t=<s>[&lc=<load case>][&before=<version>&after=<version>]
 //
 // The colours: each element's shell stress (the surface "max" field, from the record), on
@@ -16,16 +19,16 @@
 // (also in the version after, e.g. an inside corner), with no words added.
 //
 // The weak spot: a ring round the element with the largest recorded value of the version
-// before (its contour's maxAt), no number or word with it. It is shown from lead_s to the
-// end: small while the vehicle turns, growing with the zoom, held at zoom.fill of the
-// view's height from zoom_to_s through the swap (so the eye can follow the weak spot), and
-// green once the version after is shown and judged a pass. It carries no data-kind (it
+// before (its contour's maxAt), at the same place on both sides, no number or word with it.
+// It is shown from lead_s to the end: small while the vehicle turns, growing with the zoom,
+// held at zoom.fill of the view's height from zoom_to_s (so the eye can follow the weak
+// spot), and on the version after green once it says "✓ OK". It carries no data-kind (it
 // marks the picture, as the colours do).
 //
 // times: lead_s..turn_to_s the turn (turn_deg in all); zoom_s..zoom_to_s the camera
 // comes to the largest element (its neighbourhood then takes zoom.fill of the view's
-// height); swap_s..swap_to_s the version after fades in over the one before (same
-// camera, same scale). Before lead_s and after each step the picture holds still.
+// height); from the middle of swap_s..swap_to_s the version after says "✓ OK" (when judged
+// a pass) and its ring is green. Before lead_s and after each step the picture holds still.
 // On the way in the camera's direction goes round by its azimuth (about the vertical) and its
 // elevation, each evenly (the camera keeps its up, so the picture turns by the azimuth's
 // change even where the camera looks steeply down), and by no more than the zoom's time allows
@@ -38,8 +41,8 @@ import * as THREE from "three";
 import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
-import { esc, fmt, unitLabel } from "./labels.js";
-import { VIEWS, cutView, isoToThree } from "./workbench3d.js";
+import { OK_WORD, esc, fmt, unitLabel } from "./labels.js";
+import { OVERLAY, VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { PACE_LIMIT_DEG_S } from "./pace.js";
 
@@ -62,6 +65,45 @@ const params = new URLSearchParams(location.search);
 const BORDER_PX = 2; // the view's rule line
 const GREEN = "#2f7d4f"; // the pages' colour of a pass (as .ok in cut.html)
 const STATE_JA = ["補強の前", "補強の後"];
+const SIDE_GAP_PX = 16; // between the two sides in the view's box
+// The highlight of what the version after added or changed: apart from the contour's bands
+// (blue to red), the dark red past the top and the ring's red and green.
+const DIFF_COLOR = "#d01fd0";
+
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// What design b added, changed and took away against design a (both design records): parts
+// and members by id. A part changed when any of its values differ; a member when its ends'
+// nodes, their places, its section (or that section's values) or its material differ.
+export function designDiff(a, b) {
+  const byId = (list) => new Map((list ?? []).map((x) => [x.id, x]));
+  const out = { parts: { added: [], changed: [], removed: [] }, members: { added: [], changed: [], removed: [] } };
+  const pa = byId(a?.parts);
+  const pb = byId(b?.parts);
+  for (const [id, p] of pb) {
+    if (!pa.has(id)) out.parts.added.push(id);
+    else if (!sameJson(pa.get(id), p)) out.parts.changed.push(id);
+  }
+  for (const id of pa.keys()) if (!pb.has(id)) out.parts.removed.push(id);
+  const node = (d, id) => (d?.nodes ?? []).find((n) => n.id === id)?.xyz_mm ?? null;
+  const memberKey = (d, m) => [node(d, m.node_a), node(d, m.node_b), m.section, d?.sections?.[m.section] ?? null, m.material];
+  const ma = byId(a?.members);
+  const mb = byId(b?.members);
+  for (const [id, m] of mb) {
+    if (!ma.has(id)) out.members.added.push(id);
+    else if (!sameJson(memberKey(a, ma.get(id)), memberKey(b, m))) out.members.changed.push(id);
+  }
+  for (const id of ma.keys()) if (!mb.has(id)) out.members.removed.push(id);
+  return out;
+}
+
+// The diff in words for the label: what was added and changed, with counts ("" for none).
+export function diffWords(diff) {
+  if (!diff) return "";
+  const added = diff.parts.added.length + diff.members.added.length;
+  const changed = diff.parts.changed.length + diff.members.changed.length;
+  return [added ? `足した部品 ${added}` : "", changed ? `変えた部品 ${changed}` : ""].filter(Boolean).join("・");
+}
 
 const N07_KEYS = [
   "duration_s",
@@ -184,22 +226,33 @@ export class CutN07 {
     box.className = "n07-view";
     box.dataset.box = "n07.view";
     this.place(box, V);
-    Object.assign(box.style, { background: sp.colors.panel, border: `${BORDER_PX}px solid ${sp.colors.rule}` });
-    this.inner = { w: V.w - 2 * BORDER_PX, h: V.h - 2 * BORDER_PX };
     this.stage.append(box);
-    // the mark round the largest element once the camera is there: a ring in the overlay's
-    // colour, its fill clear in the middle (the colours it points at stay as they are) and
-    // the overlay's opacity only toward the rim
-    this.mark = document.createElement("div");
-    this.mark.className = "n07-mark";
+    // the view's box shared by the versions side by side (one alone fills it)
+    const n = this.cases.length;
+    const w = Math.floor((V.w - (n - 1) * SIDE_GAP_PX) / n);
+    this.inner = { w: w - 2 * BORDER_PX, h: V.h - 2 * BORDER_PX };
     const rgba = (hex) => `rgba(${new THREE.Color(hex).toArray().map((x) => Math.round(x * 255)).join(", ")}, ${sp.overlay.opacity})`;
     this.rim = rgba(sp.overlay.color);
     this.greenRim = rgba(GREEN);
-    Object.assign(this.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${this.rim} 100%)`, opacity: "0" });
-    for (const c of this.cases) {
+    // what the second version added or changed, from the two designs (designDiff)
+    this.diff = n > 1 ? designDiff(this.s.designs[this.cases[0].version], this.s.designs[this.cases[1].version]) : null;
+    this.cases.forEach((c, i) => {
+      const side = document.createElement("div");
+      side.className = "n07-side";
+      side.dataset.box = `n07.view.${i ? "after" : "before"}`;
+      Object.assign(side.style, { left: `${i * (w + SIDE_GAP_PX)}px`, top: "0px", width: `${w}px`, height: `${V.h}px`, background: sp.colors.panel, border: `${BORDER_PX}px solid ${sp.colors.rule}` });
+      box.append(side);
+      c.side = side;
       c.el = document.createElement("canvas");
       c.el.dataset.kind = "moving";
-      box.append(c.el);
+      side.append(c.el);
+      // the mark round the largest element once the camera is there: a ring in the overlay's
+      // colour, its fill clear in the middle (the colours it points at stay as they are) and
+      // the overlay's opacity only toward the rim
+      c.mark = document.createElement("div");
+      c.mark.className = "n07-mark";
+      Object.assign(c.mark.style, { borderColor: sp.overlay.color, background: `radial-gradient(circle, transparent 60%, ${this.rim} 100%)`, opacity: "0" });
+      side.append(c.mark);
       const v = cutView(this, "n07");
       v.setDesign(this.s.designs[c.version] ?? null);
       v.setLoading(this.lc?.params?.loading ?? null);
@@ -209,8 +262,9 @@ export class CutN07 {
       v.setToggles({ parts: false, contour: true, arrows: false, cg: false, names: false, limit: false });
       v.resize(this.inner.w, this.inner.h);
       c.view = v;
-    }
-    box.append(this.mark);
+      if (i === 1 && this.diff) c.marks = this.diffMarks(v, this.s.designs[c.version], this.diff);
+    });
+    this.mark = this.cases[0].mark;
     const first = this.cases[0];
     // the turn: about the vertical through the vehicle's middle, from the default view
     const bv = first.view;
@@ -252,25 +306,76 @@ export class CutN07 {
     this.legend = el;
   }
 
+  // One label per side, at label.x / label.y from its side's top left (as from the view's):
+  // the version's name, and on the version after "✓ OK" once it is shown judged a pass
+  // (setFixed) and, under it, what it added or changed (the highlight's colour, counts from
+  // designDiff).
   buildLabel() {
     const sp = this.spec;
-    const el = document.createElement("div");
-    el.className = "n07-label";
-    el.dataset.box = "n07.label";
-    el.dataset.kind = "label";
     const px = Math.max(this.px(sp.label.size_px), this.story.bodyPx, Math.round(sp.view.h * sp.label.of_view_h));
-    Object.assign(el.style, { left: `${sp.label.x}px`, top: `${sp.label.y}px`, fontSize: `${px}px` });
-    this.stage.append(el);
-    this.label = el;
+    // (inside the side's border, which its children are placed from)
+    const dx = sp.label.x - sp.view.x - BORDER_PX;
+    const dy = sp.label.y - sp.view.y - BORDER_PX;
+    this.cases.forEach((c, i) => {
+      const el = document.createElement("div");
+      el.className = "n07-label";
+      el.dataset.box = `n07.label.${i ? "after" : "before"}`;
+      el.dataset.kind = "label";
+      Object.assign(el.style, { left: `${dx}px`, top: `${dy}px`, fontSize: `${px}px` });
+      el.innerHTML = `<span class="name">${esc(c.name)}</span>`;
+      const words = i === 1 ? diffWords(this.diff) : "";
+      if (words) el.insertAdjacentHTML("beforeend", `<small class="diff" style="font-size:${Math.max(this.story.bodyPx, this.px(sp.legend.text_px))}px;color:${DIFF_COLOR}"><i style="border-color:${DIFF_COLOR}"></i>${esc(words)}</small>`);
+      c.side.append(el);
+      c.label = el;
+    });
+    this.label = this.cases.at(-1).label;
     this.labelFor = null;
   }
 
-  setLabel(c) {
-    if (this.labelFor === c) return;
-    this.labelFor = c;
-    this.label.textContent = c.name;
-    if (c.fixed) this.label.insertAdjacentHTML("beforeend", ` <span class="fixed" style="color:${GREEN}">✓ 直った</span>`);
-    this.label.dataset.fixed = c.fixed ? "1" : "0";
+  // "✓ OK" on the version after when the record judges it a pass, shown from the swap's middle.
+  setFixed(on) {
+    if (this.labelFor === on) return;
+    this.labelFor = on;
+    const a = this.cases[1];
+    if (!a) return;
+    a.label.querySelector(".fixed")?.remove();
+    if (on) a.label.querySelector(".name").insertAdjacentHTML("afterend", ` <span class="fixed" style="color:${GREEN}">${OK_WORD}</span>`);
+    a.label.dataset.fixed = on ? "1" : "0";
+  }
+
+  // Boxes round what the version after added or changed (the diff's ids), drawn from that
+  // design's own data: a part by its box, a member by its drawn tube; an id with no shape in
+  // the design gets none. In the highlight's colour, an outline seen through the plates only
+  // (no fill: the plates' colours stay as the legend reads them).
+  diffMarks(v, design, diff) {
+    const group = new THREE.Group();
+    const line = new THREE.LineBasicMaterial({ color: DIFF_COLOR, depthTest: false, transparent: true });
+    const add = (geo, matrix) => {
+      for (const obj of [new THREE.LineSegments(new THREE.EdgesGeometry(geo), line)]) {
+        obj.matrixAutoUpdate = false;
+        obj.matrix.copy(matrix);
+        obj.renderOrder = 10;
+        // in the overlay's pass, after the contour's plates (workbench3d renderOverlay)
+        obj.layers.set(OVERLAY);
+        group.add(obj);
+      }
+    };
+    const ids = [...diff.parts.added, ...diff.parts.changed];
+    for (const id of ids) {
+      const p = (design.parts ?? []).find((x) => x.id === id);
+      if (!p?.box) continue;
+      const pad = Math.max(...p.box.size_mm) * 0.08;
+      add(new THREE.BoxGeometry(...p.box.size_mm.map((x) => x + 2 * pad)), new THREE.Matrix4().makeTranslation(...p.box.center_mm));
+    }
+    for (const id of [...diff.members.added, ...diff.members.changed]) {
+      const m = v.members[id];
+      if (!m) continue;
+      const k = Math.max(m.width, m.height) * 1.6;
+      add(new THREE.BoxGeometry(m.length, k, k), m.mesh.matrix);
+    }
+    v.body.add(group);
+    v.diffMarks = group; // laid over everything, as the view's centre-of-gravity mark
+    return group;
   }
 
   resize(scale) {
@@ -323,40 +428,41 @@ export class CutN07 {
     const p = n07Progress(this.spec, t);
     this.now = { t, ...p };
     const [b, a] = this.cases;
+    // the two sides through one camera: the turn, then the way to the largest element
     b.view.lookFrom(this.cameraAt(p));
     // close in, the wheels are left out: the near tyre would stand between the camera and
     // the joint (it is seen through the spokes otherwise)
     const close = p.zoom >= 0.5;
     for (const c of this.cases) c.view.wheels.visible = !close;
     this.mark.dataset.wheels = close ? "hidden" : "shown";
-    const mix = a ? p.mix : 0;
-    if (mix < 1) b.view.renderInto(b.el.getContext("2d"), b.el.width, b.el.height, this.scale);
-    b.el.style.opacity = mix < 1 ? "1" : "0";
+    b.view.renderInto(b.el.getContext("2d"), b.el.width, b.el.height, this.scale);
     if (a) {
-      a.el.style.opacity = String(mix);
       a.view.copyCamera(b.view);
-      if (mix > 0) a.view.renderInto(a.el.getContext("2d"), a.el.width, a.el.height, this.scale);
+      a.view.renderInto(a.el.getContext("2d"), a.el.width, a.el.height, this.scale);
     }
-    this.setLabel(a && mix >= 0.5 ? a : b);
-    // the ring round the largest element (of the version before): from lead_s a small one
-    // (ring.of_view_h of the view's height) shows where the weak spot is while the vehicle
-    // turns, it grows with the zoom to zoom.fill of the view's height, and once the version
-    // after is shown and the record judges it a pass (✓ 直った) it turns green
+    // from the swap's middle the version after says "✓ OK" when the record judges it a pass
+    const fixed = !!(a && a.fixed && p.mix >= 0.5);
+    this.setFixed(fixed);
+    // the ring round the largest element (of the version before), at the same place on both
+    // sides: from lead_s a small one (ring.of_view_h of the view's height) shows where the
+    // weak spot is while the vehicle turns, it grows with the zoom to zoom.fill of the view's
+    // height; on the version after it turns green with its "✓ OK"
     const at = isoToThree(this.focus.center.toArray()).project(b.view.camera);
     const small = this.spec.ring.of_view_h;
     const d = (small + (this.spec.zoom.fill - small) * p.zoom) * this.inner.h;
-    const fixed = !!(a && a.fixed && mix >= 0.5);
-    const tone = fixed ? GREEN : this.spec.overlay.color;
-    Object.assign(this.mark.style, {
-      left: `${BORDER_PX + ((at.x + 1) / 2) * this.inner.w - d / 2}px`,
-      top: `${BORDER_PX + ((1 - at.y) / 2) * this.inner.h - d / 2}px`,
-      width: `${d}px`,
-      height: `${d}px`,
-      borderColor: tone,
-      background: `radial-gradient(circle, transparent 60%, ${fixed ? this.greenRim : this.rim} 100%)`,
-      opacity: t >= this.spec.times.lead_s ? "1" : "0",
+    this.cases.forEach((c, i) => {
+      const green = i === 1 && fixed;
+      Object.assign(c.mark.style, {
+        left: `${((at.x + 1) / 2) * this.inner.w - d / 2}px`,
+        top: `${((1 - at.y) / 2) * this.inner.h - d / 2}px`,
+        width: `${d}px`,
+        height: `${d}px`,
+        borderColor: green ? GREEN : this.spec.overlay.color,
+        background: `radial-gradient(circle, transparent 60%, ${green ? this.greenRim : this.rim} 100%)`,
+        opacity: t >= this.spec.times.lead_s ? "1" : "0",
+      });
+      c.mark.dataset.tone = green ? "green" : "red";
     });
-    this.mark.dataset.tone = fixed ? "green" : "red";
-    document.documentElement.dataset.n07Version = String(this.labelFor.version);
+    document.documentElement.dataset.n07Version = this.cases.map((c) => c.version).join(" ");
   }
 }

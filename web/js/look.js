@@ -4,7 +4,7 @@
 //         a ruled ground
 //   real  a photograph-like view: outdoor sky light (image-based), sun shadows,
 //         physically based materials (painted steel, body paint, black-coated steel,
-//         aluminium, diamond plate, galvanised steel, rubber, fabric, vinyl, resin,
+//         aluminium, diamond plate (aluminium or steel), galvanised steel, rubber, fabric, vinyl, resin,
 //         wood, earth, concrete), and part boxes with rounded edges (shapes.js)
 //
 // The real look's textures are drawn in code on a canvas. Poly Haven files (CC0)
@@ -412,6 +412,8 @@ const FINISH = {
   vinyl: { family: "vinyl", type: "physical", color: "#242528", roughness: 0.6, metalness: 0, clearcoat: 0.1, clearcoatRoughness: 0.5, sheen: 0.3, sheenRoughness: 0.5, sheenColor: "#4a4c52", normal: "fabric", normalScale: 0.15 },
   // a floor: anti-slip diamond plate (aluminium)
   tread_plate: { family: "aluminium", type: "standard", color: "#a9aeb3", roughness: 0.4, metalness: 1, normal: "plate", normalScale: 1 },
+  // the same plate in steel (a steel floor with no finish, or bare): a darker grey metal
+  tread_plate_steel: { family: "steel", type: "standard", color: "#7e8388", roughness: 0.48, metalness: 1, normal: "plate", normalScale: 1 },
   aluminium: { family: "aluminium", type: "standard", color: "#b9bec4", roughness: 0.32, metalness: 1 },
   // anodised aluminium: the oxide layer dulls and greys the metal a little
   anodized: { family: "anodized", type: "physical", color: "#9ea3a8", roughness: 0.5, metalness: 0.85, clearcoat: 0.2, clearcoatRoughness: 0.5 },
@@ -446,6 +448,14 @@ const FINISH = {
 //   entry is kept (a painted steel hood stays the body colour, a bare aluminium floor
 //   stays the diamond plate).
 //   With neither field, the kind and id decide.
+//   4. An id row with a `normal` (the floors, the deck and the steps: the diamond plate's
+//      pattern, "plate") keeps that pattern whatever the material and finish: they decide
+//      only the colour and how metallic it looks. With no finish, or bare, the plate is
+//      the material's own (TREAD: steel such as SS400 -> tread_plate_steel, aluminium such
+//      as A5052 -> tread_plate; another sort -> its AS_USED / BARE surface with the
+//      pattern on it). With a finish, that finish's surface with the pattern on it:
+//      painted -> painted_steel in the paint's own colour (not the plate's metal grey),
+//      galvanized -> galvanized, powder_coat -> powder_coat in its own colour, and so on.
 // A piece of a part's shape (shapes.js: tyre, rim, hub, spring) takes `sub[piece]`,
 // whatever the part.
 // A frame member's entry (memberEntry): `kind[member.part]` (e.g. "rollbar"), else
@@ -456,10 +466,13 @@ export const MATERIAL_OF = {
     rim: { finish: "aluminium" },
     hub: { finish: "galvanized", color: "#7e8489" },
     spring: { finish: "painted_steel", color: "#8e2f22" },
+    // the damper's cylinder and rod (shapes.js damper): black paint
+    damper: { finish: "painted_steel", color: "#1f2326" },
   },
   id: {
     body: [
-      { match: /floor|deck|step/i, finish: "tread_plate" },
+      // the diamond plate: its pattern stays whatever the material and finish (4 above)
+      { match: /floor|deck|step/i, finish: "tread_plate", normal: "plate" },
       { match: /mat\b|_mat/i, finish: "rubber", color: "#232426" },
       // hood, fender_FL / FR, side_panel_L / R, bulkhead, door, cowl and the rest: the paint
       { match: /./, finish: "body_paint" },
@@ -471,6 +484,11 @@ export const MATERIAL_OF = {
     rollbar: { finish: "painted_steel", color: "#c4c1b8" },
     bracket: { finish: "black_steel" },
     suspension: { finish: "painted_steel", color: "#2f3438" },
+    // the suspension's own parts (K2 arms): the arms painted steel tube as the suspension, the
+    // damper's body by its sub (damper, spring), the ball joint a grey forged steel
+    link: { finish: "painted_steel", color: "#2f3438" },
+    damper: { finish: "painted_steel", color: "#1f2326" },
+    ball_joint: { finish: "galvanized", color: "#8a9094" },
     tie_rod: { finish: "galvanized" },
     knuckle: { finish: "galvanized", color: "#8a9094" },
     driveshaft: { finish: "galvanized" },
@@ -511,6 +529,8 @@ export const MATERIAL_OF = {
   // the finish of each sort with no part.finish (3), and of each sort when it is "bare" (2)
   AS_USED: { steel: "painted_steel", galvanized_steel: "galvanized", aluminium: "aluminium", plastic: "resin", rubber: "rubber", vinyl: "vinyl", fabric: "fabric", wood: "wood" },
   BARE: { steel: "bare_steel", galvanized_steel: "galvanized", aluminium: "aluminium", plastic: "resin", rubber: "rubber", vinyl: "vinyl", fabric: "fabric", wood: "wood" },
+  // a patterned row's (4) plate of each sort with no part.finish or bare; no sort: steel
+  TREAD: { steel: "tread_plate_steel", aluminium: "tread_plate" },
 };
 
 // A material whose name says nothing, sorted by its numbers. The bands are wide around
@@ -541,17 +561,26 @@ export const PART_FINISHES = ["painted", "powder_coat", "bare", "anodized", "gal
 
 // The entry from the kind and id's (base), the material's sort and part.finish (the steps above).
 function decide(base, sort, finish) {
+  const entry = surfaceOf(base, sort, finish);
+  // 4: a patterned row keeps its pattern on whatever surface came out
+  return base.normal && entry !== base ? { ...entry, normal: base.normal } : entry;
+}
+
+function surfaceOf(base, sort, finish) {
   const family = (f) => FINISH[f]?.family;
-  const baseColor = base.color ?? FINISH[base.finish]?.color;
+  // a patterned row's colour is its metal's, not a paint's: a paint on it takes the paint's own
+  const baseColor = base.color ?? (base.normal ? null : FINISH[base.finish]?.color);
   // the base when it is the same surface; else the finish (with a colour, when one is given)
   const to = (f, color = null) => (family(f) === family(base.finish) ? base : color ? { finish: f, color } : { finish: f });
+  // a patterned row's own plate of the sort (4), when there is one
+  const plate = (f) => (base.normal ? MATERIAL_OF.TREAD[sort ?? "steel"] ?? f : f);
   switch (PART_FINISHES.includes(finish) ? finish : null) {
     case "painted":
       return to("painted_steel", baseColor);
     case "powder_coat":
-      return { finish: "powder_coat", color: baseColor };
+      return baseColor ? { finish: "powder_coat", color: baseColor } : { finish: "powder_coat" };
     case "bare":
-      return to(MATERIAL_OF.BARE[sort] ?? "bare_steel");
+      return to(plate(MATERIAL_OF.BARE[sort] ?? "bare_steel"));
     case "anodized":
       return to("anodized");
     case "galvanized":
@@ -560,13 +589,16 @@ function decide(base, sort, finish) {
       // a moulded body panel keeps the body's colour (coloured plastic)
       return to("resin", base.finish === "body_paint" ? baseColor : null);
     default:
-      return sort ? to(MATERIAL_OF.AS_USED[sort]) : base;
+      return sort ? to(plate(MATERIAL_OF.AS_USED[sort])) : base;
   }
 }
 
 function kindIdEntry(part) {
   const byId = (MATERIAL_OF.id[part.kind] ?? []).find((r) => r.match.test(part.id ?? ""));
-  return byId ? { finish: byId.finish, color: byId.color } : (MATERIAL_OF.kind[part.kind] ?? MATERIAL_OF.kind.default);
+  if (!byId) return MATERIAL_OF.kind[part.kind] ?? MATERIAL_OF.kind.default;
+  const e = { finish: byId.finish, color: byId.color };
+  if (byId.normal) e.normal = byId.normal;
+  return e;
 }
 
 // The table's entry for a part ({ id, kind, material?, finish? }) of a design with these materials.
@@ -582,7 +614,11 @@ export function memberEntry(material, part = null) {
 }
 
 // Colours of the parts in the diagram look (pale, see-through).
-const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6" };
+const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6", link: "#6b665c", damper: "#3a3e44", ball_joint: "#6b665c" };
+// the diagram look's thin suspension parts (arms, damper, ball joints): less see-through than a box,
+// so a 25 mm tube reads; the coil of a damper its spring red
+const ZU_SOLID = { link: 0.75, damper: 0.75, ball_joint: 0.75 };
+const ZU_SUB = { spring: "#c8402a" };
 
 const ENV = new WeakMap(); // renderer -> RoomEnvironment texture (the fall-back sky light)
 const HDRI = new WeakMap(); // renderer -> Map(role -> Promise of { tex, el, az, haze } or null)
@@ -930,6 +966,7 @@ export class Look {
       m.normalMap = this.texture(normal);
       const s = f.normalScale ?? 1;
       m.normalScale.set(s, s);
+      m.userData.normal = normal;
     }
     if (f.surface) {
       m.map = this.texture(f.surface);
@@ -972,8 +1009,9 @@ export class Look {
       return m;
     }
     if (sub === "tyre" || sub === "rim" || sub === "hub") return new THREE.MeshLambertMaterial({ color: "#fbf9f4" });
-    const color = ZU_PART[kind] ?? "#c9c3b6";
-    const opacity = kind === "occupant" ? 0.8 : 0.32;
+    // (ZU_SUB only for the suspension's own parts: the suspension drawn from its mounting points keeps its colours)
+    const color = (ZU_SOLID[kind] && ZU_SUB[sub]) || (ZU_PART[kind] ?? "#c9c3b6");
+    const opacity = kind === "occupant" ? 0.8 : ZU_SOLID[kind] ?? 0.32;
     const m = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, depthWrite: false });
     m.userData.baseOpacity = opacity;
     m.userData.baseColor = color;

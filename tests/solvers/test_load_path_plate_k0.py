@@ -13,13 +13,14 @@ import numpy as np
 
 from hiraku import solvers
 from hiraku.catalog.builders import BUILDERS, PLANS
-from hiraku.catalog.builders.load_path import R7_TOL, chain_inputs
+from hiraku.catalog.builders.load_path import R7_TOL, chain_inputs, pedal_inputs
 from hiraku.solvers.shelf import LoadPath
 from tests.solvers.test_builders_load_path import PRED, REQ, SPECS, predict, results
 from tests.solvers.test_load_path import touch_nearest
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the floating pedal these tests move
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 REG = solvers.formula_registry()
 E, G, T = 205000.0, 205000.0 / 2.6, 2.3
 
@@ -81,9 +82,23 @@ class BulkheadTest(unittest.TestCase):
 
     @staticmethod
     def run_both(design):
+        """(control_deflection on pedal_inputs, the tool); the plan's own prediction (the bound) is checked in
+        test_plan_bound_above_the_tool."""
         lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, design) if c["load_case_id"] == "R7-foot-500N")
         got = results(LoadPath().run(design, lc, PRED, {}))
-        return predict(PLANS["R7"], design, lc)["pedal_deflection"], got["pedal_deflection"]["value"]
+        pred = REG.evaluate("load_path.control_deflection", pedal_inputs(design, lc))["outputs"]["delta"]["value"]
+        return pred, got["pedal_deflection"]["value"]
+
+    def test_plan_bound_above_the_tool(self):
+        """The plan predicts the pedal by load_path.grip_bound (pedal_bound_inputs): on the bulkhead (the plate strip
+        added, an estimate) it is still above the tool."""
+        from hiraku.designgen import ladder_4w as GEN
+
+        d = GEN.build(GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "bulkhead",
+                                         "side_guard": "bars_net"}, {}))
+        lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, d) if c["load_case_id"] == "R7-foot-500N")
+        tool = results(LoadPath().run(d, lc, PRED, {}))["pedal_deflection"]["value"]
+        self.assertGreaterEqual(predict(PLANS["R7"], d, lc)["pedal_deflection"], tool)
 
     def test_version_1_pedal_moved_onto_the_bulkhead(self):
         """K0 18.4 mm, the tool 24.0 mm: 30.3 % of K0's value, just outside R7_TOL. K0 holds the plate's centre; in
@@ -100,15 +115,24 @@ class BulkheadTest(unittest.TestCase):
         point, n = pedal_face(face)
         inputs, notes = chain_inputs(d, "pedal_brake", point, 500.0, [n])
         self.assertIn("板の帯: bulkhead", notes)
-        self.assertGreater(inputs["delta_plate"]["value"] / pred, 0.95)  # the plate strip is nearly all of it
+        # the plate strip is most of it (0.90); the rest is mostly the landing post's root node turning
+        # (load_path._node_turning), counted since the node of several members is not taken rigid
+        self.assertGreater(inputs["delta_plate"]["value"] / pred, 0.85)
 
     def test_version_2_stands_on_the_bulkhead(self):
         from hiraku.designgen import ladder_4w as GEN
 
         d = GEN.build(GEN.apply_choices({"part_mounts": "brackets", "pedal_mount": "bulkhead",
                                          "side_guard": "bars_net"}, {}))
-        pred, tool = self.run_both(d)  # K0 45.0 mm, the tool 49.5 mm
+        # the pedal held by its stand alone (the pushrod taken out): K0 47.0 mm, the tool 49.5 mm
+        alone = dict(d, parts=[dict(p, connects_to=[c for c in p.get("connects_to", []) if c["to"] != "pushrod_brake"])
+                               for p in d["parts"] if p["id"] != "pushrod_brake"])
+        pred, tool = self.run_both(alone)
         self.assertLessEqual(abs(tool - pred) / pred, R7_TOL, f"K0 {pred:.2f} mm, tool {tool:.2f} mm")
+        # as generated, the pushrod pinned to the master cylinder (on the bulkhead) holds the pedal too: the tool
+        # about 26 mm. K0 follows the stand's path alone, so it is the larger (the safe side for pedal <= limit)
+        pred, tool = self.run_both(d)
+        self.assertGreater(pred, 1.3 * tool, f"K0 {pred:.2f} mm, tool {tool:.2f} mm")
 
     def test_no_plate_no_term(self):
         lc = next(c for c in BUILDERS["R7"](SPECS["R7"], REQ, V1) if c["load_case_id"] == "R7-hand-300N")

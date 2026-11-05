@@ -1,5 +1,6 @@
 // The 3D pets in the corners of the N04 / N15 tiles (layout.json <cut>.tile.pet: the
-// box at the tile's bottom right, tile.pet.feature its size in the large tile).
+// box at the tile's bottom right, tile.pet.feature its size in the large tile), and the
+// drawing they share with the app's agents (PetStage; js/agent_pets.js).
 //
 // The pets are the promo department's promo/pets/pet3d.js, served read only by the
 // screen's server at /pets/pet3d.js (hiraku.webserve --pets). It is a plain script that
@@ -61,18 +62,26 @@ export function petStateAt(changes, t, react) {
   return { state: "idle", since: null };
 }
 
-export class TilePets {
-  // tiles: [{ key, box (the .pet element), w, h, changes }]
-  constructor(HP, layout, tiles) {
+// The pet3d time of a pose: idle, one fixed pose idleT; otherwise the state's own clock
+// from since, shifted to whole hop periods so a pass hop starts from the ground at since.
+export function poseTime(state, since, t, idleT, hop) {
+  return state === "idle" ? idleT : Math.ceil(since / hop + 1) * hop + (t - since);
+}
+
+// One WebGL renderer off the page and the paper setting of promo/screens/n00.html: draws
+// one pet at a time through a camera fitted to pet3d's FRAME box and copies the frame into
+// that pet's own 2D canvas. Shared by the cut's tiles (TilePets) and the app's agents
+// (agent_pets.js). cam: layout.json n00.camera; size: the largest canvas { W, H } in px
+// at scale 1; shadow: the key light's shadow map (px a side; small pets need less); lite:
+// pet3d.js v9's light pets; antialias: the renderer's (the cut keeps both defaults).
+export class PetStage {
+  constructor(HP, cam, size, { shadow = 1024, lite = false, antialias = true } = {}) {
     this.HP = HP;
-    this.cam = layout.n00.camera;
-    this.motion = layout.n00.motion;
-    // room for the largest box (every tile may be the large one: N04's follows the voice)
-    const big = layout.n04?.tile?.pet?.feature ?? {};
-    const W = Math.max(...tiles.map((x) => x.w), big.w ?? 0);
-    const H = Math.max(...tiles.map((x) => x.h), big.h ?? 0);
-    this.size = { W, H };
-    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.cam = cam;
+    this.size = { W: size.W, H: size.H };
+    this.scale = 1;
+    this.lite = lite;
+    const r = new THREE.WebGLRenderer({ antialias, alpha: true, preserveDrawingBuffer: true });
     r.setPixelRatio(1);
     r.setClearColor(0x000000, 0);
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -89,7 +98,7 @@ export class TilePets {
     const key = new THREE.DirectionalLight(0xfff6e8, 2.1);
     key.position.set(-2.2, 8.0, 3.6);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.mapSize.set(shadow, shadow);
     Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 3.6, bottom: -1.6, near: 1, far: 16 });
     key.shadow.radius = 8;
     key.shadow.bias = -0.0006;
@@ -104,44 +113,27 @@ export class TilePets {
     ground.receiveShadow = true;
     scene.add(ground);
     this.scene = scene;
-    this.scale = 1;
-    this.pets = tiles.map((x, i) => {
-      const pet = HP.create(THREE, { role: roleOf(x.key), theme: "paper" });
-      pet.group.visible = false;
-      scene.add(pet.group);
-      const canvas = document.createElement("canvas");
-      canvas.className = "pet3d";
-      Object.assign(canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" });
-      x.box.append(canvas);
-      x.box.dataset.role = pet.role.id;
-      x.box.dataset.petState = "idle";
-      return { ...x, pet, canvas, ctx: canvas.getContext("2d"), idleT: this.motion.idle_shift_s * i, last: null };
-    });
   }
 
-  resize(scale) {
+  // A pet of a role (pet3d.js ROLES id), hidden until it is drawn.
+  add(role) {
+    const pet = this.HP.create(THREE, this.lite ? { role, theme: "paper", lite: true } : { role, theme: "paper" });
+    pet.group.visible = false;
+    this.scene.add(pet.group);
+    return pet;
+  }
+
+  // The off-page canvas holds the largest canvas: size times scale.
+  setScale(scale) {
     this.scale = scale;
     this.renderer.setSize(Math.ceil(this.size.W * scale), Math.ceil(this.size.H * scale), false);
-    for (const p of this.pets) {
-      p.canvas.width = Math.round(p.w * scale);
-      p.canvas.height = Math.round(p.h * scale);
-      p.last = null;
-    }
   }
 
-  // A tile's pet box changed size (N04: the large tile follows the voice).
-  setBox(key, w, h) {
-    const p = this.pets.find((x) => x.key === key);
-    if (!p || (p.w === w && p.h === h)) return;
-    p.w = w;
-    p.h = h;
-    if (w > this.size.W || h > this.size.H) {
-      this.size = { W: Math.max(w, this.size.W), H: Math.max(h, this.size.H) };
-      this.renderer.setSize(Math.ceil(this.size.W * this.scale), Math.ceil(this.size.H * this.scale), false);
-    }
-    p.canvas.width = Math.round(w * this.scale);
-    p.canvas.height = Math.round(h * this.scale);
-    p.last = null;
+  // Make room for a canvas of w x h (at scale 1).
+  grow(w, h) {
+    if (w <= this.size.W && h <= this.size.H) return;
+    this.size = { W: Math.max(w, this.size.W), H: Math.max(h, this.size.H) };
+    this.setScale(this.scale);
   }
 
   // A camera for a box of aspect a, fitted to pet3d's FRAME (n00.html / viewer.html).
@@ -160,37 +152,87 @@ export class TilePets {
     return { cam, dist, half };
   }
 
+  // Draw a pet at pose (pet3d's time) in a pet3d state into the whole of a 2D canvas (its
+  // context ctx), which must fit in the off-page canvas. o: pet3d's update options (blocked's since).
+  paint(pet, ctx, pose, state, o = undefined) {
+    const r = this.renderer;
+    const gl = r.domElement;
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    const { cam, dist, half } = this.cameraFor(w / h);
+    pet.setPixelScale(h / (2 * dist * half));
+    pet.group.visible = true;
+    if (o) pet.update(pose, state, cam, o);
+    else pet.update(pose, state, cam);
+    // into the top left w x h of the off-page canvas (the viewport's y is from the bottom)
+    r.setViewport(0, gl.height - h, w, h);
+    r.setScissor(0, gl.height - h, w, h);
+    r.setScissorTest(true);
+    r.clear();
+    r.render(this.scene, cam);
+    r.setScissorTest(false);
+    pet.group.visible = false;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(gl, 0, 0, w, h, 0, 0, w, h);
+  }
+}
+
+export class TilePets {
+  // tiles: [{ key, box (the .pet element), w, h, changes }]
+  constructor(HP, layout, tiles) {
+    this.HP = HP;
+    this.motion = layout.n00.motion;
+    // room for the largest box (every tile may be the large one: N04's follows the voice)
+    const big = layout.n04?.tile?.pet?.feature ?? {};
+    const W = Math.max(...tiles.map((x) => x.w), big.w ?? 0);
+    const H = Math.max(...tiles.map((x) => x.h), big.h ?? 0);
+    this.stage = new PetStage(HP, layout.n00.camera, { W, H });
+    this.renderer = this.stage.renderer;
+    this.pets = tiles.map((x, i) => {
+      const pet = this.stage.add(roleOf(x.key));
+      const canvas = document.createElement("canvas");
+      canvas.className = "pet3d";
+      Object.assign(canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" });
+      x.box.append(canvas);
+      x.box.dataset.role = pet.role.id;
+      x.box.dataset.petState = "idle";
+      return { ...x, pet, canvas, ctx: canvas.getContext("2d"), idleT: this.motion.idle_shift_s * i, last: null };
+    });
+  }
+
+  resize(scale) {
+    this.stage.setScale(scale);
+    for (const p of this.pets) {
+      p.canvas.width = Math.round(p.w * scale);
+      p.canvas.height = Math.round(p.h * scale);
+      p.last = null;
+    }
+  }
+
+  // A tile's pet box changed size (N04: the large tile follows the voice).
+  setBox(key, w, h) {
+    const p = this.pets.find((x) => x.key === key);
+    if (!p || (p.w === w && p.h === h)) return;
+    p.w = w;
+    p.h = h;
+    this.stage.grow(w, h);
+    p.canvas.width = Math.round(w * this.stage.scale);
+    p.canvas.height = Math.round(h * this.stage.scale);
+    p.last = null;
+  }
+
   // Draw every pet at cut time t (a pet is drawn again only when its pose changes).
   draw(t) {
     const M = this.motion;
-    const r = this.renderer;
-    const gl = r.domElement;
     for (const p of this.pets) {
       const { state, since } = petStateAt(p.changes, t, M.pass_dur_s);
-      // idle: one fixed pose; a reaction: its own clock from the change, shifted to whole
-      // hop periods so the pass hop starts from the ground at the change
-      const pose = state === "idle" ? p.idleT : Math.ceil(since / M.hop_period_s + 1) * M.hop_period_s + (t - since);
+      const pose = poseTime(state, since, t, p.idleT, M.hop_period_s);
       p.box.dataset.petState = state;
       const k = `${state}|${pose.toFixed(4)}|${p.canvas.width}`;
       if (k === p.last) continue;
       p.last = k;
       p.box.dataset.petDraws = String(Number(p.box.dataset.petDraws ?? 0) + 1);
-      const w = p.canvas.width;
-      const h = p.canvas.height;
-      const { cam, dist, half } = this.cameraFor(w / h);
-      p.pet.setPixelScale(h / (2 * dist * half));
-      p.pet.group.visible = true;
-      p.pet.update(pose, state, cam);
-      // into the top left w x h of the off-page canvas (the viewport's y is from the bottom)
-      r.setViewport(0, gl.height - h, w, h);
-      r.setScissor(0, gl.height - h, w, h);
-      r.setScissorTest(true);
-      r.clear();
-      r.render(this.scene, cam);
-      r.setScissorTest(false);
-      p.pet.group.visible = false;
-      p.ctx.clearRect(0, 0, w, h);
-      p.ctx.drawImage(gl, 0, 0, w, h, 0, 0, w, h);
+      this.stage.paint(p.pet, p.ctx, pose, state);
     }
   }
 }

@@ -93,9 +93,9 @@
       ]
     },
     "agent_id": {
-      "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person.",
+      "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person. designer.<module> = モジュールごとの設計役 (designs with modules).",
       "type": "string",
-      "pattern": "^(lead|designer|packager|system|user|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
+      "pattern": "^(lead|designer|packager|system|user|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
     },
     "base": {
       "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity.",
@@ -704,6 +704,14 @@
               "carries": {
                 "type": "string",
                 "description": "What goes through the link: torque, steer, brake, load, power, signal."
+              },
+              "at_mm": {
+                "$ref": "#/$defs/vec3",
+                "description": "Where the two are joined: a point on both shapes (the generator computes it; H1-joints checks it lies on both within 2 mm)."
+              },
+              "axis": {
+                "$ref": "#/$defs/vec3",
+                "description": "For a pin, bushing, hinge or ball joint: the direction of its axis (unit vector), so the joint can be drawn and turned about it."
               }
             }
           },
@@ -723,8 +731,112 @@
             "molded"
           ],
           "description": "Surface of the part as made (for the look and for corrosion notes); missing: as its material comes."
+        },
+        "module": {
+          "$ref": "#/$defs/module_id"
+        },
+        "joint": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "description": "A bracket's joint to the frame (suspension mounts): the sizes the designer may change and the mount load case (R9) checks: bolts or pins in shear and bearing, the bracket plate in bending, the fillet weld to the frame. The bracket's mass comes from these sizes.",
+          "properties": {
+            "bolt_d_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "bolt or pin diameter"
+            },
+            "bolts": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "bolts or pins carrying the mount force"
+            },
+            "plate_t_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "bracket plate thickness"
+            },
+            "weld_leg_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "fillet weld leg length (throat = 0.7 leg)"
+            }
+          }
+        },
+        "declared": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Sizes the design states for the knowledge rules (rule_check), written by the code that builds the design. The names are the intake vocabulary's declared facts (hiraku.intake.facts.FACTS, scope declared); a new name is added there and here together. A part with joint gives bolt_diameter_mm and weld_throat_mm from joint (bolt_d_mm, 0.7 weld_leg_mm), not here.",
+          "propertyNames": {
+            "enum": [
+              "bend_radius_mm",
+              "hole_edge_mm",
+              "hole_diameter_mm",
+              "bolt_diameter_mm",
+              "thread_engagement_mm",
+              "weld_length_mm",
+              "weld_throat_mm",
+              "clearance_mm",
+              "tolerance_stack_mm",
+              "clearance_hole_mm",
+              "position_tolerance_mm",
+              "closing_gap_mm"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "value",
+              "unit",
+              "basis"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unit": {
+                "const": "mm"
+              },
+              "basis": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Where the value comes from: a design variable (e.g. 'variable rollbar_t'), a standard (edition and table, or 'not checked'), or 'assumption'."
+              }
+            }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "joint"
+            ]
+          },
+          "then": {
+            "properties": {
+              "declared": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "bolt_diameter_mm"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "weld_throat_mm"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "node": {
       "type": "object",
@@ -739,6 +851,14 @@
         },
         "xyz_mm": {
           "$ref": "#/$defs/vec3"
+        },
+        "joint": {
+          "enum": [
+            "weld",
+            "bolt",
+            "pin"
+          ],
+          "description": "How the members meeting at this node are joined. Absent: not stated (the ladder_4w generator's frame nodes are welded)."
         }
       }
     },
@@ -773,6 +893,13 @@
         "part": {
           "type": "string",
           "description": "Part id this member belongs to."
+        },
+        "module": {
+          "$ref": "#/$defs/module_id"
+        },
+        "name": {
+          "type": "string",
+          "description": "The member's name for a person (Japanese), e.g. 左のレール (前の車軸から足元まで); written by the generator, shown by the screen."
         }
       }
     },
@@ -851,6 +978,31 @@
           "additionalProperties": {
             "$ref": "#/$defs/material"
           }
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module"
+          },
+          "description": "Present when the design's generator splits it into modules; then revise_design takes module and build_version makes versions."
+        },
+        "module_changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_change"
+          },
+          "description": "The proposals this version was built from (empty or absent for version 1 and for designs without modules)."
+        },
+        "archetype": {
+          "type": "string",
+          "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a hand-made design."
+        },
+        "variable_names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Design variable name -> its name for a person (Japanese), written by the generator; the screen shows these instead of the variable ids."
         }
       }
     },
@@ -958,6 +1110,14 @@
             "type": "string"
           },
           "description": "Load cases that take this case's results as input (e.g. P1 wheel force feeds R1)."
+        },
+        "modules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "description": "The modules whose designers answer a red of this case (set by the builder; package when only the layout can fix it)."
         }
       }
     },
@@ -2180,6 +2340,48 @@
               "type": "string"
             }
           }
+        },
+        "hot_spots": {
+          "type": "array",
+          "description": "The model's hottest places, highest utilisation first, whether or not the hand calculation predicted them (contract: CAE の役目). A row over 1 on the load case's criterion quantity makes the load case red even where nothing was predicted.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "where",
+              "quantity",
+              "value",
+              "limit",
+              "utilisation",
+              "predicted"
+            ],
+            "properties": {
+              "where": {
+                "type": "string",
+                "description": "member, part, joint or element group id"
+              },
+              "quantity": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/$defs/quantity"
+              },
+              "limit": {
+                "$ref": "#/$defs/quantity"
+              },
+              "utilisation": {
+                "type": "number",
+                "minimum": 0
+              },
+              "predicted": {
+                "type": "boolean",
+                "description": "a prediction of this run named this place"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -2254,7 +2456,6 @@
       "type": "object",
       "required": [
         "cause_id",
-        "comparison_id",
         "cause",
         "fix",
         "resolved"
@@ -2290,6 +2491,26 @@
         "safe_side_reason": {
           "type": "string",
           "description": "Why the unfavourable value bounds the true one (required when safe_side is true)."
+        },
+        "ends_case": {
+          "type": "boolean",
+          "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
+        },
+        "tool_decides": {
+          "type": "boolean",
+          "description": "The hand calculation does not reach the quantity (no formula, only a loose bound, or a cause it cannot model), but the load path was checked by hand in this version (a load_path prediction that every loaded part is joined to the frame, and the tool's analysis found no unsupported load): the tool's value decides the verdict (basis path_checked, pass or fail). Not with ends_case or safe_side (one verdict: safe_side's from the prediction, tool_decides' from the analysis)."
+        },
+        "tool_decides_reason": {
+          "type": "string",
+          "description": "Why the hand calculation does not reach the quantity, for people."
+        },
+        "where": {
+          "type": "string",
+          "description": "the place the cause is about (a hot_spot verdict's where, when the cause answers one)"
+        },
+        "verdict_id": {
+          "type": "string",
+          "description": "the hot_spot verdict this cause answers (a red the tool found where nothing was predicted: there is no comparison)"
         }
       },
       "allOf": [
@@ -2309,6 +2530,76 @@
               "safe_side_reason"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "ends_case": {
+                "const": true
+              }
+            },
+            "required": [
+              "ends_case"
+            ]
+          },
+          "then": {
+            "not": {
+              "properties": {
+                "safe_side": {
+                  "const": true
+                }
+              },
+              "required": [
+                "safe_side"
+              ]
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "ends_case"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "ends_case": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "safe_side"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "safe_side": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "comparison_id"
+              ]
+            },
+            {
+              "required": [
+                "verdict_id"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -2388,9 +2679,11 @@
           "enum": [
             "match",
             "explained_safe_side",
-            "unsupported_load"
+            "unsupported_load",
+            "path_checked",
+            "hot_spot"
           ],
-          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false)."
+          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false). path_checked: from a mismatch whose cause has tool_decides true, with the version's load path checked by hand (value = analysis, pass or fail by the criterion). hot_spot: the tool found a place the hand calculation did not predict where the criterion's quantity is over the limit (made by analyze from analysis.hot_spots; value = that row, pass false)."
         },
         "value_from": {
           "enum": [
@@ -2405,6 +2698,10 @@
         "margin": {
           "$ref": "#/$defs/quantity",
           "description": "How far the value is from the limit in its own unit, positive when passing."
+        },
+        "where": {
+          "type": "string",
+          "description": "the place a hot_spot verdict (or a per-place one) is about: member, part, joint or element group id"
         }
       },
       "allOf": [
@@ -2412,7 +2709,10 @@
           "if": {
             "properties": {
               "basis": {
-                "const": "unsupported_load"
+                "enum": [
+                  "unsupported_load",
+                  "hot_spot"
+                ]
               }
             },
             "required": [
@@ -2433,6 +2733,54 @@
             "required": [
               "comparison_id"
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "path_checked"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "cause_id"
+            ],
+            "properties": {
+              "value_from": {
+                "const": "analysis"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "hot_spot"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "analysis_id",
+              "where"
+            ],
+            "properties": {
+              "pass": {
+                "const": false
+              },
+              "value_from": {
+                "const": "analysis"
+              }
+            }
           }
         }
       ]
@@ -2984,6 +3332,38 @@
           },
           "description": "Parts the check could not be evaluated on, with the values the design lacks."
         },
+        "checked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "values"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "part_id": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "The part's values the check used."
+              },
+              "unchecked": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Names among values whose source is not confirmed (a part.declared basis of 'not checked' or 'assumption')."
+              }
+            }
+          },
+          "description": "Every part the check was evaluated on, passing or not, with the values it used (hits says which of them break the rule)."
+        },
         "pass": {
           "type": "boolean"
         }
@@ -3055,6 +3435,9 @@
         "prop": {
           "type": "string",
           "description": "The pet's prop: binder, pencil, spanner, steering_wheel, battery, windsock, crash_target, i_beam, tuning_fork, thermometer."
+        },
+        "module": {
+          "$ref": "#/$defs/module_id"
         }
       }
     },
@@ -3213,7 +3596,9 @@
         "hearing.answered",
         "knowledge.imported",
         "rule_check.recorded",
-        "mesh.created"
+        "mesh.created",
+        "design.change_proposed",
+        "load_cases.created"
       ]
     },
     "event": {
@@ -3485,6 +3870,40 @@
                   "tool",
                   "rule"
                 ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "agent.stopped"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "agent_id": {
+                    "$ref": "#/$defs/agent_id"
+                  },
+                  "stop_code": {
+                    "enum": [
+                      "done",
+                      "run_ended",
+                      "user_stop",
+                      "error"
+                    ],
+                    "description": "Why the role stopped, for the screen to word: done = it ended its own work; run_ended = the run ended while the role was still working (the run's own reason is run.finished's stop_code); user_stop = the stop button; error = the role ended with an error. Optional."
+                  },
+                  "stop_reason": {
+                    "type": "string",
+                    "description": "Free text for people (may be English); the screen shows stop_code."
+                  }
+                }
               }
             }
           }
@@ -3815,6 +4234,44 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "design.change_proposed"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/module_change"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "load_cases.created"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "$ref": "#/$defs/version_load_cases"
+              }
+            }
+          }
         }
       ]
     },
@@ -3908,7 +4365,6 @@
     "tool_input.record_cause": {
       "type": "object",
       "required": [
-        "comparison_id",
         "cause",
         "fix"
       ],
@@ -3928,8 +4384,76 @@
         },
         "safe_side_reason": {
           "type": "string"
+        },
+        "ends_case": {
+          "type": "boolean",
+          "description": "The mismatch cannot be settled for this load case in this run (no prediction the tools can check reaches the quantity, as the cause says): the load case ends not judged. HK4 does not wait for it and HK5 does not let it hold heavier stages; its tile stays not judged (never green). Not with safe_side."
+        },
+        "tool_decides": {
+          "type": "boolean",
+          "description": "The hand calculation does not reach the quantity; the version's load path was checked by hand, so the tool's value decides (cause.tool_decides). Not with ends_case or safe_side."
+        },
+        "tool_decides_reason": {
+          "type": "string",
+          "description": "Why the hand calculation does not reach the quantity."
+        },
+        "verdict_id": {
+          "type": "string",
+          "description": "the hot_spot verdict this cause answers (a red the tool found where nothing was predicted: there is no comparison)"
+        },
+        "where": {
+          "type": "string",
+          "description": "the place the cause is about (the hot_spot verdict's where)"
         }
-      }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "safe_side"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "safe_side": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "tool_decides",
+              "ends_case"
+            ],
+            "properties": {
+              "tool_decides": {
+                "const": true
+              },
+              "ends_case": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "comparison_id"
+              ]
+            },
+            {
+              "required": [
+                "verdict_id"
+              ]
+            }
+          ]
+        }
+      ]
     },
     "assembly_step": {
       "description": "One step of the assembly order (A7).",
@@ -4000,11 +4524,22 @@
                   "bolt",
                   "weld",
                   "rest",
-                  "pin"
-                ]
+                  "pin",
+                  "bushing",
+                  "ball_joint"
+                ],
+                "description": "How it is fixed at that step: bushing and ball_joint are fixed with their own through-bolt or castle nut, so they need the same tool clearance as a bolt."
               },
               "at_mm": {
                 "$ref": "#/$defs/vec3"
+              },
+              "tool_side": {
+                "type": "string",
+                "description": "The side the hands and tool come from to this fastening, as a direction (e.g. +z): the free side used, or, when no side is free, the first side tried."
+              },
+              "tool_gap_mm": {
+                "type": "number",
+                "description": "Smallest gap between the space the hands and tool need on tool_side and anything else in the way, computed by the assembly tool; negative = how deep something reaches into that space. Shown, not judged (the hands' way rule has no source yet)."
               }
             }
           }
@@ -4100,6 +4635,16 @@
               "number",
               "boolean"
             ]
+          }
+        },
+        "module": {
+          "$ref": "#/$defs/module_id",
+          "description": "Required when the design has modules: the change is then a proposal for this module only (its variables and choices), recorded as design.change_proposed; build_version makes the version."
+        },
+        "load_case_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       },
@@ -4826,6 +5371,225 @@
             ]
           },
           "description": "Missing: both."
+        }
+      }
+    },
+    "module_id": {
+      "enum": [
+        "package",
+        "frame",
+        "suspension",
+        "steering",
+        "occupant",
+        "powertrain",
+        "body"
+      ],
+      "description": "A design module (2026-11-04). package = レイアウト (wheelbase, track, rail spacing and height, where each module's space is; owned by the packager, no parts); frame = 枠 (rails, cross members, towers, posts, gussets, the frame's own brackets); suspension = 足まわり (wheels, knuckles, arms, dampers, their mounts on the frame); steering = 操作系 (steering wheel, column, shaft, rack, tie rods, pedals, pedal post, master cylinder); occupant = 乗員まわり (seats, belts, side guard, door or opening, grab bars, roll bar; the people are placed here); powertrain = 動力 (motor, reducer, driveshafts, battery, controller, aux, switch, wiring); body = 車体 (floor, deck, bulkhead, front body, fenders, cargo)."
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "between",
+        "via"
+      ],
+      "description": "Where two modules meet: the packager fixes it; module designers may not move it.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "between": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "node": {
+          "type": "string",
+          "description": "A frame node id, when the interface is at a node."
+        },
+        "point_mm": {
+          "$ref": "#/$defs/vec3"
+        },
+        "via": {
+          "type": "string",
+          "description": "As connects_to.via: weld, bolt, bushing, ball_joint, pin, ..."
+        }
+      }
+    },
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module_id",
+        "owner",
+        "envelope",
+        "variables"
+      ],
+      "description": "One module of a design: who owns it, the space it may use and the variables and choices it may change.",
+      "properties": {
+        "module_id": {
+          "$ref": "#/$defs/module_id"
+        },
+        "title": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "envelope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/part/properties/box"
+          },
+          "description": "Boxes of space this module's parts and members must stay inside (set by the packager; empty for package)."
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          }
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Design variables this module's designer may change."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Generator choices this module's designer may make."
+        }
+      }
+    },
+    "module_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_id",
+        "module_id",
+        "agent_id",
+        "reason"
+      ],
+      "description": "One module designer's proposal for the next version (revise_design with module). build_version builds every pending proposal of the round into one version. The packager's own change of a round may be one more entry with module_id package and agent_id packager.",
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "pattern": "^chg-[0-9]{4,}$"
+        },
+        "module_id": {
+          "$ref": "#/$defs/module_id"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/agent_id"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "load_case_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The red load cases this change answers."
+        },
+        "changes": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "design variable name -> new value in the variable's own unit",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "choices": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "generator choice name -> chosen value (as in propose_design.choices; the choices a design's generator offers are in get_context design_choices)",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The version this proposal was made on (the red it answers is on that version)."
+        }
+      }
+    },
+    "tool_input.build_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason"
+      ],
+      "description": "Agent-facing MCP tool for the packager only, for designs with modules: builds the next version from every pending module_change of the round plus the packager's own changes (package variables, envelopes, interfaces). Refused while two proposals change the same variable or a proposal's parts would leave its module's envelope.",
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "design variable name -> new value in the variable's own unit",
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "envelopes": {
+          "type": "object",
+          "description": "module_id -> new envelope boxes",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/part/properties/box"
+            }
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interface"
+          }
+        },
+        "regrow": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_id"
+          },
+          "uniqueItems": true,
+          "description": "Modules whose envelopes the code re-grows around their parts in the new version (designgen.modules.envelopes), instead of boxes written in envelopes. The packager names each module on purpose and says why in reason; overlaps between modules are still judged by H1-interference."
+        }
+      }
+    },
+    "version_load_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_version",
+        "load_cases"
+      ],
+      "description": "The load cases built for one design version (a builder's criterion may read the version's own design, e.g. how many parts to assemble). Written to v00N/load_cases.json; project.load_cases stays the first version's.",
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "load_cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/load_case"
+          }
         }
       }
     }

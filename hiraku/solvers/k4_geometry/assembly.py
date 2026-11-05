@@ -35,7 +35,7 @@ import numpy as np
 
 from .capsule import swept_overlap
 from .fastening import part_fastenings
-from .model import TOUCH_MM, WELDED, Body, bodies, corners, shape_overlap
+from .model import TOUCH_MM, WELDED, Body, _inside, bodies, corners, shape_overlap, spheres
 from .obb import OBB
 
 DIRECTIONS = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
@@ -43,8 +43,10 @@ NOT_ASSEMBLED = ("occupant", "cargo")
 
 
 def _frame(b: Body) -> bool:
-    """Members and the parts welded into the frame (gussets, through pieces): in place before assembly."""
-    return b.kind == "member" or b.kind in WELDED
+    """Members and the parts welded into the frame (gussets, through pieces): in place before assembly. A
+    welded kind that rides with a support (no carried_by, e.g. a stay welded on a knuckle) goes with its
+    corner instead."""
+    return b.kind == "member" or (b.kind in WELDED and b.support is None)
 NUDGE_MM = 20.0
 CORNER = "corner"  # unit id prefix of a corner group: "corner:<support id>"
 # Build stages by part kind, earliest first; a corner group is stage 0 and kinds not listed are
@@ -62,6 +64,9 @@ STAGES = (("motor", "gearbox", "reducer", "driveshaft", "propshaft", "halfshaft"
 TOOL_OPENING_MM = (200.0, 125.0)
 TOOL_DEPTH_MM = 300.0  # assumption: room for a hand and a short tool in front of what it fastens
 REACH_MM = 606.0  # source: AIST item C3 (above)
+# Fastenings not made by hand with a tool while the vehicle is assembled: a weld between two parts is made when
+# they are built (an arm's ball joint and cross tube welded on its legs), the frame's welds before assembly
+NOT_BY_HAND = ("weld",)
 SIDE_NAMES = {"+z": "above", "-z": "below", "+x": "the front", "-x": "the back", "+y": "the left", "-y": "the right"}
 
 
@@ -224,7 +229,7 @@ def _bottom(unit: list[Body]) -> float:
 def _held_by(design: dict, bs: dict[str, Body], k: str) -> list[np.ndarray]:
     """Centres of the parts that part k is bolted to (one point for a wheel on its hub)."""
     ups = [f"part:{f['to'].split(' ', 1)[1]}" for f in part_fastenings(design, k.split(":", 1)[1], bs)
-           if f["to"].startswith("part ")]
+           if f["to"].startswith("part ") and f["kind"] != "rest"]  # a rest orders the build, it does not hold
     return [bs[u].obb.center for u in ups if u in bs]
 
 
@@ -329,11 +334,25 @@ def steps(design: dict, bs: dict[str, Body] | None = None) -> list[dict]:
     extent = np.vstack([b.obb.corners() for b in bs.values()])
     allowed = _step_fields()
     at_node: dict[str, set[str]] = {}
+    welded: dict[str, set[str]] = {}  # a part's id -> the parts welded to it (an arm's legs, cross tube, ball joint)
     for k, b in bs.items():
         if not _frame(b) and b.kind not in NOT_ASSEMBLED:
             for f in part_fastenings(design, k.split(":", 1)[1], bs):
                 if f["to"].startswith("node "):
                     at_node.setdefault(f["to"].split(" ", 1)[1], set()).add(k)
+                elif f["to"].startswith("part ") and f["kind"] == "weld":
+                    other = "part:" + f["to"].split(" ", 1)[1]
+                    welded.setdefault(k, {k}).add(other)
+                    welded.setdefault(other, {other}).add(k)
+    for k in list(welded):  # one welded piece: every part of it
+        group, todo = set(), [k]
+        while todo:
+            x = todo.pop()
+            if x not in group:
+                group.add(x)
+                todo += list(welded.get(x, ()))
+        welded[k] = group
+    at_node.update({f"part {k.split(':', 1)[1]}": v for k, v in welded.items()})
     placed: list[Body] = []
     out: list[dict] = []
 
@@ -445,7 +464,7 @@ def hand_sweep(point, side: np.ndarray, edge: float) -> OBB:
 
 
 def hand_way(point, side: np.ndarray, around: list[Body], skip: set[str],
-             own: set[str] = frozenset()) -> tuple[float, list[str]]:
+             own: set[str] = frozenset(), sph=None) -> tuple[float, list[str]]:
     """The hands going straight in to `point` from `side`: (how deep the point is, mm, from the
     outer face of what the way meets, the ids of the bodies in the way). The way is hand_sweep()
     out past everything; a body that starts more than REACH_MM out along it is not met (the way
@@ -456,7 +475,10 @@ def hand_way(point, side: np.ndarray, around: list[Body], skip: set[str],
     s = np.asarray(side, float)
     far = max(float(np.max(o.obb.corners() @ s)) for o in around) if around else float(p @ s)
     way = hand_sweep(p, s, far + TOOL_DEPTH_MM)
-    met = [o for o in around if o.id not in own and shape_overlap(way, o) > TOUCH_MM
+    C, R = sph if sph is not None else spheres(around)
+    # a body whose bounding sphere is apart from the way's overlaps it by a negative amount: not met
+    near = np.sqrt(((C - way.center) ** 2).sum(axis=1)) <= R + float(np.linalg.norm(way.half)) + TOUCH_MM
+    met = [o for o, n in zip(around, near) if n and o.id not in own and shape_overlap(way, o) > TOUCH_MM
            and float(np.min(o.obb.corners() @ s)) - float(p @ s) <= REACH_MM]  # farther out: the arm goes around it
     edge = max([float(p @ s)] + [float(np.max(o.obb.corners() @ s)) for o in met])
     return edge - float(p @ s), sorted(o.id for o in met if o.id not in skip)
@@ -478,7 +500,7 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
     sides = [first] + [n for n in PREFERRED if n != first]
     targets = []
     for f in fast:
-        if "at_mm" not in f:
+        if "at_mm" not in f or f.get("kind") in NOT_BY_HAND:
             continue
         skip = {f["owner"]}
         kind, name = f["to"].split(" ", 1)
@@ -487,20 +509,27 @@ def _hands(fast: list[dict], unit: list[Body], around: list[Body], d_from: np.nd
             skip |= (at_node or {}).get(name, set())
         else:
             skip.add(f"{kind}:{name}")
+            skip |= (at_node or {}).get(f["to"], set())  # the welded piece it is part of (an arm's legs)
+            # the other parts that meet at the same joint (an A-arm's two legs at its ball joint): their rough
+            # boxes and capsules reach the point, as the parts bolted at one node do
+            skip |= {o.id for o in around if o.kind != "member" and _inside(np.asarray(f["at_mm"], float), o)}
         targets.append((f["to"], np.asarray(f["at_mm"], float), skip, {f["owner"]}))
+    if not targets and any(f.get("kind") in NOT_BY_HAND for f in fast):
+        return {"ok": True, "depth": 0.0, "in_way": [], "note": "welded on when it was built (no fastening by hand here)"}
     if not targets:
         b = unit[0]
         reach_out = float(np.sum(b.obb.half * np.abs(b.obb.axes @ d_from)))
         targets.append(("its face", b.obb.center + d_from * reach_out, {b.id for b in unit}, {b.id for b in unit}))
     seen = set()
     done, failed, depth = [], [], 0.0
+    sph = spheres(around)  # hand_way's bounding spheres of `around`, made once
     for where, p, skip, own in targets:
         if where in seen:
             continue
         seen.add(where)
         tried, free = None, None
         for n in sides:
-            deep, in_way = hand_way(p, np.asarray(DIRECTIONS[n], float), around, skip, own)
+            deep, in_way = hand_way(p, np.asarray(DIRECTIONS[n], float), around, skip, own, sph)
             if tried is None:
                 tried = (n, in_way, deep)
             if not in_way:

@@ -100,6 +100,93 @@ class SchemaTest(unittest.TestCase):
                                                      "value_from": "prediction", "cause_id": "cause-0001"}), [])
         self.assertNotEqual(contract.errors("verdict", {**v, "basis": "close_enough"}), [])
 
+    def test_tool_decides_after_the_path_check(self):
+        v = load("verdict.json")
+        ok = {**v, "basis": "path_checked", "value_from": "analysis", "cause_id": "cause-0001"}
+        self.assertEqual(contract.errors("verdict", ok), [])
+        self.assertEqual(contract.errors("verdict", {**ok, "pass": False}), [])  # the tool's value may fail too
+        self.assertNotEqual(contract.errors("verdict", {**ok, "value_from": "prediction"}), [])
+        self.assertNotEqual(contract.errors("verdict", {k: x for k, x in ok.items() if k != "cause_id"}), [])
+        c = load("cause.json")
+        self.assertEqual(contract.errors("cause", {**c, "tool_decides": True, "tool_decides_reason": "no plates by hand"}), [])
+        self.assertNotEqual(contract.errors("cause", {**c, "tool_decides": True, "ends_case": True}), [])
+        self.assertEqual(contract.errors("cause", {**c, "tool_decides": False, "ends_case": True}), [])
+        self.assertNotEqual(contract.errors("cause", {**c, "tool_decides": True, "safe_side": True}), [])
+        call = {"comparison_id": "cmp-0001", "cause": "plates by hand: no", "fix": "the tool decides"}
+        self.assertEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True,
+                                                                      "tool_decides_reason": "x"}), [])
+        self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "safe_side": True}), [])
+        self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "ends_case": True}), [])
+
+    def test_analysis_hot_spots(self):
+        a = load("analysis.json")
+        row = {"where": "rail_R_BE", "quantity": "max_hot_spot_stress", "value": {"value": 151.0, "unit": "MPa"},
+               "limit": {"value": 143.3, "unit": "MPa"}, "utilisation": 1.054, "predicted": False}
+        self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [row]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{k: v for k, v in row.items() if k != "predicted"}]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": -1}]}), [])
+
+    def test_hot_spot_red_and_its_cause(self):
+        v = load("verdict.json")
+        red = {k: x for k, x in v.items() if k != "comparison_id"}
+        red.update({"basis": "hot_spot", "analysis_id": "ana-0001", "where": "rail_R_BE", "value_from": "analysis",
+                    "pass": False})
+        self.assertEqual(contract.errors("verdict", red), [])
+        self.assertNotEqual(contract.errors("verdict", {**red, "pass": True}), [])
+        self.assertNotEqual(contract.errors("verdict", {k: x for k, x in red.items() if k != "where"}), [])
+        c = load("cause.json")
+        by_verdict = {k: x for k, x in c.items() if k != "comparison_id"}
+        self.assertEqual(contract.errors("cause", {**by_verdict, "verdict_id": "ver-0001", "where": "rail_R_BE"}), [])
+        self.assertNotEqual(contract.errors("cause", by_verdict), [])  # neither comparison_id nor verdict_id
+        self.assertEqual(contract.errors("tool_input.record_cause", {"verdict_id": "ver-0001", "where": "rail_R_BE",
+                                                                      "cause": "c", "fix": "f"}), [])
+        self.assertNotEqual(contract.errors("tool_input.record_cause", {"cause": "c", "fix": "f"}), [])
+
+    def test_bracket_joint_sizes(self):
+        d = load("design.json")
+        part = dict(d["parts"][0])
+        ok = {**part, "joint": {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}}
+        self.assertEqual(contract.errors("part", ok), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolt_d_mm": 0}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolts": 0}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"nut": 1}}), [])
+
+    def test_declared_sizes_for_the_rules(self):
+        from hiraku.intake.facts import FACTS
+
+        root = contract.schema()
+        names = set(root["$defs"]["part"]["properties"]["declared"]["propertyNames"]["enum"])
+        self.assertEqual(names, {n for n, (_, _, scope) in FACTS.items() if scope == "declared"})
+        part = dict(load("design.json")["parts"][0])
+        bend = {"value": 3.0, "unit": "mm", "basis": "assumption"}
+        self.assertEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": bend}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_r": bend}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {**bend, "unit": "in"}}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {"value": 3.0, "unit": "mm"}}}), [])
+        joint = {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}
+        self.assertEqual(contract.errors("part", {**part, "joint": joint, "declared": {"hole_edge_mm": bend}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
+        self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
+
+    def test_rule_check_keeps_the_values_it_checked(self):
+        rc = {"rule_check_id": "rchk-0001", "design_version": 5, "rule_id": "SM-01", "targets": ["bracket_lca_FL1"],
+              "hits": [], "pass": True}
+        row = {"part_id": "bracket_lca_FL1", "values": {"hole_edge_mm": 18.0, "hole_diameter_mm": 13.0},
+               "unchecked": ["hole_diameter_mm"]}
+        self.assertEqual(contract.errors("rule_check", rc), [])  # checked is optional
+        self.assertEqual(contract.errors("rule_check", {**rc, "checked": [row]}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**rc, "checked": [{**row, "values": {}}]}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**rc, "checked": [{**row, "values": {"hole_edge_mm": "18"}}]}), [])
+
+    def test_fastening_tool_gap(self):
+        step = {"order": 1, "part": "susp_FL", "direction": "-y", "no_interference": True, "tool_clearance": False,
+                "hand_reach": True}
+        gap = {"to": "node LS1", "kind": "bolt", "at_mm": [0.0, 1.0, 2.0], "tool_side": "+z", "tool_gap_mm": -10.6}
+        self.assertEqual(contract.errors("assembly_step", {**step, "fastenings": [gap]}), [])
+        self.assertNotEqual(contract.errors("assembly_step", {**step, "fastenings": [{**gap, "tool_gap_mm": "10"}]}), [])
+        self.assertNotEqual(contract.errors("assembly_step", {**step, "fastenings": [{**gap, "gap": 1.0}]}), [])
+
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
         ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
@@ -108,6 +195,45 @@ class SchemaTest(unittest.TestCase):
         for status, code in [("done", "cost_limit"), ("failed", "done"), ("stopped", "error")]:
             self.assertNotEqual(contract.errors("event", {**ev, "data": {"status": status, "stop_code": code}}), [])
         self.assertEqual(contract.errors("event", {**ev, "data": {"status": "stopped"}}), [])  # stop_code optional
+
+    def test_agent_stopped_says_why(self):
+        ev = {"seq": 9, "ts": "2026-11-05T02:24:00+09:00", "t": 1.0, "run_id": "x", "kind": "agent.stopped",
+              "agent": "cae.strength"}
+        for code in ("done", "run_ended", "user_stop", "error"):
+            self.assertEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength", "stop_code": code,
+                                                                       "stop_reason": "words"}}), [])
+        self.assertNotEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength",
+                                                                      "stop_code": "red_left"}}), [])
+        self.assertEqual(contract.errors("event", {**ev, "data": {"agent_id": "cae.strength"}}), [])  # optional
+
+    def test_fast_path_gives_jsonschemas_errors(self):
+        """The fast check of long plain arrays and maps reports exactly what jsonschema reports."""
+        root = contract.schema()
+        plain = jsonschema.Draft202012Validator({"$schema": root["$schema"], "$defs": root["$defs"],
+                                                 "$ref": "#/$defs/field"}, format_checker=jsonschema.FormatChecker())
+
+        def slow(obj):
+            return [f"field: {'/'.join(str(p) for p in e.absolute_path) or '(root)'}: {e.message}"
+                    for e in sorted(plain.iter_errors(obj), key=lambda e: list(e.absolute_path))]
+
+        n = 200
+        good = {"kind": "mode_shape", "unit": "1", "mesh_id": "mesh-0001",
+                "per_member": {f"m{i}": i * 0.5 for i in range(n)},
+                "per_node": {f"n{i}": ([0.1, 0.2, 1.0] if i % 2 else 3.0) for i in range(n)},
+                "per_element": [float(i) for i in range(n)] + [7]}
+        self.assertEqual(contract.errors("field", good), [])
+        self.assertEqual(slow(good), [])
+        for where, bad in [("per_member", "x"), ("per_member", True), ("per_node", [1.0, 2.0]),
+                           ("per_node", [[1.0], 2.0, 3.0]), ("per_node", None), ("per_element", "1.5"),
+                           ("per_element", False)]:
+            with self.subTest(where=where, bad=bad):
+                obj = json.loads(json.dumps(good))
+                if where == "per_element":
+                    obj[where][57] = bad
+                else:
+                    obj[where][f"{where[4]}57"] = bad
+                self.assertNotEqual(contract.errors("field", obj), [])
+                self.assertEqual(contract.errors("field", obj), slow(obj))
 
     def test_series_against_time_or_another_quantity(self):
         base = {"channel": "toe.FL", "unit": "deg", "values": [0.0, 0.1]}

@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 
 from hiraku.webserve.server import make_server
+from tests.web.beyond_fixture import SHOWN, beyond_events
 from tests.web.domains_fixture import V1_RED, V2_RED, domain_events
 from tests.web.test_browser import ENABLED, sync_playwright
 
@@ -162,6 +163,8 @@ def switch_times(events, times):
 
 GREEN_RGB = "rgb(47, 125, 79)"  # the pages' colour of a pass
 RED_RGB = "rgb(200, 64, 42)"  # n04.overlay.color
+BEYOND_NG_RGB = "rgb(106, 76, 147)"  # cut_grid.js BEYOND_NG
+BEYOND_PASSED_RGB = "rgb(178, 107, 0)"  # cut_grid.js BEYOND_PASSED
 
 
 # What the page shows at stage time t, read in the page.
@@ -198,7 +201,13 @@ READ = """async (t) => {
                contour: (() => { const t = cut.tiles.find((x) => x.key === el.dataset.domain); const l = t?.layers.find((x) => x.el === layer);
                  const ct = l?.view?.keys?.contour; return ct ? { max: ct.max, limitKnown: ct.limitKnown, parts: ct.parts, values: Object.keys(ct.values ?? {}).length } : null; })(),
                mark: mark ? mark.textContent : null, want: state === "green" ? "✓" : state === "red" ? "✕" : null,
-               label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el), text: layer?.textContent ?? "",
+               label: label ? rect(label) : null, markRect: mark ? rect(mark) : null, minText: textPx(el),
+               text: layer ? [...layer.childNodes].filter((n) => !(n.classList && (n.classList.contains("beyond") || n.classList.contains("scope")))).map((n) => n.textContent).join("") : "",
+               scope: layer?.querySelector(".scope") ? { text: layer.querySelector(".scope").innerText, kind: layer.querySelector(".scope").dataset.kind, rect: rect(layer.querySelector(".scope")) } : null,
+               beyond: layer ? [...layer.querySelectorAll(".beyond span")].map((s) => [s.textContent, getComputedStyle(s).color]) : [],
+               beyondRect: layer?.querySelector(".beyond") ? rect(layer.querySelector(".beyond")) : null,
+               beyondKind: layer?.querySelector(".beyond")?.dataset.kind ?? null,
+               recorded: layer?.dataset.recorded ?? null,
                tags: layer ? layer.querySelectorAll(".tag").length : 0, pet: !!el.querySelector('[data-box$=".pet"]'),
                hits: layer?.dataset.hits ?? null, featured: el.dataset.featured === "1" };
     }),
@@ -270,7 +279,8 @@ class GridCutTest(unittest.TestCase):
             if t["shown"] and t["label"] and t["markRect"]:
                 self.assertLessEqual(t["label"][2], t["markRect"][0], f"{t['key']}: the label runs into the mark")
 
-    def check_grid(self, got, layout, name):
+    def check_grid(self, got, layout, name, want=None):
+        """want: {domain: "✓" / "✕" / None} in place of the marks of the record's judgements."""
         spec = layout[name]
         self.assertIsNone(got["err"])
         self.assertEqual([t["key"] for t in got["tiles"]], [f"{name}.tile.{k}" for k in spec["tests"]])
@@ -286,7 +296,8 @@ class GridCutTest(unittest.TestCase):
             self.assertIsNone(t["outside"], t["key"])
             self.assertTrue(t["shown"], t["key"])
             self.assertTrue(t["pet"], t["key"])
-            self.assertEqual(t["mark"], t["want"], t["key"])  # the mark is the run's judgement, and none without one
+            dom = t["key"].split(".")[-1]
+            self.assertEqual(t["mark"], want[dom] if want and dom in want else t["want"], t["key"])  # the mark is the run's judgement, and none without one
             if t["minText"] is not None:  # a tile with a record and no judgement holds no text
                 self.assertGreaterEqual(t["minText"], layout["min_text_px"], t["key"])
             # a picture and its mark only: no name, no figure (a tile without its record says so)
@@ -461,6 +472,75 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(got["version"], 2)
         self.assertEqual({t["key"].split(".")[-1] for t in got["tiles"] if t["mark"] == "✕"}, V2_RED)
+        page.close()
+
+    def test_cases_past_the_limit_counted_apart(self):
+        """beyond_fixture: the cases past the limit (-beyond) are counted under the mark in their
+        own colours, "限界の外 N (狙いどおり NG)" for those that failed as meant and "限界の外 N:
+        落ちるはずが通った" for one that passed; a domain the record judges red only through
+        them shows the colour of its other verdicts (strength green); one red through its own
+        case too stays red (thermal in version 1). N04 on version 1 and N15 to the end."""
+        layout = grid_layout()
+        events = crash_drawn(beyond_events())
+        base = self.serve(layout, events={"20261102-120000-grid-beyond": events})
+        mark = {"green": "✓", "red": "✕"}
+        for name, version, t in (("n04", 1, 1.5), ("n15", 2, 4.8)):
+            q = f"&version={version}" if name == "n04" else ""
+            page, errors = self.open(f"{base}/cut.html?cut={name}&run=20261102-120000-grid-beyond&t=0{q}")
+            got = page.evaluate(READ, t)
+            self.assertEqual(errors, [])
+            self.assertEqual(got["version"], version)
+            want = {d: mark[SHOWN[d][version]] for d in SHOWN}
+            self.check_grid(got, layout, name, want)
+            self.check_boxes(got, name)
+            tiles = {x["key"].split(".")[-1]: x for x in got["tiles"]}
+            # the record's own judgement is kept on the layer (red for strength and thermal)
+            self.assertEqual({d: tiles[d]["recorded"] for d in SHOWN}, {"strength": "red", "thermal": "red", "handling": "green"})
+            self.assertEqual(tiles["strength"]["beyond"], [["限界の外 1 (狙いどおり NG)", BEYOND_NG_RGB]])
+            self.assertEqual(tiles["thermal"]["beyond"], [["限界の外 1 (狙いどおり NG)", BEYOND_NG_RGB]])
+            self.assertEqual(tiles["handling"]["beyond"], [["限界の外 1: 落ちるはずが通った", BEYOND_PASSED_RGB]])
+            for d in ("crash", "nvh", "aero", "powertrain", "assembly"):
+                self.assertEqual(tiles[d]["beyond"], [], d)
+            for d in SHOWN:
+                self.assertEqual(tiles[d]["beyondKind"], "note", d)  # a note, not a label of the domain
+                b = tiles[d]["beyondRect"]
+                self.inside(b, tiles[d]["rect"], d)
+                self.assertLessEqual(b[2], tiles[d]["markRect"][0], d)  # left of the mark
+                pet = next(x["rect"] for x in got["boxes"] if x["box"] == f"{name}.tile.{d}.pet")
+                self.assertTrue(b[3] <= pet[1] or b[2] <= pet[0], d)  # clear of the pet
+            # the colours apart from the red of a fail and the green of a pass
+            self.assertNotIn(BEYOND_NG_RGB, (RED_RGB, GREEN_RGB))
+            page.close()
+
+    def test_nvh_tile_says_what_the_modal_calculation_covers(self):
+        """The NVH record as the modal tool writes it (tool modal, a frame mode labelled
+        "mode k (frame)"; shape example): the tile says the calculation is the frame's beams
+        only, the parts as masses, as a note at its bottom left clear of the pet; the shape
+        example's own record (another tool, no kind in the label) gets no words."""
+        layout = grid_layout()
+        events = crash_drawn(domain_events())
+        for e in events:
+            if e["kind"] == "analysis.finished" and e["data"].get("tool") == "nvh_shape_example":
+                e["data"]["tool"] = "modal"
+                e["data"]["fields"][0]["label"] = "mode 3 (frame)"
+        base = self.serve(layout, events={"20261102-120000-grid-modal": events, "20261102-120000-grid-raw": domain_events()})
+        for name in ("n04", "n15"):
+            page, errors = self.open(f"{base}/cut.html?cut={name}&run=20261102-120000-grid-modal&t=0&version=1")
+            got = page.evaluate(READ, 1.5)
+            self.assertEqual(errors, [])
+            self.check_grid(got, layout, name)
+            self.check_boxes(got, name)
+            tiles = {x["key"].split(".")[-1]: x for x in got["tiles"]}
+            sc = tiles["nvh"]["scope"]
+            self.assertEqual(sc["text"], "フレームの梁だけの固有振動\n(部品は重さとしてだけ入る)")
+            self.assertEqual(sc["kind"], "note")
+            pet = next(x["rect"] for x in got["boxes"] if x["box"] == f"{name}.tile.nvh.pet")
+            self.assertLessEqual(sc["rect"][2], pet[0])
+            self.assertTrue(all(tiles[d]["scope"] is None for d in TESTS if d != "nvh"))
+            page.close()
+        page, errors = self.open(f"{base}/cut.html?cut=n04&run=20261102-120000-grid-raw&t=0&version=1")
+        got = page.evaluate(READ, 1.5)
+        self.assertIsNone(next(x for x in got["tiles"] if x["key"].endswith(".nvh"))["scope"])
         page.close()
 
     def test_missing_layout_keys_are_named(self):

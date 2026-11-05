@@ -4,12 +4,19 @@ confirm it (value = the prediction, the unfavourable one)."""
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any
 
 from hiraku import contract
 from hiraku.tools.context import RunContext
 
 Record = dict[str, Any]
+
+
+def reading(ctx: RunContext) -> Any:
+    """The store's reading() (each record file read once, the records not to be changed), if it has one."""
+    got = getattr(ctx.store, "reading", None)
+    return got() if got is not None else nullcontext()
 
 OPS = {
     "<=": lambda v, lim: v <= lim,
@@ -43,14 +50,48 @@ def prediction_is_unfavourable(comparison: Record, op: str) -> bool:
     return p >= a if unfavourable_side(op) == "larger" else p <= a
 
 
+PATH_FORMULA = "load_path.free_parts"  # docs/contract.md 手計算の役目: the hand calculation of the load path
+PATH_CHECKED = "path_checked"
+
+
+def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Record | None = None) -> str | None:
+    """docs/contract.md 手計算の役目, the load path checked by hand, in this version: (1) a load_path.free_parts
+    prediction of 0, of the load case's loaded parts (one of its own predictions) or of every part of the version
+    (contract 947969a: the quantity free_parts, of any load case, as qa.check_run reads it); (2) an ok analysis
+    of the load case that follows the path (a free_parts or unsupported_load result) finds no unsupported load,
+    nor does the analysis that decides (given: the compared one). None when it holds, else why not (for people)."""
+    lc_id = load_case["load_case_id"]
+    hand = [p for p in ctx.store.records("prediction", version) if p.get("formula_id") == PATH_FORMULA
+            and (p["load_case_id"] == lc_id or p["quantity"] == "free_parts")]
+    if not hand:
+        return (f"版 {version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
+                "記録されていない")
+    if not any(p["value"] == 0 for p in hand):
+        p = hand[-1]
+        return f"手計算 {p['prediction_id']} ({PATH_FORMULA}) で、つながらない部品が {p['value']:g} ある"
+    seen = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == lc_id and a["status"] == "ok"
+            and any(r.get("quantity") in ("free_parts", UNSUPPORTED_LOAD) for r in a.get("results") or [])]
+    if not seen:
+        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (free_parts か unsupported_load を出すもの、"
+                "load_path など) がまだ回っていない")
+    for a in [seen[-1]] + ([analysis] if analysis is not None else []):
+        lost = [r for r in a.get("results") or [] if r.get("quantity") == UNSUPPORTED_LOAD and r.get("value", 0) > 0]
+        if lost:
+            return f"解析 {a['analysis_id']} ({a['tool']}) で、支えのない荷重が {max(r['value'] for r in lost):g} ある"
+    return None
+
+
 def make_verdict(ctx: RunContext, verdict_id: str, comparison: Record, load_case: Record,
-                 cause_id: str | None = None) -> Record:
+                 cause_id: str | None = None, basis: str | None = None) -> Record:
     """From a match: the analysis value. With cause_id (an explained safe-side mismatch):
-    the prediction, which the caller has checked is the unfavourable value."""
+    the prediction, which the caller has checked is the unfavourable value. With cause_id and basis
+    path_checked (a cause with tool_decides, the load path checked by hand: path_check): the analysis value."""
     crit = load_case["criterion"]
-    value = comparison["predicted"] if cause_id else comparison["analyzed"]
+    checked = cause_id is not None and basis == PATH_CHECKED
+    value = comparison["predicted"] if cause_id and not checked else comparison["analyzed"]
     limit = crit["limit"]
-    extra = ({"basis": "explained_safe_side", "value_from": "prediction", "cause_id": cause_id} if cause_id
+    extra = ({"basis": PATH_CHECKED, "value_from": "analysis", "cause_id": cause_id} if checked
+             else {"basis": "explained_safe_side", "value_from": "prediction", "cause_id": cause_id} if cause_id
              else {"basis": "match", "value_from": "analysis"})
     return {
         "verdict_id": verdict_id,
@@ -196,7 +237,8 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
         if c["status"] != "mismatch":
             continue
         cause = causes.get(c["comparison_id"])
-        if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
+        # (b): settled by a resolved cause, a safe-side one, or one where the tool decides after the path check
+        if cause is None or not (cause.get("resolved") or cause.get("safe_side") or cause.get("tool_decides")):
             out.append((c, cause))
     return out
 
@@ -207,13 +249,77 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
     earlier safe-side verdict). Empty when nothing holds it back."""
     out = []
     for c, cause in unresolved_mismatches(ctx, load_case, version):
-        why = "原因がまだ書かれていない" if cause is None else f"原因 {cause['cause_id']} がまだ解けていない"
+        if cause is None:
+            why = "原因がまだ書かれていない"
+        elif cause.get("ends_case"):  # contract 08cf4d6: the load case ends not judged
+            why = f"原因 {cause['cause_id']} が、この実行の手計算では届かないとして、判定なしで終えた"
+        else:
+            why = f"原因 {cause['cause_id']} がまだ解けていない"
         out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
     crit = load_case.get("criterion")
     for a, r in beyond_results(ctx, load_case, version):
         out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"
                    f"基準 {OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超えている")
+    gap = unchecked_since_beyond(ctx, load_case, version)
+    if gap:
+        out.append(gap)
     return out
+
+
+def unchecked_since_beyond(ctx: RunContext, load_case: Record, version: int) -> str | None:
+    """docs/contract.md 分野が緑になる条件 (d): when an earlier version of the run had an analysis of the load case
+    beyond its criterion, this version needs an ok analysis that gives the judged quantity from a tool of the same
+    or a heavier stage than the heaviest tool that was beyond; a lighter tool's pass does not clear it. The reason,
+    or None when nothing earlier was beyond or such an analysis is there."""
+    from hiraku.tools.shelf import tool_stage  # shelf reads the tools; judge is read by rules
+
+    crit = load_case.get("criterion")
+    if crit is None:
+        return None
+    earlier = [(w, a) for w in range(1, version) for a, _ in beyond_results(ctx, load_case, w)]
+    if not earlier:
+        return None
+    need = max(tool_stage(ctx, a["tool"]) for _, a in earlier)
+    w, worst = max(earlier, key=lambda wa: (tool_stage(ctx, wa[1]["tool"]), wa[0]))
+    mine = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == load_case["load_case_id"]
+            and tool_stage(ctx, a["tool"]) >= need]
+    gives = [a for a in mine if a["status"] == "ok" and any(
+        r["quantity"] == judged_quantity(ctx, a["tool"], crit["quantity"]) for r in a.get("results", []))]
+    if gives:
+        return None
+    failed = [a["analysis_id"] for a in mine if a["status"] != "ok"]
+    now = f"この版の解析 {'、'.join(failed)} は失敗した" if failed else "この版ではまだ回していない"
+    return (f"版 {w} で解析 {worst['analysis_id']} ({worst['tool']}) が基準を超えた。同じか重い段のツールで "
+            f"{crit['quantity']} を出す解析が要るが、{now} (軽い段のツールの合格では消えない)")
+
+
+def beyond_text(ctx: RunContext, load_case: Record, version: int) -> str | None:
+    """A load case that ends not judged, said with the tool's numbers when a tool's result is beyond the
+    criterion (beyond_results): "ツールでは <where> の <quantity> が <value> で、基準 <op> <limit> を超える
+    (the other results at the same place)". No verdict comes of it (HK4: no verdict without a prediction);
+    None when no tool result is beyond."""
+    crit = load_case.get("criterion")
+    lines = []
+    for a, r in beyond_results(ctx, load_case, version):
+        at = f"{r['where']} の " if r.get("where") else ""
+        same = [x for x in a.get("results", []) if r.get("where") and x.get("where") == r["where"] and x is not r]
+        more = f" ({'、'.join(x['quantity'] + ' ' + _amount(x['value'], x['unit']) for x in same)})" if same else ""
+        lines.append(f"ツール {a['tool']} では {at}{r['quantity']} が {_amount(r['value'], r['unit'])} で、基準 "
+                     f"{OP_JA[crit['op']]} {_amount(crit['limit']['value'], crit['limit']['unit'])} を超える{more}")
+    return "; ".join(lines) or None
+
+
+NO_FORMULA_NOTE = "手計算 (K0) の式が無いので判定していない"
+
+
+def no_formula_cases(ctx: RunContext) -> dict[str, str]:
+    """rules.unpredictable_cases: the load cases no K0 formula can predict (no verdict can come)."""
+    from hiraku.tools.rules import unpredictable_cases  # rules reads this module
+
+    try:
+        return unpredictable_cases(ctx)
+    except Exception:  # a context without a registry or shelf: nothing said
+        return {}
 
 
 def held_cases(ctx: RunContext, domain: str, version: int) -> dict[str, list[str]]:
@@ -244,7 +350,8 @@ NOT_OP = {"<=": ">", "<": ">=", ">=": "<", ">": "<="}  # the relation that holds
 def verdict_line(v: Record) -> str:
     """The verdict in one line. The sign between the numbers is the relation that holds: the
     criterion's when it passes; when it fails, the opposite, with the criterion beside it."""
-    safe = " 安全側の予測で" if v.get("basis") == "explained_safe_side" else ""
+    safe = (" 安全側の予測で" if v.get("basis") == "explained_safe_side"
+            else " 道を手計算で確かめ、ツールの値で" if v.get("basis") == PATH_CHECKED else "")
     value, limit = v["value"]["value"], v["limit"]["value"]
     if v.get("margin_pct") is None:  # a zero limit: the margin in the quantity's own unit
         room = _amount(margin(value, v["op"], limit), v["limit"]["unit"])
@@ -298,6 +405,9 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     reds = [x for x in got if not x["pass"]]
     misses = system_misses(ctx, v) if domain == SYSTEM_DOMAIN and v else []
     held = held_cases(ctx, domain, v) if v else {}
+    if held:  # a result past the limit on a case no formula predicts: said, not hidden (it gets no verdict)
+        cannot = no_formula_cases(ctx)
+        held = {k: why + [NO_FORMULA_NOTE] if k in cannot else why for k, why in held.items()}
     held_line = "まだ合格にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
         lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
@@ -327,8 +437,12 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
 
 
 def update_judgement(ctx: RunContext, domain: str, version: int | None = None) -> Record:
-    """Recompute the tile and store it; an unchanged tile is not written again (no judgement.updated)."""
-    j = compute_judgement(ctx, domain, version)
+    """Recompute the tile and store it; an unchanged tile is not written again (no judgement.updated). The tile
+    is worked out inside the store's reading(): green rule (d) reads every earlier version's analyses for each
+    load case, so outside it each update read them all again (a demo run's version 4, all four tiles: 3260 files,
+    299 MB; inside: 170 files the first time, none after)."""
+    with reading(ctx):
+        j = compute_judgement(ctx, domain, version)
     contract.validate("judgement", j)
     if any(t == j for t in ctx.store.judgements(j["design_version"])):
         return j

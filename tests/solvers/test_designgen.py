@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from hiraku import contract, designgen, solvers
+from tests.solvers.same_design import assert_same_design
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
@@ -20,7 +21,7 @@ def results(rec):
 
 class DesignGenTest(unittest.TestCase):
     def test_defaults_build_v1(self):
-        self.assertEqual(GEN.build(), V1)
+        assert_same_design(self, GEN.build(), V1)
 
     def test_spec(self):
         names = set()
@@ -39,8 +40,9 @@ class DesignGenTest(unittest.TestCase):
 
     def test_revise_round_trip(self):
         v2 = GEN.build(GEN.values_of(V1), version=2, parent=1, reason="same variables")
-        self.assertEqual({k: v for k, v in v2.items() if k not in ("design_version", "parent_version", "name", "change_reason")},
-                         {k: v for k, v in V1.items() if k not in ("design_version", "parent_version", "name", "change_reason")})
+        assert_same_design(self,
+                           {k: v for k, v in v2.items() if k not in ("design_version", "parent_version", "name", "change_reason")},
+                           {k: v for k, v in V1.items() if k not in ("design_version", "parent_version", "name", "change_reason")})
         self.assertEqual((v2["design_version"], v2["parent_version"]), (2, 1))
 
     def test_every_range_end_builds_or_says_why(self):
@@ -122,8 +124,8 @@ class DesignGenTest(unittest.TestCase):
         self.assertEqual(kinds[0]["choices"]["part_mounts"], ["none", "brackets"])  # test_designgen_options
         self.assertEqual(designgen.archetypes({"self_propelled": False, "ride": True}), [])
         d = designgen.propose("ladder_4w", {}, {}, req)
-        self.assertEqual({k: v for k, v in d.items() if k != "change_reason"},
-                         {k: v for k, v in V1.items() if k != "change_reason"})  # the demo requirements give v1
+        assert_same_design(self, {k: v for k, v in d.items() if k != "change_reason"},
+                           {k: v for k, v in V1.items() if k != "change_reason"})  # the demo requirements give v1
         check_design_loading(req, d, "two_cargo")
         heavy = dict(req, requirements=[dict(r, value=90) if r["key"] == "Q33" else r for r in req["requirements"]])
         d2 = designgen.propose("ladder_4w", {}, {"track": mm(1220)}, heavy)
@@ -197,11 +199,12 @@ class JointReinforcementTest(unittest.TestCase):
 
     def test_butt_is_v1_byte_for_byte(self):
         raw = (ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8")
-        self.assertEqual(json.dumps(GEN.build({"gusset_leg": mm(0), "cross_members_through": one(0)}), ensure_ascii=False,
-                                    indent=2), json.dumps(json.loads(raw), ensure_ascii=False, indent=2))
-        self.assertEqual(designgen.regenerate(self.gusset, {"joints": "butt"}), V1)
-        self.assertEqual(designgen.regenerate(self.gusset, {"gusset_leg": mm(0)}), V1)
-        self.assertEqual(designgen.regenerate(self.through, {"cross_members_through": one(0)}), V1)
+        # the stored file's every key, string and order; its numbers to tests.solvers.same_design's tolerance (the
+        # last bits of float64 differ between operating systems)
+        assert_same_design(self, GEN.build({"gusset_leg": mm(0), "cross_members_through": one(0)}), json.loads(raw))
+        assert_same_design(self, designgen.regenerate(self.gusset, {"joints": "butt"}), V1)
+        assert_same_design(self, designgen.regenerate(self.gusset, {"gusset_leg": mm(0)}), V1)
+        assert_same_design(self, designgen.regenerate(self.through, {"cross_members_through": one(0)}), V1)
         self.assertEqual(GEN.choices_of(V1)["joints"], "butt")
 
     def test_the_variables_alone_make_the_same_designs(self):
@@ -237,8 +240,12 @@ class JointReinforcementTest(unittest.TestCase):
         d = self.gusset
         contract.validate("design", d)
         g = [p for p in d["parts"] if p["kind"] == "gusset"]
-        self.assertEqual(len(g), 4 * 2 * 4)  # four T stations (A, S1, S2, B), both sides, four plates each
-        self.assertEqual(d["parts"][:len(V1["parts"])], V1["parts"])
+        # four T stations (A, S1, S2, B), both sides, four plates each; but none where another part is (kit/frame
+        # gussets(avoid=...)): the battery's side of S1 and S2 (8), named in the joint's other gussets
+        self.assertEqual(len(g), 4 * 2 * 4 - 8)
+        self.assertEqual(sum("battery があるので付けない" in p["name"] for p in g), 8)
+        # every part of version 1 unchanged (by id: the joints' fittings, kit/joints.py, come after the gussets)
+        self.assertEqual([p for p in d["parts"] if p["id"] in {q["id"] for q in V1["parts"]}], V1["parts"])
         self.assertEqual({k: d["variables"][k]["value"] for k in ("gusset_leg", "gusset_thickness")},
                          {"gusset_leg": 60.0, "gusset_thickness": 2.3})
         self.assertNotIn("gussets", d["variables"])
@@ -258,13 +265,14 @@ class JointReinforcementTest(unittest.TestCase):
     def test_through(self):
         d = self.through
         contract.validate("design", d)
-        n = len(V1["parts"])
-        self.assertEqual(d["parts"][:n], V1["parts"])
+        v1_ids = {q["id"] for q in V1["parts"]}
+        # every part of version 1 unchanged (by id: the joints' fittings, kit/joints.py, come after the through pieces)
+        self.assertEqual([p for p in d["parts"] if p["id"] in v1_ids], V1["parts"])
         self.assertEqual(d["members"], V1["members"])  # the beam model is unchanged
         self.assertEqual(d["variables"]["cross_members_through"], one(1.0))
         self.assertNotIn("gusset_leg", d["variables"])
         self.assertEqual(GEN.choices_of(d)["joints"], "through")
-        extra = d["parts"][n:]
+        extra = [p for p in d["parts"] if p["id"] not in v1_ids]
         self.assertEqual({p["id"] for p in extra},
                          {f"through_cross_{st}_{s}{st}" for st in ("A", "S1", "S2", "B") for s in "LR"})
         rho = V1["materials"]["stkr400"]["density_kg_m3"] * 1e-9

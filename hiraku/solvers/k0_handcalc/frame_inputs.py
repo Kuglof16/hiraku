@@ -75,6 +75,31 @@ def overhang_moment(design: dict, node: str) -> float:
     return M
 
 
+def _end_behind(design: dict, nodes: dict, props: dict, n: str):
+    """Behind the rail node n (towards -x along its rail): (the rail's length to the first node where a cross member
+    joins the other rail, that cross member's props), or None when the rail ends without one."""
+    cur, a_len = n, 0.0
+    y, z = nodes[n][1], nodes[n][2]
+    while True:
+        nxt = None
+        for mp in props.values():
+            m = mp["member"]
+            if cur not in (m["node_a"], m["node_b"]):
+                continue
+            o = m["node_b"] if m["node_a"] == cur else m["node_a"]
+            if abs(nodes[o][1] - y) < 1e-6 and abs(nodes[o][2] - z) < 1e-6 and nodes[o][0] < nodes[cur][0]:
+                nxt = (o, mp["length"])
+                break
+        if nxt is None:
+            return None
+        cur, a_len = nxt[0], a_len + nxt[1]
+        mirror = next((k for k, q in nodes.items() if abs(q[0] - nodes[cur][0]) < 1e-6 and abs(q[1] + y) < 1e-6
+                       and abs(q[2] - z) < 1e-6), None)
+        end = _member_between(props, cur, mirror) if mirror else None
+        if end is not None:
+            return a_len, end
+
+
 def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None = None) -> dict:
     """Quantities for frame_static.rail_joint_stress at the rear axle joint (all but F and W).
 
@@ -120,6 +145,13 @@ def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None
     bc, hc, tc = _rect_dims(design["sections"][cross["member"]["section"]])
     mat = ahead["material"]
     contact_z = float(s["position_mm"][2]) - float(s.get("radius_mm", 0.0))
+    closed = _end_behind(design, nodes, props, n)
+    extra = {}
+    if closed is not None:
+        a_len, end = closed
+        be, he, te = _rect_dims(design["sections"][end["member"]["section"]])
+        extra = {"a": quantity(a_len, "mm"), "L_e": quantity(end["length"], "mm"),
+                 "b_e": quantity(be, "mm"), "h_e": quantity(he, "mm"), "t_e": quantity(te, "mm")}
     return {
         "inputs": {
             "M_oh": quantity(M, "N*mm"),
@@ -131,6 +163,7 @@ def rail_joint_inputs(design: dict, side: str | None = None, loading: str | None
             "nu": quantity(float(mat["nu"]), "1"),
             "b": quantity(b, "mm"), "h": quantity(h, "mm"), "t": quantity(t, "mm"),
             "b_c": quantity(bc, "mm"), "h_c": quantity(hc, "mm"), "t_c": quantity(tc, "mm"),
+            **extra,  # frame_static.rail_joint_stress_closed's: the rail behind and the end cross member
         },
         "support": s["id"],
         "node": n,
@@ -201,8 +234,10 @@ def ladder_twist_inputs(design: dict, loading: str | None = None) -> dict:
         design = on_board(design, loading)
     nodes = node_table(design)
     props = member_props(design)
-    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6]
-    z_rail = float(rails[0]["a"][2]) if rails else 0.0
+    try:
+        _, z_rail, rails = rail_line(props)
+    except DesignError:
+        rails, z_rail = [], 0.0
     # cross members join the two rails at the rails' height (a roll bar's top beam is not one)
     cross = [mp for mp in props.values() if abs(mp["a"][1] + mp["b"][1]) < 1e-6 and abs(mp["a"][1]) > 1e-6
              and abs(mp["a"][2] - z_rail) < 1e-6 and abs(mp["b"][2] - z_rail) < 1e-6]
@@ -298,11 +333,8 @@ def joint_wall_inputs(design: dict, loading: str | None = None, step_mm: float |
     nodes = node_table(design)
     props = member_props(design)
     summ = mass_summary(design)
-    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
-             and abs(mp["a"][0] - mp["b"][0]) > 1e-6 and mp["a"][1] > 0]
-    if not rails:
-        raise DesignError("the joint wall calculation needs a ladder frame: rails along x")
-    y_r, z_r = float(rails[0]["a"][1]), float(rails[0]["a"][2])
+    y_r, z_r, rails = rail_line(props)
+    rails = [mp for mp in rails if mp["a"][1] > 0]  # the left rail
     left = sorted({n for n, p in nodes.items() if abs(p[1] - y_r) < 1e-6 and abs(p[2] - z_r) < 1e-6},
                   key=lambda n: -nodes[n][0])
     stations = []
@@ -437,6 +469,59 @@ def beam_stiffness(p0, p1, sec: dict, E: float, G: float) -> np.ndarray:
     R = np.vstack([e, y, z])
     T = np.kron(np.eye(4), R)
     return T.T @ k @ T
+
+
+AXIS = {"x": 0, "y": 1, "z": 2}
+
+
+def members_flexibility(design: dict, member: str, t: float, holds: dict[str, str]) -> tuple[np.ndarray, np.ndarray]:
+    """(C, x): the 6 x 6 flexibility (mm/N, rad/N; mm/(N*mm), rad/(N*mm)) at the point x a fraction t along `member`,
+    of the frame's members alone (every member a slender 3D beam, beam_stiffness; no plates, no parts), held at the
+    design nodes `holds` names (node -> the components held, "x", "y", "z" or "all"). Rows and columns: u_x, u_y,
+    u_z, rot_x, rot_y, rot_z. A frame the holds leave free to move raises DesignError."""
+    props = member_props(design)
+    if member not in props:
+        raise DesignError(f"no member {member!r}")
+    nodes = node_table(design)
+    used = sorted({mp["member"][k] for mp in props.values() for k in ("node_a", "node_b")})
+    idx = {n: i for i, n in enumerate(used)}
+    na, nb = props[member]["member"]["node_a"], props[member]["member"]["node_b"]
+    x = nodes[na] + t * (nodes[nb] - nodes[na])
+    inner = 1e-9 < t < 1.0 - 1e-9  # else the point is that end node
+    land = len(used) if inner else idx[na if t <= 0.5 else nb]
+    n_nodes = len(used) + (1 if inner else 0)
+    K = np.zeros((6 * n_nodes, 6 * n_nodes))
+    for mid, mp in props.items():
+        a, b = mp["member"]["node_a"], mp["member"]["node_b"]
+        E = float(mp["material"]["E_MPa"])
+        G = E / (2.0 * (1.0 + float(mp["material"].get("nu", 0.3))))
+        pieces = [(idx[a], idx[b], nodes[a], nodes[b])]
+        if mid == member and inner:
+            pieces = [(idx[a], land, nodes[a], x), (land, idx[b], x, nodes[b])]
+        for i, j, pa, pb in pieces:
+            dofs = [6 * i + k for k in range(6)] + [6 * j + k for k in range(6)]
+            K[np.ix_(dofs, dofs)] += beam_stiffness(pa, pb, mp["section"], E, G)
+    held = set()
+    for n, comps in holds.items():
+        if n not in idx:
+            raise DesignError(f"support node {n!r} is not on any member")
+        held |= {6 * idx[n] + k for k in (range(6) if comps == "all" else (AXIS[c] for c in comps))}
+    free = [d for d in range(len(K)) if d not in held]
+    Kff = K[np.ix_(free, free)]
+    pos = {d: i for i, d in enumerate(free)}
+    if any(6 * land + k not in pos for k in range(6)):
+        raise DesignError("the landing point is held; its movement is zero")
+    rhs = np.zeros((len(free), 6))
+    for k in range(6):
+        rhs[pos[6 * land + k], k] = 1.0
+    try:
+        U = np.linalg.solve(Kff, rhs)
+    except np.linalg.LinAlgError:
+        raise DesignError("the members alone are free to move on the supports (a mechanism)") from None
+    C = np.array([[U[pos[6 * land + r], k] for k in range(6)] for r in range(6)])
+    if not np.all(np.isfinite(C)) or np.linalg.norm(Kff @ U - rhs) > 1e-6 * max(1.0, float(np.abs(rhs).max())):
+        raise DesignError("the members alone are free to move on the supports (a mechanism)")
+    return (C + C.T) / 2.0, x
 
 
 def mount_roll_stiffness(design: dict) -> dict:
@@ -581,8 +666,7 @@ def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str
              and abs(mp["a"][0] - mp["b"][0]) > 1e-6]
     if not rails:
         raise DesignError("the twist chain needs a ladder frame: rails along x")
-    y_l = max(float(mp["a"][1]) for mp in rails)
-    z_r = float(next(mp for mp in rails if abs(mp["a"][1] - y_l) < 1e-6)["a"][2])
+    y_l, z_r, rails = rail_line(props)
     w = 2.0 * y_l
     left = sorted((n for n, p in nodes.items() if abs(p[1] - y_l) < 1e-6 and abs(p[2] - z_r) < 1e-6),
                   key=lambda n: nodes[n][0])
@@ -647,11 +731,13 @@ def antisymmetric_twist(design: dict, end_member: str, pairs: dict[str, dict[str
     to_rail: dict[str, str] = {}
 
     def rail_node(node: str) -> str:
-        """The rail node an off-rail node is joined to: the fewest members away, then the nearest."""
+        """The rail node an off-rail node is joined to: the fewest members away, then the nearest, then by name (the
+        ring is a set, whose order changes with the process's string hashing)."""
         if node not in to_rail:
             seen, ring = {node}, {node}
             while ring:
-                hit = sorted((n for n in ring if n in where), key=lambda n: float(np.linalg.norm(nodes[n] - nodes[node])))
+                hit = sorted((n for n in ring if n in where),
+                             key=lambda n: (float(np.linalg.norm(nodes[n] - nodes[node])), n))
                 if hit:
                     to_rail[node] = hit[0]
                     break
@@ -793,15 +879,30 @@ def end_cross_member_inputs(design: dict, loading: str | None = None) -> dict:
     }
 
 
+def rail_line(props: dict) -> tuple[float, float, list[dict]]:
+    """A ladder frame's rails: of the members along x (one y and z each), the line (|y|, z) with members on both
+    sides that has the most length. Other members along x (a side frame's bars, outboard of the rails) are shorter.
+    Returns (rail |y|, rail z, the rails' member props, both sides)."""
+    along = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
+             and abs(mp["a"][0] - mp["b"][0]) > 1e-6]
+    runs: dict[tuple[float, float], list[float]] = {}
+    for mp in along:
+        key = (round(abs(float(mp["a"][1])), 3), round(float(mp["a"][2]), 3))
+        runs.setdefault(key, [0.0, 0.0, 0.0])
+        runs[key][0] += mp["length"]
+        runs[key][1 if mp["a"][1] > 0 else 2] = 1.0
+    both = {k: v[0] for k, v in runs.items() if v[1] and v[2]}
+    if not both:
+        raise DesignError("the calculation needs a ladder frame: two rails along x mirrored across y = 0")
+    y_l, z_r = max(both, key=both.get)
+    return y_l, z_r, [mp for mp in along if abs(abs(float(mp["a"][1])) - y_l) < 1e-3 and abs(float(mp["a"][2]) - z_r) < 1e-3]
+
+
 def _left_rail(design: dict) -> tuple[dict, dict, list[str], float, float]:
     """(nodes, member props, the left rail's nodes front to back, rail y, rail z) of a ladder frame."""
     nodes = node_table(design)
     props = member_props(design)
-    rails = [mp for mp in props.values() if abs(mp["a"][1] - mp["b"][1]) < 1e-6 and abs(mp["a"][2] - mp["b"][2]) < 1e-6
-             and abs(mp["a"][0] - mp["b"][0]) > 1e-6 and mp["a"][1] > 0]
-    if not rails:
-        raise DesignError("the calculation needs a ladder frame: rails along x")
-    y_r, z_r = float(rails[0]["a"][1]), float(rails[0]["a"][2])
+    y_r, z_r, _ = rail_line(props)
     left = sorted({n for n, p in nodes.items() if abs(p[1] - y_r) < 1e-6 and abs(p[2] - z_r) < 1e-6},
                   key=lambda n: -nodes[n][0])
     return nodes, props, left, y_r, z_r

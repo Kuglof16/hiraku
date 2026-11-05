@@ -72,9 +72,13 @@ _PRODUCT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
 class LaunchError(Exception):
-    def __init__(self, status: int, message: str):
+    """status: the HTTP status; message: the record's English (kept as "error"); extra: fields
+    sent beside it for the screen to say it in its own words (e.g. running_run_id)."""
+
+    def __init__(self, status: int, message: str, extra: dict[str, Any] | None = None):
         super().__init__(message)
         self.status = status
+        self.extra = dict(extra or {})
 
 
 def knowledge_name(name: Any) -> str:
@@ -146,6 +150,20 @@ def demo_run_estimate(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
         raise ValueError(f"estimate_usd must be a number of USD or null, not {value!r}")
     return value
+
+
+def demo_run_estimate_of(row: dict[str, Any]) -> float | None:
+    """The estimate a demo row shows: its `estimate_usd` when written, else the `usd` of the default
+    mix in its `estimates_usd` ({<mix>: {usd, upper_usd}} or null; none there: no estimate)."""
+    if "estimate_usd" in row:
+        return demo_run_estimate(row.get("estimate_usd"))
+    per_mix = row.get("estimates_usd")
+    if per_mix is None:
+        return None
+    default = per_mix.get("default") if isinstance(per_mix, dict) else None
+    if not isinstance(default, dict):
+        raise ValueError(f"estimates_usd must map each mix to {{usd, upper_usd}} (with default), not {per_mix!r}")
+    return demo_run_estimate(default.get("usd"))
 
 
 def run_command(requirements: Path, mode: str, runs_dir: Path, intake_events: Path | None = None) -> list[str]:
@@ -258,7 +276,7 @@ class Launcher:
                                    "cuts": [str(c) for c in cuts] if isinstance(cuts, list) else [str(cuts)]}
             try:
                 row["modes"] = demo_run_modes(r.get("modes"))
-                row["estimate_usd"] = demo_run_estimate(r.get("estimate_usd"))
+                row["estimate_usd"] = demo_run_estimate_of(r)
             except ValueError as e:
                 rows.append({**row, "error": str(e)})
                 continue
@@ -335,7 +353,9 @@ class Launcher:
             raise LaunchError(403, f"{KEY_NAME} is not set where this server runs; start the server in a window that has it")
         with self.lock:
             if self.running():
-                raise LaunchError(409, f"a run is still going: {self.current.get('run_id')}")
+                # (run_id is None until the child prints its folder)
+                raise LaunchError(409, f"a run is still going: {self.current.get('run_id')}",
+                                  {"running_run_id": self.current.get("run_id")})
             self.runs_dir.mkdir(parents=True, exist_ok=True)
             env ={**self.env, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
             cmd = self.command(path, mode, self.runs_dir, events) if events is not None else self.command(path, mode, self.runs_dir)

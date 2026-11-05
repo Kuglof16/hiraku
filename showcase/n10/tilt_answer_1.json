@@ -1,0 +1,27 @@
+{
+ "result": "# 答え: 約 39°\n\n## 根拠\n\n**1. ばねを無視した場合 (剛体): 約 42.8°**\n\n上側の車輪が浮くのは、重心を通る鉛直線が下側の車輪の接地点を越えるときです。\n\n- tan θ = (トレッド/2) / 重心高 = 550 / 593.5\n- θ ≈ 42.8°\n\n**2. ばねを考慮した場合: 約 39°**\n\n傾けると車体は下側へロールし、重心が下側の車輪へ寄ります。そのため、剛体より早く浮きます。\n\n- **1 輪あたりのばね:** サスペンションとタイヤの直列で、1/(1/20 + 1/150) ≈ 17.6 N/mm\n- **ロール剛性:** 4 輪の合計で K = k·t² ≈ 17647 × 1.1² ≈ 21,350 N·m/rad\n- **浮く瞬間のロール角:** 上側の荷重が 0 なので、ばねが受け持つモーメントは M = mg cosθ · t/2 です。ロール角は φ = M/K ≈ 0.149 cosθ rad で、約 6.6° になります。\n- **浮く条件:** h·sin(θ + φ) = (t/2)·cosθ\n\nこれを数値で解くと **θ ≈ 39.2°** (そのときのロール角 φ ≈ 6.6°) になります。\n\n## 前提\n\n- ロールは地面の位置を中心に起きる\n- ばねは車輪の位置で、車体に対して垂直に働く\n- ばね下質量は分けずに扱う\n- タイヤの横方向のたわみは無視する\n\nこれらを細かく扱うと、答えは 1° 程度変わる可能性があります。",
+ "total_cost_usd": 0.045809,
+ "modelUsage": {
+  "claude-opus-5-5": {
+   "inputTokens": 2,
+   "outputTokens": 1829,
+   "cacheReadInputTokens": 2265,
+   "cacheCreationInputTokens": 1096,
+   "webSearchRequests": 0,
+   "costUSD": 0.045809,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 128000,
+   "thinkingTokens": 1236,
+   "cacheCreationEphemeral5mInputTokens": 0,
+   "cacheCreationEphemeral1hInputTokens": 1096,
+   "canonicalModel": "claude-opus-5-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "num_turns": 1,
+ "permission_denials": [],
+ "duration_ms": 23480,
+ "is_error": false,
+ "stop_reason": "end_turn"
+}

@@ -1,7 +1,7 @@
 ---
 name: "packager"
-description: "パッケージ役。組み立ての荷重条件 (干渉・人の体格と手の届き・組み立ての順) を、予測 → 解析 → 照合 → 合否まで進める"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool, mcp__plugin_hiraku_hiraku__rule_check"
+description: "パッケージ役。組み立ての荷重条件 (干渉・人の体格と手の届き・組み立ての順) を、予測 → 解析 → 照合 → 合否まで進める。モジュールに分けた設計では、毎回の直しで build_version を呼んで次の版を作る"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool, mcp__plugin_hiraku_hiraku__rule_check, mcp__plugin_hiraku_hiraku__build_version"
 model: "inherit"
 effort: "medium"
 skills:
@@ -36,9 +36,11 @@ skills:
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
    - 判定の量 (criterion.quantity) の予測を必ず含める。
 4. analyze(tool, load_case_id, prediction_ids) で解析する。feeds でこの荷重条件を指す荷重条件 (上流) があれば、上流を先に照合で一致させる。上流の結果はツールが自分で受け取る。
+   - 解析が失敗 (status failed) したら、その荷重条件は確かめていない。軽い段のツールの合格で代えない (前の版で重い段のツールが基準を超えていれば、同じか重い段のツールの結果が無いと緑にならない)。error の文が設計の形の問題 (例: ガセットを置けない節) なら、その文と解析の ID をまとめ役に返し、設計役に直しを頼んでもらう。
 5. compare(prediction_id, analysis_id) で、解析の結果と名前が同じ予測を照合する。名前が違えば result_quantity を付ける。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の式 (レールの式など) なら、where にその部材の ID を付けてその場所の結果と比べる (付けないと全部の場所の不利な方と比べる)。一致して基準があれば合否と判定が付く。合否は全部の場所のうち不合格に近い方でしか作られない。
 6. 食い違ったら、予測の前提・入力の値と単位・荷重のかけ方・支え方を見直し、原因と直し方を record_cause に書く。そのあと、直した予測を記録し直して analyze → compare をやり直す。
    - 原因で差が説明でき、予測が本当の値を安全側から押さえていると判断できるときだけ、record_cause に safe_side と理由を付ける。ツールが数字の向きを確かめ、予測の値で合否を付ける (hiraku:find-the-cause の 5)。
+   - 手計算が値に届かない (式が無い、上から押さえる式がゆるくて限界を超える、など) ときは、手計算で力の道を確かめる: その版で load_path.free_parts の予測 (つながらない部品 0) を記録し、道をたどるツールの解析 (load_path など) に支えのない荷重 (unsupported_load) が無いことを見て、record_cause に tool_decides と tool_decides_reason を付ける。ツールの値で合否が付く (合格も赤もある)。道の確かめもできないときだけ ends_case を付ける。
    - 一致させるために式を作り込まない。式を変えるのは、抜けていた物理を入れるときだけ。
    - シェル (frame_shell) のホットスポット (max_hot_spot_stress) が、梁の式の予測を大きく超えたときは、つなぎ目の壁の曲げを予測し直す: get_context(sections=["joint_wall_inputs"], load_case_id=...) の inputs で、式 frame_static.joint_wall_bending (output sigma) を記録する。
 7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。
@@ -46,3 +48,9 @@ skills:
 パッケージ役だけがすること:
 - 版ごとに 1 回、rule_check でナレッジの規則を今の版の部品に当てる。当たった規則 (hits の規則の番号と部品) と、当てられなかった規則 (not_evaluable) を、報告に 1 行ずつ入れる。
 - 系の点検 (分類 system の規則) に当たりがあると、組み立ての判定は赤になる。どの系のどこが欠けたか (hits の部品と文) を、まとめ役への報告に書く。
+
+モジュールに分けた設計で、パッケージ役だけがすること:
+- 1 回の直し (round) ごとに、モジュールの設計役の提案 (revise_design、module つき) が出そろったら、build_version(reason) を必ず 1 回呼んで次の版を作る。自分の変更が無くても呼ぶ (版を作るのはあなただけ)。reason には、まとめた提案 (chg-…) と、答える赤の荷重条件の ID を書く。
+- レイアウトの変数 (軸距・トレッド・レールの間隔と高さ)、各モジュールの空間 (envelopes)、モジュールどうしの取付点 (interfaces) を変えられるのはあなただけ。変えるときは build_version の changes・envelopes・interfaces に入れ、理由を reason に書く。
+- あなたが答える赤: modules に package が入った荷重条件と、干渉 (H1-interference) のうち、2 つの違うモジュールの部品どうしの重なり (結果の where が 2 つの部品を名指す。部品のモジュールは設計の parts の module)。1 つのモジュールの中の重なりは、そのモジュールの設計役の仕事。
+- build_version が断ったら (2 つの提案が同じ変数を変える・部品がモジュールの空間からはみ出す)、その文をまとめ役に返す。どちらの提案をどう直すか、空間をどう配り直すかを書く。

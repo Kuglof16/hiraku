@@ -8,7 +8,8 @@ from pathlib import Path
 from hiraku import solvers
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
+# version 1 before designgen joined every part in shape (kit/joints.py): the free parts these tests are about
+V1 = json.loads((ROOT / "tests" / "solvers" / "data" / "offroad-4w-v1-unjoined.json").read_text(encoding="utf-8"))
 TOOL = {t.name: t for t in solvers.builtin_tools()}["load_path"]
 
 
@@ -37,7 +38,8 @@ class UnsupportedLoadTest(unittest.TestCase):
 
     def test_a_held_control_has_none(self):
         rec, r = run("hand", hand_force=300)
-        self.assertNotIn("unsupported_load", r)
+        self.assertEqual(r["unsupported_load"]["value"], 0.0)  # given at 0: the analysis looked for the path
+        self.assertNotIn("where", r["unsupported_load"])
         self.assertIn("grip_deflection", r)
 
 

@@ -82,7 +82,11 @@ class SlideTest(unittest.TestCase):
         b = {p["id"]: p for p in self.d["parts"]}
         for pid in ("seat_R", "seat_L", "seat_belt_L"):
             self.assertEqual(a[pid]["box"], b[pid]["box"], pid)
-        self.assertEqual([p["id"] for p in V1["parts"]], [p["id"] for p in self.d["parts"]])
+        # the same parts, but the belt's own fitting to its seat (kit/joints.py), made where the moved belt and the
+        # seat's box (left at the middle) no longer touch
+        belt_fit = ("fit_seat_belt_R",)
+        self.assertEqual([p["id"] for p in V1["parts"] if not p["id"].startswith(belt_fit)],
+                         [p["id"] for p in self.d["parts"] if not p["id"].startswith(belt_fit)])
 
     def test_belt_behind_the_rearmost_seat_back(self):
         b = {p["id"]: p for p in self.d["parts"]}
@@ -181,8 +185,9 @@ class SlideTest(unittest.TestCase):
 
     def test_slide_does_not_move_other_parts(self):
         a = {p["id"]: p["box"] for p in V1["parts"]}
-        moved = sorted(p["id"] for p in self.d["parts"] if p["box"] != a[p["id"]])
-        self.assertTrue(all(m.startswith("occupant_R") or m == "seat_belt_R" for m in moved), moved)
+        moved = sorted(p["id"] for p in self.d["parts"] if p["box"] != a.get(p["id"]))
+        # the belt's own fitting (kit/joints.py) goes with the belt
+        self.assertTrue(all(m.startswith(("occupant_R", "seat_belt_R", "fit_seat_belt_R")) for m in moved), moved)
         self.assertIn("seat_belt_R", moved)
 
 

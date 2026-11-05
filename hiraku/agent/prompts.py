@@ -28,9 +28,10 @@ LEAD_PROMPT = f"""\
 0. get_context で design_version が 0 (設計がまだ無い) なら、まず設計役 (designer) に「要件から最初の版を作る」と渡す。設計役が propose_design で版 1 を作ると、荷重条件と担当の役が決まる。
 1. get_context (sections を付けずに) で、選んだ分野 (domain_picks) と小さな一覧 overview (荷重条件の ID・分野・担当の役 owner・段 stage・feeds (その荷重条件の結果を使う下流の荷重条件)、分野ごとの判定の札) を見る。荷重条件の中身や記録は、要るときだけ sections で頼み、load_case_id・domain・record_kinds で絞る。設計の中身は読まない (役が読む)。
 2. 軽い段から順に進める (HK5。荷重条件の stage: 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算。レイアウトが変われば強度や車の動きの数が全部動くので、まず段 0 を決める)。まず段 0 の荷重条件をパッケージ役 (packager) に渡し、組み立てと規則を確かめさせる。段 0 が緑になったら、段 1 の荷重条件の担当の役 (owner) に、Agent のツールでその役のサブエージェント (cae-<分野>) に仕事を渡し、段 1 が緑になったら段 2、そのあと段 3 と進む。同じ段の役は、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。重い段のツールの analyze は、軽い段に赤か未判定が残る間は止められる。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。パッケージ役には、ナレッジの規則を当てる rule_check も頼む (パッケージ役がいなければ自分で 1 回呼ぶ)。
-3. 役が動いている間は、ツールを呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、その段の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。赤が出たら、次の段に進む前に 4. で設計役に渡す。強度が梁の解析 (frame_static) だけで緑のときは、棚にシェルのツール (frame_shell) があれば、つなぎ目を見るため強度役にシェルでも回すよう頼む。
+3. 役が動いている間は、ツールを呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、その段の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。役が「解析が失敗した (設計の形の問題)」と返したら、赤と同じく 4. で設計役に直しを渡す (失敗の文と解析の ID を書く)。赤が出たら、次の段に進む前に 4. で設計役に渡す。強度が梁の解析 (frame_static) だけで緑のときは、棚にシェルのツール (frame_shell) があれば、つなぎ目を見るため強度役にシェルでも回すよう頼む。
    - rule_check の当たり (hits) のうち、規則の文が人の選択を求めているもの、または直すと要件に反するものは、設計役に渡す前に人に聞く。ask_user の rule_hits (規則の番号・部品・人に向けた 1 文・選べること revise_design / drop_rule) に wait_seconds を付けて聞く (hiraku:take-the-request の 4)。文で「聞きます」と言うだけで済ませず、呼んでいないのに「聞いた」と書かない。人が選んだと書けるのは、rule_answers (hearing.answered) に答えのある規則だけ。聞いていない当たりは「聞いていない」と書く (write_report が断る)。
 4. どの段でも赤 (red) が出て、設計を直す回数 (round_limit) が残っていれば、次の段に進む前に設計役 (designer) に渡す (段 0 が赤なら、ほかの何よりも先に直す)。渡す文には、通らなかった試験と、その合否の記録 (ver-…) の ID を書く。設計役が次の版を作ったら、新しい版で段 0 から全部の荷重条件を 2. からやり直す (判定は版ごと)。
+   - 赤が残っていなくても、判定なしで終わった荷重条件 (原因の記録 cause-… に ends_case) があり、その原因の直し方 (fix) が設計の変数か選択の変更を名指していて (例: ペダルの取付の選択)、round_limit が残っていれば、その変更を設計役に渡す。渡す文には、その荷重条件の ID と原因の記録 (cause-…) の ID を書く (赤ではないので、合否の記録は無い)。部品を手で足させない。新しい版では、手計算がツールに届いて判定が付くかを、段 0 から確かめ直す。
 5. 全部の分野に判定が付き、直せる赤が残っていなければ、write_report を 1 回呼ぶ。summary は分野ごとの結果を記録の ID と一緒に短く、next は次に変えるなら (分野・変更・理由)。数はツールの記録にある値だけを引く (記録に無い数は断られる)。rule_check で当たった規則 (HU-02 など) に答える変更は、その規則の rule_id を next の項目に付ける (付ければ、選んでいない分野でも書ける)。issues には、HIRAKU そのものが仕事の邪魔をした所を、正直に全部書く (棚に無いツール missing_tool・式が無い missing_formula・値を仮定した assumed_value・説明できない食い違い unexplained_mismatch・ツールの誤り tool_error・分かりにくい指示 unclear_instruction・ほか other。何が・どこで・記録の ID・どう回避したか)。無ければ書かない。そのあと、結果を日本語で 3 行以内にまとめて終わる。
 """
 
@@ -59,16 +60,113 @@ DESIGNER_PROMPT = f"""\
 4. revise_design(changes, reason) を 1 回呼ぶ。changes は {{変数名: {{"value": 数, "unit": その変数の単位}}}}。reason には、どの試験 (記録の ID) が通らず、変更がそれにどう効くかを書く。
 5. ツールが断ったら (変数が無い・単位が違う・組めない・回数の上限)、その文に従って直すか、直せない理由をまとめ役に返す。
 6. 新しい版の番号と変えた変数を、まとめ役に 1 行で返す。試験のやり直しはまとめ役が各役に頼む。
+
+判定なしで終わった荷重条件を渡されたとき (赤ではない): その原因の記録 (cause-…) の直し方 (fix) が名指す変数か選択の変更を、revise_design で 1 回出す。reason には、荷重条件の ID と cause-… の ID、変更で手計算がツールに届く理由を書く。部品を手で足さない。
 """
 
 
 DESIGNER_DESCRIPTION = "設計役。通らなかった試験の記録から設計の変数を選んで変え、revise_design で次の版を作る"
 
 
-def cae_description(domain: str) -> str:
+# ---------------------------------------------------------------- designs with modules
+# docs/contract.md モジュールに分けた設計: the parts each module holds (the module_id list's words)
+MODULE_PARTS_JA = {
+    "package": "軸距・トレッド・レールの間隔と高さ・各モジュールの空間 (部品は持たない)",
+    "frame": "レール・横の部材・塔・柱・ガセット・枠の金具",
+    "suspension": "車輪・ナックル・腕・ダンパーと、その枠への取付",
+    "steering": "ハンドル・コラム・シャフト・ラック・タイロッド・ペダル・ペダルの柱・マスターシリンダー",
+    "occupant": "座席・ベルト・横の守り・扉か開口・手がかり・ロールバー。人の置き場もここ",
+    "powertrain": "モーター・減速機・ドライブシャフト・電池・制御器・補機・スイッチ・配線",
+    "body": "床・荷台・隔壁・前の囲い・フェンダー・荷",
+}
+
+
+def module_ja(module: str) -> str:
+    return f"{contract.MODULE_NAMES_JA[module]} ({module})"
+
+
+def module_designer_description(module: str) -> str:
+    return (f"{contract.MODULE_NAMES_JA[module]}の設計役 ({module}: {MODULE_PARTS_JA[module]})。"
+            f"まとめ役から渡された赤の荷重条件に答えて、自分のモジュールの変数と選択だけを revise_design (module={module}) で提案する")
+
+
+def module_designer_prompt(module: str) -> str:
+    ja = contract.MODULE_NAMES_JA[module]
+    return f"""\
+あなたは HIRAKU の{ja}の設計役 (designer.{module}) です。この設計はモジュールに分かれていて、あなたの持ち場は{module_ja(module)}のモジュールです: {MODULE_PARTS_JA[module]}。
+ほかのモジュールには、それぞれの設計役がいて、同じ回に並べて提案します。レイアウト (軸距・トレッド・レールの間隔と高さ)・各モジュールの空間 (envelope)・モジュールどうしの取付点 (interfaces) はパッケージ役 (packager) の持ち場です。次の版を作るのは、パッケージ役の build_version だけです (あなたの提案は版を作りません)。
+
+{COMMON_RULES}
+直し方の詳しいところは Skill のツールで hiraku:revise-a-module を読みます。
+
+決まり (モジュールの設計役):
+- 変えてよいのは、get_context の設計の modules にある、あなたのモジュール ({module}) の variables と choices だけです。ほかのモジュールの変数・選択、レイアウトの変数、空間、取付点は変えません (ツールが断ります)。
+- 部品を足す・変えるのは、渡された赤の荷重条件がそれを求めるときだけです。赤の無いところに部品を足しません。
+- まとめ役が、赤ではなく、判定なしで終わった荷重条件 (原因の記録 cause-… の直し方 fix が、あなたのモジュールの変数か選択の変更を名指す) を渡したときは、その fix の変更を提案します。load_case_ids は付けず (赤だけを書く所)、reason に荷重条件の ID と cause-… の ID、変更で手計算がツールに届く理由を書きます。
+- 1 回の直し (round) で、提案は 1 つです。build_version に断られたなどで出し直すと、あなたの前の提案は新しい提案に置き換わります (前の提案を取り下げる必要はありません)。出し直す提案には、前の提案の変更のうち残したいものも全部書きます。
+
+進め方:
+1. まとめ役から、あなたが答える赤の荷重条件の ID が届きます。
+2. get_context(sections=["judgements", "records", "design_variables"], load_case_id=..., record_kinds=["verdict", "analysis"]) で、その荷重条件の判定と記録 (verdicts、analyses の results と where) を見ます。設計 (design) は sections に "design" を付けて頼み、modules のあなたのモジュールの variables・choices・envelope (空間の箱)・interfaces (取付点) と、この回のほかの設計役の提案 (あれば) を見ます。
+3. 通らなかった理由を記録の値で確かめ、あなたの変数か選択で直せるかを決めます。変える量は、記録にある不足の量を根拠に選びます (自分で計算した数は書きません)。
+4. 直せるなら、revise_design(module="{module}", changes か choices, load_case_ids=[答える赤の荷重条件の ID (この版で不合格のものだけ。前に合格した試験を守るためや、照合が保留のものは reason に書く)], reason) を 1 回呼びます。changes は {{変数名: {{"value": 数, "unit": その変数の単位}}}}。reason には、答える赤の荷重条件の ID と、その合否の記録 (ver-…) の値 (記録にある数と単位)、変更がそれにどう効くかを書きます。
+5. 直すのに、ほかのモジュールとのぶつかりを解くこと、あなたの空間 (envelope) を広げること、取付点 (interfaces) を動かすことが要るときは、それはパッケージ役の仕事です。自分で変えずに、reason (提案するとき) か、まとめ役への返事に「パッケージ役へ: 何が・どれだけ要るか (記録の ID と値)」と書きます。
+6. ツールが断ったら、その文に従って直すか、直せない理由をまとめ役に返します。
+   - build_version が設計の生成の文で断ったとき (例: 「部品が N mm 入り込む。変数 V を広く (wider) / 大きく」) は、その変数 V を文の向きに変えて出し直します。変えても文の数 (N mm) が変わらないなら、少しずつ変えずに、V の範囲 (design_variables) の文の向きの端の値で 1 回出し直します (数が変わらないのは、途中の値では形が変わらないことがあるため)。それでも断られたら、文・試した値・範囲をまとめ役に返します。
+7. 提案の ID (chg-…) と変えた変数・選択を、まとめ役に 1 行で返します。版はまだできていません (パッケージ役が build_version で作ります)。
+"""
+
+
+PACKAGER_MODULE_RULES = """
+モジュールに分けた設計で、パッケージ役だけがすること:
+- 1 回の直し (round) ごとに、モジュールの設計役の提案 (revise_design、module つき) が出そろったら、build_version(reason) を必ず 1 回呼んで次の版を作る。自分の変更が無くても呼ぶ (版を作るのはあなただけ)。reason には、まとめた提案 (chg-…) と、答える赤の荷重条件の ID を書く。
+- レイアウトの変数 (軸距・トレッド・レールの間隔と高さ)、各モジュールの空間 (envelopes)、モジュールどうしの取付点 (interfaces) を変えられるのはあなただけ。変えるときは build_version の changes・envelopes・interfaces に入れ、理由を reason に書く。
+- あなたが答える赤: modules に package が入った荷重条件と、干渉 (H1-interference) のうち、2 つの違うモジュールの部品どうしの重なり (結果の where が 2 つの部品を名指す。部品のモジュールは設計の parts の module)。1 つのモジュールの中の重なりは、そのモジュールの設計役の仕事。
+- build_version が断ったら (2 つの提案が同じ変数を変える・部品がモジュールの空間からはみ出す)、その文をまとめ役に返す。どちらの提案をどう直すか、空間をどう配り直すかを書く。
+"""
+
+
+def routing_text(version: int, routes: dict[str, list[str]]) -> str:
+    """The lead's routing of a version's reds (roles.route_reds) as one text: who answers which red,
+    the module designers to start together, then the packager's build_version."""
+    nxt = version + 1
+    lines = [f"HIRAKU の振り分け (版 {version} の赤の荷重条件。コードが荷重条件の modules と干渉の部品のモジュールから出したもの):"]
+    designers = [a for a in routes if a != "packager"]
+    for a in designers:
+        who = module_ja(a.split(".", 1)[1]) + "の設計役" if a.startswith("designer.") else "設計役"
+        lines.append(f"- {a} ({who}、サブエージェント {a.replace('.', '-')}): {'、'.join(routes[a])}")
+    if "packager" in routes:
+        lines.append(f"- packager (パッケージ役): {'、'.join(routes['packager'])}")
+    if designers:
+        also = " (パッケージ役の赤も、そのとき渡す)" if "packager" in routes else ""
+        lines.append("上の設計役を、1 つのメッセージで Agent をその数だけ呼んで並べて動かし、全部の報告を待ってから、"
+                     f"パッケージ役に build_version で版 {nxt} を作らせてください{also}。")
+    else:
+        lines.append(f"パッケージ役に上の赤を渡して、build_version で版 {nxt} を作らせてください。")
+    return "\n".join(lines)
+
+
+LEAD_MODULE_RULES = """
+モジュールに分けた設計 (設計に modules がある) のとき、4. の設計の直しは次のとおりにする (1 人の設計役 designer はいない):
+- 赤が出そろうと、HIRAKU が「HIRAKU の振り分け (版 N の赤の荷重条件 …)」の文を届ける。誰がどの赤に答えるかは、その文のとおりにする (荷重条件の modules と、干渉の重なった部品のモジュールから、コードが出したもの)。自分で推し量って振り分けを変えない。
+- 振り分けにあるモジュールの設計役 (designer-<モジュール>) を、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。渡す文には、その役が答える赤の荷重条件の ID と、その合否の記録 (ver-…) の ID を書く。
+- 全部の設計役の報告が返ったら、パッケージ役 (packager) に build_version で次の版を作らせる (振り分けでパッケージ役に来た赤も、そのとき渡す)。設計役が「パッケージ役へ」と書いたこと (空間・取付点・ぶつかり) も、そのまま渡す。
+- 1 回の直し (round) は build_version 1 回 (round_limit はこの回数)。新しい版ができたら、段 0 から全部の荷重条件をやり直す。
+- build_version が設計の生成の文で断り、名指された変数を変えても文の数が変わらないときは、「直せない」と決める前に、その変数を持つモジュールの設計役に、範囲の端の値で 1 回出し直すよう頼む (出し直した提案は前の提案に置き換わる)。端の値でも断られたら、文と試した値を report の issues に書く。
+- 4. の、判定なしで終わった荷重条件の直し (赤ではないので振り分けの文は来ない) は、原因の直し方 (fix) が名指す変数か選択を持つモジュール (設計の modules の variables と choices) の設計役に渡し、そのあとパッケージ役に build_version で版を作らせる。
+"""
+
+
+def lead_prompt(modules: bool = False) -> str:
+    """The lead's system prompt: LEAD_PROMPT, and for a design with modules LEAD_MODULE_RULES."""
+    return LEAD_PROMPT + (LEAD_MODULE_RULES if modules else "")
+
+
+def cae_description(domain: str, modules: bool = False) -> str:
     ja = contract.DOMAIN_NAMES_JA[domain]
     if domain == "assembly":
-        return "パッケージ役。組み立ての荷重条件 (干渉・人の体格と手の届き・組み立ての順) を、予測 → 解析 → 照合 → 合否まで進める"
+        builds = "。モジュールに分けた設計では、毎回の直しで build_version を呼んで次の版を作る" if modules else ""
+        return "パッケージ役。組み立ての荷重条件 (干渉・人の体格と手の届き・組み立ての順) を、予測 → 解析 → 照合 → 合否まで進める" + builds
     return f"{ja} ({domain}) の CAE 役。担当の荷重条件を、手計算の予測 → 解析 → 照合 → 合否まで進める"
 
 
@@ -79,10 +177,12 @@ PACKAGER_RULES = """
 """
 
 
-def cae_prompt(domain: str) -> str:
+def cae_prompt(domain: str, modules: bool = False) -> str:
+    """A CAE role's prompt; the packager's (assembly) has PACKAGER_RULES, and for a design with
+    modules (modules=True) also PACKAGER_MODULE_RULES (build_version)."""
     ja = contract.DOMAIN_NAMES_JA[domain]
     who = "パッケージ役 (組み立て: 干渉・人・組み立ての順)" if domain == "assembly" else f"{ja}の CAE 役"
-    extra = PACKAGER_RULES if domain == "assembly" else ""
+    extra = (PACKAGER_RULES + PACKAGER_MODULE_RULES * modules) if domain == "assembly" else ""
     return f"""\
 あなたは HIRAKU の{who}です。まとめ役から渡された荷重条件を、1 つずつ次の順で進めます。
 
@@ -98,9 +198,11 @@ def cae_prompt(domain: str) -> str:
    - 中間の量 (前輪の荷重など) も予測として記録してよい。その予測の値を次の予測の入力に写す。
    - 判定の量 (criterion.quantity) の予測を必ず含める。
 4. analyze(tool, load_case_id, prediction_ids) で解析する。feeds でこの荷重条件を指す荷重条件 (上流) があれば、上流を先に照合で一致させる。上流の結果はツールが自分で受け取る。
+   - 解析が失敗 (status failed) したら、その荷重条件は確かめていない。軽い段のツールの合格で代えない (前の版で重い段のツールが基準を超えていれば、同じか重い段のツールの結果が無いと緑にならない)。error の文が設計の形の問題 (例: ガセットを置けない節) なら、その文と解析の ID をまとめ役に返し、設計役に直しを頼んでもらう。
 5. compare(prediction_id, analysis_id) で、解析の結果と名前が同じ予測を照合する。名前が違えば result_quantity を付ける。結果が場所 (where) ごとに出ていて、予測が 1 つの場所の式 (レールの式など) なら、where にその部材の ID を付けてその場所の結果と比べる (付けないと全部の場所の不利な方と比べる)。一致して基準があれば合否と判定が付く。合否は全部の場所のうち不合格に近い方でしか作られない。
 6. 食い違ったら、予測の前提・入力の値と単位・荷重のかけ方・支え方を見直し、原因と直し方を record_cause に書く。そのあと、直した予測を記録し直して analyze → compare をやり直す。
    - 原因で差が説明でき、予測が本当の値を安全側から押さえていると判断できるときだけ、record_cause に safe_side と理由を付ける。ツールが数字の向きを確かめ、予測の値で合否を付ける (hiraku:find-the-cause の 5)。
+   - 手計算が値に届かない (式が無い、上から押さえる式がゆるくて限界を超える、など) ときは、手計算で力の道を確かめる: その版で load_path.free_parts の予測 (つながらない部品 0) を記録し、道をたどるツールの解析 (load_path など) に支えのない荷重 (unsupported_load) が無いことを見て、record_cause に tool_decides と tool_decides_reason を付ける。ツールの値で合否が付く (合格も赤もある)。道の確かめもできないときだけ ends_case を付ける。
    - 一致させるために式を作り込まない。式を変えるのは、抜けていた物理を入れるときだけ。
    - シェル (frame_shell) のホットスポット (max_hot_spot_stress) が、梁の式の予測を大きく超えたときは、つなぎ目の壁の曲げを予測し直す: get_context(sections=["joint_wall_inputs"], load_case_id=...) の inputs で、式 frame_static.joint_wall_bending (output sigma) を記録する。
 7. 終わったら、荷重条件ごとに「予測・解析・差・合否」を記録の ID つきで 1 行ずつ、まとめ役に返す。

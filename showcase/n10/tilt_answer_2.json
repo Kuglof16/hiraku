@@ -1,0 +1,27 @@
+{
+ "result": "# 答え: 約 38°\n\n## 根拠\n\n**1. 剛体として見た場合**\n\ntan θ = (トレッド/2) ÷ 重心高 = 550 / 593.5 = 0.927 となり、θ ≈ 42.8° です。\n\n**2. ばねの影響を入れた場合**\n\nサスペンションのばねとタイヤのばねは直列につながっているので、1 輪あたりのばね定数は次のとおりです。\n\nk = 1 / (1/20 + 1/150) ≈ 17.6 N/mm\n\n上側の車輪が浮く瞬間には、下側の 2 輪が台に垂直な荷重 W cos θ をすべて受けます。W = 591.5 × 9.81 ≈ 5803 N です。\n\n- **車体のロール**: 下側の車輪は、荷重がない状態から W cos θ / (2k) ≈ 164 cos θ mm 縮みます。上側は 0 です。このためロール角は φ ≈ 0.149 cos θ rad になり、約 7° です。重心は谷側に約 h sin φ ≈ 72 mm 寄ります。\n- **重心の高さ**: 平均の沈み込みは静止時より小さくなります。そのぶん重心は約 82 (1 − cos θ) ≈ 17 mm 上がり、h ≈ 611 mm になります。\n\n**3. 浮き上がりの条件**\n\ntan θ = (550 − h sin φ) / (h cos φ)\n\nこれを θ について繰り返し計算で解くと、tan θ ≈ 0.788、θ ≈ 38.2° になります。\n\n## 前提\n\n- ロールの中心は地面の高さ・左右の真ん中としました。\n- ばねの付く位置は車輪の位置と同じとしました。\n- バネ下の質量、タイヤの横方向のたわみ、スタビライザーは無視しました。\n\nこれらを変えると結果は 1〜2° ほど動きます。ばねを無視した剛体の値は 42.8° で、これが上限になります。",
+ "total_cost_usd": 0.0593322,
+ "modelUsage": {
+  "claude-opus-5-5": {
+   "inputTokens": 2,
+   "outputTokens": 2683,
+   "cacheReadInputTokens": 2721,
+   "cacheCreationInputTokens": 640,
+   "webSearchRequests": 0,
+   "costUSD": 0.0593322,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 128000,
+   "thinkingTokens": 2000,
+   "cacheCreationEphemeral5mInputTokens": 0,
+   "cacheCreationEphemeral1hInputTokens": 640,
+   "canonicalModel": "claude-opus-5-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "num_turns": 1,
+ "permission_denials": [],
+ "duration_ms": 33245,
+ "is_error": false,
+ "stop_reason": "end_turn"
+}

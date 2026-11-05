@@ -107,7 +107,9 @@ class PlacementTest(unittest.TestCase):
         self.assertEqual(sorted(p["id"] for p in V1["parts"] if p["kind"] == "brake_caliper"),
                          sorted(f"caliper_{s}" for s in braked))
         self.assertEqual(PARTS["brake_master"]["kind"], "brake_master_cylinder")
-        self.assertAlmostEqual(box_lo_hi(PARTS["brake_master"])[1][0], box_lo_hi(PARTS["bulkhead"])[0][0], places=6)
+        # on the bulkhead's front face, in line with the brake pedal (its pushrod through the sheet: kit/joints.py)
+        self.assertAlmostEqual(box_lo_hi(PARTS["brake_master"])[0][0], box_lo_hi(PARTS["bulkhead"])[1][0], places=6)
+        self.assertAlmostEqual(PARTS["brake_master"]["box"]["center_mm"][1], PARTS["pedal_brake"]["box"]["center_mm"][1])
         for seat in ("seat_R", "seat_L"):
             belt = PARTS[safety.belt_of(seat)]
             self.assertEqual(belt["kind"], "seat_belt")
@@ -127,8 +129,10 @@ class PlacementTest(unittest.TestCase):
         deck_x = PARTS["deck"]["box"]["center_mm"][0] + PARTS["deck"]["box"]["size_mm"][0] / 2.0
         rear = sum(p["mass_kg"] for p in d["parts"] if p["kind"] in safety_lamps() and p["box"]["center_mm"][0] < deck_x)
         self.assertGreater(rear, 0.0)
-        self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), sum(p["mass_kg"] for p in V1["parts"]) + rear,
-                               places=9)
+        # and each design's own joint struts (kit/joints.py: the lamps get theirs)
+        fits = lambda x: sum(p["mass_kg"] for p in x["parts"] if p["id"].startswith("fit_"))  # noqa: E731
+        self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]),
+                               sum(p["mass_kg"] for p in V1["parts"]) + rear + fits(d) - fits(V1), places=9)
 
 
 class LampsFromTheRequirementsTest(unittest.TestCase):
@@ -164,8 +168,10 @@ class MassTest(unittest.TestCase):
             self.assertAlmostEqual(mass(d, pid), panel_kg(d, pid), places=9)
         for s in ("R", "L"):
             self.assertAlmostEqual(mass(d, f"seat_{s}", f"seat_belt_{s}"), BEFORE["seat"], places=9)
-        for sid in ("FL", "FR", "RL", "RR"):
-            self.assertAlmostEqual(mass(d, f"susp_{sid}", f"knuckle_{sid}", f"caliper_{sid}", f"toe_link_{sid}"),
+        from hiraku.designgen.kit.arms import part_ids
+
+        for sid in ("FL", "FR", "RL", "RR"):  # the suspension box is now the arms, damper and ball joints (kit/arms)
+            self.assertAlmostEqual(mass(d, *part_ids(sid).values(), f"knuckle_{sid}", f"caliper_{sid}", f"toe_link_{sid}"),
                                    BEFORE["suspension"], places=9)
         self.assertAlmostEqual(mass(d, "aux", "main_switch"), BEFORE["aux"], places=9)
 
@@ -174,10 +180,13 @@ class MassTest(unittest.TestCase):
                  + panel_kg(V1, "floor") + panel_kg(V1, "deck") + BEFORE["front_body"] + BEFORE["steering"]
                  + 2 * BEFORE["seat"] + 2 * BEFORE["occupant"] + BEFORE["cargo"] + 4 * BEFORE["wheel"]
                  + 4 * BEFORE["suspension"] + panel_kg(V1, "bulkhead")
-                 + mass(V1, "pedal_accel", "pedal_brake", "brake_master"))  # on the plates, no longer out of them
-        brackets = sum(p["mass_kg"] for p in V1["parts"] if p["kind"] == "bracket")  # plates (kit/mounts.py)
-        self.assertGreater(brackets, 0.0)
+                 + mass(V1, "pedal_accel", "pedal_brake", "brake_master")  # on the plates, no longer out of them
+                 + mass(V1, "pushrod_brake"))  # the pedal's pushrod to the master cylinder (kit/joints.py)
+        # plates (kit/mounts.py) and the joints' struts, an anchor one through a sheet (kit/joints.py)
+        self.assertGreater(sum(p["mass_kg"] for p in V1["parts"] if p["kind"] in ("bracket", "anchor")), 0.0)
         for d in (V1, NODS, ladder_4w.build({"rollbar": q(0, "1")})):  # the lamps: test_lamps_on_public_roads
+            # each design's own: the struts go where its parts are
+            brackets = sum(p["mass_kg"] for p in d["parts"] if p["kind"] in ("bracket", "anchor"))
             self.assertAlmostEqual(sum(p["mass_kg"] for p in d["parts"]), total + brackets, places=9)
 
     def test_wider_track_keeps_the_motor(self):
@@ -203,12 +212,20 @@ class DriveshaftsVariableTest(unittest.TestCase):
     def test_revised_back_is_v1(self):
         d = designgen.regenerate(NODS, {"driveshafts": {"value": 1, "unit": "1"}})
         keep = ("design_version", "parent_version", "name", "change_reason")
-        self.assertEqual({k: v for k, v in d.items() if k not in keep}, {k: v for k, v in V1.items() if k not in keep})
+        from tests.solvers.same_design import assert_same_design
+
+        assert_same_design(self, {k: v for k, v in d.items() if k not in keep},
+                           {k: v for k, v in V1.items() if k not in keep})
 
     def test_the_file_is_its_script(self):
+        from tests.solvers.same_design import assert_same_design
+
         built = ladder_4w.build({"driveshafts": q(0, "1")}, name=NODS["name"], reason=NODS["change_reason"])
         text = (ROOT / "data" / "designs" / "offroad-4w-nodriveshaft.json").read_text(encoding="utf-8")
-        self.assertEqual(json.dumps(built, ensure_ascii=False, indent=2) + "\n", text)
+        # written as the script writes it (indent 2, the characters as they are), and the same design up to the
+        # numbers' last bits, which differ between operating systems (tests.solvers.same_design)
+        self.assertEqual(json.dumps(json.loads(text), ensure_ascii=False, indent=2) + "\n", text)
+        assert_same_design(self, built, json.loads(text))
         contract.validate("design", NODS)
 
 
@@ -283,7 +300,8 @@ class SeatedBodyTest(unittest.TestCase):
         for who in ("occupant_R", "occupant_L"):
             out = [p for p in V1["parts"] if p["kind"] == "occupant" and body.person_of(p["id"]) == who]
             self.assertAlmostEqual(sum(p["mass_kg"] for p in out), BEFORE["occupant"], places=9)
-            self.assertEqual(len(out), 1 + 2 * 4)  # trunk, and thigh, shank, arm, foot on each side
+            # trunk, neck, head, and thigh, shank, upper arm, forearm, hand, foot on each side (the body in segments)
+            self.assertEqual(len(out), 3 + 2 * len(body.SEGMENTS))
             self.assertEqual(out[0]["id"], who)  # the trunk keeps the occupant's id
         # the driver's arms reach the steering wheel's grips
         grips = people.grip_points(PARTS["steering_wheel"])
