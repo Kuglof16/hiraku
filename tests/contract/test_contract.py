@@ -118,6 +118,40 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "safe_side": True}), [])
         self.assertNotEqual(contract.errors("tool_input.record_cause", {**call, "tool_decides": True, "ends_case": True}), [])
 
+    def test_analysis_hot_spots(self):
+        a = load("analysis.json")
+        row = {"where": "rail_R_BE", "quantity": "max_hot_spot_stress", "value": {"value": 151.0, "unit": "MPa"},
+               "limit": {"value": 143.3, "unit": "MPa"}, "utilisation": 1.054, "predicted": False}
+        self.assertEqual(contract.errors("analysis", {**a, "hot_spots": [row]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{k: v for k, v in row.items() if k != "predicted"}]}), [])
+        self.assertNotEqual(contract.errors("analysis", {**a, "hot_spots": [{**row, "utilisation": -1}]}), [])
+
+    def test_hot_spot_red_and_its_cause(self):
+        v = load("verdict.json")
+        red = {k: x for k, x in v.items() if k != "comparison_id"}
+        red.update({"basis": "hot_spot", "analysis_id": "ana-0001", "where": "rail_R_BE", "value_from": "analysis",
+                    "pass": False})
+        self.assertEqual(contract.errors("verdict", red), [])
+        self.assertNotEqual(contract.errors("verdict", {**red, "pass": True}), [])
+        self.assertNotEqual(contract.errors("verdict", {k: x for k, x in red.items() if k != "where"}), [])
+        c = load("cause.json")
+        by_verdict = {k: x for k, x in c.items() if k != "comparison_id"}
+        self.assertEqual(contract.errors("cause", {**by_verdict, "verdict_id": "ver-0001", "where": "rail_R_BE"}), [])
+        self.assertNotEqual(contract.errors("cause", by_verdict), [])  # neither comparison_id nor verdict_id
+        self.assertEqual(contract.errors("tool_input.record_cause", {"verdict_id": "ver-0001", "where": "rail_R_BE",
+                                                                      "cause": "c", "fix": "f"}), [])
+        self.assertNotEqual(contract.errors("tool_input.record_cause", {"cause": "c", "fix": "f"}), [])
+
+    def test_bracket_joint_sizes(self):
+        d = load("design.json")
+        part = dict(d["parts"][0])
+        ok = {**part, "joint": {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}}
+        self.assertEqual(contract.errors("part", ok), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolt_d_mm": 0}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolts": 0}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": {"nut": 1}}), [])
+
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
         ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
