@@ -14,6 +14,7 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 import copy
 import json
 import os
+import re
 import threading
 import unittest
 
@@ -30,6 +31,7 @@ ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not
 MOUNTS = "取付点 (金具・溶接・ボルト) は判定していない。取付の範囲は、金具が補強する仮定で判定から外している"
 LIMIT_V2 = 140.0  # version 2's allowable (shape example; version 1's is the sample's 156.7 MPa)
 HOT_SHARE = 0.5  # the hot-spot stress as a share of the shell's largest element value (shape example)
+RED_RGB = "rgb(200, 64, 42)"  # app.css --red (#c8402a), as getComputedStyle gives it
 
 PROBE = """() => {
   const card = document.getElementById("present-card");
@@ -44,6 +46,10 @@ PROBE = """() => {
     legend: legend.hidden ? null : legend.textContent, lim: legend.querySelector(".lim")?.textContent ?? null,
     note: legend.querySelector(".ref-note")?.textContent ?? null,
     tags: [...document.querySelectorAll("#viewport .lbl-max")].map((e) => e.textContent),
+    tagTones: [...document.querySelectorAll("#viewport .lbl-max")].map((e) => ({ text: e.textContent, fail: e.classList.contains("lbl-fail"), ref: e.classList.contains("lbl-ref"), color: getComputedStyle(e).color })),
+    extra: q(".pc-extra")?.textContent ?? null,
+    dev: q(".pc-dev")?.textContent ?? null,
+    cardText: card.textContent,
     pcNote: q(".pc-note")?.textContent ?? null,
     anaRef: [...document.querySelectorAll("#card-ana tr.ref")].map((e) => ({ text: e.textContent, px: parseFloat(getComputedStyle(e.querySelector("td")).fontSize) })),
     anaRows: [...document.querySelectorAll("#card-ana tr:not(.ref) td:first-child")].map((e) => parseFloat(getComputedStyle(e).fontSize)),
@@ -60,17 +66,24 @@ def fmt4(v):
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 
-def judged_events():
+CHANGED_TRACK = 1350.0  # version 2's track in the change test (shape example)
+TRACK_NAME = "車輪の左右の間隔 (形の見本)"  # version 1's variable_names entry (shape example)
+
+
+def judged_events(hot_share=HOT_SHARE, passed=True):
     """The shell fixture with version 2's own load case, the hot-spot result on its shell
     analysis, and its comparison, verdict (on the hot-spot value) and judgement.
+    hot_share 1.0 makes the hot-spot value the shell field's largest value (the field is then
+    the judged quantity); passed False puts the allowable under it and records a fail.
     Returns (events, hot-spot value, the shell's largest element value)."""
     events, _, shells = shell_events()
     run = events[0]
     lc = copy.deepcopy(run["data"]["load_cases"][0])
-    lc["criterion"]["limit"] = {"value": LIMIT_V2, "unit": "MPa"}
     shell2 = shells[2]
     field_max = max(next(f for f in shell2["fields"] if f.get("surface") == "max")["per_element"])
-    hot = round(HOT_SHARE * field_max, 2)
+    hot = round(hot_share * field_max, 2)
+    limit = LIMIT_V2 if passed else round(0.5 * hot, 2)
+    lc["criterion"]["limit"] = {"value": limit, "unit": "MPa"}
     ana = next(e for e in events if e["kind"] == "analysis.finished" and e["data"]["analysis_id"] == shell2["analysis_id"])
     ana["data"]["results"].append({"quantity": "max_hot_spot_stress", "value": hot, "unit": "MPa", "where": "rail_L0"})
     base = {"run_id": run["run_id"], "ts": ana["ts"], "agent": "cae.strength", "domain": "strength", "design_version": 2}
@@ -78,9 +91,10 @@ def judged_events():
            "predicted": {"value": hot, "unit": "MPa"}, "analyzed": {"value": hot, "unit": "MPa"}, "diff_abs": 0.0, "diff_rel": 0.0,
            "tolerance_rel": 0.15, "status": "match", "cause_id": None}
     ver = {"verdict_id": "ver-0002", "comparison_id": "cmp-0002", "load_case_id": lc["load_case_id"], "test_id": lc["test_id"], "domain": "strength",
-           "quantity": "max_stress", "value": {"value": hot, "unit": "MPa"}, "op": "<=", "limit": {"value": LIMIT_V2, "unit": "MPa"}, "pass": True,
-           "margin": {"value": LIMIT_V2 - hot, "unit": "MPa"}, "margin_pct": 100 * (LIMIT_V2 - hot) / LIMIT_V2, "requirement_keys": [], "basis": "match", "value_from": "analysis"}
-    judgement = {"design_version": 2, "domain": "strength", "state": "green", "red_count": 0, "verdict_ids": ["ver-0002"], "summary": "shape example"}
+           "quantity": "max_stress", "value": {"value": hot, "unit": "MPa"}, "op": "<=", "limit": {"value": limit, "unit": "MPa"}, "pass": hot <= limit,
+           "margin": {"value": limit - hot, "unit": "MPa"}, "margin_pct": 100 * (limit - hot) / limit, "requirement_keys": [], "basis": "match", "value_from": "analysis"}
+    judgement = {"design_version": 2, "domain": "strength", "state": "green" if hot <= limit else "red", "red_count": 0 if hot <= limit else 1,
+                 "verdict_ids": ["ver-0002"], "summary": "shape example"}
     t = ana["t"]
     added = [
         {**base, "t": t + 0.1, "kind": "comparison.recorded", "data": cmp},
@@ -94,6 +108,20 @@ def judged_events():
     for k, e in enumerate(events):
         e["seq"] = k
     return events, hot, field_max
+
+
+def changed_events(events):
+    """The events with version 2 built from a module designer's proposal, as build_version records
+    it: module_changes[].changes (the track's new value) and a change_reason in the packager's
+    words with record ids; version 1 names the variable (variable_names). Shape example."""
+    events = copy.deepcopy(events)
+    d1, d2 = [e["data"] for e in events if e["kind"] == "design.created"][:2]
+    d1["variable_names"] = {"track": TRACK_NAME}
+    d2["variables"]["track"] = {"value": CHANGED_TRACK, "unit": "mm"}
+    d2["module_changes"] = [{"change_id": "chg-0013", "module_id": "frame", "agent_id": "designer.frame", "design_version": 1,
+                             "reason": "形の見本", "changes": {"track": {"value": CHANGED_TRACK, "unit": "mm"}}}]
+    d2["change_reason"] = "その回の提案をまとめた (chg-0013)。chg-0013 (frame: track 1300→1350 mm) をまとめる。答える赤は R1 (ver-0001、シェル ana-0002)"
+    return events
 
 
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
@@ -153,6 +181,12 @@ class VerdictCardBrowserTest(unittest.TestCase):
         self.assertFalse(got["top"]["limitKnown"])
         # the largest-value tag on the 3D says it is for reference
         self.assertTrue(any(t.startswith("参考 最大") for t in got["tags"]), got["tags"])
+        # ... in the reference colour; no tag is red: the version passed and the value is not judged
+        # (version 1's tag beside it has no verdict to be judged by: plain)
+        self.assertTrue(all(t["ref"] for t in got["tagTones"] if t["text"].startswith("参考")), got["tagTones"])
+        for t in got["tagTones"]:
+            self.assertFalse(t["fail"], t)
+            self.assertNotEqual(t["color"], RED_RGB, t)
         # the shell's element max_stress (a result in the criterion's quantity, not judged): under 参考 too
         # (the fixture's max_stress is the field's largest value: it is also in the field's lines)
         self.assertRegex(got["ref"], rf"最大応力 \(.*\) {fmt4(self.field_max)} MPa")
@@ -190,6 +224,43 @@ class VerdictCardBrowserTest(unittest.TestCase):
         self.assertNotIn("参考の色", got["legend"])
         self.assertNotIn("156.7", got["legend"])
         self.assertEqual(got["top"]["max"], LIMIT_V2)
+        page.close()
+
+    def test_the_judged_tag_is_red_only_when_the_version_failed(self):
+        # the shell field's largest value is the judged hot-spot value, and version 2 fails on it
+        events, hot, _ = judged_events(hot_share=1.0, passed=False)
+        page, errors = self.open("run=sample&pace=0&t=0&present=1", events)
+        got = page.evaluate(PROBE)
+        self.assertEqual(errors, [])
+        self.assertEqual(got["verdict"], "基準を満たさない")
+        now = [t for t in got["tagTones"] if t["text"] == f"最大 {fmt4(hot)} MPa"]
+        self.assertEqual(len(now), 1, got["tagTones"])
+        self.assertTrue(now[0]["fail"], now)
+        self.assertEqual(now[0]["color"], RED_RGB)
+        # no tag of a value the verdict does not use is red
+        for t in got["tagTones"]:
+            if t["text"].startswith("参考"):
+                self.assertFalse(t["fail"], t)
+        page.close()
+
+    def test_what_changed_is_made_from_the_records_values_and_ids_only_under_dev(self):
+        events = changed_events(self.events)
+        page, errors = self.open("run=sample&pace=0&t=0&present=1", events)
+        got = page.evaluate(PROBE)
+        self.assertEqual(errors, [])
+        # version 1's name for the variable, version 1's value, the change's value and unit
+        self.assertRegex(got["extra"], rf"変えたこと: 版 1 → 版 2 で、{re.escape(TRACK_NAME)}を 1,?300 → 1,?350 mm")
+        # no record id and no English summary on the card for viewers
+        self.assertNotRegex(got["cardText"], r"(chg|ver|ana|pred|cmp)-\d")
+        self.assertNotIn("frame:", got["cardText"])
+        self.assertIsNone(got["dev"])
+        page.close()
+        page, errors = self.open("run=sample&pace=0&t=0&present=1&dev=1", events)
+        got = page.evaluate(PROBE)
+        self.assertEqual(errors, [])
+        # ?dev=1: the packager's words with the ids, folded under くわしく
+        self.assertIn("くわしく", got["dev"])
+        self.assertIn("chg-0013 (frame: track 1300→1350 mm)", got["dev"])
         page.close()
 
     def test_the_step_card_puts_the_wheel_force_under_reference(self):

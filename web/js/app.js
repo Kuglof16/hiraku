@@ -1498,7 +1498,7 @@ function draw() {
     }
     const scene = presentScene({ s, chain, contour, tab, toolTitle: (tool) => toolTitle(s, tool) });
     document.body.dataset.presentScene = scene.key;
-    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now);
+    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now, { dev: DEV });
     drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
   }
   renderMotion(s, chain, motion);
