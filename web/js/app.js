@@ -46,6 +46,7 @@ import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load case
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
 import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
+import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -85,7 +86,7 @@ const ui = {
   pinnedLc: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false }, // joints: off at first; modules: modules, spaces (modules.js)
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false, heat: true }, // joints: off at first; modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -108,6 +109,8 @@ for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) u
 // joints, modules: ?on=joints,modules,spaces turns those on at load (modules and spaces take the contour's place)
 for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
 if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
+// heat: ?on=heat shows the energy's flow with any analysis picked (the newest thermal one of the design shown)
+const HEAT_FORCED = (params.get("on") ?? "").split(",").includes("heat");
 
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
@@ -131,6 +134,7 @@ document.body.classList.add(`look-${look}`);
 const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 const bench = new Workbench3D(viewport, look, { quality });
 const modLayer = new ModuleLayer(bench); // modules:
+const heat = new EnergyFlow(bench, viewport); // heat:
 function resize3d() {
   const half = viewport.classList.contains("compare"); // before / after side by side: each view takes half
   const w = half ? Math.floor(viewport.clientWidth / 2) : viewport.clientWidth;
@@ -1168,7 +1172,7 @@ const LEGEND_GAP_PX = 12;
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
 
 // graphs: the analysis has series to chart without a motion (series against x).
-function renderToggles(motion, lc, graphs = false, design = null) {
+function renderToggles(motion, lc, graphs = false, design = null, heatAvail = false) {
   const t = ui.toggles;
   const btn = (key, label, on) => `<button data-toggle="${key}" class="${on ? "on" : ""}">${label}</button>`;
   $("toggles").innerHTML =
@@ -1181,6 +1185,7 @@ function renderToggles(motion, lc, graphs = false, design = null) {
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
     btn("joints", "接合", t.joints) + // joints:
+    (heatAvail ? btn("heat", "熱の流れ", t.heat) : "") + // heat:
     (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion || graphs ? btn("graph", "グラフ", t.graph) : "");
 }
@@ -1436,6 +1441,9 @@ function draw() {
   const motion = motionFor(chain.shown);
   if (resolvedMemo.rev !== s.rev || resolvedMemo.s !== s) resolvedMemo = { rev: s.rev, s, set: resolvedHooks(s) };
   const resolved = resolvedMemo.set;
+  // heat: the energy's flow (a thermal analysis shown, or ?on=heat); it takes the contour's place
+  const heatIn = tab === "bench" ? heat.inputs(s, chain.shown, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, HEAT_FORCED) : null;
+  const heatOn = !!heatIn && ui.toggles.heat;
   if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present) {
     renderTop(s);
     renderChips(s, lcId);
@@ -1444,7 +1452,7 @@ function draw() {
     renderTests(s, lcId);
     renderChain(s, chain);
     renderStatus(s);
-    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null);
+    renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, !!heatIn);
     const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = tab !== "bench";
     $("view-grid").hidden = tab !== "grid";
@@ -1467,11 +1475,11 @@ function draw() {
     // the present mode shows a shell's before / after side by side when there is an earlier version
     if (ui.present && tab === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
-    bench.setContour(ui.toggles.contour ? framedContour() : null);
+    bench.setContour(ui.toggles.contour && !heatOn ? framedContour() : null);
     if (!contour?.mesh?.maxAt) ui.zoomMax = false;
-    renderLegend(contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
+    renderLegend(heatOn ? null : contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
     renderMeshCard(contour);
-    setCompare(s, chain, ui.toggles.contour && tab === "bench" ? contour : null);
+    setCompare(s, chain, ui.toggles.contour && !heatOn && tab === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
     cmpView?.bench.setCloseUp(!!bench.focused);
     // With a motion the arrows come from the series, frame by frame.
@@ -1505,7 +1513,8 @@ function draw() {
   // modules: the round's proposals (or the version built from them) at the replay's time, under the now line
   const rc = renderRoundCard(viewport, tab === "bench" ? roundCardHtml(s, player.playhead) : "");
   if (!rc.hidden) rc.style.top = `${$("now").hidden ? 10 : $("now").offsetTop + $("now").offsetHeight + 8}px`;
-  if (contour?.frames && ui.toggles.contour) bench.setContour(framedContour());
+  if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
+  heat.show(heatOn ? heatIn : null, player.playhead); // heat:
   renderTransient(s, player.playhead, chain, resolved);
   renderPlaybar();
   bench.animate(player.playhead, !!chain.running);
@@ -1573,6 +1582,7 @@ window.hiraku = {
   state: () => player.state,
   bench,
   modules: modLayer, // modules: what the module layer draws (for the tests)
+  heat, // heat: what the energy's flow draws (heat.last, for the tests)
   pets: () => agentPets,
   // Replace what is shown with these events (parsed objects) and stop at t.
   load: (events, t = 0) => {
