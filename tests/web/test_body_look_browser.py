@@ -132,10 +132,13 @@ ZU_DESIGNS = Path(__file__).resolve().parent / "zu_designs"
 # tallcargo 7daf4c4a...); part by part, only the 54 "member:" entries of each design differ (a solid
 # BoxGeometry of 24 points from node to node -> the shared unit tube, a BufferGeometry along x 0..1
 # stretched by the member's matrix, 120 points for a rect tube with both ends, ...); the parts are the same.
+# Taken again when a one-box seat became its box (no cushion and backrest drawn inside it: the design
+# lists no backrest); before (4ace01b5) they were v1 fca41bda..., nodriveshaft 79589012...,
+# tallcargo ea452149... (only the seat kind's shape changed in web/js/shapes.js).
 ZU_PRINT = {
-    "offroad-4w-v1": "fca41bda2f3f5fe6220e1b69aaf3b683500dbbe06353e9efad14f45cbfc4ba29",
-    "offroad-4w-nodriveshaft": "795890128ddecbabcb78ab48c4972204f0b47e12478f2e4828b70b7b059e008c",
-    "offroad-4w-tallcargo": "ea452149c5d1219ce8dff62ae336e093622ecda6d9aed085ecaffd3a940bcc75",
+    "offroad-4w-v1": "58974d9cbba55cace6fc258d3c5c9849c7bd39cb0ad6544c316b9dfcd4f53796",
+    "offroad-4w-nodriveshaft": "55b985dbfd2d3a8990bd837c73a43f678f353d9a4f814c3cb7d596d7d61f2765",
+    "offroad-4w-tallcargo": "41ba1d72f02e207bede1eccc0939bd083169499642fe6bbb89fba84c8d43639f",
 }
 
 

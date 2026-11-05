@@ -1,7 +1,7 @@
 // What a part looks like, by its kind, inside its box (ISO mm: x forward, y
 // left, z up). The design gives only a kind and a box per part; the shapes
-// here stay inside that box and add nothing the design does not list (a seat's
-// backrest is part of the seat; a wheel is drawn from its support). What the
+// here stay inside that box and add nothing the design does not list (a seat is
+// its box: no backrest unless the design lists one; a wheel is drawn from its support). What the
 // design lists as its own part (the steering column and the pedals, the reducer
 // beside the motor) is not drawn again inside another part's box.
 // The suspension is drawn from the design's mounting points (support.suspension
@@ -45,16 +45,6 @@ function rod(a, b, r, seg = 10) {
   const mid = va.add(vb).multiplyScalar(0.5);
   geo.translate(mid.x, mid.y, mid.z);
   return geo;
-}
-
-function seat([sx, sy, sz]) {
-  const cushion = Math.max(40, sz * 0.38);
-  const back = Math.max(40, sx * 0.18);
-  return [
-    piece(rounded(sx * 0.96, sy * 0.92, cushion, 30), 0, 0, -sz / 2 + cushion / 2),
-    // the backrest at the rear, leaning back a little
-    { geo: rounded(back, sy * 0.92, sz - cushion, 25).rotateY(-0.12).translate(-sx / 2 + back / 2 + 10, 0, cushion / 2), sub: null },
-  ];
 }
 
 // The steering wheel: a ring filling the box across (y, z), its axis along the box's x,
@@ -318,7 +308,7 @@ const SHAPES = {
   damper,
   ball_joint: ball,
   bracket: (size, center, part) => (isClevis(part) ? clevis(size) : null),
-  seat,
+  // seat: its box (a backrest is drawn only when the design lists it as its own part)
   steering,
   battery,
   motor,
@@ -334,10 +324,6 @@ const SHAPES = {
   // rollbar: its box (the cage's tubes are frame members; the part's box keeps the cage's finish)
 };
 
-// A seat given as its pieces (seat_R_back, seat_R_cushion, ...): each is drawn as its box,
-// so the seat shape (a cushion and a backrest in one box) is not drawn twice.
-const SEAT_PIECE = /_(back|backrest|cushion|base|bottom|headrest)$/i;
-
 // Pieces of a part in its local frame (box centre at the origin, box rotation not applied).
 // Every kind without a shape is its plain box (rounded when `round`, the real look); so is
 // a suspension without mounting points. design: the part's design (the suspension reads
@@ -346,7 +332,7 @@ export function partPieces(part, { round = false, design = null } = {}) {
   const size = part.box.size_mm;
   const kind = part.kind;
   if (kind === "body") return isPlate(size) ? plate(size, round) : nose(size);
-  const make = kind === "seat" && SEAT_PIECE.test(part.id ?? "") ? null : SHAPES[kind];
+  const make = SHAPES[kind];
   return (make ? make(size, part.box.center_mm, part, design) : null) ?? [{ geo: boxGeometry(size, round), sub: null }];
 }
 
