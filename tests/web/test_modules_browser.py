@@ -232,25 +232,33 @@ class ModulesBrowserTest(unittest.TestCase):
         t = {e["data"]["change_id"]: e["t"] for e in events if e["kind"] == "design.change_proposed"}
         t_v3 = max(e["t"] for e in events if e["kind"] == "design.created")
         t_end = next(e["t"] for e in events if e["kind"] == "run.finished")
-        ids = lambda card: [card.locator(".rc-list li").nth(i).get_attribute("data-change") for i in range(card.locator(".rc-list li").count())]
+        # one page, seeking the replay (window.hiraku.seek): the card at each time
+        page = self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t={t['chg-0090'] + 0.05}")
+        at = lambda tt: page.evaluate("""async (tt) => { await window.hiraku.seek(tt);
+            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+            const c = document.getElementById('roundcard');
+            return { hidden: !c || c.hidden, round: c?.querySelector('.rc-head')?.dataset.round ?? null,
+                     ids: [...(c?.querySelectorAll('.rc-list li') ?? [])].map((li) => li.dataset.change) }; }""", tt)
         # chg-0090 waits beside the round's others while version 2 is the newest
-        card = self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t={t['chg-0090'] + 0.05}").locator("#roundcard")
-        self.assertEqual(card.locator(".rc-head").get_attribute("data-round"), "pending")
-        self.assertIn("chg-0090", ids(card))
+        got = at(t["chg-0090"] + 0.05)
+        self.assertEqual(got["round"], "pending")
+        self.assertIn("chg-0090", got["ids"])
         # version 3 built without it: the card names what was built, chg-0090 is gone
-        card = self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t={t_v3 + 0.05}").locator("#roundcard")
-        self.assertEqual(card.locator(".rc-head").get_attribute("data-round"), "built")
-        self.assertNotIn("chg-0090", ids(card))
+        got = at(t_v3 + 0.05)
+        self.assertEqual(got["round"], "built")
+        self.assertNotIn("chg-0090", got["ids"])
         # chg-0091 on version 3 waits while the run goes on (a record cut there keeps it) ...
-        card = self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t={t['chg-0091'] + 0.05}").locator("#roundcard")
-        self.assertEqual(card.locator(".rc-head").get_attribute("data-round"), "pending")
-        self.assertEqual(ids(card), ["chg-0091"])
+        got = at(t["chg-0091"] + 0.05)
+        self.assertEqual((got["round"], got["ids"]), ("pending", ["chg-0091"]))
         # ... and not once the run has finished (version 3's built card stays its ROUND_SHOW_S, without it)
-        card = self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t={t_end + 0.05}").locator("#roundcard")
         self.assertLess(t_end - t_v3, 12)
-        self.assertEqual(card.locator(".rc-head").get_attribute("data-round"), "built")
-        self.assertNotIn("chg-0091", ids(card))
-        self.assertTrue(self.open(f"run={LEFT}&tab=bench&pace=0&pets=0&t=1e6").locator("#roundcard").is_hidden())
+        got = at(t_end + 0.05)
+        self.assertEqual(got["round"], "built")
+        self.assertNotIn("chg-0091", got["ids"])
+        # the record's end (a seek past it stops there): still no waiting card
+        got = at(1e6)
+        self.assertNotEqual(got["round"], "pending")
+        self.assertNotIn("chg-0091", got["ids"])
 
     def test_variable_names_from_the_design(self):
         # design.variable_names (contract b615e2c) first, then the screen's table (labels.js
