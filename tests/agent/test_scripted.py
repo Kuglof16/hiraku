@@ -110,6 +110,23 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
         self.assert_events_fit()
 
+    def test_the_shared_design_and_its_summary_are_not_written_into(self):
+        """RunStore.design_shared and the plan's design_summary are shared between callers: after a whole scripted
+        run, every version's shared design is still its file, and the kept summary is still design_summary's."""
+        from hiraku.contract import layout
+        from hiraku.tools import plan as plan_mod
+
+        self.assertEqual(run_scripted(self.ctx), "done")
+        for v in self.ctx.project["design_versions"]:
+            with self.subTest(version=v):
+                stamp, shared = self.ctx.store.design_shared(v)
+                on_disk = json.loads((layout.version_dir(self.ctx.store.path, v) / layout.DESIGN_FILE)
+                                     .read_text(encoding="utf-8"))
+                self.assertEqual(shared, on_disk)
+                kept = plan_mod._SUMMARIES.get((str(self.ctx.store.path), stamp))
+                if kept is not None:
+                    self.assertEqual(kept, design_summary(on_disk))
+
     def test_a_fit_driver_revision_takes_the_values_found_by_code(self):
         from unittest import mock
 

@@ -342,6 +342,10 @@ class RunStore:
             if v != self.design_version + 1:
                 raise StoreError(f"next design version must be {self.design_version + 1}, got {v}")
             _write_json(layout.version_dir(self.path, v) / layout.DESIGN_FILE, design)
+            # the only writer of design.json (a version is written once): what was kept of v is dropped here, so the
+            # shared design and the built ids never rest on the file's stat alone
+            self._designs.pop(v, None)
+            self._built.pop(v, None)
             self._project.setdefault("design_versions", []).append(v)
             self._save_project()
             self.emit("design.created", agent=agent, design_version=v, data=design, text=design.get("change_reason"))
