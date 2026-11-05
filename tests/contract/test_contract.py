@@ -173,6 +173,17 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
         self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
 
+    def test_node_motion_field(self):
+        f = {"kind": "node_motion", "unit": "mm", "nodes": ["N1", "N2"], "members": [["N1", "N2", "rail_L_0"]],
+             "frames": {"t_s": [0.0, 0.01], "positions_mm": [[[0, 0, 0], [500, 0, 0]], [[0, 0, 0], [480, 0, 5]]],
+                        "broken": [[], ["rail_L_0"]]}}
+        self.assertEqual(contract.errors("field", f), [])
+        self.assertNotEqual(contract.errors("field", {k: v for k, v in f.items() if k != "members"}), [])
+        self.assertNotEqual(contract.errors("field", {**f, "members": [["N1", "N2"]]}), [])
+        many = {**f, "frames": {**f["frames"], "t_s": [0.0] * 151}}
+        self.assertNotEqual(contract.errors("field", many), [])
+        self.assertEqual(contract.errors("field", {"kind": "stress", "unit": "MPa", "per_member": {"a": 1.0}}), [])
+
     def test_part_rating(self):
         part = {**dict(load("design.json")["parts"][0]), "kind": "strap"}  # kind is free text
         ok = {**part, "rating": {"working_load_N": 2500.0, "basis": "EN 12195-2 LC (not checked)"}}
