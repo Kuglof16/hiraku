@@ -40,7 +40,7 @@ import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLege
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
-import { judgedContour } from "./judged.js";
+import { judgedContour, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
@@ -825,13 +825,19 @@ function renderChain(s, chain) {
     // the name wraps, the value and its unit do not (app.css .card td); the record's own name in the title
     // (a short aside in brackets at the name's end, 横・左の角, kept on one line)
     const nameHtml = (q) => esc(quantityName(q)).replace(/ \(([^()]{1,30})\)$/, ` <span class="nw">($1)</span>`);
-    const res = (ana.results ?? []).slice(0, 3).map((r) => `<tr title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    // the criterion's quantity where the tool is judged on another (frame_shell's element max_stress):
+    // a row of its own under 参考, small, so it does not read as the judged value against the allowable
+    const refs = referenceResults(ana, loadCase?.criterion);
+    const top = (ana.results ?? []).slice(0, 3);
+    const isRef = (r) => refs.includes(r);
+    const res = [...top, ...refs.filter((r) => !top.includes(r))].map((r) => `<tr class="${isRef(r) ? "ref" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
       `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
-      (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "");
+      (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "") +
+      (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "");
   } else if (running) {
     a.className = "card busy";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div title="${esc(running.tool)}">${esc(toolShort(s, running.tool))} で解析中…</div>`;

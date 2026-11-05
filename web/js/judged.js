@@ -32,6 +32,17 @@ export function judgedResult(ana, criterion) {
   return rs.reduce((a, b) => ((larger ? b.value > a.value : b.value < a.value) ? b : a));
 }
 
+// The analysis' results of the criterion's own quantity when the tool is judged on another one
+// (frame_shell's element max_stress beside its max_hot_spot_stress): numbers in the criterion's
+// unit that may pass the allowable but are not judged. Empty when the tool is judged on the
+// criterion's quantity.
+export function referenceResults(ana, criterion) {
+  if (!ana || !criterion?.quantity) return [];
+  const q = judgedQuantity(ana.tool, criterion.quantity);
+  if (q === criterion.quantity) return [];
+  return (ana.results ?? []).filter((r) => r.quantity === criterion.quantity && typeof r.value === "number");
+}
+
 // Two values that are the same number as recorded (fields keep 2-3 decimals, results all).
 export const sameRecorded = (a, b) => Math.abs(a - b) <= Math.max(5e-3 * Math.abs(b), 1e-2);
 

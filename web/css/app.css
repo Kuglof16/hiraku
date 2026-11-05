@@ -1062,6 +1062,11 @@ body.present .asm-caption { font-size: 24px; font-weight: 700; }
 .pc-ref { color: var(--muted); font-size: 15px; line-height: 1.4; }
 .pc-ref .pc-ref-h { font-weight: 700; }
 .pc-ref ul { margin: 2px 0 0; padding-left: 20px; }
+.pc-note { color: var(--muted); font-size: 15px; line-height: 1.4; }
+.card tr.ref td { color: var(--muted); font-size: 12px; }
+.card .ref-tag { font-size: 11px; }
+.card .not-judged { color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }
+.tile .not-judged { color: var(--muted); font-size: 11px; line-height: 1.3; }
 
 /* 詳しく: the log at the left and the chain at the right, over the view */
 body.present.present-detail .col-left,

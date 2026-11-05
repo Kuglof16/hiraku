@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - depends on the machine
 
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 
+MOUNTS = "取付点 (金具・溶接・ボルト) は判定していない。取付の範囲は、金具が補強する仮定で判定から外している"
 LIMIT_V2 = 140.0  # version 2's allowable (shape example; version 1's is the sample's 156.7 MPa)
 HOT_SHARE = 0.5  # the hot-spot stress as a share of the shell's largest element value (shape example)
 
@@ -43,6 +44,11 @@ PROBE = """() => {
     legend: legend.hidden ? null : legend.textContent, lim: legend.querySelector(".lim")?.textContent ?? null,
     note: legend.querySelector(".ref-note")?.textContent ?? null,
     tags: [...document.querySelectorAll("#viewport .lbl-max")].map((e) => e.textContent),
+    pcNote: q(".pc-note")?.textContent ?? null,
+    anaRef: [...document.querySelectorAll("#card-ana tr.ref")].map((e) => ({ text: e.textContent, px: parseFloat(getComputedStyle(e.querySelector("td")).fontSize) })),
+    anaRows: [...document.querySelectorAll("#card-ana tr:not(.ref) td:first-child")].map((e) => parseFloat(getComputedStyle(e).fontSize)),
+    anaNote: document.querySelector("#card-ana .not-judged")?.textContent ?? null,
+    tileNote: document.querySelector('.tile[data-domain="strength"] .not-judged')?.textContent ?? null,
     top: window.hiraku.bench.keys.contour ? { max: window.hiraku.bench.keys.contour.max, fieldMax: window.hiraku.bench.keys.contour.fieldMax, limitKnown: window.hiraku.bench.keys.contour.limitKnown } : null,
   };
 }"""
@@ -147,6 +153,30 @@ class VerdictCardBrowserTest(unittest.TestCase):
         self.assertFalse(got["top"]["limitKnown"])
         # the largest-value tag on the 3D says it is for reference
         self.assertTrue(any(t.startswith("参考 最大") for t in got["tags"]), got["tags"])
+        # the shell's element max_stress (a result in the criterion's quantity, not judged): under 参考 too
+        # (the fixture's max_stress is the field's largest value: it is also in the field's lines)
+        self.assertRegex(got["ref"], rf"最大応力 \(.*\) {fmt4(self.field_max)} MPa")
+        # the mounts are not judged: one line on a strength load case's card
+        self.assertEqual(got["pcNote"], MOUNTS)
+        page.close()
+
+    def test_the_analysis_card_and_the_strength_tile_say_what_is_not_judged(self):
+        page, errors = self.open("run=sample&pace=0&t=0", self.events)
+        got = page.evaluate(PROBE)
+        self.assertEqual(errors, [])
+        # the shell's max_stress row: marked 参考, smaller than the judged rows
+        self.assertEqual(len(got["anaRef"]), 1, got["anaRef"])
+        self.assertIn("参考 (判定に使わない)", got["anaRef"][0]["text"])
+        self.assertIn("最大応力", got["anaRef"][0]["text"])
+        self.assertIn(f"{fmt4(self.field_max)} MPa", got["anaRef"][0]["text"])
+        self.assertTrue(got["anaRows"])
+        self.assertLess(got["anaRef"][0]["px"], min(got["anaRows"]))
+        self.assertEqual(got["anaNote"], MOUNTS)
+        page.close()
+        page, errors = self.open("run=sample&pace=0&t=0&tab=grid", self.events)
+        got = page.evaluate(PROBE)
+        self.assertEqual(errors, [])
+        self.assertEqual(got["tileNote"], MOUNTS)
         page.close()
 
     def test_a_field_of_the_judged_quantity_keeps_the_versions_allowable_line(self):

@@ -11,7 +11,7 @@
 import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, opLabel, quantityName, ruleOf } from "./labels.js";
 import { FIELD_JA } from "./fields.js";
 import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
-import { judgedResult } from "./judged.js";
+import { judgedResult, referenceResults } from "./judged.js";
 import { assemblyRecord } from "./assembly.js";
 
 // ---- hooks: what happened, what comes next, resolved or not ---------------------------
@@ -290,7 +290,29 @@ const SCENES = [
 export function presentScene(ctx) {
   const scene = SCENES.find((x) => x.when(ctx));
   if (!scene) return { key: "none", title: "", card: null };
-  return { key: scene.key, title: scene.title, card: scene.card(ctx) };
+  const card = scene.card(ctx);
+  return { key: scene.key, title: scene.title, card: card && LOAD_CASE_SCENES.has(scene.key) ? withNotJudged(ctx, card) : card };
+}
+
+const LOAD_CASE_SCENES = new Set(["shell", "step", "result"]);
+
+// A load case's card gets, under 参考, the analyses' numbers of the criterion's quantity that the
+// verdict does not use (frame_shell's element max_stress: judged.js referenceResults), from the
+// verdict's analysis and the one shown; and on a strength load case, the line that the mounts
+// are not judged (labels.js JUDGED_JA.mountsNotJudged).
+function withNotJudged(c, card) {
+  const lc = c.chain.loadCase;
+  const verdict = sceneVerdict(c);
+  const anas = [c.s.analyses[c.s.comparisons[verdict?.comparison_id]?.analysis_id], c.contour ? c.s.analyses[c.contour.analysisId] : null, c.chain.shown];
+  const seen = new Set();
+  const lines = [];
+  for (const a of anas) {
+    if (!a || seen.has(a.analysis_id)) continue;
+    seen.add(a.analysis_id);
+    for (const r of referenceResults(a, lc?.criterion)) lines.push(`${quantityName(r.quantity)} (${c.toolTitle(a.tool)}) ${fmtVU(r.value, r.unit)}`);
+  }
+  const out = lines.length ? { ...card, ref: [...(card.ref ?? []), ...lines] } : card;
+  return lc?.domain === "strength" ? { ...out, note: JUDGED_JA.mountsNotJudged } : out;
 }
 
 export function presentCardHtml(scene, now) {
@@ -308,6 +330,7 @@ export function presentCardHtml(scene, now) {
     (c.verdict ? `<div class="pc-verdict ${c.verdict.ok ? "ok" : "bad"}">${esc(c.verdict.text)}</div>` : "") +
     // values shown beside the judged one that the verdict does not use, small and under their heading
     (c.ref?.length ? `<div class="pc-ref" data-role="reference"><div class="pc-ref-h">${esc(JUDGED_JA.ref)}</div><ul>${c.ref.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "") +
+    (c.note ? `<div class="pc-note" data-role="not-judged">${esc(c.note)}</div>` : "") +
     (c.extra?.length ? `<ul class="pc-extra">${c.extra.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "")
   );
 }

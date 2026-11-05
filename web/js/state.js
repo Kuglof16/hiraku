@@ -432,7 +432,8 @@ export function applyEvent(s, ev) {
     case "verdict.recorded": {
       put(s, "verdicts", d.verdict_id, d, ev);
       const how = isSafeSide(d) ? ` (安全側で判定: ${valueFromJa(d)}の値・${d.cause_id ?? ""})` : "";
-      const txt = `判定${how}: ${quantityName(d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmtMargin(d)})`;
+      // named by the quantity compared (frame_shell: the hot-spot stress for a max_stress criterion)
+      const txt = `判定${how}: ${quantityName(s.comparisons[d.comparison_id]?.quantity ?? d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmtMargin(d)})`;
       logRecord(s, ev, d.verdict_id, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;

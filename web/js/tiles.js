@@ -288,7 +288,8 @@ export class TileBoard {
       // with the limit it was held against; the record's own summary is the tooltip.
       const verdicts = v != null ? domainVerdicts(s, d, v) : [];
       const failed = verdicts.filter((x) => x.pass === false);
-      const vline = (x) => `${x.test_id ?? x.load_case_id} ${quantityName(x.quantity)} ${fmtQ(x.value)} ${opLabel(x.op)} ${fmtQ(x.limit)}${x.pass === false ? " ✕" : ""}`;
+      // named by the quantity compared (frame_shell: the hot-spot stress for a max_stress criterion)
+      const vline = (x) => `${x.test_id ?? x.load_case_id} ${quantityName(s.comparisons[x.comparison_id]?.quantity ?? x.quantity)} ${fmtQ(x.value)} ${opLabel(x.op)} ${fmtQ(x.limit)}${x.pass === false ? " ✕" : ""}`;
       const recorded = j.judgement?.summary ?? picks[d]?.reason ?? "";
       // a tile still まだ with no word from the record: why, as far as the record tells
       const why = j.state === "pending" && !j.judgement?.summary
@@ -322,6 +323,8 @@ export class TileBoard {
         referenceRowsHtml(refs) +
         `<div class="draw">${drawing}</div>${spark}` +
         `<div class="cap">${esc(caption)}</div>` +
+        // the strength tile: the mounts are not judged (labels.js JUDGED_JA.mountsNotJudged)
+        (d === "strength" && (s.project?.load_cases ?? []).some((c) => c.domain === "strength") ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
         `<div class="tf" data-say-host><span class="sum"${recorded && recorded !== summary ? ` title="${esc(`記録の要約: ${recorded}`)}"` : ""}>${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}${tilePet(s, d, pets)}</div></div>`
       );
     }).join("");
