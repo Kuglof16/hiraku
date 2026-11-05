@@ -146,4 +146,7 @@ class TiltTool(K2Tool):
                          f"turn at a_y = tan(tip) g = {demand:.3f} g just before rolling over: on the table gravity "
                          f"is g cos(theta) down and g sin(theta) across, so they are cos(theta) = "
                          f"{math.cos(angles[worst]):.3f} times those of that turn (quasi-static)")
-        return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}
+        places = [{"where": f"tipping to the {s}", "quantity": "tilt_angle", "value": math.degrees(angles[s]),
+                   "unit": "deg", "judged": True} for s in sides]
+        return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes,
+                "places": places}
