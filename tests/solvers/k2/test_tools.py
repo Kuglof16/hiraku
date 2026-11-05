@@ -467,6 +467,7 @@ class StepRecordRun(unittest.TestCase):
         self.assertLess(t[0], 0.05)
         self.assertGreater(t[-1], res["climb_time"])
         self.assertTrue(any("record_run = speed" in a for a in rec["assumptions"]))
+        self.assertTrue(any("tyre's vertical stiffness" in a and "without a source" in a for a in rec["assumptions"]))
 
     def test_the_vectors_at_the_peak_balance_the_weight_and_carry_the_mount_loads(self):
         from hiraku.solvers.k2_vehicle.units import G0

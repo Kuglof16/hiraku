@@ -391,6 +391,11 @@ class StepClimbTool(K2Tool):
                     vectors += mount_vectors(veh, state_at(log2.states, top[1]))
             notes.append(f"the record is run 2: rolling at {speed * 3.6:g} km/h from 2 m before the step "
                          "(record_run = speed); run 1, the push from standstill, gives numbers only")
+            lead = next(c for c in veh.corners if c.id == peak_id) if peak_id is not None else veh.corners[0]
+            notes.append(f"the hit's forces rest on the tyre's vertical stiffness {lead.k_z / 1000.0:g} N/mm above all "
+                         f"(the spring {lead.k_w / 1000.0:g} N/mm and the bump stops {lead.k_stop / 1000.0:g} N/mm "
+                         "hardly change them), values the design gives without a source (design variables carry "
+                         "none)")
             return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}
         rec = crawl["recorder"]
         x0 = crawl["x_corner"]
