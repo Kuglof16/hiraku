@@ -903,7 +903,7 @@ class N10(unittest.TestCase):
         self.assertEqual([h["v"] for h in rows["tilt"]["hand"]], [39.85])
         self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.27, "K2"))
         # only one of the three runs gave a figure for the stress
-        self.assertEqual(rows["stress"]["claude"], [61])
+        self.assertEqual(rows["stress"]["claude"], [60])
         self.assertEqual([h["v"] for h in rows["stress"]["hand"]], [40.0, 77.09])
         self.assertEqual((rows["stress"]["cae"]["v"], rows["stress"]["cae"]["by"]), (61.15, "K1"))
 
@@ -911,7 +911,7 @@ class N10(unittest.TestCase):
         rows = {r["key"]: r for r in n10_data()["rows"]}
         self.assertAlmostEqual(n10_diffs(rows["step"])[0], 1.2569, places=3)
         self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.87, 0.71, -1.87])
-        self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 0.2459, places=3)
+        self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 1.9167, places=3)
         # the widths HIRAKU allows for these quantities in the video run's comparisons
         self.assertEqual([r["tol_pct"] for r in rows.values()], [10, 10, 15])
         for r in rows.values():
@@ -1464,12 +1464,12 @@ class InBrowser(unittest.TestCase):
             cap.close()
         self.assertEqual(got["step.claude"], "約 1,090N | 3 回とも")
         self.assertEqual(got["tilt.claude"], "約 39°・38°・39° | 3 回の答え")
-        self.assertEqual(got["stress.claude"], "約 61MPa | 数字を出したのは 3 回のうち 1 回")
+        self.assertEqual(got["stress.claude"], "約 60MPa | 数字を出したのは 3 回のうち 1 回")
         self.assertEqual(got["stress.hand"], "40.0MPa | 単純はり | 77.09MPa | つなぎ目、安全側")
         self.assertEqual(got["step.cae"], "1,103.7N | K1 の解析")
         # the differences shown are the ones computed from DATA
         rows = {r["key"]: r for r in n10_data()["rows"]}
-        for k, want in (("step", "+1.3%"), ("tilt", "−1.9% | 3 回で最大"), ("stress", "+0.2%")):
+        for k, want in (("step", "+1.3%"), ("tilt", "−1.9% | 3 回で最大"), ("stress", "+1.9%")):
             self.assertEqual(got[f"{k}.diff"], want)
             worst = max(n10_diffs(rows[k]), key=abs)
             self.assertIn(f"{abs(worst):.1f}", want)
