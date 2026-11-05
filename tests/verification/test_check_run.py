@@ -1132,6 +1132,57 @@ class CheckRun(unittest.TestCase):
         by_kind(ev, "verdict.recorded")["data"]["value"] = {"value": 123.60000000000001, "unit": "MPa"}
         self.assertFlags(ev, "verdict.values")
 
+    # --- a verdict the tool decides after the load path was checked by hand (basis path_checked, 2fc1006) ----
+    def path_checked_flow(self, free_parts=0.0, unsupported=None, predicted=80.0):
+        """Mismatch (the hand calculation 80 MPa against the analysis 123.6) -> cause with tool_decides and its
+        reason -> a load_path prediction of free_parts in the version before the verdict -> verdict from the
+        analysis, on the sample's R1 case."""
+        ev = sample_events()
+        c = self._predict(ev, predicted)
+        self.assertEqual(c["status"], "mismatch")
+        at = by_kind(ev, "comparison.recorded")
+        stamp = {"ts": at["ts"], "t": at["t"], "run_id": RUN_ID, "agent": "cae.strength", "seq": 0}
+        cause = {"cause_id": "cause-0001", "comparison_id": "cmp-0001", "cause": "the hand beam leaves the gussets out",
+                 "fix": "none in this run", "resolved": False, "tool_decides": True,
+                 "tool_decides_reason": "no hand formula reaches the joint's stress"}
+        p0 = by_kind(ev, "prediction.recorded")["data"]
+        path = dict(copy.deepcopy(p0), prediction_id="pred-0009", quantity="free_parts", value=free_parts, unit="1",
+                    formula_id="load_path.free_parts", expression="n = n_parts - n_held",
+                    inputs={"n_parts": {"value": 3.0, "unit": "1"}, "n_held": {"value": 3.0 - free_parts, "unit": "1"}})
+        path.pop("terms", None)
+        i = ev.index(at) + 1
+        ev[i:i] = [dict(stamp, kind="cause.recorded", data=cause),
+                   dict(stamp, kind="comparison.recorded", data=dict(copy.deepcopy(c), cause_id="cause-0001")),
+                   dict(stamp, kind="prediction.recorded", design_version=1, data=path)]
+        if unsupported is not None:
+            by_kind(ev, "analysis.finished")["data"]["results"].append(
+                {"quantity": "unsupported_load", "value": unsupported, "unit": "1"})
+        by_kind(ev, "verdict.recorded")["data"].update(basis="path_checked", value_from="analysis", cause_id="cause-0001",
+                                                        value=dict(c["analyzed"]))
+        return renumber(ev)
+
+    def test_path_checked_verdict_with_the_path_checked(self):
+        found = [str(f) for f in self.findings(self.path_checked_flow()) if f.rule.startswith("verdict.")]
+        self.assertEqual(found, [])
+
+    def test_path_checked_needs_the_hand_check_and_no_loose_load(self):
+        said = lambda ev: [f.message for f in self.findings(ev) if f.rule == "verdict.path_checked"]
+        self.assertTrue(any("are not 0" in m for m in said(self.path_checked_flow(free_parts=1.0))))
+        self.assertTrue(any("unsupported_load 2" in m for m in said(self.path_checked_flow(unsupported=2.0))))
+        ev = self.path_checked_flow()
+        ev = renumber([e for e in ev if not (e["kind"] == "prediction.recorded"
+                                             and e["data"].get("quantity") == "free_parts")])
+        self.assertTrue(any("no load_path prediction" in m for m in said(ev)))
+
+    def test_path_checked_needs_a_cause_that_says_the_tool_decides(self):
+        ev = self.path_checked_flow()
+        cause = by_kind(ev, "cause.recorded")["data"]
+        del cause["tool_decides"], cause["tool_decides_reason"]
+        self.assertFlags(ev, "verdict.path_checked")
+        ev = self.path_checked_flow()
+        by_kind(ev, "verdict.recorded")["data"]["value"] = dict(by_kind(ev, "comparison.recorded")["data"]["predicted"])
+        self.assertFlags(ev, "verdict.values")
+
     # --- the listing of what the hooks did (--effects) -------------------------------
     def effects(self, events):
         return "\n".join(cr.run_effects(write_run(self.root / f"r{len(list(self.root.iterdir()))}", events)))
