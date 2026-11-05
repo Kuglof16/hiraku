@@ -8,8 +8,13 @@
 //   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
-//   ?on=joints      turn overlays on at load (joints: the joint marks, off by default; A7 follows it too)
-//   ?tab=grid       open on the all-domains grid instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?on=modules     turn overlays on at load (modules, spaces: off by default)
+//   ?off=joints     turn overlays off at load (joints: the joint marks, on by default; A7 follows it too)
+//   ?tab=grid       open on ④ 解析結果 (the domains' grid) instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
+//   ?tab=grid&domain=strength
+//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 照合 cards,
+//                   the play bar from its first prediction to its last comparison); a tile pressed does
+//                   the same and sets it, 「格子に戻る」 drops it. With ?t= that frame (t as the whole replay's)
 //   ?tabs=A1:0,A2:44.5,bench:80
 //                   the tabs on the replay's time: from t seconds, that tab (so one URL films ① → ② → ③;
 //                   ?t= and seek, back or forth, show the tab of that time). Before the first entry the tab
@@ -21,7 +26,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -32,7 +37,7 @@ import { mountIntake } from "./intake/index.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
 import { liftIsLimit } from "./scene.js";
-import { TileBoard } from "./tiles.js";
+import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
@@ -47,6 +52,7 @@ import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRou
 import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
+import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -83,10 +89,15 @@ function parseTabPlan(text) {
 }
 
 const ui = {
-  pinnedLc: null,
+  pinnedLc: null, // ③'s own pick (its test buttons); ④'s replay keeps its own (gridLc)
+  // ④ 解析結果: the domain whose analyses replay inside the tab (a tile pressed, or ?domain=), its
+  // own pick among the domain's tests, and where the replay was when it opened (closing goes back)
+  gridDomain: DOMAINS.includes(params.get("domain")) ? params.get("domain") : null,
+  gridLc: null,
+  gridBack: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: false, modules: false, spaces: false, heat: true }, // joints: off at first; modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -100,13 +111,17 @@ const ui = {
   qualityMetric: null, // the mesh check's metric the elements are coloured by (null: the first)
   stoppable: null, // the run id when this screen started the run being followed
   stopAsked: false,
+  followed: false, // this page followed the run while it was written (live)
+  childGone: false, // the run this screen started is no longer running (GET /api/launch), run.finished or not
   present: params.get("present") === "1", // the present mode
   detail: false, // in the present mode: the log, the chain and the hooks opened (詳しく)
+  // the agents' bundles opened (renderAgents): closed by default, all open with ?agents=open
+  openGroups: new Set(params.get("agents") === "open" ? ["designer", "cae"] : []),
 };
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
-// joints, modules: ?on=joints,modules,spaces turns those on at load (modules and spaces take the contour's place)
+// modules: ?on=modules,spaces turns those on at load (?on=joints is still read, joints being on at first) (modules and spaces take the contour's place)
 for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
 if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
 // heat: ?on=heat shows the energy's flow with any analysis picked (the newest thermal one of the design shown)
@@ -227,6 +242,78 @@ function currentTab(s) {
   if (ui.pinnedTab) return ui.pinnedTab;
   if (INTAKE_TABS.includes(s.focus.screen) || s.focus.screen === "A4" || s.focus.screen === "A7") return s.focus.screen;
   return s.focus.screen === "A6" ? "grid" : "bench";
+}
+
+// ---- ④ 解析結果: one domain's analyses replayed in the tab (js/domain_replay.js) ----------------
+let spanMemo = { n: -1, last: null, spans: {} };
+function spansNow() {
+  if (spanMemo.n !== player.events.length || spanMemo.last !== player.events.at(-1)) {
+    spanMemo = { n: player.events.length, last: player.events.at(-1), spans: domainSpans(player.events) };
+  }
+  return spanMemo.spans;
+}
+// The open domain's span when ④ shows it (null: the grid as it is).
+function openSpan(tab) {
+  return tab === "grid" && ui.gridDomain ? spansNow()[ui.gridDomain] ?? null : null;
+}
+// What the main area shows: the tab's screen, but ④ with a domain open shows the 3D and the cards.
+const viewOf = (tab, span) => (span ? "bench" : tab);
+
+function setDomainParam(d) {
+  const url = new URL(location.href);
+  if (d) url.searchParams.set("domain", d);
+  else url.searchParams.delete("domain");
+  history.replaceState(null, "", url);
+}
+
+// A tile pressed: its domain replays from its first prediction (the replay's place is kept for 戻る).
+function openDomain(d) {
+  const span = spansNow()[d];
+  if (!span) return;
+  ui.gridBack = { t: player.playhead, playing: player.playing };
+  ui.gridDomain = d;
+  ui.gridLc = null;
+  setDomainParam(d);
+  ui.frozen = false;
+  if (player.live) player.liveAttached = false;
+  player.seek(span.t0);
+  player.playing = true;
+  drawn.rev = -2;
+}
+
+function closeDomain() {
+  const back = ui.gridBack;
+  ui.gridDomain = null;
+  ui.gridLc = null;
+  ui.gridBack = null;
+  setDomainParam(null);
+  if (back) {
+    player.seek(back.t);
+    player.playing = back.playing;
+  }
+  drawn.rev = -2;
+}
+
+// The head over the 3D while a domain replays in ④: what it is, its time, and 格子に戻る.
+function renderDomainHead(span) {
+  let el = $("domain-head");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "domain-head";
+    el.className = "domain-head";
+    $("view-bench").prepend(el);
+  }
+  el.hidden = !span;
+  if (!span) return;
+  const html =
+    `<span class="dh-tab">${esc(TAB_JA.grid.no)} ${esc(TAB_JA.grid.name)}</span><span class="dh-sep">›</span>` +
+    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 照合)</span>` +
+    `<button class="dh-close" type="button" data-act="close-domain">× 格子に戻る</button>`;
+  if (el.dataset.html !== html) {
+    el.dataset.html = html;
+    el.innerHTML = html;
+    el.dataset.domain = span.domain;
+  }
 }
 
 // ---- the intake screens (A1, A2, A5) ------------------------------------------
@@ -355,15 +442,19 @@ async function draftStart(mode) {
   }
   draft.confirm = false;
   if (draft.starting) return; // one start at a time (the buttons are disabled meanwhile)
-  // /api/launch returns once the run has printed its folder, after the tools it uses are
-  // checked; until then the bar says so, counts the seconds, and the buttons cannot be pressed.
-  // On success they stay so while the page moves to the run.
-  Object.assign(draft, { starting: { mode, at: performance.now() }, error: "", errorHtml: "" });
+  // /api/launch answers at once (202); the run has a folder only after the tools it uses are
+  // checked (followStart). Until then the bar says so, counts the seconds, and the buttons cannot be
+  // pressed. On success they stay so while the page moves to the run.
+  Object.assign(draft, { starting: { mode, at: performance.now(), line: "" }, error: "", errorHtml: "" });
   renderDraft();
   const tick = setInterval(renderStartingSeconds, 1000);
   try {
-    const out = await postRequest("/api/launch", { request: draft.done.request_id, mode });
-    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
+    await postRequest("/api/launch", { request: draft.done.request_id, mode });
+    const runId = await followStart((l) => {
+      draft.starting.line = startLineJa(l);
+      renderStartingSeconds();
+    });
+    location.href = withDev(`?run=${encodeURIComponent(runId)}`); // follow it live
   } catch (e) {
     clearInterval(tick);
     draft.starting = null;
@@ -379,6 +470,36 @@ function startingSeconds() {
 function renderStartingSeconds() {
   const el = document.querySelector("#draftbar .starting .secs");
   if (el) el.textContent = `${startingSeconds()} 秒`;
+  const line = document.querySelector("#draftbar .starting .step");
+  if (line && draft?.starting) line.textContent = draft.starting.line || START_WAIT_JA;
+}
+
+// ---- following a start (POST /api/launch answers 202 at once) ------------------------------------
+// GET /api/launch's "launch" (launch.py Launcher.begin): state starting, then started with the
+// run_id once the child printed its folder, or failed (error_status 500 / 504, error). onTick gets
+// the info while it starts.
+const START_WAIT_JA = "運転の準備をしています…";
+// the child's output lines known here, in words; any other line: START_WAIT_JA (the child prints
+// nothing else before its folder unless it fails; hiraku/__main__.py _cmd_run)
+const START_LINES_JA = [[/^run folder:/, "記録を開いています…"]];
+function startLineJa(l) {
+  const line = l?.last_line ?? "";
+  return START_LINES_JA.find(([re]) => re.test(line))?.[1] ?? START_WAIT_JA;
+}
+async function followStart(onTick) {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 500));
+    let l;
+    try {
+      l = (await (await fetch("/api/launch", { cache: "no-store" })).json()).launch;
+    } catch (e) {
+      continue; // asked again in a moment
+    }
+    if (!l) continue;
+    if (l.state === "started" && l.run_id) return l.run_id;
+    if (l.state === "failed") throw Object.assign(new Error(l.error ?? String(l.error_status)), { status: l.error_status, body: l });
+    onTick?.(l);
+  }
 }
 
 // The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
@@ -398,8 +519,8 @@ function renderDraft() {
     const off = st ? " disabled" : "";
     // what each way is, in one line (the run list's words for them: DRIVEN_JA)
     const scripted =
-      `<span class="way"><button data-start="scripted"${off}>台本で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
-      (d.scripted_plan ? "" : `<span class="why">この製品には台本の計画が無いので、台本の運転は手順が少ない</span>`) +
+      `<span class="way"><button data-start="scripted"${off}>決まった手順で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
+      (d.scripted_plan ? "" : `<span class="why">この製品には決まった手順の計画が無いので、手順が少ない</span>`) +
       `</span>`;
     const claudeWhy = `<span class="why">Claude が考えて進めます。費用がかかります</span>`;
     const claude = !keyed
@@ -408,11 +529,17 @@ function renderDraft() {
         ? `<span class="confirm">Claude を呼びます。費用の上限は ${usd}、繰り返しは ${esc(rf.round_limit ?? "—")} 回まで。始めますか?</span><button class="go" data-start="claude">始める</button><button data-start-cancel="1">やめる</button>`
         : `<span class="way"><button data-start="claude"${off}>Claude で始める (費用の上限 ${usd})</button>${claudeWhy}</span>`;
     const starting = st
-      ? `<span class="starting" role="status"><b>${st.mode === "claude" ? "Claude で" : "台本で"}運転を始めています。</b>最初は、使うツールの確かめに時間がかかります (数十秒)。<span class="secs">${startingSeconds()} 秒</span></span>`
+      ? `<span class="starting" role="status"><b>${st.mode === "claude" ? "Claude で" : "決まった手順で"}運転を始めています。</b><span class="step">${esc(st.line || START_WAIT_JA)}</span> 最初は、使うツールの確かめに時間がかかります。<span class="secs">${startingSeconds()} 秒</span></span>`
       : "";
     body = `<b>要件がそろいました</b>${scripted}${claude}${starting}`;
   } else if (d) body = `<span>${esc(d.next ?? "答えの足りない項目があります")}</span>`;
-  else if (draft.state) body = `<span>分野が決まりました。${tabWord("A2")}のタブで答えるか、標準の値のまま進めてください</span>`;
+  // the domains are picked, the hearing waits: the intake's own question box (質問に答える / 標準の
+  // 値のまま進める, on A1's top and on A2) has the buttons; the bar has them only while the screen
+  // shown has none (syncDraftAsk)
+  else if (draft.state)
+    body =
+      `<span class="draft-ask"><button data-draft-ask="questions">質問に答える</button>` +
+      `<button data-draft-ask="defaults">標準の値のまま進める</button></span>`;
   else
     body =
       (draft.demoTitle
@@ -424,7 +551,29 @@ function renderDraft() {
   markTabs(player.state);
   intake?.update();
   fillPrefill();
+  syncDraftAsk();
 }
+
+// The bar's 質問に答える / 標準の値のまま進める are hidden while the intake screen shown has its own
+// (the question box: the same two ways, not to be seen twice).
+function syncDraftAsk() {
+  const ask = document.querySelector("#draftbar .draft-ask");
+  if (!ask) return;
+  const own = [...document.querySelectorAll("#intake-host button")].some((b) => b.textContent === "標準の値のまま進める" && b.checkVisibility());
+  ask.hidden = own;
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-draft-ask]");
+  if (!b || !intake) return;
+  if (b.dataset.draftAsk === "questions") {
+    // the questions are on A1's top: the screen's tab goes there, then the intake scrolls to them
+    ui.pinnedTab = "A1";
+    ui.tabPlan = [];
+    drawn.rev = -1;
+    requestAnimationFrame(() => requestAnimationFrame(() => intake.showQuestions()));
+  } else intake.useDefaults();
+});
 
 // The demo's want goes into A1's box through intake.setWant (not sent: the person presses 送る).
 // Once, when the intake is mounted.
@@ -434,16 +583,53 @@ function fillPrefill() {
   draft.prefill = "";
 }
 
+// The run this page followed is over: its run.finished has been read (the playhead may still be
+// behind it: a followed run's gaps are paced, so the replay lags the record), or the run started
+// here is no longer running (a child that ended without writing run.finished).
+function runOver() {
+  return ui.followed && (player.finished || ui.childGone);
+}
+
 function ownRunGoing() {
   const s = player.state;
-  return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running";
+  return !!ui.stoppable && ui.stoppable === s.runId && s.status === "running" && !runOver();
 }
 
 // The run being watched is going: started here (launch), or followed live while its record says
 // running (a run started elsewhere, e.g. from a Claude Code session with the plugin). A replay
 // (?live=0, a dropped file, a finished run) is not. The server checks again (Launcher.going_dir).
 function runGoing() {
-  return ownRunGoing() || (player.live && player.state.status === "running");
+  return ownRunGoing() || (player.live && player.state.status === "running" && !runOver());
+}
+
+// A run started here, followed: asks GET /api/launch until the child is gone; then reads what is
+// left of the record once and, without run.finished, stops following (what was read plays out).
+const CHILD_POLL_MS = 1500;
+function watchChild(runId) {
+  const timer = setInterval(async () => {
+    if (player.finished || player.state.runId !== runId) return clearInterval(timer);
+    let info;
+    try {
+      info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    } catch {
+      return; // (asked again on the next turn)
+    }
+    if (info.running?.run_id === runId) return;
+    clearInterval(timer);
+    try {
+      await feed?.readAll();
+    } catch {
+      /* what was read stays */
+    }
+    ui.childGone = true;
+    if (!player.finished) {
+      feed?.stop();
+      player.live = false;
+      player.liveAttached = false;
+      player.playing = player.playhead < player.duration;
+    }
+    drawn.rev = -1;
+  }, CHILD_POLL_MS);
 }
 
 async function postLaunch(path, body) {
@@ -473,6 +659,7 @@ function renderIntake(tab) {
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  syncDraftAsk();
   syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
   const now = `${player.state.runId}|${player.applied}|${runGoing()}`;
@@ -603,33 +790,41 @@ function renderShelf() {
 
 function renderTop(s) {
   $("want").textContent = s.project?.want ?? "";
+  // the version and cost pills only once there is a run (none on a new request, or before run.started)
+  const hasRun = !!s.project;
+  $("pill-version").hidden = !hasRun;
+  $("pill-cost").hidden = !hasRun;
   const v = s.currentVersion;
   const limit = s.project?.round_limit;
-  $("pill-version").textContent = `版 ${v ?? "—"}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
+  $("pill-version").textContent = `${verLabel(v)}・繰り返し ${roundsUsed(s)} / ${limit ?? "—"} 回`;
   // s.cost null: the run's cost is not known to HIRAKU (the user's own Claude Code pays), never $0.
   // A scripted run (project.driver) calls no Claude: no cost, said so rather than $0.00.
   const scripted = s.project?.driver === "scripted";
-  $("pill-cost").textContent = scripted ? "費用なし (台本の再生)" : `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
+  $("pill-cost").textContent = scripted ? "費用なし (決まった手順)" : `費用 ${s.cost === null ? "不明" : fmtUsd(s.cost)} / ${fmtUsd(s.project?.cost_limit_usd)}`;
   const live = player.live;
   // a replay says where the record is at the playhead (not that something runs now)
-  const status = { running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status;
+  // (a followed run that is over while the replay is still behind its end: said so, not 記録の途中)
+  const status = s.status === "running" && runOver() ? "実行は終わった" : ({ running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status);
   $("mode").innerHTML =
-    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "台本の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
+    // (the run list's words: 決まった手順, DRIVEN_JA / labels.js runSummaryJa)
+    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
     // the run's id only under ?dev=1 (people go back to the list by 「☰ 一覧へ」)
     (DEV ? `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` : "") +
     // a run this screen started can be stopped while it goes
-    (ui.stoppable && ui.stoppable === s.runId && s.status === "running"
+    (ownRunGoing()
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
       : DEV
         ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
         : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
 }
 
-function renderChips(s, lcId) {
-  const focusDomain = (s.project?.load_cases ?? []).find((c) => c.load_case_id === lcId)?.domain;
+// lcId: the load case shown on the 3D (null on the screens without it: no chip ringed); openDomain:
+// ④'s domain replaying in the tab (ringed whichever of its load cases shows)
+function renderChips(s, lcId, openDomain = null) {
+  const focusDomain = openDomain ?? (s.project?.load_cases ?? []).find((c) => c.load_case_id === lcId)?.domain;
   $("chips").innerHTML = DOMAINS.map((d) => {
     const j = judgementState(s, d);
-    const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : "この実行では選んでいない");
+    const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : onlyTestsLine(s) ?? "この実行では選んでいない");
     const held = heldCases(s, d, s.currentVersion).length ? " held" : ""; // held: a count not judged (held.js)
     return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
   }).join("");
@@ -650,23 +845,86 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 
 // The agents: with pets (js/agent_pets.js), each its 3D pet, name, status and bubble; without
 // (no /pets/pet3d.js), or for an agent whose role has no pet, a circle and the name.
+// The agents of one role kind, bundled into one row in the list when there are two or more:
+// the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
+const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
+const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
+const AGENT_ALERT = ["止められた", "食い違い", "赤", "解析が通らない"];
+const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : a.active ? "active" : "");
+
+// The list's entries in the agents' order: one agent, or a bundle at its first member's place.
+function agentEntries(order) {
+  const groups = new Map();
+  for (const id of order) {
+    const g = agentGroupOf(id);
+    if (g) groups.set(g, [...(groups.get(g) ?? []), id]);
+  }
+  const out = [];
+  const placed = new Set();
+  for (const id of order) {
+    const g = agentGroupOf(id);
+    if (!g || groups.get(g).length < 2) out.push({ id });
+    else if (!placed.has(g)) {
+      placed.add(g);
+      out.push({ group: g, ids: groups.get(g) });
+    }
+  }
+  return out;
+}
+
+function agentRowHtml(s, id, extra = "") {
+  const a = s.agents[id];
+  const cls = `${agentCls(a)}${extra}`;
+  // the role's name in full (操安の CAE 役), not the domain alone
+  if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
+  return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
+}
+
+// A bundle's row: 「設計役 ×6」, pressed to show each one (ui.openGroups; closed by default, so the
+// picture at ?t= does not depend on what was pressed). Its look and status follow the members: an
+// alert first, then the ones at work (the same look as a single row at work), else all done, else
+// the status they share. Closed, it carries the pet (and bubble) of its first member at work, else
+// of its first member.
+function agentGroupHtml(s, g, ids) {
+  const open = ui.openGroups.has(g);
+  const as = ids.map((id) => s.agents[id]);
+  const alert = as.find((a) => agentCls(a) === "alert");
+  const going = ids.filter((id) => agentCls(s.agents[id]) === "active");
+  const cls = alert ? "alert" : going.length ? "active" : as.every((a) => a.status === "✓") ? "done" : "";
+  const st = alert ? alert.status
+    : going.length ? `${s.agents[going[0]].status}${going.length > 1 ? ` ほか ${going.length - 1}` : ""}`
+    : as.every((a) => a.status === as[0].status) ? as[0].status : "";
+  const rep = going[0] ?? ids[0];
+  const btn = `<button class="ag-toggle" type="button" data-agent-group="${g}" aria-expanded="${open}" title="${open ? "たたむ" : "1 人ずつ見る"}">` +
+    `<span class="caret">${open ? "▾" : "▸"}</span>${AGENT_GROUP_JA[g]} <span class="cnt">×${ids.length}</span></button>`;
+  const head = agentPets?.has(rep)
+    ? `<li class="petrow agroup ${cls}${open ? " open" : ""}" data-group="${g}"${open ? "" : " data-say-host"}>` +
+      (open ? `<span class="petslot"></span>` : `<span class="petslot" data-pet-slot="${esc(rep)}"></span>`) +
+      `<span class="nm">${btn}</span><span class="st">${esc(st)}</span>${open ? "" : `<span class="say" data-say="${esc(rep)}"></span>`}</li>`
+    : `<li class="agroup ${cls}${open ? " open" : ""}" data-group="${g}"><span class="pet" style="--pet:${petColor(rep)}"></span><span>${btn}</span><span class="st">${esc(st)}</span></li>`;
+  return head + (open ? ids.map((id) => agentRowHtml(s, id, " member")).join("") : "");
+}
+
 function renderAgents(s) {
   const order = agentOrder(s);
+  const entries = agentEntries(order);
+  const rows = entries.reduce((n, e) => n + (e.group && ui.openGroups.has(e.group) ? 1 + e.ids.length : 1), 0);
   const ul = $("agents");
-  ul.classList.toggle("many", order.length > 6);
-  ul.classList.toggle("lots", order.length > 8); // modules: the six module designers come on top of the others
+  ul.classList.toggle("many", rows > 6);
+  ul.classList.toggle("lots", rows > 8); // modules: the six module designers come on top of the others
   ul.classList.toggle("pets", !!agentPets);
-  ul.innerHTML = order
-    .map((id) => {
-      const a = s.agents[id];
-      const cls = a.status === "✓" ? "done" : ["止められた", "食い違い", "赤", "解析が通らない"].includes(a.status) ? "alert" : a.active ? "active" : "";
-      // the role's name in full (操安の CAE 役), not the domain alone
-      if (agentPets?.has(id)) return petRowHtml(id, a.status, { cls, name: agentLongName(id), why: a.stopWhy });
-      return `<li class="${cls}"><span class="pet" style="--pet:${petColor(id)}"></span><span>${esc(agentLongName(id))}</span><span class="st">${esc(a.status)}</span>${stopWhyHtml(a.stopWhy)}</li>`;
-    })
-    .join("");
+  ul.innerHTML = entries.map((e) => (e.group ? agentGroupHtml(s, e.group, e.ids) : agentRowHtml(s, e.id))).join("");
   agentPets?.mount(ul, "bench");
 }
+
+$("agents").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-agent-group]");
+  if (!b) return;
+  const g = b.dataset.agentGroup;
+  if (ui.openGroups.has(g)) ui.openGroups.delete(g);
+  else ui.openGroups.add(g);
+  drawn.rev = -1;
+});
 
 function rank(id) {
   const fixed = ["lead", "designer", "packager"];
@@ -727,10 +985,12 @@ function renderLog(s, resolved) {
 // Many load cases: the chips show the id (and, for an id shared by several, a short name from the
 // title) and the row scrolls sideways, the chosen one kept in sight; the whole title is the tooltip.
 const MANY_TESTS = 12;
-function renderTests(s, lcId) {
-  const cases = s.project?.load_cases ?? [];
+// span: ④'s open domain (its tests only, its own 自動 / pick: ui.gridLc, not ③'s ui.pinnedLc)
+function renderTests(s, lcId, span = null) {
+  const all = s.project?.load_cases ?? [];
+  const cases = span ? all.filter((c) => c.domain === span.domain) : all;
   const shorts = caseShortNames(cases);
-  const auto = `<button class="auto ${ui.pinnedLc ? "" : "on"}" data-lc="">自動</button>`;
+  const auto = `<button class="auto ${(span ? ui.gridLc : ui.pinnedLc) ? "" : "on"}" data-lc="">自動</button>`;
   const el = $("tests");
   const html =
     auto +
@@ -1097,8 +1357,8 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
   // before / after: each version's largest recorded value on the one scale above
   const cmp = ct.compare
     ? `<div class="cmp" data-compare="${ct.compare.version}-${ct.compare.nowVersion}">` +
-      `<div>版 ${ct.compare.version} (左): 最大 ${esc(fmtVU(ct.compare.before.fieldMax, ct.field.unit))}</div>` +
-      `<div>版 ${ct.compare.nowVersion} (右): 最大 ${esc(fmtVU(ct.fieldMax, ct.field.unit))}</div></div>`
+      `<div>${verLabel(ct.compare.version)} (左): 最大 ${esc(fmtVU(ct.compare.before.fieldMax, ct.field.unit))}</div>` +
+      `<div>${verLabel(ct.compare.nowVersion)} (右): 最大 ${esc(fmtVU(ct.fieldMax, ct.field.unit))}</div></div>`
     : "";
   // While a motion plays, colours from another analysis (a static one of the same load case) are that
   // analysis' one moment, pasted on the moving vehicle: the legend says so, with the model it ran on.
@@ -1150,7 +1410,7 @@ function setCompare(s, chain, ct) {
     b.setScene(chain.loadCase, c.ana);
     b.setContour(c.before);
     b.setToggles(ui.toggles);
-    cmpView.tags.innerHTML = `<span data-kind="label" data-version="${c.version}">版 ${c.version}</span><span data-kind="label" data-version="${c.nowVersion}">版 ${c.nowVersion}</span>`;
+    cmpView.tags.innerHTML = `<span data-kind="label" data-version="${c.version}">${verLabel(c.version)}</span><span data-kind="label" data-version="${c.nowVersion}">${verLabel(c.nowVersion)}</span>`;
   }
   cmpView?.tags && (cmpView.tags.hidden = !c);
   // The right view keeps clear the strip under the legend (from the legend's left edge to
@@ -1291,6 +1551,17 @@ const board = new TileBoard($("grid-head"), $("tiles"));
 function renderGrid(s) {
   const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
   agentPets?.mount($("view-grid"), "grid");
+  // a tile whose domain has analysed something by now can replay it in the tab (pressed: openDomain)
+  const spans = spansNow();
+  for (const el of $("tiles").querySelectorAll(".tile[data-domain]")) {
+    const sp = spans[el.dataset.domain];
+    const ok = !!sp && sp.t0 <= player.playhead + 1e-6;
+    el.classList.toggle("can-replay", ok);
+    if (ok) {
+      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 照合) をここで再生します`;
+      el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
+    }
+  }
   const banner = $("grid-banner");
   banner.hidden = !(atLimit && reds.length);
   if (!banner.hidden) {
@@ -1303,7 +1574,8 @@ function renderGrid(s) {
   }
   // the newest report's next changes (none written yet, or no next: no block)
   const nx = $("report-next");
-  const html = reportNextHtml(s.report);
+  // (the design numbers' paths said by their names, of the report's version; the paths under ?dev=1)
+  const html = reportNextHtml(s.report, { design: s.designs[s.report?.design_version] ?? s.designs[s.currentVersion] ?? null, dev: DEV });
   if (nx.dataset.html !== html) {
     nx.dataset.html = html;
     nx.innerHTML = html;
@@ -1373,25 +1645,32 @@ function renderTransient(s, playhead, chain, resolved) {
 
 // ---- play bar ----------------------------------------------------------------
 let tickKey = "";
-function renderPlaybar() {
-  const dur = Math.max(player.duration, 1e-6);
-  const f = Math.max(0, Math.min(1, player.playhead / dur));
+// The bar's range: the whole replay, or ④'s open domain's span (its first prediction to its last comparison).
+const barRange = (span) => (span ? { lo: span.t0, hi: span.t1 } : { lo: 0, hi: player.duration });
+function renderPlaybar(span = null) {
+  const { lo, hi } = barRange(span);
+  const dur = Math.max(hi - lo, 1e-6);
+  const f = Math.max(0, Math.min(1, (player.playhead - lo) / dur));
   $("pb-fill").style.width = `${f * 100}%`;
   $("pb-knob").style.left = `${f * 100}%`;
-  $("pb-time").textContent = `${fmtTime(player.playhead)} / ${fmtTime(player.duration)} 秒`;
+  $("pb-time").textContent = `${fmtTime(Math.max(0, player.playhead - lo))} / ${fmtTime(hi - lo)} 秒`;
+  $("playbar").classList.toggle("domain", !!span);
+  $("playbar").dataset.domain = span?.domain ?? "";
   $("pb-play").textContent = player.playing ? "❚❚" : "▶";
   $("pb-speed").textContent = `${player.speed}×`;
   const live = $("pb-live");
   live.classList.toggle("show", player.live);
   live.classList.toggle("on", player.live && player.liveAttached);
-  const key = `${player.events.length}|${player.duration.toFixed(1)}`;
+  const key = `${player.events.length}|${player.duration.toFixed(1)}|${span?.domain ?? ""}`;
   if (key !== tickKey) {
     tickKey = key;
+    // (a domain's bar: the marks of its own events only)
+    const lcs = span ? new Set(span.marks.map((m) => m.lc)) : null;
     $("pb-ticks").innerHTML = player.events
-      .filter((e) => e.kind !== "cost.updated")
+      .filter((e) => e.kind !== "cost.updated" && e.t >= lo - 1e-9 && e.t <= hi + 1e-9 && (!lcs || lcs.has(e.data?.load_case_id)))
       .map((e) => {
         const cls = e.kind.startsWith("hook.") ? "hook" : e.kind === "verdict.recorded" || e.kind === "judgement.updated" ? "ok" : "";
-        return `<i class="${cls}" style="left:${(e.t / dur) * 100}%"></i>`;
+        return `<i class="${cls}" style="left:${((e.t - lo) / dur) * 100}%"></i>`;
       })
       .join("");
   }
@@ -1400,10 +1679,22 @@ function renderPlaybar() {
 function seekFromPointer(ev) {
   const rect = $("pb-track").getBoundingClientRect();
   const f = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-  player.seek(f * player.duration);
+  const { lo, hi } = barRange(openSpan(currentTab(player.state)));
+  player.seek(lo + f * (hi - lo));
 }
 
 // ---- the present mode -----------------------------------------------------------
+// The 3D made large: the corner button (#expand-btn: corners out to make it large, in to go back)
+// or Esc; ?present=1 opens the page so (the films and the tests use it).
+const EXPAND_SVG = {
+  out: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`,
+  in: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>`,
+};
+function setPresent(on) {
+  ui.present = on;
+  if (!on) ui.detail = false;
+  applyPresent();
+}
 // The colour bar and the graph move beside the view (into the rail, under the card), so
 // neither lies over the 3D; the panels the mode hides (css: body.present) come back over
 // the view with 詳しく.
@@ -1414,7 +1705,11 @@ function applyPresent() {
   $("present-rail").hidden = !on;
   // (both are placed absolutely in the view, so where they go back among its children does not matter)
   (on ? $("present-rail") : viewport).append($("legend"), $("graph"));
-  for (const b of document.querySelectorAll("#viewswitch [data-view]")) b.classList.toggle("on", (b.dataset.view === "present") === on);
+  const exp = $("expand-btn");
+  exp.innerHTML = on ? EXPAND_SVG.in : EXPAND_SVG.out;
+  exp.title = on ? "元の大きさに戻す (Esc)" : "大きく見る";
+  exp.setAttribute("aria-label", exp.title);
+  exp.setAttribute("aria-pressed", String(on));
   $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
   $("detail-btn").classList.toggle("on", ui.detail);
   const url = new URL(location.href);
@@ -1434,8 +1729,12 @@ let resolvedMemo = { rev: -1, s: null, set: new Set() };
 // ---- frame ----------------------------------------------------------------
 function draw() {
   const s = player.state;
-  const lcId = selectedLc(s);
   const tab = currentTab(s);
+  // ④ with a domain open: the 3D and the cards of that domain's load case at the playhead (or the one
+  // picked there), apart from ③'s own pick
+  const span = openSpan(tab);
+  const view = viewOf(tab, span);
+  const lcId = span ? ui.gridLc ?? domainLcAt(span, player.playhead) : selectedLc(s);
   const togglesKey = JSON.stringify(ui.toggles);
   const chain = chainFor(s, lcId, s.currentVersion);
   const motion = motionFor(chain.shown);
@@ -1444,25 +1743,30 @@ function draw() {
   // heat: the energy's flow (a thermal analysis shown, or ?on=heat); it takes the contour's place
   const heatIn = tab === "bench" ? heat.inputs(s, chain.shown, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, HEAT_FORCED) : null;
   const heatOn = !!heatIn && ui.toggles.heat;
-  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present) {
+  const over = runOver(); // (the top's words and the stop button change when the followed run ends)
+  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present || over !== drawn.over || view !== drawn.view || (span?.domain ?? null) !== drawn.dom) {
     renderTop(s);
-    renderChips(s, lcId);
+    // (the chips ring ③'s load case on ③ only; on ④ the domain open there, else none)
+    renderChips(s, view === "bench" ? lcId : null, span?.domain);
     renderAgents(s);
     renderLog(s, resolved);
-    renderTests(s, lcId);
+    renderTests(s, lcId, span);
+    renderDomainHead(span);
     renderChain(s, chain);
     renderStatus(s);
     renderToggles(motion, chain.loadCase, chain.shown?.status === "ok" && xSeriesOf(chain.shown).size > 0, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, !!heatIn);
     const intakeTab = INTAKE_TABS.includes(tab);
-    $("view-bench").hidden = tab !== "bench";
-    $("view-grid").hidden = tab !== "grid";
+    $("view-bench").hidden = view !== "bench";
+    $("view-grid").hidden = view !== "grid";
     $("view-intake").hidden = !intakeTab;
     $("view-shelf").hidden = tab !== "A4";
     $("view-asm").hidden = tab !== "A7";
-    $("main").classList.toggle("wide", tab === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
+    $("main").classList.toggle("wide", view === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
+    $("main").classList.toggle("domain-replay", !!span);
+    // the tab marked is the tab's own (④ stays marked while a domain replays in it)
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     markTabs(s);
-    if (tab === "grid") renderGrid(s);
+    if (view === "grid") renderGrid(s);
     if (intakeTab) renderIntake(tab);
     if (tab === "A4") renderShelf();
 
@@ -1473,13 +1777,13 @@ function draw() {
     bench.setScene(chain.loadCase, chain.shown);
     let ct = buildContour(s, chain);
     // the present mode shows a shell's before / after side by side when there is an earlier version
-    if (ui.present && tab === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
+    if (ui.present && view === "bench" && ct?.mesh && ct.canCompare && !ct.compare) ct = buildContour(s, chain, true);
     if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
     bench.setContour(ui.toggles.contour && !heatOn ? framedContour() : null);
     if (!contour?.mesh?.maxAt) ui.zoomMax = false;
     renderLegend(heatOn ? null : contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
     renderMeshCard(contour);
-    setCompare(s, chain, ui.toggles.contour && !heatOn && tab === "bench" ? contour : null);
+    setCompare(s, chain, ui.toggles.contour && !heatOn && view === "bench" ? contour : null);
     bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);
     cmpView?.bench.setCloseUp(!!bench.focused);
     // With a motion the arrows come from the series, frame by frame.
@@ -1488,7 +1792,7 @@ function draw() {
     // modules: the module colours and spaces on the 3D, and their legend
     modLayer.set({ colors: ui.toggles.modules, spaces: ui.toggles.spaces });
     renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces }, modLayer);
-    renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && tab === "bench"); // joints:
+    renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && view === "bench"); // joints:
     // what is going on, in one sentence; and the present mode's card for this scene
     const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
     $("now").textContent = now;
@@ -1504,10 +1808,10 @@ function draw() {
       nowEl.style.top = under ? `${tg.offsetTop + tg.offsetHeight + 8}px` : "";
       nowEl.style.maxWidth = `${under ? viewport.clientWidth - 2 * nowEl.offsetLeft : room}px`;
     }
-    const scene = presentScene({ s, chain, contour, tab, toolTitle: (tool) => toolTitle(s, tool) });
+    const scene = presentScene({ s, chain, contour, tab: view, toolTitle: (tool) => toolTitle(s, tool) });
     document.body.dataset.presentScene = scene.key;
-    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now);
-    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present };
+    if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now, { dev: DEV });
+    drawn = { ...drawn, rev: s.rev, lc: lcId, tab, toggles: togglesKey, present: ui.present, over, view, dom: span?.domain ?? null };
   }
   renderMotion(s, chain, motion);
   // modules: the round's proposals (or the version built from them) at the replay's time, under the now line
@@ -1516,9 +1820,9 @@ function draw() {
   if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
   heat.show(heatOn ? heatIn : null, player.playhead); // heat:
   renderTransient(s, player.playhead, chain, resolved);
-  renderPlaybar();
+  renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
-  if (tab === "bench") {
+  if (view === "bench") {
     bench.render();
     if (cmpView && !cmpView.el.hidden) {
       cmpView.bench.animate(player.playhead, false);
@@ -1526,10 +1830,10 @@ function draw() {
       cmpView.bench.render();
     }
   }
-  else if (tab === "grid") board.tick(player.playhead);
+  else if (view === "grid") board.tick(player.playhead);
   // the pets of the list (the workbench; hidden in the present mode) or of the grid
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
-  if (agentPets && (tab === "bench" || tab === "grid")) agentPets.tick(s, player.events, player.playhead, tab, ui.frozen ? Infinity : PET_PAINTS);
+  if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   drawRulePeek(s, INTAKE_TABS.includes(tab));
@@ -1540,7 +1844,15 @@ let lastPlayhead = null;
 function loop(ts) {
   const dt = lastTs === null ? 0 : Math.min(0.25, (ts - lastTs) / 1000);
   lastTs = ts;
-  if (!ui.frozen) player.tick(dt);
+  if (!ui.frozen) {
+    player.tick(dt);
+    // ④'s domain replay stays in its span: it stops at its last comparison
+    const span = openSpan(currentTab(player.state));
+    if (span && player.playhead > span.t1 + 1e-9) {
+      player.seek(span.t1);
+      player.pause();
+    } else if (span && player.playhead < span.t0 - 1e-9) player.seek(span.t0);
+  }
   // Moving the replay hands the test's motion back to the replay clock.
   if (lastPlayhead !== null && player.playhead !== lastPlayhead) ui.anim.local = false;
   lastPlayhead = player.playhead;
@@ -1596,7 +1908,12 @@ window.hiraku = {
 // ---- input ------------------------------------------------------------------
 $("pb-play").addEventListener("click", () => {
   ui.frozen = false;
-  player.toggle();
+  const span = openSpan(currentTab(player.state));
+  // ④'s domain: ▶ at its end plays it again from its first prediction
+  if (span && !player.playing && player.playhead >= span.t1 - 1e-6) {
+    player.seek(span.t0);
+    player.playing = true;
+  } else player.toggle();
 });
 $("pb-speed").addEventListener("click", () => player.cycleSpeed());
 $("pb-live").addEventListener("click", () => {
@@ -1631,8 +1948,19 @@ $("ab-track").addEventListener("pointerdown", (ev) => {
 $("tests").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-lc]");
   if (!b) return;
-  ui.pinnedLc = b.dataset.lc || null;
+  // ④'s domain replay keeps its own pick: ③'s stays as it was
+  if (openSpan(currentTab(player.state))) ui.gridLc = b.dataset.lc || null;
+  else ui.pinnedLc = b.dataset.lc || null;
   drawn.rev = -2;
+});
+// ④: a tile with analyses in the record replays its domain in the tab; 格子に戻る closes it
+$("tiles").addEventListener("click", (ev) => {
+  const tile = ev.target.closest(".tile.can-replay[data-domain]");
+  if (!tile || ev.target.closest("a, details, summary")) return;
+  openDomain(tile.dataset.domain);
+});
+$("view-bench").addEventListener("click", (ev) => {
+  if (ev.target.closest("button[data-act=close-domain]")) closeDomain();
 });
 $("legend").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-field], button[data-variant], button[data-act], button[data-mode], button[data-metric]");
@@ -1658,8 +1986,7 @@ $("toggles").addEventListener("click", (ev) => {
 $("viewswitch").addEventListener("click", (ev) => {
   const b = ev.target.closest("button");
   if (!b) return;
-  if (b.dataset.view) ui.present = b.dataset.view === "present";
-  else if (b.id === "detail-btn") ui.detail = !ui.detail;
+  if (b.id === "detail-btn") ui.detail = !ui.detail;
   if (!ui.present) ui.detail = false;
   applyPresent();
 });
@@ -1677,10 +2004,17 @@ viewport.addEventListener("pointerup", (ev) => {
 $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-tab]");
   if (!b) return;
+  // a tab pressed (④ again, or another) ends ④'s domain replay: the replay goes back where it was
+  if (ui.gridDomain) closeDomain();
   ui.pinnedTab = b.dataset.tab;
   ui.tabPlan = []; // a tab pressed by hand ends ?tabs=
 });
+$("expand-btn").addEventListener("click", () => setPresent(!ui.present));
 window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && ui.present) {
+    setPresent(false);
+    return;
+  }
   if (ev.target.closest("input, textarea")) return;
   if (ev.code === "Space") {
     ev.preventDefault();
@@ -1688,8 +2022,8 @@ window.addEventListener("keydown", (ev) => {
     player.toggle();
   } else if (ev.code === "ArrowRight") player.step(1);
   else if (ev.code === "ArrowLeft") player.step(-1);
-  else if (ev.code === "Home") player.seek(0);
-  else if (ev.code === "End") player.seek(player.duration);
+  else if (ev.code === "Home") player.seek(barRange(openSpan(currentTab(player.state))).lo);
+  else if (ev.code === "End") player.seek(barRange(openSpan(currentTab(player.state))).hi);
 });
 
 // Drop an events.jsonl onto the page to replay it.
@@ -1733,7 +2067,12 @@ function play() {
     return;
   }
   ui.frozen = false;
-  if (player.live) player.attachLive();
+  const span = openSpan(currentTab(player.state));
+  if (span) {
+    // ?tab=grid&domain=: that domain's analyses from its first prediction
+    player.seek(span.t0);
+    player.playing = params.get("autoplay") !== "0";
+  } else if (player.live) player.attachLive();
   else if (params.get("autoplay") !== "0") player.play();
   readyResolve(player.playhead);
 }
@@ -1757,15 +2096,16 @@ function loadEvents(events, { live }) {
   startPlayback();
 }
 
-// While a record is read (all of it, before it plays): a notice with how much is read.
+// While a record is read (all of it, before it plays): a notice with how much is read, on the 3D
+// (inside #viewport: the other tabs and the tabs row stay uncovered).
 function loadingNote(body) {
   let el = $("loading-note");
   if (!body) return el?.remove();
   if (!el) {
     el = document.createElement("div");
     el.id = "loading-note";
-    el.className = "loading-note";
-    document.body.append(el);
+    el.className = "loading-note in-view";
+    viewport.append(el);
   }
   const mb = (n) => fmt(n / 1e6, 2);
   // (before the first part comes back the size is not known yet: the note shows at once, so the
@@ -1812,15 +2152,18 @@ async function openRun(runId) {
   loadingNote(null);
   const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
+  ui.followed = follow;
+  ui.childGone = false;
   if (follow) {
-    feed.follow(() => player.finished);
-    // started from this screen? then it can be stopped from here
+    feed.follow(() => player.finished || ui.childGone);
+    // started from this screen? then it can be stopped from here (until it is over)
     fetch("/api/launch", { cache: "no-store" })
       .then((r) => r.json())
       .then((info) => {
         if (info.running?.run_id === runId) {
           ui.stoppable = runId;
           drawn.rev = -1;
+          watchChild(runId);
         }
       })
       .catch(() => {});
@@ -1947,7 +2290,10 @@ async function renderLaunch(message = "") {
     .join("");
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えた</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
-  const running = busy ? `<p>走っている: <a href="${withDev(`?run=${encodeURIComponent(rid)}`)}">${esc(rid)} を追いかける</a> ${rid ? stop : ""}</p>` : "";
+  // (a run still starting has no id yet: no link until it has)
+  const running = !busy ? "" : rid
+    ? `<p>走っている: <a href="${withDev(`?run=${encodeURIComponent(rid)}`)}">${esc(rid)} を追いかける</a> ${stop}</p>`
+    : `<p>${START_WAIT_JA}</p>`;
   // without the key in the server's window, only scripted runs and replays are there (the key is never asked for)
   const keyless = info.claude_ready
     ? ""
@@ -2095,7 +2441,10 @@ function plainLaunch(info, message) {
   if (info.available === false) return pick; // (no server to send a request to)
   const rid = info.running?.run_id ?? "";
   const stop = info.running?.stop_requested ? `<span class="why">止めるよう伝えました</span>` : `<button data-launch-stop="${esc(rid)}">止める</button>`;
-  const running = busy ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${rid ? stop : ""}</p>` : "";
+  // (a run still starting has no id yet: no link until it has)
+  const running = !busy ? "" : rid
+    ? `<p class="going">いま実行しています。<a href="?run=${encodeURIComponent(rid)}">見る</a> ${stop}</p>`
+    : `<p class="going">${START_WAIT_JA}</p>`;
   const rows = info.demo_runs_error
     ? [`<p class="err">デモの一覧を読めませんでした</p>`]
     : (info.demo_runs ?? []).map((d) => {
@@ -2114,15 +2463,43 @@ function plainLaunch(info, message) {
   );
 }
 
+// While a start from the list is on its way: a note on top of the list at once (what the child is
+// at, the seconds), until the page moves to the run.
+function launchStartingNote(mode, at) {
+  let el = $("launch-starting");
+  if (!el) {
+    el = document.createElement("p");
+    el.id = "launch-starting";
+    el.className = "starting";
+    el.setAttribute("role", "status");
+    $("launch").prepend(el);
+  }
+  const how = mode === "claude" ? "Claude で" : "決まった手順で";
+  return (line) => {
+    el.innerHTML = `<b>${how}運転を始めています。</b><span class="step">${esc(line || START_WAIT_JA)}</span> ` +
+      `最初は、使うツールの確かめに時間がかかります。<span class="secs">${Math.floor((performance.now() - at) / 1000)} 秒</span>`;
+  };
+}
+
 async function launch(file, mode) {
   launchConfirm = null;
   for (const b of $("launch").querySelectorAll("button")) b.disabled = true;
+  const at = performance.now();
+  let line = "";
+  const show = launchStartingNote(mode, at);
+  show(line);
+  const tick = setInterval(() => show(line), 1000);
   try {
     const res = await fetch("/api/launch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirements: file, mode }) });
     const out = await res.json();
     if (!res.ok) throw Object.assign(new Error(out.error ?? String(res.status)), { status: res.status, body: out });
-    location.href = withDev(`?run=${encodeURIComponent(out.run_id)}`); // follow it live
+    const runId = await followStart((l) => {
+      line = startLineJa(l);
+      show(line);
+    });
+    location.href = withDev(`?run=${encodeURIComponent(runId)}`); // follow it live
   } catch (e) {
+    clearInterval(tick);
     // a run started here still going (409): in words, the list's own line links to it
     const going = e.status === 409 && "running_run_id" in (e.body ?? {});
     renderLaunch(going ? "いま走っている運転があります。終わってから始めてください。" : `走らせられなかった: ${e.message ?? e}`);
@@ -2200,8 +2577,11 @@ $("view-intake").addEventListener("change", (ev) => {
 });
 
 fitStage();
+// the module names (designer.<module> → 「枠の設計役」) from the start, so a record still being read
+// does not show the ids; drawn again once they are in
+loadModuleNames().then(() => (drawn.rev = -1));
 if (ui.present) applyPresent();
-else $("viewswitch").querySelector('[data-view="bench"]').classList.add("on");
+else $("expand-btn").innerHTML = EXPAND_SVG.out;
 requestAnimationFrame(loop);
 if (params.get("run")) openRun(params.get("run"));
 else if (params.get("src")) {

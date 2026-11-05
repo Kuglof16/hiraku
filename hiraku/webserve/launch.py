@@ -5,8 +5,11 @@
                        the run started here, if one is still going, and the demo runs
                        (data/catalog/demo_runs.yaml, see Launcher.demo_runs)
     POST /api/launch   {"requirements": "<file name>", "mode": "scripted" | "claude"}
-                       -> {"run_id": ...} once the child prints its run folder (and the
-                       folder has its events.jsonl); the name is a file
+                       -> 202 at once, {"state": "starting", "run_id": null, ...}; GET
+                       /api/launch's "launch" then says "started" with the run_id once the
+                       child prints its run folder (and the folder has its events.jsonl),
+                       or "failed" with error_status 500 (it ended first) / 504 (silent
+                       past wait_s, ended) and the error; the name is a file
                        directly in the requirements folder, or a path under it listed as
                        `file` in the demo runs. A file in the demo runs only runs in the
                        modes listed for it there.
@@ -205,6 +208,8 @@ class Launcher:
         self.lock = threading.Lock()
         self.proc: subprocess.Popen | None = None
         self.current: dict[str, Any] | None = None
+        self.last: dict[str, Any] | None = None  # the newest begin's info, kept after its end (GET "launch")
+        self._waits: dict[int, tuple[subprocess.Popen, deque[str]]] = {}
         self.started: list[dict[str, Any]] = []
 
     def claude_ready(self) -> bool:
@@ -232,8 +237,22 @@ class Launcher:
             "claude_ready": self.claude_ready(),
             "key_name": KEY_NAME,
             "running": self.current if self.running() else None,
+            # the newest start from the screen while it starts and after (state starting / started /
+            # failed, its child's last output line, the error of a failed one)
+            "launch": self.shown(self.last),
             "started": self.started[-10:],
         }
+
+    def shown(self, info: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The info as the screen gets it: the child's words with the key's value never in them."""
+        if info is None:
+            return None
+        key = self.env.get(KEY_NAME, "").strip()
+        out = dict(info)
+        for k in ("last_line", "error"):
+            if key and isinstance(out.get(k), str) and key in out[k]:
+                out[k] = out[k].replace(key, "***")
+        return out
 
     def _read_file(self, name: str, path: Path) -> dict[str, Any]:
         try:
@@ -353,6 +372,16 @@ class Launcher:
         return req, events
 
     def start(self, name: Any, mode: Any, request: Any = None) -> dict[str, Any]:
+        """Start a run and wait until it has printed its folder (begin, then wait): the run's info
+        with its run_id, or LaunchError (500: it ended first; 504: silent past wait_s, ended)."""
+        info = self.begin(name, mode, request, watch=False)
+        return self.wait(info)
+
+    def begin(self, name: Any, mode: Any, request: Any = None, watch: bool = True) -> dict[str, Any]:
+        """Start a run's child and return at once (POST /api/launch, 202): its info, state
+        "starting" and run_id None until the child prints its folder. With watch, a thread waits
+        for that (wait) and leaves the end in the info (GET /api/launch's "launch"): state
+        "started" with the run_id, or "failed" with error_status (500 / 504) and error."""
         if mode not in MODES:
             raise LaunchError(400, f"mode must be one of {', '.join(MODES)}")
         events = None
@@ -379,10 +408,24 @@ class Launcher:
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                     text=True, encoding="utf-8", errors="replace")
             info: dict[str, Any] = {"run_id": None, "mode": mode, "requirements": name if request is None else f"{REQUESTS_DIR}/{request}",
-                                    "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+                                    "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "state": "starting", "last_line": ""}
             tail: deque[str] = deque(maxlen=20)
             threading.Thread(target=self._read, args=(proc, info, tail), daemon=True).start()
-            self.proc, self.current = proc, info
+            self.proc, self.current, self.last = proc, info, info
+            self._waits[id(info)] = (proc, tail)
+        if watch:
+            threading.Thread(target=self._watch, args=(info,), daemon=True).start()
+        return info
+
+    def _watch(self, info: dict[str, Any]) -> None:
+        try:
+            self.wait(info)
+        except LaunchError as e:  # already in the info (wait)
+            del e
+
+    def wait(self, info: dict[str, Any]) -> dict[str, Any]:
+        """Wait for the child of begin to print its folder (state started) or end (failed, LaunchError)."""
+        proc, tail = self._waits.pop(id(info))
         # The child prints its own folder (run folder: ...) once the folder and its events.jsonl
         # exist. Only that line names the run: a new folder in runs/ may be another run's (one
         # started at the same time from the command line or drip), and stop() writes into it.
@@ -393,19 +436,27 @@ class Launcher:
         while time.monotonic() < deadline:
             rid = info["run_id"]
             if rid and (self.runs_dir / rid / EVENTS_FILE).exists():
-                self.started.append(info)
-                return info
+                return self._started(info)
             if "exit_code" in info:  # the child has ended and all its output was read (_read)
-                raise LaunchError(500, "the run ended before it started: " + " / ".join(tail))
+                raise self._failed(info, LaunchError(500, "the run ended before it started: " + " / ".join(tail)))
             time.sleep(0.1)
         with self.lock:
             if info["run_id"] is None:  # (it may print at the last moment: then it is a run, see below)
                 end_tree(proc)
                 if self.proc is proc:
                     self.proc, self.current = None, None
-                raise LaunchError(504, f"the run did not print its run folder in {self.wait_s:g} s; it was stopped")
+                raise self._failed(info, LaunchError(504, f"the run did not print its run folder in {self.wait_s:g} s; it was stopped"))
+        return self._started(info)
+
+    def _started(self, info: dict[str, Any]) -> dict[str, Any]:
+        info["state"] = "started"
         self.started.append(info)
         return info
+
+    @staticmethod
+    def _failed(info: dict[str, Any], e: LaunchError) -> LaunchError:
+        info.update(state="failed", error_status=e.status, error=str(e))
+        return e
 
     def stop(self, run_id: Any) -> dict[str, Any]:
         """Ask the run started here to stop (only that one, and only while it runs)."""
@@ -472,6 +523,8 @@ class Launcher:
         for line in proc.stdout:
             line = line.rstrip()
             tail.append(line)
+            if line:
+                info["last_line"] = line[-200:]
             if line.startswith(_RUN_FOLDER) and info["run_id"] is None:
                 name = Path(line[len(_RUN_FOLDER):].strip()).name
                 if RUN_ID_RE.match(name):
