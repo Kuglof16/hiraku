@@ -818,6 +818,21 @@ class ToolDecidesTest(RunCase, unittest.TestCase):
         self.assertIn("tool_decides", str(cm.exception))
 
 
+class PredictionOutputsTest(RunCase, unittest.TestCase):
+    """Run 160725: a formula's outputs not taken as the prediction are kept in its assumptions (the R4
+    clearance's travel left was the number the designers needed)."""
+
+    def test_the_other_outputs_are_said(self):
+        from hiraku.tools.functions import OTHER_OUTPUTS
+
+        ana, _, _ = self.run_p1()
+        pred = self.predict_r1({"value": ana["results"][1]["value"], "unit": "N"})
+        line = [a for a in pred["assumptions"] if a.startswith(OTHER_OUTPUTS)]
+        self.assertEqual(len(line), 1)
+        self.assertIn("M ", line[0])  # the bending moment beside sigma, the output predicted
+        self.assertNotIn("sigma", line[0])
+
+
 class VerdictsPerPlaceTest(RunCase, unittest.TestCase):
     """docs/contract.md 分野が緑になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
     must pass; a later verdict of the same quantity and place replaces the earlier one."""

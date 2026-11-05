@@ -603,6 +603,14 @@ def _formula(ctx: RunContext, formula_id: str) -> Record:
     raise ToolError(f"式 {formula_id!r} はありません。{hint}")
 
 
+OTHER_OUTPUTS = "式のほかの出力 (予測にしていないもの): "
+MAX_OTHER_OUTPUTS = 16
+
+
+def _short_number(x: float) -> str:
+    return f"{x:.4g}"
+
+
 def record_prediction(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """Evaluate a K0 formula with the given inputs and record the result as a prediction."""
     _check_input("record_prediction", args)
@@ -632,6 +640,13 @@ def record_prediction(ctx: RunContext, args: dict[str, Any], agent: str | None =
 
     assumptions = list(args["assumptions"])
     assumptions += [a for a in formula.get("assumptions", []) if a not in assumptions]
+    rest = [f"{k} {_short_number(q.get('value'))} {q.get('unit', '')}".rstrip() for k, q in outputs.items()
+            if k != name and isinstance(q, dict) and isinstance(q.get("value"), (int, float))]
+    if rest:
+        # run 160725: the R4 clearance formula's travel left (t_side -212, -94, -44 mm on versions 3-5) was in its
+        # outputs only; the designers read the clearance, which stays at contact, and spent two rounds on it
+        assumptions.append(f"{OTHER_OUTPUTS}{'、'.join(rest[:MAX_OTHER_OUTPUTS])}"
+                           + (f" ほか {len(rest) - MAX_OTHER_OUTPUTS} 個" if len(rest) > MAX_OTHER_OUTPUTS else ""))
     pred = {
         "prediction_id": ctx.store.next_id("prediction"),
         "design_version": ctx.version,
@@ -1036,7 +1051,9 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
         raise ToolError(f"照合 {cmp['comparison_id']} は一致しているので、原因を書く必要はありません")
     existing = ctx.causes_by_comparison().get(cmp["comparison_id"])
     if existing:
-        raise ToolError(f"照合 {cmp['comparison_id']} の原因は {existing['cause_id']} にもう書かれています")
+        raise ToolError(f"照合 {cmp['comparison_id']} の原因は {existing['cause_id']} にもう書かれています。原因の記録は"
+                        "書き換えられないので、書いた原因のまま進めてください (直した式で予測し直して照合すれば、"
+                        "あとの照合が前の食い違いを置き換えます)")
     if not args["cause"].strip() or not args["fix"].strip():
         raise ToolError("cause と fix の両方に中身を書いてください")
     pred = ctx.prediction(cmp["prediction_id"])
@@ -1464,6 +1481,34 @@ def _proposal_line(c: Record) -> Record:
     return out
 
 
+def _proposal_builds(ctx: RunContext, design: Record, module: str, changes: Record, choices: Record) -> None:
+    """Refuse a module proposal the generator cannot build, to the designer who made it (run 160725: an occupant
+    proposal of rollbar_width 1200 mm was refused only at build_version, and went packager -> lead -> designer
+    -> packager before version 3 was made). Tried on the version with this proposal alone, then with the round's
+    other pending proposals too (another module's change may be what makes it fit); refused only when neither
+    builds. A design the generator builds is not kept: build_version builds the round's proposals again."""
+    if ctx.designgen is None or not (changes or choices):
+        return
+    others: Record = {}
+    for c in ctx.store.pending_proposals(ctx.version):
+        if c["module_id"] != module:
+            others.update({**(c.get("changes") or {}), **(c.get("choices") or {})})
+    said = None
+    for merged in ([{**changes, **choices}] + ([{**others, **changes, **choices}] if others else [])):
+        try:
+            ctx.designgen.regenerate(copy.deepcopy(design), merged)
+            return
+        except ValueError as e:
+            said = said or str(e)
+    mine = set((rules.design_modules(ctx) or {}).get(module, {}).get("variables") or [])
+    named_others = [k for m in design.get("modules") or [] if m["module_id"] != module
+                    for k in m.get("variables") or [] if re.search(rf"\b{re.escape(k)}\b", said)]
+    nxt = (_who_changes(design, said, "build_version") if named_others and not any(
+        re.search(rf"\b{re.escape(k)}\b", said) for k in mine)
+        else "文の示す値に直して、revise_design を呼び直してください")
+    raise ToolError(f"この提案では設計を組めません (提案は記録していません): {said}。{nxt}")
+
+
 def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
     """revise_design on a design with modules (HK6): a proposal of one module's designer (designer.<module>)
     that changes only that module's variables and choices (design.modules[].variables and choices), checked
@@ -1487,6 +1532,7 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     design = ctx.store.design()
     choices = dict(args.get("choices") or {})
     _, _, changes = _checked_changes(ctx, design, args.get("changes") or {}, choices)
+    _proposal_builds(ctx, design, module, changes, choices)
     if args.get("load_case_ids"):
         # the contract's module_change.load_case_ids: "The red load cases this change answers" (red on version v)
         from hiraku.tools.judge import latest_verdicts
@@ -1721,8 +1767,13 @@ def build_version(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
             by_module.setdefault(c["module_id"], []).append(c["change_id"])
         lines = [f"{contract.MODULE_NAMES_JA.get(m, m)} ({m}) の {pid} が空間から {far:.1f} mm はみ出す"
                  + (f" (提案 {', '.join(by_module[m])})" if m in by_module else "") for m, pid, far in breaches]
-        raise ToolError("部品がモジュールの空間 (envelope) からはみ出すので、版を作れません: " + "; ".join(lines)
-                        + "。その設計役に収まる値で出し直してもらうか、regrow (モジュールの並び) か envelopes で空間を配り直してください")
+        # run 160725: an occupant proposal moved the frame's rail pieces; the packager found regrow frame on its
+        # second call. A module with no proposal of its own moved because of another's: name it
+        carried = [m for m in dict.fromkeys(m for m, _, _ in breaches) if m not in by_module and m not in regrow]
+        hint = (f"。{'・'.join(carried)} には自分の提案が無く、ほかのモジュールの変更で部品が動いたので、"
+                f"regrow に {'・'.join(carried)} を足して呼び直すのが近道です (空間を動いた部品に合わせる)" if carried else "")
+        raise ToolError("部品がモジュールの空間 (envelope) からはみ出すので、版を作れません: " + "; ".join(lines) + hint
+                        + "。ほかには、その設計役に収まる値で出し直してもらうか、envelopes で空間を配り直してください")
     used = [copy.deepcopy(c) for c in pending]
     if own_moved:
         used.append({"change_id": ctx.store.next_id("module_change"), "module_id": "package", "agent_id": "packager",
