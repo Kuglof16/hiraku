@@ -1110,14 +1110,15 @@ def _static_checks(model: FEModel, Fs: dict) -> dict:
     if q["fail"]:
         rec = dict(base, reasons=[f"mesh check: {r}" for r in q["fail"]], results=precheck.result_items(mass=mass))
         return {"solve": lambda F: dict(rec)}
-    rb = precheck.rigid_body_check(model, lay)
+    K = model.stiffness(lay)  # assembled once for the rigid-body check and the solver
+    rb = precheck.rigid_body_check(model, lay, K=K)
     base["rigid"] = rb
     if rb["free_rigid_modes"]:
         rec = dict(base, reasons=[f"the model can move as a rigid body ({', '.join(rb['free_motions'])}); add supports"],
                    results=precheck.result_items(mass=mass, rigid=rb))
         return {"solve": lambda F: dict(rec)}
     try:
-        solver = StaticSolver(model, method="eliminate", check_rigid=False)
+        solver = StaticSolver(model, method="eliminate", check_rigid=False, K=K)
     except ModelError as e:
         rec = dict(base, reasons=[str(e)], results=precheck.result_items(mass=mass, rigid=rb))
         return {"solve": lambda F: dict(rec)}
