@@ -19,7 +19,7 @@ factors are 1.
 
 Inflation pressure: the one coefficient file (data/tyres/pacejka_tvd3_205_60r15.json) is a
 205/60R15 passenger car tyre fitted at 2.2 bar, not a measured UTV tyre. The vehicles K2
-models run 25x8-12 UTV tyres at about 0.5 bar (7 psi), far outside the pressure the
+models run 25x8-12 UTV tyres at about 0.5 bar (7 psi; a typical value, no source read), far outside the pressure the
 coefficients were fitted at, so the MF 6.1 pressure terms (NOMPRES, PPX*, PPY*, PPZ*, ...)
 would only extrapolate. K2 therefore keeps the tyre at its nominal pressure: MF61 reads only
 the longitudinal, lateral and aligning groups (PRESSURE_TERMS_READ is False) and the size,

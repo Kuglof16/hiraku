@@ -23,6 +23,8 @@ from .jit import ENABLED as JIT, njit
 from .magic_formula import MF61, _combined, _k_kya
 from .units import G0
 
+# The deflection state's damping at standstill and the speed it fades out above: HIRAKU's choice for a
+# stable standstill (an assumption, no source).
 LOW_SPEED_DAMPING_RATIO = 0.7   # tyre deflection-state damping at standstill (fades out above V_LOW)
 V_LOW = 1.0                     # m/s
 
