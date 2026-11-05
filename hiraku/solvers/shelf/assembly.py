@@ -14,7 +14,7 @@ from ..k4_geometry.joints import joint_gaps, outside_envelopes
 from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_points
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
-from ..k4_geometry.people import slide_ends
+from ..k4_geometry.people import occupants, slide_ends
 from ..k4_geometry.obb import from_box, overlap
 from ..k4_geometry.people import KNEE_COMFORT_SOURCE, PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
@@ -174,8 +174,12 @@ class Assembly(BuiltinTool):
         ends = []
         for label, d_end, moved in slide_ends(design):
             keys = {f"part:{pid}" for pid in moved}
+            # the seat's own rider is not moved with it here (the body is the large person at the middle; K4's poses
+            # seat each body size at its own place on the slide, people.fit): its body against the moved seat's back
+            # and head restraint is not an interference of the slide's end
+            riders = {f"part:{o['id']}" for o in occupants(design)}
             ends += [(a, b, o, f"seat at the slide's {label} end") for a, b, o in interferences(d_end, bodies(d_end))
-                     if a in keys or b in keys]
+                     if (a in keys or b in keys) and not _rider_pair(a, b, keys, riders)]
         static = sorted(static + [(a, b, o) for a, b, o, _ in ends], key=lambda t: -t[2])
         sw = sweep(design, bs)
         seq = steps(design, bs)
@@ -258,3 +262,12 @@ def _name(body_id: str) -> str:
     """'part:battery' -> 'battery', 'member:rail_L_FA' -> 'member rail_L_FA'."""
     kind, name = body_id.split(":", 1)
     return name if kind == "part" else f"member {name}"
+
+
+def _rider_pair(a: str, b: str, moved: set[str], riders: set[str]) -> bool:
+    """Whether a and b are a moved seat part (seat, back, head restraint) and a rider's body or one of its segments
+    (body ids "part:<occupant id>" and "part:<occupant id>.<segment>")."""
+    for x, y in ((a, b), (b, a)):
+        if x in moved and y.split(".", 1)[0] in riders:
+            return True
+    return False
