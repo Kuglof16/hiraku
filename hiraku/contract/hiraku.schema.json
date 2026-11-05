@@ -2383,7 +2383,6 @@
       "type": "object",
       "required": [
         "cause_id",
-        "comparison_id",
         "cause",
         "fix",
         "resolved"
@@ -2431,6 +2430,14 @@
         "tool_decides_reason": {
           "type": "string",
           "description": "Why the hand calculation does not reach the quantity, for people."
+        },
+        "where": {
+          "type": "string",
+          "description": "the place the cause is about (a hot_spot verdict's where, when the cause answers one)"
+        },
+        "verdict_id": {
+          "type": "string",
+          "description": "the hot_spot verdict this cause answers (a red the tool found where nothing was predicted: there is no comparison)"
         }
       },
       "allOf": [
@@ -2506,6 +2513,20 @@
               }
             }
           }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "comparison_id"
+              ]
+            },
+            {
+              "required": [
+                "verdict_id"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -2586,9 +2607,10 @@
             "match",
             "explained_safe_side",
             "unsupported_load",
-            "path_checked"
+            "path_checked",
+            "hot_spot"
           ],
-          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false). path_checked: from a mismatch whose cause has tool_decides true, with the version's load path checked by hand (value = analysis, pass or fail by the criterion)."
+          "description": "match: from a matching comparison (value = analysis). explained_safe_side: from a mismatch whose cause has safe_side true and whose numbers confirm it (value = the unfavourable of prediction and analysis). Absent means match. unsupported_load: the analysis found load points with no path to the frame (value = their count, limit 0, pass false). path_checked: from a mismatch whose cause has tool_decides true, with the version's load path checked by hand (value = analysis, pass or fail by the criterion). hot_spot: the tool found a place the hand calculation did not predict where the criterion's quantity is over the limit (made by analyze from analysis.hot_spots; value = that row, pass false)."
         },
         "value_from": {
           "enum": [
@@ -2603,6 +2625,10 @@
         "margin": {
           "$ref": "#/$defs/quantity",
           "description": "How far the value is from the limit in its own unit, positive when passing."
+        },
+        "where": {
+          "type": "string",
+          "description": "the place a hot_spot verdict (or a per-place one) is about: member, part, joint or element group id"
         }
       },
       "allOf": [
@@ -2610,7 +2636,10 @@
           "if": {
             "properties": {
               "basis": {
-                "const": "unsupported_load"
+                "enum": [
+                  "unsupported_load",
+                  "hot_spot"
+                ]
               }
             },
             "required": [
@@ -2649,6 +2678,32 @@
               "cause_id"
             ],
             "properties": {
+              "value_from": {
+                "const": "analysis"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "basis": {
+                "const": "hot_spot"
+              }
+            },
+            "required": [
+              "basis"
+            ]
+          },
+          "then": {
+            "required": [
+              "analysis_id",
+              "where"
+            ],
+            "properties": {
+              "pass": {
+                "const": false
+              },
               "value_from": {
                 "const": "analysis"
               }
@@ -4205,7 +4260,6 @@
     "tool_input.record_cause": {
       "type": "object",
       "required": [
-        "comparison_id",
         "cause",
         "fix"
       ],
@@ -4237,6 +4291,14 @@
         "tool_decides_reason": {
           "type": "string",
           "description": "Why the hand calculation does not reach the quantity."
+        },
+        "verdict_id": {
+          "type": "string",
+          "description": "the hot_spot verdict this cause answers (a red the tool found where nothing was predicted: there is no comparison)"
+        },
+        "where": {
+          "type": "string",
+          "description": "the place the cause is about (the hot_spot verdict's where)"
         }
       },
       "allOf": [
@@ -4271,6 +4333,20 @@
               }
             }
           }
+        },
+        {
+          "anyOf": [
+            {
+              "required": [
+                "comparison_id"
+              ]
+            },
+            {
+              "required": [
+                "verdict_id"
+              ]
+            }
+          ]
         }
       ]
     },
