@@ -211,7 +211,7 @@ class RealLookBrowserTest(unittest.TestCase):
         expect = {role: all(f"{a}/{f}" in files for f in names) for role, (a, names) in ASSET_FILES.items() if role in WORKBENCH_ROLES}
         self.assertEqual(got["assets"], expect)
         if expect["sky"]:
-            self.assertEqual(got["intensity"], 0.8)  # look.js: the HDRI's intensity
+            self.assertEqual(got["intensity"], 0.45)  # look.js HDRI_INTENSITY
         # the horizon's HDRI is the sky seen behind the vehicle, with its haze (set when drawn)
         self.assertEqual((got["background"], got["fog"]), (expect["horizon"], expect["horizon"]))
         if expect["dirt"]:

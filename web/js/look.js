@@ -742,6 +742,10 @@ const GROUND_GLSL = `
 // as the light always stood; the sky behind (the horizon's HDRI, when it is there) is turned
 // so that its own sun stands there.
 const BENCH_SUN = new THREE.Vector3(2.5, 6, 3.5).normalize();
+// The sky HDRI's light. Its own sun is in it and lights what lies in the sun light's shadow
+// (the environment casts no shadow), so it is kept below the sun light: at 0.8 the shadows
+// under and beside the vehicle were faint. Look value.
+export const HDRI_INTENSITY = 0.45;
 
 export class Look {
   // opts.stage: the cut views' stage (see the top of the file)
@@ -790,8 +794,11 @@ export class Look {
     }
     scene.environment = ENV.get(renderer);
     scene.environmentIntensity = 0.55;
-    scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x6b5b45, 1.1));
-    const sun = new THREE.DirectionalLight(0xfff4e5, 2.6);
+    // the sun is the key and the sky's light (the environment and this hemisphere) the fill, at
+    // about the ratio of a sunny photograph: shadows and the undersides read dark (look values;
+    // the hemisphere was 1.1 and the sun 2.6, which left the shadows faint)
+    scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x6b5b45, 0.4));
+    const sun = new THREE.DirectionalLight(0xfff4e5, 3.4);
     sun.castShadow = true;
     sun.shadow.mapSize.set(this.q.shadow.size, this.q.shadow.size);
     scene.add(sun, sun.target);
@@ -816,7 +823,7 @@ export class Look {
       const got = await hdriOf(renderer, role);
       if (!got) continue;
       scene.environment = got.tex;
-      scene.environmentIntensity = 0.8;
+      scene.environmentIntensity = HDRI_INTENSITY;
       this.assets[role] = true;
       if (role === "horizon") backdrop(got);
       break;

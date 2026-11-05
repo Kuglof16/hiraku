@@ -66,8 +66,9 @@ export class RealPost {
     this.composer.addPass(this.renderPass);
     if (quality.ao) {
       this.ao = new AOPass(scene, camera, size.x, size.y, quality.ao.scale);
-      // the vehicle is 1 to 4 m across: occlusion within 0.25 m (contacts, corners, under the body)
-      this.ao.updateGtaoMaterial({ radius: 0.25, distanceExponent: 1, thickness: 1, scale: 1, samples: 16 });
+      // the vehicle is 1 to 4 m across: occlusion within 0.5 m (contacts, corners, and the ground
+      // under the body, whose floor stands a few hundred mm up: 0.25 m left it lit as in the open)
+      this.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1, thickness: 1, scale: 1, samples: 16 });
       this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, rings: 2, samples: 16 });
       this.composer.addPass(this.ao);
     }

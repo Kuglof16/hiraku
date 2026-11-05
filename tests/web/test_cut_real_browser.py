@@ -370,7 +370,7 @@ class CutRealLookTest(unittest.TestCase):
             self.assertFalse(v["assets"]["sky"])  # the horizon's HDRI lights it in the sky's place
             if v["drawn"]:
                 self.assertTrue(v["background"] and v["fog"], v)  # set when the view is drawn
-            self.assertEqual(v["envIntensity"], 0.8)
+            self.assertEqual(v["envIntensity"], 0.45)  # look.js HDRI_INTENSITY
             if v["ground"]:
                 self.assertEqual(v["ground"]["mapW"], 1024)
                 self.assertTrue(v["ground"]["normal"] and v["ground"]["stain"], v)
