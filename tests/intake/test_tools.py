@@ -306,6 +306,9 @@ class AskUserToolTest(ToolsTestCase):
         path = ctx.store.path
 
         def write():
+            deadline = time.monotonic() + 30
+            while not (Path(path) / hearing.REQUEST_FILE).exists() and time.monotonic() < deadline:
+                time.sleep(0.02)  # the screen answers a question that is on the screen, not before it
             time.sleep(after)
             (Path(path) / hearing.ANSWER_FILE).write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
 

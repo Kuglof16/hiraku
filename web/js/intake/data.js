@@ -290,6 +290,10 @@ export const ITEM_HELP = {
     "why": "動く部分が当たらない広さを確かめるためです。",
     "example": "0 度から 60 度まで"
   },
+  "Q58": {
+    "why": "狭い道や曲がり角で、向きを変えられるかを確かめるためです。",
+    "example": "12 m"
+  },
   "Q61": {
     "why": "設計の余裕の大きさです。大きいほど安全で、重くなります。",
     "example": "1.5"
@@ -341,6 +345,20 @@ export const ITEM_HELP = {
   "Q97": {
     "why": "地面から片足で乗り上げられる高さかどうか確かめるためです。",
     "example": "550 mm"
+  }
+};
+
+export const ITEM_CHOICES_ALT = {
+  "Q30": {
+    "labels": {
+      "driver": "1 人だけ"
+    },
+    "on": [
+      "lean"
+    ],
+    "off": [
+      "ride"
+    ]
   }
 };
 

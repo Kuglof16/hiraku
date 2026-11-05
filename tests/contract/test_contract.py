@@ -152,6 +152,41 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolts": 0}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"nut": 1}}), [])
 
+    def test_declared_sizes_for_the_rules(self):
+        from hiraku.intake.facts import FACTS
+
+        root = contract.schema()
+        names = set(root["$defs"]["part"]["properties"]["declared"]["propertyNames"]["enum"])
+        self.assertEqual(names, {n for n, (_, _, scope) in FACTS.items() if scope == "declared"})
+        part = dict(load("design.json")["parts"][0])
+        bend = {"value": 3.0, "unit": "mm", "basis": "assumption"}
+        self.assertEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": bend}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_r": bend}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {**bend, "unit": "in"}}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {"value": 3.0, "unit": "mm"}}}), [])
+        joint = {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}
+        self.assertEqual(contract.errors("part", {**part, "joint": joint, "declared": {"hole_edge_mm": bend}}), [])
+        self.assertNotEqual(contract.errors("part", {**part, "joint": joint, "declared": {"bolt_diameter_mm": bend}}), [])
+        self.assertEqual(contract.errors("part", {**part, "declared": {"bolt_diameter_mm": bend}}), [])  # no joint
+
+    def test_rule_check_keeps_the_values_it_checked(self):
+        rc = {"rule_check_id": "rchk-0001", "design_version": 5, "rule_id": "SM-01", "targets": ["bracket_lca_FL1"],
+              "hits": [], "pass": True}
+        row = {"part_id": "bracket_lca_FL1", "values": {"hole_edge_mm": 18.0, "hole_diameter_mm": 13.0},
+               "unchecked": ["hole_diameter_mm"]}
+        self.assertEqual(contract.errors("rule_check", rc), [])  # checked is optional
+        self.assertEqual(contract.errors("rule_check", {**rc, "checked": [row]}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**rc, "checked": [{**row, "values": {}}]}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**rc, "checked": [{**row, "values": {"hole_edge_mm": "18"}}]}), [])
+
+    def test_fastening_tool_gap(self):
+        step = {"order": 1, "part": "susp_FL", "direction": "-y", "no_interference": True, "tool_clearance": False,
+                "hand_reach": True}
+        gap = {"to": "node LS1", "kind": "bolt", "at_mm": [0.0, 1.0, 2.0], "tool_side": "+z", "tool_gap_mm": -10.6}
+        self.assertEqual(contract.errors("assembly_step", {**step, "fastenings": [gap]}), [])
+        self.assertNotEqual(contract.errors("assembly_step", {**step, "fastenings": [{**gap, "tool_gap_mm": "10"}]}), [])
+        self.assertNotEqual(contract.errors("assembly_step", {**step, "fastenings": [{**gap, "gap": 1.0}]}), [])
+
     def test_stop_code_goes_with_status(self):
         ev = {"seq": 9, "ts": "2026-11-03T01:00:00+09:00", "t": 1.0, "run_id": "x", "kind": "run.finished"}
         ok = [("done", "done"), ("failed", "error"), ("stopped", "not_judged"), ("stopped", "user_stop"), ("stopped", "red_left")]
