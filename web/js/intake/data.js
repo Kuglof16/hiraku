@@ -234,6 +234,10 @@ export const ITEM_HELP = {
     "why": "雨や泥で電気の部品が壊れないかの確かめに使います。",
     "example": "水の飛まつ"
   },
+  "Q21": {
+    "why": "帯や鎖が強くても、荷台の側の固定点が先に壊れれば荷は止まらないためです。",
+    "example": "8000 N"
+  },
   "Q30": {
     "why": "人数と荷の組み合わせで、重さのかかり方が変わるためです。",
     "example": "2 人 + 荷"
@@ -241,6 +245,22 @@ export const ITEM_HELP = {
   "Q34": {
     "why": "いる場合は、はさまれや倒れかかりをより厳しく見るためです。",
     "example": "いない / 子ども"
+  },
+  "Q35": {
+    "why": "後ろからぶつけられたとき、首が後ろへ折れないように、頭の後ろに受け止めるものが届く高さかを確かめるためです。",
+    "example": "800 mm"
+  },
+  "Q36": {
+    "why": "頭が横にずれても、後ろで受け止められる幅があるかを確かめるためです。",
+    "example": "170 mm"
+  },
+  "Q37": {
+    "why": "受け止める面が頭から遠いと、ぶつけられたときに頭が大きく後ろへ振られてから止まるためです。",
+    "example": "55 mm"
+  },
+  "Q38": {
+    "why": "背もたれと頭を受け止める部分のあいだに、頭や首が入り込む大きな穴が残っていないかを確かめるためです。",
+    "example": "60 mm"
   },
   "Q40": {
     "why": "荷の重さで、骨組みにかかる力が決まるためです。",
@@ -294,6 +314,10 @@ export const ITEM_HELP = {
     "why": "狭い道や曲がり角で、向きを変えられるかを確かめるためです。",
     "example": "12 m"
   },
+  "Q59": {
+    "why": "床と荷の材料で滑りやすさが変わり、固定に要る力が変わるためです。",
+    "example": "0.3 (分からないとき) / ゴムのマット 0.6"
+  },
   "Q61": {
     "why": "設計の余裕の大きさです。大きいほど安全で、重くなります。",
     "example": "1.5"
@@ -313,6 +337,14 @@ export const ITEM_HELP = {
   "Q80": {
     "why": "溶接や締め付けの決まりのどれを使うかを選ぶためです。",
     "example": "鋼の溶接"
+  },
+  "Q83": {
+    "why": "折れ角が大きすぎると、ハンドルが重い所と軽い所ができたり、引っかかって回らなくなったりするためです。",
+    "example": "35°"
+  },
+  "Q84": {
+    "why": "折れた軸を通すと、ハンドルを一定に回しても先の回転が速くなったり遅くなったりし、手に感じる重さが 1 回転の中で変わるためです。",
+    "example": "10 %"
   },
   "Q89": {
     "why": "太すぎて手が回らないことがないか確かめるためです。",
@@ -391,6 +423,14 @@ export const ITEM_CHOICES = {
     "高齢者": "高齢者",
     "子ども": "子ども",
     "高齢者と子ども": "高齢者と子ども"
+  },
+  "Q59": {
+    "0.3": "分からない (0.3)",
+    "0.6": "ゴムのマットを敷く (0.6)",
+    "0.45": "木の荷と合板の床 (0.45)",
+    "0.15": "樹脂のパレットとステンレス板・溝付きアルミの床 (0.15)",
+    "0.2": "雪・氷・霜がつく (0.2)",
+    "0.1": "油や脂がつく (0.1)"
   },
   "Q64": {
     "あり": "つける",
@@ -613,5 +653,95 @@ export const FACTS = {
     "label": "閉じる隙間",
     "unit": "mm",
     "inDesigns": false
+  },
+  "uj_count": {
+    "label": "操舵の軸の折れる所 (自在継手) の数",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "uj_angle_max_deg": {
+    "label": "操舵の軸の折れ角 (折れる所のうち最大)",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "uj_angle_diff_deg": {
+    "label": "2 か所の折れ角の差",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "uj_phase_error_deg": {
+    "label": "2 か所の継手の向き合わせ (位相) の、正しい向きからのずれ",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "steer_speed_variation_pct": {
+    "label": "ハンドルを一定に回したときの、車輪の側の回転のむら (折れる所が 1 か所のとき、折れ角から計算)",
+    "unit": "%",
+    "inDesigns": true
+  },
+  "headrest_height_mm": {
+    "label": "頭を受け止める上端の高さ (座席の基準点から胴の線に沿って)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "headrest_width_mm": {
+    "label": "頭を受け止める面の左右の幅 (上端から 65 mm 下)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "headrest_backset_mm": {
+    "label": "頭の後ろと受け止める面との水平のすき間",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "headrest_gap_mm": {
+    "label": "背もたれと頭を受け止める部分のあいだのすき間",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "lashing_count": {
+    "label": "荷を止める固定 (帯・鎖) の本数",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "topover_count": {
+    "label": "荷の上を越えて上から押さえる固定の本数",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "lashing_pretension_N": {
+    "label": "上から押さえる固定 1 本の張り (小さい方)",
+    "unit": "N",
+    "inDesigns": false
+  },
+  "lashing_angle_deg": {
+    "label": "上から押さえる固定と荷台の床の角度 (最小)",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "lashing_angle_sin": {
+    "label": "上から押さえる固定の角度の sin",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "cargo_blocked_forward": {
+    "label": "荷が荷台の前の壁に当てて止めてあるか (1 = 止めてある、0 = ない)",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "lashing_wll_min_N": {
+    "label": "荷につながる帯・金具・固定点のうち、使ってよい力の最小",
+    "unit": "N",
+    "inDesigns": true
+  },
+  "lashing_wll_sum_N": {
+    "label": "荷につながる帯 (kind が strap) の使ってよい力の合計 (1 本ずつ 1 回数える)",
+    "unit": "N",
+    "inDesigns": true
+  },
+  "anchor_strength_min_N": {
+    "label": "荷につながる固定点 (kind が anchor) が受けられる力の最小",
+    "unit": "N",
+    "inDesigns": true
   }
 };

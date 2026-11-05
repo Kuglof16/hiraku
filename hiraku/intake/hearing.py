@@ -432,7 +432,10 @@ def read_answer(run_path: Path) -> Record | None:
     path = Path(run_path) / ANSWER_FILE
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except PermissionError:  # Windows: the writer is renaming the file into place right now; the next poll sees it
+        return None
 
 
 def wait_for_answer(run_path: Path, timeout_s: float, *, poll_s: float = 0.5,

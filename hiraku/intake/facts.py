@@ -70,6 +70,27 @@ FACTS: dict[str, tuple[str, str, str]] = {
     "clearance_hole_mm": ("隙間穴の径", "mm", "declared"),
     "position_tolerance_mm": ("位置の公差", "mm", "declared"),
     "closing_gap_mm": ("閉じる隙間", "mm", "declared"),
+    # steering shaft joints (the part of kind steering)
+    "uj_count": ("操舵の軸の折れる所 (自在継手) の数", "1", "declared"),
+    "uj_angle_max_deg": ("操舵の軸の折れ角 (折れる所のうち最大)", "deg", "declared"),
+    "uj_angle_diff_deg": ("2 か所の折れ角の差", "deg", "declared"),
+    "uj_phase_error_deg": ("2 か所の継手の向き合わせ (位相) の、正しい向きからのずれ", "deg", "declared"),
+    "steer_speed_variation_pct": ("ハンドルを一定に回したときの、車輪の側の回転のむら (折れる所が 1 か所のとき、折れ角から計算)", "%", "part"),
+    # head restraint (the part of kind seat)
+    "headrest_height_mm": ("頭を受け止める上端の高さ (座席の基準点から胴の線に沿って)", "mm", "declared"),
+    "headrest_width_mm": ("頭を受け止める面の左右の幅 (上端から 65 mm 下)", "mm", "declared"),
+    "headrest_backset_mm": ("頭の後ろと受け止める面との水平のすき間", "mm", "declared"),
+    "headrest_gap_mm": ("背もたれと頭を受け止める部分のあいだのすき間", "mm", "declared"),
+    # cargo securing (the part of kind cargo)
+    "lashing_count": ("荷を止める固定 (帯・鎖) の本数", "1", "declared"),
+    "topover_count": ("荷の上を越えて上から押さえる固定の本数", "1", "declared"),
+    "lashing_pretension_N": ("上から押さえる固定 1 本の張り (小さい方)", "N", "declared"),
+    "lashing_angle_deg": ("上から押さえる固定と荷台の床の角度 (最小)", "deg", "declared"),
+    "lashing_angle_sin": ("上から押さえる固定の角度の sin", "1", "part"),
+    "cargo_blocked_forward": ("荷が荷台の前の壁に当てて止めてあるか (1 = 止めてある、0 = ない)", "1", "declared"),
+    "lashing_wll_min_N": ("荷につながる帯・金具・固定点のうち、使ってよい力の最小", "N", "part"),
+    "lashing_wll_sum_N": ("荷につながる帯 (kind が strap) の使ってよい力の合計 (1 本ずつ 1 回数える)", "N", "part"),
+    "anchor_strength_min_N": ("荷につながる固定点 (kind が anchor) が受けられる力の最小", "N", "part"),
 }
 REQ_NAME = re.compile(r"^req_Q[0-9]{2}$")  # the number of a requirement, in the requirement's own unit
 VAR_PREFIX = "var_"  # a design variable's value, in the variable's own unit
@@ -120,7 +141,7 @@ def _declared_facts(part: Record) -> dict[str, float]:
     for name, d in (part.get("declared") or {}).items():
         if FACTS.get(name, ("", "", ""))[2] != "declared" or not isinstance(d, dict):
             continue
-        if _num(d.get("value")) and d.get("unit", "mm") == "mm":
+        if _num(d.get("value")) and d.get("unit", FACTS[name][1]) == FACTS[name][1]:  # each name has one unit
             out[name] = float(d["value"])
     joint = part.get("joint")  # the joint a part carries gives the same facts once (declared wins when both say it)
     if isinstance(joint, dict):
@@ -142,6 +163,34 @@ def _declared_unchecked(part: Record) -> list[str]:
     for name, d in (part.get("declared") or {}).items():
         if name in read and any(m in str(d.get("basis", "")).lower() for m in UNCONFIRMED):
             out.append(name)
+    return out
+
+
+def _computed_facts(design: Record, part: Record, facts: dict[str, float]) -> dict[str, float]:
+    """Facts worked out here, so the rule language needs no trigonometry and no sums over parts."""
+    out: dict[str, float] = {}
+    if "lashing_angle_deg" in facts:
+        out["lashing_angle_sin"] = math.sin(math.radians(facts["lashing_angle_deg"]))
+    # one universal joint: the output speed varies between cos(a) and 1/cos(a) times the input speed; two joints are not worked out
+    if facts.get("uj_count") == 1 and "uj_angle_max_deg" in facts and facts["uj_angle_max_deg"] < 89:
+        c = math.cos(math.radians(facts["uj_angle_max_deg"]))
+        out["steer_speed_variation_pct"] = 100.0 * max(1.0 / c - 1.0, 1.0 - c)
+    # the rated parts (part.rating: a strap's, a hook's, an anchor's working load) joined to this part, in either direction
+    ids = {p["id"]: p for p in design.get("parts", [])}
+    joined = {q["id"] for q in design.get("parts", []) if any(c.get("to") == part["id"] for c in q.get("connects_to", []))}
+    joined |= {c.get("to") for c in part.get("connects_to", []) if c.get("to") in ids}
+    rated = [ids[i] for i in joined if _num((ids[i].get("rating") or {}).get("working_load_N"))]
+    if rated:
+        out["lashing_wll_min_N"] = min(float(q["rating"]["working_load_N"]) for q in rated)
+        straps = [q for q in rated if q.get("kind") == "strap"]
+        if straps:
+            out["lashing_wll_sum_N"] = sum(float(q["rating"]["working_load_N"]) for q in straps)
+        # an anchor is joined to the strap, not to the load: look one step further
+        reach = {q["id"] for q in design.get("parts", []) if any(c.get("to") in {s["id"] for s in straps} for c in q.get("connects_to", []))}
+        reach |= {c.get("to") for s in straps for c in s.get("connects_to", []) if c.get("to") in ids}
+        anchors = [ids[i] for i in (joined | reach) if ids[i].get("kind") == "anchor" and _num((ids[i].get("rating") or {}).get("working_load_N"))]
+        if anchors:
+            out["anchor_strength_min_N"] = min(float(a["rating"]["working_load_N"]) for a in anchors)
     return out
 
 
@@ -226,6 +275,7 @@ def targets(design: Record, requirements: list[Record] | None = None) -> list[Re
     for p in design.get("parts", []):
         part_ids.add(p["id"])
         facts = {**shared, **_box_facts(p), **_declared_facts(p)}
+        facts.update(_computed_facts(design, p, facts))
         if p["id"] in members_by_part:
             facts.update(_member_facts(design, members_by_part[p["id"]]))
         else:  # no member of its own: the section of the members it is connected to (connects_to names them)

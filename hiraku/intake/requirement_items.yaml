@@ -113,6 +113,24 @@ items:
     question: 水やほこりへの強さ (IP) はどのくらい要りますか。
     choices: [{label: 対策なし, value: IPX0}, {label: 水の飛まつ, value: IPX4}, {label: 水・ほこりに強い, value: IP54}, {label: 水に浸かっても, value: IP67}]
 
+  - key: Q21
+    name: 荷台の固定点 1 か所が受けられる力の下限
+    applies_if: cargo
+    ask: default
+    why: 帯や鎖が強くても、荷台の側の固定点が先に壊れれば荷は止まらないためです。
+    example: 8000 N
+    default:
+      value: 8000
+      unit: N
+      trust: 3
+      basis: >-
+        assumption: the smallest row for goods road vehicles borrowed for a much lighter vehicle. EN 12640 as quoted in
+        the European Best Practice Guidelines on Cargo Securing for Road Transport (2014) 2.6, Table 3: vehicle total
+        mass 3.5 to 7.5 t, strength of a lashing point 800 daN (= 8 000 N), read 2026-11-06 (secondary, PDF p. 23);
+        the table has no row below 3.5 t; EN 12640 itself not checked (paid). The CTU Code 6.6.8 says most goods road
+        vehicles have points of LC or MSL 20 kN, read 2026-11-06 (p. 27). No ROV standard or manual read gives a
+        strength for cargo bed anchors
+
   - key: Q30
     name: 人数と荷重の組み合わせ
     applies_if: ride or lean
@@ -168,6 +186,85 @@ items:
     example: いない / 子ども
     question: 子どもや高齢者など、力の弱い人が使ったり、そばにいたりしますか。
     choices: [{label: いない, value: いない}, {label: 高齢者, value: 高齢者}, {label: 子ども, value: 子ども}, {label: 高齢者と子ども, value: 高齢者と子ども}]
+
+  - key: Q35
+    name: 頭を後ろから受け止める高さの下限 (座席の基準点から、胴の線に沿って上へ)
+    applies_if: ride and self_propelled
+    ask: confirm
+    why: 後ろからぶつけられたとき、首が後ろへ折れないように、頭の後ろに受け止めるものが届く高さかを確かめるためです。
+    example: 800 mm
+    question: 座った人の頭を後ろから受け止める高さは、座席の基準点 (腰のあたり) から胴の傾きに沿って、いくつ以上にしますか。
+    default:
+      value: 800
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series
+        (MLIT English/Japanese text, https://www.mlit.go.jp/jidosha/un/UN_R017.pdf), para. 5.6.2 and 5.6.3.1 (front
+        seats not less than 800 mm, other seats 750 mm) and para. 6.5.4 (the height is from the R point, the seating
+        reference point of para. 2.13, to the tangent at the top, measured along the manikin's torso reference
+        line), read 2026-11-06; R17 applies to M1 and N1 (para. 1). 49 CFR 571.202a (FMVSS 202a, eCFR current text,
+        https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a) S4.2.1(a)(1)
+        (front outboard not less than 800 mm in at least one position) with S3 (height from the H-point parallel to
+        the torso reference line), read 2026-11-06; it applies to passenger cars and to MPVs, trucks and buses of
+        4,536 kg GVWR or less (S2). UN R25 was not checked (not reachable). No text read requires this for an
+        off-road utility or recreational vehicle; ANSI/ROHVA 1, ANSI/OPEI B71.9 and SAE J2258 were not checked
+
+  - key: Q36
+    name: 頭を後ろから受け止める面の左右の幅の下限
+    applies_if: ride and self_propelled
+    ask: default
+    why: 頭が横にずれても、後ろで受け止められる幅があるかを確かめるためです。
+    example: 170 mm
+    default:
+      value: 170
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series
+        (https://www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (not less than 85 mm to each side of the seat's
+        vertical median plane; 2 x 85 = 170 mm computed) and para. 6.6.1 (measured in a plane 65 mm below the top,
+        perpendicular to the torso reference line), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.2 (not
+        less than 170 mm at 65 ±3 mm below the top; 254 mm for a front outboard seat when a front centre seat
+        exists), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles (S2)
+
+  - key: Q37
+    name: 頭の後ろと、それを受け止める面との前後のすき間の上限
+    applies_if: ride and self_propelled
+    ask: default
+    why: 受け止める面が頭から遠いと、ぶつけられたときに頭が大きく後ろへ振られてから止まるためです。
+    example: 55 mm
+    default:
+      value: 55
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3
+        (front outboard backset not more than 55 mm) with S3 (backset = the minimum horizontal distance from the rear
+        of the head of a seated 50th percentile male, head restraint measurement device on the SAE J826 manikin, to
+        the head restraint) and S5.2.3 (top set between 750 and 800 mm, seat back at the design angle), eCFR current
+        text, https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read
+        2026-11-06; applies to passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less (S2). UN R17 08
+        series has no backset limit (the word does not occur in the MLIT text, read 2026-11-06); later R17 series
+        and UN R25 were not checked
+
+  - key: Q38
+    name: 背もたれと、頭を受け止める部分のあいだのすき間の上限
+    applies_if: ride and self_propelled
+    ask: default
+    why: 背もたれと頭を受け止める部分のあいだに、頭や首が入り込む大きな穴が残っていないかを確かめるためです。
+    example: 60 mm
+    default:
+      value: 60
+      unit: mm
+      trust: 3
+      basis: >-
+        assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series
+        (https://www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (no gap of more than 60 mm between the seat back
+        and a head restraint not adjustable for height; 25 mm in the lowest position if adjustable) and para. 6.7.1
+        (gaps measured with a 165 mm sphere), read 2026-11-06, for M1 and N1. 49 CFR 571.202a S4.2.4.1 (no gap
+        greater than 60 mm with a 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and
+        light vehicles
 
   - key: Q40
     name: 積載
@@ -362,6 +459,26 @@ items:
         林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A
         (https://www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked
 
+  - key: Q59
+    name: 荷と荷台の床のあいだの摩擦係数 (止まっているときの値)
+    applies_if: cargo
+    ask: confirm
+    why: 床と荷の材料で滑りやすさが変わり、固定に要る力が変わるためです。
+    example: 0.3 (分からないとき) / ゴムのマット 0.6
+    question: 荷台の床と荷の材料は何ですか。分からなければ、滑りにくい値は使わずに 0.3 とします。
+    choices: [{label: 分からない (0.3), value: 0.3}, {label: ゴムのマットを敷く (0.6), value: 0.6}, {label: 木の荷と合板の床 (0.45), value: 0.45}, {label: 樹脂のパレットとステンレス板・溝付きアルミの床 (0.15), value: 0.15}, {label: 雪・氷・霜がつく (0.2), value: 0.2}, {label: 油や脂がつく (0.1), value: 0.1}]
+    default:
+      value: 0.3
+      unit: "1"
+      trust: 3
+      basis: >-
+        assumption: the container and road rule borrowed. CTU Code (MSC.1/Circ.1497) Annex 7, 2.2.2.3 and the note of
+        Appendix 2: a material pair not in the table or not verified, max 0.3; frost, ice, snow 0.2; oily or greasy
+        0.1, read 2026-11-06 (p. 95-96, p. 129). Pairs in Appendix 2 (p. 128-129, read 2026-11-06): sawn timber vs
+        plywood 0.45, plastic pallet vs stainless steel 0.15, rubber vs other materials 0.6, and others listed in
+        .notes/R3-sources.md. The same table is quoted from EN 12195-1:2010 Annex B in the EU Best Practice Guidelines
+        (2014) Appendix 3, read 2026-11-06 (secondary). Values for swept clean surfaces, static friction
+
   - key: Q60
     name: 静的に倒れない限界
     applies_if: standing
@@ -548,6 +665,55 @@ items:
     name: 出荷の形
     applies_if: assembly
     ask: default
+
+  - key: Q83
+    name: 操舵の回転を折って伝える所の、1 か所あたりの折れ角の上限
+    applies_if: ride and self_propelled
+    ask: confirm
+    why: 折れ角が大きすぎると、ハンドルが重い所と軽い所ができたり、引っかかって回らなくなったりするためです。
+    example: 35°
+    question: ハンドルの回転を、軸を折り曲げて車輪の側へ伝えるとき、1 か所で折ってよい角度はいくつまでにしますか。使う部品の決まった値があれば、それを書いてください。
+    default:
+      value: 35
+      unit: deg
+      trust: 3
+      basis: >-
+        assumption: the maximum operating angle of one maker's single steering universal joints, applied to the
+        joints of this vehicle, whose maker is not chosen. Borgeson Universal, "U-Joint & Shaft General Instructions"
+        (sheet dated 3/20/2018), item 1): single joints 35 degrees, double joints 70 degrees, beyond which the joint
+        can bind and be damaged; read 2026-11-06 (https://sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf).
+        These are aftermarket steering joints of cars. Industrial joints are rated otherwise (read 2026-11-06): Huco
+        Universal Joints catalogue section 2, PDF p. 8, needle roller T series 40 deg single, 80 deg double; PDF p. 9,
+        plain bearing DIN 808 joints 45 deg single, 90 deg double; PDF p. 6, plain T series sizes 50 and up 30 deg
+        (https://theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf); Timken
+        NB10-UJ needle bearing type, max operating angle for power transmission 25 deg
+        (https://cad.timken.com/printitem/needle-bearing-type-universal-joints/eedle-bearing-type-universal-solid-joints-imperial/68514415607).
+        Borgeson's web page (https://www.borgeson.com/joints.html) was not checked (403). The joint actually chosen and
+        its catalogue win over this value
+
+  - key: Q84
+    name: ハンドルから車輪の側へ伝わる回転のむらの上限
+    applies_if: ride and self_propelled
+    ask: default
+    why: 折れた軸を通すと、ハンドルを一定に回しても先の回転が速くなったり遅くなったりし、手に感じる重さが 1 回転の中で変わるためです。
+    example: 10 %
+    default:
+      value: 10
+      unit: "%"
+      trust: 3
+      basis: >-
+        assumption: the example value of an allowable torque variation rate in a passenger-car steering design tool,
+        applied to this vehicle. NSK Ltd, US 8,965,743 B2 (granted 2015-02-24), description of FIG. 21-27: the
+        allowable torque variation rate is "for example, 10%" (FIG. 23-27 compare 10 % down to 3 %); the torque
+        variation rate is the ratio of input to output torque, the inverse of the angular velocity ratio (its Equation
+        (5) is an image and was not read); read 2026-11-06 in the Google Patents text
+        (https://patents.google.com/patent/US8965743B2/en). HIRAKU takes the rate as the largest deviation of the
+        output-to-input speed ratio from 1 over one turn (an assumption about the patent's definition). The ratio of
+        one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a) (a = angle between the shafts, t = turn of the input
+        from the position where its arm of the cross lies in the plane of the two shafts), max 1/cos a, min cos a:
+        Mustansiriyah University lecture note "universal joint", PDF p. 7-8, read 2026-11-06 (secondary)
+        (https://uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); the same range w cos a to
+        w sec a in Huco Universal Joints catalogue section 2, PDF p. 2, read 2026-11-06. No standard for steering was read
 
   - key: Q86
     name: 乗員の空間の荷重の基準の質量 M (横 1.75 M J・後ろ 1.4 M J・上 20 M N の M)

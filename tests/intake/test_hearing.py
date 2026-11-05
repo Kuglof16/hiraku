@@ -59,7 +59,7 @@ class PlanTest(unittest.TestCase):
         req, own = bare("care-bed")
         plan = plan_hearing(req, product_defaults=own)
         asked = {q["req_key"]: q for q in plan.questions}
-        self.assertEqual(list(asked), ["Q03", "Q11", "Q19", "Q20", "Q30", "Q34", "Q40", "Q56", "Q61", "Q80"])
+        self.assertEqual(list(asked), ["Q03", "Q11", "Q19", "Q20", "Q30", "Q34", "Q40", "Q56", "Q59", "Q61", "Q80"])
         self.assertEqual({k for k, q in asked.items() if q["ask"] == "must"}, {"Q30", "Q40"})
         self.assertNotIn("default", asked["Q30"])  # a required answer has no default to fall back on
         self.assertNotIn("default", asked["Q03"])  # nobody has a value for it
@@ -153,7 +153,7 @@ class PrepareTest(unittest.TestCase):
     def test_hearing_text(self):
         req, own = bare("care-bed")
         p = prepare(req, {"Q30": "two_cargo", "Q40": 1}, product_defaults=own)
-        self.assertEqual(hearing_text(p).split("、")[0], "質問 10 件")
+        self.assertEqual(hearing_text(p).split("、")[0], "質問 11 件")
         self.assertIn("答えが無いまま 1 件", hearing_text(p))  # Q03
 
 
@@ -187,7 +187,9 @@ class RequirementsFileStandsTest(unittest.TestCase):
         req["requirements"] = [r for r in req["requirements"] if r["key"] not in drop]
         req["requirements"] += [{"key": "Q40", "name": "積載", "value": 40, "unit": "kg", "source": "user", "trust": 1},
                                 {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1},
-                                {"key": "Q58", "name": "最小回転半径の上限", "value": 3, "unit": "m", "source": "user", "trust": 1}]
+                                {"key": "Q58", "name": "最小回転半径の上限", "value": 3, "unit": "m", "source": "user", "trust": 1},
+                                {"key": "Q21", "name": "荷台の固定点 1 か所が受けられる力の下限", "value": 8000, "unit": "N", "source": "user", "trust": 1},
+                                {"key": "Q59", "name": "荷と荷台のあいだの摩擦の係数", "value": 0.6, "unit": "1", "source": "user", "trust": 1}]
         return req
 
     def test_nothing_is_asked_when_the_file_has_every_required_item(self):

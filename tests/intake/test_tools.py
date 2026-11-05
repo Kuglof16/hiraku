@@ -151,7 +151,7 @@ class AskUserToolTest(ToolsTestCase):
         ctx = make_ctx(self.root, product="care-bed")
         got = call("ask_user", ctx)
         keys = [q["req_key"] for q in got["questions"]]
-        self.assertEqual(keys, ["Q03", "Q11", "Q19", "Q20", "Q30", "Q34", "Q40", "Q56", "Q61", "Q80"])
+        self.assertEqual(keys, ["Q03", "Q11", "Q19", "Q20", "Q30", "Q34", "Q40", "Q56", "Q59", "Q61", "Q80"])
         self.assertFalse(got["ready"])
         self.assertIn("Q30", got["next"])
         q19 = next(q for q in got["questions"] if q["req_key"] == "Q19")
