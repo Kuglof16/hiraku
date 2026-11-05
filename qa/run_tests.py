@@ -77,6 +77,10 @@ KNOWN_HEAVY_GB = {"tests.solvers.test_fe_tubes.RearLinkRevisionTest": 8.7,
                   "tests.solvers.test_frame_tubes.SpaceFrameK2Test": 8.6,
                   "tests.solvers.test_frame_tubes.MeshFlowTest": 7.6}
 CONVERGENCE_JOBS = "HIRAKU_CONVERGENCE_JOBS"  # mesh levels the convergence test runs side by side (worker_env)
+CONVERGENCE = "tests.solvers.test_fe_tubes.SpaceFrameConvergenceTest"
+# its levels' peaks (GB), largest first: 14, 20, 40, 30 mm on Linux (EC2 m7a.4xlarge, 87619d5, 11/5 12:15).
+# With HIRAKU_CONVERGENCE_JOBS=n set for the suite, n levels may be at their peaks at once.
+CONVERGENCE_LEVEL_GB = (16.0, 13.7, 13.5, 11.3)
 # started first when there are no times yet
 HEAVY = ("tests.verification.test_real_runs", "tests.solvers.k2", "tests.verification.test_tools_protocol",
          "tests.solvers.test_frame_shell", "tests.solvers.test_k1_shell", "tests.tools.test_made_tools")
@@ -373,6 +377,13 @@ def memory_of(name: str, last: dict[str, float]) -> float | None:
     """The last peak (GB) of a class or method (a method that never ran alone: its class's), and never less
     than the known one (KNOWN_HEAVY_GB: a class whose heavy work runs in child processes)."""
     known = next((KNOWN_HEAVY_GB[k] for k in (name, name.rsplit(".", 1)[0]) if k in KNOWN_HEAVY_GB), None)
+    if CONVERGENCE in (name, name.rsplit(".", 1)[0]):  # levels side by side: their peaks add up
+        try:
+            n = max(1, int(os.environ.get(CONVERGENCE_JOBS) or 1))
+        except ValueError:
+            n = 1
+        if n > 1:
+            known = max(known or 0.0, round(sum(CONVERGENCE_LEVEL_GB[:n]), 1))
     for k in (name, name.rsplit(".", 1)[0]):
         if k in last:
             return max(float(last[k]), known or 0.0)

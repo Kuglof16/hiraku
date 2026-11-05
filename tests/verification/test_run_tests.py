@@ -328,6 +328,17 @@ class MemoryAware(unittest.TestCase):
             os.environ[rt.CONVERGENCE_JOBS] = "3"  # set on purpose (a run of that class alone): kept
             self.assertEqual(rt.worker_env()[rt.CONVERGENCE_JOBS], "3")
 
+    def test_convergence_levels_side_by_side_count_their_peaks_together(self):
+        from unittest import mock
+
+        conv = rt.CONVERGENCE
+        for jobs, want in (("1", 15.7), ("2", 29.7), ("3", 43.2), ("9", 54.5), ("x", 15.7)):
+            with self.subTest(jobs=jobs), mock.patch.dict(os.environ, {rt.CONVERGENCE_JOBS: jobs}):
+                self.assertEqual(rt.memory_of(conv, {conv: 0.6}), want)
+        with mock.patch.dict(os.environ, {rt.CONVERGENCE_JOBS: "3"}):
+            self.assertEqual(rt.memory_of(conv, {conv: 50.0}), 50.0)  # a larger measured peak stands
+            self.assertEqual(rt.memory_of("m.A", {"m.A": 5.0}), 5.0)  # other classes as before
+
     def test_memory_of(self):
         last = {"m.A": 5.0, "m.B.test_x": 1.0}
         self.assertEqual(rt.memory_of("m.A", last), 5.0)
