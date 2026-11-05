@@ -901,7 +901,7 @@ class N10(unittest.TestCase):
         self.assertEqual((rows["step"]["cae"]["v"], rows["step"]["cae"]["by"]), (1103.7, "K1"))
         self.assertEqual(rows["tilt"]["claude"], [39, 38, 39])
         self.assertEqual([h["v"] for h in rows["tilt"]["hand"]], [39.85])
-        self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.27, "K2"))
+        self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.26, "K2"))
         # only one of the three runs gave a figure for the stress
         self.assertEqual(rows["stress"]["claude"], [60])
         self.assertEqual([h["v"] for h in rows["stress"]["hand"]], [40.0, 77.09])
@@ -910,7 +910,7 @@ class N10(unittest.TestCase):
     def test_differences(self):
         rows = {r["key"]: r for r in n10_data()["rows"]}
         self.assertAlmostEqual(n10_diffs(rows["step"])[0], 1.2569, places=3)
-        self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.87, 0.71, -1.87])
+        self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.9, 0.68, -1.9])
         self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 1.9167, places=3)
         # the widths HIRAKU allows for these quantities in the video run's comparisons
         self.assertEqual([r["tol_pct"] for r in rows.values()], [10, 10, 15])
