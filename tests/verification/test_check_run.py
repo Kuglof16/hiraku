@@ -1208,6 +1208,28 @@ class CheckRun(unittest.TestCase):
                 self.assertTrue(any(f.rule == "cause.settled" for f in self.findings(ev) if f.level == "error"))
         self.assertNotIn("cause.settled", self.rules(self.path_checked_flow()))
 
+    def test_r9_judges_a_mount_utilisation_at_most_1(self):
+        # contract 40645e0: bolt_shear / bolt_bearing / plate_bending / weld utilisation, unit 1, <= 1
+        def run(**crit):
+            ev = sample_events()
+            lc = copy.deepcopy(ev[0]["data"]["load_cases"][0])
+            lc.update(load_case_id="R9-mounts", test_id="R9",
+                      criterion=dict({"quantity": "weld_utilisation", "op": "<=",
+                                      "limit": {"value": 1.0, "unit": "1"}}, **crit))
+            ev[0]["data"]["load_cases"].append(lc)
+            return [f.message for f in self.findings(ev) if f.rule == "R9.criterion"]
+        self.assertEqual(run(), [])
+        self.assertTrue(any("not one of" in m for m in run(quantity="max_stress")))
+        self.assertTrue(any("not <= 1" in m for m in run(limit={"value": 0.8, "unit": "1"})))
+        self.assertTrue(any("not <= 1" in m for m in run(op="<")))
+
+    def test_joint_sizes_belong_to_a_bracket(self):
+        ev = sample_events()
+        part = by_kind(ev, "design.created")["data"]["parts"][0]
+        part["joint"] = {"bolt_d_mm": 10.0, "bolts": 2}
+        warned = [f for f in self.findings(ev) if f.rule == "part.joint" and f.level == "warn"]
+        self.assertEqual(len(warned), 0 if part.get("kind") == "bracket" else 1)
+
     # --- the listing of what the hooks did (--effects) -------------------------------
     def effects(self, events):
         return "\n".join(cr.run_effects(write_run(self.root / f"r{len(list(self.root.iterdir()))}", events)))

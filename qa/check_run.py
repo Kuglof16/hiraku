@@ -149,6 +149,9 @@ PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX
                                               "PLUGIN_ALIVE_FILE") if hasattr(layout, k)}
 UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
 PATH_CHECKED = "path_checked"  # the tool's value decides after the load path was checked by hand (contract 2fc1006)
+MOUNT_TEST = "R9"  # suspension mounts (contract 40645e0): a bracket's bolts, plate and weld at the mount force
+MOUNT_QUANTITIES = ("bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation",
+                    "weld_utilisation")
 PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
 FREE_PARTS = "free_parts"  # the version-wide count of the same formula, and a tool result that must be 0 then
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
@@ -1488,6 +1491,30 @@ class RunChecker:
                     and "criterion" in lc and self.version_of("comparison", c) == v):
                 self.warn("report.differences", w, f"{dom} leaves out the mismatch {cid} ({lc.get('load_case_id')})")
 
+    def check_mounts(self) -> None:
+        """R9 suspension mounts (contract 40645e0): every R9 load case judges one of R9_QUANTITIES, unit 1,
+        <= 1 (rule R9.criterion); a part with joint sizes (part.joint) is a bracket (warning part.joint)."""
+        seen = [(layout.PROJECT_FILE, self.load_cases)]
+        seen += [(self.where_of[i], lcs) for _, (i, lcs) in sorted(self.version_lcs.items(), key=lambda kv: str(kv[0]))]
+        for w, lcs in seen:
+            for lc_id, lc in lcs.items():
+                if lc.get("test_id") != MOUNT_TEST or not isinstance(lc.get("criterion"), dict):
+                    continue
+                c = lc["criterion"]
+                limit = c.get("limit") or {}
+                if c.get("quantity") not in MOUNT_QUANTITIES:
+                    self.error("R9.criterion", w, f"{lc_id} judges {c.get('quantity')}, not one of "
+                                                  f"{', '.join(MOUNT_QUANTITIES)}")
+                if not (c.get("op") == "<=" and limit.get("unit") == "1" and isinstance(limit.get("value"), (int, float))
+                        and abs(limit["value"] - 1.0) < 1e-12):
+                    self.error("R9.criterion", w, f"{lc_id}: criterion {c.get('op')} {limit.get('value')} "
+                                                  f"{limit.get('unit')}, not <= 1 (unit 1)")
+        for v, (i, d) in self.designs.items():
+            for p in d.get("parts") or []:
+                if p.get("joint") and p.get("kind") != "bracket":
+                    self.warn("part.joint", self.where_of[i], f"v{v} part {p.get('id')} ({p.get('kind')}) has joint "
+                                                              f"sizes; they are a bracket's (contract 40645e0)")
+
     def check_h3(self) -> None:
         open_mismatch: dict[str, set[str]] = {}
         for i, e in enumerate(self.events):
@@ -2101,6 +2128,7 @@ class RunChecker:
         self.check_verdicts()
         self.check_judgements()
         self.check_report()
+        self.check_mounts()
         self.check_h3()
         self.check_light_first()
         self.check_hooks()
