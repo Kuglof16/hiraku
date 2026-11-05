@@ -160,13 +160,19 @@ class SchemaTest(unittest.TestCase):
         from hiraku.intake.facts import FACTS
 
         root = contract.schema()
-        names = set(root["$defs"]["part"]["properties"]["declared"]["propertyNames"]["enum"])
-        self.assertEqual(names, {n for n, (_, _, scope) in FACTS.items() if scope == "declared"})
+        decl = root["$defs"]["part"]["properties"]["declared"]
+        names = set(decl["propertyNames"]["enum"])
+        units = set(decl["additionalProperties"]["properties"]["unit"]["enum"])
+        vocab = {n: unit for n, (_, unit, scope) in FACTS.items() if scope == "declared"}
+        self.assertLessEqual(set(vocab), names)  # the contract may lead the vocabulary by a branch, never trail it
+        self.assertLessEqual(set(vocab.values()), units)
         part = dict(load("design.json")["parts"][0])
         bend = {"value": 3.0, "unit": "mm", "basis": "assumption"}
         self.assertEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": bend}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_r": bend}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {**bend, "unit": "in"}}}), [])
+        uj = {"value": 12.5, "unit": "deg", "basis": "computed from the shaft geometry"}
+        self.assertEqual(contract.errors("part", {**part, "declared": {"uj_angle_max_deg": uj}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "declared": {"bend_radius_mm": {"value": 3.0, "unit": "mm"}}}), [])
         joint = {"bolt_d_mm": 10.0, "bolts": 2, "plate_t_mm": 4.0, "weld_leg_mm": 4.0}
         self.assertEqual(contract.errors("part", {**part, "joint": joint, "declared": {"hole_edge_mm": bend}}), [])

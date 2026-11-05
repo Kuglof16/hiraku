@@ -780,7 +780,20 @@
               "tolerance_stack_mm",
               "clearance_hole_mm",
               "position_tolerance_mm",
-              "closing_gap_mm"
+              "closing_gap_mm",
+              "uj_count",
+              "uj_angle_max_deg",
+              "uj_angle_diff_deg",
+              "uj_phase_error_deg",
+              "headrest_height_mm",
+              "headrest_width_mm",
+              "headrest_backset_mm",
+              "headrest_gap_mm",
+              "lashing_count",
+              "topover_count",
+              "lashing_pretension_N",
+              "lashing_angle_deg",
+              "cargo_blocked_forward"
             ]
           },
           "additionalProperties": {
@@ -797,7 +810,15 @@
                 "minimum": 0
               },
               "unit": {
-                "const": "mm"
+                "enum": [
+                  "mm",
+                  "deg",
+                  "N",
+                  "N*m",
+                  "1",
+                  "%"
+                ],
+                "description": "Each name has one unit, the one in hiraku.intake.facts.FACTS (the rules check it)."
               },
               "basis": {
                 "type": "string",
