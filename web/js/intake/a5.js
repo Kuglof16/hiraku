@@ -2,7 +2,7 @@
 
 import { CATEGORIES, FACTS } from "./data.js";
 import { fill, h } from "./dom.js";
-import { allRules, ruleNeeds, ruleState, ruleTree, TRUST_JA } from "./model.js";
+import { allRules, checkedRows, ruleNeeds, ruleState, ruleTree, showValue, TRUST_JA } from "./model.js";
 
 const MODES = [["category", "種類で分ける"], ["source", "出どころで分ける"]];
 const FILTERS = [["all", "すべて"], ["builtin", "最初から入っているもの"], ["dropped", "あなたが読み込んだもの"], ["hit", "引っかかったもの"]];
@@ -73,11 +73,28 @@ function detail(m, rule, ui) {
               : neIds.has(id) ? partChip("unk", id, `判定できません。設計に「${neIds.get(id).map((n) => FACTS[n]?.label || n).join("・")}」の情報がありません`)
               : partChip("ok", id, "問題なし")),
             !c.targets?.length ? h("span", { class: "in-empty" }, "この設計に、当てはまる部品がありません") : null),
+          measured(m, rule),
           st.hits.length ? h("ul", { class: "in-hits" }, st.hits.map((x) => h("li", {}, h("code", {}, x.part_id), " ", x.message))) : null,
           st.notEvaluable.length
             ? h("p", { class: "in-foot" }, "判定に必要なデータが設計に無いので、判定していません: ",
                 [...new Set(st.notEvaluable.flatMap((x) => x.missing))].map((n) => h("code", {}, FACTS[n]?.label ? `${FACTS[n].label} (${n})` : n)))
             : null));
+}
+
+/** The values a check used, part by part; a failing part says what it has and what the rule asks. */
+function measured(m, rule) {
+  const rows = checkedRows(m, rule);
+  if (!rows.length) return null;
+  const label = (n) => FACTS[n]?.label || n;
+  const unit = (n) => FACTS[n]?.unit || "";
+  return h("div", { class: "in-vals" },
+    h("h4", {}, "判定に使った値", rows.some((r) => r.unchecked) ? h("small", { class: "in-miss" }, " 確かめていない値を使っています") : null),
+    h("table", {},
+      h("tbody", {}, rows.map((r) => h("tr", { class: r.hit ? "hit" : "ok" },
+        h("td", {}, h("code", {}, r.part_id), r.hit ? h("span", { class: "in-st hit" }, "引っかかった") : null),
+        h("td", {}, r.values.map((v) => h("span", { class: `in-val${v.unchecked ? " unchecked" : ""}`, title: v.unchecked ? "確かめていない値です" : "" },
+          `${label(v.name)} ${showValue(v.value, unit(v.name))}`, v.unchecked ? " (確かめていない値)" : "", " "))),
+        h("td", {}, r.need && r.hit ? `今 ${showValue(r.need.now, unit(r.need.name))} → 要る ${showValue(r.need.limit, unit(r.need.name))} ${r.need.opJa}` : r.need ? `要る ${showValue(r.need.limit, unit(r.need.name))} ${r.need.opJa}` : ""))))));
 }
 
 function dropzone(api, ui) {
