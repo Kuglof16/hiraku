@@ -1,5 +1,6 @@
 // The 3D pets in the corners of the N04 / N15 tiles (layout.json <cut>.tile.pet: the
-// box at the tile's bottom right, tile.pet.feature its size in the large tile), and the
+// box at the tile's bottom right, tile.pet.feature its size in the large tile) and of the
+// N02 panes (cut.js CutN02: n02.pane.pet, the agent that ran the pane's test), and the
 // drawing they share with the app's agents (PetStage; js/agent_pets.js).
 //
 // The pets are the promo department's promo/pets/pet3d.js, served read only by the
@@ -178,7 +179,8 @@ export class PetStage {
 }
 
 export class TilePets {
-  // tiles: [{ key, box (the .pet element), w, h, changes }]
+  // tiles: [{ key, box (the .pet element), w, h, changes, role? }]; role: the pet3d.js role
+  // when the caller knows it (N02: the agent of the record), else roleOf(key)
   constructor(HP, layout, tiles) {
     this.HP = HP;
     this.motion = layout.n00.motion;
@@ -189,7 +191,7 @@ export class TilePets {
     this.stage = new PetStage(HP, layout.n00.camera, { W, H });
     this.renderer = this.stage.renderer;
     this.pets = tiles.map((x, i) => {
-      const pet = this.stage.add(roleOf(x.key));
+      const pet = this.stage.add(x.role ?? roleOf(x.key));
       const canvas = document.createElement("canvas");
       canvas.className = "pet3d";
       Object.assign(canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%" });
