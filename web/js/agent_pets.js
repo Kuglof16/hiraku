@@ -87,6 +87,18 @@ const BY_KIND = Object.fromEntries(PET_EVENTS.map((r) => [r.kind, r]));
 const realAgent = (id) => !!id && id !== "system" && id !== "user";
 const domainAgent = (d) => (d === "assembly" ? "packager" : `cae.${d}`);
 
+// The agents a list of events names (as petTimeline sees them: the event's agent, data.agent_id,
+// run.started's / project.updated's agents), in the order first named.
+export function agentIdsOf(events) {
+  const ids = new Set();
+  for (const ev of events) {
+    const d = ev.data ?? {};
+    const listed = ev.kind === "run.started" || ev.kind === "project.updated" ? (d.agents ?? []).map((a) => a?.agent_id) : [];
+    for (const id of [ev.agent, d.agent_id, ...listed]) if (typeof id === "string" && realAgent(id)) ids.add(id);
+  }
+  return [...ids];
+}
+
 // The pets' timeline of a list of events (the player's, in display time): per agent the
 // changes [{ t, seq, motion, base }], and per event seq the agents it concerns (whose bubble
 // its log line is). Events are taken in order; only t decides what is shown at t.
@@ -235,6 +247,7 @@ export class AgentPets {
     this.stage = new PetStage(HP, layout.n00.camera, { W: 64, H: 64 }, { shadow: PET_SHADOW, lite: PET_LITE, antialias: PET_ANTIALIAS });
     this.stage.setScale(1);
     this.pets = new Map(); // agent id -> { pet, i, boxes: { bench, grid } }
+    this.spare = new Map(); // agent id -> a pet made ahead (prepare) until box() needs it
     this.timeline = { events: null, n: -1, per: new Map(), owners: new Map() };
     this.pixel = 1; // canvas px per stage px (stage scale x device pixel ratio)
     this.stats = { paints: 0, ms: 0 };
@@ -266,7 +279,8 @@ export class AgentPets {
       // i: the role's place in pet3d.js ROLES, not the order the pets were made in (a page
       // opened at ?t= makes them in another order than one played up to t)
       const role = this.roleOf(id);
-      p = { pet: this.stage.add(role), i: this.HP.ROLES.findIndex((r) => r.id === role), boxes: {} };
+      p = { pet: this.spare.get(id) ?? this.stage.add(role), i: this.HP.ROLES.findIndex((r) => r.id === role), boxes: {} };
+      this.spare.delete(id);
       this.pets.set(id, p);
     }
     let b = p.boxes[place];
@@ -293,6 +307,20 @@ export class AgentPets {
       b = p.boxes[place] = { el, canvas, ctx: canvas.getContext("2d"), last: null, state: null };
     }
     return b.el;
+  }
+
+  // Make the pets of these agents ahead of their first frame (while the record is read) and
+  // have their shaders compiled, so that frame waits for neither. Each is kept aside until
+  // box() needs it: the pets' order (this.pets) stays the order the frames ask for them.
+  // Resolves when the compile is done.
+  prepare(ids) {
+    let made = 0;
+    for (const id of ids) {
+      if (!id || this.pets.has(id) || this.spare.has(id) || !this.has(id)) continue;
+      this.spare.set(id, this.stage.add(this.roleOf(id)));
+      made += 1;
+    }
+    return made ? this.stage.precompile() : Promise.resolve();
   }
 
   // Put the boxes into the slots ([data-pet-slot] = agent id) under root.

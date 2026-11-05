@@ -123,6 +123,18 @@ export class PetStage {
     return pet;
   }
 
+  // Have the shaders of the pets made so far (add; hidden ones too: three's compile takes every
+  // material of the scene) compiled before their first paint, finished in the background
+  // (compileAsync); nothing is drawn. Resolves when done (or it failed: paint then compiles
+  // them as before).
+  precompile() {
+    try {
+      return this.renderer.compileAsync(this.scene, this.cameraFor(this.size.W / this.size.H).cam).catch(() => {});
+    } catch {
+      return Promise.resolve();
+    }
+  }
+
   // The off-page canvas holds the largest canvas: size times scale.
   setScale(scale) {
     this.scale = scale;
