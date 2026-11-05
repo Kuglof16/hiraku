@@ -627,11 +627,11 @@ class ReferenceLook(unittest.TestCase):
             if c.get("layer") == "behind":
                 self.assertGreaterEqual(first, 1.3, role)
                 self.assertEqual(c["start"]["alpha"], 0, role)
-        # a few stay on the name, the rest live about the screen
+        # every letter gets a pet, the rest stand at the name's foot or behind a letter
         seats = {role: [b["to"] for b in c["beats"] if isinstance(b.get("to"), dict) and "seat" in b["to"]]
                  for role, c in cast.items()}
         on = [role for role, s in seats.items() if s]
-        self.assertTrue(3 <= len(on) <= 5, on)
+        self.assertEqual(sorted(seats[role][-1]["seat"] for role in on), list(range(6)), on)
         self.assertGreaterEqual(len([c for c in cast.values() if c.get("layer") == "behind"]), 1)
         # two pass each other and bow: their bows overlap in time, facing each other
         bows = sorted((b["t"], role) for role, c in cast.items() for b in c["beats"] if b.get("kind") == "bow")
@@ -903,7 +903,7 @@ class N10(unittest.TestCase):
         self.assertEqual([h["v"] for h in rows["tilt"]["hand"]], [39.85])
         self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.27, "K2"))
         # only one of the three runs gave a figure for the stress
-        self.assertEqual(rows["stress"]["claude"], [61])
+        self.assertEqual(rows["stress"]["claude"], [60])
         self.assertEqual([h["v"] for h in rows["stress"]["hand"]], [40.0, 77.09])
         self.assertEqual((rows["stress"]["cae"]["v"], rows["stress"]["cae"]["by"]), (61.15, "K1"))
 
@@ -911,7 +911,7 @@ class N10(unittest.TestCase):
         rows = {r["key"]: r for r in n10_data()["rows"]}
         self.assertAlmostEqual(n10_diffs(rows["step"])[0], 1.2569, places=3)
         self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.87, 0.71, -1.87])
-        self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 0.2459, places=3)
+        self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 1.9167, places=3)
         # the widths HIRAKU allows for these quantities in the video run's comparisons
         self.assertEqual([r["tol_pct"] for r in rows.values()], [10, 10, 15])
         for r in rows.values():
@@ -1464,12 +1464,12 @@ class InBrowser(unittest.TestCase):
             cap.close()
         self.assertEqual(got["step.claude"], "約 1,090N | 3 回とも")
         self.assertEqual(got["tilt.claude"], "約 39°・38°・39° | 3 回の答え")
-        self.assertEqual(got["stress.claude"], "約 61MPa | 数字を出したのは 3 回のうち 1 回")
+        self.assertEqual(got["stress.claude"], "約 60MPa | 数字を出したのは 3 回のうち 1 回")
         self.assertEqual(got["stress.hand"], "40.0MPa | 単純はり | 77.09MPa | つなぎ目、安全側")
         self.assertEqual(got["step.cae"], "1,103.7N | K1 の解析")
         # the differences shown are the ones computed from DATA
         rows = {r["key"]: r for r in n10_data()["rows"]}
-        for k, want in (("step", "+1.3%"), ("tilt", "−1.9% | 3 回で最大"), ("stress", "+0.2%")):
+        for k, want in (("step", "+1.3%"), ("tilt", "−1.9% | 3 回で最大"), ("stress", "+1.9%")):
             self.assertEqual(got[f"{k}.diff"], want)
             worst = max(n10_diffs(rows[k]), key=abs)
             self.assertIn(f"{abs(worst):.1f}", want)
@@ -1712,15 +1712,17 @@ class InBrowser(unittest.TestCase):
                     self.fail((t, pet, what))
         for pet, s in self.over_time(frames, fps).items():
             self.assertLessEqual(s, 0.2 + 1e-9, pet)
-        # where they are at the end: about the screen (on the name, in the row, on the
-        # floor, behind a letter), in all four quarters of the safe area's width
+        # where they are at the end: about the name (on its letters, behind the H, at its
+        # foot left and right), none down by the chips: every pet's middle above the
+        # line under the name, and spread across the name's width
+        n = lc.load_layout()["n00"]
         _, _, drawn, _ = frames[-1]
         self.assertEqual(len(drawn), 10)
         xs = sorted((b["x0"] + b["x1"]) / 2 for b in drawn.values())
-        ys = sorted((b["y0"] + b["y1"]) / 2 for b in drawn.values())
+        for pet, b in drawn.items():
+            self.assertLess((b["y0"] + b["y1"]) / 2, n["rule"]["y"], pet)
+            self.assertGreater((b["y0"] + b["y1"]) / 2, n["name"]["y"] - 120, pet)
         self.assertGreater(xs[-1] - xs[0], 1000)
-        self.assertGreater(ys[-1] - ys[0], 500)
-        self.assertGreaterEqual(len({int((x - 96) // 432) for x in xs}), 4)
 
     def test_n18_pets_about_the_words(self):
         # the name, the tag, the URL and the credit: at most 0.2 s under any pet; all

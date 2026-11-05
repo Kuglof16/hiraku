@@ -1,0 +1,38 @@
+{
+ "name": "rops_pushover_frame",
+ "usable": true,
+ "problems": [],
+ "spec": {
+  "name": "rops_pushover_frame",
+  "title": "横転の保護枠: 骨組全体 (シャシーとロールバー) を塑性ヒンジで押し、乗員の空間との隙間を測る",
+  "domain": "strength",
+  "base": "K1",
+  "tests": [
+   "R4"
+  ],
+  "origin": "claude",
+  "usable": true,
+  "checks": [
+   {
+    "case": "fixed-base portal h 1000 mm, round tube 48.6 x 2.3, f_y 215 MPa, side load at a corner",
+    "quantity": "side_collapse_load",
+    "expected": 4243.706693333334,
+    "got": 4243.706693334451,
+    "unit": "N",
+    "tolerance_rel": 0.001,
+    "pass": true,
+    "source": "plastic analysis of a fixed-base portal, sway mechanism H h = 4 M_p with M_p = Z_p f_y and Z_p = (d^3 - (d - 2t)^3)/6 for a round tube (Neal, The Plastic Methods of Structural Analysis; textbook plastic theory)"
+   }
+  ],
+  "formulas": [
+   "frame_static.rops_occupant_clearance",
+   "frame_static.portal_frame_side",
+   "frame_static.portal_frame_rear",
+   "frame_static.portal_frame_top"
+  ],
+  "stage": 1
+ },
+ "printed": "",
+ "made_at": "2026-11-05T00:58:11+00:00",
+ "reason": "R4-rops (横転の保護枠) を解析するツールが棚に無い (formula_inputs の note: この試験を解析するツールは棚にありません)。手計算はロールバーだけの小さな門形なので、設計の骨組全体 (シャシーとロールバー) を同じ塑性ヒンジの押し方で解き、k4_geometry の乗員の空間との隙間を測る"
+}

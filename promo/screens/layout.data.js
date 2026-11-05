@@ -158,11 +158,11 @@ window.PROMO_LAYOUT = {
     },
     "cast": {
       "lead": {
-        "_who": "walks in along the floor from the left, meets handling and both bow, walks on, turns to the viewer",
+        "_who": "walks in from the left along the foot of the name, meets handling and both bow, walks on to the H, turns to the viewer",
         "start": {
           "at": [
-            150,
-            893
+            160,
+            346
           ],
           "yaw_deg": 110,
           "alpha": 0
@@ -170,19 +170,19 @@ window.PROMO_LAYOUT = {
         "beats": [
           {
             "do": "fade",
-            "t": 1.05,
+            "t": 1.3,
             "to": 1,
             "dur_s": 0.45
           },
           {
             "do": "walk",
-            "t": 1.05,
+            "t": 1.3,
             "to": [
-              300,
-              893
+              215,
+              346
             ],
-            "dur_s": 2.7,
-            "swing": 0.5
+            "dur_s": 2.45,
+            "swing": 0.4
           },
           {
             "do": "act",
@@ -195,8 +195,8 @@ window.PROMO_LAYOUT = {
             "do": "walk",
             "t": 4.7,
             "to": [
-              520,
-              893
+              364,
+              346
             ],
             "dur_s": 2.1,
             "swing": 0.7
@@ -249,11 +249,11 @@ window.PROMO_LAYOUT = {
         ]
       },
       "packager": {
-        "_who": "carries its box in from the right along the floor, turns to the viewer and turns the box about",
+        "_who": "carries its box in from the right along the foot of the name, stops by the U, turns to the viewer and turns the box about",
         "start": {
           "at": [
-            1735,
-            893
+            1760,
+            346
           ],
           "yaw_deg": -66,
           "alpha": 0
@@ -269,8 +269,8 @@ window.PROMO_LAYOUT = {
             "do": "walk",
             "t": 1.6,
             "to": [
-              1420,
-              893
+              1590,
+              346
             ],
             "dur_s": 3.9,
             "swing": 0.55,
@@ -292,7 +292,7 @@ window.PROMO_LAYOUT = {
         ]
       },
       "cae.handling": {
-        "_who": "steady: hops down off the left end of the row to the floor, meets lead and bows, walks to the left and sits",
+        "_who": "steady: hops up off the left end of the row to the foot of the name, meets lead and bows, walks to the left and sits",
         "start": {
           "at": {
             "row": 0
@@ -309,8 +309,8 @@ window.PROMO_LAYOUT = {
             "do": "hop",
             "t": 2.08,
             "to": [
-              455,
-              884
+              350,
+              346
             ],
             "h": "seat",
             "yaw_deg": 60,
@@ -329,8 +329,8 @@ window.PROMO_LAYOUT = {
             "do": "walk",
             "t": 3.1,
             "to": [
-              365,
-              884
+              300,
+              346
             ],
             "dur_s": 0.9,
             "swing": 0.7
@@ -346,8 +346,8 @@ window.PROMO_LAYOUT = {
             "do": "walk",
             "t": 4.75,
             "to": [
-              215,
-              884
+              165,
+              346
             ],
             "dur_s": 1.4,
             "swing": 0.7
@@ -368,7 +368,7 @@ window.PROMO_LAYOUT = {
         ]
       },
       "cae.powertrain": {
-        "_who": "eager: short crouch, the highest jump, two bounces, onto the I; nods, looks about",
+        "_who": "eager: short crouch, the highest jump, two bounces, onto the H; nods, looks about",
         "start": {
           "at": {
             "row": 1
@@ -385,8 +385,8 @@ window.PROMO_LAYOUT = {
             "do": "hop",
             "t": 2.45,
             "to": {
-              "seat": 1,
-              "at": 0.5
+              "seat": 0,
+              "at": 0.6
             },
             "h": "seat",
             "yaw_deg": 8,
@@ -424,7 +424,7 @@ window.PROMO_LAYOUT = {
         ]
       },
       "cae.aero": {
-        "_who": "light: slow crouch, a floating jump onto the R, lands soft; looks about",
+        "_who": "light: slow crouch, a floating jump onto the I, lands soft; looks about",
         "start": {
           "at": {
             "row": 2
@@ -441,8 +441,8 @@ window.PROMO_LAYOUT = {
             "do": "hop",
             "t": 2.9,
             "to": {
-              "seat": 2,
-              "at": 0.45
+              "seat": 1,
+              "at": 0.5
             },
             "h": "seat",
             "yaw_deg": -8,
@@ -465,7 +465,7 @@ window.PROMO_LAYOUT = {
         ]
       },
       "cae.crash": {
-        "_who": "heavy: sits down where it stands over its chip with a thump, then turns its prop about",
+        "_who": "heavy: a low-arched jump onto the R that lands hard, then turns its prop about",
         "start": {
           "at": {
             "row": 3
@@ -479,12 +479,26 @@ window.PROMO_LAYOUT = {
             "dur_s": 0.9
           },
           {
-            "do": "sit",
-            "t": 3.4,
-            "to": 1,
-            "dur_s": 0.55,
-            "over": 0.12,
-            "thump": 0.16
+            "do": "hop",
+            "t": 3.3,
+            "to": {
+              "seat": 2,
+              "at": 0.45
+            },
+            "h": "seat",
+            "yaw_deg": 4,
+            "crouch_s": 0.24,
+            "crouch": 0.28,
+            "air_s": 0.36,
+            "over_px": 16,
+            "land_sq": 0.4,
+            "bounces": [
+              [
+                6,
+                0.12
+              ]
+            ],
+            "weight": 1.4
           },
           {
             "do": "act",
@@ -496,7 +510,7 @@ window.PROMO_LAYOUT = {
         ]
       },
       "cae.strength": {
-        "_who": "careful: walks a few steps along the row to crash, turns and sits next to it, looks about",
+        "_who": "careful: a long crouch, then a measured jump onto the A; turns and looks about",
         "start": {
           "at": {
             "row": 4
@@ -510,13 +524,25 @@ window.PROMO_LAYOUT = {
             "dur_s": 0.9
           },
           {
-            "do": "walk",
+            "do": "hop",
             "t": 3.85,
             "to": {
-              "row": 3.55
+              "seat": 3,
+              "at": 0.5
             },
-            "dur_s": 1.3,
-            "swing": 0.45
+            "h": "seat",
+            "yaw_deg": 14,
+            "crouch_s": 0.26,
+            "crouch": 0.2,
+            "air_s": 0.36,
+            "over_px": 34,
+            "bounces": [
+              [
+                6,
+                0.12
+              ]
+            ],
+            "settle_s": 0.3
           },
           {
             "do": "turn",
@@ -525,17 +551,10 @@ window.PROMO_LAYOUT = {
             "dur_s": 0.45
           },
           {
-            "do": "sit",
-            "t": 5.75,
-            "to": 1,
-            "dur_s": 0.6,
-            "over": 0.05
-          },
-          {
             "do": "act",
-            "t": 6.4,
+            "t": 6.0,
             "kind": "look",
-            "dur_s": 0.6,
+            "dur_s": 0.7,
             "amp_deg": 16
           }
         ]
@@ -625,7 +644,7 @@ window.PROMO_LAYOUT = {
         ]
       }
     },
-    "_cast_note": "where each of the ten pets lives and what it does (2026-11-04: pets everywhere, not only on the name). start: the first place (at), the box height (h: seat = title_pets.h_em x the name size, row = pets.h; default seat), yaw_deg (0 faces the viewer, + turns the front to screen right) and alpha; layer: front (default) or behind (under the name: it peeks out from behind a letter and never covers it). beats: pet3d.js anim.route, each {do, t (start, s), ...} in time order (walk: on foot in whole steps that match the ground covered, turned along the way, the speed easing in and out, swing the legs' swing, carry_deg the prop held up in front; hop: one pet3d anim.hop there, n00.play.hop with the beat's values on top, the box going to h; turn; sit (to 0..1, thump: a squash as it lands); act: look, nod, sway, fiddle, bow, peek (leans out roll_deg and dx_px, back unless stay); fade; tick: the tick over the head when its chip lights). Places: [x, y] the feet in design px (the floor under the chips at y 893 in front and 884 behind: a seat box 126 high then ends at 907.6 and 898.6, above the subtitle band), {row: k} the feet in row spot k (the domain pets' places over their chips at the start), {seat: letter, at} on a letter (title_pets). Who and where: lead and packager walk in from the left and right along the floor (packager carrying its box); handling hops down to the floor, bows to lead as they pass, and sits at the left; crash sits down in its row spot and strength walks over to sit by it; powertrain, aero, nvh and thermal jump onto I, R, K and U; designer peeks from behind the H. No pet is on or in front of the name while the voice says it (0.3-1.3 s)"
+    "_cast_note": "where each of the ten pets lives and what it does (2026-11-04: pets everywhere, not only on the name). start: the first place (at), the box height (h: seat = title_pets.h_em x the name size, row = pets.h; default seat), yaw_deg (0 faces the viewer, + turns the front to screen right) and alpha; layer: front (default) or behind (under the name: it peeks out from behind a letter and never covers it). beats: pet3d.js anim.route, each {do, t (start, s), ...} in time order (walk: on foot in whole steps that match the ground covered, turned along the way, the speed easing in and out, swing the legs' swing, carry_deg the prop held up in front; hop: one pet3d anim.hop there, n00.play.hop with the beat's values on top, the box going to h; turn; sit (to 0..1, thump: a squash as it lands); act: look, nod, sway, fiddle, bow, peek (leans out roll_deg and dx_px, back unless stay); fade; tick: the tick over the head when its chip lights). Places: [x, y] the feet in design px (the floor under the chips at y 893 in front and 884 behind: a seat box 126 high then ends at 907.6 and 898.6, above the subtitle band), {row: k} the feet in row spot k (the domain pets' places over their chips at the start), {seat: letter, at} on a letter (title_pets). Who and where (2026-11-05: all ten end about the name): lead and packager walk in from the left and right along the foot of the name (y 346; packager carrying its box); handling hops up to the foot of the name, bows to lead as they pass, and sits at the left; powertrain, aero, crash, strength, nvh and thermal jump onto H, I, R, A, K and U (each onto the letter nearest its chip); designer peeks from behind the H. No pet is on or in front of the name while the voice says it (0.3-1.3 s)"
   },
   "n01": {
     "duration_s": 4.0,

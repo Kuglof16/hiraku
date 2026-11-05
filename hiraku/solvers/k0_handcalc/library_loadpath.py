@@ -412,7 +412,9 @@ def _free_parts() -> Formula:
         title="どこにも繋がらない部品の数 (触れている所を部材からたどる)",
         domain="strength",
         expression="n = n_parts - n_held",
-        inputs={"n_parts": {"unit": "1", "description": "parts modelled as rigid bodies", "min": 0},
+        inputs={"n_parts": {"unit": "1", "description": ("parts counted: every part modelled as a rigid body, or (the "
+                                                         "path check of a load case) the parts the load case loads"),
+                            "min": 0},
                 "n_held": {"unit": "1", "description": "those a chain of contacts joins to a frame member", "min": 0}},
         outputs={"n": ("1", "parts joined to nothing that holds them", n_parts - n_held)},
         assumptions=["触れている所はどれも 6 方向に硬い (1 か所で触れれば、その部品は止まる)"],
