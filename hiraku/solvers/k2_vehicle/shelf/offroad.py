@@ -11,7 +11,7 @@ from ..model import box_design, build_vehicle
 from ..scenario import new_sim, side_gravity
 from ..units import G0
 from .base import MU, K2Tool, P, Pair, _length, _min_load, _ramp_gravity, _res, _side_ids, _slope
-from .lane_change import path_run
+from .lane_change import add_mounts, path_run
 
 
 class OffroadRollTool(K2Tool):
@@ -25,6 +25,8 @@ class OffroadRollTool(K2Tool):
     mean_uphill_load (N, its mean over the run), max_roll (deg, against the slope),
     rms_vertical_accel (m/s^2, body axis), tipped (1), and tip_slope_angle (deg, the slope
     at which the uphill wheels all left the ground while it was made, when they did).
+    With K&C corners the drive also gives the force the body receives at each suspension mount
+    (lane_change.add_mounts: mount_* series with gravity_x/y/z, mount_force_peak, joint vectors).
     """
 
     name = "offroad_roll"
@@ -127,5 +129,7 @@ class OffroadRollTool(K2Tool):
                            "通り道の高さ。その間は直線、外は近い方の通り道と同じ"},
                  dict(_slope(f"横 {math.degrees(beta):g}° の斜面 ({side}が上)。slope_angle の通りに水平から傾く", veh,
                              float(x[0]), float(x[-1]), roll=beta if left_up else -beta), angle_channel="slope_angle")]
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-                "assumptions": notes}
+        out = {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
+               "assumptions": notes}
+        add_mounts(veh, st, out)  # the drive over the rough slope (the slope's making is not in it)
+        return out

@@ -11,6 +11,7 @@ from ..record import Recorder
 from ..scenario import HOLD_TORQUE, new_sim, slope_gravity
 from ..units import G0
 from .base import FRONT_AREA, MU, RHO, K2Tool, P, Pair, _length, _min_load, _ramp_gravity, _res, _slope
+from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
 
 def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | None = None, grade: float = 0.0,
@@ -26,6 +27,7 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
     if grade:
         _ramp_gravity(sim, slope_gravity, math.atan(grade))
     rec = Recorder(sim, rec_hz) if rec_hz > 0 else None
+    log = LoadLog(sim) if rec is not None and any(has_mounts(c) for c in veh.corners) else None
     start_rolling(sim, v0)
     ctrl = SpeedController(sim)
     n = sim.n
@@ -62,6 +64,8 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
             x_brake = float(sim.design_origin()[0])
         if rec is not None:
             rec.tick()
+        if log is not None:
+            log.tick()
         if t >= t_brake:
             peak_dec = max(peak_dec, -float(sim.out["acc"][0]))
             for i, c in enumerate(veh.corners):
@@ -75,13 +79,17 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
         if t > t_brake + 60.0:
             raise DesignError("the vehicle did not stop within 60 s of braking; check the brakes and mu")
     x_stop = float(sim.design_origin()[0])
+    t_stop = sim.t
     if rec is not None:
         rec.keep_snapshot()
         for _ in range(int(0.8 / dt)):
             sim.step(controls(sim, 0.0, [0.0] * n, brake_on))
             rec.tick()
+            if log is not None:
+                log.tick()
     return {"stopping": x_stop - x_cmd, "braking": x_stop - x_brake, "peak_decel": peak_dec, "min_load": min_load,
-            "min_rear_axle": min_rear if rear else None, "max_pitch": max_pitch, "recorder": rec, "sim": sim}
+            "min_rear_axle": min_rear if rear else None, "max_pitch": max_pitch, "recorder": rec, "sim": sim,
+            "states": log.states if log is not None else [], "t_brake": t_brake, "t_stop": t_stop}
 
 
 class BrakingTool(K2Tool):
@@ -96,6 +104,10 @@ class BrakingTool(K2Tool):
     behind the CG: 0 = the rear lifts), min_rear_axle_load (N, those supports together),
     max_pitch (deg, nose down +); with parking_slope: parking_drift (mm in 60 s, facing uphill,
     brakes on) and parking_friction_demand (1, the largest |F_road| / F_z of a braked wheel).
+    With K&C corners the stop also gives the force the body receives at each suspension mount:
+    the mount_* series of mounts.mount_series (closer from the brakes coming on to the stop, and
+    at each mount's largest force), mount_force_peak (N, the largest of all the mounts, where
+    '<support>.<mount> at t <s> s') and the joint vectors at that instant.
     """
 
     name = "braking"
@@ -179,5 +191,14 @@ class BrakingTool(K2Tool):
         # the recorded run is the stop (on the grade); the parking run is not recorded
         scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)", veh, -_length(veh) - 1.0,
                         r["stopping"] + v0 * 0.5 + _length(veh) + 2.0, front_up=math.atan(grade))] if grade else []
-        return {"results": res, "series": rec.series(), "vectors": rec.vectors(-1), "scene": scene,
-                "assumptions": notes}
+        series, vectors = rec.series(), rec.vectors(-1)
+        if r["states"]:
+            # the body's loads at the mounts: closer from the brakes coming on to just after the stop
+            series += mount_series(veh, r["states"], [(r["t_brake"] - 0.1, r["t_stop"] + 0.2)])
+            top = mount_peak(series)
+            if top is not None:
+                res.append(top[0])
+                # joint vectors: every mount at the instant of mount_force_peak (each mount's own
+                # largest is in the series)
+                vectors += mount_vectors(veh, state_at(r["states"], top[1]))
+        return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}
