@@ -161,7 +161,13 @@ def unpredicted_over(ctx: RunContext, analysis: Record, load_case: Record) -> li
         return []
     q = judged_quantity(ctx, analysis.get("tool"), crit["quantity"])
     return [r for r in analysis.get("hot_spots") or []
-            if r.get("quantity") == q and not r.get("predicted") and r.get("utilisation", 0) > 1]
+            if r.get("quantity") == q and not r.get("predicted") and r.get("utilisation", 0) > 1
+            and SPIKE_NOTE not in (r.get("note") or "")]
+
+
+# docs/contract.md 判定の量 (cc6f396): a singular point (a re-entrant corner whose stress keeps rising as the mesh is
+# refined) is listed with this word in its note and never makes a red; the analysis department writes the note
+SPIKE_NOTE = "尖り"
 
 
 def hot_spot_verdict(verdict_id: str, analysis: Record, load_case: Record, row: Record) -> Record:

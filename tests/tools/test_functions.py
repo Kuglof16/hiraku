@@ -892,7 +892,8 @@ class HotSpotTest(RunCase, unittest.TestCase):
 
     def test_predicted_rows_within_limit_rows_and_other_quantities_make_no_red(self):
         self.rows = [self.row(predicted=True), self.row(where="a", value=150.0),
-                     self.row(where="b", quantity="max_displacement")]
+                     self.row(where="b", quantity="max_displacement"),
+                     {**self.row(where="corner"), "note": "尖り。細かくすると上がる"}]  # a singular point (cc6f396)
         self.r1()
         self.assertEqual([v for v in self.ctx.store.records("verdict") if v.get("basis") == "hot_spot"], [])
 
