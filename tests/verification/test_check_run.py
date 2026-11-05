@@ -95,6 +95,9 @@ class CheckRun(unittest.TestCase):
     def rules(self, events, level="error"):
         return {f.rule for f in self.findings(events) if f.level == level}
 
+    def messages(self, events, rule, level="error"):
+        return [f.message for f in self.findings(events) if f.rule == rule and f.level == level]
+
     def assertFlags(self, events, rule):
         found = self.findings(events)
         self.assertIn(rule, {f.rule for f in found if f.level == "error"},
@@ -753,6 +756,58 @@ class CheckRun(unittest.TestCase):
             extra.append(j)
         ev[at:at] = extra
         return renumber(ev)
+
+    def _heavier_beyond_then_lighter_pass(self, v2_shell=None, shell_stage=3):
+        """Two versions (modular): v1's frame_shell (stage shell_stage) of R1 at 200 MPa against 156.7 after
+        frame_static's pass; v2 judged on frame_static alone (pass, tile green), with a frame_shell analysis
+        of v2 giving v2_shell MPa when given."""
+        ev = modular(red=False)
+        ev = self._shell_after_green(ev, 200.0, then="pending")
+        ev = self._stages(ev, frame_static=1, frame_shell=shell_stage)
+        at = next(n for n, e in enumerate(ev) if e["kind"] == "design.created" and e["data"].get("design_version") == 2) + 1
+        new = []
+        chain = [e for e in ev if e["kind"] in ("prediction.recorded", "analysis.started", "analysis.finished",
+                                                  "comparison.recorded", "verdict.recorded")
+                 and (e["data"].get("analysis_id") in (None, "ana-0001") or e["kind"] == "prediction.recorded")]
+        for e in chain:
+            c = copy.deepcopy(e)
+            d = c["data"]
+            for k, old, nw in (("prediction_id", "pred-0001", "pred-0002"), ("analysis_id", "ana-0001", "ana-0003"),
+                               ("comparison_id", "cmp-0001", "cmp-0002"), ("verdict_id", "ver-0001", "ver-0002")):
+                if d.get(k) == old:
+                    d[k] = nw
+            if "prediction_ids" in d:
+                d["prediction_ids"] = ["pred-0002"]
+            if "design_version" in d:
+                d["design_version"] = 2
+            if "design_version" in c:
+                c["design_version"] = 2
+            c["t"], c["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+            new.append(c)
+        if v2_shell is not None:
+            s, f = (copy.deepcopy(e) for e in new if e["kind"] in ("analysis.started", "analysis.finished"))
+            for e in (s, f):
+                e["data"].update(analysis_id="ana-0004", tool="frame_shell")
+            f["data"].pop("fields", None)
+            f["data"]["results"] = [{"quantity": "max_hot_spot_stress", "value": v2_shell, "unit": "MPa"}]
+            new += [s, f]
+        j = copy.deepcopy(next(e for e in ev if e["kind"] == "judgement.updated"))
+        j["data"].update(design_version=2, state="green", verdict_ids=["ver-0002"])
+        j["design_version"] = 2
+        j["t"], j["ts"] = ev[at - 1]["t"], ev[at - 1]["ts"]
+        new.append(j)
+        ev[at:at] = new
+        return renumber(ev)
+
+    def test_d_a_lighter_pass_does_not_clear_a_heavier_tool_s_exceedance(self):
+        # docs/contract.md 分野が緑になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
+        # limit, v2 green on frame_static alone
+        said = lambda ev: [m for m in self.messages(ev, "judgement.state") if "contract (d)" in m]
+        self.assertTrue(said(self._heavier_beyond_then_lighter_pass()))
+        # a shell of v2 giving the judged quantity (within the limit) clears it
+        self.assertEqual(said(self._heavier_beyond_then_lighter_pass(v2_shell=120.0)), [])
+        # the exceedance came from a tool no heavier than frame_static's stage: frame_static's pass stands
+        self.assertEqual(said(self._heavier_beyond_then_lighter_pass(shell_stage=1)), [])
 
     def test_a_later_result_beyond_the_criterion_holds_a_green_tile(self):
         # the sample's limit is 156.7 MPa; a green tile left standing after a shell result beyond it

@@ -1255,9 +1255,38 @@ class RunChecker:
                     worst = max(vals) if op in ("<=", "<") else min(vals)
                     if not OPS[op](worst, limit["value"]):
                         why.append(f"{a.get('analysis_id')} {q} {worst:.4g} {limit.get('unit')} beyond {op} {limit['value']}")
+            # (d) (contract 460043d): an earlier version's analysis beyond the criterion asks for an analysis of
+            # the same or a heavier stage in this version giving the judged quantity; a lighter tool's pass
+            # does not clear it
+            beyond = [(self._stage(a.get("tool")), aid) for aid, (j, a) in self.recs["analysis"].items()
+                      if j < i and a.get("load_case_id") == lc_id and isinstance(a.get("design_version"), int)
+                      and isinstance(v, int) and a["design_version"] < v and self._beyond(a, crit)]
+            if beyond:
+                need, first = max(beyond)
+                gives = [aid for aid, (j, a) in self.recs["analysis"].items()
+                         if j < i and a.get("load_case_id") == lc_id and a.get("design_version") == v
+                         and a.get("status") == "ok" and self._stage(a.get("tool")) >= need
+                         and self._judged_values(a, crit)]
+                if not gives:
+                    why.append(f"{first} (stage {need}) was beyond the criterion in an earlier version and no "
+                               f"analysis of stage {need} or more gives {crit.get('quantity')} in v{v} (contract (d))")
             if why:
                 out[lc_id] = why
         return out
+
+    def _judged_values(self, a: dict, crit: dict) -> list[float]:
+        """The analysis's values of the criterion's judged quantity (JUDGED_AS for its tool), in its unit."""
+        q = JUDGED_AS.get((a.get("tool"), crit.get("quantity")), crit.get("quantity"))
+        unit = (crit.get("limit") or {}).get("unit")
+        return [r["value"] for r in a.get("results", [])
+                if r.get("quantity") == q and r.get("unit") == unit and isinstance(r.get("value"), (int, float))]
+
+    def _beyond(self, a: dict, crit: dict) -> bool:
+        """An ok analysis whose worst judged value fails the criterion."""
+        vals, op, lim = self._judged_values(a, crit), crit.get("op"), (crit.get("limit") or {}).get("value")
+        if a.get("status") != "ok" or not vals or op not in OPS or not isinstance(lim, (int, float)):
+            return False
+        return not OPS[op](max(vals) if op in ("<=", "<") else min(vals), lim)
 
     def check_judgements(self) -> None:
         """A tile is red when a listed verdict fails (even with load cases left without one), else
