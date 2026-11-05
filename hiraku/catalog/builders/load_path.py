@@ -892,6 +892,31 @@ def free_inputs(design: Record, load_case: Record) -> Record:
     return {"n_parts": q(len(modelled_parts(design)), "1"), "n_held": q(len(held), "1")}
 
 
+def loaded_parts(design: Record, load_case: Record) -> list[str]:
+    """The parts a load case puts a force on, for the path check (docs/contract.md 手計算の役目): the controls its
+    params name (hand_part, foot_parts), else every modelled part with mass (load_path.modelled_parts: not
+    occupants or cargo, whose weight goes through the part they rest on, which is counted)."""
+    from hiraku.solvers.shelf.load_path import modelled_parts
+
+    params = load_case.get("params") or {}
+    named = [params.get("hand_part")] if params.get("hand_part") else []
+    named += [p.strip() for p in str(params.get("foot_parts") or "").split(",") if p.strip()]
+    if named:
+        return list(dict.fromkeys(named))
+    return [p["id"] for p in modelled_parts(design) if float(p.get("mass_kg") or 0.0) > 0.0]
+
+
+def path_inputs(design: Record, load_case: Record) -> Record:
+    """load_path.free_parts' inputs over the parts the load case loads (loaded_parts): those parts, and those of
+    them a chain of contacts joins to a member. n_parts - n_held is the count of loads with no path, the tool's
+    unsupported_load."""
+    from hiraku.solvers.shelf.load_path import contact_groups, find_contacts
+
+    loaded = loaded_parts(design, load_case)
+    held, _ = contact_groups(design, find_contacts(design))
+    return {"n_parts": q(len(loaded), "1"), "n_held": q(len([p for p in loaded if p in held]), "1")}
+
+
 _CHAIN = ["部品は剛体。触れている所 (すき間 2 mm 以下) をボルト留めのばねとみる",
           "握る点 (踏む面) から枠までの、触れている所のいちばん短い鎖 1 本",
           "鎖が板を通るときは、荷重の来る所から板の中心までの板の帯の曲げとねじれ (中心で固定とみる: 仮定)",
@@ -899,6 +924,12 @@ _CHAIN = ["部品は剛体。触れている所 (すき間 2 mm 以下) をボ�
 _FREE = ["触れている所を部材からたどって、届かない部品を数える (carried_by は見ない)"]
 FREE_PREDICTION = {"quantity": "free_parts", "formula_id": "load_path.free_parts", "output": "n", "assumptions": _FREE,
                    "inputs": {"n_parts": "from.n_parts", "n_held": "from.n_held"}, "inputs_from": free_inputs}
+# The path check of any load case (docs/contract.md 手計算の役目, contract 2fc1006): the same count over the parts
+# the load case loads, under the tool's name for a load with no path, so the tool's unsupported_load compares with it.
+PATH_PREDICTION = {"quantity": "unsupported_load", "formula_id": "load_path.free_parts", "output": "n",
+                   "assumptions": ["力のかかる部品 (荷重条件が名指す操作部、無ければ質量のある部品の全部) から、触れている所を"
+                                   "部材までたどって、届かない部品を数える (carried_by は見ない)"],
+                   "inputs": {"n_parts": "from.n_parts", "n_held": "from.n_held"}, "inputs_from": path_inputs}
 
 R7_PLAN = {
     "tool": "load_path",
@@ -938,12 +969,13 @@ R7_PLAN = {
                   "の動き。板の入った枠は手で解けないので、手計算は上から押さえる値 (load_path.grip_bound) を出す: 力を全部、"
                   "触れている所の鎖 1 本と、板を入れない部材だけの枠に通したときの補エネルギーから。板と、並んだ別の道が持つ分を"
                   "入れないので、ツールよりずっと大きい"),
-        "fix": "板の入った枠を手で解く式は無い。手計算は上から押さえる値なので、安全側の値として合否を出す",
-        "safe_side": True,
-        "safe_side_reason": ("補エネルギーの定理: 釣り合っている力の分布のどれでも、その補エネルギーは本当の値以上なので、荷重の"
-                             "向きの動きは上から押さえられる。板とほかの道に力を持たせない分布はその 1 つ。動きの大きさは、"
-                             "3 つの向きの押さえの和 (柔らかさの行列の跡 ≥ 最大固有値) で押さえる。基準は grip_deflection "
-                             "<= Q67 なので、大きい方が不利"),
+        "fix": ("板の入った枠を手で解く式は無い。手計算は力の道を確かめ (load_path.free_parts: 握る点から枠まで触れている所が"
+                "つながる)、合否はツールの値で出す。上から押さえる値 (load_path.grip_bound) は記録に残し、ツールの値が"
+                "それを超えたら食い違いとして止まる"),
+        "tool_decides": True,
+        "tool_decides_reason": ("板の入った枠は手で解けず、手計算は上から押さえる値 (補エネルギーの定理) だけで、ツールより"
+                                "ずっと大きい (N15 版 5 で 9.10 mm、demo 版 4 で 9.66 mm に対してツール 0.54 mm)。値には"
+                                "届かないので、手計算で道がつながることを確かめて、ツールの値で決める"),
     }, {
         "quantity": "pedal_deflection",
         "source": ("the analysis department's split of the tool's pedal movement on the design department's run r8 "

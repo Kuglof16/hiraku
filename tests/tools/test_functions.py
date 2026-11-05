@@ -1,4 +1,5 @@
 import importlib
+import json
 import unittest
 from unittest import mock
 
@@ -674,6 +675,100 @@ class SafeSideTest(RunCase, unittest.TestCase):
         with self.assertRaises(ToolError) as cm:
             record_cause(self.ctx, self.args(cmp, safe_side=True, safe_side_reason="larger is safer"))
         self.assertIn("基準は なし", str(cm.exception))
+
+
+class ToolDecidesTest(RunCase, unittest.TestCase):
+    """docs/contract.md 手計算の役目 (contract 2fc1006): a mismatch the hand calculation does not reach, with the load
+    path checked by hand in the version (a load_path.free_parts prediction of 0, an analysis that follows the path
+    with no unsupported load), is judged on the tool's value (basis path_checked), pass or fail."""
+
+    r1_mismatch, args = SafeSideTest.r1_mismatch, SafeSideTest.args
+
+    def setUp(self):
+        super().setUp()
+        tool = self.tools["frame_static"]
+        run = tool.run
+
+        def with_path(design, load_case, predictions, params):  # as the analysis department's frame tools will
+            out = run(design, load_case, predictions, params)
+            out["results"] = out["results"] + [{"quantity": "unsupported_load", "value": self.lost, "unit": "1"}]
+            return out
+
+        self.lost = 0.0
+        tool.run = with_path
+
+    def path_prediction(self, n, load_case_id="R1-step100", quantity="free_parts"):
+        """A load_path.free_parts prediction of n, as K0 records it (written to the store here: the stand-in
+        registry has no load_path formulas)."""
+        from importlib import resources
+
+        p = json.loads((resources.files("hiraku.contract") / "examples" / "prediction.json").read_text(encoding="utf-8"))
+        lc = self.ctx.load_case(load_case_id)
+        p.update(prediction_id=self.ctx.store.next_id("prediction"), design_version=self.ctx.version,
+                 load_case_id=load_case_id, test_id=lc["test_id"], domain=lc["domain"], quantity=quantity,
+                 value=float(n), unit="1", formula_id="load_path.free_parts", expression="n = n_parts - n_held",
+                 inputs={"n_parts": {"value": 5.0, "unit": "1"}, "n_held": {"value": 5.0 - n, "unit": "1"}}, terms=[])
+        self.ctx.store.add_record("prediction", p, design_version=self.ctx.version, agent="cae.strength",
+                                  domain=lc["domain"])
+        return p
+
+    def decides(self, cmp, **kw):
+        return self.args(cmp, tool_decides=True, tool_decides_reason="the joint's twist is not in the formula", **kw)
+
+    def test_the_tools_value_decides_after_the_path_check(self):
+        cmp = self.r1_mismatch(1.5)  # analysis above the prediction: not safe side
+        self.path_prediction(0, load_case_id="P1-step100")  # every part of the version (contract 947969a)
+        out = record_cause(self.ctx, self.decides(cmp))
+        cause, ver = out["cause"], out["verdict"]
+        self.assertEqual((cause["tool_decides"], cause["tool_decides_reason"]),
+                         (True, "the joint's twist is not in the formula"))
+        self.assertEqual((ver["basis"], ver["value_from"], ver["cause_id"], ver["value"]),
+                         ("path_checked", "analysis", cause["cause_id"], cmp["analyzed"]))
+        self.assertEqual(ver["pass"], cmp["analyzed"]["value"] <= ver["limit"]["value"])
+        from hiraku.contract import errors
+        from hiraku.tools.judge import held_cases
+
+        self.assertEqual(errors("verdict", ver), [])
+        self.assertNotIn("R1-step100", held_cases(self.ctx, "strength", self.ctx.version))  # green rule (b)
+        tile = self.ctx.store.judgements()[0]
+        self.assertEqual(tile["state"], "green" if ver["pass"] else "red")
+        self.assertIn("道を手計算で確かめ、ツールの値で", tile["summary"])
+        self.assert_events_fit()
+
+    def test_refused_without_the_path_check(self):
+        cmp = self.r1_mismatch(1.5)
+        with self.assertRaises(ToolError) as cm:  # no load_path.free_parts prediction in the version
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("load_path.free_parts", str(cm.exception))
+        self.path_prediction(1)
+        with self.assertRaises(ToolError) as cm:  # a part joined to nothing
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("つながらない部品が 1", str(cm.exception))
+        self.assertEqual(self.ctx.store.records("cause"), [])
+
+    def test_refused_when_the_analysis_has_an_unsupported_load(self):
+        self.lost = 1.0
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.decides(cmp))
+        self.assertIn("支えのない荷重が 1", str(cm.exception))
+
+    def test_needs_a_reason_and_goes_alone(self):
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.args(cmp, tool_decides=True, tool_decides_reason=" "))
+        self.assertIn("tool_decides_reason", str(cm.exception))
+        with self.assertRaises(ToolError):  # the contract refuses it with ends_case, and so does the tool
+            record_cause(self.ctx, self.decides(cmp, ends_case=True))
+
+    def test_ends_case_is_refused_once_the_path_is_checked(self):
+        cmp = self.r1_mismatch(1.5)
+        self.path_prediction(0)
+        with self.assertRaises(ToolError) as cm:
+            record_cause(self.ctx, self.args(cmp, ends_case=True))
+        self.assertIn("tool_decides", str(cm.exception))
 
 
 class FakeShell(fakes.FakeTool):

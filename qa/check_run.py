@@ -148,6 +148,8 @@ SYSTEM_CATEGORY, SYSTEM_DOMAIN = "system", "assembly"
 PLUGIN_FILES = {getattr(layout, k) for k in ("PLUGIN_HOOKS_FILE", "PLUGIN_OUTBOX_FILE", "PLUGIN_LOCK_FILE",
                                               "PLUGIN_ALIVE_FILE") if hasattr(layout, k)}
 UNSUPPORTED = "unsupported_load"  # a load with no path: a failing verdict from an analysis (contract)
+PATH_CHECKED = "path_checked"  # the tool's value decides after the load path was checked by hand (contract 2fc1006)
+PATH_FORMULA = "load_path.free_parts"  # the hand count that checks the load path (any quantity it predicts)
 BEYOND_SUFFIX = "-beyond"  # a load case past the limit, meant to fail (hiraku.catalog.build.BEYOND_SUFFIX)
 # the result a tool is judged on where it is not the criterion's own quantity (docs/contract.md, 判定に使う量)
 JUDGED_AS = {("frame_shell", "max_stress"): "max_hot_spot_stress"}
@@ -1043,6 +1045,10 @@ class RunChecker:
             c = self._before("comparison", k.get("comparison_id"), i, w, "cause.link", "comparison")
             if c is not None and c.get("status") != "mismatch":
                 self.warn("cause.link", w, f"{kid} explains {k.get('comparison_id')}, which matched")
+            # one way to settle a mismatch (contract 26de5b8): the tool decides, safe side, or ended
+            ways = [f for f in ("tool_decides", "safe_side", "ends_case") if k.get(f) is True]
+            if len(ways) > 1:
+                self.error("cause.settled", w, f"{kid} says {' and '.join(ways)}: a cause takes one of them")
             rb = k.get("resolved_by")
             if rb:
                 r = self.recs["comparison"].get(rb)
@@ -1072,6 +1078,8 @@ class RunChecker:
             crit = (self.lc(v.get("load_case_id"), self.version_of("verdict", v)) or {}).get("criterion")
             if v.get("basis", "match") == "explained_safe_side":
                 self._check_safe_side_verdict(vid, v, c, crit, i, w)
+            elif v.get("basis") == PATH_CHECKED:
+                self._check_path_checked_verdict(vid, v, c, i, w)
             else:
                 if c.get("status") != "match":
                     self.error("verdict.from_match", w, f"{vid} made from {v.get('comparison_id')}, a {c.get('status')}")
@@ -1160,6 +1168,51 @@ class RunChecker:
             self.error("verdict.safe_side", w, f"{vid}: criterion {op} but the prediction {pv} is on the favourable "
                                                f"side of the analysis {av}")
 
+    def _check_path_checked_verdict(self, vid: str, v: dict, c: dict, i: int, w: str) -> None:
+        """basis path_checked (contract 2fc1006, 手計算の役目): a mismatch whose own cause, recorded before the
+        verdict, says tool_decides (with a reason, not ends_case); the version's load path checked by hand
+        before it: a load_path prediction of free_parts 0 in that version, and the compared analysis gives no
+        unsupported load above 0. The value is the analysis' (pass or fail by the criterion)."""
+        rule = "verdict.path_checked"
+        cid = v.get("comparison_id")
+        if c.get("status") != "mismatch":
+            self.error(rule, w, f"{vid} is path_checked but {cid} is a {c.get('status')}")
+        if not v.get("cause_id"):
+            self.error(rule, w, f"{vid} is path_checked but names no cause")
+        else:
+            k = self._before("cause", v["cause_id"], i, w, rule, "cause")
+            if k is not None:
+                if k.get("comparison_id") != cid:
+                    self.error(rule, w, f"{vid}: {v['cause_id']} explains {k.get('comparison_id')}, not {cid}")
+                if k.get("tool_decides") is not True:
+                    self.error(rule, w, f"{vid}: {v['cause_id']} does not say tool_decides true")
+                elif not str(k.get("tool_decides_reason") or "").strip():
+                    self.error(rule, w, f"{vid}: {v['cause_id']} gives no tool_decides_reason")
+                if k.get("ends_case") is True:
+                    self.error(rule, w, f"{vid}: {v['cause_id']} says ends_case, which gives no verdict")
+        if v.get("value_from", "analysis") != "analysis":
+            self.error("verdict.values", w, f"{vid} is path_checked but value_from is {v.get('value_from')!r}, "
+                                            f"not 'analysis'")
+        if v.get("value") != c.get("analyzed"):
+            self.error("verdict.values", w, f"{vid} value {v.get('value')} is not the compared analysis value")
+        ver = self.version_of("verdict", v)
+        # by its formula, whatever the quantity: free_parts (every part of the version) or unsupported_load
+        # (the parts the load case's force is on), as hiraku.tools.judge.path_check reads it
+        hand = [p for j, p in self.recs["prediction"].values()
+                if j < i and p.get("design_version") == ver and p.get("formula_id") == PATH_FORMULA]
+        if not hand:
+            self.error(rule, w, f"{vid} is path_checked but v{ver} has no {PATH_FORMULA} prediction before it "
+                                f"(the load path checked by hand)")
+        elif not any(isinstance(p.get("value"), (int, float)) and p["value"] == 0 for p in hand):
+            self.error(rule, w, f"{vid} is path_checked but v{ver}'s {PATH_FORMULA} predictions are not 0 "
+                                f"(the path is not joined)")
+        a = self.recs["analysis"].get(c.get("analysis_id"))
+        loose = [r.get("value") for r in ((a[1] if a else {}).get("results") or [])
+                 if r.get("quantity") == UNSUPPORTED and isinstance(r.get("value"), (int, float)) and r["value"] > 0]
+        if loose:
+            self.error(rule, w, f"{vid} is path_checked but {c.get('analysis_id')} gives unsupported_load "
+                                f"{loose[0]:g} (the verdict is unsupported_load, red)")
+
     def _check_verdict_math(self, vid: str, v: dict, w: str) -> None:
         try:
             val, lim, op = float(v["value"]["value"]), float(v["limit"]["value"]), v["op"]
@@ -1237,7 +1290,11 @@ class RunChecker:
                     continue
                 causes = [kid for kid, (k, r) in self.recs["cause"].items() if k < i and r.get("comparison_id") == cid]
                 cause = self._state_at("cause", causes[-1], i) if causes else None
-                if cause is None or not (cause.get("resolved") or cause.get("safe_side")):
+                # (b): resolved, safe-side, or the tool decides with the path checked (a path_checked verdict of it)
+                decided = cause is not None and cause.get("tool_decides") is True and any(
+                    r.get("basis") == PATH_CHECKED and r.get("comparison_id") == cid
+                    for j, r in self.recs["verdict"].values() if j < i)
+                if cause is None or not (cause.get("resolved") or cause.get("safe_side") or decided):
                     out_why = "no cause" if cause is None else f"{causes[-1]} not resolved, not safe-side"
                     why.append(f"latest comparison {cid} of {c.get('quantity')} is a mismatch ({out_why})")
             newest: dict[str, dict] = {}
@@ -1975,6 +2032,8 @@ class RunChecker:
                 out.append(f"    {kid}: {k.get('cause', '')[:80]}")
                 if k.get("safe_side"):
                     out.append(f"    safe side: {k.get('safe_side_reason', '')[:80]}")
+                if k.get("tool_decides"):
+                    out.append(f"    the tool decides (path checked by hand): {k.get('tool_decides_reason', '')[:80]}")
                 if k.get("resolved_by"):
                     out.append(f"    resolved by {k['resolved_by']}")
         out.append(f"verdicts: {len(self.recs['verdict'])}")

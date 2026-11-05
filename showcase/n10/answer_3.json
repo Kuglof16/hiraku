@@ -1,0 +1,27 @@
+{
+ "result": "# 答え: 約 1,090 N (1 輪あたり)\n\n## 根拠\n\n**1. 角に乗る瞬間の力の向き**\n\n段の角は車軸の 200 mm 下にあります (300 − 100 = 200 mm)。そのとき角は車軸から水平に √(300² − 200²) ≈ 223.6 mm 前にあります。角から受ける反力は車輪の中心を通るので、水平成分 H と鉛直成分 V の比は次のとおりです。\n\nH / V = 223.6 / 200 ≈ 1.118\n\n**2. 車全体のモーメントのつり合い (後輪の接地点まわり)**\n\n- 重量 W = 591.5 × 9.81 ≈ 5,803 N で、重心は後輪から 686 mm 前にあります。\n- 後輪の駆動力は接地点に働くので、このモーメントには入りません。\n- 前輪の反力は前車軸 (1,700 mm 前、高さ 300 mm) を通ります。\n\nこれより次の式が立ちます。\n\n1700·V + 300·H = 686·W\n\nこの式に H = 1.118V を代入すると、V ≈ 1,956 N、H ≈ 2,187 N (2 輪の合計) になります。\n\n**3. 1 輪あたり**\n\nH ≈ **1,093 N** です。\n\n## 補足\n\n- 重心の高さ 593.5 mm はこの計算に使いません。ゆっくり乗り上げるので慣性力は無視でき、駆動力は地面の高さに働くためです。\n- 荷重移動を無視して、静止時の前輪荷重 (1 輪 1,171 N) に 1.118 を掛ける簡易計算だと約 1,309 N になります。前で押す水平力が前輪の荷重の一部を後輪へ移すため、実際はこれより小さくなります。",
+ "total_cost_usd": 0.0440918,
+ "modelUsage": {
+  "claude-opus-5-5": {
+   "inputTokens": 2,
+   "outputTokens": 1922,
+   "cacheReadInputTokens": 2699,
+   "cacheCreationInputTokens": 638,
+   "webSearchRequests": 0,
+   "costUSD": 0.0440918,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 128000,
+   "thinkingTokens": 1303,
+   "cacheCreationEphemeral5mInputTokens": 0,
+   "cacheCreationEphemeral1hInputTokens": 638,
+   "canonicalModel": "claude-opus-5-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "num_turns": 1,
+ "permission_denials": [],
+ "duration_ms": 25658,
+ "is_error": false,
+ "stop_reason": "end_turn"
+}

@@ -437,12 +437,15 @@ else:
 
 class SavedRuns(unittest.TestCase):
     """The example runs committed under showcase/<run_id>/. runs/ is local and not
-    committed, so it is not checked here (python -m qa.check_run --all does that by hand)."""
+    committed, so it is not checked here (python -m qa.check_run --all does that by hand).
+    A showcase run keeps events.jsonl, project.json, report.json and tools/ only (showcase/prepare.py:
+    every record is in its event, the version folders are left out), so check_run's files.missing is
+    set aside; every other check runs on the events."""
 
     def test_showcase_runs_follow_the_contract(self):
-        runs = sorted(p for p in (ROOT / layout.SHOWCASE_DIR).glob("*/") if p.is_dir())
+        runs = sorted(p for p in (ROOT / layout.SHOWCASE_DIR).glob("*/") if p.is_dir() and (p / "events.jsonl").exists())
         if not runs:
             self.skipTest(f"no runs under {layout.SHOWCASE_DIR.as_posix()}/ yet")
         for run in runs:
             with self.subTest(run=run.name):
-                self.assertEqual(_errors(run), [])
+                self.assertEqual([e for e in _errors(run) if "files.missing" not in e], [])

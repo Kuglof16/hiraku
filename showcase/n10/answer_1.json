@@ -1,0 +1,27 @@
+{
+ "result": "# 答え: 約 **1,090 N**(1 輪あたり。計算値は 1,093 N)\n\n## 根拠\n\n**1. 段の角の力の向き**\n\n前輪が浮いた瞬間、前輪にかかる力は段の角からの反力だけです。この反力は角から車輪の中心に向かいます。\n\n- cos θ = (r − h)/r = (300 − 100)/300 = 2/3\n- tan θ = √5/2 ≈ 1.118\n\nしたがって、水平の力 H と垂直の荷重 N の関係は H = N·tan θ です。\n\n**2. 前輪の荷重は静止時より減る**\n\nゆっくり乗り上げるので、静的なつり合いで考えます。押す力の元は後輪の駆動力で、地面の高さで前向きに働きます。一方、角からの反力の水平成分は、前の車軸の高さ 0.3 m で後ろ向きに働きます。この 2 つの力が偶力になり、前を持ち上げる向きに働くため、前輪の荷重が減ります。\n\n後輪の接地点まわりのモーメントのつり合いは次のとおりです。\n\n  N_f·1.7 + H_f·0.3 = mg·0.686  (H_f = N_f·tan θ)\n\n- mg = 591.5 × 9.807 ≈ 5,801 N\n- N_f = 3,979 / (1.7 + 0.3 × 1.118) ≈ 1,955 N(前 2 輪の合計)\n- 1 輪あたり N ≈ 977.5 N\n- H = 977.5 × 1.118 ≈ **1,093 N**\n\n## 補足\n\n- 静止時の前輪荷重(1 輪 1,170 N)をそのまま使うと 1,308 N になります。荷重移動の分だけ過大な値です。\n- 重心の高さは、加速度が無い準静的な条件では結果に関係しません。\n- 車輪の転がり抵抗とタイヤの変形は無視しています。",
+ "total_cost_usd": 0.059989799999999996,
+ "modelUsage": {
+  "claude-opus-5-5": {
+   "inputTokens": 2,
+   "outputTokens": 1917,
+   "cacheReadInputTokens": 649,
+   "cacheCreationInputTokens": 2689,
+   "webSearchRequests": 0,
+   "costUSD": 0.059989799999999996,
+   "contextWindow": 1000000,
+   "maxOutputTokens": 128000,
+   "thinkingTokens": 1248,
+   "cacheCreationEphemeral5mInputTokens": 0,
+   "cacheCreationEphemeral1hInputTokens": 2689,
+   "canonicalModel": "claude-opus-5-5",
+   "provider": "firstParty",
+   "costBasis": "list"
+  }
+ },
+ "num_turns": 1,
+ "permission_denials": [],
+ "duration_ms": 23702,
+ "is_error": false,
+ "stop_reason": "end_turn"
+}
