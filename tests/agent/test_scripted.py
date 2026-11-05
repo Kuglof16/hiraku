@@ -545,6 +545,25 @@ class SplitByModuleTest(unittest.TestCase):
         self.assertEqual(split_by_module(self.DESIGN, {"wheelbase": {"value": 1, "unit": "mm"}}, {"roof": "x"})[2],
                          ["wheelbase", "roof"])
 
+    def test_an_entry_hits_only_the_reds_of_its_modules(self):
+        """Run 142135 (the tests picked without H7): version 2's only red, R7-hand, goes to the steering designer;
+        the plan's next entry, the occupant's opening, hits none, the controls' entry after it does."""
+        from hiraku.agent.scripted import revision_hits
+
+        mm = lambda v: {"value": v, "unit": "mm"}  # noqa: E731
+        routed = {"designer.steering": ["R7-hand"]}
+        opening = {"choices": {"side_guard": "bars_net"}, "reason": "H7"}
+        controls = {"changes": {"steering_column_angle": {"value": 20, "unit": "deg"}}, "reason": "R7"}
+        layout = {"changes": {"track": mm(1220)}, "reason": "P1"}
+        self.assertFalse(revision_hits(self.DESIGN, routed, opening))
+        self.assertTrue(revision_hits(self.DESIGN, routed, controls))
+        self.assertFalse(revision_hits(self.DESIGN, routed, layout))
+        self.assertTrue(revision_hits(self.DESIGN, {"packager": ["P1-step100"]}, layout))
+        # as before the check: no routed red (a rule's red tile), a name no module owns, a driver fit
+        self.assertTrue(revision_hits(self.DESIGN, {}, opening))
+        self.assertTrue(revision_hits(self.DESIGN, routed, {"changes": {"wheelbase": mm(1)}, "reason": "x"}))
+        self.assertTrue(revision_hits(self.DESIGN, routed, {"fit": "driver", "reason": "x"}))
+
 
 if __name__ == "__main__":
     unittest.main()
