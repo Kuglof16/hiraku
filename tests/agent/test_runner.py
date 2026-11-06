@@ -44,7 +44,7 @@ class OptionsTest(RunCase, unittest.TestCase):
             self.assertIn(f"mcp__hiraku__{name}", o.allowed_tools)
         self.assertIn("mcp__hiraku__get_tool_template", o.allowed_tools)
         self.assertIn("mcp__hiraku__build_version", o.allowed_tools)  # the run tools (the tool refuses designs without modules)
-        self.assertEqual(len(o.allowed_tools), 23)  # with find_tradeoffs (intake), write_design and check_design
+        self.assertEqual(len(o.allowed_tools), 24)  # with find_tradeoffs (intake), write_design, edit_design, check_design
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])
@@ -60,7 +60,7 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertIn("mcp__hiraku__make_tool", o.agents["cae-strength"].tools)
         self.assertIn("mcp__hiraku__revise_design", o.agents["designer"].tools)
         self.assertNotIn("mcp__hiraku__make_tool", o.agents["designer"].tools)
-        for name in ("write_design", "check_design"):  # a design Claude writes: the designer's only
+        for name in ("write_design", "edit_design", "check_design"):  # a design Claude writes: the designer's only
             self.assertIn(f"mcp__hiraku__{name}", o.agents["designer"].tools)
             self.assertNotIn(f"mcp__hiraku__{name}", o.agents["cae-strength"].tools)
         self.assertEqual(o.agents["designer"].skills, ["hiraku:write-a-design"])  # not the CAE roles' and the lead's

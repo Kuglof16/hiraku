@@ -120,6 +120,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "build_version": contract_input_schema("build_version"),
     "propose_design": contract_input_schema("propose_design"),
     "write_design": contract_input_schema("write_design"),
+    "edit_design": contract_input_schema("edit_design"),
     "check_design": contract_input_schema("check_design"),
     "make_tool": contract_input_schema("make_tool"),
     "check_tool": check_tool_input_schema(),
@@ -209,6 +210,14 @@ DESCRIPTIONS = {
         "ツールが付ける。型を下書きに使ったら based_on にその型を書く。ツールが check_design で確かめ、通らない設計は"
         "問題を全部挙げて断る。モジュールに分かれた設計では使わない"
     ),
+    "edit_design": (
+        "設計役だけが使う。Claude が書いた設計 (write_design の版) の次の版を、全体を書き直さずに edits (変える所だけ) で"
+        "作る。edits は今の版に上から順に当てる: add_node・move_node・remove_node・add_member・remove_member・"
+        "split_member (at_node で 2 本に。無い節点なら中点に作る。新しい部材は <id>_a と <id>_b)・set_section・"
+        "assign_section・add_part・set_part・remove_part・set_support (fields の null はその欄を外す)・set_material・"
+        "set_variable。無い id や、参照を切る edit は、何番目かを言って断る (何も当てない)。当てたあとは write_design と同じに "
+        "check_design で確かめて次の版にする (回数は round_limit まで、全部の荷重条件をやり直す)。型の設計は revise_design"
+    ),
     "check_design": (
         "書いた設計を、版にせずに確かめる。契約の形、参照 (部材の節点・断面・材料、部品の carried_by・connects_to、支えの "
         "frame_node)、全部の部材と部品を載せる節点が支えまでつながるか、長さが mm として変でないか、干渉 (K4) の数、"
@@ -265,7 +274,7 @@ def for_agent(name: str, result: Any) -> Any:
 # Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
-ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_design", "write_report")
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_design", "edit_design", "write_report")
 NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
              "見つかりません)。同じ入力でもう一度呼んでください")
 

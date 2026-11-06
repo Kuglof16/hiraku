@@ -26,8 +26,9 @@ CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", 
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 # designs with modules: the packager also builds each round's version
 MODULE_PACKAGER_TOOLS = (*PACKAGER_TOOLS, *contract.MCP_TOOLS_PACKAGER)
-# write_design and check_design: a design Claude writes (docs/contract.md Claude が書く設計)
-DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design", "write_design", "check_design")
+# write_design, edit_design and check_design: a design Claude writes (docs/contract.md Claude が書く設計)
+DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design", "write_design", "edit_design",
+                  "check_design")
 MODULE_DESIGNER_TOOLS = ("get_context", "list_tools", *contract.MCP_TOOLS_DESIGNER)  # revise_design with module
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
 # compare); the designer chooses changes, like the lead (whose effort is the run's).
