@@ -150,6 +150,15 @@ SETS = {
     "RECSb40w14sb60h8": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
                             "rollbar_width": 1400, "side_bar_d": 60.5, "side_bar_t": 3.2, "side_bar_high": 800},
                            "w14sb60 with the top side bar 800 above the cushion (from 637.5)"),
+    # K2 on h8: OK at the contact stiffness x0.5 (+47 mm), NG at x2 (-102 mm: the hull lands first): one bar, posts back
+    # one bar needs side_net 0 (the net needs two bars): not made. With the roll bar further back the stay's foot fits
+    # at 0.10-0.30 / 0.70-0.80 (offset 200) and 0.10-0.15 / 0.65-0.80 (offset 300) (find_stay over 0.05 steps)
+    "RECSb40w14sb60h8o2": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.3,
+                              "rollbar_width": 1400, "side_bar_d": 60.5, "side_bar_t": 3.2, "side_bar_high": 800,
+                              "rollbar_offset": 200}, "h8 with the roll bar 200 behind S2 (from 80), stay foot at 0.3"),
+    "RECSb40w14sb60h8o3": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.15,
+                              "rollbar_width": 1400, "side_bar_d": 60.5, "side_bar_t": 3.2, "side_bar_high": 800,
+                              "rollbar_offset": 300}, "h8 with the roll bar 300 behind S2, stay foot at 0.15"),
     "RECSb40w14fp": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
                         "rollbar_width": 1400, "rollbar_front_posts": 1},
                        "RECSb40 1400 wide + front posts and top rails, side bars 42.7 x 2.3"),
