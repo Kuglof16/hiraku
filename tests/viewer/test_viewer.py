@@ -293,22 +293,32 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual(o["wall_x_mm"], 415.0)
 
     def test_crash_contact_record(self):
-        # K2 fcd3f2b8: element contact, the run goes on past the split, wheel nodes on no element
+        # K2 8a24cd15: element contact, wheel nodes on no element touching the wall through the tyre spring, C1
+        # judged by the least room over the run (occupant_space_margin) and frame_split_fraction (C1-split)
         o = make("crash", "crash_contact")
         rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
         nm = rec["fields"][0]
-        st = o["stop"]
-        self.assertTrue(st["goes_on"])
-        self.assertEqual((st["piece_pct"], st["limit_pct"], st["ok"]), (15.6, 3.0, False))
-        self.assertAlmostEqual(st["t_s"], common.result(rec, "frame_split_time"))
+        self.assertIsNone(o["stop"])  # no frame_split_time: no piece that can reach the occupants broke off
         sm = o["summary"]
-        self.assertEqual(sm["after"], {"t0_s": st["t_s"], "t1_s": nm["frames"]["t_s"][-1]})
+        self.assertIsNone(sm["after"])
         self.assertAlmostEqual(sm["crush_end"], common.result(rec, "max_crush"))
-        self.assertAlmostEqual(sm["crush_at_split"], common.result(rec, "crush_at_split"))
         mg = sm["margin"]
         self.assertAlmostEqual(mg["value"], common.result(rec, "occupant_space_margin"))
-        self.assertEqual((mg["op"], mg["limit"], mg["ok"]), (">=", 0.0, mg["value"] >= 0.0))
-        self.assertAlmostEqual(sm["wall_free_after_s"], 0.0981)
+        self.assertEqual((mg["op"], mg["limit"], mg["ok"], mg["load_case_id"]), (">=", 0.0, mg["value"] >= 0.0, "C1-40kmh"))
+        self.assertEqual((mg["where"], mg["member"], mg["t_s"]), ("occupant_L.foot_L", "tower_post_LA2", 0.0673))
+        least = min(h["value"]["value"] for h in rec["hot_spots"] if h["quantity"] == "occupant_space_margin")
+        self.assertAlmostEqual(least, mg["value"])
+        sp = sm["split"]
+        self.assertAlmostEqual(sp["value"], common.result(rec, "frame_split_fraction"))
+        self.assertEqual((sp["op"], sp["limit"], sp["load_case_id"], sp["ok"]), ("<=", 0.03, "C1-split", sp["value"] <= 0.03))
+        (pc,) = sp["pieces"]
+        self.assertAlmostEqual(pc.pop("t_s"), 0.0133)
+        self.assertEqual(pc, {"nodes": 5, "pct": 1.5, "members": ["cross_F"]})
+        self.assertEqual(sp["not_counted"], 1)
+        cm = sm["crush_margin"]
+        self.assertAlmostEqual(cm["value"], common.result(rec, "crumple_length") - common.result(rec, "max_crush"))
+        self.assertTrue(o["tyre_spring"])
+        self.assertIsNone(sm["wall_free_after_s"])
         # the four wheel nodes: radius, links to the mounts the record names, the first frame at the wall by hand
         W = {w["id"]: w for w in o["wheels"]}
         self.assertEqual(sorted(W), ["wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR"])
@@ -331,8 +341,9 @@ class FieldDataTest(unittest.TestCase):
             self.assertAlmostEqual(off[(last * npt + j) * 3 + a], P[-1][fl["node"]][a] - P[0][fl["node"]][a], places=3)
         rows = {s["label"]: s for s in o["ledger"]["stated"]}
         self.assertTrue(rows["wheel node wheel_FL~centre"]["agrees"])
-        self.assertTrue(any("分離" in t and "200 ms まで続く" in t for t in o["notes"]))
-        self.assertTrue(any("乗員への入力" in t for t in o["notes"]))
+        self.assertTrue(any("離れた塊" in t and "cross_F" in t for t in o["notes"]))
+        self.assertTrue(any("タイヤのばね" in t for t in o["notes"]))
+        self.assertTrue(any("乗員への入力" in t and "1 ステップで止まる" not in t for t in o["notes"]))
 
     def test_rigid_fit(self):
         # one node: its translation, no rotation

@@ -1,8 +1,6 @@
 {
- "load_case_id": "C1-40kmh",
  "test_id": "C1",
  "domain": "crash",
- "title": "40 km/h で壁に正面から当たる (2 人 + 荷)",
  "params": {
   "speed": {
    "value": 40.0,
@@ -17,6 +15,9 @@
   "Q40",
   "Q31"
  ],
+ "tolerance_rel": 0.15,
+ "load_case_id": "C1-40kmh",
+ "title": "40 km/h で壁に正面から当たる (2 人 + 荷)",
  "criterion": {
   "quantity": "occupant_space_margin",
   "op": ">=",
@@ -24,12 +25,11 @@
    "value": 0.0,
    "unit": "mm"
   },
-  "basis": "C1: the crush must stop short of the occupants (the front overhang ahead of them)",
+  "basis": "C1: no structure reaches into the occupants' space (the least room to their part boxes over the crash)",
   "requirement_keys": [
    "Q65"
   ]
  },
- "tolerance_rel": 0.15,
  "modules": [
   "frame",
   "body",
