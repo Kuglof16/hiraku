@@ -225,7 +225,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
   2. `list_tools` と `list_formulas` でツールと式を選ぶ。
   3. `record_prediction` で手計算の予測を記録する。
   4. `analyze` で解析する。
-  5. `compare` で予測と照合する。
+  5. `compare` で予測と比べて判定する。
   6. 食い違ったら `record_cause` に原因と直し方を書き、予測を記録し直してやり直す。
 - 赤の分野が残り、直す回数 (`round_limit`) も残っていれば、まとめ役が設計役に渡す。新しい版では、全部の荷重条件をやり直す (`LEAD_PROMPT` の 4、`hiraku/agent/hooks.py` の `next_step`)。
 - 使える組み込みのツールは `Agent` と `Skill` だけ。`permission_mode="dontAsk"` で、名前を並べたツールのほかは止まる (`hiraku/agent/runner.py` の `build_options`)。
@@ -263,10 +263,10 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
   - `list_formulas`: 手計算 (K0) の式の一覧。
   - `list_tools`: 解析のツールの棚。`usable` が true のツールだけを使える。
-- 予測・解析・照合
+- 予測・解析・判定
   - `record_prediction`: 式と入力と前提を選ぶ。値は K0 が計算する。
   - `analyze`: 全部の解析のツールをこの 1 つから呼ぶ。
-  - `compare`: 予測と解析を照合する。一致して基準があれば、合否も作る。
+  - `compare`: 予測と解析を比べる。一致して基準があれば、OK か NG かも出す。
   - `record_cause`: 食い違いの原因と直し方を書く。分野の止まりがこれで解ける。
 - 設計 (設計役だけ)
   - `propose_design`: 版 0 から最初の版を作る。
@@ -289,7 +289,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 - ローカルの plugin `hiraku` が 1 つある (`plugins/hiraku/.claude-plugin/plugin.json`)。実行で読む skill はこの plugin のものだけ (`runner.py` の `plugins`・`skills`、`roles.py` の `plugin_skills`)。
 - skill は 4 つ。
   - `take-the-request`: まとめ役が依頼を受ける手順。分野を選び、要件を聞き、ナレッジを規則にし、規則を当てる。途中で届く伝言の受け方も書いてある (`plugins/hiraku/skills/take-the-request/SKILL.md`)。
-  - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 照合 → 合否まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
+  - `predict-then-analyze`: 荷重条件 1 つを、予測 → 解析 → 判定 (OK か NG) まで進める手順 (`.../predict-then-analyze/SKILL.md`)。
   - `find-the-cause`: 食い違ったときに原因を探し、`record_cause` に書く手順 (`.../find-the-cause/SKILL.md`)。
   - `revise-a-module`: 設計がモジュールに分かれているとき、モジュールの設計役が、赤の荷重条件を読んで自分のモジュールの直しを提案し、直せないものをパッケージ役に渡す手順 (`.../revise-a-module/SKILL.md`)。
 
@@ -312,7 +312,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 - 役のプロンプトには「数値は全部、ツールが出す。自分で計算した数を入力にも文にも書かない。単位の換算もしない」とある (`prompts.py` の `COMMON_RULES`)。
 - 予測の値は K0 が計算し、Claude は式と入力を選ぶだけ (`docs/contract.md` の「1 つの数字を信用して合否を出すまで」、`mcp.py` の `record_prediction` の説明)。
-- 照合の許す幅は荷重条件に入っていて、モデルは決めない。合否はツールの中でだけ作る (`docs/contract.md`)。
+- 予測と解析の差を許す幅は荷重条件に入っていて、モデルは決めない。OK と NG はツールの中でだけ作る (`docs/contract.md`)。
 - 報告の数はコードが記録から入れる。Claude が書くのは `summary` と `next` だけ (`docs/contract.md`、`mcp.py` の `write_report` の説明)。
 - Claude が実行の中で作ったツールは、答えの分かっている例に全部通ったときだけ棚に入る (`mcp.py` の `make_tool` の説明、`docs/contract.md`)。
 
