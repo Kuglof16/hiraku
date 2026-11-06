@@ -639,6 +639,31 @@ export function variableName(name, design = null) {
 // empty when the server has no such route: the id is shown as written)
 export const MODULE_JA = {};
 export const moduleName = (m) => MODULE_JA[m] ?? m ?? "";
+
+// The design roles (contract MODULE_DESIGNERS designer.<role>, DESIGNER_ROLES_JA; same values, checked by
+// tests/web/test_static.py), in the contract's order. One role owns any number of a design's modules
+// (design.modules[].owner). The per-module designers of older records (designer.frame, ...,
+// contract LEGACY_MODULE_DESIGNERS) are named from their module.
+export const DESIGNER_ROLES_JA = {
+  structure: "構造",
+  mechanism: "機構",
+  electric: "電気",
+};
+export const DESIGNER_ROLES = Object.keys(DESIGNER_ROLES_JA);
+// "structure" for designer.structure; null for any other id (designer.frame, designer, cae.*)
+export const designerRole = (id) => {
+  const r = typeof id === "string" && id.startsWith("designer.") ? id.slice(9) : null;
+  return r && Object.hasOwn(DESIGNER_ROLES_JA, r) ? r : null;
+};
+// "frame" for an older record's designer.frame; null for a design role or any other id
+export const designerModule = (id) => (typeof id === "string" && id.startsWith("designer.") && !designerRole(id) ? id.slice(9) : null);
+// The role that answers for a module of a design: its owner in design.modules, else (an older record,
+// no owner) designer.<module>; package is the packager's.
+export function moduleOwner(moduleId, design = null) {
+  const m = (design?.modules ?? []).find((x) => x?.module_id === moduleId);
+  if (typeof m?.owner === "string" && m.owner) return m.owner;
+  return moduleId === "package" ? "packager" : `designer.${moduleId}`;
+}
 const DIM_JA = { t: "板厚", h: "高さ", b: "幅", d: "直径" };
 const PART_FIELD_JA = { mass_kg: "重さ" };
 const MATERIAL_FIELD_JA = { E_MPa: "材料の硬さ (ヤング率)" };
@@ -744,7 +769,8 @@ export function agentName(id) {
   if (!id) return "";
   if (ROLE_JA[id]) return ROLE_JA[id];
   if (id.startsWith("cae.")) return DOMAIN_JA[id.slice(4)] ?? id;
-  if (id.startsWith("designer.")) return `${moduleName(id.slice(9))}の設計役`; // modules: designer.<module>
+  if (designerRole(id)) return `${DESIGNER_ROLES_JA[designerRole(id)]}の設計役`; // designer.structure → 構造の設計役
+  if (designerModule(id)) return `${moduleName(designerModule(id))}の設計役`; // older records: designer.<module>
   return id;
 }
 

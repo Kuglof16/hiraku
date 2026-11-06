@@ -18,6 +18,7 @@
   --purple: #8e6bbf;
   --yellow: #e8c547;
   --orange-pale: #fcefdc;
+  --orange: #b26b00; /* attention (the hooks' stops, a mismatch's cause); red is for NG judgements only */
   --font: "BIZ UDPGothic", "BIZ UDGothic", "Yu Gothic", Meiryo, sans-serif;
   --mono: "BIZ UDGothic", Consolas, monospace;
   --band: 0px; /* subtitle band at the bottom (video layout) */
@@ -61,9 +62,14 @@ body.video .statusrow, body.no-status .statusrow { display: none; }
 body.no-status .stage, body.video .stage { grid-template-rows: 64px 56px minmax(0, 1fr) 0 var(--band); }
 body.video .hint { display: none; }
 /* the video has no replay bar (the bench's): ?t= and window.hiraku.seek move the replay without
-   it. What stood above it comes down by the bar's height. A7's assembly bar stays (its track and
-   "手順 n / N" show the steps one by one), only its ▶ goes. */
-body.video .playbar, body.video .asm-bar .as-play { display: none; }
+   it. What stood above it comes down by the bar's height. A7 keeps only its band "手順 n / N"
+   (at the bar's left): its track, its ▶ and its switches (接合, モジュール) go, and its list of
+   steps does not take the pointer (the order follows the replay's time, assembly.js timedU). */
+body.video .playbar, body.video .asm-bar .as-play, body.video .asm-bar .as-track { display: none; }
+body.video .asm-bar { right: auto; }
+body.video .asm-bar .as-label { min-width: 0; text-align: left; }
+body.video .asm-3d > .asm-joints-btn, body.video .asm-3d > .modtoggles { display: none; }
+body.video .asm-side .asm-steps { pointer-events: none; }
 body.video .legend, body.video .running { bottom: 12px; }
 body.video .animbar { bottom: 12px; }
 body.video .viewport.has-anim .running, body.video .viewport.has-anim .legend, body.video .graph { bottom: 60px; }
@@ -205,6 +211,7 @@ body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 70
 .agents li.active .st { color: var(--blue); font-weight: 600; }
 .agents li.done .st { color: var(--green); }
 .agents li.alert .st { color: var(--red); font-weight: 600; }
+.agents li.heed .st { color: var(--orange); font-weight: 600; }
 .pet {
   width: 28px;
   height: 28px;
@@ -301,8 +308,8 @@ body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 70
 .logpanel li.warn::before { content: "!"; color: #b7791f; }
 .logpanel li.bad { color: var(--red); }
 .logpanel li.bad::before { content: "✗"; color: var(--red); }
-.logpanel li.hook { color: var(--red); background: var(--red-pale); font-weight: 600; border-radius: 6px; }
-.logpanel li.hook::before { content: "✗"; color: var(--red); }
+.logpanel li.hook { color: var(--orange); background: var(--orange-pale); font-weight: 600; border-radius: 6px; }
+.logpanel li.hook::before { content: "!"; color: var(--orange); }
 .logpanel li.said::before { content: "“"; color: var(--muted); font-size: 18px; top: 2px; }
 .logpanel li.said .who { color: var(--muted); }
 .logpanel li.said .tx { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
@@ -495,6 +502,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .bubble .tx { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
 .bubble .who .pet { width: 20px; height: 20px; }
 
+/* the hooks' stops: attention (orange), not a NG judgement (red is for those only) */
 .hookflash {
   position: absolute;
   left: 50%;
@@ -502,9 +510,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
   transform: translateX(-50%);
   z-index: 7;
   max-width: 640px;
-  background: var(--red-pale);
-  border: 2px solid var(--red);
-  color: var(--red);
+  background: var(--orange-pale);
+  border: 2px solid var(--orange);
+  color: var(--orange);
   border-radius: 12px;
   padding: 10px 18px;
   font-size: 17px;
@@ -515,6 +523,27 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .hookflash small { display: block; font-size: 15px; font-weight: 600; }
 .hookflash b { display: block; font-size: 20px; }
 .hookflash .next { display: block; color: var(--ink); font-size: 17px; }
+
+/* the cause of a mismatch Claude wrote, until its load case's judgement is OK (present.js openCause) */
+.causenote {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + var(--band));
+  transform: translateX(-50%);
+  z-index: 6;
+  width: max-content;
+  max-width: min(860px, calc(100% - 40px));
+  background: var(--card);
+  border: 2px solid var(--orange);
+  border-radius: 12px;
+  padding: 10px 18px 12px;
+  color: var(--ink);
+  font-size: 19px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.causenote small { display: block; color: var(--orange); font-size: 15px; font-weight: 700; }
+.causenote .tx { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; line-clamp: 5; overflow: hidden; }
 
 .running {
   position: absolute;
@@ -637,7 +666,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .pb-knob { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--ink); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--ink); }
 .pb-ticks { position: absolute; inset: 0; pointer-events: none; }
 .pb-ticks i { position: absolute; top: 3px; width: 2px; height: 7px; margin-left: -1px; background: var(--line); }
-.pb-ticks i.hook { background: var(--red); height: 9px; top: 1px; }
+.pb-ticks i.hook { background: var(--orange); height: 9px; top: 1px; }
 .pb-ticks i.ok { background: var(--green); }
 .pb-time { font-size: 16px; font-variant-numeric: tabular-nums; min-width: 128px; text-align: right; }
 .pb-speed { border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 12px; font-size: 15px; min-width: 52px; }
@@ -684,6 +713,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .card.wait h3 { color: var(--muted); }
 .card.ok { border: 2px solid var(--green); }
 .card.bad { border: 2px solid var(--red); }
+.card.warn { border: 2px solid var(--orange); }
 .card.busy { border: 2px solid var(--blue); }
 .card table { border-collapse: collapse; width: 100%; font-size: 17px; margin: 4px 0; }
 .card td { padding: 2px 0; }
@@ -695,6 +725,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .badge { display: inline-block; border-radius: 8px; padding: 2px 12px; color: #fff; font-weight: 700; font-size: 15px; }
 .badge.ok { background: var(--green); }
 .badge.bad { background: var(--red); }
+.badge.warn { background: var(--orange); }
 .verdict { margin-top: 6px; font-weight: 600; }
 .verdict.ok { color: var(--green); }
 .verdict.bad { color: var(--red); }
@@ -726,7 +757,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .activity .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); margin-right: 10px; }
 .hooks { display: flex; gap: 10px; color: var(--muted); white-space: nowrap; }
 .hooks .rule { border-radius: 6px; padding: 0 6px; }
-.hooks .rule.hit { color: var(--red); background: var(--red-pale); font-weight: 600; }
+.hooks .rule.hit { color: var(--orange); background: var(--orange-pale); font-weight: 600; }
 .hooks .hk { font-family: var(--mono); font-weight: 700; }
 
 /* all-domains grid (A6): the whole width, 4 x 2 tiles */
@@ -1104,6 +1135,8 @@ body.present .asm-caption { font-size: 24px; font-weight: 700; }
   overflow: hidden;
 }
 .pc-now { font-size: 20px; font-weight: 700; line-height: 1.35; }
+/* the video (?video=1): the agent's sentence in 2 lines at most, cut with … */
+body.video .pc-now { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; flex-shrink: 0; }
 .pc-scene { font-size: 16px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 8px; }
 .pc-num .pc-what { font-size: 20px; }
 .pc-num .pc-val { font-size: 52px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }

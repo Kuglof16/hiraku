@@ -210,7 +210,9 @@ export function allRules(m) {
 export function ruleState(m, rule) {
   const c = m.checks.get(rule.rule_id);
   if (!c) return { checked: false, targets: 0, hits: [], notEvaluable: [], pass: null };
-  return { checked: true, targets: c.targets.length, hits: c.hits, notEvaluable: c.not_evaluable || [], pass: c.pass, designVersion: c.design_version };
+  if (c.level === "advice") // an advice rule: its hits are notes, never a failure; the parts it cannot judge are not shown
+    return { checked: true, targets: c.targets.length, hits: [], advice: c.hits, isAdvice: true, notEvaluable: [], pass: true, designVersion: c.design_version };
+  return { checked: true, targets: c.targets.length, hits: c.hits, advice: [], isAdvice: false, notEvaluable: c.not_evaluable || [], pass: c.pass, designVersion: c.design_version };
 }
 
 const OP_JA = { "<=": "以下", ">=": "以上", "<": "より小さい", ">": "より大きい" };
@@ -229,11 +231,12 @@ export function checkedRows(m, rule) {
   const c = m.checks.get(rule.rule_id);
   if (!c || !c.checked) return [];
   const hitIds = new Set((c.hits || []).map((h) => h.part_id));
+  const isAdvice = c.level === "advice";
   const lim = simpleLimit(rule.check);
   return c.checked.map((row) => {
     const values = Object.entries(row.values).map(([name, value]) => ({ name, value, unchecked: (row.unchecked || []).includes(name) }));
     const own = lim && row.values[lim.name] !== undefined ? row.values[lim.name] : null;
-    return { part_id: row.part_id, hit: hitIds.has(row.part_id), values,
+    return { part_id: row.part_id, hit: !isAdvice && hitIds.has(row.part_id), ...(isAdvice && hitIds.has(row.part_id) ? { advice: true } : {}), values,
       need: lim && own !== null ? { name: lim.name, now: own, op: lim.op, opJa: OP_JA[lim.op], limit: lim.limit } : null,
       unchecked: (row.unchecked || []).length > 0 };
   });

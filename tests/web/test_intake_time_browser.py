@@ -78,7 +78,7 @@ class _RunPage(unittest.TestCase):
         page = self.browser.new_page(viewport=STAGE)
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run={RUN}&live=0&pace=0&{query}")
+        page.goto(f"{self.base}/?run={RUN}&live=0&pace=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
@@ -105,7 +105,9 @@ class IntakeTimeBrowserTest(_RunPage):
         self.assertEqual((late["just"], late["shadows"]), (0, [""]))  # the glow is over
 
     def test_the_same_t_twice_is_the_same_picture(self):
-        for query in (f"tab=A1&t={LIT_AT + 0.25}", f"tab=A2&t={ASKED_AT + 2.5}"):
+        # pets=0: the picture of the intake screens alone, not of whichever pet3d.js the repository has
+        # (the pets' own same picture at the same t: test_agent_pets_browser)
+        for query in (f"tab=A1&pets=0&t={LIT_AT + 0.25}", f"tab=A2&pets=0&t={ASKED_AT + 2.5}"):
             _, first = self.shot(query)
             _, again = self.shot(query)
             self.assertTrue(first == again, f"{query}: the two pictures differ")
@@ -245,7 +247,7 @@ class TabPlanPresentBrowserTest(_RunPage):
         for t in (LIT_AT + 0.25, ASKED_AT + 2.5, 57):
             shots = []
             for _ in range(2):
-                page, errors = self.open(f"{self.QUERY}&t={t}")
+                page, errors = self.open(f"{self.QUERY}&pets=0&t={t}")  # (pets=0: as in IntakeTimeBrowserTest)
                 shots.append(page.screenshot())
                 page.close()
                 self.assertEqual(errors, [], t)

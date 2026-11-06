@@ -22,7 +22,7 @@ from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.body_fixture import ADDED, BASE, added_ids, body_design, body_events, schema_has_part_material
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -169,7 +169,7 @@ class BodyLookBrowserTest(unittest.TestCase):
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
         # off=joints: the parts' own look (the joints, on at first, make the parts see-through)
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look={look}&off=joints")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look={look}&off=joints", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors

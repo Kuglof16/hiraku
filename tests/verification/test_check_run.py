@@ -1592,6 +1592,27 @@ class Modules(unittest.TestCase):
         self.assertEqual(self.hk6(modular(proposals=[dict(good, choices={"tyre": "wide"})])), set())
         self.assertEqual(self.hk6(modular(proposals=[dict(good, design_version=1)])), set())  # contract 18c2679
 
+    def test_a_module_answers_to_its_owner(self):
+        # three design roles (2026-11-06): the suspension's owner is designer.mechanism, who proposes for it
+        ev = modular(proposals=None)
+        for e in ev:
+            if e["kind"] == "design.created":
+                for x in e["data"].get("modules") or []:
+                    if x["module_id"] == "suspension":
+                        x["owner"] = "designer.mechanism"
+        for e in ev:
+            if e["kind"] == "design.change_proposed":
+                e["agent"] = e["data"]["agent_id"] = "designer.mechanism"
+        for e in ev:
+            if e["kind"] == "design.created" and e["data"].get("module_changes"):
+                for c in e["data"]["module_changes"]:
+                    c["agent_id"] = "designer.mechanism"
+        self.assertEqual(self.hk6(ev), set())
+        for e in ev:
+            if e["kind"] == "design.change_proposed":
+                e["agent"] = e["data"]["agent_id"] = "designer.suspension"  # the old role, no longer its owner
+        self.assertTrue(any("only its owner designer.mechanism" in m for m in self.hk6(ev)))
+
     def test_a_red_goes_to_the_modules_its_load_case_names(self):
         self.assertTrue(self.hk6(modular(case_modules=("frame",))))
         self.assertTrue(self.hk6(modular(red=False)))

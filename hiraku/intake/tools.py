@@ -139,12 +139,15 @@ def _rule_questions(ctx: Any, raw: Any) -> list[Record]:
     """The rule hits the lead wants the person to decide on, checked: the contract's shape, rules this run has."""
     out: list[Record] = []
     known = {r["rule_id"] for r in _enabled_rules(ctx)}
+    advice_ids = {r["rule_id"] for r in _enabled_rules(ctx) if r.get("level") == "advice"}
     for q in raw or []:
         problems = contract.errors("rule_question", q)
         if problems:
             raise IntakeError("rule_hits の 1 件が契約の形ではありません: " + "; ".join(str(p) for p in problems[:2]))
         if q["rule_id"] not in known:
             raise IntakeError(f"規則 {q['rule_id']} はこの実行にありません。ある規則: {', '.join(sorted(known))}")
+        if q["rule_id"] in advice_ids:
+            raise IntakeError(f"規則 {q['rule_id']} は助言 (level advice) なので、人には聞きません (記録に助言として残ります)")
         out.append({**q, "choices": list(q.get("choices") or hearing.RULE_CHOICES)})
     return out
 
@@ -301,7 +304,12 @@ def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if tradeoff.collector is None:
         raise ToolError("この実行には、感度を集めるしくみ (hiraku.tools 側の collector) がまだ登録されていません")
     design = _store(ctx).design()
-    names = list(args.get("variables") or [f"variables.{k}" for k in (design.get("variables") or {})])
+    if args.get("variables"):
+        names = list(args["variables"])
+    elif tradeoff.default_variables is not None:
+        names = list(tradeoff.default_variables(ctx) or [])
+    else:
+        names = [f"variables.{k}" for k in (design.get("variables") or {})]
     paths = [p if p.startswith(_PATH_ROOTS) else f"variables.{p}" for p in names][:_MAX_VARIABLES]
     if not paths:
         raise ToolError("動かす設計の数がありません。variables に設計の変数の名前 (または variables.<名前> などの道) を渡してください")
@@ -472,9 +480,11 @@ def rule_check_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         "summary": summary,
         "text": rulecheck.summary_line(checks, rules),
         "hits": [{"rule_id": c["rule_id"], "text": next(r["text"] for r in rules if r["rule_id"] == c["rule_id"]),
-                  "parts": [h["part_id"] for h in c["hits"]]} for c in checks if c["hits"]],
+                  "parts": [h["part_id"] for h in c["hits"]]} for c in checks if c["hits"] and not rulecheck.is_advice(c)],
+        "advice": [{"rule_id": c["rule_id"], "text": next(r["text"] for r in rules if r["rule_id"] == c["rule_id"]),
+                    "parts": [h["part_id"] for h in c["hits"]]} for c in checks if c["hits"] and rulecheck.is_advice(c)],
         "not_evaluable": [{"rule_id": c["rule_id"], "missing": sorted({m for n in c["not_evaluable"] for m in n["missing"]})}
-                          for c in checks if c["not_evaluable"]],
+                          for c in checks if c["not_evaluable"] and not rulecheck.is_advice(c)],
         "recorded": persist and not problems,
         **({"not_recorded": problems[0]} if problems else {}),
         **({"dropped_rules": [{"rule_id": r, "reason": why} for r, why in dropped.items()]} if dropped else {}),

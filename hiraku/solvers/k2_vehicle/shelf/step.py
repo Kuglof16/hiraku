@@ -8,7 +8,7 @@ import numpy as np
 
 from ..checks import _check
 from ..drive import SpeedController, controls, start_rolling
-from ..model import DesignError, box_design, build_vehicle
+from ..model import DesignError, _given, box_design, build_vehicle
 from ..record import BodyLog, Recorder
 from ..road import step as step_road
 from ..scenario import new_sim
@@ -142,6 +142,22 @@ CLIMB_BEFORE_S = 0.6  # a following wheel's climb: from this long before its cen
 HIT_HALF_S = 0.1  # s each side of a wheel's hit kept at every load state in run 2's mount series
 CRAWL_SPEED = 0.5  # m/s after the lift-off (K2's choice: slow, so the record stays nearly quasi-static)
 CRAWL_MAX_S = 20.0
+
+
+def stiffness_sources(design: dict) -> str:
+    """Where the hit's stiffnesses come from: each design variable's basis (the contract's optional
+    field), or that it has none, or that the design does not give it (K2's default, an assumption)."""
+    out = []
+    for name in ("tyre_stiffness", "bump_stop_factor"):
+        v = _given(design, name)
+        if v is None:
+            out.append(f"{name} K2's default (the design has no {name}; an assumption)")
+        elif v.get("basis"):
+            out.append(f"{name} {v['basis']}")
+        else:
+            out.append(f"{name} from the design without a source (no basis)")
+    out.append("the spring is the supports' wheel rate (the design's choice)")
+    return "; ".join(out)
 
 
 def climb_windows(t_lift: float, crossed: dict[int, float], stepping: list[int]) -> list[tuple[float, float]]:
@@ -403,8 +419,7 @@ class StepClimbTool(K2Tool):
             lead = next(c for c in veh.corners if c.id == peak_id) if peak_id is not None else veh.corners[0]
             notes.append(f"the hit's forces rest on the tyre's vertical stiffness {lead.k_z / 1000.0:g} N/mm above all "
                          f"(the spring {lead.k_w / 1000.0:g} N/mm and the bump stops {lead.k_stop / 1000.0:g} N/mm "
-                         "hardly change them), values the design gives without a source (design variables carry "
-                         "none)")
+                         f"hardly change them); where they come from: {stiffness_sources(design)}")
             return {"results": res, "series": series, "vectors": vectors, "scene": scene, "assumptions": notes}
         rec = crawl["recorder"]
         x0 = crawl["x_corner"]

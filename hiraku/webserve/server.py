@@ -710,6 +710,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # socketserver's listen backlog is 5; a page asks for its modules on several connections at
+    # once, and with a busy machine the accept loop falls behind (a browser test saw
+    # ERR_CONNECTION_REFUSED with other browser tests running beside it)
+    request_queue_size = 64
+
     # On Windows SO_REUSEADDR (HTTPServer's default) lets a second socket bind a port another
     # server already listens on, so a second HIRAKU would quietly share the port with an old one.
     # There the port is bound exclusively instead: a port in use fails with OSError.
