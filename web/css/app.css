@@ -60,7 +60,7 @@ button {
 body.video { --band: 170px; }
 body.video .statusrow, body.no-status .statusrow { display: none; }
 body.no-status .stage, body.video .stage { grid-template-rows: 64px 56px minmax(0, 1fr) 0 var(--band); }
-body.video .hint { display: none; }
+body.video .hint, body.video .bench-more { display: none; }
 /* the video has no replay bar (the bench's): ?t= and window.hiraku.seek move the replay without
    it. What stood above it comes down by the bar's height. A7 keeps only its band "手順 n / N"
    (at the bar's left): its track, its ▶ and its switches (接合, モジュール) go, and its list of
@@ -672,6 +672,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .pb-live.on { border-color: var(--red); color: var(--red); font-weight: 700; }
 
 .hint { margin: 0 4px; font-size: 14px; color: var(--muted); }
+/* the workbench's くわしく (app.js: what the dummy is drawn from) */
+.bench-more { margin: 0 4px; font-size: 14px; color: var(--muted); }
+.bench-more > summary { cursor: pointer; width: max-content; }
 
 /* right: prediction -> analysis -> comparison */
 .col-right { min-height: 0; }
@@ -1132,7 +1135,7 @@ body.present .stage { grid-template-rows: 64px minmax(0, 1fr) var(--band); }
 body.present .tabsrow, body.present .statusrow, body.present .pills { display: none; }
 body.present .main { grid-template-columns: minmax(0, 1fr); padding: 14px 452px 14px 24px; }
 body.present .col-left, body.present .col-right { display: none; }
-body.present .tests, body.present .toggles, body.present .hint, body.present .bubble,
+body.present .tests, body.present .toggles, body.present .hint, body.present .bench-more, body.present .bubble,
 body.present .running, body.present .limitnote, body.present .animbar, body.present .now { display: none; }
 /* only the main labels in the 3D (the largest value, the picked wheel's force) */
 body.present .gl-labels .lbl:not(.lbl-key) { display: none; }

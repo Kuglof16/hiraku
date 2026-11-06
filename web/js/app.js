@@ -39,6 +39,7 @@ import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.
 import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
+import { DUMMY_NOTE_JA } from "./hybrid3.js"; // the workbench's くわしく under a dummy
 import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
@@ -1848,6 +1849,9 @@ function draw() {
 
     const design = s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null;
     bench.setDesign(design);
+    // the workbench's くわしく: what the real look's dummy is drawn from (hybrid3.js)
+    $("bench-more").hidden = !bench.dummyDrawn;
+    if ($("bench-dummy-note").textContent !== DUMMY_NOTE_JA) $("bench-dummy-note").textContent = DUMMY_NOTE_JA;
     bench.setLoading(chain.loadCase?.params?.loading ?? null);
     bench.setMotion(motion);
     bench.setScene(chain.loadCase, chain.shown);

@@ -12,6 +12,8 @@ WEB = Path(__file__).resolve().parents[2] / "web"
 JS = WEB / "js"
 # the one page outside the CDN the screen links to: the repository's README, section 動かし方
 README_RUN_URL = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"
+# web/js/hybrid3.js: the source of the Hybrid III table, in its comment
+H3_SOURCE_URL = "https://www.humaneticsgroup.com/sites/default/files/2020-06/hybiii50-tps.pdf"
 
 
 def read(p):
@@ -168,6 +170,9 @@ class FilesTest(unittest.TestCase):
                 elif p.name == "app.js" and url == README_RUN_URL:
                     # the run list's link to the README (a page the person opens; nothing is loaded from it)
                     self.assertIn(f'const README_RUN = "{url}"', read(p))
+                elif p.name == "hybrid3.js" and url == H3_SOURCE_URL:
+                    # the Hybrid III table's source, named in a comment (nothing is loaded from it)
+                    self.assertIn(f"// {url}\n", read(p))
                 else:
                     self.fail(f"{p.name}: external URL outside the pinned CDN: {url}")
 
