@@ -125,24 +125,38 @@ offroad-4w:
         With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
         the launch tool gave 5.976 s at 16 kW, 5.907 s at 17 kW and 5.869 s at 18 kW
     - &rev_joints
-      say: 強度 (段 3、つなぎ目の壁) の赤を直すため、レールの肉厚を上げてつなぎ目にガセットを足します
+      say: 強度 (段 3、つなぎ目の壁とサスペンションの取付) の NG を直すため、レールとつなぎ目、塔、取付を強くします
+      # the user's set RECb40 (2026-11-06; the analysis department's studies/lere sets.py 71a7d6f9: BASE + B50 + CH60F +
+      # rail_b 45 + tower_b 40 on v005); REC (tower_b 35) gave the same design as the measuring branch (nodes, members,
+      # parts, sections and mass 759.6 kg compared, the design department, 2026-11-06)
       changes:
         rail_t: {value: 4.5, unit: mm}
-        gusset_leg: {value: 80, unit: mm}
-        gusset_thickness: {value: 3.2, unit: mm}
-        cross_h: {value: 50, unit: mm}
-        # R9 (the suspension brackets, stage 3 with R1s): thicker bracket plates and welds, and a wider rail for the
-        # weld's length along it (plan A of the lead, 2026-11-06; rail_b still to be decided with the user)
+        rail_b: {value: 45, unit: mm}
+        gusset_leg: {value: 120, unit: mm}
+        gusset_thickness: {value: 4.5, unit: mm}
+        gusset_ends: {value: 1, unit: '1'}
+        cross_h: {value: 60, unit: mm}
+        rollbar_foot_h: {value: 70, unit: mm}
+        tower_b: {value: 40, unit: mm}
+        tower_t: {value: 4.5, unit: mm}
+        tower_brace_b: {value: 35, unit: mm}
+        tower_brace_t: {value: 4.5, unit: mm}
+        tower_brace_at: {value: 0.5, unit: '1'}
         mount_plate_t: {value: 9, unit: mm}
         mount_weld_leg: {value: 6.3, unit: mm}
-        rail_b: {value: 45, unit: mm}
       reason: >-
-        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
-        レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)。
-        R9: 後ろの下のアームの後ろのピンのブラケットの板と溶接が利用率 1 を超えるので、板の厚さを 9 mm、溶接の脚を 6.3 mm にし、
-        溶接の長さを決めるレールの幅を 40 mm から 45 mm にする
+        R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm、
+        幅を 40 mm から 45 mm にし、つなぎ目と両端の角に脚 120 mm・厚さ 4.5 mm のガセットを足し、横の部材の高さを 40 mm から 60 mm
+        (ロールバーの足は 70 mm) にする (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)。後ろの塔の柱の足を、
+        40 mm 角・厚さ 4.5 mm の塔の管と、柱の高さの半分から後ろの横の部材への斜めの支え (35 mm 角・厚さ 4.5 mm) で受ける。
+        R9: 後ろの下のアームの後ろのピンのブラケットの板と溶接が利用率 1 を超えるので、板の厚さを 9 mm、溶接の脚を 6.3 mm にする
+        (溶接の長さはレールの幅 45 mm で決まる)
       source: >-
+        REC (tyre 60 N/mm, the analysis department's EC2 shell runs, 2026-11-06): +6.1 kg; hot spots LE / RE 98 / 97 MPa,
+        LB / RB 94 / 94 MPa, the front tower post LA2 130 MPa; R9 plate / weld 0.81 / 0.64. RECb40 (the tower tubes 40 x
+        40, the user's choice): +2.9 kg more, 762.5 kg; LA2 95.9 MPa at tyre 60 N/mm and 109.1 MPa at tyre 90 N/mm (the
+        top of the tyre's range, within the limit; an assumption of this revision: the design's tyre is 60 N/mm); the
+        posts' footprint leaves 2.5 mm of the rail's top face.
         R9: the analysis department's hand estimates on v4 of the demo scripted run 20261106-185605 (plate 6.16, weld 2.88
         at RR.lca_rear) and its shell runs (set A) on v5 with the bracket base (claude/analysis-lca-bracket-base cce7565f),
         mount_plate_t 9 and mount_weld_leg 6.3: plate 0.997 / weld 0.80 at rail_b 40, 0.81 / 0.63 at rail_b 45, 2026-11-06.
