@@ -295,7 +295,7 @@ export class GripView {
       const shown = lines.slice(0, size.kcLines);
       const pts = f.wheels.map((w) => ({ id: w.id, stroke: w.stroke, mark: (w.contact[1] ?? 0) >= 0 ? "fill" : "ring" }));
       kc =
-        `<div class="gp-sec">K&amp;C <small>同じ版の台・左の輪として測り、右はその鏡・横はストローク mm、縮みが +</small></div>` +
+        `<div class="gp-sec">K&amp;C <small>同じ設計の台・左の輪として測り、右はその鏡・横はストローク mm、縮みが +</small></div>` +
         `<div class="kc-grid">${shown.map((l) => `<div class="kc-tile">${kcSvg(l, pts, W, size.kc)}</div>`).join("")}</div>` +
         `<div class="gp-foot">● 左の輪 ○ 右の輪</div>`;
     }
