@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+
+from tests.viewer import no_paths
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -86,7 +88,7 @@ class RopsDataTest(unittest.TestCase):
         self.assertEqual(self.obj["field"], "rops")
         self.assertTrue(self.obj["title"].startswith(names.field_labels()["rops"]))
         self.assertEqual(names.field_labels()["rops"], "強度信頼性 (ROPS)")
-        self.assertNotRegex(json.dumps(self.obj, ensure_ascii=False), r"[A-Za-z]:\\\\|/Users/|/home/")
+        self.assertNotRegex(json.dumps(self.obj, ensure_ascii=False), no_paths.IN_JSON_SHORT)
         self.assertEqual(self.obj["source"]["run"], RUN.name)
 
     def test_default_version_is_the_failing_one(self):
@@ -161,7 +163,7 @@ class RopsPageTest(unittest.TestCase):
         self.assertEqual(out["over_view"], [])
         self.assertEqual(out["layout_overlap"], [])
         self.assertFalse(out["notes_open"])
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
         self.assertIn("部品と計算での扱い", out["panel"])
         self.assertIsNotNone(out["ground"])
         # opened at the largest load on v5's worst case: NG, the record's value
