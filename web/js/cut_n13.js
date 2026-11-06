@@ -36,6 +36,7 @@
 import { requireKeys, storyOf } from "./cut_n03.js";
 import { GREEN, MUTED, RED, panel, showFrom, spread, textPx, toolTitle } from "./cut_panels.js";
 import { checkSourceShort, esc, plainName, plainToolName, plainValue } from "./labels.js";
+import { getUrl } from "./source.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -226,7 +227,7 @@ export class CutN13 {
   async loadCode() {
     const run = params.get("run") ?? "";
     try {
-      const res = await fetch(`/api/runs/${encodeURIComponent(run)}/tools/${encodeURIComponent(this.tool.name)}-${this.attempt}.py`, { cache: "no-store" });
+      const res = await fetch(getUrl(`/api/runs/${encodeURIComponent(run)}/tools/${encodeURIComponent(this.tool.name)}-${this.attempt}.py`), { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       // as many lines as the box holds under its head
       const C = this.spec.code;

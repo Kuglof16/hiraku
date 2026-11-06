@@ -54,6 +54,7 @@ import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
+import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -360,7 +361,8 @@ const intakeApi = {
 // draft, sent back with the next change. A1 and A2 draw the draft's intake events (with the
 // request as the person's words, and the server's warnings as the lead's). When the hearing is
 // settled the request's files are saved and 始める starts a run on them (--intake-events).
-const draft = params.has("new")
+// (a static export has no server to send a request to: ?new=1 opens the run list there)
+const draft = params.has("new") && !STATIC
   ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false, prefill: "", demoTitle: "" }
   : null;
 
@@ -815,9 +817,11 @@ function renderTop(s) {
     // a run this screen started can be stopped while it goes
     (ownRunGoing()
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
-      : DEV
-        ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
-        : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
+      : STATIC
+        ? `<a class="launch-link" href="${withDev("?list=1")}" title="ほかの記録を見る">☰ 一覧へ</a>`
+        : DEV
+          ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
+          : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
 }
 
 // lcId: the load case shown on the 3D (null on the screens without it: no chip ringed); openDomain:
@@ -1015,7 +1019,7 @@ function renderTests(s, lcId, span = null) {
 // The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
 // a prediction shows its formula as written.
 const formulaTitles = new Map();
-fetch("/api/formulas", { cache: "no-store" })
+fetch(getUrl("/api/formulas"), { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : { formulas: [] }))
   .then((got) => {
     for (const f of got.formulas ?? []) if (f.title) formulaTitles.set(f.formula_id, f.title);
@@ -2126,6 +2130,7 @@ function loadFailedWhy(e) {
   if (e?.status === 404) return "この記録は見つかりませんでした。消されたか、名前が違います。";
   if (e?.status) return `サーバーが記録を返せませんでした (${e.status})。`;
   if (e instanceof SyntaxError) return "サーバーの返事が読めませんでした。";
+  if (STATIC) return "記録のファイルを読めませんでした。新しいブラウザで開き直してください。";
   return "サーバーにつながりませんでした。HIRAKU が動いているか確かめてください。";
 }
 
@@ -2155,7 +2160,8 @@ async function openRun(runId) {
   }
   feed.loaded = true;
   loadingNote(null);
-  const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
+  // (a static export holds finished records only: nothing to follow)
+  const follow = !STATIC && !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
   ui.followed = follow;
   ui.childGone = false;
@@ -2181,7 +2187,7 @@ async function openRun(runId) {
 const prose = (s) => esc(s).replace(/\(([^()]{1,40})\)/g, '<span class="nw">($1)</span>');
 
 async function fetchRuns() {
-  return (await fetch("/api/runs", { cache: "no-store" })).json();
+  return (await fetch(getUrl("/api/runs"), { cache: "no-store" })).json();
 }
 
 // The list for people on a narrow window (a phone): out of the 1920 x 1080 stage, which would scale it
@@ -2274,9 +2280,14 @@ async function renderLaunch(message = "") {
   if (!box) return;
   let info;
   try {
-    info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    info = await (await fetch(getUrl("/api/launch"), { cache: "no-store" })).json();
   } catch (e) {
     info = { available: false };
+  }
+  if (STATIC) {
+    // replays only: the recommendation (people's list), then one line to the README for the rest
+    box.innerHTML = (DEV ? "" : pickHtml(info, false)) + LOCAL_RUN_HTML + (await staticExtrasHtml());
+    return;
   }
   if (!DEV) {
     box.innerHTML = plainLaunch(info, message);
@@ -2387,6 +2398,21 @@ function demoSection(info, busy) {
 // row's くわしく, or under ?dev=1; without the key, one short word beside the 実行する that cannot be pressed.
 const README_RUN = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"; // README の「動かし方」 (A1's くわしく)
 const NEEDS_KEY_JA = "Claude のキーが要ります";
+// A static export (source.js STATIC) only replays: in place of the buttons that start, stop or send
+// something, one line to the README's section on running HIRAKU (heading 「はじめに動かす」).
+const README_START = "https://github.com/Kuglof16/hiraku#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB%E5%8B%95%E3%81%8B%E3%81%99";
+const LOCAL_RUN_HTML =
+  `<p class="local-run">手元で動かすには (再現する・実行する・新しく依頼する): <a class="readme" href="${README_START}" target="_blank" rel="noopener">README の「はじめに動かす」</a></p>`;
+// The export's other pages (data/static.json extras: [{href, title}], e.g. N10's answers), one line each.
+async function staticExtrasHtml() {
+  try {
+    const got = await (await fetch("data/static.json")).json();
+    const rows = (got.extras ?? []).map((x) => `<p class="extra"><a href="${esc(x.href)}">${esc(x.title)}</a></p>`);
+    return rows.join("");
+  } catch {
+    return "";
+  }
+}
 
 // おすすめ: the server's default saved run (else the newest saved one) as a replay; with no saved run,
 // the scripted run of the demo row PICK_DEMO_ID. Nothing when neither is there.

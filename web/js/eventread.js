@@ -6,6 +6,9 @@
 // count everything else (and lines that are not UTF-8) in bad_lines.
 // (One difference that cannot show up in practice: Python's json accepts NaN and
 // Infinity, JSON.parse does not; the JSON form could not carry such a line either.)
+// In a static export (source.js) the record is one gzipped file, read whole.
+
+import { STATIC, staticEventsPath } from "./source.js";
 
 const ASCII_SPACE = /^[ \t\n\r\v\f]+|[ \t\n\r\v\f]+$/g;
 const LINE_BREAK = /\r\n|\r|\n/;
@@ -66,10 +69,37 @@ export function parseEventLines(bytes) {
   return { events, bad };
 }
 
+// The bytes of a gzipped file's answer, unpacked. A host that sends it with Content-Encoding: gzip
+// has the browser unpack it already: then the bytes do not start with gzip's magic and are kept.
+async function gunzipped(res) {
+  const buf = new Uint8Array(await res.arrayBuffer());
+  if (buf[0] !== 0x1f || buf[1] !== 0x8b) return buf;
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// A static export (source.js STATIC): the whole record in one read from data/runs/<id>/events.jsonl.gz.
+// Offsets count the unpacked bytes; a read past the start finds nothing more (the record is finished).
+async function fetchStaticEvents(runId, offset) {
+  if (offset > 0) return { events: [], next_offset: offset, size: offset, reset: false, bad_lines: 0, run_id: runId };
+  const path = staticEventsPath(runId);
+  const res = await fetch(path);
+  if (!res.ok) {
+    const err = new Error(`${res.status} ${path}`);
+    err.status = res.status;
+    err.serverError = res.status;
+    throw err;
+  }
+  const bytes = await gunzipped(res);
+  const { events, bad } = parseEventLines(bytes);
+  return { events, next_offset: bytes.length, size: bytes.length, reset: false, bad_lines: bad, run_id: runId };
+}
+
 // One read from `offset`: {events, next_offset, size, reset, bad_lines} (the JSON form's fields).
 // A failed request throws an Error "<status> <path>" that carries .status and .serverError
 // (the server's error text, else the status).
 export async function fetchEvents(runId, offset) {
+  if (STATIC) return fetchStaticEvents(runId, offset);
   const path = `/api/runs/${encodeURIComponent(runId)}/events?offset=${offset}`;
   const res = await fetch(`${path}&format=ndjson`, { cache: "no-store" });
   if (!res.ok) {

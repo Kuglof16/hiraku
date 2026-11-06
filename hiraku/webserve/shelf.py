@@ -45,6 +45,16 @@ class Shelf:
                 threading.Thread(target=self._fill, daemon=True).start()
         return {"ready": False}
 
+    def compute(self) -> dict[str, Any]:
+        """What get() answers once ready, computed here and now (blocking; the static export's
+        shelf). A shelf already computed is answered as it is."""
+        with self._lock:
+            if self._result is not None:
+                return self._result
+            self._started = True
+        self._fill()
+        return self._result
+
     def _fill(self) -> None:
         try:
             result = {"ready": True, **self._load()}
