@@ -86,12 +86,18 @@ class Motor:
 
 
 class SpeedController:
-    """PI on the forward speed: positive output drives, negative brakes (N m per wheel)."""
+    """PI on the forward speed: positive output drives, negative brakes (N m per wheel).
+
+    motor: the drive per driven wheel is held to what the motor gives at the wheels' speed
+    (Motor.wheel_torque_total at the forward speed over the mean radius, split equally), so a held
+    speed the motor cannot keep is not kept (without it the drive has no limit)."""
 
     def __init__(self, sim: Sim, kp: float | None = None, ki: float | None = None, max_drive: float = math.inf,
-                 max_brake: float = math.inf):
+                 max_brake: float = math.inf, motor: Motor | None = None):
         veh = sim.veh
         r = sum(c.radius for c in veh.corners) / veh.n
+        self.r = r
+        self.motor = motor
         self.driven = [i for i, c in enumerate(veh.corners) if c.drive]
         self.braked = [i for i, c in enumerate(veh.corners) if c.brake]
         if not self.driven:
@@ -112,6 +118,9 @@ class SpeedController:
         brake = [0.0] * sim.n
         if u >= 0.0:
             t = min(u, self.max_drive)
+            if self.motor is not None:
+                cap = self.motor.wheel_torque_total(sim.forward_speed() / self.r) / len(self.driven)
+                t = min(t, cap)
             for i in self.driven:
                 drive[i] = t
         else:
