@@ -395,7 +395,7 @@ class CrashBeamTool(K2Tool):
             "do not brace the frame) and the rims' crushing (a wheel's rim stops at the wall once its tyre is "
             "through). Either can move the result a lot (not checked): with the floor as a rigid box the least room "
             "on demo v1 was -12 mm, without it -497 mm with a split, against -196 mm here (K2's runs, 2026-11-06). "
-            "床の板が骨組みを支える力と、車輪のリムがつぶれることは、このモデルに入っていない (確かめていない)",
+            "床の板が骨組みを支える力と、車輪のリムがつぶれることは、このモデルに入っていない (結果を大きく動かすことがある)",
             f"peak_decel and the deceleration series: the whole mass's deceleration, the wall's impulse over each "
             f"{WINDOW * 1000:g} ms / (the total mass x {WINDOW * 1000:g} ms), recorded every {REC_DT * 1000:g} ms; "
             "peak_decel is the input to the occupants (the deceleration of the whole vehicle they ride in, not of the "
