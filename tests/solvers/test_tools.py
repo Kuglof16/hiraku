@@ -26,6 +26,15 @@ def q(v, u):
     return {"value": v, "unit": u}
 
 
+# a tool that names no test (the light crash tool since C1 is judged by K2's crash_beam) runs under the test its
+# domain's formulas belong to
+NO_TEST = {"crash": "C1"}
+
+
+def test_of(tool) -> str:
+    return tool.tests[0] if tool.tests else NO_TEST[tool.domain]
+
+
 def results(rec):
     return {r["quantity"]: r for r in rec["results"]}
 
@@ -150,7 +159,7 @@ class DeclarationsTest(unittest.TestCase):
             # the coarsest meshes: a 10 mm shell of the demo vehicle commits about 8 GB in SuperLU. Mesh convergence
             # solves more meshes; it is tested in test_mesh_convergence
             params = COARSE.get(t.name, {})
-            rec = t.run(design_for(t), required_case(t, t.tests[0]), PRED, params)
+            rec = t.run(design_for(t), required_case(t, test_of(t)), PRED, params)
             self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
             got = [r["quantity"] for r in rec["results"]]
             for p in t.predicts:
@@ -162,7 +171,7 @@ class DeclarationsTest(unittest.TestCase):
         for t in TOOLS.values():
             for p in t.load_case_params:
                 if p.required:
-                    rec = t.run(DESIGN, load_case("x", t.tests[0], t.domain), PRED, {})
+                    rec = t.run(DESIGN, load_case("x", test_of(t), t.domain), PRED, {})
                     self.assertEqual(rec["status"], "failed", t.name)
                     self.assertIn(f"{p.name} [{p.unit or 'string'}]", rec["error"])
 
