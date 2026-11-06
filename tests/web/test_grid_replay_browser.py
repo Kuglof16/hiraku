@@ -46,7 +46,8 @@ STATE = """() => ({
   dom: document.querySelector('#domain-head .dh-dom')?.textContent ?? null,
   tests: [...document.querySelectorAll('#tests button.test')].map((b) => b.dataset.lc),
   testOn: document.querySelector('#tests button.on')?.dataset.lc ?? null,
-  cards: ['card-pred', 'card-ana', 'card-cmp'].map((id) => document.getElementById(id).innerText),
+  // (textContent: the cards are folded under ③'s くわしく, so innerText is empty)
+  cards: ['card-pred', 'card-ana', 'card-cmp'].map((id) => document.getElementById(id).textContent),
   time: document.getElementById('pb-time').textContent,
   playhead: window.hiraku.player.playhead, playing: window.hiraku.player.playing,
   url: location.search,
