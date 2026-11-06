@@ -1071,6 +1071,13 @@ class FrameShell(BuiltinTool):
                  STEP_BENDING + "; the shell includes the stress concentration at the joints, which the formula does not"),
         Predicts("wheel_load_<support>", "mass_props.static_wheel_loads", "wheel_load_<support>",
                  "at rest only (no step_height, no upstream forces)"),
+        # R9 plate and weld cases (the brackets meshed as plates): declared so that the run's stage rule
+        # (tools.shelf.load_case_stage) counts frame_shell as the tool that gives them
+        Predicts("plate_bending_utilisation", "mount_bracket.plate_bending", "u",
+                 "R9 plates: the hand formula takes the plate as a cantilever from the tube wall; the shell has the "
+                 "concentration around the pin hole and the wall's bending"),
+        Predicts("weld_utilisation", "mount_bracket.weld", "u",
+                 "R9 welds: the hand formula takes the throat's mean stress; the shell has the weld line's ends"),
         PATH_PREDICTS,
     )
     upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
