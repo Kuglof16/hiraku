@@ -21,7 +21,7 @@ from hiraku.webserve.server import make_server
 from tests.web.held_fixture import HELD_LC, REFERENCE_CASES, REFERENCE_KINDS, REFERENCE_TITLES, held_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -59,7 +59,7 @@ class HeldBandBrowserTest(unittest.TestCase):
 
     def open(self, run_id, tab):
         page = self.browser.new_page(viewport={"width": 1280, "height": 720})
-        page.goto(f"{self.base}/?run={run_id}&tab={tab}&pace=0&pets=0&t=1e6")
+        page.goto(f"{self.base}/?run={run_id}&tab={tab}&pace=0&pets=0&t=1e6", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page
@@ -70,6 +70,10 @@ class HeldBandBrowserTest(unittest.TestCase):
             tile = page.locator('.tile[data-domain="assembly"]')
             self.assertIn("green", tile.get_attribute("class"))  # judged green ...
             self.assertIn("held", tile.get_attribute("class"))  # ... and held
+            # the tile's large mark says it (tiles.js: OK with 保留 N beside it); the band with the
+            # words is under くわしく (the tile's words only when it is opened)
+            self.assertRegex(tile.locator('[data-role="mark"]').inner_text(), r"^OK\s*保留 \d+$")
+            tile.locator("details.more > summary").click()
             band = tile.locator(".heldband")
             self.assertTrue(band.is_visible())
             text = band.inner_text()
@@ -94,6 +98,9 @@ class HeldBandBrowserTest(unittest.TestCase):
             words = {"compare": "比べるだけ", "relay": "渡すだけ", "reference": "参考"}
             for lc_id, _tid, domain, quantity, value, _unit, _extra in REFERENCE_CASES:
                 tile = page.locator(f'.tile[data-domain="{domain}"]')
+                # the rows are under くわしく (tiles.js: the tile's words only when it is opened), so
+                # their words are read as text, shown or not
+                self.assertEqual(tile.locator("details.more .refrows").count(), 1, domain)
                 self.assertNotIn("held", tile.get_attribute("class"), domain)
                 self.assertEqual(tile.locator(".heldband").count(), 0, domain)
                 row = tile.locator(f'.refrows li[data-ref="{lc_id}"]')
@@ -101,11 +108,19 @@ class HeldBandBrowserTest(unittest.TestCase):
                 self.assertEqual(row.get_attribute("data-kind"), REFERENCE_KINDS[lc_id])
                 self.assertEqual(row.get_attribute("data-quantity"), quantity)
                 self.assertEqual(float(row.get_attribute("data-value")), value)
-                self.assertIn(words[REFERENCE_KINDS[lc_id]], row.inner_text())
-                self.assertIn(REFERENCE_TITLES[lc_id], row.inner_text())  # the load case's title, not its id
-                self.assertIn("参考 (判定しない)", tile.locator(".refrows").inner_text())
+                self.assertIn(words[REFERENCE_KINDS[lc_id]], row.text_content())
+                self.assertIn(REFERENCE_TITLES[lc_id], row.text_content())  # the load case's title, not its id
+                self.assertIn("参考 (判定しない)", tile.locator(".refrows").text_content())
                 # not coloured: no orange, green or red background
-                bg = row.evaluate("e => getComputedStyle(e.closest('.refrows')).backgroundColor")
+                # (the grid draws again as the replay moves: a row read through a locator can be the one
+                # just taken out, whose computed style is ''. Look it up and read it in one step, and
+                # wait until a drawn one answers.)
+                sel = f'.tile[data-domain="{domain}"] .refrows li[data-ref="{lc_id}"]'
+                bg = page.wait_for_function(
+                    """(sel) => { const e = document.querySelector(sel); if (!e || !e.isConnected) return null;
+                       const c = getComputedStyle(e.closest('.refrows')).backgroundColor; return c || null; }""",
+                    arg=sel,
+                ).json_value()
                 self.assertIn(bg, ("rgba(0, 0, 0, 0)", "transparent"))
             # handling stays green, powertrain keeps its own state (the record's)
             self.assertIn("green", page.locator('.tile[data-domain="handling"]').get_attribute("class"))

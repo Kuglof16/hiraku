@@ -26,21 +26,21 @@ export const NO_CRITERION_KINDS = [
   {
     kind: "held",
     ja: "保留",
-    why: "基準がまだ無いので判定していない (緑ではない)",
+    why: "基準がまだ無いので判定していない (OK ではない)",
     source: "量の名前と単位 (held.js COUNT_NAME)",
     test: ({ quantity, unit, value }) => isCountQuantity(quantity, unit) && value !== 0,
   },
   {
     kind: "relay",
     ja: "渡すだけ",
-    why: "ほかの荷重条件に力を渡すだけ (合否の基準は無い)",
+    why: "ほかの荷重条件に力を渡すだけ (OK / NG の基準は無い)",
     source: "荷重条件の feeds (hiraku/contract/hiraku.schema.json の load_case.feeds)",
     test: ({ lc }) => Array.isArray(lc.feeds) && lc.feeds.length > 0,
   },
   {
     kind: "compare",
     ja: "比べるだけ",
-    why: "予測と照らし合わせる量 (合否の基準は無い)",
+    why: "予測と照らし合わせる量 (OK / NG の基準は無い)",
     // hiraku/catalog/builders/k2_tests.py lines 17-21: "S5 has no criterion"; its case past the
     // limit (load_case_id ending -beyond) has one and is judged
     source: "試験 S5 で -beyond で終わらない荷重条件 (hiraku/catalog/builders/k2_tests.py 17〜21 行)",

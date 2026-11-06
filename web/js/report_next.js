@@ -7,7 +7,7 @@
 // are said by their names (labels.js designNumberName); the path itself only under ?dev=1.
 // No next: no block.
 
-import { DOMAIN_JA, designNumberName, esc, verLabel } from "./labels.js";
+import { DOMAIN_JA, designNumberName, esc, judgedWords, verLabel } from "./labels.js";
 
 // a design number's path as the reports write it (K5's paths)
 const PATH = /\b(?:variables|sections|parts|materials)\.[A-Za-z0-9_.\-]*[A-Za-z0-9_]/g;
@@ -17,7 +17,8 @@ const UNNAMED_JA = "設計の値";
 export function changeWords(text, design = null, dev = false) {
   let out = "";
   let at = 0;
-  for (const m of String(text ?? "").matchAll(PATH)) {
+  text = judgedWords(text); // the record's words in the screen's (OK / NG, 判定, vN)
+  for (const m of text.matchAll(PATH)) {
     const name = designNumberName(m[0], design) ?? UNNAMED_JA;
     out += esc(text.slice(at, m.index)) + `<span class="rn-name" data-path="${esc(m[0])}">${esc(name)}</span>` + (dev ? ` <small class="rn-path">(${esc(m[0])})</small>` : "");
     at = m.index + m[0].length;

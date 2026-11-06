@@ -16,7 +16,7 @@ from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -126,7 +126,7 @@ class AssemblyBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/{path}")
+        page.goto(f"{self.base}/{path}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -218,13 +218,14 @@ class AssemblyBrowserTest(unittest.TestCase):
         page.wait_for_function("document.querySelector('#view-asm .asm-seek').dataset.u === '1'")
         got = page.evaluate(self.A7_STATE)
         self.assertEqual([r["cur"] for r in got["rows"]], [True, False, False])
-        self.assertEqual(got["visible"], [True, False, False])
+        # (the next part has already started on its way in: assembly.js LEAD)
+        self.assertEqual(got["visible"], [True, True, False])
         self.assertIn(STEPS[0]["text"], got["caption"])
         page.mouse.click(box["x"] + box["width"] * 2 / 3, y)
         page.wait_for_function("document.querySelector('#view-asm .asm-seek').dataset.u === '2'")
         got = page.evaluate(self.A7_STATE)
         self.assertEqual([r["cur"] for r in got["rows"]], [False, True, False])
-        self.assertEqual(got["visible"], [True, True, False])
+        self.assertEqual(got["visible"], [True, True, True])
         # a step's row also takes the order there
         page.click("#view-asm .asm-steps li[data-order='3']")
         page.wait_for_function("document.querySelector('#view-asm .asm-seek').dataset.u === '3'")
@@ -387,7 +388,8 @@ class AssemblyBrowserTest(unittest.TestCase):
         self.assertEqual(us[-1], n)
         self.assertTrue(all(u == round(u) for u in us), us)  # the state lands on whole steps, as under a hand
         got = at(T["scrub_s"] + (T["scrub_to_s"] - T["scrub_s"]) * low / 28)
-        self.assertEqual(got["visible"], [i < got["u"] for i in range(n)])
+        # (on a whole step u the next part has already started on its way in: assembly.js LEAD)
+        self.assertEqual(got["visible"], [i <= got["u"] for i in range(n)])
 
         # held on the last step to the end: the caption and the column name it, and the
         # column says in words what the checks found over all the steps (counted from the record)

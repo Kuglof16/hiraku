@@ -117,7 +117,7 @@ class CutN02PetsTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/cut.html?cut=n02&run={RUN}&t={t}")
+        page.goto(f"{base}/cut.html?cut=n02&run={RUN}&t={t}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         return page, errors

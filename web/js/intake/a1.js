@@ -139,6 +139,9 @@ export function renderA1(el, m, api, ui) {
     : m.domains && !waitN ? { title: "調べることは、決まっている内容からです", note: `7 つのうち ${lit} 個` }
     : { title: "HIRAKU が、何を調べるか考えています", note: lit ? `${lit} / 7` : "" };
   const review = reviewLine(m);
+  // the lead's own pet beside the headline (ui.petSlots "lead"; the host mounts role lead): working while the choice is being made
+  const thinking = !!(m.chat.length || m.want || m.domains?.want) && (draftN > 0 || waitN > 0 || !m.domains);
+  const leadSlot = petSlot({ domain: "lead", shownName: "まとめ役", state: thinking ? "wait" : m.domains ? "done" : "idle", litAt: null }, ui);
   const ask = askingPanel(m, api, ui);
   el.classList?.[ask ? "add" : "remove"]("has-ask");
   const want = m.want || m.domains?.want || [...m.chat].reverse().find((c) => c.who === "user")?.text || "";
@@ -165,8 +168,9 @@ export function renderA1(el, m, api, ui) {
           ? h("ul", { class: "in-why" }, reasons.map(([f, why]) => h("li", {}, h("b", {}, FLAGS.find((x) => x.name === f)?.symbol || f), why)))
           : null),
       h("div", { class: "in-block" },
-        h("h2", {}, headline.title, h("small", {}, headline.note)),
-        review ? h("p", { class: "in-review" }, review) : null,
+        h("div", { class: "in-headrow" },
+          leadSlot,
+          h("div", { class: "in-headtext" }, h("h2", {}, headline.title, h("small", {}, headline.note)), review ? h("p", { class: "in-review" }, review) : null)),
         h("div", { class: "in-cards" }, cards.map((c) => card(c, api, ui))),
         assembly.length ? h("p", { class: "in-foot" }, "組み立てやすさ・人への当たりは、上の 7 つとは別に見ます ",
           h("details", { class: "in-tests" }, h("summary", {}, "くわしく"), assembly.map((t) => h("code", {}, t)))) : null),

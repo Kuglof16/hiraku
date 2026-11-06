@@ -1413,7 +1413,7 @@ class RunChecker:
 
     def _held(self, i: int, domain: str, v: int) -> dict[str, list[str]]:
         """Load cases of the domain (with a criterion, without a failing verdict) that may not count as
-        passed at event i (docs/contract.md, 分野が緑になる条件): the latest comparison of the judged
+        passed at event i (docs/contract.md, 分野が OK になる条件): the latest comparison of the judged
         quantity is a mismatch whose cause is not written, or neither resolved nor safe-side (earlier
         mismatches a later comparison of the same load case and quantity replaced do not hold), or a
         tool's newest ok analysis has its judged result beyond the criterion, which also voids a
@@ -2147,7 +2147,8 @@ class RunChecker:
                                                               f"does not say this run does not look at it")
                 continue
             if (dom in unjudged or j is None or j.get("state") == "pending") and behind_red:
-                if "低い段の赤" not in str(self.project.get("stop_reason") or ""):
+                said = str(self.project.get("stop_reason") or "")
+                if not any(p in said for p in ("低い段の NG", "低い段の赤")):  # the second: runs recorded before contract 98669325
                     self.warn("HK4_no_stop_before_judged", w, f"round_limit with {dom} not judged behind a red, but the "
                                                               f"stop reason does not say a lower stage's red is left")
             elif dom in unjudged:

@@ -177,7 +177,9 @@ class Crash(BuiltinTool):
     title = "壁への正面衝突 (バンパーのばね → レールの塑性のつぶれ → フレーム)"
     domain = "crash"
     base = "K1"
-    tests = ["C1"]
+    # C1 is judged by K2's crash_beam (the frame as beams); this light tool stays on the shelf for a run to call,
+    # its formulas are C1's hand calculation, and it names no test so C1's stage is crash_beam's (HK5)
+    tests: list[str] = []
     formulas = ["crash.plastic_crush", "crash.plastic_occupant_space_margin", "crash.rect_tube_crush",
                 "crash.round_tube_crush", "crash.mean_deceleration"]
     load_case_params = (Param("speed", "km/h", "speed when the front meets the wall", required=True), LOADING)

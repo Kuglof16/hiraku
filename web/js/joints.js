@@ -37,6 +37,7 @@ export const JOINT_KINDS = {
   // bright magenta, not #d23c8a (22 apart in CIELAB from the steering module's #e2759f; this is 55)
   wire: { ja: "電線", mark: "dot", color: "#ff1fd2" },
   hose: { ja: "ホース", mark: "dot", color: "#3fa7c9" },
+  strap: { ja: "帯", mark: "dot", color: "#a0522d" }, // a band holding a load (sienna: apart from rest's and friction's)
 };
 const OTHER = { mark: "dot", color: "#8a8577" };
 
@@ -56,7 +57,8 @@ const BEAD_POLYGON_OFFSET = { factor: -1, units: -4 };
 // matt paint (metalness 0 lit the colour lighter than the painted frame it lies on).
 export const BEAD_REAL = { roughness: 0.55, metalness: 0.6 };
 export const BEAD_NOTE = `溶接のビードは脚 ${WELD_BEAD.leg_mm} mm の三角の断面で継ぎ目に沿う。寸法と色は画面の決め (出典なし)`;
-export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: String(via) };
+// (a kind not in the table: "そのほか" on the screen, not the record's English word; the word is the row's title)
+export const kindOf = (via) => JOINT_KINDS[via] ?? { ...OTHER, ja: "そのほか", via: String(via) };
 
 // The rule for a frame node that does not say how it is joined (node.joint absent): drawn as
 // welded. The contract (docs/contract.md, d9631a5; node.joint in the schema) says the ladder_4w
@@ -740,7 +742,7 @@ export function jointLegendHtml(info) {
     .map((k) => {
       const kd = kindOf(k);
       const extra = k === "weld" && info.frameRule ? `<small>枠の節 ${info.frameRule}</small>` : "";
-      return `<span class="jl-sw jl-${kd.mark}" style="--jc:${kd.color}"></span><span class="jl-nm" data-kind="${esc(k)}">${esc(kd.ja)}${extra}</span><span class="jl-n" data-count="${esc(k)}">${info.counts[k]}</span>`;
+      return `<span class="jl-sw jl-${kd.mark}" style="--jc:${kd.color}"></span><span class="jl-nm" data-kind="${esc(k)}"${kd.via ? ` title="${esc(kd.via)}"` : ""}>${esc(kd.ja)}${extra}</span><span class="jl-n" data-count="${esc(k)}">${info.counts[k]}</span>`;
     })
     .join("");
   const ruleNote = info.ruleBasis === "old" ? NODE_RULE_OLD_NOTE : NODE_RULE_NOTE;

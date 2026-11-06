@@ -220,7 +220,8 @@ class DemoMeshTest(unittest.TestCase):
         self.assertLessEqual(ms.edge_lengths().max(), 10.0 + 1e-9)
         self.assertEqual(ms.links, [])
         self.assertEqual(len(ms.element_member), ms.n_elements)
-        self.assertEqual(set(ms.element_member), {m["id"] for m in self.design["members"]})
+        # the tubes, and the suspension mount brackets meshed as plates (k1_shell.brackets)
+        self.assertEqual(set(ms.element_member), {m["id"] for m in self.design["members"]} | set(ms.bracket_material))
         kinds = ms.joint_kinds
         self.assertEqual({k for k, v in kinds.items() if v == "L"}, {"LF", "LE", "RF", "RE"})
         self.assertEqual({k for k, v in kinds.items() if v == "T"}, {"LA", "LS1", "LS2", "LB", "RA", "RS1", "RS2", "RB"})
@@ -243,6 +244,8 @@ class DemoMeshTest(unittest.TestCase):
         nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in self.design["nodes"]}
         mem = {m["id"]: m for m in self.design["members"]}
         for k, mid in enumerate(self.mesh.element_member):
+            if mid not in mem:  # a mount bracket's plate: flat (above), not a tube wall
+                continue
             ax = self.mesh.member_axes[mid]
             rel = c[k] - nodes[mem[mid]["node_a"]]
             rad = rel - (rel @ ax[0]) * ax[0]
@@ -258,7 +261,10 @@ class DemoMeshTest(unittest.TestCase):
 
     def test_mass_against_the_beam_model(self):
         d = self.design
-        shell = self.model.total_mass() * 1000.0
+        # the tubes' elements only (the mount brackets' plates are parts, not frame members)
+        tube = np.array([m in {x["id"] for x in d["members"]} for m in self.mesh.element_member])
+        _, xl, _, _ = element.local_frames(self.model.element_xyz())
+        shell = float(np.sum((self.model.rho * self.model.thickness * element.element_area(xl))[tube])) * 1000.0
         beam = mass_summary(d)["frame_mass_kg"]
         # per unit length the shell (mid-line perimeter x t) and the beam (exact A) are the same for a
         # rect tube; the difference is length: rails extended at L joints, cross members cut back at the rail walls
@@ -458,7 +464,8 @@ class GussetMeshTest(unittest.TestCase):
 
     def test_plates_are_meshed_and_welded(self):
         ms = self.mesh
-        self.assertEqual(set(ms.element_member) - {m["id"] for m in self.design["members"]}, set(self.gussets))
+        self.assertEqual(set(ms.element_member) - {m["id"] for m in self.design["members"]},
+                         set(self.gussets) | set(ms.bracket_material))  # and the mount brackets' plates
         self.assertEqual(set(ms.part_material), set(self.gussets))
         # LS1's rear gussets are left off on the battery's side (kit/frame.Frame.gussets avoid): its front ones
         self.assertEqual(ms.part_material["gusset_LS1_front_lower"], "cross_S1")
@@ -510,7 +517,12 @@ class GussetMeshTest(unittest.TestCase):
         with self.assertRaisesRegex(DesignError, "not the centroid"):
             build_mesh(d, 10.0)
         p["box"]["center_mm"][0] -= 5.0
-        p["carried_by"] = ["LF"]  # an L joint
+        p["carried_by"] = ["LF"]  # an L joint takes gussets at its own corner, not this one
+        with self.assertRaisesRegex(DesignError, "not the centroid"):
+            build_mesh(d, 10.0)
+        at = {n["id"]: [m["id"] for m in d["members"] if n["id"] in (m["node_a"], m["node_b"])] for n in d["nodes"]}
+        inside = [n for n, ms in at.items() if len(ms) == 2 and all(m.startswith("rail_") for m in ms)]
+        p["carried_by"] = [inside[0]]  # a node inside a rail: no tube ends on its side
         with self.assertRaisesRegex(DesignError, "no T joint"):
             build_mesh(d, 10.0)
 

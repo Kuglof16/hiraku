@@ -1,0 +1,269 @@
+{
+  "design_version": 2,
+  "agent": "lead",
+  "domains": [
+    {
+      "domain": "handling",
+      "state": "green",
+      "line": "S1 lighter_side_load 822.1 N ≥ 0 N (余裕 822.1 N) / S1 lighter_side_load 83.14 N ≥ 0 N (余裕 83.14 N)",
+      "verdict_ids": [
+        "ver-0011",
+        "ver-0013"
+      ],
+      "effects": [],
+      "assumptions": [
+        "ベッドは硬い",
+        "床は水平",
+        "力はまっすぐ下",
+        "入力は版 2 の formula_inputs (product_care_bed.s1_inputs) から写した",
+        "rigid bed on a level floor; the casters' contact points on two lines along the bed",
+        "the load and the weight act straight down",
+        "キャスターは滑らない (床が押す力を接地点で受ける)",
+        "入力は版 2 の formula_inputs (product_care_bed.s1_push_inputs) から写した",
+        "the casters do not slide: the floor takes the push at the contact points (floor level)"
+      ],
+      "differences": []
+    },
+    {
+      "domain": "powertrain",
+      "state": "green",
+      "line": "P5 actuator_force 1988 N ≤ 4000 N (余裕 50 %) / P5 actuator_force 2151 N ≤ 4000 N (余裕 46 %)",
+      "verdict_ids": [
+        "ver-0012",
+        "ver-0015"
+      ],
+      "effects": [],
+      "assumptions": [
+        "準静的 (加速と摩擦は入れない)",
+        "板の上の重さは板と一緒に回り、ちょうつがいからの距離は平らなときの水平の距離 (高さは入れない)",
+        "入力は版 2 の formula_inputs (product_care_bed.p5_inputs) から写した",
+        "quasi-static (no acceleration, no friction in the hinge and the pins)",
+        "the load stays where it is on the board as it rises (it turns with the board)",
+        "scanned at 721 angles"
+      ],
+      "differences": []
+    },
+    {
+      "domain": "strength",
+      "state": "green",
+      "line": "R3 fatigue_damage 0.0003877 < 1 (余裕 100 %) / R5 max_stress 18.06 MPa ≤ 61.25 MPa (余裕 71 %) / R5 max_stress 36.48 MPa ≤ 53.75 MPa (余裕 32 %)",
+      "verdict_ids": [
+        "ver-0017",
+        "ver-0010",
+        "ver-0014"
+      ],
+      "effects": [
+        {
+          "name": "damage at lug_back (bracket_back), range 65.23 MPa",
+          "value": 0.00038773313775584994,
+          "unit": "1",
+          "share": 0.7665166500017647
+        },
+        {
+          "name": "damage at lug_knee (bracket_knee), range 43.69 MPa",
+          "value": 0.0001165292765274419,
+          "unit": "1",
+          "share": 0.2303688335434167
+        },
+        {
+          "name": "damage at frame (post_LF), range 10.84 MPa",
+          "value": 1.57544032163717e-06,
+          "unit": "1",
+          "share": 0.0031145164548185608
+        }
+      ],
+      "assumptions": [
+        "着座ごとに床の枠の応力が 0 から載せた分まで 1 回振れる",
+        "背上げ・膝上げは金具の耳の根元が 1 回振れる",
+        "昇降と柵の上げ下げは枠の応力を変えない",
+        "入力は版 2 の formula_inputs (product_care_bed.r3_inputs) から写した",
+        "each use is one cycle of its stress range (0 to the loaded stress)",
+        "IIW-type S-N curve (no mean stress correction)",
+        "linear damage accumulation (Miner)",
+        "the uses' ranges differ, so the cycles are a spectrum: below the knee the slope is 2 m - 1 (IIW-1823-07 (2008) sec. 4.3.1, p.110; library_fatigue.spectrum_slope), not the constant-amplitude slope of the design variable fatigue_slope_after_knee_constant_amplitude",
+        "荷重は床の長さに一様",
+        "片側を平面の枠とみる (横の部材は入れない)",
+        "柱は横にずれない",
+        "入力は版 2 の formula_inputs (product_care_bed.r5_deck_inputs) から写した",
+        "the load is uniform along the upper rail (the weights spread along the deck)",
+        "one side of the bed as a plane frame: the cross members and the other side are left out",
+        "joints rigid, no sway of the posts",
+        "Euler-Bernoulli beams, bending only (the posts' axial stress added)",
+        "上の棒は柱の上に載った梁 (柱は押す向きのばねとねじりのばね)",
+        "柱の根元 (受け口) は回らない",
+        "床の枠の横の部材は入れない",
+        "入力は版 2 の formula_inputs (product_care_bed.r5_rail_inputs) から写した",
+        "the posts are cantilevers from their sockets; each foot turns with the upper rail's twist (k_f, given) and the socket stub itself does not bend",
+        "the top bar is held by the posts along the push, about the vertical axis (the posts' torsion) and in its twist (the posts' tips turning in the push's plane, against the bar's torsion)",
+        "in the sleeve the post and the sleeve bend and twist together as one tube (no gap between them)",
+        "the gusset: two plates flanking the post, as deep as the tube at the root, tapering to nothing at g; taken in 4 steps at each step's middle depth, checked at each step's lower end; its shear in torsion taken in the tube alone",
+        "the socket stub: square tube along the push, its stress at its end (no length effect)"
+      ],
+      "differences": []
+    },
+    {
+      "domain": "nvh",
+      "state": "pending",
+      "line": "まだ判定していない試験: なし",
+      "verdict_ids": [],
+      "effects": [],
+      "assumptions": [],
+      "differences": []
+    },
+    {
+      "domain": "thermal",
+      "state": "green",
+      "line": "T3 actuator_duty 6.6 % ≤ 10 % (余裕 34 %)",
+      "verdict_ids": [
+        "ver-0016"
+      ],
+      "effects": [],
+      "assumptions": [
+        "1 回の上げ下げは定格の速さ",
+        "1 日の使い方を 1 時間に集める (いちばん忙しい時間)",
+        "s は版 2 の formula_inputs (P5-back の版 2 の照合 cmp-0017 / ana-0011 のストロークと同じ値)",
+        "each stroke at the rated speed",
+        "the hour is the busiest one: every use of the day in it"
+      ],
+      "differences": []
+    }
+  ],
+  "unchecked": [
+    {
+      "item": "Q03 使う頻度・年数",
+      "source": "assumption (a sample answer; no source)"
+    },
+    {
+      "item": "Q11 路面・床と摩擦係数",
+      "source": "assumption (an indoor floor; no friction coefficient looked up)"
+    },
+    {
+      "item": "Q30 人数と荷重の組み合わせ",
+      "source": "assumption (a sample answer): the one occupant is the bed's user; the carer stands beside the bed and is not counted (only people on board are)"
+    },
+    {
+      "item": "Q31 体格の範囲",
+      "source": "AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: the AIST page is a list only; not reachable)"
+    },
+    {
+      "item": "Q34 弱い人がいるか",
+      "source": "assumption (a home care bed is used by older people)"
+    },
+    {
+      "item": "Q63 挟み込みの隙間",
+      "source": "JIS T 9254 (copy) と FDA の病院ベッドの挟み込みの指針 (2006), https://www.fda.gov/files/medical%20devices/published/Hospital-Bed-System-Dimensional-and-Assessment-Guidance-to-Reduce-Entrapment---Guidance-for-Industry-and-FDA-Staff.pdf. The FDA zones: FDA guidance, read 2026-11-03 in a source check. The JIS T 9254 part: not checked in this repository"
+    },
+    {
+      "item": "Q72 なぞる規格",
+      "source": "catalog research (not checked in this repository; tried 2026-11-03: the basis has no URL; not reachable)"
+    },
+    {
+      "item": "Q80 材料と接合",
+      "source": "assumption"
+    },
+    {
+      "item": "Q81 組む人と工具",
+      "source": "assumption"
+    },
+    {
+      "item": "Q82 出荷の形",
+      "source": "assumption"
+    },
+    {
+      "item": "material stkr400",
+      "source": "yield: JIS G 3466 minimum yield point for STKR400; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository."
+    },
+    {
+      "item": "material stkm13a",
+      "source": "yield: JIS G 3445 minimum yield point for STKM13A; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository."
+    },
+    {
+      "item": "material ss400",
+      "source": "yield: JIS G 3101 minimum yield point for SS400 at thickness <= 16 mm; E, nu, density: common design values for carbon steel. Not checked against the standard text in this repository."
+    }
+  ],
+  "next": [
+    {
+      "domain": "handling",
+      "change": "サイドレールを外へ押す荷重で、キャスター 1 輪ずつの荷重も判定に入れる。右前のキャスターが浮かないよう、キャスターの幅を範囲の外まで広げられるか、重りや脚の張り出しを足す",
+      "reason": "S1-side-rail-push は左右の合計 (lighter_side_load) で合格したが、ana-0012 で右前のキャスターの荷重が負で、1 輪が床から離れるおそれがある"
+    },
+    {
+      "domain": "nvh",
+      "change": "騒音 (N3) の荷重条件を作り、アクチュエータの運転音を判定する",
+      "reason": "騒音を選んだが、この型 (care_bed) では荷重条件が 1 つも作られず、判定が付いていない"
+    },
+    {
+      "domain": "handling",
+      "change": "サイドレールの高さを下げた分、転落を防ぐ高さの要件を足して確かめる",
+      "reason": "版 2 で転倒のためにサイドレールを下げたが、転落防止の高さを決める要件が無い"
+    }
+  ],
+  "summary": "版 2 で、安定・動力・強度・熱の 4 分野が合格。騒音 (nvh) は荷重条件が作られず未判定。\n- 安定 (handling): 版 1 は S1-side-rail-push が不合格 (ver-0007、lighter_side_load -64.72 N)。版 2 でキャスターの幅を広げ、サイドレールとデッキを下げて合格 (ver-0011、ver-0013、lighter_side_load 83.14 N、照合 cmp-0018 一致)。ただし右前のキャスター 1 輪の荷重は負のまま (ana-0012)。\n- 強度 (strength): 版 1 は R5-side-rail が不合格 (ver-0006、149.5 MPa)。版 2 でサイドレールの柱を太く・厚く・4 本にし、ガセットを伸ばして合格 (ver-0014、36.48 MPa、cmp-0019 一致)。R5-deck (ver-0010) と R3-uses (ver-0017) も合格。\n- 動力 (powertrain): P5-back・P5-knee とも合格 (ver-0012、ver-0015、cmp-0016・cmp-0020 一致)。\n- 熱 (thermal): T3-6uses 合格 (ver-0016、cmp-0022 一致)。\n- 規則: rule_check の当たりは版 1・版 2 とも 0 (評価できない規則 8)。",
+  "issues": [
+    {
+      "kind": "missing_tool",
+      "what": "騒音 (nvh) を分野に選んだが、版 1・版 2 とも nvh の荷重条件が 1 つも作られず、判定が pending のまま終わった。",
+      "where": "propose_design (care_bed の型) と judgements の nvh",
+      "workaround": "判定せずに報告の next に書いた"
+    },
+    {
+      "kind": "other",
+      "what": "組み立ての試験 (H1・H2・H4・H5・G2) が選ばれたのに、段 0 の組み立ての荷重条件が作られず、パッケージ役に渡すものが無かった。",
+      "where": "pick_domains の assembly_test_ids と版 1 の荷重条件",
+      "workaround": "rule_check だけをまとめ役が版 1・版 2 で 1 回ずつ呼んだ"
+    },
+    {
+      "kind": "tool_error",
+      "what": "S1-side-rail-push の compare の 1 回目が Internal server error になった。",
+      "where": "compare (S1-side-rail-push、版 1)",
+      "record_ids": [
+        "cmp-0008"
+      ],
+      "workaround": "安定役がもう一度呼び、cmp-0008 が出た"
+    },
+    {
+      "kind": "unclear_instruction",
+      "what": "S1 の判定の量 lighter_side_load は反対側 2 輪の合計なので、1 輪が負の荷重 (浮く) でも合格になる。",
+      "where": "S1-side-rail-push の基準",
+      "record_ids": [
+        "ver-0013",
+        "ana-0012"
+      ],
+      "workaround": "合格のまま、next に 1 輪ずつの判定を書いた"
+    },
+    {
+      "kind": "assumed_value",
+      "what": "サイドレールを押す力は Q33 の 50% という仮定の値、アクチュエータの定格の力と定格のデューティは設計の変数で、カタログで確かめていない。",
+      "where": "S1-side-rail-push・R5-side-rail・P5・T3 の基準",
+      "record_ids": [
+        "ver-0012",
+        "ver-0015",
+        "ver-0016"
+      ],
+      "workaround": "そのまま使った"
+    },
+    {
+      "kind": "other",
+      "what": "R3-uses の予測の応力の幅は解析と同じコードから出ていて、予測と解析が独立に確かめたことにならない。P5 も道具の基準が予測と同じ式。",
+      "where": "R3-uses、P5-back、P5-knee",
+      "record_ids": [
+        "cmp-0024",
+        "cmp-0025",
+        "cmp-0016",
+        "cmp-0020"
+      ],
+      "workaround": "一致として合否を出した"
+    },
+    {
+      "kind": "missing_tool",
+      "what": "強度が梁の解析だけで緑になったが、棚にシェルの道具 (frame_shell) が無く、つなぎ目を見られなかった。",
+      "where": "R5-deck・R5-side-rail",
+      "record_ids": [
+        "ana-0009",
+        "ana-0013"
+      ],
+      "workaround": "シェルは回さなかった"
+    }
+  ]
+}

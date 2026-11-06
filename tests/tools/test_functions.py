@@ -648,12 +648,22 @@ class SafeSideTest(RunCase, unittest.TestCase):
         cmp = self.r1_mismatch(6.0)  # the tool's stress (about 186 MPa) beyond the criterion (156.7 MPa)
         record_cause(self.ctx, self.args(cmp, ends_case=True))
         text = rules.cannot_judge_text(self.ctx)
-        self.assertIn("R1-step100 は、食い違いの原因を記録して判定なしで終えた", text)
+        self.assertIn("R1-step100 は、不一致の原因を記録して判定なしで終えた", text)
         self.assertRegex(text, r"R1-step100: ツール frame_static では .*max_stress が [\d.]+ MPa で、基準 ≤ [\d.]+ MPa を超える")
-        self.assertIn("赤にもしていません", text)
+        self.assertIn("NG にもしていません", text)
         self.assertNotIn("R1-step100", judge.latest_verdicts(self.ctx, 1))  # no red without a prediction
         with mock.patch.object(judge, "beyond_results", return_value=[]):  # within its criterion: nothing more said
             self.assertNotIn("ツール", rules.cannot_judge_text(self.ctx))
+
+    def test_an_ended_case_without_a_criterion_leaves_nothing_unjudged(self):
+        """A load case judged by nothing (P1-step100 feeds R1): ending its step on a cause does not stop the run."""
+        cmp = self.r1_mismatch(1.5)
+        record_cause(self.ctx, self.args(cmp, ends_case=True))
+        self.assertIn("R1-step100", rules.cannot_judge_text(self.ctx))
+        lc = self.ctx.load_case("R1-step100")
+        with mock.patch.object(type(self.ctx), "load_case", lambda c, i: {k: v for k, v in lc.items() if k != "criterion"}):
+            self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})  # still not waited for (HK4, HK5)
+            self.assertIsNone(rules.cannot_judge_text(self.ctx))
 
     def test_a_cause_without_ends_case_ends_nothing(self):
         cmp = self.r1_mismatch(1.5)
@@ -917,7 +927,7 @@ class PredictionOutputsTest(RunCase, unittest.TestCase):
 
 
 class VerdictsPerPlaceTest(RunCase, unittest.TestCase):
-    """docs/contract.md 分野が緑になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
+    """docs/contract.md 分野が OK になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
     must pass; a later verdict of the same quantity and place replaces the earlier one."""
 
     def place_verdict(self, base_cmp, base_ver, where, passed):
@@ -972,7 +982,7 @@ class FakeShell(fakes.FakeTool):
 
 
 class GreenConditionsTest(RunCase, unittest.TestCase):
-    """docs/contract.md 分野が緑になる条件: no unresolved mismatch, no result beyond the criterion in the
+    """docs/contract.md 分野が OK になる条件: no unresolved mismatch, no result beyond the criterion in the
     judged quantity (frame_shell: max_hot_spot_stress for max_stress); HK4 holds such a domain."""
 
     def add_shell(self, factor, corner=4.0):
@@ -1049,7 +1059,7 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.version, 2)
         tile = self.tile()
         self.assertEqual(tile["state"], "pending")
-        self.assertIn("版 1 で解析", tile["summary"])
+        self.assertIn("v1 で解析", tile["summary"])
         self.assertIn("この版ではまだ回していない", tile["summary"])
         orig = shell.run
         shell.run = lambda *a: {"status": "failed", "base": "K1", "results": [], "error": "gusset at no T joint"}
@@ -1196,8 +1206,8 @@ class CheckCacheTest(RunCase, unittest.TestCase):
         self.tools["step_climb"].checks_from_cache = True  # K2's tools: the tests' disk cache was used
         check_shelf(self.ctx)
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn("ツール step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
-        self.assertFalse(any("frame_static の照合" in t for t in said))
+        self.assertIn("ツール step_climb の確かめは、試験のために覚えておいた前の結果を使いました", said)
+        self.assertFalse(any("frame_static の確かめは" in t for t in said))
 
 
 class RunToolsOnlyTest(RunCase, unittest.TestCase):

@@ -49,9 +49,15 @@ def asked_event(asked: Record) -> Record:
     The contract wants one of them at least, and `questions` not empty when it is there."""
     data = {k: v for k, v in asked.items() if v or k not in ("questions", "rule_questions", "tradeoff_questions")}
     n, m, t = len(data.get("questions", [])), len(data.get("rule_questions", [])), len(data.get("tradeoff_questions", []))
-    what = " と ".join(w for w in ((f"足りない要件が {n} 件" if n else ""), (f"当たった規則の相談が {m} 件" if m else ""),
-                                   (f"両立しにくい 2 つの優先の相談が {t} 件" if t else "")) if w)
-    return {"kind": HEARING_ASKED, "agent": "lead", "text": f"{what}あります。まとめて聞きます", "data": data}
+    parts = []
+    if n:
+        parts.append(f"決まっていないことを {n} つ聞きます")
+    if m:  # the rule question's own sentence says which rule and what it hit; several: how many
+        rules = data["rule_questions"]
+        parts.append(rules[0]["text"].strip().rstrip("。") if m == 1 else f"規則に当たったことを {m} つ、このままでいいか聞きます")
+    if t:
+        parts.append(f"どちらを優先するかを {t} つ聞きます")
+    return {"kind": HEARING_ASKED, "agent": "lead", "text": "。".join(parts), "data": data}
 
 
 def hearing_events(prepared: Prepared) -> list[Record]:

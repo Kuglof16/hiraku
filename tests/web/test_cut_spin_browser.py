@@ -67,9 +67,12 @@ FIND = """() => {
 }"""
 
 # The orientations (quaternions) of the camera and of the body seen from it, for the views drawn at t.
+# The cut is drawn at t as hiraku.seek draws it (cut.js drawAt: cut.draw(t)), without seek's wait for
+# two frames on the screen and its story check: the views are drawn inside cut.draw. Over all the
+# cuts here every reading was the same as with seek (2026-11-05), in about half the time for N07.
 READ = """async (t) => {
   window.__stamp = t;
-  await window.hiraku.seek(t);
+  window.hiraku.cut.draw(t);
   const out = [];
   for (const { path, v } of window.__views) {
     if (v.__drawn !== t) continue;
@@ -83,14 +86,32 @@ READ = """async (t) => {
 }"""
 
 
+# The whole walk in the page, one step after another as before (FIND, then READ at t), in one call
+# instead of two calls from here per step: the readings are the same, without the round trips.
+STEPS = f"""async (ts) => {{
+  const find = {FIND};
+  const read = {READ};
+  const readings = [];
+  let paths = [];
+  for (const t of ts) {{
+    paths = find();
+    readings.push(await read(t));
+  }}
+  return {{ readings, paths }};
+}}"""
+
+
 def turn_deg(a, b):
     """The angle (deg) of the rotation between two unit quaternions."""
     d = min(1.0, abs(sum(x * y for x, y in zip(a, b))))
     return math.degrees(2 * math.acos(d))
 
 
-@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
-class CutSpinTest(unittest.TestCase):
+class _CutSpinPage(unittest.TestCase):
+    """The records, the servers and a browser (no tests of its own). The cuts are in four classes
+    below, about as long as each other (a runner that puts each class in its own process runs them
+    side by side)."""
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
@@ -145,18 +166,18 @@ class CutSpinTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/cut.html?cut={cut}&{query}&t=0")
+        page.goto(f"{base}/cut.html?cut={cut}&{query}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=180000)
         page.evaluate("window.hiraku.ready")
         self.assertIsNone(page.evaluate("document.querySelector('.err')?.textContent ?? null"), cut)
         dur = page.evaluate("window.hiraku.player.duration")
         prev = {}
         best = {"cam": (0.0, None), "screen": (0.0, None)}
-        paths = []
-        for i in range(int(round(dur / STEP_S)) + 1):
-            t = round(min(dur, i * STEP_S), 4)
-            paths = page.evaluate(FIND)
-            for x in page.evaluate(READ, t):
+        ts = [round(min(dur, i * STEP_S), 4) for i in range(int(round(dur / STEP_S)) + 1)]
+        got = page.evaluate(STEPS, ts)
+        paths = got["paths"]
+        for t, readings in zip(ts, got["readings"]):
+            for x in readings:
                 p = prev.get(x["path"])
                 if p and abs(t - p[0] - STEP_S) < 1e-6:
                     for k in best:
@@ -175,6 +196,40 @@ class CutSpinTest(unittest.TestCase):
             self.assertLessEqual(w, LIMIT_DEG_S, (cut, k, round(w, 1), where))
         return best
 
+
+# (seconds of each cut with READ's cut.draw, 2026-11-05, beside other tests on this PC: n03 32, n04 10,
+# n06 162, n07 91, n09 53, n11 71, n14 84, n15 27, n16 87; N06 alone is the longest)
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class CutSpinN06Test(_CutSpinPage):
+    def test_n06(self):
+        self.check("n06", self.base, f"run={self.runs['n06']}")
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class CutSpinN04N07N09Test(_CutSpinPage):
+    def test_n04(self):
+        self.check("n04", self.base, f"run={self.runs['n04']}&version=1")
+
+    def test_n07(self):
+        self.check("n07", self.base, f"run={self.runs['n07']}")
+
+    def test_n09(self):
+        self.check("n09", self.base, f"run={self.runs['n09']}&design_run={self.runs['n09_design']}")
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class CutSpinN11N14Test(_CutSpinPage):
+    def test_n11(self):
+        self.check("n11", self.base, f"run={self.runs['n11']}")
+
+    def test_n14(self):
+        self.check("n14", self.base, f"run={self.runs['n14']}")
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class CutSpinN03N15N16Test(_CutSpinPage):
     def test_n01_n02(self):
         if not self.dev:
             self.skipTest("needs HIRAKU_WEB_DEV_RUNS (a folder made by tests.web.dev_k2_run)")
@@ -185,30 +240,14 @@ class CutSpinTest(unittest.TestCase):
     def test_n03(self):
         self.check("n03", self.base, f"run={self.runs['n03']}")
 
-    def test_n04(self):
-        self.check("n04", self.base, f"run={self.runs['n04']}&version=1")
-
-    def test_n06(self):
-        self.check("n06", self.base, f"run={self.runs['n06']}")
-
-    def test_n07(self):
-        self.check("n07", self.base, f"run={self.runs['n07']}")
-
-    def test_n09(self):
-        self.check("n09", self.base, f"run={self.runs['n09']}&design_run={self.runs['n09_design']}")
-
-    def test_n11(self):
-        self.check("n11", self.base, f"run={self.runs['n11']}")
-
-    def test_n14(self):
-        self.check("n14", self.base, f"run={self.runs['n14']}")
-
     def test_n15(self):
         self.check("n15", self.base, f"run={self.runs['n15']}")
 
     def test_n16(self):
         self.check("n16", self.base, f"run={self.runs['n16']}")
 
+
+class TurnRateTest(unittest.TestCase):
     def test_a_fast_turn_is_caught(self):
         """The check itself: a quarter turn of the camera within one step reads as 1800 deg/s."""
         q0 = [0.0, 0.0, 0.0, 1.0]

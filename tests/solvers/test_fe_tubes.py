@@ -348,9 +348,11 @@ class SpaceFrameShellTest(unittest.TestCase):
             xyz = tubes.design_xyz(self.d)
             for l in mounts:  # K2's mount points come back to the hardpoints in the design's axes
                 np.testing.assert_allclose(l.point_mm, xyz[l.carriers[0]], atol=1e-6)
-        # standing still the mounts carry the sprung weight
+        # standing still the mounts carry the sprung weight: within 0.5 % (the state is a record of K2's step run
+        # before the push; with the tyre at 60 N/mm the body still moves a little there: 5500.5 N against 5479.6 N,
+        # 0.38 %; within 0.1 % at 150 N/mm)
         up = sum(l.force_N[2] for l in tubes.body_loads(self.d, veh, self.st["static"]) if l.kind == "mount")
-        self.assertAlmostEqual(up, veh.m_s * 9.80665, delta=1e-3 * veh.m_s * 9.80665)
+        self.assertAlmostEqual(up, veh.m_s * 9.80665, delta=5e-3 * veh.m_s * 9.80665)
 
     def test_quality_and_solve(self):
         for case in ("static", "lift"):
@@ -380,7 +382,8 @@ class SpaceFrameShellTest(unittest.TestCase):
         self.assertGreaterEqual(yield_mpa / abs(st["hot_spot_max"]["value"]), 1.5)
         self.assertIn(lift["hot_spot_max"]["joint"], ("RQ3", "LQ3"))
         self.assertTrue(lift["hot_spot_max"]["member"].startswith("rear_lower_link"))
-        self.assertAlmostEqual(abs(lift["hot_spot_max"]["value"]), 231.2, delta=5.0)
+        # 212.4 MPa with the decided tyre 60 N/mm (231.2 at the earlier 150 N/mm: the softer tyre lowers K2's forces)
+        self.assertAlmostEqual(abs(lift["hot_spot_max"]["value"]), 212.4, delta=5.0)
         d0 = max(abs(h["value"]) for h in st["hot_spots"] if h["joint"] == "D0")
         self.assertLess(d0, 0.65 * yield_mpa)
 

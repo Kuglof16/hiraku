@@ -743,7 +743,7 @@ const after = slots();
 console.log(JSON.stringify({ n: before.length, same: before.every((s, i) => s === after[i]), kept: intake.petSlots.get('handling').children.includes(mine),
   states: Object.fromEntries([...intake.petSlots].map(([d, s]) => [d, s.dataset.state])) }));
 """)
-        self.assertEqual(got["n"], 7)
+        self.assertEqual(got["n"], 8)  # the seven domains' and the lead's, beside the headline
         self.assertTrue(got["same"])
         self.assertTrue(got["kept"])
         self.assertEqual((got["states"]["handling"], got["states"]["thermal"], got["states"]["nvh"]), ("lit", "off", "off"))
@@ -779,6 +779,18 @@ console.log(JSON.stringify({ added, review: el.text() }));
         self.assertIn("足した", got["added"][0])
         self.assertIn("機械の上に置くので共振を見る", got["added"][0])
         self.assertIn("足すものは無いと確かめました: 足すものは無い", got["review"])
+
+    def test_the_lead_has_its_own_pet_place_beside_the_headline_working_until_the_choice_is_made(self):
+        got = self.run_body("""
+const lead = () => intake.petSlots.get('lead');
+const none = lead().dataset.state;
+events = []; intake.update();
+const thinking = lead().dataset.state;
+console.log(JSON.stringify({ none, thinking, role: lead().dataset.domain, done: [...intake.petSlots.keys()].includes('lead') }));
+""")
+        self.assertEqual(got["role"], "lead")
+        self.assertTrue(got["done"])
+        self.assertEqual(got["none"], "done")  # the picks are in: the lead is not working any more
 
     def test_the_headline_counts_what_was_picked(self):
         got = self.run_body("""console.log(JSON.stringify({ text: el.text() }));""")

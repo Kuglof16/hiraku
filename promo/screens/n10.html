@@ -98,6 +98,10 @@
   /* who ran the analysis (team K1/K2) stays in DATA and the README; the cell
      shows only the value, so each row reads answer -> analysis -> difference */
   .cae .note { display: none; }
+  /* the one line beside the title (comes with sentence 1, stays) */
+  .claim { position: absolute; left: calc(820 * var(--u)); top: calc(78 * var(--u));
+           font: 700 calc(40 * var(--u)) / 1.4 var(--font-ja); color: var(--miss); white-space: nowrap;
+           animation: fade-up 0.5s ease-out both; animation-delay: 1.2s; }
   /* where Claude without tools fell short: runs that gave no figure */
   .claude .in.miss { outline: calc(4 * var(--u)) solid var(--miss); outline-offset: calc(10 * var(--u)); border-radius: calc(6 * var(--u)); }
   /* once Claude's three answers are in (2.3 s), the row where it fell short (stress: 2 of 3 runs gave no
@@ -171,6 +175,8 @@
 <div class="stage paper-grid">
   <div class="safe">
     <h1 class="title" data-box="n10.title">CAE ツールで確かめる</h1>
+    <!-- the maker 2026-11-06: the answers can be close, yet nobody knows until it is checked -->
+    <div class="claim">合っていても、確かめるまでは分からない</div>
     <div class="table" data-box="n10.table">
       <div class="head" data-box="n10.head">
         <div>問い</div>

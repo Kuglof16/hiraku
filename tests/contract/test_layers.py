@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2] / "hiraku"
 
-LAYERS = ["contract", "cad", "solvers", "designgen", "store", "catalog", "intake", "tools", "agent", "export", "webserve", "__main__"]
+LAYERS = ["contract", "cad", "cfd", "solvers", "designgen", "store", "catalog", "intake", "tools", "agent", "export", "webserve", "__main__"]
 
 # Upward imports that exist today and are being removed (lead asked the owners).
 KNOWN_UPWARD = {("catalog", "tools")}

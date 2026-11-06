@@ -351,4 +351,60 @@ def all_formulas() -> list[Formula]:
         requires=[(sp.And(m > 0, F > 0, kb > 0, st > 0), "m, F_m, k_b and stroke must be positive")],
         symbols=s,
     ))
+    out.append(Formula(
+        formula_id="crash.rail_column_split",
+        title="つぶれる所の後ろのレールが、つぶれの力で折れるか (まっすぐな柱として)",
+        domain="crash",
+        expression="P_c = min(A f_y, pi^2 E I / L^2); u = F / P_c; fraction = share when u >= 1, else 0",
+        inputs={"F": _in("N", "force one rail passes back while the crush zone folds (its mean crushing force)", min=0),
+                "A": _in("mm^2", "wall area of the rail behind the crush zone", min=0),
+                "f_y": _in("MPa", "yield stress of the rail", min=0),
+                "E": _in("MPa", "Young's modulus of the rail", min=0),
+                "I": _in("mm^4", "the rail's smaller second moment of area", min=0),
+                "L": _in("mm", "length of the rail from the crush zone's end back to the occupants (pinned ends)",
+                         min=0),
+                "share": _in("1", "share of the whole mass ahead of the crush zone's end (what comes off if the rail "
+                                  "folds)", min=0, max=1)},
+        outputs={"fraction": ("1", "share of the mass broken off the frame (0: the rails hold)", None),
+                 "u": ("1", "the rail's load over its collapse load", None),
+                 "P_c": ("N", "collapse load of the rail: squash or Euler buckling, the smaller", None)},
+        assumptions=["the rail behind the crush zone is a straight column with pinned ends, loaded along its axis by "
+                     "the crush zone's mean crushing force", "no bending from the towers or the arm brackets on it",
+                     "a rail that collapses lets the front (ahead of the crush zone's end) come off"],
+        source="squash load A f_y and Euler's buckling load pi^2 E I / L^2 (textbook strength of materials)",
+        requires=[(lambda x: x["A"] > 0 and x["f_y"] > 0 and x["E"] > 0 and x["I"] > 0 and x["L"] > 0,
+                   "A, f_y, E, I and L must be positive")],
+        fn=_rail_column,
+    ))
     return out
+
+
+def _rail_column(x: dict) -> dict:
+    p_c = min(x["A"] * x["f_y"], math.pi ** 2 * x["E"] * x["I"] / x["L"] ** 2)
+    u = x["F"] / p_c
+    return {"P_c": p_c, "u": u, "fraction": x["share"] if u >= 1.0 else 0.0}
+
+
+def tube_least_I(section: dict) -> float:
+    """The smaller second moment of area (mm^4) of a tube, sharp corners."""
+    d = section["dims_mm"]
+    t = float(d["t"])
+    if section["shape"] == "rect_tube":
+        b, h = float(d["b"]), float(d["h"])
+        return min((h * b ** 3 - (h - 2 * t) * (b - 2 * t) ** 3) / 12.0, (b * h ** 3 - (b - 2 * t) * (h - 2 * t) ** 3) / 12.0)
+    D = float(d["d"])
+    return math.pi * (D ** 4 - (D - 2 * t) ** 4) / 64.0
+
+
+def rail_behind(design: dict, x_end: float) -> dict | None:
+    """The first member of a rail chain behind the crush zone's end (x <= x_end): the column the crush force
+    passes into."""
+    nodes, chains = _rails(design)
+    best = None
+    for c in chains:
+        for m in c:
+            xa, xb = float(nodes[m["node_a"]][0]), float(nodes[m["node_b"]][0])
+            if max(xa, xb) <= x_end + 1e-6 and (best is None or max(xa, xb) > best[0]):
+                best = (max(xa, xb), m)
+                break
+    return None if best is None else best[1]

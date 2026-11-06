@@ -178,8 +178,8 @@ class ServerTest(unittest.TestCase):
         cls.server.server_close()
         shutil.rmtree(cls.tmp)
 
-    def get(self, path):
-        with urllib.request.urlopen(self.base + path, timeout=5) as r:
+    def get(self, path, timeout=5):
+        with urllib.request.urlopen(self.base + path, timeout=timeout) as r:
             return r.status, r.headers, r.read()
 
     def get_error(self, path):
@@ -195,8 +195,10 @@ class ServerTest(unittest.TestCase):
         self.assertTrue(headers["Content-Type"].startswith("text/javascript"))
 
     def test_formula_titles(self):
-        # the K0 formulas' ids and Japanese titles for the prediction card (no shelf checks run)
-        _, headers, body = self.get("/api/formulas")
+        # the K0 formulas' ids and Japanese titles for the prediction card (no shelf checks run).
+        # The first request builds the solvers' formula registry cold (108 formulas, 5.7 s measured with
+        # the PC busy), so this one request gets a longer timeout than the others.
+        _, headers, body = self.get("/api/formulas", timeout=60)
         self.assertTrue(headers["Content-Type"].startswith("application/json"))
         got = {f["formula_id"]: f["title"] for f in json.loads(body)["formulas"]}
         self.assertEqual(got["launch.time_to_speed"], "止まった所から目標の速さまでの時間と最高速度")
@@ -671,7 +673,10 @@ class LaunchTest(unittest.TestCase):
                 lau.proc.wait()
         shutil.rmtree(self.tmp)
 
-    def serve(self, env, hold_s=3.0, command=None, reader=fake_reader):
+    def serve(self, env, hold_s=60.0, command=None, reader=fake_reader):
+        # the stand-in run stays alive until tearDown kills it: under load a 3 s child could end before
+        # the next request, so a check that needs it going (409 for a second start, the hearing's 400)
+        # read a finished run instead
         lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=command or fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
                        reader=reader, wait_s=20, demo_runs_file=self.demo_file)
         self.launchers = [*getattr(self, "launchers", []), lau]

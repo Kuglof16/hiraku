@@ -10,8 +10,11 @@ test_browser.py).
 import copy
 import json
 import math
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku import contract
 from hiraku.webserve.server import make_server
@@ -89,7 +92,8 @@ class QualityBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.events, cls.mesh, cls.ana, cls.flaws = quality_events()
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -101,13 +105,14 @@ class QualityBrowserTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, events=None):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events or self.events)

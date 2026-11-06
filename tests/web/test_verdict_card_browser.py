@@ -15,14 +15,17 @@ import copy
 import json
 import os
 import re
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.shell_fixture import shell_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -128,7 +131,8 @@ def changed_events(events):
 class VerdictCardBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -141,13 +145,14 @@ class VerdictCardBrowserTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, query, events=None):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         if events is not None:
@@ -165,8 +170,8 @@ class VerdictCardBrowserTest(unittest.TestCase):
         self.assertIn("判定の量", got["what"])
         self.assertIn("構造的ホットスポット応力", got["what"])
         # the verdict's line with version 2's allowable, not version 1's
-        self.assertEqual(got["crit"], f"解析 {fmt4(self.hot)} MPa ≤ 許容 {fmt4(LIMIT_V2)} MPa → 合格")
-        self.assertEqual(got["verdict"], "基準を満たした")
+        self.assertEqual(got["crit"], f"解析 {fmt4(self.hot)} MPa ≤ 許容 {fmt4(LIMIT_V2)} MPa → OK")
+        self.assertEqual(got["verdict"], "OK")
         # the shell's largest element value: small, under 参考
         self.assertIsNotNone(got["ref"], got)
         self.assertIn("参考 (判定に使わない)", got["ref"])
@@ -232,7 +237,7 @@ class VerdictCardBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=0&present=1", events)
         got = page.evaluate(PROBE)
         self.assertEqual(errors, [])
-        self.assertEqual(got["verdict"], "基準を満たさない")
+        self.assertEqual(got["verdict"], "NG")
         now = [t for t in got["tagTones"] if t["text"] == f"最大 {fmt4(hot)} MPa"]
         self.assertEqual(len(now), 1, got["tagTones"])
         self.assertTrue(now[0]["fail"], now)

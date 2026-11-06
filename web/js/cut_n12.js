@@ -7,20 +7,23 @@
 // Two boxes of layout.json n12:
 // - table: the compared quantity, then the hand calculation's value and the analysis's,
 //   large (the story's two numbers), and under them the difference and the allowed range
-//   with "✕ 食い違い" (red, from times.mismatch_s; neutral before). From times.fixed_s the
-//   comparison that resolved the cause: its values, "✓ 一致" in green.
+//   with "! 不一致" (red, from times.mismatch_s; neutral before). From times.fixed_s the
+//   comparison that resolved the cause: its values, "✓ 予想通り" in green.
 // - cause: from times.cause_s the cause in one line. When the cause's text says
 //   "<a> cm のつもりが <b> mm" and a setting of the load case came from the request as
 //   written, the line is "<the requirement's name>: <a> cm のつもりが <b> mm と書かれていた";
 //   otherwise the cause's first sentence with requirement ids taken out. From fixed_s the
-//   fix's first sentence and "✓ OK" (when the record says resolved).
+//   fix's first sentence and "✓ 解決" (when the record says resolved).
 // The ✕ / ✓ are labels (data-kind), the two values numbers. No record id is shown.
 // Positions, sizes, colours, the length and the times come from layout.json n12; a missing
 // key is named on the page.
 
 import { requireKeys, storyOf } from "./cut_n03.js";
 import { GREEN, MUTED, RED, panel, requestedSetting, textPx } from "./cut_panels.js";
-import { OK_WORD, esc, fmtPct, fmtQ, fmtSigned, quantityName } from "./labels.js";
+import { MATCH_WORD, MISMATCH_WORD, esc, fmtPct, fmtQ, fmtSigned, quantityName } from "./labels.js";
+
+// the fix's mark once the record says the cause is resolved (not a verdict: no OK)
+const RESOLVED_WORD = "✓ 解決";
 
 const params = new URLSearchParams(location.search);
 
@@ -46,9 +49,9 @@ export function causeLine(s, cause, lc) {
 export function n12Records(s) {
   const causes = s.order.causes.map((id) => s.causes[id]);
   const cause = (params.get("cause") ? s.causes[params.get("cause")] : null) ?? causes.find((c) => c.resolved_by) ?? causes[0];
-  if (!cause) throw new Error("食い違いの原因の記録が無い");
+  if (!cause) throw new Error("不一致の原因の記録が無い");
   const bad = s.comparisons[cause.comparison_id];
-  if (!bad) throw new Error("原因が説明する照合の記録が無い");
+  if (!bad) throw new Error("原因が説明する比べの記録が無い");
   const fixed = cause.resolved_by ? s.comparisons[cause.resolved_by] ?? null : null;
   const ana = s.analyses[bad.analysis_id];
   const lc = (s.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id) ?? null;
@@ -97,7 +100,7 @@ export class CutN12 {
     this.causeBox.insertAdjacentHTML(
       "beforeend",
       `<p class="n12-why" style="font-size:${cx}px">${esc(causeLine(this.s, this.cause, this.lc))}</p>` +
-        (this.fixed && fix ? `<p class="n12-fix" style="font-size:${cx}px">直し方: ${esc(fix)}${this.cause.resolved ? ` <span class="mark" data-kind="label" style="color:${GREEN}">${OK_WORD}</span>` : ""}</p>` : ""),
+        (this.fixed && fix ? `<p class="n12-fix" style="font-size:${cx}px">直し方: ${esc(fix)}${this.cause.resolved ? ` <span class="mark" data-kind="label" style="color:${GREEN}">${RESOLVED_WORD}</span>` : ""}</p>` : ""),
     );
     this.causeEl = this.causeBox.querySelector(".n12-why");
     this.fixEl = this.causeBox.querySelector(".n12-fix");
@@ -115,7 +118,7 @@ export class CutN12 {
     this.el.ana.textContent = fmtQ(c.analyzed, 3);
     this.el.again.textContent = fixed && c.prediction_id !== this.bad.prediction_id ? "直してから予測し直した" : "";
     this.el.diff.textContent = judged ? `差 ${fmtSigned(c.diff_rel)} (許す幅 ±${fmtPct(c.tolerance_rel, 0)})` : "";
-    this.el.mark.textContent = judged ? (ok ? "✓ 一致" : "✕ 食い違い") : "";
+    this.el.mark.textContent = judged ? (ok ? MATCH_WORD : MISMATCH_WORD) : "";
     this.el.mark.style.display = judged ? "" : "none";
     const tone = judged ? (ok ? GREEN : RED) : MUTED;
     this.el.mark.style.color = tone;

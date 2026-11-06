@@ -9,6 +9,20 @@ from hiraku.intake import (IntakeError, describe_condition, flags_text, load_pro
 from hiraku.intake.products import answers_file
 
 
+_SAVED_WRITER = []
+
+
+def setUpModule():
+    """These tests assume no load-case writer is registered (hiraku.tools registers one when it is imported, and
+    stays registered in a process that ran other tests first): hold the state here and put it back after."""
+    _SAVED_WRITER.append(domains_module.load_case_writer)
+    domains_module.load_case_writer = None
+
+
+def tearDownModule():
+    domains_module.load_case_writer = _SAVED_WRITER.pop()
+
+
 def pick(slug, **kw):
     req = load_product(slug)
     return pick_domains(req["want"], req["flags"], req.get("speed_class"), **kw)
@@ -108,6 +122,50 @@ class NoBuilderTest(unittest.TestCase):
                 for tid in p["test_ids"]:
                     with self.subTest(slug=slug, test=tid):
                         self.assertIsNotNone(builder_for(catalog, tid))
+
+
+class ImpliedFlagsTest(unittest.TestCase):
+    """What a reading of the sentence leaves out and the code adds (vibration, continuous) so N1, T1 and T2 are not lost."""
+
+    FLAGS = {"ride": True, "self_propelled": True, "outdoor": True, "rough": True, "battery": True, "electric": True,
+             "cargo": True, "standing": True}  # what Claude set for an electric off-road vehicle (a real run, 2026-11-06)
+
+    def picked(self, flags, **kw):
+        rec = pick_domains("林道を走る電動の車", flags, "vehicle", **kw)
+        return rec, {p["domain"]: p["test_ids"] for p in rec["picks"]}
+
+    def test_a_self_propelled_battery_vehicle_gets_vibration_and_continuous_and_the_tests_they_light(self):
+        rec, by = self.picked(self.FLAGS)
+        self.assertTrue(rec["flags"]["vibration"] and rec["flags"]["continuous"])
+        self.assertIn("N1", by["nvh"])
+        self.assertTrue({"T1", "T2"} <= set(by["thermal"]))
+        self.assertIn("コードが補った", rec["flag_reasons"]["vibration"])
+        self.assertEqual(contract.errors("domains_picked", rec), [])
+
+    def test_a_flag_given_as_false_stays_false_and_a_given_reason_is_kept(self):
+        rec, by = self.picked({**self.FLAGS, "continuous": False}, flag_reasons={"vibration": "Claude の理由"})
+        self.assertFalse(rec["flags"]["continuous"])
+        self.assertEqual(by["thermal"], [t for t in by["thermal"] if t not in ("T1", "T2")])
+        self.assertEqual(rec["flag_reasons"]["vibration"], "Claude の理由")
+
+    def test_a_product_that_does_not_move_by_itself_is_not_changed(self):
+        rec, _ = self.picked({"lean": True, "electric": True, "standing": True})
+        self.assertFalse(rec["flags"]["vibration"] or rec["flags"]["continuous"])
+
+    def test_the_reason_has_one_full_stop_before_the_note_and_an_added_test_is_not_said_to_be_left_out(self):
+        from hiraku.intake.domains import add_tests
+
+        rec, _ = self.picked(self.FLAGS, reasons={"handling": "倒れないかを確かめる。"})
+        reason = {p["domain"]: p["reason"] for p in rec["picks"]}["handling"]
+        self.assertNotIn("。。", reason)
+        left = [t for t in ("S2",) if "S2" in reason]
+        if left:  # S2 has no builder here: the note says so, and adding it takes the sentence out
+            self.assertIn("S2", reason)
+            after, _, _ = add_tests(rec, [{"test_id": "S2", "reason": "転ぶ向きを見る"}])
+            again = {p["domain"]: p for p in after["picks"]}["handling"]
+            self.assertIn("S2", again["test_ids"])
+            self.assertNotIn("S2 旋回", again["reason"])  # taken into the run: not "left out" any more
+            self.assertTrue(again["reason"].startswith("倒れないかを確かめる"))
 
 
 class WrittenLoadCaseTest(unittest.TestCase):
@@ -253,8 +311,10 @@ class PickDomainsTest(unittest.TestCase):
 
     def test_summary_line(self):
         rec = pick("electric-guitar")  # the counts follow the catalog and the builders: not written here
-        parts = [f"{p['shown_name']} ({len(p['test_ids'])})" for p in rec["picks"]]
-        self.assertEqual(summary_line(rec), f"{len(rec['picks'])} 分野: " + "・".join(parts))
+        tests = {t for p in rec["picks"] for t in p["test_ids"]} | set(rec["assembly_test_ids"])
+        self.assertEqual(summary_line(rec), f"確かめる分野を {len(rec['picks'])} つ、試験を {len(tests)} 個選びました")
+        added = dict(rec, added_tests=[{"test_id": "N1", "reason": "x"}])
+        self.assertTrue(summary_line(added).endswith("(Claude が足した 1 個を含む)"))
         self.assertEqual([p["domain"] for p in rec["picks"]], ["strength", "nvh"])
 
 

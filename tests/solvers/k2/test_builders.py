@@ -13,7 +13,7 @@ from hiraku import contract, solvers
 from hiraku.catalog import REPO_ROOT, load_requirements
 from hiraku.catalog.builders import BUILDERS as ALL_BUILDERS
 from hiraku.catalog.builders.common import BuildError
-from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND,
+from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND, PLANS_DRIVE,
                                               PREDICTION_ONLY_PARAMS)
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
@@ -58,7 +58,7 @@ class Builders(unittest.TestCase):
 
     def test_the_nine_tests(self):
         self.assertEqual(sorted(BUILDERS), sorted(TOOL_OF))
-        self.assertEqual(set(PLANS), set(BUILDERS))
+        self.assertEqual(set(PLANS), set(BUILDERS) | set(PLANS_DRIVE))  # the drive records' steps by load case id
         for tid, fn in BUILDERS.items():  # the package collects this module (a product's builder may wrap it)
             got = ALL_BUILDERS[tid]
             self.assertIs(getattr(got, "general", got), fn)
@@ -116,15 +116,19 @@ class Builders(unittest.TestCase):
             h[above] = tilt_inputs(self.design, lc)["h"]["value"]
         # the demo design's cargo box stands on its floor with its centre 150 mm up
         self.assertAlmostEqual(h[150.0], h[None], places=6)
-        # 703.0 mm before every part was joined to the frame (kit/joints: fittings and struts as parts with their
+        # 702.3 mm before each seat's back and head restraint were parts of their own (ladder_4w._seat_back_parts:
+        # 3.67 kg per seat taken out of the seat box, centred 319 mm and 879 mm above it, the parts' centre of gravity
+        # 5.0 mm higher); 703.0 mm before every part was joined to the frame (kit/joints: fittings and struts as parts with their
         # mass, 47db54d and the commits before it on the joints branch; the arms' 703.0 came in after them unchanged);
         # 699.4 mm before the suspension box was the arms, damper and ball joints (kit/arms.py: the same mass, the
         # damper's and the upper arm's share higher up) and the clevis brackets; 710.4 mm before the occupants were in segments (2a4e726: head, neck, trunk, upper arm, forearm, hand; the
         # same mass spread over those boxes), 712.7 mm before the roll bar
         # was on by default (its tubes raise the centre of gravity), 718.8 mm before the suspension towers, the dash
         # and the occupants' bodies as parts, 726.5 mm before the floors and the deck were steel sheets 3.2 mm thick
-        # (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down
-        self.assertAlmostEqual(h[620.0], 702.3, delta=0.5)
+        # (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down; 706.9 mm before the rear lower
+        # arms' brackets reached the rail's outer face (+0.70 kg, 10 mm further out each) and the seat mount brackets
+        # (+0.35 kg)
+        self.assertAlmostEqual(h[620.0], 706.3, delta=0.5)
 
     def test_cases_past_the_limit(self):
         for tid in BEYOND:
@@ -175,8 +179,44 @@ class Plans(unittest.TestCase):
 
     def steps(self):
         """(test id, catalog spec, step) of every plan, the cases past the limit included."""
-        out = [(tid, {"id": tid}, step) for tid, step in PLANS.items()]
+        out = [(tid, {"id": tid}, step) for tid, step in PLANS.items() if tid not in PLANS_DRIVE]
         return out + [(tid, {"id": tid, "variant": "beyond"}, PLANS_BEYOND.get(tid, PLANS[tid])) for tid in BEYOND]
+
+    def drive_case(self):
+        """S1's drive record built from the demo requirements (hiraku.catalog.build DRIVE_BUILDERS)."""
+        from hiraku.catalog import load_catalog
+        from hiraku.catalog.build import DRIVE_BUILDERS
+        (lc,) = DRIVE_BUILDERS["S1"](load_catalog(), self.req, self.design)
+        return lc
+
+    def test_the_drive_record_has_its_own_step_with_the_tools_pair(self):
+        lc = self.drive_case()
+        self.assertEqual(lc["load_case_id"], f"S1-tilt-{lc['params']['loading']}-rollover-drive")
+        self.assertIn(lc["load_case_id"], PLANS_DRIVE)
+        from hiraku.catalog.build import recipe_for
+        step = recipe_for(PLANS, lc)
+        self.assertIs(step, PLANS_DRIVE[lc["load_case_id"]])  # its own step, not S1's
+        self.assertEqual(step["tool"], "rollover_tilt")
+        tool = TOOLS["rollover_tilt"]
+        pairs = {(p["quantity"], p["formula_id"], p["output"]) for p in tool.describe()["predicts"]}
+        self.assertTrue(step["say"])
+        self.assertTrue(step["predictions"])
+        for p in step["predictions"]:
+            self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
+            self.assertEqual(set(p["inputs"]), set(self.formulas[p["formula_id"]]["inputs"]))
+            self.assertTrue(p["assumptions"])
+            # the refs resolve on the drive case and the formula evaluates, as S1's own prediction does
+            frm = p["inputs_from"](self.design, lc)
+            inputs = {k: self.resolve(ref, lc, {}, frm) for k, ref in p["inputs"].items()}
+            out = self.registry.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
+            s1 = BUILDERS["S1"]({"id": "S1"}, self.req, self.design)
+            s1_inputs = {k: self.resolve(ref, s1, {}, p["inputs_from"](self.design, s1)) for k, ref in p["inputs"].items()}
+            self.assertEqual(out, self.registry.evaluate(p["formula_id"], s1_inputs)["outputs"][p["output"]])
+        # the drive case reads only what the tool declares (and the prediction's cargo height)
+        declared = {q["name"] for q in tool.describe()["params"]}
+        self.assertEqual(set(lc["params"]) - declared - set(PREDICTION_ONLY_PARAMS), set())
+        self.assertEqual(lc["params"]["hold_past"], {"value": 1.0, "unit": "deg"})
+        self.assertEqual(lc["tolerance_rel"], BUILDERS["S1"]({"id": "S1"}, self.req, self.design)["tolerance_rel"])
 
     def test_steps_predict_with_paired_formulas(self):
         for tid, _, step in self.steps():

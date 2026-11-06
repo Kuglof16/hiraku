@@ -496,26 +496,34 @@ def clear_mailbox(run_path: Path) -> None:
 
 
 def hearing_text(prepared: Prepared) -> str:
-    """One line for the chat / log: how many questions, how many settled by answer, by default."""
+    """One line for the chat / log, for someone who sees it first: what was asked and answered, whether standard values filled
+    the rest (no ids, no counts of defaults: the items and their values are in the record's answers)."""
     by = {"hearing": 0, "default": 0}
     for r in prepared.answered["answers"]:
         by[r["source"]] += 1
     rules = prepared.asked.get("rule_questions") or []
     trades = prepared.asked.get("tradeoff_questions") or []
+    standard = "分からない所は標準の値で進めました"
     if trades and not prepared.asked["questions"] and not rules:  # only trade-offs were asked
         got = {a["tradeoff_id"]: a["choice"] for a in prepared.answered.get("tradeoff_answers", [])}
-        return (f"両立しにくい 2 つの優先の相談 {len(trades)} 件、答え {len(got)} 件"
-                + (f"、答えが無いまま {len(trades) - len(got)} 件 (人がまだ決めていない)" if len(got) < len(trades) else ""))
+        return ("どちらを優先するかの答えをもらいました" if len(got) >= len(trades)
+                else f"どちらを優先するかは、{len(trades) - len(got)} つがまだ決まっていません (人がまだ決めていない)")
     if rules and not prepared.asked["questions"]:  # only rule hits were asked
         got = {a["rule_id"]: a["choice"] for a in prepared.answered.get("rule_answers", [])}
         dropped = [r for r, c in got.items() if c == "drop_rule"]
-        return (f"当たった規則の相談 {len(rules)} 件、答え {len(got)} 件" + (f"、この実行で外す規則 {'・'.join(dropped)}" if dropped else "")
-                + (f"、答えが無いまま {len(rules) - len(got)} 件 (人がまだ決めていない)" if len(got) < len(rules) else ""))
+        line = "規則に当たったことへの答えをもらいました" if len(got) >= len(rules)             else f"規則に当たったことのうち {len(rules) - len(got)} つが、まだ決まっていません (人がまだ決めていない)"
+        return line + (f"。{len(dropped)} つの規則は、この実行では外します" if dropped else "")
     if not prepared.asked["questions"]:  # nothing to ask: the requirements file stands
-        keys = "・".join(r["key"] for r in prepared.answered["answers"] if r["source"] == "default")
-        return "要件のファイルのまま進みます" + (f" (既定値で足した {by['default']} 件: {keys})" if by["default"] else "")
-    left = f"、答えが無いまま {len(prepared.unresolved)} 件 (聞いたが、答えも標準の値も無く、要件に入っていない)" if prepared.unresolved else ""
-    more = (f"。当たった規則の相談 {len(rules)} 件、答え {len(prepared.answered.get('rule_answers', []))} 件") if rules else ""
+        return f"聞くことはありませんでした。{standard}" if by["default"] else "聞くことはありませんでした。設計を始めます"
+    parts = [f"{by['hearing']} つ答えてもらいました" if by["hearing"] else "答えはなかったので、標準の値で進めました"]
+    if by["hearing"] and by["default"]:
+        parts.append(standard)
+    if prepared.unresolved:
+        parts.append(f"答えも標準の値も無い {len(prepared.unresolved)} つは、要件に入っていません")
+    if rules:
+        parts.append("規則に当たったことへの答えもあります" if prepared.answered.get("rule_answers") else "規則に当たったことは、まだ決まっていません")
     if trades:
-        more += f"。優先の相談 {len(trades)} 件、答え {len(prepared.answered.get('tradeoff_answers', []))} 件"
-    return f"質問 {len(prepared.asked['questions'])} 件、答え {by['hearing']} 件、既定値 {by['default']} 件{left}{more}"
+        parts.append("どちらを優先するかの答えもあります" if prepared.answered.get("tradeoff_answers") else "どちらを優先するかは、まだ決まっていません")
+    if not prepared.unresolved:
+        parts.append("設計を始めます")
+    return "。".join(parts)

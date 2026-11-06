@@ -4,8 +4,8 @@
 //
 //   assemblyRecord(s)   the newest assembly record among the events applied
 //   AssemblyStage       a Workbench3D posed at a point of the order: steps before
-//                       the current one in place, the current part on its path_mm,
-//                       later parts not drawn
+//                       the current one in place, the current part on its path_mm (eased,
+//                       easeInto; the next one already starting, LEAD), later parts not drawn
 //   stepRowsHtml        the list of steps (checks, fastenings), the current one marked
 //   AssemblySeek        the bar under the 3D: one tick per step, a knob, play
 //   AssemblyPanel       the A7 tab: the three together, the bar under the hand; opened by
@@ -23,6 +23,7 @@ import { esc, fmt, keepAsides } from "./labels.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { mountAssemblySwitch } from "./modules.js"; // modules:
 import { assemblyJointControls, JOINT_KINDS } from "./joints.js"; // joints:
+import { pendingLength } from "./heavy.js";
 
 export const CHECKS = [
   { key: "no_interference", ja: "干渉", title: "ほかの部品と重ならずに入る" },
@@ -48,7 +49,9 @@ export function assemblyRecord(s) {
   const ids = s?.order?.analyses ?? [];
   for (let i = ids.length - 1; i >= 0; i -= 1) {
     const a = s.analyses[ids[i]];
-    if (a?.status !== "ok" || !Array.isArray(a.assembly) || !a.assembly.length) continue;
+    // (a static export's assembly not read yet: its length from the light record, so the older ones are not read)
+    const n = pendingLength(a, "assembly") ?? (Array.isArray(a?.assembly) ? a.assembly.length : 0);
+    if (a?.status !== "ok" || !n) continue;
     const design = s.designs?.[a.design_version] ?? s.designs?.[s.currentVersion] ?? null;
     const steps = [...a.assembly].sort((x, y) => x.order - y.order);
     return { ana: a, steps, interferences: a.interferences ?? [], design };
@@ -154,8 +157,51 @@ export function pointOnPath(path, f) {
   return [...pts.at(-1)];
 }
 
-// Ease in and out over a step (a part starts and stops gently).
-const ease = (f) => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, f)));
+// The look of a part's way in (the record's order and times are not changed, only how a part is
+// drawn between them): a cubic Bézier easing, CSS cubic-bezier(x1, y1, x2, y2) with the ends (0, 0)
+// and (1, 1), fast at the start and slowing down as the part goes into its place; and each part
+// starts LEAD of a step before the one ahead of it is in place (the parts move overlapping). Part k
+// goes in while u runs from k - 1 - LEAD (0 for the first) to k, so at u = k it is in place.
+export const EASE_BEZIER = [0.22, 1, 0.36, 1];
+export const LEAD = 0.25;
+
+// CSS's cubic-bezier as a function of the time x (0..1): the curve's parameter s for x (Newton's
+// steps, then halving if they do not settle), and its y.
+export function cubicBezier(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const X = (s) => ((ax * s + bx) * s + cx) * s;
+  const Y = (s) => ((ay * s + by) * s + cy) * s;
+  const dX = (s) => (3 * ax * s + 2 * bx) * s + cx;
+  return (x) => {
+    const t = Math.max(0, Math.min(1, x));
+    if (t === 0 || t === 1) return t;
+    let s = t;
+    for (let i = 0; i < 8; i += 1) {
+      const e = X(s) - t;
+      if (Math.abs(e) < 1e-7) return Y(s);
+      const d = dX(s);
+      if (Math.abs(d) < 1e-6) break;
+      s -= e / d;
+    }
+    let lo = 0, hi = 1;
+    s = t;
+    for (let i = 0; i < 40; i += 1) {
+      if (X(s) < t) lo = s;
+      else hi = s;
+      s = (lo + hi) / 2;
+    }
+    return Y(s);
+  };
+}
+export const easeInto = cubicBezier(...EASE_BEZIER);
+
+// How far part k (1-based) has gone along its path at progress u, before the easing (0: not
+// started, 1: in place).
+export function partTime(u, k) {
+  const start = k === 1 ? 0 : k - 1 - LEAD;
+  return Math.max(0, Math.min(1, (u - start) / (k - start)));
+}
 
 function boxEdges(size) {
   const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
@@ -272,17 +318,17 @@ export class AssemblyStage {
     if (!this.rec?.design || u === this.u) return;
     this.u = u;
     const n = this.movers.length;
-    const { current, frac } = stepAt(u, n);
-    const f = ease(frac);
+    const { current } = stepAt(u, n);
     const v = this.view;
     v.model.visible = !this.frameStep || this.frameStep.step.order <= this.movers[current - 1]?.step.order;
     for (const s of this.still) s.o.group.visible = s.shown;
     let cur = null;
     this.movers.forEach((m, i) => {
       const idx = i + 1;
-      const shown = idx <= current;
-      const moving = idx === current && frac < 1;
-      const at = moving ? pointOnPath(m.step.path_mm ?? [m.end], f) : m.end;
+      // (the current one from the start of its path; the next ones once they have started: LEAD)
+      const ft = partTime(u, idx);
+      const shown = idx <= current || ft > 0;
+      const at = ft < 1 ? pointOnPath(m.step.path_mm ?? [m.end], easeInto(ft)) : m.end;
       const off = [at[0] - m.end[0], at[1] - m.end[1], at[2] - m.end[2]];
       if (m.kind === "part") {
         m.obj.group.visible = shown === true;

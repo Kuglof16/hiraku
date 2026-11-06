@@ -39,7 +39,8 @@ KIND_MODULE = {
     "pushrod": "steering", "bearing": "steering", "anchor": "frame",  # designgen kit/joints.py's parts
     "steering": "steering", "steering_column": "steering", "steering_shaft": "steering", "steering_rack": "steering",
     "accelerator_pedal": "steering", "brake_pedal": "steering", "brake_master_cylinder": "steering",
-    "seat": "occupant", "seat_belt": "occupant", "occupant": "occupant", "rollbar": "occupant",
+    "seat": "occupant", "seatback": "occupant", "head_restraint": "occupant",  # the seat's back and head restraint
+    "seat_belt": "occupant", "occupant": "occupant", "rollbar": "occupant",
     "battery": "powertrain", "switch": "powertrain", "motor": "powertrain", "reducer": "powertrain", "driveshaft": "powertrain",
     "controller": "powertrain", "electrical": "powertrain",
     "body": "body", "cargo": "body",
