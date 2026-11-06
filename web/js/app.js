@@ -42,7 +42,7 @@ import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.
 import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
 import { REPLY_STEP_S } from "./intake/a1.js";
-import { lookFromParams, qualityFromParams } from "./look.js";
+import { lookFromParams, looksReady, qualityFromParams } from "./look.js";
 import { DUMMY_NOTE_JA } from "./hybrid3.js"; // the workbench's くわしく under a dummy
 import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
@@ -2662,6 +2662,18 @@ async function seekAndDraw(t) {
   return player.playhead;
 }
 
+// ④ shown: its tile pictures once the real look's files are in (a picture drawn before them is
+// drawn again: TileViews' onReady), all at once
+async function tilesInTheirLook() {
+  if ($("view-grid").hidden) return;
+  await looksReady();
+  draw();
+  clearTimeout(tilePicTimer);
+  tilePicTimer = null;
+  board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale);
+  await nextFrame();
+}
+
 let readyResolve;
 const ready = new Promise((r) => (readyResolve = r));
 window.hiraku = {
@@ -2903,12 +2915,18 @@ async function play() {
     player.playing = params.get("autoplay") !== "0";
   } else if (player.live) player.attachLive();
   else if (opensAtEnd()) {
-    // a finished run opened as it is: at its end, every verdict in (▶ plays it from its start)
+    // a finished run opened as it is: at its end, every verdict in (▶ plays it from its start).
+    // The frame is fixed there as at ?t= (seekAndDraw: ④'s tile pictures drawn at once, now and
+    // when ④ is pressed), and ready once ④'s pictures have the real look's files (looksReady)
     ui.building = true;
     await player.seekInSteps(player.duration);
     ui.building = false;
-    player.pause();
+    await seekAndDraw(player.duration);
+    await tilesInTheirLook();
     document.documentElement.dataset.openedAt = "end";
+    bootDone();
+    readyResolve(player.playhead);
+    return;
   } else if (params.get("autoplay") !== "0") player.play();
   bootDone();
   readyResolve(player.playhead);

@@ -46,6 +46,14 @@ TOP = """() => ({
   openedAt: document.documentElement.dataset.openedAt ?? null,
 })"""
 
+# ④'s tile pictures: per tile, whether it shows a picture (data-key) and how many of its pixels are drawn
+PICTURES = """() => [...document.querySelectorAll('#tiles canvas.tile3d')].map((c) => {
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let n = 0;
+  for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+  return [c.dataset.domain, c.dataset.key ?? null, n];
+})"""
+
 
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class FreshOpenBrowserTest(unittest.TestCase):
@@ -94,6 +102,11 @@ class FreshOpenBrowserTest(unittest.TestCase):
         # ④: the tiles as at the end (?t=1e6), with verdicts in (not the 選んでいない / まだ of 50 s)
         page.click('.tab[data-tab="grid"]')
         end_tiles = self.top(page)["tiles"]
+        # their 3D pictures are drawn at once (as at ?t=), not left empty for a frame filmed then
+        pics = page.evaluate(PICTURES)
+        self.assertTrue(pics, pics)
+        for domain, key, filled in pics:
+            self.assertTrue(key and filled > 1000, (domain, key, filled))
         ref, errors_ref = self.open(f"run={RUN}&tab=grid&t=1e6")
         self.assertEqual(end_tiles, self.top(ref)["tiles"])
         self.assertTrue(any(" green" in c for _, c in end_tiles), end_tiles)
