@@ -8,7 +8,8 @@ Numbers come from code; Claude supplies the words (flags and reasons, names, the
 written in a sentence). tools.py holds the definitions of the MCP tools for hiraku/tools/mcp.py.
 """
 
-from hiraku.intake.domains import IntakeError, pick_domains, project_picks, reasons_missing, summary_line
+from hiraku.intake.domains import (IntakeError, can_write_load_cases, pick_domains, project_picks, reasons_missing,
+                                   register_load_case_writer, summary_line)
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES, describe_condition, flags_text
 from hiraku.intake.pipeline import IntakeResult, intake
 from hiraku.intake.products import load_product, product_files
@@ -23,6 +24,8 @@ __all__ = [
     "intake",
     "load_product",
     "pick_domains",
+    "register_load_case_writer",
+    "can_write_load_cases",
     "product_files",
     "project_picks",
     "reasons_missing",
