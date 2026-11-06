@@ -539,7 +539,7 @@ TOOLS: dict[str, Record] = {
         "description": (
             "設計の数を動かすと、1 つの結果は良くなり別の結果は悪くなる組 (両立しにくい 2 つ) を、感度 (K5、解析を動かして測る) から探す。"
             "数 (今の値・動かした後の値・10 % 動かしたときの変化) はコードが計算する。あなたは数を書かない。見つかった組を人に聞くなら、"
-            "返った tradeoff_id を ask_user の tradeoff_ids に渡す。人の答え (favor_a=良くなる方を優先 / favor_b=悪くなる方を避けない / "
+            "返った tradeoff_id を ask_user の tradeoff_ids に渡す。人の答え (favor_a=良くなる方を優先 / favor_b=悪くなる方を悪くしない / "
             "keep_both=どちらも守る) は設計役への指示に入れる。variables は動かす設計の数 (設計の変数の名前か、variables.<名前> などの道)、"
             "quantities は比べる結果の名前。解析を何回も回すので、変数は絞る (最大 8)。"
         ),
