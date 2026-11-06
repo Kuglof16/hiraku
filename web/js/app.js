@@ -9,6 +9,8 @@
 //                   are the one-line row of chips over the 3D (?board=1: the board of every test, as without video=1)
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
+//                   (a finished run opened with none of ?t=, ?tab=, ?tabs=, ?autoplay=, ?domain=, ?play=, ?video=1
+//                   opens paused at its end, every verdict in; ▶ plays it from its start: opensAtEnd)
 //   ?on=modules     turn overlays on at load (modules, spaces: off by default)
 //   ?off=joints     turn overlays off at load (joints: the joint marks, on by default; A7 follows it too)
 //   ?tab=grid       open on ④ 解析結果 (the domains' grid) instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
@@ -33,7 +35,7 @@
 import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
-import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
+import { applyEvent, chainFor, initialState, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
@@ -513,6 +515,21 @@ function closeDomain() {
     player.playing = back.playing;
   }
   drawn.rev = -2;
+}
+
+// The whole record's state (every event read so far applied, not only those up to the playhead):
+// the top row draws it while a domain replays in ④, so the run's version and status stay as they
+// are and do not seem to go back with that domain's replay. New events are applied on top; a
+// record that changed under it (another run, events put in between) is built again.
+let wholeMemo = { n: 0, last: null, state: initialState() };
+function wholeState() {
+  const evs = player.events;
+  const kept = wholeMemo.n <= evs.length && (wholeMemo.n === 0 || evs[wholeMemo.n - 1] === wholeMemo.last);
+  if (!kept) wholeMemo = { n: 0, last: null, state: initialState() };
+  for (let i = wholeMemo.n; i < evs.length; i++) applyEvent(wholeMemo.state, evs[i]);
+  wholeMemo.n = evs.length;
+  wholeMemo.last = evs.at(-1) ?? null;
+  return wholeMemo.state;
 }
 
 // The head over the 3D while a domain replays in ④: what it is, its time, and 格子に戻る.
@@ -1046,7 +1063,9 @@ function renderShelf() {
   shelf.render();
 }
 
-function renderTop(s) {
+// s: the state the row shows (the whole record's while ④ replays a domain); domainAt: that domain
+// and its version at the playhead, said in one line beside the status (null: none)
+function renderTop(s, domainAt = null) {
   $("want").textContent = s.project?.want ?? "";
   // the version and cost pills only once there is a run (none on a new request, or before run.started)
   const hasRun = !!s.project;
@@ -1065,6 +1084,9 @@ function renderTop(s) {
   // (a followed run that is over while the replay is still behind its end: said so, not 記録の途中)
   const status = s.status === "running" && runOver() ? "実行は終わった" : ({ running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status);
   $("mode").innerHTML =
+    (domainAt
+      ? `<span class="domain-playing" id="domain-playing" data-domain="${esc(domainAt.domain)}">${esc(TAB_JA.grid.no)} で <b>${esc(DOMAIN_JA[domainAt.domain] ?? domainAt.domain)}</b> を再生中 (${esc(verLabel(domainAt.version))})</span>`
+      : "") +
     // (the run list's words: 決まった手順, DRIVEN_JA / labels.js runSummaryJa)
     // (data-driver: a scripted run's replay and a Claude run's replay look apart; large with ?video=1)
     `<span class="badge ${live ? "live" : ""}" data-driver="${live ? "" : scripted ? "scripted" : s.project?.driver ? "claude" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : s.project?.driver ? "Claude の実行の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
@@ -2451,7 +2473,10 @@ function drawNow() {
   const heatOn = !!heatIn && ui.toggles.heat;
   const over = runOver(); // (the top's words and the stop button change when the followed run ends)
   if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present || over !== drawn.over || view !== drawn.view || (span?.domain ?? null) !== drawn.dom) {
-    renderTop(s);
+    // (④ replaying a domain: the top row keeps the whole run's version and status, and says in a line
+    // which domain plays at which version; the video's frames as before)
+    if (span && !VIDEO_LAYOUT) renderTop(wholeState(), { domain: span.domain, version: s.currentVersion });
+    else renderTop(s);
     // (the chips ring ③'s load case on ③ only; on ④ the domain open there, else none)
     renderChips(s, view === "bench" ? lcId : null, span?.domain);
     // the side panels and the 3D only while the workbench shows (on ① ②, ④'s grid, the shelf and A7
@@ -2840,6 +2865,14 @@ function startPlayback() {
   // the pets first (a page opened at ?t= draws them in its first frame)
   Promise.all([petsReady, loadModuleNames()]).then(play); // modules: the module names before the first frame
 }
+// A saved run that is over, opened with nothing saying where or what to show (no ?t=, ?tab=, ?tabs=,
+// ?autoplay=, ?video=1): it opens at its end, where ④ has every domain's verdict and ⑤ the vehicle
+// built. The static export's first screen (?t= set for it, FIRST) and a followed run are as before.
+function opensAtEnd() {
+  if (player.live || !player.finished || VIDEO_LAYOUT) return false;
+  return !["t", "tab", "tabs", "autoplay", "domain", "play"].some((k) => params.has(k));
+}
+
 async function play() {
   if (animLoop?.findArrival(player.events) != null) {
     seekAndDraw(params.has("t") ? Number(params.get("t")) || 0 : null).then(() => {
@@ -2869,7 +2902,14 @@ async function play() {
     player.seek(span.t0);
     player.playing = params.get("autoplay") !== "0";
   } else if (player.live) player.attachLive();
-  else if (params.get("autoplay") !== "0") player.play();
+  else if (opensAtEnd()) {
+    // a finished run opened as it is: at its end, every verdict in (▶ plays it from its start)
+    ui.building = true;
+    await player.seekInSteps(player.duration);
+    ui.building = false;
+    player.pause();
+    document.documentElement.dataset.openedAt = "end";
+  } else if (params.get("autoplay") !== "0") player.play();
   bootDone();
   readyResolve(player.playhead);
 }

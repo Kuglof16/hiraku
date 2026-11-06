@@ -104,6 +104,8 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 /* ?video=1: whether the picture is a scripted run or a Claude run, at a glance (24 px, a coloured ground) */
 body.video .mode .badge[data-driver="scripted"] { font-size: 24px; font-weight: 700; color: #fff; background: #3b3934; border-color: #3b3934; padding: 4px 18px; }
 body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 700; color: #fff; background: #2b59c3; border-color: #2b59c3; padding: 4px 18px; }
+/* ④ replaying a domain: which one, at which version (the badge beside it keeps the whole run's status) */
+.mode .domain-playing { color: var(--blue); white-space: nowrap; }
 .mode .runid { font-family: var(--mono); font-size: 15px; color: inherit; text-decoration: none; }
 .mode .runid:hover { text-decoration: underline; }
 
