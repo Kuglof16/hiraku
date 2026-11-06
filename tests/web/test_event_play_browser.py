@@ -181,6 +181,34 @@ class EventPlayBrowserTest(unittest.TestCase):
         self.assertAlmostEqual(page.evaluate("window.hiraku.player.playhead"), evs[mism_i]["t"], places=6)
         self.assertEqual(errors, [])
 
+    def url_page(self, query):
+        """The sample run as the URL gives it (no load): ?t= in the URL freezes the frame."""
+        page = self.browser.new_page(viewport={"width": 1440, "height": 810})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{self.bases['saved']}/?run=sample{query}", wait_until="domcontentloaded")
+        page.wait_for_function(READY, timeout=60000)
+        page.evaluate("window.hiraku.ready")
+        self.addCleanup(page.close)
+        return page, errors
+
+    def test_url_t_gives_the_same_frame_with_and_without_video(self):
+        """?t= in the URL and a seek to the same t give the same frame: on the event clock (the
+        screen's default) and on the paced clock (?video=1's default, the filming's ?t= values)."""
+        for video, clock in (("", "event"), ("&video=1", "paced")):
+            ref, e1 = self.url_page(f"{video}&autoplay=0")
+            self.assertEqual(ref.evaluate("window.hiraku.player.clock"), clock, video)
+            ts = ref.evaluate("window.hiraku.player.events.map((e) => e.t)")
+            t = round((ts[len(ts) // 2] + ts[len(ts) // 2 + 1]) / 2, 3)
+            ref.evaluate("(t) => window.hiraku.seek(t)", t)
+            at, e2 = self.url_page(f"{video}&t={t}")
+            self.assertEqual(at.evaluate(SUMMARY), ref.evaluate(SUMMARY), video)
+            self.assertEqual(e1 + e2, [], video)
+        # ?pace= is followed under ?video=1 too
+        page, errors = self.url_page("&video=1&pace=event&autoplay=0")
+        self.assertEqual(page.evaluate("window.hiraku.player.clock"), "event")
+        self.assertEqual(errors, [])
+
     def test_pace_params(self):
         for q, clock in (("&pace=real", "real"), ("&pace=0", "real"), ("&pace=paced", "paced"), ("", "event"), ("&pace=event", "event")):
             page, errors = self.open(q)

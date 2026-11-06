@@ -288,7 +288,9 @@ function eventDwell(ev) {
 player.dweller = eventDwell;
 // ?pace=real (or ?pace=0): the recorded times; ?pace=paced: the gaps stretched and cut (?gapmax=3
 // sets the longest gap), the default before the event clock; else the event clock
-const PACE_PARAM = params.get("pace");
+// ?video=1 (the filming) without ?pace=: the paced clock, so the ?t= values taken on it give the
+// same frames; ?pace=event asks for the event clock there
+const PACE_PARAM = params.get("pace") ?? (params.get("video") === "1" ? "paced" : null);
 player.clock = PACE_PARAM === "0" || PACE_PARAM === "real" ? "real" : PACE_PARAM === "paced" ? "paced" : "event";
 if (params.has("fit")) player.fitS = Math.max(5, Number(params.get("fit")) || player.fitS); // ?fit=110: the event clock's length
 if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapmax")) || 3);
