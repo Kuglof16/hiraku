@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -37,6 +38,12 @@ UNPRICED_DRIVER = "claude_code_plugin"
 MODULE_CHANGE = "module_change"
 CHANGE_PROPOSED = "design.change_proposed"
 ID_PREFIX = {**layout.ID_PREFIX, MODULE_CHANGE: "chg"}
+# The head of an events.jsonl line as emit writes it (seq, ts, t, run_id, kind first; ", " and ": " separators)
+_HEAD = re.compile(r'\{"seq": (\d+), "ts": "[^"]*", "t": ([-0-9.eE]+), "run_id": "[^"]*", "kind": "([^"]+)"')
+# The event kinds the plugin's hook command never reads (hiraku.agent.hooks, tools.rules / judge, agent.plugin read
+# the others, and records from their files): the analyses' and meshes' events, 98 % of the bytes of a long run's
+# events.jsonl (43 + 22 of 66 MB on the video's scripted run 20261106-084552)
+HOOK_SKIPPED_KINDS = frozenset({"analysis.finished", "mesh.created"})
 
 
 # Keys of an analysis that RunStore.reading() leaves out: the tools' large outputs for the screen and the export
@@ -122,6 +129,8 @@ class RunStore:
         self._t_offset = 0.0  # t of the last event when reopened
         self._counters = {kind: 0 for kind in ID_PREFIX}
         self._counters_open = False  # True after open(): the counters are counted on the first next_id
+        self._skip_kinds: frozenset[str] = frozenset()  # open(skip_kinds=...): kinds events() leaves out
+        self._last_line: tuple[int, float] | None = None  # (seq, t) of the last line events() read
         # inside reading(): record files already looked at in this stretch, by path (None outside). Emptied on every
         # event, since every write of this store emits one
         self._read_cache: dict[str, Any] | None = None
@@ -169,15 +178,18 @@ class RunStore:
         return store
 
     @classmethod
-    def open(cls, path: Path) -> "RunStore":
-        """Reopen an existing run folder (for reading, or to append more events)."""
+    def open(cls, path: Path, *, skip_kinds: frozenset[str] = frozenset()) -> "RunStore":
+        """Reopen an existing run folder (for reading, or to append more events). skip_kinds: event kinds
+        events() leaves out without parsing their lines (a reader that never looks at them: the plugin's hook
+        command and HOOK_SKIPPED_KINDS); seq and t still continue from the file's last line."""
         path = Path(path)
         project = _read_json(path / layout.PROJECT_FILE)
         store = cls(path, project)
-        events = store.events()
-        if events:
-            store._seq = events[-1]["seq"] + 1
-            store._t_offset = events[-1]["t"]
+        store._skip_kinds = frozenset(skip_kinds)
+        store.events()
+        if store._last_line is not None:
+            store._seq = store._last_line[0] + 1
+            store._t_offset = store._last_line[1]
         # the id counters are counted from the records on the first next_id, not here: a reader (the plugin's hook
         # command, the screen) never reserves an id, and reading every record file took 1.2 s of a hook's 2.3 s on
         # a long run (1033 records)
@@ -267,10 +279,27 @@ class RunStore:
                     f.seek(done)
                     chunk = f.read(size - done)
                 end = chunk.rfind(b"\n") + 1  # a line still being written is left for the next call
-                got = got + [json.loads(line) for line in chunk[:end].decode("utf-8").splitlines() if line.strip()]
+                got = got + self._parse_lines(chunk[:end].decode("utf-8").splitlines())
                 done += end
                 self._events_read = (done, got)
             return list(got)
+
+    def _parse_lines(self, lines: list[str]) -> list[Record]:
+        """The events of these lines, less the kinds in _skip_kinds: a line is matched on its head (emit writes
+        seq, ts, t, run_id and kind first) and a skipped kind is not parsed. _last_line gets the last line's
+        seq and t either way."""
+        out: list[Record] = []
+        for line in lines:
+            if not line.strip():
+                continue
+            head = _HEAD.match(line) if self._skip_kinds else None
+            if head and head.group(3) in self._skip_kinds:
+                self._last_line = (int(head.group(1)), float(head.group(2)))
+                continue
+            e = json.loads(line)
+            out.append(e)
+            self._last_line = (e["seq"], e["t"])
+        return out
 
     # ------------------------------------------------------------------ project
 
