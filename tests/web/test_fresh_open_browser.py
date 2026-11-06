@@ -3,9 +3,9 @@
 - a saved run that is over, opened with no ?t= (nor ?tab=, ?tabs=, ?autoplay=, ?video=1): it opens
   at its end, where ④ has every domain's verdict (the tiles as at ?t=1e6) and ⑤ the vehicle built;
   ▶ there plays it from its start; with ?t= or ?tab= it opens as before;
-- ④ replaying a domain (a tile pressed): the top row keeps the whole run's version and status (not
-  the domain's replay's), and one line beside it says which domain plays at which version; it goes
-  when the domain is closed. Under ?video=1 the top row is as before.
+- ④ is the run as it ended (test_grid_viewer_browser): at any ?t= its top row has the whole run's
+  version and status, and a tile pressed opens the viewer over it (no domain replay, no line about
+  one). Under ?video=1 the top row is as before.
 
 Records: the saved Claude run (showcase/20261105-160725-offroad-4w, v1 to v7) and the contract's
 sample (one version; strength from 5.0 s to 6.5 s at pace=0, where the record is still going).
@@ -126,40 +126,34 @@ class FreshOpenBrowserTest(unittest.TestCase):
         self.assertEqual((got["openedAt"], got["playhead"], got["playing"]), (None, 0, False))
         self.assertEqual(errors + errors2 + errors3, [])
 
-    # ---- ④'s domain replay and the top row ----------------------------------------------------
+    # ---- ④ as the run ended and the top row --------------------------------------------------
 
-    def test_a_domain_replay_keeps_the_top_row(self):
+    def test_the_grid_keeps_the_top_row_and_opens_the_viewer(self):
         page, errors = self.open(f"run={RUN}&tab=grid&t=1e6")
         before = self.top(page)
         self.assertTrue(before["pill"].startswith("v7"), before["pill"])
         self.assertIsNone(before["line"])
-        page.click('.tile[data-domain="strength"]')
+        page.click('#tiles .tile[data-domain="strength"] .th')
         got = self.top(page)
-        self.assertLess(got["ver"], 7)  # (the domain's replay is at an earlier version)
-        self.assertEqual(got["pill"], before["pill"])
-        self.assertIn("完了", got["mode"])
-        self.assertNotIn("記録の途中", got["mode"])
-        self.assertEqual(got["line"], f"④ で 強度信頼性 を再生中 (v{got['ver']})")
-        page.click("#domain-head .dh-close")
-        got = self.top(page)
-        self.assertIsNone(got["line"])
-        self.assertEqual((got["pill"], got["mode"]), (before["pill"], before["mode"]))
-        self.assertEqual(errors, [])
-
-    def test_the_sample_still_going_at_the_domain_says_its_end(self):
-        # the sample's strength is at 5.0 to 6.5 s, where the record says 記録の途中: the top keeps 完了
-        page, errors = self.open("run=sample&pace=0&tab=grid&t=1e6")
-        page.click('.tile[data-domain="strength"]')
-        got = self.top(page)
-        self.assertIn("完了", got["mode"])
-        self.assertNotIn("記録の途中", got["mode"])
-        self.assertEqual(got["line"], "④ で 強度信頼性 を再生中 (v1)")
-        # ?domain= opens it the same way
-        page2, errors2 = self.open("run=sample&pace=0&tab=grid&domain=strength&t=6.0")
+        self.assertTrue(page.is_visible("#grid-viewer iframe"))
+        self.assertEqual((got["pill"], got["mode"], got["line"], got["playhead"]), (before["pill"], before["mode"], None, before["playhead"]))
+        page.click("#grid-viewer .gv-back")
+        self.assertFalse(page.is_visible("#grid-viewer"))
+        # at an earlier ?t=: the same top row and tiles (the whole record)
+        page2, errors2 = self.open(f"run={RUN}&tab=grid&t=50")
         got = self.top(page2)
+        self.assertEqual((got["pill"], got["tiles"]), (before["pill"], before["tiles"]))
         self.assertIn("完了", got["mode"])
-        self.assertEqual(got["line"], "④ で 強度信頼性 を再生中 (v1)")
         self.assertEqual(errors + errors2, [])
+
+    def test_the_sample_still_going_at_t_says_its_end_on_the_grid(self):
+        # the sample at 6.0 s, where the record says 記録の途中: ④'s top says 完了
+        page, errors = self.open("run=sample&pace=0&tab=grid&t=6.0")
+        got = self.top(page)
+        self.assertIn("完了", got["mode"])
+        self.assertNotIn("記録の途中", got["mode"])
+        self.assertIsNone(got["line"])
+        self.assertEqual(errors, [])
 
     def test_video_keeps_the_top_row_as_before(self):
         page, errors = self.open("run=sample&pace=0&tab=grid&domain=strength&t=6.0&video=1")

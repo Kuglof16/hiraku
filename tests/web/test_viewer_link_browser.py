@@ -136,31 +136,31 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         self.assertNotEqual(ans.get("source"), viewer_link.SAMPLE_SOURCE)
         self.assertEqual(errors, [])
 
-    def test_tile_details_list_each_analysis_with_its_button(self):
+    def test_tile_test_rows_open_each_analysis_in_the_tab(self):
+        # ④'s tiles have no 「ビューアで見る」 button: a test's row opens its analysis over the list
+        # (test_grid_viewer_browser), at the field of the tool table in use (viewer.src.build's when
+        # there: entry_opening / spray_reach on the assembly field; else viewer_link.TOOL_FIELD)
         _, page, errors = self.open("tab=grid")
-        page.wait_for_selector('.tile[data-domain="assembly"] [data-role="viewer-list"]', state="attached", timeout=30000)
+        page.wait_for_selector('.tile[data-domain="assembly"] [data-role="test-rows"]', state="attached", timeout=30000)
+        self.assertEqual(page.locator('.tile [data-role="viewer-link"]').count(), 0)
         page.evaluate("document.querySelector('.tile[data-domain=\"assembly\"] details.more').open = true")
-        links = page.evaluate(LINKS, '.tile[data-domain="assembly"] [data-role="viewer-list"]')
-        self.assertTrue(links)
-        on = [x for x in links if not x["disabled"]]
-        off = [x for x in links if x["disabled"]]
-        self.assertTrue(on, links)
-        for x in on:
-            self.assertEqual(x["href"], viewer_href(x["ana"], x["field"]))
-            self.assertEqual(x["target"], "_blank")
+        rows = page.evaluate("""() => [...document.querySelectorAll('.tile[data-domain="assembly"] [data-role="test-row"]')].map((r) => r.dataset.ana)""")
+        self.assertTrue(rows)
         tools = page.evaluate("() => Object.fromEntries(Object.values(window.hiraku.state().analyses).map((a) => [a.analysis_id, a.tool]))")
         table = viewer_link.tool_table()
-        for x in links:
-            # the field from the tool table in use (viewer.src.build's when there: entry_opening /
-            # spray_reach on the assembly field; else viewer_link.TOOL_FIELD, where they have none)
-            want = viewer_link.field_of(tools[x["ana"]], table)
+        for ana in rows:
+            want = viewer_link.field_of(tools[ana], table)
+            page.click(f'.tile[data-domain="assembly"] [data-role="test-row"][data-ana="{ana}"]')
             if want is None:
-                self.assertTrue(x["disabled"], x)
-                self.assertEqual(x["why"], viewer_link.NO_FIELD)
-            else:
-                self.assertEqual(x["field"], want, x)
-        for x in off:
-            self.assertTrue(x["why"] and "\n" not in x["why"], x)
+                self.assertEqual(page.locator('[data-role="viewer-none"]').get_attribute("data-ana"), ana)
+                self.assertIn(viewer_link.NO_FIELD, page.locator('[data-role="viewer-none"] span').text_content())
+                page.keyboard.press("Escape")
+                continue
+            got = page.evaluate("() => { const v = document.getElementById('grid-viewer'); return { shown: !v.hidden, src: v.querySelector('iframe').getAttribute('src') }; }")
+            self.assertTrue(got["shown"], ana)
+            self.assertEqual(got["src"], viewer_href(ana, want))
+            page.click("#grid-viewer .gv-back")
+            page.evaluate("document.querySelector('.tile[data-domain=\"assembly\"] details.more').open = true")
         if SHOTS:
             # the whole page (the grid redraws its tiles, so a tile's own element may be replaced mid-shot)
             page.screenshot(path=str(SHOTS / "grid_1440.png"))
