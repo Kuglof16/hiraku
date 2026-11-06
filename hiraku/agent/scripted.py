@@ -350,15 +350,31 @@ def stage_groups(ctx: RunContext, steps: list[Record]) -> list[tuple[int, list[R
     while changed:  # the feeds have no loop (a load case is fed by the ones it reads), so this ends
         changed = False
         for i, step in enumerate(steps):
-            k = max([ks[i]] + [ks[j] for j, other in enumerate(steps) if other["load_case"] in ups[i]])
+            # an upstream load case is there once its first step has run: the lowest stage of its steps (P1-step100's
+            # static push at stage 1 feeds R1; its drive in K2 at stage 3 comes later and feeds R1s)
+            first = {}
+            for j, other in enumerate(steps):
+                if other["load_case"] in ups[i]:
+                    first[other["load_case"]] = min(first.get(other["load_case"], ks[j]), ks[j])
+            k = max([ks[i], *first.values()])
             if k != ks[i]:
                 ks[i], changed = k, True
+    first_stage: dict[str, int] = {}
+    for j, s in enumerate(steps):
+        first_stage[s["load_case"]] = min(first_stage.get(s["load_case"], ks[j]), ks[j])
     out = []
     for k in sorted(set(ks)):
         left = [i for i in range(len(steps)) if ks[i] == k]
         ordered: list[int] = []
+
+        def waits(i: int) -> bool:
+            # after the steps of this stage of a feeding case whose first step is in this stage; a case already there
+            # from a lighter stage does not hold it (R1s goes before P1-step100's drive in K2, as the plan puts it)
+            return any(steps[j]["load_case"] in ups[i] and first_stage[steps[j]["load_case"]] == k
+                       for j in left if j != i)
+
         while left:  # the plan's order, each step after the steps (of this stage) of the cases feeding it
-            i = next((i for i in left if not any(steps[j]["load_case"] in ups[i] for j in left if j != i)), left[0])
+            i = next((i for i in left if not waits(i)), left[0])
             ordered.append(i)
             left.remove(i)
         out.append((k, [steps[i] for i in ordered]))
