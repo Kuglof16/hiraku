@@ -1379,3 +1379,20 @@ body:not(.video) #roundcard .rc-list .pw { white-space: nowrap; overflow: hidden
 body:not(.video) #now { max-width: 62%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ① ② : the hooks' line would sit on the request's bar at the top: it goes to the bottom instead */
 body[data-intake-tab="A1"]:not(.video) .hookline, body[data-intake-tab="A2"]:not(.video) .hookline { top: auto !important; bottom: 70px; }
+
+/* Buttons that change the screen: large, shaped as buttons, saying where they go (not the video) */
+body:not(.video) .tab { font-size: 21px; padding: 7px 12px; border-color: var(--rule); background: var(--card, #fffdf8); color: var(--ink); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08); }
+body:not(.video) .tab.on { border-color: var(--ink); border-width: 2px; background: var(--ink); color: var(--card, #fffdf8); }
+body:not(.video) .tab:hover { border-color: var(--ink); }
+body:not(.video) .tabflow { gap: 2px; }
+body:not(.video) .back-link { font-size: 19px; padding: 5px 16px; font-weight: 600; background: var(--card, #fffdf8); }
+body:not(.video) .runlist a { font-size: 18px; padding: 5px 16px; }
+.grid-viewer .gv-back { font-size: 20px !important; font-weight: 600; padding: 8px 20px !important; border: 2px solid var(--ink) !important; }
+/* ④: a tile opens its analysis in the viewer, and says so */
+body.grid-fixed .grid-view .tile[data-domain] { position: relative; }
+body.grid-fixed .grid-view .tile[data-domain]::after {
+  content: "▶ 押すとビューアで見られます"; position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  font-size: 17px; font-weight: 600; padding: 5px 16px; border-radius: 999px; background: var(--ink); color: var(--card, #fffdf8);
+  pointer-events: none; white-space: nowrap;
+}
+body.grid-fixed .grid-view .tile[data-domain]:hover { box-shadow: 0 0 0 3px var(--ink); }
