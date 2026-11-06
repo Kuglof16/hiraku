@@ -446,6 +446,47 @@ class LayoutTest(unittest.TestCase):
             shutil.rmtree(tmp)
 
 
+class MaterialsTest(unittest.TestCase):
+    """GET /api/materials: the material cards (data/materials/cards/<id>.json) as they are."""
+
+    def serve(self, materials_dir):
+        s = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None, launcher=False, materials_dir=materials_dir)
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        self.addCleanup(s.server_close)
+        self.addCleanup(s.shutdown)
+        with urllib.request.urlopen(f"http://127.0.0.1:{s.server_address[1]}/api/materials", timeout=10) as r:
+            self.assertTrue(r.headers["Content-Type"].startswith("application/json"))
+            return json.loads(r.read())
+
+    def test_the_repository_cards_as_they_are(self):
+        from hiraku import contract
+        from hiraku.webserve.materials import CARDS_DIR
+
+        files = sorted(CARDS_DIR.glob("*.json"))
+        got = self.serve(CARDS_DIR)
+        self.assertEqual(got["skipped"], [])
+        self.assertEqual(len(got["cards"]), len(files))
+        self.assertGreaterEqual(len(files), 4)
+        self.assertEqual([c["id"] for c in got["cards"]], [p.stem for p in files])
+        for card, path in zip(got["cards"], files):
+            self.assertEqual(card, json.loads(path.read_text(encoding="utf-8")), path.name)
+            self.assertEqual(contract.errors("material_card", card), [])
+
+    def test_a_file_that_is_not_a_card_is_left_out_and_named(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        good = {"id": "steel_a", "name": "steel A (shape example)", "category": "steel",
+                "properties": {"yield_MPa": {"value": 245.0, "kind": "standard_minimum", "source": "shape example", "checked": False}}}
+        (tmp / "steel_a.json").write_text(json.dumps(good), encoding="utf-8")
+        (tmp / "other_name.json").write_text(json.dumps(good), encoding="utf-8")  # not named by its id
+        (tmp / "broken.json").write_text("{", encoding="utf-8")
+        (tmp / "no_props.json").write_text(json.dumps({**good, "id": "no_props", "properties": {}}), encoding="utf-8")
+        got = self.serve(tmp)
+        self.assertEqual(got["cards"], [good])
+        self.assertEqual(sorted(s["file"] for s in got["skipped"]), ["broken.json", "no_props.json", "other_name.json"])
+        self.assertEqual(self.serve(tmp / "absent"), {"cards": [], "skipped": []})
+
+
 class PetsTest(unittest.TestCase):
     def test_pets_script_is_served_as_it_is_or_404(self):
         """GET /pets/pet3d.js passes the given pets file through as JavaScript; without it, 404."""

@@ -1578,6 +1578,16 @@ const TAB_HEADS = {
   A4() {
     const host = $("shelf-host");
     const sum = host.querySelector(".sh-sum")?.textContent.trim() ?? "";
+    // the shelf's 材質 view (js/materials.js): the material cards, and how many have values not read
+    const mt = host.querySelector(".mt-host:not([hidden])");
+    if (mt) {
+      const unread = mt.querySelectorAll(".mt-row .mt-tag.unread").length;
+      return [
+        sum ? `材質: ${sum}` : "材質カードを読んでいる",
+        ["出典", unread ? `読んでいない値のある材質 ${unread}` : sum ? "どの材質の値も、出典を読んで確かめた" : "—", unread ? "warn" : sum ? "ok" : ""],
+        "材質を選ぶと、カードの値と出どころが右に出る",
+      ];
+    }
     const bad = host.querySelectorAll(".sh-chk.bad, .sh-chk.noval").length;
     return [
       sum ? `棚: ${sum}` : "棚を読んでいる",

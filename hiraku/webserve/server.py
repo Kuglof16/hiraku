@@ -32,6 +32,8 @@ Standard library only. Routes:
     GET /api/runs/<run_id>/tools        the tools a run wrote: {"tools": {name: [n, ...]}} from
                                         the names of its tools/<name>-<n>.py (empty without tools/)
     GET /api/formulas                  the K0 formulas' ids and Japanese titles (formula_titles)
+    GET /api/materials                  the material cards (data/materials/cards/<id>.json) as
+                                        they are, for the shelf's 材質 view (materials.py)
     GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
                                         module designers (web/js/modules.js)
     GET /viewer/<path>                  the result viewer (viewer/, read only; 404 without it)
@@ -67,6 +69,7 @@ from hiraku.contract import EXAMPLES_DIR
 from hiraku.contract.layout import EVENTS_FILE, JUDGEMENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
 from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
 from hiraku.webserve.shelf import Shelf
+from hiraku.webserve.materials import CARDS_DIR, material_cards
 from hiraku.webserve import viewer_link
 
 DEFAULT_HOST = "127.0.0.1"
@@ -468,6 +471,7 @@ class Handler(BaseHTTPRequestHandler):
     layout_file: Path = LAYOUT_FILE
     pets_file: Path = PETS_FILE
     shelf: Shelf = Shelf()
+    materials_dir: Path = CARDS_DIR
     quiet: bool = False
     assets: bool = True  # /api/assets lists the Poly Haven files (False: none, for the fall-back)
     viewer_dir: Path = viewer_link.VIEWER_DIR
@@ -510,6 +514,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/formulas":
             self._send_json(formula_titles())
+            return
+        if path == "/api/materials":
+            self._send_json(material_cards(self.materials_dir))
             return
         m = _EVENTS_PATH_RE.match(path)
         if m:
@@ -795,13 +802,15 @@ def make_server(
     viewer_dir: Path | str = viewer_link.VIEWER_DIR,
     viewer_data_dir: Path | str | None = None,
     viewer_build=None,
+    materials_dir: Path | str = CARDS_DIR,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
     launcher: None starts runs into runs_dir with this process' environment
     (with the demo runs of demo_runs_file); False turns starting runs off; or a
     Launcher to use. shelf: what /api/shelf answers (by default the solvers'
-    shelf, computed on the first request).
+    shelf, computed on the first request). materials_dir: the folder of the
+    material cards /api/materials answers.
     assets: False makes /api/assets answer none (the screen then draws its own textures,
     as without the files).
     """
@@ -819,6 +828,7 @@ def make_server(
             "layout_file": Path(layout_file),
             "pets_file": Path(pets_file),
             "shelf": shelf or Shelf(),
+            "materials_dir": Path(materials_dir),
             "quiet": quiet,
             "assets": assets,
             "viewer_dir": Path(viewer_dir),

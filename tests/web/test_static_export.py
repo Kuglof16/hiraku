@@ -133,6 +133,7 @@ class ExportTest(unittest.TestCase):
             pairs = {"/api/runs": data / "runs.json", "/api/launch": data / "launch.json",
                      "/api/assets": data / "assets.json", "/api/modules": data / "modules.json",
                      "/api/formulas": data / "formulas.json", f"/api/runs/{RUN_ID}/tools": data / "runs" / RUN_ID / "tools.json",
+                     "/api/materials": data / "materials.json",
                      "/layout.json": self.out / "layout.json"}
             for route, f in pairs.items():
                 self.assertEqual(json.loads(get(base + route)), json.loads(f.read_text(encoding="utf-8")), route)
@@ -162,6 +163,15 @@ class ExportTest(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_the_material_cards_are_in(self):
+        from hiraku.webserve.materials import CARDS_DIR
+
+        got = json.loads((self.out / "data" / "materials.json").read_text(encoding="utf-8"))
+        files = sorted(CARDS_DIR.glob("*.json"))
+        self.assertGreaterEqual(len(files), 4)
+        self.assertEqual(got["cards"], [json.loads(p.read_text(encoding="utf-8")) for p in files])
+        self.assertEqual(got["skipped"], [])
 
     def test_only_tool_files_and_the_runs_taken(self):
         tools = sorted(p.name for p in (self.out / "data" / "runs" / RUN_ID / "tools").iterdir())
@@ -230,7 +240,7 @@ class StaticBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
         saved = make_saved(cls.tmp)
-        site = cls.tmp / "site"
+        site = cls.site = cls.tmp / "site"
         ex.export(site / "hiraku", saved_dir=saved, shelf=fake_shelf())
         cls.formulas = {f["formula_id"]: f["title"] for f in json.loads((site / "hiraku" / "data" / "formulas.json").read_text(encoding="utf-8"))["formulas"]}
         cls.server = ThreadingHTTPServer(("127.0.0.1", STATIC_PORT), partial(QuietHandler, directory=str(site)))
@@ -293,6 +303,13 @@ class StaticBrowserTest(unittest.TestCase):
         page.click('.tab[data-tab="A4"]')
         page.wait_for_function(f"document.querySelectorAll('#view-shelf .sh-tool').length >= {len(SHELF_TOOLS)}", timeout=10000)
         self.assertIn("レールの曲げ", page.inner_text("#view-shelf"))
+        # A4's 材質: the material cards from data/materials.json
+        page.click('#view-shelf .sh-view button[data-view="materials"]')
+        cards = json.loads((self.site / "hiraku" / "data" / "materials.json").read_text(encoding="utf-8"))["cards"]
+        page.wait_for_function(f"document.querySelectorAll('#view-shelf .mt-row').length === {len(cards)}", timeout=10000)
+        page.click(f'#view-shelf .mt-row[data-material="{cards[0]["id"]}"]')
+        shown = page.eval_on_selector_all("#view-shelf .mt-detail .mt-val", "(xs) => xs.map((x) => x.textContent)")
+        self.assertEqual(len(shown), len(cards[0]["properties"]))
         self.clean(page, seen)
 
     def test_the_run_list_only_replays(self):
