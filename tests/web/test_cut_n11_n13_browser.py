@@ -367,18 +367,18 @@ class CutN11N13Test(unittest.TestCase):
             self.assertEqual(seen[t]["counts"].get("number"), 2, t)
         # neutral before mismatch_s; then red with the difference and the allowed range
         self.assertEqual(c[T["lead_s"]]["labels"], [])
-        self.assertEqual(c[T["mismatch_s"]]["diff"], [f"差 {pct(_rel(PRED1, ANA))} (許す幅 ±10 %) ✕ 食い違い"])
-        self.assertEqual(c[T["mismatch_s"]]["marks"], [["✕ 食い違い", RED]])
+        self.assertEqual(c[T["mismatch_s"]]["diff"], [f"差 {pct(_rel(PRED1, ANA))} (許す幅 ±10 %) ✕ NG (食い違い)"])
+        self.assertEqual(c[T["mismatch_s"]]["marks"], [["✕ NG (食い違い)", RED]])
         # the cause from cause_s, in one line: the requirement's name, cm meant and mm written
         self.assertEqual(c[T["cause_s"] - 0.1]["cause"], [])
         self.assertEqual(c[T["cause_s"]]["cause"], [f"荷の重心の高さ (形の見本): {SETTING} cm のつもりが {SETTING} mm と書かれていた"])
         self.assertEqual(c[T["fixed_s"] - 0.1]["fix"], [])
         # from fixed_s the comparison that resolved it: green, and the fix with "✓ OK"
         late = c[T["fixed_s"]]
-        self.assertEqual(late["diff"], [f"差 {pct(_rel(PRED2, ANA))} (許す幅 ±10 %) ✓ 一致"])
+        self.assertEqual(late["diff"], [f"差 {pct(_rel(PRED2, ANA))} (許す幅 ±10 %) ✓ OK"])
         self.assertEqual(late["again"], ["直してから予測し直した"])
         self.assertEqual(late["fix"], ["直し方: 荷の高さを設計のとおりにして予測し直す ✓ OK"])
-        self.assertEqual(late["marks"], [["✓ 一致", GREEN], ["✓ OK", GREEN]])
+        self.assertEqual(late["marks"], [["✓ OK", GREEN], ["✓ OK", GREEN]])
 
     # ---- N13 --------------------------------------------------------------------------
 

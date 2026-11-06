@@ -162,20 +162,43 @@ class FilesTest(unittest.TestCase):
         self.assertIn('<script type="module" src="js/app.js">', html)
         self.assertIn('type="importmap"', html)
 
-    def test_screen_words_use_v_and_hantei(self):
-        """The screen says v3 (not 版 3) and 判定 (not 照合). Comments are not shown, so they
-        are left out; the intake's screen (web/js/intake/) is the intake's own."""
+    # Lines the word check lets through, each with why: (file, a piece of the line).
+    SCREEN_WORDS_ALLOWED = [
+        # the words hiraku/tools/judge.py writes in a judgement's summary, matched (not shown)
+        ("js/beyond.js", "const NOT_ALL_JUDGED = ["),
+        # labels.js judgedWords: the record's words it turns into OK / NG / 判定 on the screen
+        ("js/labels.js", '.replace(/不合格|合格/g, (m) => (m === "不合格" ? "NG" : "OK"))'),
+        ("js/labels.js", '.replace(/照合|合否/g, "判定")'),
+        ("js/labels.js", '.replace(/(?<!半透明の)([赤緑])(?![いく色字み])/g, (m, c) => (c === "赤" ? "NG" : "OK"))'),
+        # the colour of a drawing (a see-through red pose, a box red over its limit), not a verdict
+        ("js/app.js", "半透明の赤 = 限界を超えたあとの姿勢"),
+        ("js/cut.js", "半透明の赤: 限界の外の条件の動き"),
+        ("js/energy_flow.js", "上限を超えたときだけ赤"),
+    ]
+
+    def test_screen_words_use_v_and_ok_ng(self):
+        """The screen says v3 (not 版 3), 判定 (not 照合) and OK / NG for a verdict (not 合格・
+        不合格・基準を満たした, nor 緑・赤 meaning the verdict). Comments are not shown, so they are
+        left out; the intake's screen (web/js/intake/) is the intake's own. Internal names (green,
+        red, class names) are ASCII and not matched; CSS is not read."""
         intake = JS / "intake"
-        banned = [re.compile(r"版\s*\d"), re.compile(r"\d\s*版"), re.compile(r"版\s*\$\{"), re.compile("照合")]
+        banned = [re.compile(r"版\s*\d"), re.compile(r"\d\s*版"), re.compile(r"版\s*\$\{"), re.compile("照合"),
+                  re.compile("合格"), re.compile("基準を満たし|基準を満たさ"), re.compile("緑"), re.compile("赤")]
         found = []
         for p in self.web_files():
             if p.suffix not in (".js", ".html") or p.is_relative_to(intake):
                 continue
+            rel = p.relative_to(WEB).as_posix()
             text = strip_html_comments(read(p)) if p.suffix == ".html" else strip_js_comments(read(p))
             for n, line in enumerate(text.splitlines(), 1):
-                if any(b.search(line) for b in banned):
-                    found.append(f"{p.relative_to(WEB)}:{n}: {line.strip()[:80]}")
+                if any(b.search(line) for b in banned) and not any(f == rel and piece in line for f, piece in self.SCREEN_WORDS_ALLOWED):
+                    found.append(f"{rel}:{n}: {line.strip()[:80]}")
         self.assertEqual(found, [])
+
+    def test_screen_words_allowed_lines_are_there(self):
+        """Each let-through line is still in its file (an allowance not needed any more is removed)."""
+        for f, piece in self.SCREEN_WORDS_ALLOWED:
+            self.assertIn(piece, read(WEB / f), f)
 
     def test_comment_stripper_keeps_strings(self):
         src = 'const u = "https://x.org/a"; // 照合\nconst t = `a ${b ? `c//d` : "/*e*/"} f`; /* 版 1 */ const r = /"\\//g;\nx = "g"'

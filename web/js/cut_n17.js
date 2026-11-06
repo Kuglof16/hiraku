@@ -20,7 +20,7 @@
 
 import { clearOfBand } from "./compose.js";
 import { storyOf } from "./cut_n03.js";
-import { DOMAIN_JA, designNumberName, esc, fmt, fmtVU, isYesNo, opLabel, plainName, verLabel } from "./labels.js";
+import { DOMAIN_JA, designNumberName, esc, fmt, fmtVU, isYesNo, judgedWords, opLabel, plainName, verLabel } from "./labels.js";
 
 // The words of the viewers (the review of the first cuts: the page was mostly English
 // internal names and test ids). A domain's line is made here from its verdicts (the
@@ -202,7 +202,7 @@ export class CutN17 {
     el.innerHTML =
       `<div class="n17-head" data-box="n17.result">` +
       `<div class="n17-kicker" style="font-size:${body}px">報告・設計 ${esc(verLabel(rep.design_version))}</div>` +
-      `<h2>${esc(rep.summary)}</h2>` +
+      `<h2>${esc(judgedWords(rep.summary))}</h2>` +
       (chips ? `<div class="n17-chips" data-box="n17.chips" style="font-size:${chipPx}px">${chips}</div>` : "") +
       `</div>` +
       `<div class="n17-body n17-pale" data-box="n17.body" data-kind="note">${(rep.domains ?? []).map((d) => this.domainHtml(d)).join("")}${this.uncheckedHtml()}</div>` +
@@ -262,8 +262,8 @@ export class CutN17 {
       `<h3><span class="${cls}">${mark} ${esc(DOMAIN_JA[d.domain] ?? d.domain)}</span> <span class="n17-line">${esc(this.lineOf(d))}</span></h3>` +
       `<div class="n17-detail" data-kind="note">` +
       (effRows ? `<div class="n17-group" data-box="${key}.effects"><h4>効いている項 (全体に占める割合)</h4>${effRows}</div>` : "") +
-      (senRows ? `<div class="n17-group" data-box="${key}.sensitivity"><h4>感度 (その数を 1 % 変えると、合否の量が何 % 動くか)</h4>${senRows}</div>` : "") +
-      (assumptions.length ? `<p class="n17-note">仮定: ${assumptions.map(esc).join("、")}</p>` : "") +
+      (senRows ? `<div class="n17-group" data-box="${key}.sensitivity"><h4>感度 (その数を 1 % 変えると、判定の量が何 % 動くか)</h4>${senRows}</div>` : "") +
+      (assumptions.length ? `<p class="n17-note">仮定: ${assumptions.map((a) => esc(judgedWords(a))).join("、")}</p>` : "") +
       (diffs ? `<p class="n17-note">${esc(diffs)}</p>` : "") +
       `</div></section>`
     );

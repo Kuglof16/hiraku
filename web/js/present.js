@@ -8,7 +8,7 @@
 // The words for the hooks' notices (what happened / what comes next) and whether a stopped
 // action was later done are here too: the workbench uses them as well.
 
-import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, judgedWords, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
 import { FIELD_JA } from "./fields.js";
 import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
 import { judgedResult, referenceResults } from "./judged.js";
@@ -63,15 +63,15 @@ export function resolvedHooks(s) {
 
 const limitWord = (op) => (op === "<=" || op === "<" ? "許容" : op === ">=" || op === ">" ? "必要" : "基準");
 
-// 解析 123.6 MPa ≤ 許容 156.7 MPa → 合格
+// 解析 123.6 MPa ≤ 許容 156.7 MPa → OK
 export function verdictLine(verdict) {
   if (!verdict) return "";
-  return `${valueFromJa(verdict)} ${fmtQ(verdict.value)} ${opLabel(verdict.op)} ${limitWord(verdict.op)} ${fmtQ(verdict.limit)} → ${verdict.pass ? "合格" : "不合格"}`;
+  return `${valueFromJa(verdict)} ${fmtQ(verdict.value)} ${opLabel(verdict.op)} ${limitWord(verdict.op)} ${fmtQ(verdict.limit)} → ${verdict.pass ? "OK" : "NG"}`;
 }
 
 export function verdictSentence(verdict) {
   if (!verdict) return null;
-  return { ok: !!verdict.pass, text: verdict.pass ? "基準を満たした" : "基準を満たさない" };
+  return { ok: !!verdict.pass, text: verdict.pass ? "OK" : "NG" };
 }
 
 // 基準: 最大応力 ≤ 156.7 MPa (the load case's criterion, before a verdict)
@@ -184,11 +184,11 @@ const SCENES = [
       const wait = picked.length - green.length - red.length;
       const names = (list) => list.map(([d]) => DOMAIN_JA[d]).join("・");
       return {
-        what: `判定が合格の分野 (${verLabel(c.s.currentVersion)})`,
+        what: `判定が OK の分野 (${verLabel(c.s.currentVersion)})`,
         value: `${green.length} / ${picked.length}`,
         src: "各分野の判定の記録",
-        crit: red.length ? `基準を満たさない分野: ${names(red)}` : wait ? `判定を待っている分野: ${wait}` : "",
-        verdict: wait && !red.length ? null : { ok: !red.length, text: red.length ? "基準を満たさない分野がある" : "全分野で基準を満たした" },
+        crit: red.length ? `NG の分野: ${names(red)}` : wait ? `判定を待っている分野: ${wait}` : "",
+        verdict: wait && !red.length ? null : { ok: !red.length, text: red.length ? `NG ${red.length} 分野` : "全分野 OK" },
       };
     },
   },
@@ -228,7 +228,8 @@ const SCENES = [
       // packager's own words (change_reason, with record ids) only under ?dev=1
       // (a version with no recorded change, e.g. parts added by a designer: its change_reason as
       // written when it names no record id)
-      const said = ct.compare ? c.s.designs?.[ct.compare.nowVersion]?.change_reason : null;
+      const saidRaw = ct.compare ? c.s.designs?.[ct.compare.nowVersion]?.change_reason : null;
+      const said = saidRaw ? judgedWords(saidRaw) : saidRaw;
       const why = ct.compare ? versionChangeLine(c.s, ct.compare.nowVersion) ?? (said && !RECORD_ID.test(said) ? said : null) : null;
       const dev = said && said !== why ? [`${verLabel(ct.compare.nowVersion)} の記録の文: ${said}`] : [];
       // The large number is the judged quantity: the verdict's value, else (no verdict yet) the

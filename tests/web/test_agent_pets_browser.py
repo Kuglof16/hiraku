@@ -234,7 +234,7 @@ class AgentPetsTest(unittest.TestCase):
         # the judgement's line is the bubble of its domain's agent (the event's agent is system)
         grid = page.evaluate(READ, {"t": 12.2, "tab": "grid"})
         nvh = {s["agent"]: s["text"] for s in grid["says"] if s["on"]}
-        self.assertTrue(nvh["cae.nvh"].startswith("v2 の判定は緑"), nvh)
+        self.assertTrue(nvh["cae.nvh"].startswith("v2 の判定は OK"), nvh)
         self.assertEqual(errors, [])
         page.close()
 

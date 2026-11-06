@@ -165,8 +165,8 @@ class VerdictCardBrowserTest(unittest.TestCase):
         self.assertIn("判定の量", got["what"])
         self.assertIn("構造的ホットスポット応力", got["what"])
         # the verdict's line with version 2's allowable, not version 1's
-        self.assertEqual(got["crit"], f"解析 {fmt4(self.hot)} MPa ≤ 許容 {fmt4(LIMIT_V2)} MPa → 合格")
-        self.assertEqual(got["verdict"], "基準を満たした")
+        self.assertEqual(got["crit"], f"解析 {fmt4(self.hot)} MPa ≤ 許容 {fmt4(LIMIT_V2)} MPa → OK")
+        self.assertEqual(got["verdict"], "OK")
         # the shell's largest element value: small, under 参考
         self.assertIsNotNone(got["ref"], got)
         self.assertIn("参考 (判定に使わない)", got["ref"])
@@ -232,7 +232,7 @@ class VerdictCardBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=0&present=1", events)
         got = page.evaluate(PROBE)
         self.assertEqual(errors, [])
-        self.assertEqual(got["verdict"], "基準を満たさない")
+        self.assertEqual(got["verdict"], "NG")
         now = [t for t in got["tagTones"] if t["text"] == f"最大 {fmt4(hot)} MPa"]
         self.assertEqual(len(now), 1, got["tagTones"])
         self.assertTrue(now[0]["fail"], now)

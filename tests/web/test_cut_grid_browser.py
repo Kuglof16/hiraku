@@ -498,7 +498,7 @@ class GridCutTest(unittest.TestCase):
             self.assertEqual({d: tiles[d]["recorded"] for d in SHOWN}, {"strength": "red", "thermal": "red", "handling": "green"})
             self.assertEqual(tiles["strength"]["beyond"], [["限界の外 1 (狙いどおり NG)", BEYOND_NG_RGB]])
             self.assertEqual(tiles["thermal"]["beyond"], [["限界の外 1 (狙いどおり NG)", BEYOND_NG_RGB]])
-            self.assertEqual(tiles["handling"]["beyond"], [["限界の外 1: 落ちるはずが通った", BEYOND_PASSED_RGB]])
+            self.assertEqual(tiles["handling"]["beyond"], [["限界の外 1: NG のはずが OK", BEYOND_PASSED_RGB]])
             for d in ("crash", "nvh", "aero", "powertrain", "assembly"):
                 self.assertEqual(tiles[d]["beyond"], [], d)
             for d in SHOWN:

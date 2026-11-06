@@ -287,7 +287,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertIn("予測", end["used"][0])
         self.assertIn("150", end["used"][1])
         self.assertIn("予測の値", end["verdict"])
-        self.assertIn("合格", end["verdict"])
+        self.assertIn("→ OK", end["verdict"])
         self.assertIn("安全側で判定", end["logLine"])
         page.click("button[data-tab=grid]")
         tile = page.evaluate(
@@ -1649,7 +1649,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(got["order"], ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"])
         self.assertEqual(sorted(got["red"]), ["assembly", "crash"])
-        self.assertEqual(got["flow"], ["v1 赤 4", "v2 赤 2"])
+        self.assertEqual(got["flow"], ["v1 NG 4", "v2 NG 2"])
         self.assertIn("繰り返しの上限", got["banner"])
         self.assertIn("電池 × cross1 8 mm 干渉", got["assembly"])
         self.assertIn("電池 43 ℃", got["thermal"])

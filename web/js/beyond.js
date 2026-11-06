@@ -61,6 +61,6 @@ export function tileOf(s, domain, v) {
 export function beyondWords(t) {
   const out = [];
   if (t.ng.length) out.push(`${BEYOND_TITLE} ${t.ng.length} (狙いどおり NG)`);
-  if (t.passed.length) out.push(`${BEYOND_TITLE} ${t.passed.length}: 落ちるはずが通った`);
+  if (t.passed.length) out.push(`${BEYOND_TITLE} ${t.passed.length}: NG のはずが OK`);
   return out;
 }

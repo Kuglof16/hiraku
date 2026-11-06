@@ -26,7 +26,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -826,7 +826,7 @@ function renderChips(s, lcId, openDomain = null) {
   const focusDomain = openDomain ?? (s.project?.load_cases ?? []).find((c) => c.load_case_id === lcId)?.domain;
   $("chips").innerHTML = DOMAINS.map((d) => {
     const j = judgementState(s, d);
-    const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : onlyTestsLine(s) ?? "この実行では選んでいない");
+    const title = j.judgement?.summary != null ? judgedWords(j.judgement.summary) : (j.picked ? "まだ判定が無い" : onlyTestsLine(s) ?? "この実行では選んでいない");
     const held = heldCases(s, d, s.currentVersion).length ? " held" : ""; // held: a count not judged (held.js)
     return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
   }).join("");
@@ -851,7 +851,7 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 // the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
 const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
 const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
-const AGENT_ALERT = ["止められた", "食い違い", "赤", "解析が通らない"];
+const AGENT_ALERT = ["止められた", MISMATCH_STATUS, RED_STATUS, "解析が通らない"];
 const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : a.active ? "active" : "");
 
 // The list's entries in the agents' order: one agent, or a bundle at its first member's place.
@@ -1066,7 +1066,7 @@ function renderChain(s, chain) {
           .map((t) => `<span title="${esc(t.name)}">${esc(termName(t))}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${elastic ? fmtSigned(t.share, 0) : fmtPct(t.share, 0)}</span>`)
           .join("")}</div>`
       : "";
-    const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(a)}</li>`).join("");
+    const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(judgedWords(a))}</li>`).join("");
     p.className = "card";
     // the formula's title in words when the catalogue has one; the formula itself and its inputs
     // folded under くわしく (without a title: as written, as before)
@@ -1121,7 +1121,7 @@ function renderChain(s, chain) {
     let v = "";
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
-      const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      const how = safe ? `<span class="safe-mark" title="差 OK ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
       const big = verdictSentence(verdict);
       // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
@@ -1150,7 +1150,7 @@ function renderChain(s, chain) {
       `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
       `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
-      `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "一致 ✓" : "食い違い ✗"}</span>` +
+      `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "差 OK ✓" : "差 NG (食い違い) ✗"}</span>` +
       cz +
       v;
     keepOpen(c);
@@ -1572,7 +1572,7 @@ function renderGrid(s) {
     const code = s.stopCode ?? (/^cost limit\b/.test(s.stopReason ?? "") ? "cost_limit" : /^turn limit\b/.test(s.stopReason ?? "") ? "turn_limit" : s.stopReason);
     const words = code === "round_limit" ? `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した` : STOP_CODE_JA[code];
     const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
-    banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
+    banner.innerHTML = `<b>${why}。NG が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
   }
   // the newest report's next changes (none written yet, or no next: no block)
   const nx = $("report-next");
@@ -2396,13 +2396,13 @@ function pickHtml(info, busy) {
   const head = `<span class="tag">おすすめ</span>`;
   if (run)
     return (
-      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、不合格の所を直すまでを、保存した記録で見ます` +
+      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、NG の所を直すまでを、保存した記録で見ます` +
       `${run.want ? `<div class="sub">依頼: ${esc(run.want)}</div>` : ""}</div><a class="go" href="?run=${encodeURIComponent(run.run_id)}">見る</a></div>`
     );
   const d = (info.demo_runs ?? []).find((r) => r.id === PICK_DEMO_ID && r.file && !r.error && (r.modes ?? []).includes("scripted"));
   if (!d) return "";
   return (
-    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、不合格の所を直すまでを、決まった手順で再現します <span class="nw">(無料・Claude なし)</span>` +
+    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、NG の所を直すまでを、決まった手順で再現します <span class="nw">(無料・Claude なし)</span>` +
     `${d.want ? `<div class="sub">依頼: ${prose(d.want)}</div>` : ""}</div><button class="go" data-launch="scripted" data-req="${esc(d.file)}" ${busy ? "disabled" : ""}>再現する</button></div>`
   );
 }

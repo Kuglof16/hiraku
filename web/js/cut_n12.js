@@ -115,7 +115,7 @@ export class CutN12 {
     this.el.ana.textContent = fmtQ(c.analyzed, 3);
     this.el.again.textContent = fixed && c.prediction_id !== this.bad.prediction_id ? "直してから予測し直した" : "";
     this.el.diff.textContent = judged ? `差 ${fmtSigned(c.diff_rel)} (許す幅 ±${fmtPct(c.tolerance_rel, 0)})` : "";
-    this.el.mark.textContent = judged ? (ok ? "✓ 一致" : "✕ 食い違い") : "";
+    this.el.mark.textContent = judged ? (ok ? OK_WORD : "✕ NG (食い違い)") : "";
     this.el.mark.style.display = judged ? "" : "none";
     const tone = judged ? (ok ? GREEN : RED) : MUTED;
     this.el.mark.style.color = tone;
