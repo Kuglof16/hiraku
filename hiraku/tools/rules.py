@@ -327,7 +327,7 @@ def check_call(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | No
 
 def pending(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
     """Picked domains whose judgement is still pending: [(domain, load case ids)], the load cases
-    without a verdict and (HK4, docs/contract.md 分野が緑になる条件) those held back from passing by an
+    without a verdict and (HK4, docs/contract.md 分野が OK になる条件) those held back from passing by an
     unresolved mismatch or a result beyond the criterion (judge.held_cases)."""
     v = version or ctx.version
     verdicts = latest_verdicts(ctx, v)

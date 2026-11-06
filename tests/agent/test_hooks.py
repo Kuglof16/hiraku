@@ -161,7 +161,7 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assert_events_fit()
 
     def test_a_result_beyond_the_limit_after_a_pass_blocks_the_stop(self):
-        """docs/contract.md 分野が緑になる条件: a later analysis beyond the criterion holds the passed
+        """docs/contract.md 分野が OK になる条件: a later analysis beyond the criterion holds the passed
         load case back; HK4 treats it as pending, and a run stopped at the cap is not_judged."""
         from hiraku.agent.runner import end_status
 

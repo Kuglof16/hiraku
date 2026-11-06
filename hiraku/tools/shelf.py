@@ -2,7 +2,7 @@
 
 The run checks only the tools its tests can use (tools_for_tests). A check is reused from an
 earlier run in the same runs folder while the hiraku package's source is unchanged
-(docs/contract.md 照合の使い回し: source_hash over every .py, kept per tool in a TOOL_CHECK_FILE;
+(docs/contract.md 確かめの使い回し: source_hash over every .py, kept per tool in a TOOL_CHECK_FILE;
 each check then says code_hash and cached_from). Tools made in a run, and tools whose code is not
 in the hiraku package (the hash would not cover it), are always checked again. (The analysis
 department's K2 checks also keep a disk cache for the tests only, HIRAKU_CHECK_CACHE=1 in

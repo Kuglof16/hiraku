@@ -917,7 +917,7 @@ class PredictionOutputsTest(RunCase, unittest.TestCase):
 
 
 class VerdictsPerPlaceTest(RunCase, unittest.TestCase):
-    """docs/contract.md 分野が緑になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
+    """docs/contract.md 分野が OK になる条件 (a) (b90041e): with verdicts of several places or quantities, every one
     must pass; a later verdict of the same quantity and place replaces the earlier one."""
 
     def place_verdict(self, base_cmp, base_ver, where, passed):
@@ -972,7 +972,7 @@ class FakeShell(fakes.FakeTool):
 
 
 class GreenConditionsTest(RunCase, unittest.TestCase):
-    """docs/contract.md 分野が緑になる条件: no unresolved mismatch, no result beyond the criterion in the
+    """docs/contract.md 分野が OK になる条件: no unresolved mismatch, no result beyond the criterion in the
     judged quantity (frame_shell: max_hot_spot_stress for max_stress); HK4 holds such a domain."""
 
     def add_shell(self, factor, corner=4.0):

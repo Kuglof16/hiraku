@@ -196,7 +196,7 @@ def hot_spot_verdict(verdict_id: str, analysis: Record, load_case: Record, row: 
 
 
 def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
-    """The verdict that stands for each load case in one design version (docs/contract.md 分野が緑になる条件 (a)):
+    """The verdict that stands for each load case in one design version (docs/contract.md 分野が OK になる条件 (a)):
     per load case, verdict quantity and place (the compared result's where, from a per-place prediction
     `<quantity>.<place>`), the newest verdict replaces the earlier ones; of what is left, the newest failing one
     when any fails (a failing place is not hidden by a newer pass at another place or of another quantity), else
@@ -264,7 +264,7 @@ STAND_IN_BELOW = 1e-6  # contract 9017d93: below this fraction of the limit, a j
 
 
 def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record | None]]:
-    """(comparison, cause or None) holding the load case back (docs/contract.md 分野が緑になる条件 (b)):
+    """(comparison, cause or None) holding the load case back (docs/contract.md 分野が OK になる条件 (b)):
     per judged quantity of the load case (the criterion's, the one a tool is judged on, judged_quantity,
     or a result named by result_quantity for a prediction of the criterion's quantity), the version's
     latest comparison, when it is a mismatch whose cause is missing or neither resolved nor safe side.
@@ -342,7 +342,7 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
 
 
 def unchecked_since_beyond(ctx: RunContext, load_case: Record, version: int) -> str | None:
-    """docs/contract.md 分野が緑になる条件 (d): when an earlier version of the run had an analysis of the load case
+    """docs/contract.md 分野が OK になる条件 (d): when an earlier version of the run had an analysis of the load case
     beyond its criterion, this version needs an ok analysis that gives the judged quantity from a tool of the same
     or a heavier stage than the heaviest tool that was beyond; a lighter tool's pass does not clear it. The reason,
     or None when nothing earlier was beyond or such an analysis is there."""
