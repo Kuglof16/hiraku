@@ -21,7 +21,9 @@ without a frame node to the mesh node nearest the support. The total is the desi
 Wheels: each part of kind "wheel" becomes a node of its own at the wheel's centre (its box centre)
 carrying the wheel's mass and the masses of the knuckles and brake calipers (kinds "knuckle",
 "brake_caliper") that rest on the same support; its radius for the wall is the support's radius_mm
-(else half the box's x size): it touches the wall when x + radius reaches it (kernel step 7). It is joined to the frame by LINKS: pin-ended axial springs (no bending,
+(else half the box's x size): it touches the wall when x + radius reaches it, through the tyre's
+radial stiffness (ktyre, from tyre_contact) up to the tyre's section height (hsec), then the rim stops
+(kernel step 7). It is joined to the frame by LINKS: pin-ended axial springs (no bending,
 no torsion, no yield, they never break) standing in for the suspension arms. The frame nodes they go
 to (the mounts): the wheel's carried_by nodes when it has them; else the carried_by nodes of the
 parts reached from the wheel through connects_to by load-carrying connections over parts without
@@ -141,9 +143,12 @@ class Mesh:
     crad: np.ndarray | None = None     # (ne,) m, contact radius (0 for a link)
     link: np.ndarray | None = None     # (ne,) int8, 1: a wheel link (pin-ended axial spring)
     nrad: np.ndarray | None = None     # (n,) m, a node's radius for the wall (a wheel's radius, else 0)
+    ktyre: np.ndarray | None = None    # (n,) N/m, a wheel node's tyre radial stiffness for the wall (else 0)
+    hsec: np.ndarray | None = None     # (n,) m, a wheel node's tyre section height (radius less rim radius; else 0)
     cdist: np.ndarray | None = None    # (ne, ne) m, the distance between axes at which a pair touches; -1: never
     n_frame: int = 0                   # the frame's nodes are 0 .. n_frame - 1, the wheel nodes after them
-    wheels: dict = field(default_factory=dict)  # wheel part id -> {"node", "radius", "mounts", "parts", "kg"}
+    wheels: dict = field(default_factory=dict)  # wheel part id -> {"node", "radius", "mounts", "parts", "kg", "k_t", "section"}
+    tyre_notes: list[str] = field(default_factory=list)  # where the tyre's stiffness and section height came from
 
     def __post_init__(self):
         ne, n = len(self.con), len(self.node_ids)
@@ -153,6 +158,10 @@ class Mesh:
             self.crad = np.zeros(ne)
         if self.nrad is None:
             self.nrad = np.zeros(n)
+        if self.ktyre is None:
+            self.ktyre = np.zeros(n)
+        if self.hsec is None:
+            self.hsec = np.zeros(n)
         if self.cdist is None:
             self.cdist = -np.ones((ne, ne))
         if not self.n_frame:
@@ -374,6 +383,39 @@ def _holds(dirs: list[np.ndarray]) -> bool:
 
 
 MAX_MOUNTS = 6  # the fallback takes at most this many nodes for a wheel
+TYRE_K_DEFAULT = 60e3  # N/m, the tyre's radial stiffness when the design has no tyre_stiffness (the project's default
+                       # for low-pressure ATV tyres, range 45-90 N/mm; its sources are not in this repository: 確かめていない)
+SECTION_SHARE = 0.4    # the tyre's section height as a share of the wheel radius when the design gives no rim
+                       # (HIRAKU's assumption)
+TYRE_VARIABLE = "tyre_stiffness"  # K2's design variable (hiraku.solvers.k2_vehicle.model reads the same, with its aliases)
+RIM_VARIABLE = "rim_radius"       # a design variable (length); the contract's supports have no rim field
+
+
+def tyre_contact(design: dict) -> dict:
+    """{"k": N/m, "rim": m or None, "notes"}: the tyre's radial stiffness for the wall from the design variable
+    tyre_stiffness (or its older names, as K2's model reads it), else TYRE_K_DEFAULT; the rim radius from the
+    design variable rim_radius when given."""
+    from ..model import VARIABLE_ALIASES
+    from ..units import si
+
+    var = design.get("variables") or {}
+    k, src = TYRE_K_DEFAULT, (f"the project's default {TYRE_K_DEFAULT / 1000:g} N/mm (the design has no "
+                              f"{TYRE_VARIABLE}; range 45-90 N/mm for low-pressure ATV tyres, its sources not in this "
+                              "repository: 確かめていない)")
+    for name in (TYRE_VARIABLE,) + VARIABLE_ALIASES.get(TYRE_VARIABLE, ()):
+        if name in var:
+            k, src = si(var[name], "N/m"), f"the design's {name}"
+            break
+    notes = [f"tyre radial stiffness for the wall contact: the vertical stiffness {TYRE_VARIABLE}, taken as the same in "
+             f"the radial direction (not checked): {k / 1000:g} N/mm, {src}"]
+    rim = si(var[RIM_VARIABLE], "m") if RIM_VARIABLE in var else None
+    if rim is not None:
+        notes.append(f"the tyre's section height (the deflection at which the rim reaches the wall): the wheel radius "
+                     f"less the design's {RIM_VARIABLE} {rim * 1000:g} mm")
+    else:
+        notes.append(f"the tyre's section height (the deflection at which the rim reaches the wall): "
+                     f"{SECTION_SHARE * 100:g} % of the wheel radius (HIRAKU's assumption; the design gives no rim)")
+    return {"k": float(k), "rim": rim, "notes": notes}
 
 
 def _add_wheels(mesh: Mesh, design: dict, nodes_mm: dict, wheel_parts: dict) -> None:
@@ -382,6 +424,8 @@ def _add_wheels(mesh: Mesh, design: dict, nodes_mm: dict, wheel_parts: dict) -> 
     design_idx = list(mesh.design_nodes.values())
     dt_frame = stable_dt(mesh)[0]
     w_max = 2.0 / dt_frame
+    tyre = tyre_contact(design)
+    mesh.tyre_notes = tyre["notes"]
     texts = []
     for wid, w in wheel_parts.items():
         p = parts[wid]
@@ -422,6 +466,9 @@ def _add_wheels(mesh: Mesh, design: dict, nodes_mm: dict, wheel_parts: dict) -> 
         mesh.mass = np.append(mesh.mass, m_w)
         mesh.inertia = np.append(mesh.inertia, 0.5 * m_w * radius * radius)  # a disc's; no moment acts on the node
         mesh.nrad = np.append(mesh.nrad, radius)
+        mesh.ktyre = np.append(mesh.ktyre, tyre["k"])
+        h_sec = radius - tyre["rim"] if tyre["rim"] is not None and 0.0 < tyre["rim"] < radius else SECTION_SHARE * radius
+        mesh.hsec = np.append(mesh.hsec, h_sec)
         for q, m in kg.items():
             mesh.node_parts[q] = {i: m}
         share = m_w / len(mounts)
@@ -438,10 +485,11 @@ def _add_wheels(mesh: Mesh, design: dict, nodes_mm: dict, wheel_parts: dict) -> 
             mesh.crad = np.append(mesh.crad, 0.0)
             mesh.link = np.append(mesh.link, np.int8(1))
         mesh.wheels[wid] = {"node": i, "radius": radius, "mounts": [mesh.node_ids[k] for k in mounts],
-                            "parts": list(kg), "kg": m_w, "how": how}
+                            "parts": list(kg), "kg": m_w, "how": how, "k_t": tyre["k"], "section": h_sec}
         texts.append(f"{wid} ({' + '.join(kg)}, {m_w:.1f} kg, radius {radius * 1000:.0f} mm) to "
                      f"{', '.join(mesh.node_ids[k] for k in mounts)} ({how})")
-    mesh.notes.append("the wheels as nodes at their centres touching the wall at their radius (x + r > wall), joined to "
+    mesh.notes.append("the wheels as nodes at their centres touching the wall at their radius (x + r > wall) through the "
+                      "tyre (the wall note says how), joined to "
                       "the frame by pin-ended links standing in for the suspension arms (axial springs only, no bending, "
                       "no yield, never broken; stiffness set from the time step: each link's frequency "
                       f"{LINK_SHARE:g} x the frame elements' highest, far stiffer than the arms): " + "; ".join(texts))

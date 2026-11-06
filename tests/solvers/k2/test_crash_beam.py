@@ -68,7 +68,7 @@ def load_case(speed=40.0, **params):
 class KnownAnswers(unittest.TestCase):
     def test_every_own_check_passes(self):
         checks = TOOLS["crash_beam"].own_checks()
-        self.assertEqual(len(checks), 11)
+        self.assertEqual(len(checks), 13)
         for c in checks:
             with self.subTest(case=c["case"]):
                 self.assertTrue(c["pass"], f"{c['case']}: expected {c['expected']} got {c['got']}")
@@ -145,20 +145,63 @@ class ContactKnownAnswers(unittest.TestCase):
         self.assertLessEqual(c["v2"] - c["v1"], c["speed"] + 1e-9)
         np.testing.assert_allclose(c["momentum_after"], c["momentum_before"], rtol=1e-12, atol=1e-12)
 
-    def test_wheel_node_touches_the_wall_at_wall_less_its_radius(self):
-        """A node of radius r = 0.3 m (18 kg) moves at 1 m/s toward the wall at x = 1 m from 2 mm short of touching.
+    def test_wheel_node_on_the_tyre_spring_below_the_rim(self):
+        """A lone wheel node, radius r = 0.3 m, m = 18 kg, tyre radial stiffness k_t = 60 N/mm, section height
+        h = 0.4 r = 0.12 m (rim radius 0.18 m), moves at v = 1 m/s toward the wall at x = 1 m from 2 mm short of
+        touching; dt = 1e-5 s.
 
-        Hand check: the wall acts on a wheel node when x + r would pass the wall, so at x = wall - r = 0.7 m: the
-        first step it pushes starts within one step's travel short of it, 0.7 m - v dt < x <= 0.7 m (dt = 1e-5 s,
-        v dt = 0.01 mm), the step before it starts at most there. The contact is perfectly plastic (a tyre and rim
-        crush, they do not throw the wheel back): the node ends that step at x = 0.7 m exactly (to round-off), never
-        passes it, and stays there at rest."""
+        Hand calculation: the tyre touches when x + r has passed the wall (x = 0.7 m): the spring acts on the
+        deflection at the start of a step, so the first step it pushes starts within one step's travel past
+        0.7 m (0.7 m < x <= 0.7 m + v dt) and the step before starts at most at 0.7 m. Then a mass on a linear spring that only pushes: the force peaks at
+        F = v sqrt(k_t m) = 1 x sqrt(60000 x 18) = 1039.2 N, the deflection at d = v sqrt(m / k_t) = 17.3 mm (below
+        h: the rim does not touch), the contact lasts half a period pi sqrt(m / k_t) = 54.4 ms, and the node leaves
+        at -v (no damping in the tyre: elastic). Tolerances 1e-3 relative ((omega dt)^2 = k_t dt^2 / m = 3.3e-7:
+        the central differences are near exact; the contact time is counted in whole steps, 1e-5 / 0.0544 = 2e-4)."""
         w = self.w
-        self.assertLessEqual(w["last_free_x"], w["expected"] - w["speed"] * w["dt"] + 1e-12)
-        self.assertLessEqual(w["first_touch_x"], w["expected"] + 1e-12)
-        self.assertGreater(w["first_touch_x"], w["expected"] - w["speed"] * w["dt"] - 1e-12)
-        self.assertAlmostEqual(w["deepest"], w["expected"], delta=1e-12)
-        self.assertAlmostEqual(w["speed_after"], 0.0, delta=1e-9)
+        m, k, v, r, h, wall = 18.0, 60e3, 1.0, 0.3, 0.12, 1.0
+        self.assertEqual((w["mass"], w["k_t"], w["speed"], w["radius"], w["wall"]), (m, k, v, r, wall))
+        self.assertAlmostEqual(w["section"], h, delta=1e-12)
+        self.assertLessEqual(w["last_free_x"], wall - r + 1e-12)
+        self.assertGreater(w["first_touch_x"], wall - r - 1e-12)
+        self.assertLessEqual(w["first_touch_x"], wall - r + v * w["dt"] + 1e-12)
+        self.assertAlmostEqual(w["peak_force"] / (v * math.sqrt(k * m)), 1.0, delta=1e-3)
+        self.assertAlmostEqual(w["contact_time"] / (math.pi * math.sqrt(m / k)), 1.0, delta=1e-3)
+        self.assertAlmostEqual((w["deepest"] - (wall - r)) / (v * math.sqrt(m / k)), 1.0, delta=1e-3)
+        self.assertFalse(w["rim"])
+        self.assertAlmostEqual(w["speed_after"] / -v, 1.0, delta=1e-3)
+
+    def test_wheel_node_reaches_the_rim(self):
+        """The same wheel node at v = 40 km/h = 11.11 m/s: the free spring would deflect v sqrt(m / k_t) = 192 mm,
+        more than the section height h = 120 mm, so the rim reaches the wall: the node stops at x = wall - (r - h)
+        = 0.82 m exactly (the rim's contact is perfectly plastic, as the wheel's was before the tyre) and never
+        passes it. Hand calculation: the tyre takes (1/2) k_t h^2 = 432 J of the (1/2) m v^2 = 1111 J; the rest is
+        lost at the rim. The tyre then pushes the node back with what it holds: it leaves at h sqrt(k_t / m) =
+        6.93 m/s (1e-3 relative). The wall's largest force is the rim's (more than the tyre's k_t h = 7.2 kN)."""
+        w = known.wheel_into_wall(speed=40.0 / 3.6)
+        m, k, r, h, wall = 18.0, 60e3, 0.3, 0.12, 1.0
+        self.assertTrue(w["rim"])
+        self.assertAlmostEqual(w["deepest"], wall - (r - h), delta=1e-12)
+        self.assertAlmostEqual(w["speed_after"] / -(h * math.sqrt(k / m)), 1.0, delta=1e-3)
+        self.assertGreater(w["peak_force"], k * h)
+
+    def test_tyre_spring_and_time_step(self):
+        """The tyre's spring is held to the kernel's budget: (omega dt)^2 = k_t dt^2 / m of the wheel node at most
+        sim.TYRE_PENALTY_MAX; a spring past it fails loudly (the run would go unstable)."""
+        mesh = build_mesh(on_board(small_frame(), "two_cargo"))
+        wheels = range(mesh.n_frame, mesh.n)
+        self.assertTrue(all(mesh.ktyre[i] == 60e3 for i in wheels))  # small_frame has no tyre_stiffness: 60 N/mm
+        self.assertTrue(all(abs(mesh.hsec[i] - 0.4 * mesh.nrad[i]) < 1e-12 for i in wheels))
+        self.assertTrue(all(mesh.ktyre[i] == 0.0 and mesh.hsec[i] == 0.0 for i in range(mesh.n_frame)))
+        d = small_frame()
+        d["variables"]["tyre_stiffness"] = q(90.0, "N/mm")
+        d["variables"]["rim_radius"] = q(150.0, "mm")
+        mesh2 = build_mesh(on_board(d, "two_cargo"))
+        i = mesh2.n_frame
+        self.assertAlmostEqual(mesh2.ktyre[i], 90e3)
+        self.assertAlmostEqual(mesh2.hsec[i], mesh2.nrad[i] - 0.15)
+        mesh2.ktyre[i] = 10.0 * sim.TYRE_PENALTY_MAX * mesh2.mass[i] / sim.time_step(mesh2) ** 2
+        with self.assertRaises(ValueError):
+            sim.run_crash(mesh2, 1.0, 1e-3)
 
     def test_closest_points_of_two_segments(self):
         from hiraku.solvers.k2_vehicle.crash_beam.kernel import closest, closest_py
@@ -316,13 +359,17 @@ class Tool(unittest.TestCase):
         return {r["quantity"]: r for r in (rec or self.rec)["results"]}
 
     def test_a_large_piece_breaking_off_is_reported_and_can_stop_the_run(self):
-        """With the hinges breaking at 25 deg, at 40 km/h the side rails between the front axle and the seats break
-        and a piece of 9.3 % of the mass comes apart from the seats' side at about 23 ms. By default the run goes on
-        (the pieces touch each other) and the results say when the split happened (C1: NG); with stop_at_split it
-        stops there, and the results that need the stop are not given."""
-        on = TOOLS["crash_beam"].run(self.d, load_case(hinge_break_angle=q(25.0, "deg")),
+        """With the hinges breaking at 25 deg and a rim of 295 mm in the 300 mm wheels (a 5 mm tyre section: the front
+        wheels stop at the wall nearly at once and load the rails behind the front axle), at 40 km/h the side rails
+        between the front axle and the seats break and a piece of 8.7 % of the mass comes apart from the seats' side
+        at about 43 ms. (With the default 40 % section the tyres give way, the posts break instead and no piece of
+        3 % comes off.) By default the run goes on (the pieces touch each other) and the results say when the split
+        happened (C1: NG); with stop_at_split it stops there, and the results that need the stop are not given."""
+        d = copy.deepcopy(self.d)
+        d["variables"]["rim_radius"] = q(295.0, "mm")
+        on = TOOLS["crash_beam"].run(d, load_case(hinge_break_angle=q(25.0, "deg")),
                                      [{"prediction_id": "pred-0001"}], {})
-        stop = TOOLS["crash_beam"].run(self.d, load_case(hinge_break_angle=q(25.0, "deg"), stop_at_split=True),
+        stop = TOOLS["crash_beam"].run(d, load_case(hinge_break_angle=q(25.0, "deg"), stop_at_split=True),
                                        [{"prediction_id": "pred-0001"}], {})
         for rec in (on, stop):
             self.assertEqual(rec["status"], "ok", rec.get("error"))
@@ -407,6 +454,12 @@ class Tool(unittest.TestCase):
         self.assertTrue(any("確かめていない" in n and "friction" in n for n in notes), notes)
         self.assertTrue(any("確かめていない" in n and "hinge" in n for n in notes), notes)
         self.assertTrue(any("Courant" in n for n in notes), notes)
+        # the tyre: small_frame has no tyre_stiffness, so 60 N/mm, taken as the radial stiffness (not checked)
+        self.assertTrue(any(n.startswith("tyre radial stiffness for the wall contact: the vertical stiffness "
+                                         "tyre_stiffness, taken as the same in the radial direction (not checked)")
+                            and "60 N/mm" in n for n in notes), notes)
+        self.assertTrue(any("40 % of the wheel radius" in n and "HIRAKU's assumption" in n for n in notes), notes)
+        self.assertTrue(any("peak_decel" in n and "input to the occupants" in n for n in notes), notes)
 
     def test_fields_only_when_the_contract_has_node_motion(self):
         self.assertEqual(sim.contract_has_node_motion(),
@@ -424,7 +477,9 @@ class Tool(unittest.TestCase):
         self.assertEqual([f["kind"] for f in rec["fields"]], ["node_motion"])
 
     def test_given_params_are_used_and_not_assumed(self):
-        rec = TOOLS["crash_beam"].run(self.d, load_case(20.0, wall_mu=q(0.0, "1"), hinge_break_angle=q(1000.0, "deg")),
+        d = copy.deepcopy(self.d)
+        d["variables"]["tyre_stiffness"] = q(60.0, "N/mm")  # the tyre's default is an unchecked value too
+        rec = TOOLS["crash_beam"].run(d, load_case(20.0, wall_mu=q(0.0, "1"), hinge_break_angle=q(1000.0, "deg")),
                                       [{"prediction_id": "pred-0001"}], {})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         res = {r["quantity"]: r["value"] for r in rec["results"]}
@@ -452,16 +507,17 @@ class DemoDesign(unittest.TestCase):
         res = {r["quantity"]: r for r in rec["results"]}
         for name in ("peak_decel", "battery_mount_force", "broken_members", "max_plastic_rotation"):
             self.assertIn(name, res)
-        # at 40 km/h the front rails break, then the rails between the front axle and the seats: the front comes
-        # apart from the seats' side at about 56 ms (C1: NG, frame_split_time). The pieces touch each other, so the run
-        # goes on past the split; the seats' piece then moves on with nothing ahead of it that touches, to the time limit
-        self.assertAlmostEqual(res["frame_split_time"]["value"], 0.056, delta=0.006)
-        self.assertIn("_AS1", res["frame_split_time"]["where"])
+        # at 40 km/h, with the front wheels on their tyres (the design's tyre_stiffness 150 N/mm), the front rails
+        # break and one rail between the front axle and the seats, but no piece of 3 % of the mass comes apart from
+        # the seats' side: no frame_split_time, and the vehicle stops (about 70 ms)
+        self.assertNotIn("frame_split_time", res)
+        self.assertEqual(res["broken_members"]["value"], 3.0)
+        self.assertIn("rail_L_FA", res["broken_members"]["where"])
         for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
             self.assertIn(name, res)
-        self.assertGreater(res["crush_at_split"]["value"], 0.0)
-        self.assertGreaterEqual(res["max_crush"]["value"], res["crush_at_split"]["value"])
-        self.assertTrue(any("goes on past the split" in a for a in rec["assumptions"]))
+        self.assertTrue(any(a.startswith("run: the vehicle stopped") for a in rec["assumptions"]))
+        self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and "150 N/mm, the design's "
+                            "tyre_stiffness" in a for a in rec["assumptions"]))
         contact_note = next(a for a in rec["assumptions"] if a.startswith("contact between the frame's elements"))
         self.assertIn("pair-steps in contact", contact_note)
         self.assertNotIn(" 0 pair-steps", contact_note)

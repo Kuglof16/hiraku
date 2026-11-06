@@ -10,7 +10,7 @@ from ..checks import _check
 from ..crash_beam import known, measure
 from ..crash_beam.mesh import MIN_ELEMENT_RADII, N_SUB, build_mesh
 from ..crash_beam.sim import (CONTACT_PENALTY, CONTACT_SKIN, COURANT, MAX_FIELD_NODES, PENALTY, REC_DT, SPLIT_STOP_SHARE,
-                              STOP_SHARE, WINDOW,contract_has_node_motion, default_picks, member_end_hinges, member_forces, node_motion,
+                              STOP_SHARE, TYRE_PENALTY_MAX, WINDOW, contract_has_node_motion, default_picks, member_end_hinges, member_forces, node_motion,
                               run_crash)
 from ..model import DesignError
 from ..units import G0
@@ -139,12 +139,27 @@ class CrashBeamTool(K2Tool):
                                   f"上限 {c['bound'] * 1000:.2f} mm 以内か)",
                           source_ja="相対の運動エネルギーが全部接触のばねに入っても、めり込みは v √(μ / k) まで"))
         w = known.wheel_into_wall()
-        out.append(_check(f"a wheel node of radius 0.3 m moving at {w['speed']:g} m/s into the wall at x = 1 m: the "
-                          "deepest x of the node", "deepest_x", w["expected"], w["deepest"], "m", 1e-9,
-                          "the wall acts on a wheel node of radius r when x + r would pass the wall, perfectly plastic: "
-                          "the node stops at x = wall - r",
-                          case_ja="半径 0.3 m の車輪の点を 1 m/s で x = 1 m の壁に当てる: 点がいちばん進んだ x",
-                          source_ja="半径 r の車輪の点は x + r が壁を越えようとすると押される (跳ね返らない): x = 壁 - r で止まる"))
+        m, k, v = w["mass"], w["k_t"], w["speed"]
+        case = (f"a wheel node ({m:g} kg, radius {w['radius']:g} m, tyre {k / 1000:g} N/mm, section height "
+                f"{w['section'] * 1000:.0f} mm) moving at {v:g} m/s into the wall (the rim does not reach it)")
+        case_ja = (f"車輪の点 ({m:g} kg、半径 {w['radius']:g} m、タイヤのばね {k / 1000:g} N/mm、タイヤの断面の高さ "
+                   f"{w['section'] * 1000:.0f} mm) を {v:g} m/s で壁に当てる (リムは壁に届かない)")
+        out.append(_check(case + ": peak wall force", "peak_force", v * math.sqrt(k * m), w["peak_force"], "N", 1e-3,
+                          "undamped mass-spring impact: F = v sqrt(k_t m)", case_ja=case_ja + ": 壁の力のいちばん大きい値",
+                          source_ja="減衰のない質量とばねの衝突: F = v √(k_t m)"))
+        out.append(_check(case + ": contact time", "contact_time", math.pi * math.sqrt(m / k), w["contact_time"], "s",
+                          1e-3, "half a period of the mass on the tyre's spring: pi sqrt(m / k_t)",
+                          case_ja=case_ja + ": 壁に触れている時間", source_ja="質量とばねの揺れの半周期 π √(m / k_t)"))
+        r = known.wheel_into_wall(speed=40.0 / 3.6)
+        rim = r["wall"] - (r["radius"] - r["section"])
+        out.append(_check(f"the same wheel node at 40 km/h (the free tyre would deflect "
+                          f"{r['speed'] * math.sqrt(m / k) * 1000:.0f} mm, more than its section height): the deepest x "
+                          "of the node", "deepest_x", rim, r["deepest"], "m", 1e-9,
+                          "the rim (radius r - section height) reaches the wall and stops there, perfectly plastic: "
+                          "x = wall - (r - h)",
+                          case_ja="同じ車輪の点を 40 km/h で当てる (タイヤのたわみが断面の高さを超える): 点がいちばん進んだ x",
+                          source_ja="リム (半径 = r - タイヤの断面の高さ) が壁に届いたらそこで止まる (跳ね返らない): "
+                                    "x = 壁 - (r - h)"))
         return out
 
     def run(self, design: dict, load_case: dict, predictions: list[dict], params: dict | None = None) -> dict:
@@ -319,10 +334,16 @@ class CrashBeamTool(K2Tool):
             f"the wall: a rigid plane x = {run.wall_x * 1000:.0f} mm, at the front-most of the frame's nodes "
             f"({', '.join(mesh.node_ids[k] for k in front)}, x = {xr.max() * 1000:.0f} mm) and the part boxes they carry; "
             f"it touches the frame's nodes by a penalty spring {PENALTY:g} x the node's mass / dt^2, and the wheel nodes "
-            "when a wheel centre's x + its radius would pass the wall, perfectly plastic (the wheel stops at the wall and "
-            "does not spring back; HIRAKU's choice standing in for the tyre and rim crushing, their stiffness is not "
-            "modelled: a wheel is stopped within one step, which shows as a short peak in the deceleration when the "
-            "front wheels reach the wall); the part boxes and the bumper do not touch the wall",
+            "through the tyre: when a wheel centre's x + its radius passes the wall, a spring of the tyre's radial "
+            "stiffness on the deflection (compressive only, no damping: the tyre gives back what it holds); when the "
+            "deflection reaches the tyre's section height the rim is at the wall and stops there, perfectly plastic "
+            "(no spring-back from the rim; HIRAKU's choice, the rim's own crushing is not modelled). "
+            + "; ".join(f"{wid}: {w['k_t'] / 1000:g} N/mm, section height {w['section'] * 1000:.0f} mm, rim radius "
+                        f"{(w['radius'] - w['section']) * 1000:.0f} mm" for wid, w in mesh.wheels.items())
+            + (f"; the tyre spring on the wheel node's mass (omega dt)^2 = k_t dt^2 / m = {run.extra['tyre_omega_dt2']:.2g} "
+               f"at most (the kernel allows {TYRE_PENALTY_MAX:g})" if mesh.wheels else "")
+            + "; the part boxes and the bumper do not touch the wall",
+            *mesh.tyre_notes,
             f"contact between the frame's elements that share no node (pieces broken apart, a member folding onto "
             f"another), frictionless: each element a capsule of radius half its section's larger outer dimension "
             f"(pairs closer than that at the start, near the joints: from their starting distance); a penalty spring "
@@ -333,9 +354,10 @@ class CrashBeamTool(K2Tool):
             f"most {cst['longest']} pairs on it, {cst['pair_steps']} pair-steps in contact. The wheels and the part boxes "
             "do not touch the elements",
             "no gravity and no ground (the crash forces are many times the weight over the run)",
-            f"peak_decel and the deceleration series: the wall's impulse over each {WINDOW * 1000:g} ms / (the total mass x "
-            f"{WINDOW * 1000:g} ms), recorded every {REC_DT * 1000:g} ms; mean_decel: the speed lost / the time to the "
-            "stop",
+            f"peak_decel and the deceleration series: the whole mass's deceleration, the wall's impulse over each "
+            f"{WINDOW * 1000:g} ms / (the total mass x {WINDOW * 1000:g} ms), recorded every {REC_DT * 1000:g} ms; "
+            "peak_decel is the input to the occupants (the deceleration of the whole vehicle they ride in, not of the "
+            "seat mounts on their own); mean_decel: the speed lost / the time to the stop",
             f"max_crush and the crush series: how far {ref_text} moved toward the wall after the frame's front-most "
             "node reached it (the shortening of the structure ahead of them while the front is held at the wall; a "
             "broken-off front piece moving back from the wall is not counted)",

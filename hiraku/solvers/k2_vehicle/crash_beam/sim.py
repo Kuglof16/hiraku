@@ -22,6 +22,8 @@ PENALTY = 1.0         # wall stiffness of a node: PENALTY m / dt^2 (with COURANT
 CONTACT_PENALTY = 0.05  # element contact: (omega dt)^2 of one pair's spring on its contact point's mass (kernel step 6);
                         # a point at a node can be in up to 4 pairs (0.2), a wheel link adds LINK_SHARE^2 x 2.56 (0.1):
                         # 2.56 + 1.0 + 0.2 + 0.1 < 4 (HIRAKU's choice)
+TYRE_PENALTY_MAX = PENALTY  # a wheel node's tyre spring: k_t dt^2 / m at most this (it takes the place of the frame
+                            # nodes' wall penalty in that budget; a wheel node has no element, only links)
 CONTACT_SKIN = 0.01   # m, the contact pair list keeps the pairs within their contact distance + this
 REC_DT = 1e-4         # s, the record's step
 WINDOW = 1e-3         # s, the deceleration and the mount forces are averaged over this (from the momentum)
@@ -83,10 +85,16 @@ def advance(mesh: Mesh, st: State, nsteps: int, dt: float, *, alpha: float = 0.0
     fn(int(nsteps), float(dt), st.x, st.v, st.R, st.w, mesh.mass, mesh.inertia, mesh.con, mesh.l0, mesh.e0,
        mesh.prop, st.up, st.tp, st.thp, st.alive, st.yielded, st.fix, st.vpre, st.fext, float(alpha),
        0 if wall is None else 1, 0.0 if wall is None else float(wall), st.kpen, float(mu),
-       float(min(hinge_lim, 1e300)), st.fint, imp, mesh.nrad, mesh.link, mesh.cdist, st.cpairs, st.cnp, st.xref,
-       float(CONTACT_SKIN), float(CONTACT_PENALTY if contact else 0.0), st.fcon, st.cstat)
+       float(min(hinge_lim, 1e300)), st.fint, imp, mesh.nrad, mesh.ktyre, mesh.hsec, mesh.link, mesh.cdist, st.cpairs,
+       st.cnp, st.xref, float(CONTACT_SKIN), float(CONTACT_PENALTY if contact else 0.0), st.fcon, st.cstat)
     st.t += nsteps * dt
     return imp
+
+
+def tyre_omega_dt2(mesh: Mesh, dt: float) -> float:
+    """The largest (omega dt)^2 = k_t dt^2 / m of the wheel nodes' tyre springs on their own masses (0 without)."""
+    on = mesh.ktyre > 0.0
+    return float((mesh.ktyre[on] * dt * dt / mesh.mass[on]).max()) if on.any() else 0.0
 
 
 def hinge_rotations(st: State) -> np.ndarray:
@@ -184,6 +192,10 @@ def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0
     if stop_at_split is None:
         stop_at_split = not contact
     dt = time_step(mesh) if dt is None else dt
+    tyre_w2 = tyre_omega_dt2(mesh, dt)
+    if tyre_w2 > TYRE_PENALTY_MAX:
+        raise ValueError(f"the tyre's wall spring is too stiff for the time step: (omega dt)^2 = k_t dt^2 / m = "
+                         f"{tyre_w2:.3g} on a wheel node, more than {TYRE_PENALTY_MAX:g} (dt {dt:.3g} s)")
     st = new_state(mesh, (speed, 0.0, 0.0), dt)
     wall = float(mesh.x0[:mesh.n_frame, 0].max()) if wall is None else float(wall)
     per = max(1, int(round(REC_DT / dt)))
@@ -193,7 +205,7 @@ def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0
     broken_at, first_yield = {}, None
     stopped = f"time limit {time_limit:g} s"
     steps = 0
-    extra: dict = {"pieces": []}
+    extra: dict = {"pieces": [], "tyre_omega_dt2": tyre_w2}
     seen: set[tuple[int, ...]] = set()
     while st.t < time_limit - 0.5 * dt:
         alive0 = st.alive.copy()

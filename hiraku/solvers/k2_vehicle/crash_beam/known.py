@@ -259,28 +259,39 @@ def tube_crosswise(length_mm: float = 600.0, gap_mm: float = 20.0, speed: float 
 
 
 def wheel_into_wall(radius: float = 0.3, wall: float = 1.0, speed: float = 1.0, mass: float = 18.0,
-                    use_jit: bool = True) -> dict:
-    """One node of radius `radius` (a wheel) moving at `speed` (+x) into the wall at x = wall, from 2 mm short of
-    touching: the node's x at the start of the first step the wall pushes, the last x before it with no push, the
-    deepest x over the run and the speed after (the wheel's wall contact is perfectly plastic: kernel step 7)."""
+                    k_t: float = 60e3, section: float | None = None, use_jit: bool = True) -> dict:
+    """One node of radius `radius` (a wheel) with a tyre of radial stiffness k_t (N/m) and section height `section`
+    (m, default 40 % of the radius) moving at `speed` (+x) into the wall at x = wall, from 2 mm short of touching,
+    dt = 1e-5 s, until it has left the wall (kernel step 7: the tyre's spring, then the rim's plastic stop). The
+    node's x at the start of the first step the wall pushes, the last x before it with no push, the wall's largest
+    force, the time it pushes, the deepest x, whether the rim reached the wall, and the speed after."""
     from .mesh import Mesh
 
+    h = 0.4 * radius if section is None else section
     mesh = Mesh(["wheel~centre"], np.array([[wall - radius - 0.002, 0.0, 0.0]]), np.array([mass]), np.array([1.0]),
                 np.zeros((0, 2), dtype=np.int64), np.zeros(0), np.zeros((0, 3, 3)), np.zeros((0, 8)), [], {},
-                nrad=np.array([radius]), cdist=np.zeros((0, 0)))
+                nrad=np.array([radius]), ktyre=np.array([k_t]), hsec=np.array([h]), cdist=np.zeros((0, 0)))
     dt = 1e-5
     st = sim.new_state(mesh, (speed, 0.0, 0.0), dt)
-    first, before, deepest = None, None, -math.inf
-    for _ in range(1000):
+    first, before, deepest, peak, on = None, None, -math.inf, 0.0, 0
+    t_free = 0.002 / speed + 3.0 * math.pi * math.sqrt(mass / k_t)
+    for _ in range(int(t_free / dt)):
         x = float(st.x[0, 0])
         imp = sim.advance(mesh, st, 1, dt, wall=wall, use_jit=use_jit)
         deepest = max(deepest, x, float(st.x[0, 0]))
-        if imp[0] != 0.0 and first is None:
-            first = x
+        if imp[0] != 0.0:
+            on += 1
+            peak = max(peak, -float(imp[0]) / dt)
+            if first is None:
+                first = x
+        elif first is not None:
+            break  # it has left the wall
         if first is None:
             before = x
-    return {"first_touch_x": first, "last_free_x": before, "expected": wall - radius, "deepest": deepest,
-            "speed_after": float(st.v[0, 0]), "dt": dt, "speed": speed}
+    return {"first_touch_x": first, "last_free_x": before, "deepest": deepest, "peak_force": peak,
+            "contact_time": on * dt, "rim": bool(deepest >= wall - (radius - h) - 1e-12),
+            "speed_after": float(st.v[0, 0]), "dt": dt, "speed": speed, "mass": mass, "k_t": k_t, "radius": radius,
+            "section": h, "wall": wall}
 
 
 __all__ = ["beam_design", "cantilever_deflection", "cantilever_collapse", "mass_on_spring", "stable_dt",

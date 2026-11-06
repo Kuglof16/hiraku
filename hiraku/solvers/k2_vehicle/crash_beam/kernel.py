@@ -32,11 +32,14 @@ Per step (central differences, the velocities at the half steps):
    since then (its displacement less the mean displacement of all nodes): then no pair left out can
    have come within cdist (each axis point moves at most as far as its nodes do);
 7. the wall, a rigid plane x = xw: a frame node (nrad = 0) past it gets the penalty force kpen (x - xw)
-   back; a wheel node (nrad > 0, the wheel's radius) touches it when x + nrad would pass it, and the
-   contact is perfectly plastic: the wall force is the one that brings x + nrad to the wall at the end
-   of the step and no more (it only pushes, so the wheel does not spring back from the wall as a
-   penalty spring would throw it back). Both get a Coulomb friction force against their sliding
-   velocity, at most mu times the wall force (and at most the force that stops the sliding in half a step);
+   back; a wheel node (nrad > 0, the wheel's radius) touches it through its tyre: when x + nrad passes
+   the wall, the tyre's deflection d = x + nrad - xw gives the force ktyre min(d, hsec) (compressive
+   only, no damping: the tyre gives back what it holds), hsec the tyre's section height; when the
+   deflection reaches hsec the rim (radius nrad - hsec) is at the wall and that contact is perfectly
+   plastic: on top of the tyre's force, the force that brings x + nrad - hsec to the wall at the end of
+   the step and no more (with ktyre = hsec = 0 the wheel itself stops at x + nrad = xw). Both kinds get a
+   Coulomb friction force against their sliding velocity, at most mu times the wall force (and at most
+   the force that stops the sliding in half a step);
 8. the velocities (mass-proportional damping alpha, 0 in a crash) and the positions; the node rotations
    R <- exp([w dt]x) R with the spin w in the design frame (isotropic rotational inertia: no gyroscopic term).
 """
@@ -116,8 +119,8 @@ _clamp01 = njit(_clamp01)
 
 
 def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive, yielded, fix, vpre, fext,
-             alpha, wall_on, xw, kpen, mu, hinge_lim, fint, imp, nrad, link, cdist, cpairs, cnp, xref, skin, pc,
-             fcon, cstat):
+             alpha, wall_on, xw, kpen, mu, hinge_lim, fint, imp, nrad, ktyre, hsec, link, cdist, cpairs, cnp, xref,
+             skin, pc, fcon, cstat):
     n = x.shape[0]
     ne = con.shape[0]
     Ti = np.empty((3, 3))
@@ -391,11 +394,16 @@ def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive
             fc[2] = 0.0
             if wall_on != 0:
                 fn = 0.0
-                if nrad[i] > 0.0:  # a wheel: perfectly plastic, x + nrad stops at the wall (no spring-back)
-                    vfree = (damp_a * v[i, 0] + dt * (fext[i, 0] - fint[i, 0] + fcon[i, 0]) / m[i]) * damp_b
-                    vlim = (xw - nrad[i] - x[i, 0]) / dt
+                if nrad[i] > 0.0:  # a wheel: the tyre's spring, then the rim's perfectly plastic stop
+                    dfl = x[i, 0] + nrad[i] - xw
+                    if dfl > 0.0:
+                        if dfl > hsec[i]:
+                            dfl = hsec[i]
+                        fn = ktyre[i] * dfl
+                    vfree = (damp_a * v[i, 0] + dt * (fext[i, 0] - fint[i, 0] + fcon[i, 0] - fn) / m[i]) * damp_b
+                    vlim = (xw - (nrad[i] - hsec[i]) - x[i, 0]) / dt
                     if fix[i, 0] == 0 and vfree > vlim:
-                        fn = (vfree - vlim) * m[i] / (dt * damp_b)
+                        fn += (vfree - vlim) * m[i] / (dt * damp_b)
                 else:
                     g = x[i, 0] - xw
                     if g > 0.0:
