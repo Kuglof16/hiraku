@@ -95,7 +95,7 @@
     "agent_id": {
       "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person. designer.<module> = モジュールごとの設計役 (designs with modules).",
       "type": "string",
-      "pattern": "^(lead|designer|packager|system|user|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
+      "pattern": "^(lead|designer|packager|system|user|designer\\.(structure|mechanism|electric)|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
     },
     "base": {
       "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity.",
