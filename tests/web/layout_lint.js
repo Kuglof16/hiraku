@@ -28,6 +28,12 @@
 //             .wordmark) or an agent's pet or bubble (.petbox .say) crosses the text of another
 //             element, or a pressable thing, by more than SLACK px on both axes (a badge drawn
 //             over the HIRAKU name). Text boxes are cut to the box that clips them.
+//   apart     (only with opts.apart: a list of selectors) two shown boxes matched by different
+//             selectors cross by more than SLACK px on both axes, each cut to the box that clips it.
+//             For the boxes laid over the 3D (the toggles, the colour legend, the いま: line, the
+//             graph, the cause note): a box with pointer-events: none (the いま: line) is not seen
+//             by the hit test, and a box wholly under another is not "visible" above, so neither
+//             overlap nor cover sees them cross. One inside the other is not counted.
 //
 // One line by kind or class (ONE_LINE): buttons, select, summary, tabs, table heads, headings, and the
 // screen's labels/states: .pill .chip .badge .tag .vb .cut .drv .def .tb .state, and an <a> drawn as
@@ -352,6 +358,23 @@
       const w = px(Math.min(lr.right, r.right) - Math.max(lr.left, r.left));
       const h = px(Math.min(lr.bottom, r.bottom) - Math.max(lr.top, r.top));
       if (w > SLACK && h > SLACK) add("cover", l, { with: sel(el), withText: words(el), by: `${w.toFixed(0)}x${h.toFixed(0)}px` });
+    }
+  }
+  // (f) apart: the boxes of opts.apart, by their own boxes (not the hit test)
+  const apart = (opts.apart ?? []).map((s, i) =>
+    [...root.querySelectorAll(s)]
+      .filter((e) => shown(e) && !exempt(e, "apart"))
+      .filter((e) => inView(e.getBoundingClientRect()))
+      .map((e) => ({ e, i, r: cut(e.getBoundingClientRect(), clipOf(e.parentElement ?? e)) }))
+      .filter(({ r }) => r.right - r.left > 0.5 && r.bottom - r.top > 0.5),
+  ).flat();
+  for (let i = 0; i < apart.length; i++) {
+    for (let j = i + 1; j < apart.length; j++) {
+      const a = apart[i], b = apart[j];
+      if (a.i === b.i || a.e.contains(b.e) || b.e.contains(a.e)) continue;
+      const w = px(Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left));
+      const h = px(Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top));
+      if (w > SLACK && h > SLACK) add("apart", a.e, { with: sel(b.e), withText: words(b.e), by: `${w.toFixed(0)}x${h.toFixed(0)}px` });
     }
   }
   }; // pass

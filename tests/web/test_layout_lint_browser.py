@@ -31,6 +31,8 @@ except ImportError:  # pragma: no cover
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 REPO_DIR = Path(__file__).resolve().parents[2]
 LINT_JS = (Path(__file__).with_name("layout_lint.js")).read_text(encoding="utf-8")
+# the boxes laid over the 3D that must not cross one another (layout_lint.js, the apart rule)
+APART = ["#toggles button", "#expand-btn", "#legend", "#now", "#causenote", "#graph"]
 
 WIDTHS = ((1280, 720), (1920, 1080), (900, 506))  # 16:9; the stage is scaled to the window
 
@@ -217,7 +219,7 @@ def lint(browser, bases: dict, screens=SCREENS, widths=WIDTHS, shots: Path | Non
         for size in widths:
             page = open_screen(browser, bases, screen, size)
             try:
-                for p in page.evaluate(LINT_JS, {"root": screen.root, "skip": list(screen.known)}):
+                for p in page.evaluate(LINT_JS, {"root": screen.root, "skip": list(screen.known), "apart": APART}):
                     out.append({"screen": screen.name, "width": size[0], **p})
                 if shots is not None:
                     shots.mkdir(parents=True, exist_ok=True)
@@ -258,6 +260,11 @@ PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
 <button data-lint="wrap" style="width: 40px">まだ長い札</button>
 <div id="card" style="width: 160px; overflow: hidden"><table id="wide"><tr><td style="white-space: nowrap">rops_occupant_clearance.side_mirror</td><td>2.772 mm</td></tr></table></div>
 <div style="width: 300px"><table><tr><td>名前</td><td id="split" style="width: 30px">4.143 mm</td></tr></table></div>
+<div style="position: relative; height: 60px">
+  <div id="row" style="position: absolute; left: 0; top: 0; width: 300px; height: 24px"><button id="t1">重心</button></div>
+  <div id="panel" style="position: absolute; left: 20px; top: 4px; width: 100px; height: 50px; background: #fff; z-index: 2"><button>応力</button></div>
+  <div id="line" style="position: absolute; left: 100px; top: 30px; width: 200px; pointer-events: none">いま: 線の箱</div>
+</div>
 <div style="width: 300px"><table id="fits"><tr><td style="overflow-wrap: anywhere">rops_occupant_clearance.side_mirror</td><td id="whole" style="white-space: nowrap">2.772 mm</td></tr></table></div>
 </body></html>"""
 
@@ -285,6 +292,8 @@ class LayoutLintBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 800, "height": 700})  # (the tables at the end in view)
         page.set_content(PLANTED)
         got = page.evaluate(LINT_JS, {})
+        # apart: a box over a button wholly (the hit test sees the box only), a line that does not take the pointer
+        apart = page.evaluate(LINT_JS, {"apart": ["#row button", "#panel", "#line"]})
         page.close()
         found = {(p["rule"], p["sel"]) for p in got}
         self.assertIn(("overlap", "#b1"), found)
@@ -315,6 +324,9 @@ class LayoutLintBrowserTest(unittest.TestCase):
         self.assertIn(("unit", "#split"), found)
         for quiet in ("#fits", "#whole"):
             self.assertNotIn(quiet, {p["sel"] for p in got})
+        self.assertNotIn("apart", {p["rule"] for p in got})  # only with opts.apart
+        crossed = {frozenset((p["sel"], p["with"])) for p in apart if p["rule"] == "apart"}
+        self.assertEqual(crossed, {frozenset(("#t1", "#panel")), frozenset(("#panel", "#line"))})  # (#line is clear of #t1)
 
     def test_no_layout_breaks_on_the_screens(self):
         problems = lint(self.browser, self.bases)

@@ -418,7 +418,16 @@ body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #ecee
   font-size: 15px;
   min-width: 150px;
   max-width: 250px;
+  /* its height kept under the toggles (app.js fitOverlays): the list of fields gives way first and
+     scrolls; the colour bar keeps its height (with even less room, the whole legend scrolls) */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
+.legend > * { flex: none; }
+.legend > .fields { flex: 0 1 auto; min-height: 44px; overflow-y: auto; scrollbar-width: thin; margin-bottom: 6px; }
+.legend > .fields > .kinds:last-child { margin-bottom: 0; }
 .legend[hidden] { display: none; }
 .legend .ttl { font-weight: 600; margin-bottom: 6px; }
 .legend .bar { display: grid; grid-template-columns: 18px auto; column-gap: 8px; }
@@ -1158,6 +1167,8 @@ body.video .mode .stop-btn { display: none; }
   pointer-events: none;
 }
 .now[hidden] { display: none; }
+/* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
+.now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
 /* app.js loadingNote: while a record is read */
 .loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
   border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }

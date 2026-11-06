@@ -1761,14 +1761,15 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     : ct.partLimit
       ? `<div class="lim">${swatch}${esc(ct.partLimit.part)} の許容 ${fmt(ct.partLimit.value, 4)} ${esc(unit)} を超えたとき</div>`
       : "";
-  // one row of buttons per analysis (its tool's title is on each button when there are several)
+  // one row of buttons per analysis (its tool's title is on each button when there are several),
+  // in a box that scrolls when the list is longer than the room under the toggles (fitOverlays)
   const nButtons = ct.variants.reduce((n, g) => n + g.buttons.length, 0);
   const chips =
     kindRow +
     (nButtons > 1
-      ? ct.variants
+      ? `<div class="fields">${ct.variants
           .map((g) => `<div class="kinds variants" data-analysis="${esc(g.ana)}">${g.buttons.map((v) => `<button data-variant="${esc(v.key)}" class="${v.on ? "on" : ""}">${esc(v.name)}</button>`).join("")}</div>`)
-          .join("")
+          .join("")}</div>`
       : "");
   const acts =
     zoomAct +
@@ -1850,6 +1851,59 @@ function setCompare(s, chain, ct) {
   }
 }
 const LEGEND_GAP_PX = 12;
+
+// The boxes over the 3D keep apart (tests/web/test_overlay_fit_browser.py), in the stage's px:
+// - the colour legend starts under the toggles' row and the full-screen button; its list of
+//   fields scrolls inside it (the chosen one scrolled into sight), the colour bar stays;
+// - the いま: line keeps left of the toggles (their row grows with the switches a design offers);
+//   with too little room there, on a row of its own under them. Where it would reach the legend
+//   it stops short of it, on one line, cut (the whole sentence is its title);
+// - the cause note goes up above the graph at the bottom left when the two would cross.
+// Each style is written only when it changes (this runs on every frame).
+const setStyle = (el, key, v) => {
+  if (el.style[key] !== v) el.style[key] = v;
+};
+function fitOverlays() {
+  const lg = $("legend");
+  const tg = $("toggles");
+  const ex = $("expand-btn");
+  const lgIn = !lg.hidden && lg.parentElement === viewport;
+  if (lgIn) {
+    let top = 10;
+    for (const e of [tg, ex]) if (e.offsetParent === viewport && e.offsetWidth) top = Math.max(top, e.offsetTop + e.offsetHeight + 8);
+    const bottom = parseFloat(getComputedStyle(lg).bottom) || 0;
+    setStyle(lg, "maxHeight", `${Math.max(120, viewport.clientHeight - bottom - top)}px`);
+    const f = lg.querySelector(".fields");
+    const on = f?.querySelector("button.on");
+    if (f && on && f.dataset.shown !== on.dataset.variant) {
+      f.dataset.shown = on.dataset.variant;
+      if (f.scrollHeight > f.clientHeight) f.scrollTop = Math.max(0, on.offsetTop - f.offsetTop - (f.clientHeight - on.offsetHeight) / 2);
+    }
+  } else setStyle(lg, "maxHeight", "");
+
+  const nowEl = $("now");
+  if (!nowEl.hidden && tg.offsetWidth) {
+    const room = tg.offsetLeft - nowEl.offsetLeft - 12;
+    const under = room < 360;
+    const top = under ? tg.offsetTop + tg.offsetHeight + 8 : 10; // (10: .now's own top)
+    let width = under ? viewport.clientWidth - 2 * nowEl.offsetLeft : room;
+    // the legend beside it (across its width, and within two lines' height below its top)
+    const beside = lgIn && lg.offsetLeft < nowEl.offsetLeft + width + 12 && lg.offsetTop < top + 80;
+    if (beside) width = Math.min(width, lg.offsetLeft - nowEl.offsetLeft - 12);
+    setStyle(nowEl, "top", under ? `${top}px` : "");
+    setStyle(nowEl, "maxWidth", `${width}px`);
+    nowEl.classList.toggle("one-line", beside);
+  }
+
+  const cn = $("causenote");
+  const gr = $("graph");
+  if (!cn.hidden && !gr.hidden && gr.parentElement === viewport) {
+    setStyle(cn, "bottom", ""); // where it stands by itself (then lifted again in the same frame: no paint between)
+    const left = cn.offsetLeft - cn.offsetWidth / 2; // (translateX(-50%))
+    const cross = left < gr.offsetLeft + gr.offsetWidth && gr.offsetLeft < left + cn.offsetWidth && cn.offsetTop + cn.offsetHeight > gr.offsetTop;
+    setStyle(cn, "bottom", cross ? `${viewport.clientHeight - gr.offsetTop + 8}px` : "");
+  } else setStyle(cn, "bottom", "");
+}
 
 // A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
 const liftLimit = (motion, lc) => motion?.liftT != null && liftIsLimit(lc);
@@ -2399,16 +2453,6 @@ function drawNow() {
     $("now").textContent = now;
     $("now").title = now;
     $("now").hidden = !now;
-    // the line keeps left of the toggles (their row grows with the switches a design offers)
-    // (too little room there: on a row of its own under the toggles, as wide as the 3D)
-    const tg = $("toggles");
-    const nowEl = $("now");
-    if (!nowEl.hidden && tg.offsetWidth) {
-      const room = tg.offsetLeft - nowEl.offsetLeft - 12;
-      const under = room < 360;
-      nowEl.style.top = under ? `${tg.offsetTop + tg.offsetHeight + 8}px` : "";
-      nowEl.style.maxWidth = `${under ? viewport.clientWidth - 2 * nowEl.offsetLeft : room}px`;
-    }
     const scene = presentScene({ s, chain, contour, tab: view, toolTitle: (tool) => toolTitle(s, tool) });
     document.body.dataset.presentScene = scene.key;
     if (ui.present) $("present-card").innerHTML = presentCardHtml(scene, now, { dev: DEV });
@@ -2423,6 +2467,7 @@ function drawNow() {
   if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
   heat.show(heatOn ? heatIn : null, player.playhead); // heat:
   renderTransient(s, player.playhead, chain, resolved);
+  fitOverlays();
   if (ZOOM) zoomTransform(stage, stageBase, ZOOM, player.playhead, STAGE_W, STAGE_H); // ?zoom=
   renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
