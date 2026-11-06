@@ -1317,6 +1317,28 @@
           "type": "string",
           "description": "write_load_case: why this load case stands for the use, its source or an assumption said as one."
         },
+        "limit_from": {
+          "type": "object",
+          "required": [
+            "expr"
+          ],
+          "additionalProperties": false,
+          "description": "write_load_case: how the code computed criterion.limit, kept so a later version computes it again from that version's materials and sections.",
+          "properties": {
+            "expr": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            },
+            "refs": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "feeds": {
           "type": "array",
           "items": {
