@@ -1052,13 +1052,13 @@ window.PROMO_LAYOUT = {
       }
     },
     "times": {
-      "burst_s": 1.25,
-      "tiles_s": 1.35,
+      "burst_s": 1.8,
+      "tiles_s": 1.9,
       "tile_in_s": 0.6,
       "tile_stagger_s": 0.05,
-      "name_s": 1.75,
-      "tag_s": 2.3,
-      "gloss_s": 2.4,
+      "name_s": 2.3,
+      "tag_s": 2.85,
+      "gloss_s": 2.95,
       "_gloss_note": "added 2026-11-03: the small line under the tag (title.gloss) fades up over 0.6 s, 0.1 s after the tag starts",
       "door_open_s": 0.55,
       "latch_s": 0.38,
@@ -1071,7 +1071,7 @@ window.PROMO_LAYOUT = {
       "_note": "burst: flash of light as the door has swung out; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the closed door starts to part (door.crack_*). burst, tiles, name and tag were 0.3 s earlier until 2026-11-03; they moved to leave the door closed a while first. latch: the bolt slides back and the leaves jolt (door.latch_*), the seam light flickers; mesh_in: the triangle mesh starts to show over the vehicle (hero_mesh.in_dur_s); mesh_out: its first elements come apart (hero_mesh.*)"
     },
     "door": {
-      "crack_dur_s": 0.2,
+      "crack_dur_s": 0.3,
       "crack_deg": 12,
       "crack_ease": [
         0.25,
@@ -1079,8 +1079,8 @@ window.PROMO_LAYOUT = {
         0.3,
         1
       ],
-      "hold_dur_s": 0.12,
-      "open_dur_s": 0.38,
+      "hold_dur_s": 0.2,
+      "open_dur_s": 0.75,
       "angle_deg": 105,
       "perspective_px": 2400,
       "ease": [
