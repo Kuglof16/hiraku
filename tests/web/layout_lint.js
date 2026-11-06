@@ -28,6 +28,11 @@
 //             .wordmark) or an agent's pet or bubble (.petbox .say) crosses the text of another
 //             element, or a pressable thing, by more than SLACK px on both axes (a badge drawn
 //             over the HIRAKU name). Text boxes are cut to the box that clips them.
+//   cut       a line of text cut across by the edge of a box that clips it and does not scroll
+//             (overflow hidden or clip): part of the line inside, more than SLACK px of it outside, up
+//             or down (a card's last line cut in half by its frame). Not inside a box cut on purpose
+//             with an ellipsis or a line clamp (text-overflow, -webkit-line-clamp). Let off with data-lint="cut".
+//             With opts.unseen (a film: nothing is opened or scrolled) a line wholly below the edge too.
 //   apart     (only with opts.apart: a list of selectors) two shown boxes matched by different
 //             selectors cross by more than SLACK px on both axes, each cut to the box that clips it.
 //             For the boxes laid over the 3D (the toggles, the colour legend, the いま: line, the
@@ -358,6 +363,41 @@
       const w = px(Math.min(lr.right, r.right) - Math.max(lr.left, r.left));
       const h = px(Math.min(lr.bottom, r.bottom) - Math.max(lr.top, r.top));
       if (w > SLACK && h > SLACK) add("cover", l, { with: sel(el), withText: words(el), by: `${w.toFixed(0)}x${h.toFixed(0)}px` });
+    }
+  }
+  // (e2) cut: a line cut across by a clipping box that does not scroll
+  const cutBy = (el) => {
+    // the nearest box with overflow hidden/clip on the way up, unless one on the way cuts on purpose
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.textOverflow === "ellipsis" || (cs.webkitLineClamp && cs.webkitLineClamp !== "none")) return null;
+      const o = [cs.overflowX, cs.overflowY];
+      if (o.includes("auto") || o.includes("scroll")) return null; // (a scroller: looked at as it scrolls)
+      if (o.includes("hidden") || o.includes("clip")) return e;
+    }
+    return null;
+  };
+  for (const n of textNodes(root)) {
+    const p = n.parentElement;
+    if (!p || exempt(p, "cut") || !shown(p)) continue;
+    const box = cutBy(p);
+    if (!box || !shown(box)) continue;
+    const c = box.getBoundingClientRect();
+    if (!inView(c)) continue;
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) {
+      if (!(r.width > 0.5 && r.height > 0)) continue;
+      const out = Math.max(c.top - r.top, r.bottom - c.bottom);
+      const inside = Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top);
+      if (inside > 0.5 && px(out) > SLACK && r.right > c.left && r.left < c.right) {
+        add("cut", p, { by: `${px(out).toFixed(0)}px`, with: sel(box) });
+        break;
+      }
+      // opts.unseen (a film, where nothing is opened or scrolled): a line wholly under the frame too
+      if (opts.unseen && r.top >= c.bottom && r.right > c.left && r.left < c.right) {
+        add("cut", p, { by: "unseen", with: sel(box) });
+        break;
+      }
     }
   }
   // (f) apart: the boxes of opts.apart, by their own boxes (not the hit test)

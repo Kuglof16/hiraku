@@ -265,6 +265,8 @@ PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
   <div id="panel" style="position: absolute; left: 20px; top: 4px; width: 100px; height: 50px; background: #fff; z-index: 2"><button>応力</button></div>
   <div id="line" style="position: absolute; left: 100px; top: 30px; width: 200px; pointer-events: none">いま: 線の箱</div>
 </div>
+<div id="frame" style="height: 30px; overflow: hidden; line-height: 20px; width: 200px"><p id="half" style="margin: 0">一行目<br>二行目</p></div>
+<div id="clamped" style="display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; width: 60px; line-height: 20px; height: 30px">長い長い長い長い文です</div>
 <div style="width: 300px"><table id="fits"><tr><td style="overflow-wrap: anywhere">rops_occupant_clearance.side_mirror</td><td id="whole" style="white-space: nowrap">2.772 mm</td></tr></table></div>
 </body></html>"""
 
@@ -289,7 +291,7 @@ class LayoutLintBrowserTest(unittest.TestCase):
 
     def test_the_lint_finds_planted_breaks(self):
         """Each rule on a page made to break it; the ellipsis and data-lint="wrap" are let off."""
-        page = self.browser.new_page(viewport={"width": 800, "height": 700})  # (the tables at the end in view)
+        page = self.browser.new_page(viewport={"width": 800, "height": 1000})  # (the tables and the frames at the end in view)
         page.set_content(PLANTED)
         got = page.evaluate(LINT_JS, {})
         # apart: a box over a button wholly (the hit test sees the box only), a line that does not take the pointer
@@ -325,6 +327,9 @@ class LayoutLintBrowserTest(unittest.TestCase):
         for quiet in ("#fits", "#whole"):
             self.assertNotIn(quiet, {p["sel"] for p in got})
         self.assertNotIn("apart", {p["rule"] for p in got})  # only with opts.apart
+        # a line cut in half by a frame that does not scroll; not a box clamped on purpose
+        self.assertIn(("cut", "#half"), found)
+        self.assertNotIn("#clamped", {p["sel"] for p in got if p["rule"] == "cut"})
         crossed = {frozenset((p["sel"], p["with"])) for p in apart if p["rule"] == "apart"}
         self.assertEqual(crossed, {frozenset(("#t1", "#panel")), frozenset(("#panel", "#line"))})  # (#line is clear of #t1)
 

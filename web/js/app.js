@@ -1897,6 +1897,19 @@ function fitOverlays() {
     nowEl.classList.toggle("one-line", beside);
   }
 
+  // the present card: what does not fit is left out whole, never cut in half by the card's frame:
+  // the reference values first (last first), then the note, then the extra lines (last first)
+  const pc = $("present-card");
+  if (ui.present && pc && pc.scrollHeight > pc.clientHeight + 1) {
+    const order = [...pc.querySelectorAll(".pc-ref li")].reverse().concat([...pc.querySelectorAll(".pc-note")], [...pc.querySelectorAll(".pc-extra li")].reverse());
+    for (const e of order) {
+      if (pc.scrollHeight <= pc.clientHeight + 1) break;
+      e.hidden = true;
+      const list = e.closest(".pc-ref, .pc-extra");
+      if (list && !list.querySelector("li:not([hidden])")) list.hidden = true;
+    }
+  }
+
   const cn = $("causenote");
   const gr = $("graph");
   if (!cn.hidden && !gr.hidden && gr.parentElement === viewport) {
@@ -2437,7 +2450,9 @@ function drawNow() {
       if ((ct?.key ?? null) !== (contour?.key ?? null)) contour = ct;
       bench.setContour(ui.toggles.contour && !heatOn ? framedContour() : null);
       if (!contour?.mesh?.maxAt) ui.zoomMax = false;
-      renderLegend(heatOn ? null : contour, s, chain.shown, motion); // before setCompare, which keeps the legend's strip clear
+      // (before setCompare, which keeps the legend's strip clear; only where the 3D shows a contour,
+      // ③ and ④: not on A7, whose view has no colours, though the present mode draws the workbench under it)
+      renderLegend(heatOn || !(view === "bench" || view === "grid") ? null : contour, s, chain.shown, motion);
       renderMeshCard(contour);
       setCompare(s, chain, ui.toggles.contour && !heatOn && view === "bench" ? contour : null);
       bench.setFocus(ui.zoomMax && ui.toggles.contour ? contour : null);

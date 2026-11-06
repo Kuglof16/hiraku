@@ -10,12 +10,18 @@ The layout lint's apart rule (tests/web/layout_lint.js) on:
 Then that the いま: line keeps to one line, cut, with the whole sentence in its title, when the
 legend is beside it.
 
+The present mode in the video (present=1&video=1&more=1, the 4K film's scenes of the showcase):
+no line cut in half by a frame (the lint's cut rule: the card's last line), the legend's title
+clear of the top tick's number on ③ and ④, no colour legend on A7 and no English word in its
+joints' legend, and A1's domains all inside the view (it does not scroll in a film).
+
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 import threading
@@ -30,6 +36,13 @@ from tests.web.test_layout_lint_browser import APART, LINT_JS, REPO_DIR
 SHOWCASE = "20261105-160725-offroad-4w"
 GRIP_CAUSE = "20261107-120000-grip-cause"
 SIZES = ((1440, 900, ""), (1920, 1080, "&video=1"))
+FILM = f"run={SHOWCASE}&present=1&video=1&pace=0&more=1"
+# the legend's title (its last line) and the top tick's number, by their text boxes
+TITLE_TICK = """() => { const l = document.getElementById('legend'); if (l.hidden || !l.offsetWidth) return null;
+  const box = (e) => { const r = document.createRange(); r.selectNodeContents(e); const rs = [...r.getClientRects()].filter((b) => b.width > 0.5);
+    return rs.length ? { top: Math.min(...rs.map((b) => b.top)), bottom: Math.max(...rs.map((b) => b.bottom)) } : null; };
+  const tk = [...l.querySelectorAll('.bar .tk')].find((e) => e.textContent.trim());
+  return { title: box(l.querySelector('.ttl')), tick: tk ? box(tk) : null }; }"""
 
 
 def grip_cause_events() -> list[dict]:
@@ -117,6 +130,40 @@ class OverlayFitBrowserTest(unittest.TestCase):
             self.assertEqual(got, {"below": True, "inside": True, "bar": True, "on": True, "n": 8})
         finally:
             page.close()
+
+    def lint(self, page, rules=("cut", "apart")) -> list[str]:
+        got = page.evaluate(LINT_JS, {"apart": APART, "unseen": True})
+        return [f"{p['rule']}: {p['sel']} 「{p['text'][:30]}」 {p.get('with', '')} {p.get('by', '')}" for p in got if p["rule"] in rules]
+
+    def test_the_legends_title_is_clear_of_the_top_tick(self):
+        for query, w, h in ((f"run={SHOWCASE}&tab=bench&pace=0&t=4641", 1440, 900), (f"{FILM}&tab=bench&t=4641", 1920, 1080),
+                            (f"{FILM}&tab=grid&t=4700", 1920, 1080)):
+            with self.subTest(query=query):
+                page = self.open(query, w, h)
+                try:
+                    got = page.evaluate(TITLE_TICK)
+                    self.assertIsNotNone(got)
+                    self.assertGreaterEqual(got["tick"]["top"], got["title"]["bottom"] - 0.5, got)
+                finally:
+                    page.close()
+
+    def test_the_film_scenes_cut_no_line_in_half(self):
+        for name, q in (("bench", "&tab=bench&t=4641"), ("grid", "&tab=grid&t=4700"), ("A7", "&tabs=A7:4700&t=4703"), ("A1", "&tab=A1&t=20")):
+            with self.subTest(scene=name):
+                page = self.open(FILM + q, 1920, 1080)
+                try:
+                    self.assertEqual(self.lint(page), [])
+                    if name == "A1":  # nothing of A1 under the frame: the view does not scroll in the film
+                        got = page.evaluate("() => { const v = document.getElementById('view-intake'); return [v.scrollHeight, v.clientHeight]; }")
+                        self.assertLessEqual(got[0], got[1] + 1, got)
+                    if name == "A7":  # the assembly has no colours: no colour legend; the joints' kinds in Japanese
+                        got = page.evaluate("""() => ({ legend: !!document.getElementById('legend').offsetWidth,
+                          names: [...document.querySelectorAll('.jl-nm')].filter((e) => e.offsetWidth).map((e) => e.textContent) })""")
+                        self.assertFalse(got["legend"])
+                        self.assertTrue(got["names"])
+                        self.assertEqual([n for n in got["names"] if re.search(r"[A-Za-z]{3,}", n)], [])
+                finally:
+                    page.close()
 
     def test_the_cause_note_goes_above_the_graph(self):
         for w, h, extra in SIZES:
