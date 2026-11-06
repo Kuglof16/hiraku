@@ -76,7 +76,7 @@ window.HV = window.HV || {};
       g.font = 'bold 10px system-ui, sans-serif'; g.fillText(m.label, x0 + w + 7, y - 4); g.font = '11px system-ui, sans-serif';
     }
     g.fillStyle = '#444'; g.font = '10px system-ui, sans-serif';
-    wrap(g, (c.log ? 'log scale' : 'linear scale') + (c.note ? '; ' + c.note : ''), 4, y0 + h + 14, W - 8, 11);
+    wrap(g, (c.log ? '対数目盛' : '線形目盛') + (c.note ? '、' + c.note : ''), 4, y0 + h + 14, W - 8, 11);
   };
   function wrap(g, text, x, y, maxW, lh) {
     let line = '';
@@ -250,6 +250,70 @@ window.HV = window.HV || {};
       });
       this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true; this.eattr.needsUpdate = true;
       this.mesh.computeBoundingSphere(); this.edges.geometry.computeBoundingSphere();
+    }
+  };
+
+  // ---------------------------------------------------------------- parts in the calculation
+  // D.ledger (viewer/src/common.py parts_ledger): per part (D.parts order) its category in this field's
+  // calculation, mass, the nodes it sits on (kg each) and the deciding function; the mass table against the
+  // record's stated mass. Shared by every field: colours the part boxes, the legend, the table, the click text.
+  HV.LEDGER_COL = { frame_nodes: [0.16, 0.42, 0.85], unsprung: [0.95, 0.55, 0.08], stiffness: [0.15, 0.65, 0.3],
+                    mass_only: [0.6, 0.35, 0.78], body: [0.4, 0.62, 0.72], not_in: [0.86, 0.86, 0.86] };
+  HV.GREY = [0.8, 0.8, 0.82];
+  const rgb = c => `rgb(${c.map(v => Math.round(255 * v)).join(',')})`;
+  const kg = v => (v === null || v === undefined) ? '-' : `${(+v).toFixed(1)} kg`;
+  HV.Ledger = class {
+    constructor(D) { this.D = D; this.L = D.ledger || null; }
+    has() { return !!(this.L && this.L.parts && this.L.parts.length); }
+    cat(i) { return this.L && this.L.parts[i] ? this.L.parts[i].cat : null; }
+    paint(boxes, mode) {   // mode: 'category' | 'grey' (anything else: the field's own colours)
+      if (!boxes || !this.has() || (mode !== 'category' && mode !== 'grey')) return false;
+      for (let i = 0; i < boxes.n; i++) boxes.colour(i, mode === 'grey' ? HV.GREY : (HV.LEDGER_COL[this.cat(i)] || HV.GREY));
+      return true;
+    }
+    legendHtml() {
+      if (!this.has()) return '<div class="muted">部品の扱いのデータがない</div>';
+      const L = this.L;
+      return L.table.map(r => `<div class="lg"><span class="sw" style="background:${rgb(HV.LEDGER_COL[r.cat])}"></span>` +
+        `${HV.esc(L.categories[r.cat])}: ${r.count} 個` + (L.tool === 'assembly' ? '' : `、${kg(r.mass_kg)}`) + '</div>').join('');
+    }
+    tableHtml() {
+      if (!this.has()) return '';
+      const L = this.L, m = L.members || {};
+      let h = '<table class="mt"><tr><th>内訳</th><th>個数</th><th>質量</th></tr>';
+      for (const r of L.table) h += `<tr><td>${HV.esc(L.categories[r.cat])}</td><td>${r.count}</td><td>${L.tool === 'assembly' ? '-' : kg(r.mass_kg)}</td></tr>`;
+      h += `<tr><td>フレームの部材 (剛性あり)</td><td>${m.count ?? '-'}</td><td>${kg(m.mass_kg)}</td></tr>`;
+      if (L.total_kg !== null && L.total_kg !== undefined) h += `<tr class="tot"><td>計算に入る合計</td><td></td><td>${kg(L.total_kg)}</td></tr>`;
+      h += '</table>';
+      if ((L.stated || []).length) {
+        h += '<table class="mt"><tr><th>記録の値</th><th>記録</th><th>ここで計算</th><th>判定</th></tr>' +
+          L.stated.map(s => `<tr><td>${HV.esc(s.label)}</td><td>${kg(s.stated_kg)}</td><td>${kg(s.computed_kg)}</td>` +
+            `<td class="${s.agrees ? 'ok' : 'ng'}">${s.agrees ? 'OK' : 'NG'}${s.agrees ? '' : ` (差 ${s.diff_kg === null ? '-' : (s.diff_kg >= 0 ? '+' : '') + s.diff_kg.toFixed(1)} kg)`}</td></tr>`).join('') + '</table>';
+        const bad = L.stated.filter(s => !s.agrees);
+        if (bad.length) h += `<div class="ng">差の出どころ: ${HV.esc(bad[0].why || '')}</div>`;
+      } else {
+        h += `<div class="muted">記録に質量の値がない (${L.tool === 'assembly' ? '組み立ては質量を使わない' : '照合なし'})</div>`;
+      }
+      h += `<div class="muted">乗員・荷物: ${HV.esc(L.loading)}</div>`;
+      if (L.error) h += `<div class="ng">${HV.esc(L.error)}</div>`;
+      return h;
+    }
+    listsHtml() {
+      if (!this.has()) return '';
+      const L = this.L, ids = a => a.slice(0, 12).map(HV.esc).join(', ') + (a.length > 12 ? ` ほか ${a.length - 12}` : '');
+      const ns = L.no_stiffness || [], ni = L.not_in || [];
+      return `<div class="pl"><b>剛性なしの部品</b> ${ns.length} 個${ns.length ? ': ' + ids(ns) : ''}</div>` +
+             `<div class="pl"><b>計算に入っていない部品</b> ${ni.length} 個${ni.length ? ': ' + ids(ni.map(x => x.id)) : ''}</div>` +
+             (L.members && L.members.crush_members ? `<div class="pl"><b>つぶれる部材</b> ${ids(L.members.crush_members)}</div>` : '');
+    }
+    info(i) {
+      if (!this.has() || !this.L.parts[i]) return '';
+      const e = this.L.parts[i], L = this.L;
+      const nodes = (e.nodes || []).map(([n, w]) => w === null ? HV.esc(n) : `${HV.esc(n)} ${(+w).toFixed(2)} kg`).join(', ');
+      return `<div class="lc"><span class="sw" style="background:${rgb(HV.LEDGER_COL[e.cat])}"></span><b>${HV.esc(L.categories[e.cat])}</b></div>` +
+             `${HV.esc(e.id)} (${HV.esc(e.kind)}) ${kg(e.mass_kg)}` + (nodes ? `<br>節点: ${nodes}` : '') +
+             `<br><span class="muted">${HV.esc(e.fn)}</span>` +
+             `<details><summary>計算での扱い (詳しく)</summary>${HV.esc(e.how)}</details>`;
     }
   };
 

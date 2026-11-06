@@ -65,7 +65,7 @@ def build(args) -> dict:
 
 # ---------------------------------------------------------------- A: crash (1-D)
 def build_a(args, vdir, rec, design) -> dict:
-    obj = common.base_object("crash", "Crash: frontal wall impact (A: 1-D mass and spring)", args.run, vdir, rec, design)
+    obj = common.base_object("crash", "衝突: 壁への正面衝突 (A: 1次元の質量とばね)", args.run, vdir, rec, design)
     obj["model"] = "A"
     fr = obj["frame"]
     st = next((f for f in rec.get("fields", []) if f.get("kind") == "stress" and "per_member" in f), None)
@@ -110,14 +110,9 @@ def build_a(args, vdir, rec, design) -> dict:
         {"label": "peak deceleration", "value": f"{obj['a_max']:.2f} {obj['units']['deceleration']}",
          "source": "the series' largest value; the frame was solved at this instant"},
     ]
-    obj["not_computed"] = [
-        "A is a 1-D model: no deformed shape is drawn. The crush is one number (a mass on a spring); the vehicle is "
-        "drawn where it stands and crush(t) is shown in the plot only (it is not moved into or through the wall).",
-        "Stress and the elastic frame deflection were solved once, at the peak deceleration; at other times they are "
-        "the stored values x a(t) / a_max (linear frame). The deflection (off by default) is not a crushed shape.",
-        "The rebound after the standstill is not followed; wall loads at the front nodes are the tool's share of the wall force.",
-    ]
-    obj["notes"] = ["Run crash_beam (B) on this design for a deformed shape over time."]
+    obj["notes"] = ["A は 1 次元モデル (質量とばね)。車体はその場に置いたまま描き、つぶれ量は下のグラフにだけ出す。",
+                    "応力はピークの瞬間に 1 回解いた値 × a(t)/a_max。弾性たわみ (既定は倍率 0) はつぶれた形ではない。"]
+    obj["ledger"] = common.parts_ledger("crash", design, lc, rec, obj["parts"])
     return obj
 
 
@@ -159,7 +154,7 @@ def _angle(p, nd, i, j):
 
 
 def build_b(args, vdir, rec, design) -> dict:
-    obj = common.base_object("crash", "Crash: frontal wall impact (B: beams that yield and fold)", args.run, vdir, rec, design)
+    obj = common.base_object("crash", "衝突: 壁への正面衝突 (B: 梁が降伏して折れる)", args.run, vdir, rec, design)
     obj["model"] = "B"
     nm = next((f for f in rec.get("fields", []) or [] if f.get("kind") == "node_motion"), None)
     if nm is None:
@@ -199,21 +194,22 @@ def build_b(args, vdir, rec, design) -> dict:
     obj["colour"] = {"strain": common.pack_f32(strain, [nF, ne]), "fold": common.pack_f32(fold, [nF, ne]),
                      "strain_absmax": max((abs(strain[i]) for i in whole), default=0.0),
                      "fold_max": max((fold[i] for i in whole), default=0.0)}
-    # part boxes moved by the mean motion of their carried_by nodes (translation only)
+    # part boxes moved by the mean motion of the nodes the tool puts their mass on (translation only): the
+    # carried_by nodes, or for a part without carried_by its support's frame node (common.parts_ledger); a part
+    # the loading leaves off stays where it is
+    lc = common.load_case_of(vdir, rec["load_case_id"])
+    obj["ledger"] = common.parts_ledger("crash_beam", design, lc, rec, obj["parts"])
     offs = []
-    by_id = {p["id"]: p for p in design.get("parts", [])}
     keep = []
-    for p in obj["parts"]:
-        cb = [index[c] for c in (by_id.get(p["id"], {}).get("carried_by") or []) if c in index]
-        if cb:
-            keep.append((p, cb))
-    obj["parts"] = [p for p, _ in keep]
+    for p, e in zip(obj["parts"], obj["ledger"]["parts"]):
+        cb = [index[nd] for nd, _kg in e["nodes"] if nd in index] if e["cat"] != "not_in" else []
+        keep.append((p, cb))
     for F in P:
         for p, cb in keep:
             for k in range(3):
-                offs.append(sum(F[i][k] - P[0][i][k] for i in cb) / len(cb))
+                offs.append(sum(F[i][k] - P[0][i][k] for i in cb) / len(cb) if cb else 0.0)
     obj["part_off"] = common.pack_f32(offs, [nF, len(keep), 3])
-    dropped = [p["id"] for p in common.parts_of(design) if p["id"] not in {q["id"] for q, _ in keep}]
+    dropped = [p["id"] for p, cb in keep if not cb]
     # the wall and what is beyond it
     wall = _wall(obj)
     wx = wall["c"][0] - wall["s"][0] / 2.0 if wall else max(p[0] for p in P[0])
@@ -227,6 +223,8 @@ def build_b(args, vdir, rec, design) -> dict:
         any_nodes |= {i for _, i in over}
         po = []
         for j, (p, _cb) in enumerate(keep):
+            if not _cb:
+                continue
             front = p["c"][0] + p["s"][0] / 2.0 + offs[(k * len(keep) + j) * 3]
             if front > wx + TOL_MM:
                 po.append(front - wx)
@@ -255,29 +253,15 @@ def build_b(args, vdir, rec, design) -> dict:
         {"label": "mesh", "value": f"{n} nodes, {ne} beam elements of {len(set(emem))} members; {nF} frames kept of the run",
          "source": "record node_motion field"},
     ]
-    obj["not_computed"] = [
-        "Member stresses are not in the crash_beam record. The colour is computed here from the node positions of the "
-        "same run: element axial strain = change of the element's length / its length at t = 0 (positions are stored to "
-        "0.1 mm, so about 0.1 % on a 100 mm element), and fold = the largest change of the angle between the element and "
-        "a neighbouring element at its ends (a plastic hinge shows as a fold). Bending inside one element is not seen.",
-        "Part boxes are not deformed and do not touch the wall in the tool: each is moved by the mean motion of its "
-        "carried_by nodes (no rotation)." + (f" Not drawn (no carried_by node in the mesh): {len(dropped)} parts, e.g. "
-                                             f"{', '.join(dropped[:4])}." if dropped else ""),
-        f"Between the {nF} stored frames nothing is interpolated; the frame's broken pieces do not touch each other in the "
-        "tool. The record lists broken members, not elements: a member is marked from the frame its first element breaks.",
-    ]
     b = obj["beyond"]
     obj["notes"] = [
-        (f"Wall penetration: {b['nodes_any']} frame nodes go beyond the wall face (x = {wx:g} mm) at some frame, deepest "
-         f"{b['node_depth_max']:.1f} mm." if b["nodes_any"] else
-         f"Wall penetration: no frame node goes beyond the wall face (x = {wx:g} mm) in any stored frame "
-         f"(tolerance {TOL_MM} mm, half the record's 0.1 mm rounding).")
-        + (f" Part boxes moved with their nodes reach past it: {', '.join(b['parts_any'])}, up to {b['part_depth_max']:.1f} mm "
-           f"(the tool does not let part boxes touch the wall; {b['parts'][0]} of them already reach past the face at "
-           f"t = 0, up to {b['part_depth'][0]:.1f} mm: the wall touches the front-most frame node, not the parts)."
+        "形は計算の節点位置そのもの (変形 ×1、実寸)。色はその位置から求めた要素の軸ひずみ、または端の折れ角。",
+        (f"壁面 (x = {wx:g} mm) より先へ出たフレーム節点: 全体で {b['nodes_any']} 個、最大 {b['node_depth_max']:.1f} mm。"
+         if b["nodes_any"] else f"壁面 (x = {wx:g} mm) より先へ出たフレーム節点はない (許容 {TOL_MM} mm)。")
+        + (f" 部品の箱は壁に当たらない扱い (節点と一緒に動かすだけ): 壁面の先に出た箱 {', '.join(b['parts_any'][:6])}"
+           f"{' ほか' if len(b['parts_any']) > 6 else ''}、最大 {b['part_depth_max']:.1f} mm (t = 0 で既に {b['parts'][0]} 個)。"
            if b["parts_any"] else ""),
-        "Positions and the deformed shape are real size (no scale).",
-    ]
+    ] + ([f"箱を動かす節点がない部品 (その場に置く): {len(dropped)} 個"] if dropped else [])
     return obj
 
 

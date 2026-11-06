@@ -139,7 +139,7 @@ def member_strain(design: dict, frame: dict, shape: dict[str, list[float]]) -> d
 def build(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "modal", version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
-    obj = common.base_object("nvh", "NVH: frame modes and frequency response", args.run, vdir, rec, design)
+    obj = common.base_object("nvh", "NVH: フレームの固有振動と周波数応答", args.run, vdir, rec, design)
     ids = obj["frame"]["node_ids"]
     effects = {e["name"]: e.get("value") for e in rec.get("effects", [])}
     modes = []
@@ -194,18 +194,13 @@ def build(args) -> dict:
         {"label": "modes", "value": f"{len(modes)} mode shapes stored of {sum(1 for r in rec['results'] if r['quantity'].startswith('mode_'))} frequencies",
          "source": "record fields (mode_shape, per_node vec3 at the frame nodes)"},
     ]
-    obj["not_computed"] = [
-        "Beam modes only: the frame is drawn as straight members between its nodes; the shape between nodes is not stored.",
-        "Mode shapes are normalised (no physical amplitude): the scale sets how far the largest node moves on screen.",
-        "Part boxes are not drawn: the record holds mode shapes at the frame nodes only.",
-        "Member strain is computed here from node translations only (the record has no rotations): bending is an "
-        "estimate (node rotation = mean chord rotation of the members at the node), torsion is left out; values are "
-        "relative to the mode's largest member.",
-    ]
+    obj["notes"].append("モード形は大きさを持たない (相対値)。変形は表示用の倍率で、実寸ではない。")
+    obj["notes"].append("ひずみは節点の並進だけから求めた推定 (曲げは推定、ねじりは入らない)、そのモードの最大を 1 とした相対値。")
     if missing:
         obj["notes"].append(f"{len(missing)} frame nodes have no mode vector in the record (drawn still): {', '.join(sorted(missing))}")
     obj["notes"].append("Motion: x(t) = node + scale x shape / |shape|max x sin(phase); colour = member strain / the mode's "
                         "largest (or, switched, |shape| / |shape|max at each node).")
+    obj["ledger"] = common.parts_ledger("modal", design, lc, rec, obj["parts"])
     return obj
 
 

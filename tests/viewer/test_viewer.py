@@ -20,7 +20,8 @@ FX = Path(__file__).resolve().parent / "fixtures"
 VIEWER = ROOT / "viewer"
 SCRIPTS = {"nvh": nvh, "crash": crash, "assembly": assembly}
 COMMON_KEYS = {"field", "title", "source", "frame", "parts", "scene", "vectors", "results", "assumptions",
-               "inputs", "not_computed", "notes"}
+               "inputs", "notes", "ledger"}
+LEDGER_CATS = set(common.CATEGORIES)
 
 
 def make(field, run=None, tool=None):
@@ -76,8 +77,89 @@ class FieldDataTest(unittest.TestCase):
                     self.assertTrue(0 <= a < n and 0 <= b < n)
                 for p in o["parts"]:
                     self.assertEqual((len(p["c"]), len(p["s"]), len(p["r"])), (3, 3, 3))
-                self.assertTrue(o["inputs"] and o["not_computed"])
+                self.assertTrue(o["inputs"])
+                self.assertNotIn("not_computed", o)
+                # no file path anywhere in the data: the run by its folder name only
+                text = json.dumps(o, ensure_ascii=False)
+                self.assertNotRegex(text, r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+                self.assertEqual(o["source"]["run"], f if f != "crash" else "crash")
+                # the parts ledger: one entry per part box, in the same order, with a known category
+                L = o["ledger"]
+                self.assertEqual([e["id"] for e in L["parts"]], [p["id"] for p in o["parts"]])
+                for e in L["parts"]:
+                    self.assertIn(e["cat"], LEDGER_CATS)
+                    self.assertTrue(e["fn"].startswith("hiraku."), e["fn"])
+                    if e["cat"] in ("frame_nodes", "unsprung", "mass_only"):
+                        self.assertAlmostEqual(sum(kg for _, kg in e["nodes"]), e["mass_kg"], places=9)
+                self.assertEqual(sum(r["count"] for r in L["table"]), len(L["parts"]))
                 json.dumps(o)
+
+    def test_ledger_per_field(self):
+        cats = {f: {e["id"]: e["cat"] for e in o["ledger"]["parts"]} for f, o in self.obj.items()}
+        # NVH (modal.add_masses): the battery on its carried_by nodes, the wheel at the wheel centre node
+        self.assertEqual(cats["nvh"], {"battery": "frame_nodes", "wheel_FL": "unsprung"})
+        w = next(e for e in self.obj["nvh"]["ledger"]["parts"] if e["id"] == "wheel_FL")
+        self.assertEqual(w["nodes"], [["wc:FL", 14.0]])   # support FL is 60 mm outboard of LA: a link node
+        self.assertEqual(self.obj["nvh"]["ledger"]["stated"], [])
+        # crash A: every part in the one rigid mass; the record's vehicle_mass is compared (fixture: fewer parts)
+        L = self.obj["crash"]["ledger"]
+        self.assertEqual(set(cats["crash"].values()), {"mass_only"})
+        st = {s["label"]: s for s in L["stated"]}
+        self.assertTrue(st["frame_mass"]["agrees"], st["frame_mass"])
+        self.assertFalse(st["vehicle_mass"]["agrees"])
+        self.assertAlmostEqual(st["vehicle_mass"]["diff_kg"], L["total_kg"] - st["vehicle_mass"]["stated_kg"])
+        self.assertTrue(L["members"]["crush_members"])
+        # assembly: bodies, no masses
+        self.assertEqual(set(cats["assembly"].values()), {"body"})
+        self.assertIsNone(self.obj["assembly"]["ledger"]["total_kg"])
+        # crash B: parts on their carried_by nodes, the record's frame mass agrees, parts moved with those nodes
+        b = make("crash", "crash_b")
+        self.assertEqual(set(e["cat"] for e in b["ledger"]["parts"]), {"frame_nodes"})
+        sb = {s["label"]: s for s in b["ledger"]["stated"]}
+        self.assertTrue(sb["frame"]["agrees"], sb["frame"])
+        self.assertEqual(len(b["parts"]), len(b["ledger"]["parts"]))
+
+    def test_ledger_rules_by_hand(self):
+        # a two-member frame, one support at a frame node, an occupant left off by the loading 'empty'
+        d = {"nodes": [{"id": "a", "xyz_mm": [0, 0, 0]}, {"id": "b", "xyz_mm": [1000, 0, 0]}, {"id": "c", "xyz_mm": [2000, 0, 0]},
+                       {"id": "lone", "xyz_mm": [2000, 10, 0]}],
+             "members": [{"id": "m1", "node_a": "a", "node_b": "b", "section": "s", "material": "st"},
+                         {"id": "m2", "node_a": "b", "node_b": "c", "section": "s", "material": "st"}],
+             "sections": {"s": {"shape": "rect_tube", "dims_mm": {"b": 40, "h": 80, "t": 2}}},
+             "materials": {"st": {"E_MPa": 200000.0, "nu": 0.3, "density_kg_m3": 7850.0, "yield_MPa": 300.0}},
+             "supports": [{"id": "S", "kind": "wheel", "position_mm": [0, 0, 0], "radius_mm": 300, "frame_node": "a"}],
+             "parts": [{"id": "box", "kind": "battery", "box": {"center_mm": [1000, 0, 100], "size_mm": [100, 100, 100]}, "mass_kg": 30.0,
+                        "carried_by": ["b", "lone"]},
+                       {"id": "wheel", "kind": "wheel", "box": {"center_mm": [0, 0, 0], "size_mm": [100, 100, 100]}, "mass_kg": 10.0},
+                       {"id": "driver", "kind": "occupant", "box": {"center_mm": [1500, 0, 300], "size_mm": [100, 100, 100]}, "mass_kg": 75.0}]}
+        parts = common.parts_of(d)
+        frame = 7850.0 * (40 * 80 - 36 * 76) * 2000.0 * 1e-9
+        for tool in ("modal", "crash_beam"):
+            L = common.parts_ledger(tool, d, {"params": {"loading": "empty"}}, {}, parts)
+            c = {e["id"]: e for e in L["parts"]}
+            self.assertEqual(c["driver"]["cat"], "not_in")
+            self.assertEqual([x["id"] for x in L["not_in"]], ["driver"])
+            self.assertEqual(c["wheel"]["cat"], "unsprung")
+            self.assertEqual(c["wheel"]["nodes"], [["a", 10.0]])   # the support sits at frame node a
+            self.assertAlmostEqual(L["members"]["mass_kg"], frame)
+            self.assertAlmostEqual(L["total_kg"], frame + 40.0)
+            self.assertEqual(sorted(L["no_stiffness"]), ["box", "wheel"])
+        # modal: equal shares on the carried_by nodes as given; crash_beam: a node no member uses goes to the nearest
+        m = {e["id"]: e for e in common.parts_ledger("modal", d, None, {}, parts)["parts"]}
+        self.assertEqual(m["box"]["nodes"], [["b", 15.0], ["lone", 15.0]])
+        b = {e["id"]: e for e in common.parts_ledger("crash_beam", d, {"params": {"loading": "empty"}}, {}, parts)["parts"]}
+        self.assertEqual(b["box"]["nodes"], [["b", 15.0], ["c", 15.0]])
+        # crash_beam's stated mass is read from its assumption and compared per row
+        rec = {"assumptions": [f"mass {frame + 40.0:.1f} kg: frame {frame:.1f} kg on its element nodes, parts 40.0 kg; "
+                               "the parts without carried_by (wheels, suspension) as point masses at their nearest support's "
+                               "frame node: S 10.0 kg at a; each part's mass ..."]}
+        L = common.parts_ledger("crash_beam", d, {"params": {"loading": "empty"}}, rec, parts)
+        self.assertTrue(all(s["agrees"] for s in L["stated"]), L["stated"])
+        self.assertEqual(len(L["stated"]), 4)
+
+    def test_run_name_not_path(self):
+        self.assertEqual(common.run_name(FX / "nvh", FX / "nvh" / "v001"), "nvh")
+        self.assertEqual(common.run_name(FX / "nvh" / "v001", FX / "nvh" / "v001"), "nvh")
 
     def test_nvh(self):
         o = self.obj["nvh"]
@@ -110,8 +192,8 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual([s["kind"] for s in o["scene"]], ["wall"])
         self.assertEqual(len(o["vectors"]), len(rec["vectors"]))
         self.assertEqual(o["model"], "A")
-        self.assertTrue(any("A is a 1-D model: no deformed shape is drawn" in t for t in o["not_computed"]))
-        self.assertTrue(any("a(t) / a_max" in t for t in o["not_computed"]))
+        self.assertTrue(any("1 次元モデル" in t for t in o["notes"]))
+        self.assertTrue(any("a(t)/a_max" in t for t in o["notes"]))
         self.assertEqual(o["wall_x_mm"], o["scene"][0]["c"][0] - o["scene"][0]["s"][0] / 2)
         labels = {r["label"] for r in o["inputs"]}
         self.assertTrue({"speed", "wall", "mass"} <= labels, labels)
@@ -155,8 +237,8 @@ class FieldDataTest(unittest.TestCase):
         want_n = [sum(1 for p in F if p[0] > wx + b["tol_mm"]) for F in nm["frames"]["positions_mm"]]
         self.assertEqual(b["nodes"], want_n)
         self.assertEqual(len(b["parts"]), nF)
-        self.assertTrue(any("Wall penetration" in t for t in o["notes"]))
-        self.assertTrue(any("Member stresses are not in the crash_beam record" in t for t in o["not_computed"]))
+        self.assertTrue(any("壁面" in t for t in o["notes"]))
+        self.assertTrue(any("変形 ×1" in t for t in o["notes"]))
         self.assertTrue({"speed", "wall", "wall friction", "beam break", "mass", "mesh"} <= {r["label"] for r in o["inputs"]})
         for k in ("t", "decel", "crush"):
             self.assertEqual(len(common.unpack_f32(o["series"][k])), len(rec["series"][0]["t_s"]))
@@ -303,19 +385,26 @@ class PageTest(unittest.TestCase):
 
     def test_crash_b_page(self):
         out = self._check(self.dir_b, "crash")
-        self.assertIn("B: beams", out["title"])
-        self.assertIn("frame nodes beyond the wall face", out["hud"])
-        self.assertIn("Member stresses are not in the crash_beam record", out["notes"])
+        self.assertIn("B: 梁", out["title"])
+        self.assertIn("壁面の先のフレーム節点", out["hud"])
+        self.assertIn("変形 ×1", out["hud"])
 
     def test_crash_a_page_says_no_shape(self):
         out = self._check(self.dir, "crash")
-        self.assertIn("A is a 1-D model: no deformed shape is drawn", out["hud"])
+        self.assertIn("1次元モデル", out["hud"])
 
     def test_nvh_page_strain(self):
         out = self._check(self.dir, "nvh")
-        self.assertIn("member strain", out["hud"])
-        self.assertIn("strain energy, top members", out["hud"])
-        self.assertIn("translations only", out["notes"])
+        self.assertIn("部材のひずみ", out["hud"])
+        self.assertIn("実寸ではない", out["hud"])
+
+    def test_part_click_returns_category(self):
+        for d, f in ((self.dir, "nvh"), (self.dir, "crash"), (self.dir_b, "crash"), (self.dir, "assembly")):
+            with self.subTest(field=f, b=d == self.dir_b):
+                out = self._check(d, f)
+                self.assertIn(out["part_pick"].get("cat"), set(common.CATEGORIES), out["part_pick"])
+                self.assertIn("節点" if f != "assembly" else "形だけ", out["part_info"])
+                self.assertIn("部品と計算での扱い", out["panel"])
 
     def test_fields_load_without_console_errors(self):
         for f in SCRIPTS:
@@ -328,7 +417,10 @@ class PageTest(unittest.TestCase):
                 self.assertEqual(out["shown_field"], f)
                 self.assertGreater(out["nT"], 1)
                 self.assertGreater(out["drawn_px"], 1000)
-                self.assertIn("NOT COMPUTED", out["notes"])
+                self.assertNotIn("NOT COMPUTED", out["page_text"])
+                self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")   # no file paths on screen
+                self.assertEqual(out["over_view"], [])                               # no text over the 3D view
+                self.assertFalse(out["notes_open"])                                  # explanations closed by default
 
 
 if __name__ == "__main__":

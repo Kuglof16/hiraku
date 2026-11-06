@@ -52,7 +52,7 @@ window.HV = window.HV || {};
     $('prev').onclick = () => setTime(st.t - 1);
     $('next').onclick = () => setTime(st.t + 1);
     $('play').onclick = () => {
-      st.playing = !st.playing; $('play').textContent = st.playing ? '❚❚ pause' : '▶ play';
+      st.playing = !st.playing; $('play').textContent = st.playing ? '❚❚ 停止' : '▶ 再生';
       clearInterval(st.timer);
       if (st.playing && st.ctl) st.timer = setInterval(() => setTime((st.t + 1) % st.ctl.nT), st.ctl.playMs || 40);
     };
@@ -73,10 +73,24 @@ window.HV = window.HV || {};
     view.renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
     view.renderer.domElement.addEventListener('pointerup', e => {
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4 || e.button !== 0 || !st.ctl) return;
-      const hit = view.pick(e, st.ctl.pickables());
-      showInfo(hit ? st.ctl.info(hit) : null);
+      const own = st.ctl.pickables(), boxes = st.ctx && st.ctx.boxes;
+      const hit = view.pick(e, boxes && !own.includes(boxes.mesh) ? own.concat([boxes.mesh]) : own);
+      showInfo(hit ? infoOf(hit, own) : null);
     });
-    function showInfo(html) { const b = $('info'); if (!html) { b.style.display = 'none'; return; } b.innerHTML = html; b.style.display = 'block'; }
+    // a part box: the field's own text (if it picks boxes) and how the part enters this calculation
+    function infoOf(hit, own) {
+      const boxes = st.ctx && st.ctx.boxes;
+      if (boxes && hit.object === boxes.mesh) {
+        const i = hit.instanceId;
+        window.__lastPick = { part: st.ctx.D.parts[i].id, cat: st.ctx.ledger.cat(i) };
+        return (own.includes(boxes.mesh) ? st.ctl.info(hit) + '<hr>' : `<b>${HV.esc(st.ctx.D.parts[i].id)}</b> ${HV.esc(st.ctx.D.parts[i].name)}<br>`) +
+               st.ctx.ledger.info(i);
+      }
+      window.__lastPick = { member: true };
+      return st.ctl.info(hit);
+    }
+    function showInfo(html) { const b = $('info'); $('infohint').style.display = html ? 'none' : ''; if (!html) { b.style.display = 'none'; return; } b.innerHTML = html; b.style.display = 'block'; }
+    $('ledgerMode').onchange = () => { if (st.ctx) { st.ctx.partMode = $('ledgerMode').value; st.ctl.setTime(st.t); } refresh(); };
 
     function setTime(i) {
       if (!st.ctl) return;
@@ -85,6 +99,7 @@ window.HV = window.HV || {};
     }
     function refresh() {
       const c = st.ctl; if (!c) return;
+      if (st.ctx && st.ctx.boxes && st.ctx.ledger.paint(st.ctx.boxes, st.ctx.partMode)) st.ctx.boxes.update();
       $('tline').textContent = c.timeText(st.t);
       $('hudlines').replaceChildren(...c.hud().map(l => { const d = document.createElement('div'); d.textContent = l; return d; }));
       HV.drawContourBar($('legend'), c.contour());
@@ -95,16 +110,16 @@ window.HV = window.HV || {};
     window.addEventListener('resize', () => { plot.draw(); });
 
     async function open(field) {
-      clearInterval(st.timer); st.playing = false; $('play').textContent = '▶ play';
+      clearInterval(st.timer); st.playing = false; $('play').textContent = '▶ 再生';
       document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.id === 'sw_' + field));
       if (st.ctx) view.scene.remove(st.ctx.root);
       view.materials.length = 0; showInfo(null);
       st.field = field; st.ctl = null; st.ctx = null;
       const D = await loadData(field);
       if (!D) {
-        $('title').textContent = `${field}: no data file`;
-        $('source').textContent = `viewer/data/${field}.js is missing: python -m viewer.src.${field} <run dir>`;
-        $('tline').textContent = ''; for (const id of ['hudlines', 'notes', 'inputs', 'fieldpanel']) $(id).replaceChildren();
+        $('title').textContent = `${(HV.fields[field] || { label: field }).label}: データがない`;
+        $('source').textContent = `python -m viewer.src.${field} で作る`;
+        $('tline').textContent = ''; for (const id of ['hudlines', 'inputs', 'fieldpanel', 'ledgerLegend', 'ledgerLists', 'ledgerTable']) $(id).replaceChildren();
         HV.drawContourBar($('legend'), null); plot.draw([]); view.render();
         return;
       }
@@ -114,20 +129,30 @@ window.HV = window.HV || {};
       const ctl = await HV.fields[field].init(D, ctx);
       st.ctl = ctl;
       if (ctl.panel) ctl.panel($('fieldpanel'));
-      // header and notes
+      // every part of the design as its box (the field's own boxes, or grey ones added here) and how it enters
+      // this field's calculation (D.ledger)
+      if (!ctx.boxes) ctx.addParts(D.parts, { opacity: 0.2 });
+      ctx.layers.parts = true;
+      ctx.ledger = new HV.Ledger(D);
+      ctx.partMode = ctl.partMode || 'category';
+      $('ledgerMode').value = ctx.partMode;
+      $('ledgerMode').querySelector('option[value=field]').disabled = !ctl.partMode;
+      $('ledgerLegend').innerHTML = ctx.ledger.legendHtml();
+      $('ledgerLists').innerHTML = ctx.ledger.listsHtml();
+      $('ledgerTable').innerHTML = ctx.ledger.tableHtml();
+      // header: short; the run by its name only (never a path)
       $('title').textContent = D.title;
       const s = D.source;
-      $('source').textContent = `${s.design_name} | ${s.version} ${s.analysis_id} (${s.tool}, ${s.load_case_id}) | run ${s.run}`;
-      $('notes').innerHTML = (D.not_computed || []).map(t => `<div class="nc">NOT COMPUTED: ${HV.esc(t)}</div>`).join('') +
-        (D.notes || []).map(t => `<div class="nt">${HV.esc(t)}</div>`).join('');
-      // inputs
+      $('source').textContent = `v${s.design_version ?? '?'} | ${s.run} ${s.version} ${s.analysis_id} | ${s.tool} ${s.load_case_id}`;
+      // inputs; the longer explanations in closed panels
       const rows = (D.inputs || []).map(r => `<tr><td><b>${HV.esc(r.label)}</b></td><td>${HV.esc(r.value)}</td><td class="muted">${HV.esc(r.source || '')}</td></tr>`).join('');
       const res = (D.results || []).map(r => `<tr><td>${HV.esc(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where || '')}</td></tr>`).join('');
       const asm = (D.assumptions || []).map(a => `<li>${HV.esc(a)}</li>`).join('');
-      $('inputs').innerHTML = `<div class="h">Inputs (the case and where they come from)</div><table>${rows}</table>` +
+      $('inputs').innerHTML = `<div class="h">入力 (条件と出どころ)</div><table>${rows}</table>` +
         (ctl.extraInputs ? ctl.extraInputs() : '') +
-        `<details><summary>Results in the record (${(D.results || []).length})</summary><table>${res}</table></details>` +
-        (asm ? `<details><summary>Assumptions in the record (${D.assumptions.length})</summary><ul>${asm}</ul></details>` : '');
+        `<details id="notesBox"><summary>説明 (${(D.notes || []).length})</summary><div id="notes">${(D.notes || []).map(t => `<div>${HV.esc(t)}</div>`).join('')}</div></details>` +
+        `<details><summary>記録の結果 (${(D.results || []).length})</summary><table>${res}</table></details>` +
+        (asm ? `<details><summary>記録の前提 (${D.assumptions.length})</summary><ul>${asm}</ul></details>` : '');
       // controls
       $('time').max = ctl.nT - 1; st.t = Math.min(ctl.t0 || 0, ctl.nT - 1);
       $('scaleLabel').textContent = ctl.scale.label; $('scaleNote').textContent = ctl.scale.note || '';

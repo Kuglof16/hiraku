@@ -31,7 +31,15 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
             page.wait_for_timeout(200)
         out["tline"] = page.text_content("#tline")
         out["hud"] = page.text_content("#hudlines")
-        out["notes"] = page.text_content("#notes")
+        out["notes"] = page.text_content("#notes") or ""
+        out["notes_open"] = page.evaluate("!!(document.getElementById('notesBox') || {}).open")
+        out["panel"] = page.text_content("#panel")
+        out["page_text"] = page.evaluate("document.body.innerText")
+        # visible text boxes that overlap the 3D view (none may)
+        out["over_view"] = page.evaluate("""() => { const v = document.getElementById('view').getBoundingClientRect(); const bad = [];
+            for (const id of ['hud', 'info', 'legend', 'notes', 'panel', 'bottom']) { const e = document.getElementById(id); if (!e) continue;
+              const r = e.getBoundingClientRect(); if (r.width === 0 || r.height === 0 || getComputedStyle(e).display === 'none') continue;
+              if (r.left < v.right - 1 && r.right > v.left + 1 && r.top < v.bottom - 1 && r.bottom > v.top + 1) bad.push(id); } return bad; }""")
         out["inputs"] = page.text_content("#inputs")[:600]
         out["legend_shown"] = page.evaluate("getComputedStyle(document.getElementById('legend')).display !== 'none'")
         # coloured pixels in the 3D view (not the background)
@@ -47,6 +55,21 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
             page.wait_for_timeout(100)
             if page.is_visible("#info"):
                 out["info"] = page.text_content("#info")
+                break
+        # click a part box: the screen point of the first shown part box's centre (largest box first)
+        out["part_pick"], out["part_info"] = {}, ""
+        pts = page.evaluate("""() => { const T = window.THREE, ctx = HV.state.ctx, b = ctx && ctx.boxes; if (!b) return [];
+            const r = HV.view.renderer.domElement.getBoundingClientRect(), M = new T.Matrix4(), v = new T.Vector3(), out = [];
+            const order = b.parts.map((p, i) => i).filter(i => b.show[i]).sort((i, j) => b.parts[j].s[0] * b.parts[j].s[1] * b.parts[j].s[2] - b.parts[i].s[0] * b.parts[i].s[1] * b.parts[i].s[2]);
+            for (const i of order.slice(0, 6)) { b.mesh.getMatrixAt(i, M); v.setFromMatrixPosition(M).project(HV.view.camera);
+              out.push([r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]); } return out; }""")
+        for x, y in pts:
+            page.evaluate("window.__lastPick = null")
+            page.mouse.click(x, y)
+            page.wait_for_timeout(100)
+            pick = page.evaluate("window.__lastPick")
+            if pick and pick.get("cat"):
+                out["part_pick"], out["part_info"] = pick, page.text_content("#info")
                 break
         if shot:
             Path(shot).parent.mkdir(parents=True, exist_ok=True)

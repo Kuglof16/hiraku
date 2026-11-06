@@ -39,7 +39,7 @@ def build(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "assembly", load_case=getattr(args, "load_case", None) or "H1-interference",
                                      version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
-    obj = common.base_object("assembly", "Assembly: steps, paths and interferences", args.run, vdir, rec, design)
+    obj = common.base_object("assembly", "組み立て: 手順・経路・干渉", args.run, vdir, rec, design)
     pidx = {p["id"]: i for i, p in enumerate(obj["parts"])}
     midx = {m: i for i, m in enumerate(obj["frame"]["member_ids"])}
     steps, offs = [], []
@@ -78,13 +78,10 @@ def build(args) -> dict:
         {"label": "interferences", "value": f"{len(obj['interferences'])} pairs in the record",
          "source": "record interferences (a, b, depth_mm, state, condition)"},
     ]
-    obj["not_computed"] = [
-        "Paths are the record's straight path_mm segments; the part's turning on the way and the hands and tools are not drawn.",
-        "Interferences are the record's pairs and depths only; the overlapping volume is not stored. Motion interferences (steer, wheel travel) are listed with their condition; the moved pose is not drawn.",
-        "entry_opening and spray_reach are shown as numbers (the opening and the spray arc are not in the records as shapes).",
-    ]
+    obj["notes"].append("部品は記録の経路 (直線の折れ線) に沿って順番に動かす。動きは実寸 (倍率なし)。")
     if offs:
         obj["notes"].append(f"Box centre minus the last path point: largest {max(offs):.1f} mm over {len(offs)} steps (the page adds it to the path).")
+    obj["ledger"] = common.parts_ledger("assembly", design, lc, rec, obj["parts"])
     return obj
 
 

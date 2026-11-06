@@ -10,15 +10,16 @@ Data written for the page (viewer/data/<field>.js):
     window.VIEW_DATA["<field>"] = {...};
 
 Every field's object has these keys (the page's shared parts read them):
-    field, title, source {run, version, analysis_id, tool, load_case_id, design_name}
+    field, title, source {run (the run folder's name, never a path), version, analysis_id, tool, load_case_id,
+           design_name, design_version}
     frame {node_ids, nodes (packed f32, n x 3, mm), members [[ia, ib], ...], member_ids,
            member_names, radius_mm}
     parts [{id, name, kind, module, c, s, r}]   (box centre, size, rpy_deg; mm and deg)
     scene [{kind, label, c, s}]                 (boxes from the record's scene)
     vectors [{kind, at, o, f}]                  (origin mm, force N)
     inputs [{label, value, source}]             (the case's inputs and where they come from)
-    not_computed [text]                         (what the record does not hold)
-    notes [text]
+    notes [text]                                (the longer explanations; the page keeps them in a closed panel)
+    ledger {...}                                (parts_ledger: how each part enters the calculation)
 plus the field's own keys (see each script).
 
 Packed arrays: {"dtype": "f32", "shape": [...], "b64": base64(gzip(little-endian bytes))}.
@@ -237,11 +238,18 @@ def qty(q: Any) -> str:
     return str(q)
 
 
+def run_name(run: Path, vdir: Path) -> str:
+    """The run's name for the screen: the run folder's last name (never a path). A version folder given directly:
+    the name of the folder above it."""
+    run, vdir = Path(run).resolve(), Path(vdir).resolve()
+    return (vdir.parent.name if run == vdir else run.name) or vdir.name
+
+
 def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, design: Record) -> Record:
     return {
         "field": field,
         "title": title,
-        "source": {"run": str(Path(run).resolve()), "version": Path(vdir).name,
+        "source": {"run": run_name(run, vdir), "version": Path(vdir).name,
                    "analysis_id": record.get("analysis_id", ""), "tool": record.get("tool", ""),
                    "load_case_id": record.get("load_case_id", ""), "design_name": design.get("name", ""),
                    "design_version": design.get("design_version")},
@@ -252,7 +260,6 @@ def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, d
         "results": results_of(record),
         "assumptions": list(record.get("assumptions", []) or []),
         "inputs": [],
-        "not_computed": [],
         "notes": [],
     }
 
@@ -268,9 +275,250 @@ def case_inputs(lc: Record | None, load_case_id: str) -> list[Record]:
         rows.append({"label": k, "value": qty(v), "source": "load case params"})
     crit = lc.get("criterion")
     if crit:
-        rows.append({"label": "criterion", "value": f"{crit['quantity']} {crit['op']} {qty(crit['limit'])}",
+        rows.append({"label": "判定基準", "value": f"{crit['quantity']} {crit['op']} {qty(crit['limit'])}",
                      "source": crit.get("basis", "")})
     return rows
+
+
+# ---------------------------------------------------------------- parts in the calculation
+# How each part of the design enters a tool's calculation, worked out by calling the tool's own functions
+# (hiraku.contract.loading.on_board, hiraku.solvers.k0_handcalc.vehicle.mass_items) and following the rule of
+# the function named in each entry. Nothing here is a guess: where a rule is copied (crash_beam is on another
+# branch and cannot be imported), the function it copies is named.
+
+CATEGORIES = {   # key -> the short Japanese label on screen (the English meaning in the comment)
+    "frame_nodes": "フレームの節点に質量",          # mass on frame nodes
+    "unsprung": "ばね下 (支持点に質量)",            # unsprung, mass at the support
+    "stiffness": "剛性ありでモデル化",              # meshed / modelled with stiffness
+    "mass_only": "質量だけ (剛性なし)",            # mass only, no stiffness
+    "body": "形だけ (質量なし)",                    # a body, shape only, no mass
+    "not_in": "この計算に入っていない",             # not in this calculation
+}
+
+FN_ON_BOARD = "hiraku.contract.loading.parts_on_board"
+FN_MASS_ITEMS = "hiraku.solvers.k0_handcalc.vehicle.mass_items"
+FN_MODAL = "hiraku.solvers.k1_frame.modal.add_masses"
+FN_CRASH_A = "hiraku.solvers.shelf.crash.CrashTool.analyse (mass_summary -> plastic_impact; crash_frame at the peak)"
+FN_CRASH_B = "hiraku.solvers.k2_vehicle.crash_beam.mesh._lump_parts (branch claude/k2-crash-beam-b)"
+FN_ASSEMBLY = "hiraku.solvers.k4_geometry.model.bodies, assembly.steps"
+FN_SHAFT = "hiraku.solvers.k1_frame.shaft.driveshaft_modes"
+
+
+def _stated_b(record: Record) -> Record | None:
+    """crash_beam states its mass in an assumption: 'mass M kg: frame F kg on its element nodes, parts P kg; the
+    parts without carried_by ... : RL 24.7 kg at LB, ...'."""
+    for a in record.get("assumptions", []) or []:
+        m = re.match(r"mass ([\d.]+) kg: frame ([\d.]+) kg[^,]*, parts ([\d.]+) kg", a)
+        if m:
+            sup = {s: (float(kg), node) for s, kg, node in re.findall(r"(\w+) ([\d.]+) kg at (\S+?)[,;]", a + ";")}
+            return {"total": float(m.group(1)), "frame": float(m.group(2)), "parts": float(m.group(3)),
+                    "unsprung": sup, "text": a}
+    return None
+
+
+def parts_ledger(tool: str, design: Record, load_case: Record | None, record: Record, parts: list[Record]) -> Record:
+    """Per part of `parts` (parts_of(design), same order): its category in `tool`'s calculation, its mass, the
+    nodes it sits on with kg each, the deciding function and a sentence; the frame members' mass; the mass table
+    per category against the record's own stated mass; the parts with no stiffness and those not in the
+    calculation. tool: modal, crash, crash_beam or assembly."""
+    from hiraku.contract import loading as contract_loading
+    from hiraku.contract.protocols import DEFAULT_LOADING
+
+    lc_loading = ((load_case or {}).get("params") or {}).get("loading")
+    loading = lc_loading or DEFAULT_LOADING
+    loading_src = ("load case params.loading" if lc_loading else
+                   f"default {DEFAULT_LOADING} (hiraku.contract.loading.loading_of: the load case gives none"
+                   + ("" if load_case else "; the run does not hold this load case") + ")")
+    out: Record = {"tool": tool, "loading": loading, "loading_source": loading_src, "categories": CATEGORIES,
+                   "parts": [], "members": None, "table": [], "stated": [], "error": None, "notes": []}
+    dparts = {p["id"]: p for p in design.get("parts", [])}
+    try:
+        on_ids = {p["id"] for p in contract_loading.parts_on_board(design, loading)}
+    except ValueError as e:
+        out["error"] = f"{FN_ON_BOARD}: {e}"
+        on_ids = set(dparts)
+    on = {**design, "parts": [p for p in design.get("parts", []) if p["id"] in on_ids]}
+    items, frame_kg = {}, None
+    if tool != "assembly":
+        try:
+            from hiraku.solvers.k0_handcalc.vehicle import mass_items
+            its = mass_items(on)
+            items = {it.id.split(":", 1)[1]: it for it in its if it.carrier != "member"}
+            frame_kg = sum(it.mass_kg for it in its if it.carrier == "member")
+        except Exception as e:  # the design as stored cannot be read by the tool's own function
+            out["error"] = f"{FN_MASS_ITEMS} could not read this design: {e}"
+    nodes_xyz = {n["id"]: [float(c) for c in n["xyz_mm"]] for n in design.get("nodes", [])}
+    used = sorted({m[k] for m in design.get("members", []) for k in ("node_a", "node_b")} & set(nodes_xyz))
+    supports = {s["id"]: s for s in design.get("supports", [])}
+
+    def nearest_used(xyz):
+        return min(used, key=lambda n: sum((a - b) ** 2 for a, b in zip(nodes_xyz[n], xyz))) if used else None
+
+    steps, groups = {}, {}
+    for s in record.get("assembly", []) or []:
+        steps[s.get("part")] = s.get("order")
+        for g in s.get("group_parts", []) or []:
+            groups[g] = s.get("part")
+    shaft_ids = set()
+    if tool == "modal":
+        try:
+            from hiraku.solvers.k1_frame.shaft import shaft_inputs
+            shaft_ids = set(shaft_inputs(on))
+        except Exception as e:
+            out["notes"].append(f"{FN_SHAFT}: not reproduced ({e})")
+    for p in parts:
+        pid, src = p["id"], dparts.get(p["id"], {})
+        mass = float(src.get("mass_kg", 0.0) or 0.0)
+        e: Record = {"id": pid, "kind": p.get("kind", ""), "mass_kg": mass, "cat": "not_in", "nodes": [], "fn": "",
+                     "how": "", "stiffness": False}
+        if pid not in on_ids:
+            e.update(fn=FN_ON_BOARD, how=f"left off by the loading {loading} (occupants board in design order; cargo only "
+                                         f"with two_cargo): not in the design the tool is given")
+            out["parts"].append(e)
+            continue
+        if tool == "assembly":
+            if pid in steps:
+                how = f"a body (its box as an OBB / capsule) with its own step {steps[pid]} in the sequence"
+            elif pid in groups:
+                how = f"a body in the corner group put on at step of {groups[pid]}"
+            else:
+                how = "a body in the interference checks; no step of its own in this record"
+            carried = list(src.get("carried_by") or [])
+            e.update(cat="body", fn=FN_ASSEMBLY, how=how + "; masses are not used by the assembly tool",
+                     nodes=[[n, None] for n in carried])
+            out["parts"].append(e)
+            continue
+        it = items.get(pid)
+        if it is None:
+            e.update(cat="not_in", fn=FN_MASS_ITEMS, how="not reproduced: " + (out["error"] or "no mass item"))
+            out["parts"].append(e)
+            continue
+        if it.carrier == "nodes":
+            if tool == "crash_beam":
+                share: dict[str, float] = {}
+                moved = []
+                for n in it.carried_by:
+                    k = n if n in used else nearest_used(nodes_xyz[n])
+                    if k != n:
+                        moved.append(f"{n} -> {k}")
+                    share[k] = share.get(k, 0.0) + it.mass_kg / len(it.carried_by)
+                nodes = [[k, v] for k, v in share.items()]
+                how = ("point masses in equal shares on its carried_by nodes; the part's own rotational inertia and its "
+                       "stiffness are not in the model, it has no contact with the wall (only frame nodes touch it)"
+                       + (f"; carried_by nodes no member uses moved to the nearest frame node: {', '.join(moved)}" if moved else ""))
+                e.update(cat="frame_nodes", fn=FN_CRASH_B, how=how, nodes=nodes)
+            elif tool == "crash":
+                nodes = [[n, it.mass_kg / len(it.carried_by)] for n in it.carried_by]
+                e.update(cat="mass_only", fn=FN_CRASH_A, nodes=nodes,
+                         how="in the one rigid mass of the 1-D model (mass_summary), no stiffness, does not crush; in K1 at "
+                             "the peak its d'Alembert force (and moment) is shared equally by its carried_by nodes "
+                             "(hiraku.solvers.k1_frame.model inertia loads)")
+            else:
+                nodes = [[n, it.mass_kg / len(it.carried_by)] for n in it.carried_by]
+                e.update(cat="frame_nodes", fn=FN_MODAL, nodes=nodes,
+                         how="lumped translational mass, equal shares on its carried_by frame nodes (node loads in the "
+                             "mass case); no stiffness, no rotational inertia")
+        else:  # support: no carried_by, rests on the nearest support (K0's rule)
+            sid = it.carried_by[0]
+            s = supports.get(sid, {})
+            fn_node = s.get("frame_node")
+            if tool == "crash_beam":
+                k = fn_node if fn_node in used else nearest_used([float(c) for c in s.get("position_mm", [0, 0, 0])])
+                e.update(cat="unsprung", fn=FN_CRASH_B, nodes=[[k, it.mass_kg]],
+                         how=f"no carried_by: a point mass at support {sid}'s frame node {k} (the nearest support); no "
+                             f"stiffness, no wheel or tyre model, no contact with the wall")
+            else:
+                pos = [float(c) for c in s.get("position_mm", [0, 0, 0])]
+                at_frame = fn_node in nodes_xyz and sum((a - b) ** 2 for a, b in zip(nodes_xyz[fn_node], pos)) < 1e-12
+                node = fn_node if at_frame else f"wc:{sid}"
+                where = (f"the wheel centre node {node} (hiraku.solvers.k1_frame.model.wheel_node), joined to frame node "
+                         f"{fn_node} by a stiff link member" if not at_frame else f"frame node {node} (the support is there)")
+                if tool == "crash":
+                    e.update(cat="mass_only", fn=FN_CRASH_A, nodes=[[node, it.mass_kg]],
+                             how=f"no carried_by (unsprung, nearest support {sid}): in the one rigid mass of the 1-D model, "
+                                 f"no stiffness; in K1 at the peak its force is at {where}")
+                else:
+                    e.update(cat="unsprung", fn=FN_MODAL, nodes=[[node, it.mass_kg]],
+                             how=f"no carried_by (nearest support {sid}): lumped mass at {where}; the support's spring "
+                                 f"(if any) runs from that node to the ground; no stiffness of its own")
+        if pid in shaft_ids:
+            e["how"] += f"; also its own shaft beam with stiffness for driveshaft_bending/torsion_mode ({FN_SHAFT})"
+        out["parts"].append(e)
+
+    # the frame members
+    if tool == "assembly":
+        out["members"] = {"count": len(design.get("members", [])), "mass_kg": None, "fn": FN_ASSEMBLY,
+                          "how": "each member is a body (its tube as an OBB) for the interference checks; no mass"}
+    else:
+        how = {"modal": "beams with stiffness (PyNite, subdivided); consistent mass from density x A x L "
+                        "(add_member_self_weight in the mass case)",
+               "crash": "in the one rigid mass; the crush zone's rails fold at their mean crushing force (the only "
+                        "stiffness of the 1-D model besides the bumper spring from design.variables); K1 at the peak "
+                        "uses every member's stiffness",
+               "crash_beam": "co-rotational beam elements with plastic hinges (stiffness, yield, break); each element's "
+                             "own mass half to each of its two nodes"}[tool]
+        fn = {"modal": FN_MODAL, "crash": FN_CRASH_A, "crash_beam": "hiraku.solvers.k2_vehicle.crash_beam.mesh.build_mesh"}[tool]
+        m: Record = {"count": len(design.get("members", [])), "mass_kg": frame_kg, "fn": fn, "how": how}
+        if tool == "crash":
+            try:
+                from hiraku.solvers.k0_handcalc.library_crash import crush_zone
+                m["crush_members"] = crush_zone(on)["members"]
+            except Exception as ex:
+                m["crush_members"] = None
+                out["notes"].append(f"hiraku.solvers.k0_handcalc.library_crash.crush_zone: not reproduced ({ex})")
+        out["members"] = m
+
+    # the mass table
+    cats = {}
+    for e in out["parts"]:
+        c = cats.setdefault(e["cat"], {"cat": e["cat"], "label": CATEGORIES[e["cat"]], "count": 0, "mass_kg": 0.0})
+        c["count"] += 1
+        c["mass_kg"] += e["mass_kg"]
+    out["table"] = [cats[k] for k in CATEGORIES if k in cats]
+    in_calc = sum(e["mass_kg"] for e in out["parts"] if e["cat"] not in ("not_in", "body"))
+    out["parts_in_kg"] = in_calc if tool != "assembly" else None
+    out["total_kg"] = (in_calc + frame_kg) if (frame_kg is not None and tool != "assembly") else None
+    stated = []
+    if tool == "crash":
+        for q, mine in (("vehicle_mass", out["total_kg"]), ("frame_mass", frame_kg)):
+            v = result(record, q)
+            if v is not None:
+                stated.append({"label": q, "stated_kg": v, "computed_kg": mine, "tol_kg": 1e-6 * max(1.0, v),
+                               "source": f"record result {q}"})
+        if not stated:
+            out["notes"].append("the crash record states no vehicle_mass")
+    elif tool == "crash_beam":
+        sb = _stated_b(record)
+        if sb:
+            stated += [{"label": "mass (total)", "stated_kg": sb["total"], "computed_kg": out["total_kg"], "tol_kg": 0.051,
+                        "source": "record assumption 'mass ... kg' (1 decimal)"},
+                       {"label": "frame", "stated_kg": sb["frame"], "computed_kg": frame_kg, "tol_kg": 0.051,
+                        "source": "same assumption"},
+                       {"label": "parts", "stated_kg": sb["parts"], "computed_kg": in_calc, "tol_kg": 0.051,
+                        "source": "same assumption"}]
+            for sid, (kg, node) in sb["unsprung"].items():
+                mine = sum(e["mass_kg"] for e in out["parts"] if e["cat"] == "unsprung" and e["nodes"]
+                           and e["nodes"][0][0] == node)
+                stated.append({"label": f"unsprung at {sid} ({node})", "stated_kg": kg, "computed_kg": mine,
+                               "tol_kg": 0.051, "source": "same assumption, per support"})
+        else:
+            out["notes"].append("the crash_beam record states no mass assumption")
+    elif tool == "modal":
+        out["notes"].append(f"the modal record states no mass; the parts on board follow the load case's loading "
+                            f"({loading}, {loading_src})")
+    else:
+        out["notes"].append("the assembly tool uses no masses; every part on board is a body")
+    for s in stated:
+        s["diff_kg"] = None if s["computed_kg"] is None else s["computed_kg"] - s["stated_kg"]
+        s["agrees"] = s["diff_kg"] is not None and abs(s["diff_kg"]) <= s["tol_kg"]
+        if not s["agrees"]:
+            s["why"] = ("not computed: " + (out["error"] or "") if s["diff_kg"] is None else
+                        "the design.json read here is not the design the tool weighed (a trimmed or edited copy), or "
+                        "the loading differs; computed from this version's design.json with loading " + loading)
+    out["stated"] = stated
+    out["no_stiffness"] = [e["id"] for e in out["parts"] if e["cat"] not in ("not_in", "body") and not e["stiffness"]]
+    out["not_in"] = [{"id": e["id"], "why": e["how"]} for e in out["parts"] if e["cat"] == "not_in"]
+    return out
 
 
 def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Callable[[argparse.ArgumentParser], None] | None = None,

@@ -7,7 +7,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.crash = {
-  label: 'Crash',
+  label: '衝突',
   async init(D, ctx) { return D.model === 'B' ? HV.crashB(D, ctx) : HV.crashA(D, ctx); },
 };
 
@@ -29,7 +29,7 @@ HV.crashA = async function (D, ctx) {
   const MM_PER_N = 0.005;   // 1 kN = 5 mm
   const ratio = () => Math.max(0, a[S.k]) / amax;
   const spec = () => ({ min: S.log ? Math.max(0.1, D.stress.max * 1e-3) : 0, max: Math.max(D.stress.max, 1e-9), log: S.log, unit: D.stress.unit,
-                        title: 'von Mises per member, x a(t)/a_max', marks: D.marks || [], note: `stored at the peak (${HV.fmt(D.stress.max)} ${D.stress.unit}); colour range fixed to it` });
+                        title: '部材の相当応力 × a(t)/a_max', marks: D.marks || [], note: `範囲はピーク時の最大 ${HV.fmt(D.stress.max)} ${D.stress.unit}` });
   function update() {
     const r = ratio(), f = S.scale * r;
     for (let i = 0; i < nodes0.length; i++) cur[i] = nodes0[i] + f * disp[i];
@@ -44,35 +44,30 @@ HV.crashA = async function (D, ctx) {
   const tx = Array.from(t);
   return {
     nT, t0: kPeak, playMs: 30, viewDir: [0.25, -1.25, 0.45],
-    timeNote: `${nT} instants of the tool's series (t = 0 at contact). The vehicle is not moved: A is a 1-D model.`,
-    scale: { min: 0, max: 50, step: 1, value: S.scale, label: 'Elastic frame deflection scale (A)', note: 'The linear frame deflection solved at the peak, x a(t)/a_max x this factor. Not a crushed shape; 0 = not drawn.' },
+    timeNote: `t = 0 で接触、${nT} 点`,
+    scale: { min: 0, max: 50, step: 1, value: S.scale, label: '弾性たわみの倍率 (A)', note: '0 = 描かない。つぶれた形ではない' },
     setScale(v) { S.scale = v; update(); },
     setTime(i) { S.k = i; update(); },
     setLog(on) { S.log = on; update(); },
-    timeText(i) { return `t = ${(1000 * t[i]).toFixed(1)} ms   deceleration ${a[i].toFixed(2)} ${D.units.deceleration}   crush ${x[i].toFixed(1)} ${D.units.crush}   wall force ${F[i].toFixed(1)} ${D.units.wall_force}`; },
+    timeText(i) { return `t = ${(1000 * t[i]).toFixed(1)} ms   減速度 ${a[i].toFixed(2)} ${D.units.deceleration}   つぶれ ${x[i].toFixed(1)} ${D.units.crush}`; },
     hud() {
-      const r = ratio();
-      let mx = 0, mm = -1; pm.forEach((v, m) => { if (v !== null && v * r > mx) { mx = v * r; mm = m; } });
-      return ['A is a 1-D model: no deformed shape is drawn. The vehicle stands still; crush(t) = ' + x[S.k].toFixed(1) + ' mm is in the plot only.',
-              `stress now = stored peak stress x a(t)/a_max = x ${r.toFixed(3)} (frame solved once, at t = ${(1000 * t[kPeak]).toFixed(1)} ms)`,
-              `largest member stress now ${HV.fmt(mx)} ${D.stress.unit}` + (mm >= 0 ? ` (${D.frame.member_ids[mm]})` : '') +
-              (S.scale > 0 ? `; elastic deflection x ${S.scale} (not to scale), largest stored ${HV.fmt(D.disp.max)} ${D.disp.unit}` : '; deflection not drawn (scale 0)'),
-              'arrows: wall loads (red) x a(t)/a_max, inertia (purple) x a(t)/a_max, wheel reactions and gravity (green, red at the cg) as stored; 1 kN = 5 mm'];
+      return ['A: 1次元モデル。車体はその場に描く (つぶれはグラフだけ)' + (S.scale > 0 ? `   弾性たわみ ×${S.scale}、実寸ではない` : ''),
+              `色: 部材の相当応力 (ピーク時の値 × a(t)/a_max = ×${ratio().toFixed(2)})   矢印 1 kN = 5 mm`];
     },
     contour: spec,
     plot() {
-      const c = t[S.k], mk = [{ x: t[kPeak], label: 'peak (frame solved here)', col: '#c0c' }];
+      const c = t[S.k], mk = [{ x: t[kPeak], label: 'ピーク', col: '#c0c' }];
       return [
-        { title: 'deceleration', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(a), col: '#1f4e9c' }], marks: mk, cursor: c },
-        { title: 'crush (1-D, not drawn in 3D)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(x), col: '#a03000' }], marks: mk, cursor: c },
-        { title: 'wall force', unit: D.units.wall_force, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(F), col: '#0a6b2a' }], marks: mk, cursor: c },
+        { title: '減速度', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(a), col: '#1f4e9c' }], marks: mk, cursor: c },
+        { title: 'つぶれ (1次元)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(x), col: '#a03000' }], marks: mk, cursor: c },
+        { title: '壁の力', unit: D.units.wall_force, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(F), col: '#0a6b2a' }], marks: mk, cursor: c },
       ];
     },
     plotClick(_, tv) { let b = 0, bd = Infinity; t.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; },
     pickables: () => [beams.mesh, boxes.mesh],
     info(hit) {
       const r = ratio();
-      if (hit.object === boxes.mesh) { const p = D.parts[hit.instanceId]; return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)} (${HV.esc(p.kind)})<br>not moved (A is a 1-D model)`; }
+      if (hit.object === boxes.mesh) { const p = D.parts[hit.instanceId]; return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)}<br>動かさない (A は 1次元モデル)`; }
       const m = beams.memberOf(hit), s = pm[m], [na, nb] = D.frame.members[m], ids = D.frame.node_ids;
       const d = n => Math.hypot(disp[3 * n], disp[3 * n + 1], disp[3 * n + 2]);
       return `<b>${HV.esc(D.frame.member_ids[m])}</b> ${HV.esc(D.frame.member_names[m])}<br>` +
@@ -103,10 +98,10 @@ HV.crashB = async function (D, ctx) {
   // the run's largest is said in the note
   const frameMax = k => { let mx = 0; const br = brokenSet(k); for (let e = 0; e < ne; e++) if (!br.has(D.frame.member_ids[e])) mx = Math.max(mx, Math.abs(val(k, e))); return Math.max(mx, 1e-6); };
   const spec = () => { const m = frameMax(S.k); return S.what === 'strain'
-    ? { min: -m, max: m, log: false, unit: '%', title: 'element axial strain (from its length change)',
-        note: `range = this frame's largest; the run's largest ${HV.fmt(D.colour.strain_absmax)} %. Computed from the run's node positions; - shortened, + stretched; broken members light grey` }
-    : { min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: 'deg', title: 'fold angle at the element ends (change from t = 0)',
-        note: `range = this frame's largest; the run's largest ${HV.fmt(D.colour.fold_max)} deg. Computed from the run's node positions; a plastic hinge shows here; broken members light grey` }; };
+    ? { min: -m, max: m, log: false, unit: '%', title: '要素の軸ひずみ (− 縮み、+ 伸び)',
+        note: `範囲はこの時刻の最大 (全体の最大 ${HV.fmt(D.colour.strain_absmax)} %)。薄い灰色 = 破断` }
+    : { min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '要素の端の折れ角 (t = 0 から)',
+        note: `範囲はこの時刻の最大 (全体の最大 ${HV.fmt(D.colour.fold_max)}°)。薄い灰色 = 破断` }; };
   function update() {
     const k = S.k;
     beams.setNodes(pos.subarray(k * n * 3, (k + 1) * n * 3));
@@ -117,54 +112,45 @@ HV.crashB = async function (D, ctx) {
   const tx = Array.from(ts);
   const ctl = {
     nT: nF, t0: fPeak, playMs: 60, viewDir: [0.25, -1.25, 0.45],
-    timeNote: `${nF} frames stored by the run (t = 0 at contact); the shape is the run's own node positions, real size, not interpolated.`,
-    scale: { min: 1, max: 1, step: 1, value: 1, label: 'Shape scale (B: fixed at 1, real size)', note: 'The deformed shape is the run\'s node positions; it is not scaled.' },
+    timeNote: `t = 0 で接触、記録の ${nF} 時刻 (補間なし)`,
+    scale: { min: 1, max: 1, step: 1, value: 1, label: '変形 ×1 (実寸)', note: '計算の節点位置そのもの' },
     setScale() {},
     setTime(i) { S.k = i; update(); },
     setLog(on) { S.log = on; update(); },
-    timeText(k) { const j = near(tf[k]); return `t = ${(1000 * tf[k]).toFixed(2)} ms   deceleration ${dec[j].toFixed(2)} ${D.units.deceleration}   crush ${cr[j].toFixed(1)} ${D.units.crush} (series at ${(1000 * ts[j]).toFixed(1)} ms)`; },
+    timeText(k) { const j = near(tf[k]); return `t = ${(1000 * tf[k]).toFixed(2)} ms   減速度 ${dec[j].toFixed(2)} ${D.units.deceleration}   つぶれ ${cr[j].toFixed(1)} ${D.units.crush}`; },
     hud() {
       const k = S.k, br = M.broken[k] || [];
-      let mx = 0, me = -1; for (let e = 0; e < ne; e++) { if (brokenSet(k).has(D.frame.member_ids[e])) continue; const v = Math.abs(val(k, e)); if (v > mx) { mx = v; me = e; } }
-      return [
-        `WALL: frame nodes beyond the wall face (x = ${HV.fmt(D.wall_x_mm)} mm) now ${B.nodes[k]}` + (B.nodes[k] ? `, deepest ${B.depth[k].toFixed(1)} mm` : '') +
-          `; over the run ${B.nodes_any} nodes, deepest ${B.node_depth_max.toFixed(1)} mm (tolerance ${B.tol_mm} mm)`,
-        `part boxes past the wall face now ${B.parts[k]}` + (B.parts[k] ? `, up to ${B.part_depth[k].toFixed(1)} mm` : '') +
-          ` (${B.parts[0]} already at t = 0; part boxes do not touch the wall in the tool)`,
-        `largest ${S.what === 'strain' ? 'axial strain' : 'fold'} now ${HV.fmt(S.what === 'strain' ? val(k, me) : mx)} ${S.what === 'strain' ? '%' : 'deg'}` + (me >= 0 ? ` (${D.frame.member_ids[me]})` : '') +
-          `; broken members by now ${br.length}${br.length ? ': ' + br.join(', ') : ''}`,
-        'shape: the run\'s node positions, real size; colour: computed from the same positions (the record holds no member stresses)'];
+      return [`変形 ×1 (実寸)   色: ${S.what === 'strain' ? '要素の軸ひずみ %' : '要素の端の折れ角 °'}   破断した部材 ${br.length}`,
+              `壁面の先のフレーム節点 ${B.nodes[k]}` + (B.nodes[k] ? ` (最大 ${B.depth[k].toFixed(1)} mm)` : '') + `   壁面の先の部品の箱 ${B.parts[k]} (箱は壁に当たらない扱い)`];
     },
     contour: spec,
     plot() {
-      const c = tf[S.k], mk = [{ x: ts[kPeak], label: 'peak deceleration', col: '#c0c' }];
+      const c = tf[S.k], mk = [{ x: ts[kPeak], label: 'ピーク', col: '#c0c' }];
       return [
-        { title: 'deceleration (crash_beam)', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, cursor: c },
-        { title: 'crush (front-most nodes to the seat mounts)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#a03000' }], marks: mk, cursor: c },
-        { title: 'frame nodes beyond the wall face', unit: 'nodes', xlabel: 't [s]', x: Array.from(tf), ys: [{ v: B.nodes, col: '#c00' }], marks: [], cursor: c },
+        { title: '減速度', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, cursor: c },
+        { title: 'つぶれ (前端から座席の取付まで)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#a03000' }], marks: mk, cursor: c },
+        { title: '壁面の先のフレーム節点', unit: '個', xlabel: 't [s]', x: Array.from(tf), ys: [{ v: B.nodes, col: '#c00' }], marks: [], cursor: c },
       ];
     },
     plotClick(_, tv) { let b = 0, bd = Infinity; tf.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; },
     pickables: () => [beams.mesh, boxes.mesh],
     info(hit) {
       const k = S.k;
-      if (hit.object === boxes.mesh) { const p = D.parts[hit.instanceId], o = boxes.off[hit.instanceId]; return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)} (${HV.esc(p.kind)})<br>moved with its carried_by nodes by (${o.map(v => v.toFixed(1)).join(', ')}) mm; not deformed`; }
+      if (hit.object === boxes.mesh) { const p = D.parts[hit.instanceId], o = boxes.off[hit.instanceId]; return `<b>${HV.esc(p.id)}</b> ${HV.esc(p.name)}<br>移動 (${o.map(v => v.toFixed(1)).join(', ')}) mm、箱は変形しない`; }
       const e = beams.memberOf(hit), mid = D.frame.member_ids[e], [na, nb] = D.frame.members[e], ids = D.frame.node_ids;
-      return `<b>${HV.esc(mid)}</b> ${HV.esc(D.frame.member_names[e])}<br>element ${HV.esc(ids[na])} - ${HV.esc(ids[nb])}: axial strain ${HV.fmt(strain[k * ne + e])} %, fold ${HV.fmt(fold[k * ne + e])} deg` +
-             (brokenSet(k).has(mid) ? '<br><b>member broken by now</b> (an element of it removed)' : '');
+      return `<b>${HV.esc(mid)}</b> ${HV.esc(D.frame.member_names[e])}<br>要素 ${HV.esc(ids[na])} - ${HV.esc(ids[nb])}: 軸ひずみ ${HV.fmt(strain[k * ne + e])} %、折れ角 ${HV.fmt(fold[k * ne + e])}°` +
+             (brokenSet(k).has(mid) ? '<br><b>この時刻までに破断</b>' : '');
     },
     panel(div) {
-      const h = document.createElement('h3'); h.textContent = 'Colour (B)'; div.appendChild(h);
-      for (const [k, lab] of [['strain', 'element axial strain %'], ['fold', 'fold angle at the ends, deg']]) {
+      const h = document.createElement('h3'); h.textContent = '色の量 (B)'; div.appendChild(h);
+      for (const [k, lab] of [['strain', '要素の軸ひずみ %'], ['fold', '要素の端の折れ角 °']]) {
         const l = document.createElement('label'); l.style.display = 'block';
         const r = document.createElement('input'); r.type = 'radio'; r.name = 'crashcol'; r.id = 'crashcol_' + k; r.checked = S.what === k;
         r.onchange = () => { S.what = k; update(); HV.refresh(); };
         l.append(r, ' ' + lab); div.appendChild(l);
       }
     },
-    extraInputs() { return `<div class="muted">B: ${HV.esc(D.notes[0])}</div>`; },
   };
-  ctx.layers.parts = false;
   update();
   return ctl;
 };

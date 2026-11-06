@@ -22,7 +22,25 @@ python -m viewer.src.assembly <run dir>   # assembly record   -> viewer/data/ass
   - **A** (`crash`, 1-D mass and spring): "A is a 1-D model: no deformed shape is drawn". The vehicle stands still (never moved into the wall); colour = the stored peak stress × a(t)/a_max; the elastic deflection solved at the peak is off by default (scale 0). Plots: deceleration, crush and wall force over t.
 - **Assembly** (`assembly`, H1/H3; `entry_opening` H7 and `spray_reach` H6 as numbers): part boxes coloured by step order, by status, or by interference depth. The parts move along `path_mm` in step order. A plot shows the tool gap per step.
 
-Every field lists its inputs (and where each one comes from) and a NOT COMPUTED note.
+Every field lists its inputs (and where each one comes from).
+
+## Parts in the calculation (every field)
+
+Every part of the design is drawn as its box (with rpy), and `src/common.py` `parts_ledger` says how each enters that field's calculation, by calling the tools' own functions (`hiraku.contract.loading.parts_on_board`, `hiraku.solvers.k0_handcalc.vehicle.mass_items`) and following the named function's rule:
+
+- NVH (`k1_frame.modal.add_masses`): parts with carried_by as lumped masses in equal shares on those frame nodes; parts without carried_by (unsprung) at the nearest support's wheel centre node `wc:<id>` (or its frame node if the support is there); members with stiffness and their own consistent mass.
+- Crash A (`shelf.crash`): every part on board in the one rigid mass; only the crush zone's rails crush (`library_crash.crush_zone`); K1 at the peak loads the parts on the same nodes.
+- Crash B (`k2_vehicle.crash_beam.mesh._lump_parts`, branch claude/k2-crash-beam-b, rule copied): point masses on carried_by nodes (a node no member uses: the nearest frame node), unsprung parts at their support's frame node; no part stiffness, no contact of parts with the wall. Part boxes move with those nodes.
+- Assembly (`k4_geometry.model.bodies`): every part on board is a body (shape only, masses not used).
+
+Categories (legend, click info): mass on frame nodes / unsprung / modelled with stiffness / mass only / shape only / not in this calculation (left off by the loading). The mass table compares the per-category sums and the members' mass with the record's own mass (crash `vehicle_mass`, `frame_mass`; crash_beam's mass assumption per support); NVH and assembly records state none.
+
+## Screen rules (keep for new fields)
+
+- No file paths on screen or in the data: `source.run` is the run folder's name.
+- Short Japanese text; longer explanations in closed panels (`説明`, `計算での扱い`); nothing drawn over the 3D view (header above it, legend and click info in the side panel).
+- No lists of what is not computed; only what is needed to read the picture: the deformation scale (変形 ×N、実寸ではない), relative values, the colour's quantity.
+- OK / NG for pass / fail, 判定 for a judged result, vN for design versions.
 
 ## Files
 
