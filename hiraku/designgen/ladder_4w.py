@@ -1552,13 +1552,28 @@ def _seat_mounts(lay: Layout, seat: str, cross_top: float, rail_inner: float, cr
                                          (x_lo, a, z_lo), (x_hi, b, z_hi), nodes, rho))
 
 
+BELT_FLOOR_GAP_MM = 3.0  # a sliding seat's belt anchor strut this far behind the floor's rear edge (assumption, more
+# than load_path's touch, 2 mm)
+
+
 def _belt_behind_travel(lay: Layout, belt: str, back_mm: float) -> None:
     """Put the seat belt (as kit/safety.place_belts placed it, behind the seat back at the travel's middle)
-    back_mm farther back: behind the seat back at the rearmost end of the travel. Placed again, so that the
-    nodes it is carried by are those of where it now is."""
+    back_mm farther back: behind the seat back at the rearmost end of the travel, and at least far enough back that
+    its anchor strut to the frame (kit/joints.py, STRUT_D_MM thick, at the belt's front face or behind it) ends
+    BELT_FLOOR_GAP_MM behind the floor's rear edge. A strut over the floor's edge shuts the floor in when the floor
+    reaches the side posts (side_guard): the floor goes in from above, and its sides and ends are closed by the frame
+    (assembly blocked_parts 2 on the scripted run's version 2 with seat_slide 56 mm: the strut 13 mm over the floor's
+    rear edge, and floor_front behind the floor). Placed again, so that the nodes it is carried by are those of where
+    it now is."""
+    from .kit import joints
+
     p = lay.part(belt)
     lay.parts.remove(p)
     c, size = p["box"]["center_mm"], p["box"]["size_mm"]
+    if any(q["id"] == "floor" for q in lay.parts):
+        front = float(c[0]) + float(size[0]) / 2.0  # the belt's front face as placed
+        clear = float(lay.box("floor")[0][0]) - joints.STRUT_D_MM / 2.0 - BELT_FLOOR_GAP_MM
+        back_mm = max(back_mm, front - clear)
     lay.put(Item(p["id"], p["name"], p["kind"], tuple(size), float(p["mass_kg"])), x=float(c[0]) - back_mm,
             y=float(c[1]), z=float(c[2]))
 
