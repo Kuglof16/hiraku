@@ -286,7 +286,7 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
                 out["picks"].sort(key=lambda p: ANALYSIS_DOMAINS.index(p["domain"]))
             pick["test_ids"].append(tid)
         added.append({"test_id": tid, "reason": why})
-        if not has_builder(catalog, tid, product) and not can_write_load_cases():
+        if not has_builder(catalog, tid, product):
             no_builder.append(tid)
     if added:
         out["added_tests"] = added

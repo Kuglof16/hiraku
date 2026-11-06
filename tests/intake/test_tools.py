@@ -227,6 +227,19 @@ class AddTestsToolTest(ToolsTestCase):
         self.assertIn("write_load_case", got["next"])
 
 
+    def test_no_builder_is_said_whether_or_not_a_load_case_writer_is_registered(self):
+        from hiraku.intake import domains as dom
+
+        for writer in (None, lambda *a: None):  # write_load_case registered (as hiraku.tools does) or not
+            with self.subTest(writer=writer is not None):
+                ctx = make_ctx(Path(tempfile.mkdtemp(dir=self.root)))
+                call("pick_domains", ctx, **AddTestsToolTest.ARGS)
+                with mock.patch.object(dom, "load_case_writer", writer), mock.patch.object(dom, "has_builder", lambda c, t, p=None: False):
+                    got = call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
+                self.assertEqual(got["no_builder"], ["F1"])
+                self.assertIn("write_load_case", got["next"])
+
+
 class AskUserToolTest(ToolsTestCase):
     def test_a_product_the_run_knows_gets_its_own_values_as_defaults(self):
         ctx = make_ctx(self.root, product="care-bed")
