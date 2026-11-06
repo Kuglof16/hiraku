@@ -469,7 +469,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (5)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (6)・音振 (1)・熱 (2)",
+   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -1622,7 +1622,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 10 件あります。まとめて聞きます",
+   "text": "決まっていないことを 10 つ聞きます",
    "data": {
     "questions": [
      {
@@ -1813,7 +1813,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 10 件、答え 7 件、既定値 20 件",
+   "text": "7 つ答えてもらいました。分からない所は標準の値で進めました。設計を始めます",
    "data": {
     "answers": [
      {
@@ -25042,7 +25042,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (4)・騒音 (0)・熱 (デューティ) (1)",
+   "text": "確かめる分野を 5 つ、試験を 9 個選びました",
    "data": {
     "want": "在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)",
     "flags": {
@@ -26173,7 +26173,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 11 件あります。まとめて聞きます",
+   "text": "決まっていないことを 11 つ聞きます",
    "data": {
     "questions": [
      {
@@ -26423,7 +26423,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 11 件、答え 3 件、既定値 24 件",
+   "text": "3 つ答えてもらいました。分からない所は標準の値で進めました。設計を始めます",
    "data": {
     "answers": [
      {
@@ -26701,7 +26701,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "2 分野: 強度 (弦の張力) (3)・音振 (1)",
+   "text": "確かめる分野を 2 つ、試験を 7 個選びました",
    "data": {
     "want": "電気ギターを作りたい。弦を張ってもネックが反らず、開放弦の音がデッドスポット無しで鳴る形にしたい",
     "flags": {
@@ -27822,7 +27822,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 4 件あります。まとめて聞きます",
+   "text": "決まっていないことを 4 つ聞きます",
    "data": {
     "questions": [
      {
@@ -27905,7 +27905,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 4 件、答え 0 件、既定値 3 件、答えが無いまま 3 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "答えはなかったので、標準の値で進めました。答えも標準の値も無い 3 つは、要件に入っていません",
    "data": {
     "answers": [
      {
@@ -27984,7 +27984,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (3)・動力 (4)・液体のこぼれ (0)・人との接触 (0)・強度信頼性 (3)・音振 (1)・熱 (2)",
+   "text": "確かめる分野を 7 つ、試験を 15 個選びました",
    "data": {
     "want": "飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい",
     "flags": {
@@ -29125,7 +29125,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 17 件あります。まとめて聞きます",
+   "text": "決まっていないことを 17 つ聞きます",
    "data": {
     "questions": [
      {
@@ -29416,7 +29416,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 17 件、答え 2 件、既定値 32 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "2 つ答えてもらいました。分からない所は標準の値で進めました。答えも標準の値も無い 4 つは、要件に入っていません",
    "data": {
     "answers": [
      {
@@ -30365,7 +30365,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (5)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (6)・音振 (1)・熱 (2)",
+   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -31518,7 +31518,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 20 件: Q04・Q21・Q22・Q23・Q24・Q25・Q26・Q27・Q28・Q29・Q35・Q36・Q37・Q38・Q39・Q57・Q59・Q63・Q83・Q84)",
+   "text": "聞くことはありませんでした。分からない所は標準の値で進めました",
    "data": {
     "answers": [
      {

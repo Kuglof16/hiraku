@@ -164,8 +164,15 @@ class RunListRowsBrowserTest(unittest.TestCase):
                 keyless = page.evaluate("document.querySelectorAll('#launch .keyless').length")
                 page.close()
                 self.assertEqual(errors, [])
-                self.assertEqual(keyless, 1 if key == "no key" else 0, key)  # the server's launcher, not the window's
+                self.assertEqual(keyless, 0, key)  # the plain list does not say what is missing
                 self.assertEqual(problems, [], f"{key} @{width}")
+        # ?dev=1 says when the server's window has no key (the server's launcher, not the window's)
+        for key in self.bases:
+            page, errors = self.open(1280, 720, "?list=1&dev=1", key=key)
+            keyless = page.evaluate("document.querySelectorAll('#launch .keyless').length")
+            page.close()
+            self.assertEqual(errors, [])
+            self.assertEqual(keyless, 1 if key == "no key" else 0, key)
 
     def test_the_dev_list_is_as_it_was(self):
         page, errors = self.open(1280, 720, "?list=1&dev=1")

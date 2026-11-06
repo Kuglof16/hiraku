@@ -1,7 +1,7 @@
 ---
 description: "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める"
 argument-hint: "<要件のファイル (例 data/requirements/offroad-4w.yaml)>"
-allowed-tools: "mcp__plugin_hiraku_hiraku__start_run, mcp__plugin_hiraku_hiraku__open_run, mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__write_report, mcp__plugin_hiraku_hiraku__pick_domains, mcp__plugin_hiraku_hiraku__ask_user, mcp__plugin_hiraku_hiraku__import_knowledge, mcp__plugin_hiraku_hiraku__rule_check, mcp__plugin_hiraku_hiraku__find_tradeoffs, mcp__plugin_hiraku_hiraku__wait_for_roles"
+allowed-tools: "mcp__plugin_hiraku_hiraku__start_run, mcp__plugin_hiraku_hiraku__open_run, mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__write_report, mcp__plugin_hiraku_hiraku__pick_domains, mcp__plugin_hiraku_hiraku__ask_user, mcp__plugin_hiraku_hiraku__import_knowledge, mcp__plugin_hiraku_hiraku__rule_check, mcp__plugin_hiraku_hiraku__find_tradeoffs, mcp__plugin_hiraku_hiraku__add_tests, mcp__plugin_hiraku_hiraku__wait_for_roles"
 ---
 
 <!-- written by python -m hiraku.agent.plugin_files from hiraku/agent/prompts.py; do not edit -->
@@ -36,6 +36,9 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 
 進め方:
 0. get_context で design_version が 0 (設計がまだ無い) なら、まず設計役 (designer) に「要件から最初の版を作る」と渡す。設計役が propose_design で版 1 を作ると、荷重条件と担当の役が決まる。
+   - この製品に合う設計の型が無い (get_context の archetypes が空) ときは、設計役に「型が無いので write_design で設計そのものを書いて版 1 を作る」と渡す。その設計を直すときは、設計役は edit_design (変える所だけ) か write_design (全体を書き直す) で次の版を作る。
+   - 選んだ試験 (domain_picks の test_ids) のうち、荷重条件の作り方 (builder) が無くて荷重条件が無い試験は、版 1 ができたら write_load_case で荷重条件を書く (その分野の役に頼んでも、自分で書いてもよい)。限度は数を書かず、limit_from の式 (expr) で書き、refs の名前は要件の key (Q61 など) か設計の道 (materials.<key>.yield_MPa など)。数はコードが計算する。
+0b. 分野を選んだあと (pick_domains のあと) は、必ず add_tests で選びを見直す。この製品に要る試験がカタログにあって選びに入っていなければ足し (tests: test_id と、人の言葉の理由)、足すものが無いときも見直した理由を no_addition_reason に書いて呼ぶ。足すだけで外せない。builder の無い試験を足したら、結果の no_builder を見て、荷重条件は write_load_case で書くか、ツールを作る道へ。値が足りなければ ask_user。詳しくは Skill hiraku:take-the-request の 1b。
 1. get_context (sections を付けずに) で、選んだ分野 (domain_picks) と小さな一覧 overview (荷重条件の ID・分野・担当の役 owner・段 stage・feeds (その荷重条件の結果を使う下流の荷重条件)、分野ごとの判定の札) を見る。荷重条件の中身や記録は、要るときだけ sections で頼み、load_case_id・domain・record_kinds で絞る。設計の中身は読まない (役が読む)。
 2. 軽い段から順に進める (HK5。荷重条件の stage: 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算。レイアウトが変われば強度や車の動きの数が全部動くので、まず段 0 を決める)。まず段 0 の荷重条件をパッケージ役 (packager) に渡し、組み立てと規則を確かめさせる。段 0 が緑になったら、段 1 の荷重条件の担当の役 (owner) に、Agent のツールでその役のサブエージェント (cae-<分野>) に仕事を渡し、段 1 が緑になったら段 2、そのあと段 3 と進む。同じ段の役は、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。重い段のツールの analyze は、軽い段に赤か未判定が残る間は止められる。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。パッケージ役には、ナレッジの規則を当てる rule_check も頼む (パッケージ役がいなければ自分で 1 回呼ぶ)。
 3. 役が動いている間は、ツールを呼ばずに報告を待つ。報告が返ったら、get_context の judgements で、その段の分野に判定 (green か red) が付いたかを 1 回だけ確かめる。まだ (pending) の分野があれば、その役にもう一度頼む。役が「解析が失敗した (設計の形の問題)」と返したら、赤と同じく 4. で設計役に直しを渡す (失敗の文と解析の ID を書く)。赤が出たら、次の段に進む前に 4. で設計役に渡す。強度が梁の解析 (frame_static) だけで緑のときは、棚にシェルのツール (frame_shell) があれば、つなぎ目を見るため強度役にシェルでも回すよう頼む。

@@ -786,7 +786,8 @@ function checkStory() {
 function addDriverTag(layout, s) {
   if (s.project?.driver !== "scripted") return;
   const safe = layout.safe ?? { x: 96, y: 60, w: 1728 };
-  const px = layout.min_text_px ?? 18;
+  // at least 24 px: a scripted run is told apart from a Claude run at a glance in the video
+  const px = Math.max(24, layout.min_text_px ?? 18);
   const h = Math.ceil(px * 1.2) + 6; // line-height 1.2, padding 2 + border 1 a side
   const el = document.createElement("p");
   el.className = "cut-driver";

@@ -101,6 +101,9 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 .mode { justify-self: end; display: flex; gap: 10px; align-items: center; font-size: 16px; color: var(--muted); }
 .mode .badge { border: 1.5px solid var(--line); border-radius: 999px; padding: 4px 16px; color: var(--ink); background: var(--panel); }
 .mode .badge.live { border-color: var(--red); color: var(--red); }
+/* ?video=1: whether the picture is a scripted run or a Claude run, at a glance (24 px, a coloured ground) */
+body.video .mode .badge[data-driver="scripted"] { font-size: 24px; font-weight: 700; color: #fff; background: #3b3934; border-color: #3b3934; padding: 4px 18px; }
+body.video .mode .badge[data-driver="claude"] { font-size: 24px; font-weight: 700; color: #fff; background: #2b59c3; border-color: #2b59c3; padding: 4px 18px; }
 .mode .runid { font-family: var(--mono); font-size: 15px; color: inherit; text-decoration: none; }
 .mode .runid:hover { text-decoration: underline; }
 
@@ -135,6 +138,13 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 /* nothing in this run: faint, still pressable (its screen says what would be there) */
 .tab.empty { opacity: 0.5; }
 .tab.empty:hover, .tab.empty.on { opacity: 0.75; }
+/* a static export: the run list's tab is a link (js/app.js STATIC) */
+a.tab.tab-list { text-decoration: none; }
+/* a static export on ① / ②: the record's request and 「この記録を再生する」 */
+.replaybar .rb-want { flex: 1 1 auto; min-width: 0; }
+.replaybar .rb-want b { margin-right: 8px; }
+/* ... and no box to write or send in (① 's request box, ② 's note and answers): nothing is sent there */
+.static-export #view-intake .in-composer { display: none; }
 .tab-arrow { flex: none; width: 14px; height: 14px; color: var(--line); }
 .tabtip {
   position: absolute;
@@ -1132,6 +1142,9 @@ body.present .stage { grid-template-rows: 64px minmax(0, 1fr) var(--band); }
 body.present .tabsrow, body.present .statusrow, body.present .pills { display: none; }
 body.present .main { grid-template-columns: minmax(0, 1fr); padding: 14px 452px 14px 24px; }
 body.present .col-left, body.present .col-right { display: none; }
+/* the video's A1 and A2 (the intake screens) are filmed without the rail's card ("いま:"): they use the whole width */
+body.video.present[data-intake-tab="A1"] .present-rail, body.video.present[data-intake-tab="A2"] .present-rail { display: none; }
+body.video.present[data-intake-tab="A1"] .main, body.video.present[data-intake-tab="A2"] .main { padding-right: 24px; }
 body.present .tests, body.present .toggles, body.present .hint, body.present .bubble,
 body.present .running, body.present .limitnote, body.present .animbar, body.present .now { display: none; }
 /* only the main labels in the 3D (the largest value, the picked wheel's force) */

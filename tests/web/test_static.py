@@ -11,6 +11,7 @@ from hiraku.contract.protocols import HOOK_RULES
 WEB = Path(__file__).resolve().parents[2] / "web"
 JS = WEB / "js"
 # the one page outside the CDN the screen links to: the repository's README, section 動かし方
+# (A1's くわしく and, in a static export's run list, the line in place of the run buttons)
 README_RUN_URL = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"
 
 
@@ -133,7 +134,8 @@ class ContractCoverageTest(unittest.TestCase):
         the list, or a domain with open tests reads as OK on the screen."""
         listed = re.findall(r'"([^"]+)"', re.search(r"const NOT_ALL_JUDGED = \[(.*?)\];", read(JS / "beyond.js"), re.S).group(1))
         judge = read(WEB.parent / "hiraku" / "tools" / "judge.py")
-        phrases = set(re.findall(r"(判定の無い試験|まだ[^\s\"':。、]*?試験)", judge))
+        # (a phrase may hold a space, まだ OK にできない試験; it ends before a quote or a newline)
+        phrases = set(re.findall(r"(判定の無い試験|まだ[^\"':。、\n]*?試験)", judge))
         self.assertTrue(phrases)
         self.assertEqual(sorted(p for p in phrases if p not in listed), [])
         # the phrase design-ok-ng-words writes, and the older ones of saved records

@@ -109,7 +109,7 @@ def summary_line(checks: list[Record], rules: list[Record]) -> str:
     text = {r["rule_id"]: r["text"] for r in rules}
     hits = "、".join(f"{c['rule_id']} ({text.get(c['rule_id'], '')}): " + "・".join(h["part_id"] for h in c["hits"])
                     for c in checks if c["hits"] and not is_advice(c))
-    lines = [f"{s['rules']} 規則: 当たり {s['hit_rules']}、合格 {s['passed_rules']}、評価できない {s['not_evaluable_rules']}"]
+    lines = [f"{s['rules']} 規則: 当たり {s['hit_rules']}、通った {s['passed_rules']}、評価できない {s['not_evaluable_rules']}"]
     if hits:
         lines.append(f"当たった部品: {hits}")
     if s["advice_hits"]:

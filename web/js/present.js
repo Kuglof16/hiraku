@@ -74,7 +74,9 @@ export function openCause(s) {
     const lc = p?.load_case_id ?? null;
     if (lc && passedAfter(lc, s.firstSeqOf[id])) continue;
     const lcRec = (s.project?.load_cases ?? []).find((x) => x.load_case_id === lc);
+    // who wrote it: Claude, or the fixed text of a scripted run (project.driver "scripted")
     return { id, key: `${id}|${s.seqOf[id]}`, text: roundLongDecimals(judgedWords(c.cause ?? "")), domain: p?.domain ?? lcRec?.domain ?? null,
+      scripted: s.project?.driver === "scripted",
       // the load case's title up to its first ":" or bracket (the short name)
       version: p?.design_version ?? null, lcTitle: lcRec?.title ? String(lcRec.title).split(/[:：(（]/)[0].trim() || null : null };
   }
@@ -83,7 +85,8 @@ export function openCause(s) {
 
 export function causeNoteHtml(c) {
   const where = [c.domain ? DOMAIN_JA[c.domain] ?? c.domain : null, c.version != null ? `v${c.version}` : null, c.lcTitle].filter(Boolean).join("・");
-  return `<small>不一致の原因 (Claude が書いた)${where ? `・${esc(where)}` : ""}</small><div class="tx">${esc(c.text)}</div>`;
+  const who = c.scripted ? "決まった手順の文" : "Claude が書いた";
+  return `<small>不一致の原因 (${who})${where ? `・${esc(where)}` : ""}</small><div class="tx">${esc(c.text)}</div>`;
 }
 
 // ---- a verdict in words --------------------------------------------------------------
