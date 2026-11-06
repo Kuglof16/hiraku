@@ -182,8 +182,9 @@ class OccupantBrowserTest(unittest.TestCase):
         Per person: the head a ball, the neck a joint, the torso the chest, a waist joint and the
         pelvis, each limb (upper arm, forearm, thigh, shank) a slim cylinder with a joint ball at
         each end of its box's longest side (shoulder, elbow, wrist, hip, knee, ankle), the hands
-        and feet rounded boxes. The joints are one dark colour, apart from the heat colour, the
-        caution orange and the verdict's red; the others keep the dressed colours."""
+        and feet rounded boxes. Two colours: the joints, the neck, the hands and the feet one dark
+        colour, apart from the heat colour, the caution orange and the verdict's red; the rest the
+        dummy's yellow (the shape's ratios, sizes and colours: test_dummy_browser)."""
         drawn = self.drawn["real"]
         self.assertEqual(drawn["errors"], [])
         got = drawn["parts"]
@@ -193,7 +194,7 @@ class OccupantBrowserTest(unittest.TestCase):
             pieces = lambda seg: [m["piece"] for m in got[f"{person}.{seg}" if seg else person]["meshes"]]
             self.assertEqual(pieces("head"), ["ball"])
             self.assertEqual(pieces("neck"), ["joint"])
-            self.assertEqual(pieces(None), ["rounded_box", "joint", "rounded_box"])  # chest, waist, pelvis
+            self.assertEqual(pieces(None), ["rounded_box", "joint", "pelvis"])  # chest, waist, pelvis
             for seg in limbs:
                 self.assertEqual(sorted(pieces(seg)), ["joint", "joint", "limb"], seg)
             for seg in ("hand_L", "hand_R", "foot_L", "foot_R"):
@@ -212,8 +213,10 @@ class OccupantBrowserTest(unittest.TestCase):
                 mid = lambda loc: float((loc[:, long].min() + loc[:, long].max()) / 2)
                 ends = sorted(mid(in_box(p, m["verts"])[0]) for m in got[p["id"]]["meshes"] if m["piece"] == "joint")
                 np.testing.assert_allclose(ends, [-(size[long] / 2 - r), size[long] / 2 - r], atol=0.5, err_msg=seg)
-            # the person's colours: skin, jacket, trousers, shoes and the joints'
-            self.assertEqual(len({m["color"] for m in mine}), 5, person)
+            # the person's colours: the body's and the joints' (the neck, hands and feet too)
+            self.assertEqual(len({m["color"] for m in mine}), 2, person)
+            dark = {m["color"] for seg in ("neck", "hand_L", "hand_R", "foot_L", "foot_R") for m in got[f"{person}.{seg}"]["meshes"]}
+            self.assertEqual(dark, {m["color"] for m in joints}, person)
         (joint,) = joint_colours
         rgb = lambda h: np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float)
         for other in ("#ff5a1f", "#e9893a", "#c8402a"):  # energy_flow.js HEAT_COLOR, CAUTION_ORANGE, the verdict's red

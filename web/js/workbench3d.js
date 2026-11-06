@@ -41,7 +41,7 @@ import { overOf } from "./fields.js";
 import { maxTagClass } from "./judged.js"; // the largest-value tag's colour (one rule)
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { CONTOUR_FADE, DUMMY_JOINT, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
+import { CONTOUR_FADE, DUMMY_BODY, DUMMY_JOINT, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
 import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
@@ -517,6 +517,7 @@ export class Workbench3D {
     this.props.clear();
     disposeTree(this.ghost);
     disposeTree(this.motionArrows);
+    this.dummyDrawn = false; // set again below when an occupant is drawn as a dummy
     if (!design) return void this.joints.setDesign(null); // joints:
 
     const nodes = Object.fromEntries((design.nodes ?? []).map((n) => [n.id, v3(n.xyz_mm)]));
@@ -626,6 +627,13 @@ export class Workbench3D {
     // given as one box, or a torso box that still holds the head) keeps the torso drawn as a
     // capsule with a ball for the head, as before.
     const headed = new Set(occupants.filter((p) => segmentOf(p) === "head").map(personOf));
+    // each person's parts by segment ("torso" the torso): the real look's dummy takes the leg's
+    // scale from them (shapes.js occupantDummyPieces)
+    const bodies = new Map();
+    for (const p of occupants) {
+      if (!bodies.has(personOf(p))) bodies.set(personOf(p), {});
+      bodies.get(personOf(p))[segmentOf(p) ?? "torso"] = p;
+    }
     // the parts drawn here by their short name (one name tag for those that share it)
     const sameShort = new Map();
     for (const p of design.parts ?? []) {
@@ -647,13 +655,14 @@ export class Workbench3D {
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
-        // dressed by its segment in the real look (look.js occupantSub); one colour in the diagram.
-        // The real look draws a crash test dummy (shapes.js occupantDummyPieces): its joints dark
-        // (look.js DUMMY_JOINT), the pelvis in the legs' colour
-        const mat = this.look.partMaterial("occupant", this.look.real ? occupantSub(segmentOf(p)) : null);
-        const pieces = this.look.real ? occupantDummyPieces(p, segmentOf(p) === null) : occupantSegmentPieces(p);
+        // one colour in the diagram. The real look draws a crash test dummy (shapes.js
+        // occupantDummyPieces, its shape's ratios hybrid3.js): the body yellow (look.js DUMMY_BODY),
+        // the joints, the neck, the hands and the feet black (look.js DUMMY_JOINT)
+        const mat = this.look.partMaterial("occupant", this.look.real ? DUMMY_BODY : null);
+        const pieces = this.look.real ? occupantDummyPieces(p, segmentOf(p) === null, bodies.get(personOf(p))) : occupantSegmentPieces(p);
+        if (this.look.real) this.dummyDrawn = true;
         for (const pc of pieces) {
-          const m = pc.sub === "joint" ? this.look.partMaterial("occupant", DUMMY_JOINT) : pc.sub === "pelvis" ? this.look.partMaterial("occupant", occupantSub("thigh")) : mat;
+          const m = pc.sub === "joint" ? this.look.partMaterial("occupant", DUMMY_JOINT) : mat;
           const mesh = new THREE.Mesh(pc.geo, m);
           mesh.castShadow = this.look.real;
           holder.add(mesh);
