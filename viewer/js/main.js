@@ -8,7 +8,7 @@ window.HV = window.HV || {};
 (function (HV) {
   'use strict';
   HV.fields = HV.fields || {};
-  HV.FIELD_ORDER = ['nvh', 'crash', 'assembly', 'strength', 'fatigue', 'thermal'];
+  HV.FIELD_ORDER = ['strength', 'fatigue', 'nvh', 'crash', 'handling', 'powertrain', 'aero', 'thermal', 'assembly'];
   const $ = id => document.getElementById(id);
 
   function loadData(field) {
@@ -127,7 +127,7 @@ window.HV = window.HV || {};
     async function open(field) {
       stopPlay(); st.playing = false; $('play').textContent = '▶ 再生';
       document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.id === 'sw_' + field));
-      if (st.ctx) view.scene.remove(st.ctx.root);
+      if (st.ctx) { view.scene.remove(st.ctx.root); if (st.ctx.fixed) view.scene.remove(st.ctx.fixed); }
       view.materials.length = 0; showInfo(null);
       st.field = field; st.ctl = null; st.ctx = null;
       const D = await loadData(field);
@@ -175,6 +175,7 @@ window.HV = window.HV || {};
       for (const id of ['scale', 'scaleNum']) { $(id).min = ctl.scale.min; $(id).max = ctl.scale.max; $(id).step = ctl.scale.step; $(id).value = ctl.scale.value; }
       $('timeNote').textContent = ctl.timeNote || '';
       $('speedrow').style.display = ctl.times ? '' : 'none';
+      if (ctl.times) $('speed').value = String(ctl.speed || 0.01);   // the field's own default (vehicles: real time)
       $('logc').checked = !!(ctl.contour() || {}).log; $('logrow').style.display = ctl.setLog ? '' : 'none';
       ['x', 'y', 'z'].forEach((k, a) => {
         const lo = Math.floor(ctx.lo[a] - 20), hi = Math.ceil(ctx.hi[a] + 20), c = view.clipState[k];

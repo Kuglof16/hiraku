@@ -48,7 +48,7 @@ def _wall(obj) -> dict | None:
 
 
 def _wall_row(wall) -> dict:
-    return {"label": "wall", "value": (f"rigid wall, face at x = {wall['c'][0] - wall['s'][0] / 2:g} mm, box centre "
+    return {"label": "壁", "value": (f"rigid wall, face at x = {wall['c'][0] - wall['s'][0] / 2:g} mm, box centre "
                                        f"({', '.join(f'{v:g}' for v in wall['c'])}) mm, size "
                                        f"{' x '.join(f'{v:g}' for v in wall['s'])} mm") if wall else "no wall in the record's scene",
             "source": "record scene (the tool's scene.wall)"}
@@ -114,9 +114,9 @@ def build_a(args, vdir, rec, design) -> dict:
     mass = common.result(rec, "vehicle_mass")
     obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
         _wall_row(wall),
-        {"label": "mass", "value": f"{mass:g} kg" if mass is not None else "not in the record",
+        {"label": "質量", "value": f"{mass:g} kg" if mass is not None else "not in the record",
          "source": "record result vehicle_mass (design as loaded, the case's loading)"},
-        {"label": "peak deceleration", "value": f"{obj['a_max']:.2f} {obj['units']['deceleration']}",
+        {"label": "減速度のピーク", "value": f"{obj['a_max']:.2f} {obj['units']['deceleration']}",
          "source": "the series' largest value; the frame was solved at this instant"},
     ]
     obj["notes"] = ["A は 1 次元モデル (質量とばね)。車体はその場に置いたまま描き、つぶれ量は下のグラフにだけ出す。",
@@ -344,13 +344,13 @@ def build_b(args, vdir, rec, design) -> dict:
     mass = _assumption(rec, r"^mass [\d.]+ kg")
     obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
         _wall_row(wall),
-        {"label": "wall friction", "value": _assumption(rec, r"^wall friction") or "given in the case (see params)",
+        {"label": "壁の摩擦", "value": _assumption(rec, r"^wall friction") or "given in the case (see params)",
          "source": "record assumptions (the tool's default when the case does not give wall_mu)"},
-        {"label": "beam break", "value": _assumption(rec, r"breaks \(is removed\)") or "given in the case (see params)",
+        {"label": "梁が折れる角度", "value": _assumption(rec, r"breaks \(is removed\)") or "given in the case (see params)",
          "source": "record assumptions (the tool's default when the case does not give hinge_break_angle)"},
-        {"label": "mass", "value": mass.split(":")[0] if mass else "not in the record",
+        {"label": "質量", "value": mass.split(":")[0] if mass else "not in the record",
          "source": "record assumptions (frame on its element nodes, parts on their carried_by nodes)"},
-        {"label": "mesh", "value": f"{n} nodes, {ne} beam elements of {len(set(emem))} members; {nF} frames kept of the run",
+        {"label": "梁の分割", "value": f"{n} nodes, {ne} beam elements of {len(set(emem))} members; {nF} frames kept of the run",
          "source": "record node_motion field"},
     ]
     b = obj["beyond"]

@@ -1,0 +1,42 @@
+{
+ "load_case_id": "F1-wind30",
+ "test_id": "F1",
+ "domain": "aero",
+ "title": "瞬間 30 m/s の横風で風上の輪が浮かない (2 人 + 荷)",
+ "params": {
+  "loading": "two_cargo",
+  "wind_speed": {
+   "value": 30.0,
+   "unit": "m/s"
+  },
+  "speed": {
+   "value": 40.0,
+   "unit": "km/h"
+  },
+  "wind_from": "left"
+ },
+ "requirement_keys": [
+  "Q30",
+  "Q33",
+  "Q40",
+  "Q18",
+  "Q50"
+ ],
+ "tolerance_rel": 0.1,
+ "criterion": {
+  "quantity": "critical_wind_speed",
+  "op": ">=",
+  "limit": {
+   "value": 30.0,
+   "unit": "m/s"
+  },
+  "basis": "Q18 gust 30 m/s",
+  "requirement_keys": [
+   "Q18"
+  ]
+ },
+ "modules": [
+  "body",
+  "package"
+ ]
+}

@@ -67,6 +67,10 @@
 <script src="js/strength.js"></script>
 <script src="js/fatigue.js"></script>
 <script src="js/thermal.js"></script>
+<script src="js/vehicle.js"></script>
+<script src="js/handling.js"></script>
+<script src="js/powertrain.js"></script>
+<script src="js/aero.js"></script>
 </head>
 <body>
 <div id="loading">読み込み中…</div>
@@ -108,13 +112,14 @@
   <div class="row"><input type="range" id="time" min="0" max="0" step="1" value="0"></div>
   <div class="row" id="speedrow"><label>再生の速さ (実時間の)
     <select id="speed"><option value="0.005">0.005 倍</option><option value="0.01" selected>0.01 倍</option><option value="0.02">0.02 倍</option>
-      <option value="0.05">0.05 倍</option><option value="0.1">0.1 倍</option><option value="0.25">0.25 倍</option><option value="0.5">0.5 倍</option><option value="1">1 倍</option></select></label></div>
+      <option value="0.05">0.05 倍</option><option value="0.1">0.1 倍</option><option value="0.25">0.25 倍</option><option value="0.5">0.5 倍</option><option value="1">1 倍</option>
+      <option value="2">2 倍</option><option value="10">10 倍</option><option value="50">50 倍</option><option value="200">200 倍</option></select></label></div>
   <div class="muted" id="timeNote"></div>
 
   <h3>表示</h3>
   <div class="row"><label><input type="checkbox" id="lyFrame"> フレーム</label>
     <label><input type="checkbox" id="lyGhost"> 変形前</label>
-    <label><input type="checkbox" id="lyScene"> 壁・台</label>
+    <label><input type="checkbox" id="lyScene"> 壁・台・路面</label>
     <label><input type="checkbox" id="lyArrows"> 力の矢印</label></div>
 
   <h3>断面</h3>
