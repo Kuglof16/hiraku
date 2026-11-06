@@ -18,7 +18,8 @@ from hiraku.webserve, written beforehand by the server's own functions so the an
                                          no host compression is needed
     data/runs/<id>/tools.json            GET /api/runs/<id>/tools (tool_versions)
     data/runs/<id>/tools/<file>          GET /api/runs/<id>/tools/<file>
-    data/static.json                     the export's other pages (extras), for the run list
+    data/static.json                     the export's other pages (extras), for the run list, and the
+                                         run a bare page opens on ① (first: first_run)
     layout.json, pets/pet3d.js           GET /layout.json, GET /pets/pet3d.js (promo's, as they are)
     n10/                                 the saved N10 answers (showcase/n10) and a page that shows them
 
@@ -106,6 +107,36 @@ def complete_lines(data: bytes) -> bytes:
     """The complete lines of a record (the server leaves a line still being written)."""
     end = data.rfind(b"\n")
     return data[: end + 1] if end >= 0 else b""
+
+
+KIND_RE = re.compile(rb'"kind"\s*:\s*"([a-z_.]+)"')
+# what ① and ② show (web/js/tabs.js TAB_NEEDS A1, A2): the request (run.started's want), the picked
+# domains, and the hearing asked and answered
+FIRST_NEEDS = ("run.started", "domains.picked", "hearing.asked", "hearing.answered")
+
+
+def record_kinds(path: Path) -> set[str]:
+    """The event kinds in a record (read from the start of each line, where `kind` is written)."""
+    kinds: set[str] = set()
+    with path.open("rb") as f:
+        for line in f:
+            m = KIND_RE.search(line, 0, 400) or KIND_RE.search(line)
+            if m:
+                kinds.add(m.group(1).decode("ascii"))
+    return kinds
+
+
+def first_run(runs: list[dict[str, Any]], saved_dir: Path) -> dict[str, Any] | None:
+    """The run a bare static page opens on ①: a finished saved run whose record has the request and
+    everything ① and ② show (FIRST_NEEDS); the recommended run (default) when it has, else the
+    newest that has. None when no run has (the page then opens on the run list)."""
+    ok = [r for r in runs if r["saved"] and r["finished"] and r.get("want")
+          and set(FIRST_NEEDS) <= record_kinds(saved_dir / r["run_id"] / EVENTS_FILE)]
+    if not ok:
+        return None
+    pick = next((r for r in ok if r["default"]), None) or max(ok, key=lambda r: r["run_id"])
+    why = "the recommended run" if pick["default"] else "the newest run"
+    return {"run": pick["run_id"], "why": f"{why} whose record has {', '.join(FIRST_NEEDS)}"}
 
 
 def _prepare_out(out: Path) -> None:
@@ -225,9 +256,10 @@ def export(
                 _write(out / N10_DIR / f.name, f.read_bytes())
         _write(out / N10_DIR / "index.html", _n10_page(n10).encode("utf-8"))
         extras.append({"href": f"{N10_DIR}/index.html", "title": "N10: ツールなしの Claude に同じ問いを聞いた答え"})
-    _write(data / "static.json", _json_bytes({"extras": extras}))
+    first = first_run(runs, saved_dir)
+    _write(data / "static.json", _json_bytes({"extras": extras, "first": first}))
     files = {p.relative_to(out).as_posix(): p.stat().st_size for p in sorted(out.rglob("*")) if p.is_file()}
-    return {"out": str(out), "runs": [r["run_id"] for r in runs], "files": files}
+    return {"out": str(out), "runs": [r["run_id"] for r in runs], "first": first, "files": files}
 
 
 # --- what must not be published ------------------------------------------------------------------
@@ -285,6 +317,8 @@ def main(argv: list[str] | None = None) -> int:
     big = max(files, key=files.get)
     print(f"wrote {len(files)} files, {total / 1e6:.1f} MB, to {got['out']}")
     print(f"  runs: {', '.join(got['runs'])}")
+    first = got["first"]
+    print(f"  first screen: {'① of ' + first['run'] + ' (' + first['why'] + ')' if first else 'the run list (no run has ① and ② in its record)'}")
     print(f"  largest: {big} ({files[big] / 1e6:.1f} MB)")
     if args.no_scan:
         return 0

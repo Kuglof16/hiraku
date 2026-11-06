@@ -35,6 +35,7 @@ from tests.web.test_shelf_browser import ARCHETYPES, FORMULAS, SHELF_TOOLS
 
 REPO = Path(__file__).resolve().parents[2]
 RUN_ID = "20261102-203000-static-fixture"
+PLAIN_ID = "20261102-203001-static-plain"  # newer (the recommended one), with no ① / ② in its record
 STATIC_PORT, SERVER_PORT = 8826, 8827
 CODE_1 = "def run():\n    return 1\n"
 CHECK_1 = json.dumps({"tool": "rollbar", "checks": []})
@@ -46,15 +47,48 @@ def fake_shelf() -> Shelf:
     return Shelf(lambda: {"tools": SHELF_TOOLS, "formulas": FORMULAS, "archetypes": ARCHETYPES})
 
 
+INTAKE_KINDS = ("domains.picked", "hearing.asked", "hearing.answered")
+INTAKE_SOURCE = REPO / "showcase" / "20261105-160725-offroad-4w" / "events.jsonl"
+
+
+def intake_events() -> list[dict]:
+    """The first domains.picked, hearing.asked and hearing.answered of a saved run's record (what ① and
+    ② show), at t 0."""
+    got: dict[str, dict] = {}
+    with INTAKE_SOURCE.open("rb") as f:
+        for line in f:
+            m = ex.KIND_RE.search(line, 0, 400)
+            kind = m.group(1).decode() if m else None
+            if kind in INTAKE_KINDS and kind not in got:
+                got[kind] = {**json.loads(line), "t": 0.0}
+            if len(got) == len(INTAKE_KINDS):
+                break
+    return [got[k] for k in INTAKE_KINDS]
+
+
+def sample_record(intake: bool) -> bytes:
+    """The contract sample's events; with intake, ①'s and ②'s events after run.started (seq renumbered)."""
+    events = [json.loads(s) for s in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines() if s.strip()]
+    if intake:
+        run_id = events[0]["run_id"]
+        events[1:1] = [{**e, "run_id": run_id} for e in intake_events()]
+    for i, e in enumerate(events):
+        e["seq"] = i
+    return "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events).encode("utf-8")
+
+
 def make_saved(root: Path, extra_line: str | None = None) -> Path:
-    """saved/<RUN_ID>/ (the sample's events, two tool files and one other file in tools/) and saved/n10/."""
+    """saved/<RUN_ID>/ (the sample's events with ①'s and ②'s, two tool files and one other file in
+    tools/), saved/<PLAIN_ID>/ (newer, the sample's events alone: no request's hearing) and saved/n10/."""
     saved = root / "saved"
     run = saved / RUN_ID
     (run / "tools").mkdir(parents=True)
-    data = SAMPLE_EVENTS.read_bytes()
+    data = sample_record(intake=True)
     if extra_line is not None:
         data += extra_line.encode("utf-8") + b"\n"
     (run / "events.jsonl").write_bytes(data)
+    (saved / PLAIN_ID).mkdir()
+    (saved / PLAIN_ID / "events.jsonl").write_bytes(sample_record(intake=False))
     (run / "tools" / "rollbar-1.py").write_text(CODE_1, encoding="utf-8")
     (run / "tools" / "rollbar-1.check.json").write_text(CHECK_1, encoding="utf-8")
     (run / "tools" / "notes.txt").write_text("not a tool file\n", encoding="utf-8")
@@ -128,9 +162,22 @@ class ExportTest(unittest.TestCase):
         tools = sorted(p.name for p in (self.out / "data" / "runs" / RUN_ID / "tools").iterdir())
         self.assertEqual(tools, ["rollbar-1.check.json", "rollbar-1.py"])
         runs = json.loads((self.out / "data" / "runs.json").read_text(encoding="utf-8"))
-        self.assertEqual([r["run_id"] for r in runs], [RUN_ID, "sample"])
-        self.assertEqual([r["run_id"] for r in runs if r["default"]], [RUN_ID])
+        self.assertEqual([r["run_id"] for r in runs], [PLAIN_ID, RUN_ID, "sample"])
+        self.assertEqual([r["run_id"] for r in runs if r["default"]], [PLAIN_ID])
         self.assertEqual(json.loads((self.out / "data" / "launch.json").read_text(encoding="utf-8")), {"available": False})
+
+    def test_first_run_has_the_request_and_the_hearing(self):
+        """The recommended run has no ① / ② in its record: the first screen is the run that has."""
+        first = json.loads((self.out / "data" / "static.json").read_text(encoding="utf-8"))["first"]
+        self.assertEqual(first["run"], RUN_ID)
+        self.assertIn("newest", first["why"])
+        self.assertEqual(self.got["first"], first)
+        # without such a run: none (the page opens on the run list)
+        root = self.tmp / "plain-only"
+        saved = make_saved(root)
+        shutil.rmtree(saved / RUN_ID)
+        got = ex.export(root / "site", saved_dir=saved, shelf=fake_shelf(), sample=False)
+        self.assertIsNone(got["first"])
 
     def test_n10_page(self):
         page = (self.out / "n10" / "index.html").read_text(encoding="utf-8")
@@ -222,7 +269,7 @@ class StaticBrowserTest(unittest.TestCase):
           mode: document.getElementById('mode').innerText,
           stop: !!document.querySelector('[data-stop]'),
         })""")
-        self.assertEqual(got["events"], len(SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(got["events"], len(SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()) + len(INTAKE_KINDS))
         self.assertTrue(got["canvas"])
         self.assertIn("再生", got["mode"])
         self.assertFalse(got["stop"])
@@ -241,7 +288,7 @@ class StaticBrowserTest(unittest.TestCase):
         self.clean(page, seen)
 
     def test_the_run_list_only_replays(self):
-        for query in ("", "?new=1", "?list=1&dev=1"):
+        for query in ("?list=1", "?new=1", "?list=1&dev=1"):
             with self.subTest(query=query):
                 page, seen = self.open(query, wait_ready=False)
                 page.wait_for_selector("#runlist .local-run a", timeout=20000)
@@ -259,6 +306,48 @@ class StaticBrowserTest(unittest.TestCase):
                 self.assertEqual(got["extras"], ["n10/index.html"])
                 self.assertGreaterEqual(got["runs"], 1)
                 self.clean(page, seen)
+
+    def test_first_screen_is_the_request(self):
+        """A bare page: ① of the picked run with its request; ② has its hearing; the run list is a tab;
+        「この記録を再生する」 goes to ③ and plays."""
+        page, seen = self.open("")
+        state = """() => ({
+          on: [...document.querySelectorAll('.tab.on')].map((b) => b.dataset.tab),
+          intake: !document.getElementById('view-intake').hidden,
+          bar: document.getElementById('replaybar')?.innerText ?? null,
+          list: document.getElementById('runlist').hidden,
+          inputs: [...document.querySelectorAll('#view-intake textarea, #view-intake .in-composer button')].filter((e) => e.checkVisibility()).length,
+          runId: window.hiraku.state().runId,
+          playing: window.hiraku.player.playing, playhead: window.hiraku.player.playhead,
+        })"""
+        got = page.evaluate(state)
+        want = json.loads(SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()[0])["data"]["want"]
+        self.assertEqual((got["on"], got["intake"], got["list"], got["playing"], got["inputs"]), (["A1"], True, True, False, 0))
+        self.assertIn(want, got["bar"])
+        self.assertIn("この記録を再生する", got["bar"])
+        self.assertIn(want, page.inner_text("#intake-host"))
+        # the steps in order, then the run list's tab (a link) after them
+        order = page.evaluate("[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.tab ?? t.getAttribute('href'))")
+        self.assertEqual(order[:3], ["A1", "A2", "bench"])
+        self.assertIn("?list=1", order)
+        self.assertGreater(order.index("?list=1"), order.index("A7"))
+        # ②: the hearing of the record
+        page.click('.tab[data-tab="A2"]')
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A2'")
+        self.assertIn("この記録を再生する", page.inner_text("#replaybar"))
+        self.assertEqual(page.evaluate("[...document.querySelectorAll('#view-intake textarea')].filter((e) => e.checkVisibility()).length"), 0)
+        # the button: ③ from the record's first design, playing
+        page.click("#replaybar button[data-static-replay]")
+        page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'bench' && window.hiraku.player.playing")
+        got = page.evaluate(state)
+        self.assertEqual((got["intake"], got["runId"]), (False, json.loads(SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()[0])["run_id"]))
+        first_design = page.evaluate("window.hiraku.player.events.find((e) => e.kind === 'design.created').t")
+        self.assertGreaterEqual(got["playhead"], first_design)
+        self.assertLess(got["playhead"], page.evaluate("window.hiraku.player.duration") / 2)
+        # the run list's tab opens the list
+        page.click("#tabs a.tab-list")
+        page.wait_for_selector("#runlist .local-run a", timeout=20000)
+        self.clean(page, seen)
 
     def test_n10_page_opens(self):
         page, seen = self.open("n10/index.html", wait_ready=False)

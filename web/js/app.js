@@ -61,11 +61,36 @@ import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 
 const $ = (id) => document.getElementById(id);
-const params = new URLSearchParams(location.search);
+// A static export opened with no parameters starts at ① of the run its export picked (data/static.json
+// first: a saved run whose record has the request, the picked domains and the hearing), stopped at the
+// record's end so ① and ② show all of it; 「この記録を再生する」 plays it (STATIC_REPLAY). Without such a
+// run: the run list, as before.
+async function staticFirst() {
+  try {
+    return (await (await fetch("data/static.json")).json()).first ?? null;
+  } catch {
+    return null;
+  }
+}
+const FIRST = STATIC && !location.search ? await staticFirst() : null;
+const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}&tab=A1&t=1e6` : location.search);
 // ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
 const tabs = mountTabs($("tabs"), { dev: DEV });
+// A static export: the run list is a tab of its own after the steps (a link to ?list=1; the steps
+// themselves are the record's, from ①)
+if (STATIC) {
+  document.documentElement.classList.add("static-export"); // (app.css: no box to write or send in on ① / ②)
+  const list = document.createElement("a");
+  list.className = "tab tab-list";
+  list.href = DEV ? "?list=1&dev=1" : "?list=1";
+  list.title = "保存した記録の一覧 (ほかの実行を選んで見る)";
+  list.innerHTML =
+    `<svg class="tab-ic" viewBox="0 0 20 20" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 5.5H16M4 10H16M4 14.5H16"/></svg>` +
+    `<span class="tab-name">実行の一覧</span>`;
+  $("tabs").querySelector(".tabside")?.prepend(list);
+}
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
@@ -676,14 +701,47 @@ async function dropFile(name, text) {
   }
 }
 
+// A static export (STATIC) on ① / ②: the record's request and one button, 「この記録を再生する」, which
+// plays the run on ③ from its first design (the request itself cannot be sent there: no server).
+function renderReplayBar() {
+  const bar = $("replaybar");
+  if (!bar) return;
+  const want = player.state.project?.want ?? "";
+  const html =
+    `<span class="rb-want"><b>この記録の依頼</b> ${want ? esc(want) : "—"}</span>` +
+    `<button class="go" type="button" data-static-replay="1">この記録を再生する</button>`;
+  if (bar.dataset.html !== html) {
+    bar.innerHTML = html;
+    bar.dataset.html = html;
+  }
+}
+
+function staticReplay() {
+  const t0 = player.events.find((e) => e.kind === "design.created")?.t ?? 0;
+  if (ui.gridDomain) closeDomain();
+  ui.pinnedTab = "bench";
+  ui.tabPlan = [];
+  ui.frozen = false;
+  player.seek(t0);
+  player.play();
+  drawn.rev = -1;
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-static-replay]")) staticReplay();
+});
+
 function renderIntake(tab) {
   if (!intake) {
     // in a new request the bar (renderDraft) sits above the screens
-    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    $("view-intake").innerHTML =
+      `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}${STATIC ? `<div class="draftbar replaybar" id="replaybar"></div>` : ""}` +
+      `<div class="intake-host" id="intake-host"></div>`;
     intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  renderReplayBar();
   syncDraftAsk();
   syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
