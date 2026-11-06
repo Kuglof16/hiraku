@@ -417,7 +417,32 @@ def _p1_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
     return out
 
 
-DRIVE_BUILDERS = {"P1": _p1_drive}
+# S3's drive record: the lane change this much faster than the requirement's speed, near the tyres' limit. K2's
+# choice for the video: on the video run 20261106-124650's version 5, 40 km/h used at most 0.59 of the friction
+# circle, 50 km/h 0.93 with no wheel lifting, 55 km/h lifted a wheel and left the lane (K2's runs, 2026-11-06)
+S3_DRIVE_FACTOR = 1.25
+
+
+def _s3_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
+    """S3's drive record: the double lane change at S3_DRIVE_FACTOR times its speed, near the tyres' limit, no
+    criterion and feeding nothing (for the screen and the video to show the friction circles near the limit)."""
+    out = []
+    for lc in _build_one(catalog, req, design, "S3", False):
+        if is_beyond(lc):
+            continue
+        d = copy.deepcopy(lc)
+        sp = d["params"]["speed"]
+        v = float(sp["value"]) * S3_DRIVE_FACTOR
+        d["params"] = dict(d["params"], speed={"value": v, "unit": sp["unit"]})
+        d["load_case_id"] = f"S3-dlc{v:g}{DRIVE_SUFFIX}"
+        d["title"] = f"{DRIVE_TITLE}: 限界に近い速さ {v:g} {sp['unit']} の車線変更 ({lc['title']})"
+        d.pop("criterion", None)
+        d.pop("feeds", None)
+        out.append(d)
+    return out
+
+
+DRIVE_BUILDERS = {"P1": _p1_drive, "S3": _s3_drive}
 
 
 def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],
