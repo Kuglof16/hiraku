@@ -901,7 +901,7 @@ class N10(unittest.TestCase):
         self.assertEqual((rows["step"]["cae"]["v"], rows["step"]["cae"]["by"]), (1103.7, "K1"))
         self.assertEqual(rows["tilt"]["claude"], [39, 38, 39])
         self.assertEqual([h["v"] for h in rows["tilt"]["hand"]], [39.85])
-        self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.27, "K2"))
+        self.assertEqual((rows["tilt"]["cae"]["v"], rows["tilt"]["cae"]["by"]), (38.26, "K2"))
         # only one of the three runs gave a figure for the stress
         self.assertEqual(rows["stress"]["claude"], [60])
         self.assertEqual([h["v"] for h in rows["stress"]["hand"]], [40.0, 77.09])
@@ -910,7 +910,7 @@ class N10(unittest.TestCase):
     def test_differences(self):
         rows = {r["key"]: r for r in n10_data()["rows"]}
         self.assertAlmostEqual(n10_diffs(rows["step"])[0], 1.2569, places=3)
-        self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.87, 0.71, -1.87])
+        self.assertEqual([round(x, 2) for x in n10_diffs(rows["tilt"])], [-1.9, 0.68, -1.9])
         self.assertAlmostEqual(n10_diffs(rows["stress"])[0], 1.9167, places=3)
         # the widths HIRAKU allows for these quantities in the video run's comparisons
         self.assertEqual([r["tol_pct"] for r in rows.values()], [10, 10, 15])
@@ -1007,7 +1007,11 @@ class N08(unittest.TestCase):
         self.assertIn("お見積もりはお問い合わせください", self.html)
         self.assertIn("ノード数の上限", self.html)
         self.assertIn("ライセンスの有効期限", self.html)
-        self.assertIsNone(re.search(r"[¥€￥]|円|ドル", self.html))
+        # the application shows no prices; the one price the voice gives is in the source line, with its source
+        src = re.search(r'<p class="src" data-box="n08.src"[^>]*>(.*?)</p>', self.html).group(1)
+        self.assertIn("SOLIDWORKS Simulation", src)
+        self.assertIn("2024 年 2 月現在", src)
+        self.assertIsNone(re.search(r"[¥€￥]|円|ドル", self.html.replace(src, "")))
         # the warnings carry words only, no counts
         for m1, m2 in re.findall(r'msg\((?:WARN|ERR), "([^"]+)", "([^"]+)"\)', self.html):
             self.assertIsNone(re.search(r"[0-9０-９]", m1 + m2), m1)

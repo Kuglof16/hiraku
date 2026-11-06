@@ -1,5 +1,5 @@
 {
- "script": "${WORK}/script/narration_v7.tsv",
+ "script": "${WORK}/script/narration_v9.tsv",
  "fps": 30,
  "band": {
   "top": 910,
