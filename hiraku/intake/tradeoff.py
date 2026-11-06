@@ -12,11 +12,23 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from hiraku.intake.domains import IntakeError
+
 Record = dict[str, Any]
 
 MIN_ELASTICITY = 0.1  # a result that moves less than 0.1 % for 1 % of the number is not a side of a trade-off
 STEP_PCT = 10.0  # the step the question talks about
 CHOICES = ["favor_a", "favor_b", "keep_both"]
+
+# What gathers the sensitivities of a run (hiraku.tools, above this package, registers it):
+# collector(ctx, paths, only_quantities) -> {sens: {quantity: [term]}, meta: {quantity: {label, unit, lower_is_better}},
+# bases: {quantity: {value, record_id}}, skipped: [why]}
+collector = None
+
+
+def register_collector(fn) -> None:
+    global collector
+    collector = fn
 
 
 def _split(name: str) -> tuple[str, str] | None:
@@ -124,8 +136,6 @@ def text(pair: Record) -> str:
 
 def check_answers(raw: Any, asked: list[Record] | None = None) -> list[Record]:
     """The trade-off answers [{tradeoff_id, choice, note?}]; `asked` are the run's tradeoff_questions."""
-    from hiraku.intake import IntakeError
-
     if raw in (None, []):
         return []
     if not isinstance(raw, list):
@@ -141,3 +151,15 @@ def check_answers(raw: Any, asked: list[Record] | None = None) -> list[Record]:
             raise IntakeError(f"{a['tradeoff_id']} の選択肢は {' か '.join(offered.get(a['tradeoff_id'], CHOICES))} です")
         out.append({k: str(v) if k == "note" else v for k, v in a.items() if v not in (None, "")})
     return out
+
+
+def to_question(pair: Record) -> Record:
+    """The pair in the contract's `tradeoff_question` shape (every number from the code; needs the base values)."""
+    sides = {}
+    for key in ("a", "b"):
+        s = pair[key]
+        if "now" not in s or "after" not in s or not s.get("record_id"):
+            raise ValueError(f"{pair['tradeoff_id']}: no base value or record for {s.get('name')}")
+        sides[key] = {"name": s["name"], "unit": s.get("unit") or "1", "now": s["now"], "after": s["after"], "record_id": s["record_id"]}
+    return {"tradeoff_id": pair["tradeoff_id"], "variable": pair["variable"], "step_pct": pair["step_pct"], "text": pair["text"],
+            **sides, "choices": list(pair.get("choices") or CHOICES)}
