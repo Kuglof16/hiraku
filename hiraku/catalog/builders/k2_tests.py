@@ -102,6 +102,9 @@ TOLERANCE = {
     # the same force balance integrated over speed; K2 adds tyre slip, the load moving to
     # the rear axle and its own wheel inertia
     "P3": 0.10,
+    # the same Ackermann geometry; K2 drives it slowly, so its tyres slip a little (0.5 % on
+    # the check vehicle at 2 m/s) and the tyres' contact points move as the body rolls
+    "S6": 0.03,
 }
 
 
@@ -252,6 +255,19 @@ def _p3_accel(spec: Record, req: Record, design: Record) -> Record:
                  _crit("time_to_speed", "<=", q(limit, "s"), f"Q51 {limit:g} s to Q50 {target:g} km/h", ["Q51"]))
 
 
+def _s6_turn(spec: Record, req: Record, design: Record) -> Record:
+    on, keys = _loading(req, design)
+    r_max = number(req, "Q58", "m")
+    return _case(spec, "S6", "handling", "S6-turn", f"小回り: 全切りで回るときの外側の前輪の円の半径が {r_max:g} m 以下 "
+                 f"({LOADING_JA[on]})",
+                 {"loading": on, "speed": q(TURN_SPEED_KMH, "km/h"), "direction": "both"}, keys + ["Q58"],
+                 _crit("turning_radius_wheel", "<=", q(r_max, "m"), f"Q58 {r_max:g} m", ["Q58"]))
+
+
+# S6 drives the turn slowly so the tyres hardly slip (a walking pace; K2's choice, not from a standard)
+TURN_SPEED_KMH = 5.0
+
+
 # ------------------------------------------------------------------ past the limit
 def _f1_beyond(spec: Record, req: Record, design: Record) -> Record:
     on, keys = _loading(req, design)
@@ -323,7 +339,7 @@ def _variant(test_id: str, fn):
 BUILDERS: dict[str, Callable[[Record, Record, Record], Record]] = {
     tid: _variant(tid, fn) for tid, fn in {
         "S1": _s1_tilt, "S1'": _s1p_ssf, "F1": _f1_wind, "S3": _s3_dlc, "S4": _s4_brake, "S4b": _s4b_park,
-        "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel}.items()
+        "S5": _s5_slope, "P2": _p2_grade, "P3": _p3_accel, "S6": _s6_turn}.items()
 }
 
 
@@ -425,6 +441,18 @@ def slope_inputs(design: Record, load_case: Record) -> Record:
     y = float(veh.cg_total[1]) * 1000.0
     return {"a_y": q(math.tan(beta), "g"), "h": _height(veh, ground),
             "e": q(-y if lp.get("slope_up", "left") == "left" else y, "mm")}
+
+
+def turning_inputs(design: Record, load_case: Record) -> Record:
+    """turning.min_radius's L (the steered axle to the unsteered one, as K2's Ackermann steering takes
+    it), t (the steered axle's track: between its outermost wheels' design positions) and delta_i (the
+    design's max_steer_angle, else K2's assumed 35 deg)."""
+    import math as _m
+    veh, _ = _vehicle(design, load_case)
+    ys = [float(c.pos[1]) for c in veh.corners if c.steer and c.kind == "wheel"]
+    if len(ys) < 2:
+        raise BuildError("S6 needs two steered wheels (turning.min_radius takes their track)")
+    return {"L": q(abs(veh.l_steer), "m"), "t": q(max(ys) - min(ys), "m"), "delta_i": q(_m.degrees(veh.max_steer), "deg")}
 
 
 def launch_inputs(design: Record, load_case: Record) -> Record:
@@ -551,6 +579,14 @@ PLANS: dict[str, Record] = {
                "quantity": "time_to_speed", "formula_id": "launch.time_to_speed", "output": "t",
                "assumptions": ["発進から全力、輪は滑らない", "トルクで決まり、その先は出力で決まる"],
                "inputs": dict(_LAUNCH_REFS, v="lc.target_speed"), "inputs_from": launch_inputs}]},
+    "S6": {"tool": "turning_circle", "say": "全切りで回るときの外側の前輪の円の半径を、軸距・輪距・切れ角のアッカーマンの形で"
+                                            "先に見積もります",
+           "predictions": [{
+               "quantity": "turning_radius_wheel", "formula_id": "turning.min_radius", "output": "R",
+               "assumptions": ["アッカーマンの舵: どの輪も、舵の無い車軸の線の上の 1 点のまわりを回る",
+                               "ゆっくり回るので、タイヤは滑らない", "タイヤは接地点のまわりで向きを変える (スクラブ 0)",
+                               "全切り: 内側の前輪が max_steer_angle、外側はアッカーマンの角度"],
+               "inputs": {"L": "from.L", "t": "from.t", "delta_i": "from.delta_i"}, "inputs_from": turning_inputs}]},
 }
 
 # The steps of the cases past the limit that differ from PLANS (F1 and S4 predict as PLANS).

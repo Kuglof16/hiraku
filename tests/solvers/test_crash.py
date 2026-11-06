@@ -59,6 +59,8 @@ class CrashToolTest(unittest.TestCase):
         self.assertAlmostEqual(r["inertia_acceleration"]["value"], r["peak_deceleration"]["value"] * G, delta=1e-6)
         self.assertAlmostEqual(r["battery_inertia_force"]["value"], 50.0 * r["peak_deceleration"]["value"] * G, places=6)
         self.assertIn("occupant_space_margin", r)
+        for name in ("peak_force", "max_crush", "stop_time", "mean_deceleration", "mean_crush_force", "crush_bottomed"):
+            self.assertIn(name, r)
         self.assertEqual({s["channel"] for s in rec["series"]}, {"deceleration", "crush", "wall_force"})
         wall = rec["scene"][0]
         front = max([n["xyz_mm"][0] for n in DESIGN["nodes"]] + [p["box"]["center_mm"][0] + p["box"]["size_mm"][0] / 2
@@ -73,11 +75,20 @@ class CrashToolTest(unittest.TestCase):
 
     def test_missing_front_data(self):
         d = copy.deepcopy(DESIGN)
-        del d["variables"]["crush_stiffness"]
+        del d["variables"]["bumper_stroke"]
         rec = TOOL.run(d, lc(speed=q(40, "km/h")), PRED, {})
         self.assertEqual(rec["status"], "failed")
-        self.assertIn("crush_stiffness", rec["error"])
+        self.assertIn("bumper_stroke", rec["error"])
         self.assertEqual(TOOL.run(DESIGN, lc(), PRED, {})["status"], "failed")
+
+    def test_crush_stiffness_not_read(self):
+        d = copy.deepcopy(DESIGN)
+        del d["variables"]["crush_stiffness"]
+        a = results(TOOL.run(d, lc(speed=q(40, "km/h")), PRED, {}))
+        b = results(TOOL.run(DESIGN, lc(speed=q(40, "km/h")), PRED, {}))
+        self.assertEqual(a["max_crush"]["value"], b["max_crush"]["value"])
+        rec = TOOL.run(DESIGN, lc(speed=q(40, "km/h")), PRED, {})
+        self.assertTrue(any("crush_stiffness is not used" in s for s in rec["assumptions"]))
 
     def test_mean_deceleration_formula(self):
         o = solvers.formula_registry().evaluate("crash.mean_deceleration", {"m": q(760, "kg"), "v": q(40, "km/h"), "s": q(300, "mm")})["outputs"]
