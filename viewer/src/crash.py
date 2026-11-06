@@ -25,6 +25,11 @@ model "B" (tool crash_beam: co-rotational beams with plastic hinges, its node_mo
         member_hinge.<m>.<end>, deg); colour.force {member: packed nF, N}, area_mm2, hinge_ends, stress_absmax, hinge_max
     stop {t_s, member, piece_pct, limit_pct, text}: the run stops when a piece breaks off the seats' side
         (result frame_split_time and its assumption)
+    from K2 fcd3f2b8 (element contact): stop.goes_on (the run goes on past the split) and stop.ok (the piece under
+        the limit); wheels [{id, node, r, width, kg, parts, mounts, mount_ids, c, t_wall_s, ...}] from the node_motion
+        nodes '<wheel>~centre' on no element and the record's mass assumption (the parts on a wheel move with its
+        node); summary.margin (occupant_space_margin judged by the load case's criterion), summary.after (the
+        "after the split" band), crush_at_split, crumple_length, wall_free_after_s
     hot_spots [{where, quantity, value, unit, limit, ok}] least first
     summary {t_end_s, peak_decel, mean_decel (the deceleration series' mean: speed lost / time), crush_end,
              crush_max, least_room (the first hot spot)}
@@ -204,18 +209,67 @@ def member_results(rec: dict, t_frames: list[float], members: list[str], design:
 
 
 def stop_of(rec: dict) -> dict | None:
-    """Why the run stopped, from the record: frame_split_time (its where = the member that broke) and the
-    assumption 'the frame split at ... a piece with X % of the whole mass ...'."""
+    """The split, from the record: frame_split_time (its where = the member that broke) and the assumption
+    'the frame split at ... a piece with X % of the whole mass ...'. K2 182f148f stops there ('stops at a piece
+    of L %'); from fcd3f2b8 (element contact) the run goes on ('a split off of a piece of L % of the mass or
+    more is NG for C1', 'the run goes on past the split'): goes_on. ok: the piece is under the limit."""
     t = next((r for r in rec.get("results", []) if r["quantity"] == "frame_split_time"), None)
     a = _assumption(rec, r"^the frame split at")
     if t is None and a is None:
         return None
     pct = re.search(r"a piece with ([\d.]+) % of the whole mass", a or "")
-    lim = re.search(r"stops at a piece of ([\d.]+) %", a or "")
+    lim = (re.search(r"stops at a piece of ([\d.]+) %", a or "")
+           or re.search(r"a piece of ([\d.]+) % of the mass or more is NG", a or ""))
     member = (t or {}).get("where") or (re.search(r"when (\S+) broke", a or "") or [None, None])[1]
-    return {"t_s": float(t["value"]) if t else None, "member": member,
-            "piece_pct": float(pct.group(1)) if pct else None, "limit_pct": float(lim.group(1)) if lim else None,
-            "text": a or ""}
+    piece, limit = (float(pct.group(1)) if pct else None), (float(lim.group(1)) if lim else None)
+    return {"t_s": float(t["value"]) if t else None, "member": member, "piece_pct": piece, "limit_pct": limit,
+            "goes_on": "run goes on past the split" in (a or ""),
+            "ok": (piece < limit) if piece is not None and limit is not None else None, "text": a or ""}
+
+
+WHEEL_RE = re.compile(r"(\w+) \(([^()]*?), ([\d.]+) kg, radius ([\d.]+) mm\) to ([^()]+?) \(")
+
+
+def wheels_of(rec: dict, ids: list[str], linked: set[str], design: dict) -> list[dict]:
+    """The wheel nodes of the node_motion field (K2 fcd3f2b8: '<wheel>~centre', on no element) with their
+    radius, mass, the parts on them and the frame nodes their links go to, as the record's mass assumption
+    says them ('wheel_FL (wheel_FL + knuckle_FL + caliper_FL, 18.0 kg, radius 300 mm) to LAl1, LAl2, ...').
+    Without that text: the wheel part's box (radius = half its x size), no links."""
+    index = {n: i for i, n in enumerate(ids)}
+    said = {m.group(1): m for m in WHEEL_RE.finditer(_assumption(rec, r"wheels as nodes at their centres") or "")}
+    parts = {p["id"]: p for p in design.get("parts", [])}
+    out = []
+    for nid in ids:
+        if not nid.endswith("~centre") or nid in linked:
+            continue
+        wid = nid[: -len("~centre")]
+        box = (parts.get(wid) or {}).get("box") or {}
+        size = box.get("size_mm") or [0.0, 0.0, 0.0]
+        m = said.get(wid)
+        mounts = [s.strip() for s in m.group(5).split(",")] if m else []
+        out.append({"id": wid, "node": index[nid], "r": float(m.group(4)) if m else float(size[0]) / 2.0,
+                    "width": float(size[1]), "kg": float(m.group(3)) if m else None,
+                    "parts": [s.strip() for s in m.group(2).split("+")] if m else [wid],
+                    "mounts": [index[s] for s in mounts if s in index], "mount_ids": [s for s in mounts if s in index]})
+    return out
+
+
+def judge(value, op: str, limit) -> bool | None:
+    if value is None or limit is None:
+        return None
+    return {">=": value >= limit, ">": value > limit, "<=": value <= limit, "<": value < limit}.get(op)
+
+
+def margin_of(rec: dict, lc: dict | None) -> dict | None:
+    """occupant_space_margin (the record's result) judged by the load case's criterion (op, limit)."""
+    r = next((x for x in rec.get("results", []) if x["quantity"] == "occupant_space_margin"), None)
+    if r is None:
+        return None
+    crit = (lc or {}).get("criterion") or {}
+    lim = crit.get("limit", {}).get("value") if crit.get("quantity") == "occupant_space_margin" else None
+    op = crit.get("op", ">=")
+    return {"value": float(r["value"]), "unit": r.get("unit", "mm"), "where": r.get("where", ""), "op": op,
+            "limit": lim, "ok": judge(float(r["value"]), op, lim)}
 
 
 def hot_spots_of(rec: dict) -> list[dict]:
@@ -287,6 +341,46 @@ def build_b(args, vdir, rec, design) -> dict:
     # the loading leaves off stays where it is
     lc = common.load_case_of(vdir, rec["load_case_id"])
     obj["ledger"] = common.parts_ledger("crash_beam", design, lc, rec, obj["parts"])
+    # the wheel nodes (K2 fcd3f2b8): on no element of the field (their links are not in its members); the parts
+    # the record puts on a wheel node move with it
+    linked = {x for a, b, _m in nm["members"] for x in (a, b)}
+    wheels = wheels_of(rec, ids, linked, design)
+    obj["wheels"] = [{"id": w["id"], "node": w["node"], "r": w["r"], "width": w["width"], "kg": w["kg"],
+                      "parts": w["parts"], "mounts": w["mounts"], "mount_ids": w["mount_ids"],
+                      "c": P[0][w["node"]]} for w in wheels]
+    on_wheel = {pid: w for w in wheels for pid in w["parts"]}
+    dparts = {p["id"]: p for p in design.get("parts", [])}
+    for e in obj["ledger"]["parts"]:
+        w = on_wheel.get(e.get("id"))
+        if w is None or e["cat"] == "not_in":
+            continue
+        e.update(cat="unsprung", nodes=[[ids[w["node"]], float(dparts.get(e["id"], {}).get("mass_kg") or 0.0)]],
+                 how=(f"in the wheel node {ids[w['node']]} ({' + '.join(w['parts'])}"
+                      + (f", {w['kg']:g} kg" if w["kg"] is not None else "") + f"), joined to the frame nodes "
+                      f"{', '.join(w['mount_ids']) or '(not said)'} by pin-ended links (axial springs only); the wheel "
+                      f"touches the wall at its centre's x + {w['r']:g} mm and stops there (record assumptions)"))
+    if wheels:
+        # the ledger's per-support checks again with the wheel parts on their wheel nodes, and one row per wheel
+        L = obj["ledger"]
+        for s in L.get("stated", []):
+            m = re.match(r"unsprung at \S+ \((\S+)\)$", s["label"])
+            if m:
+                s["computed_kg"] = sum(e["mass_kg"] for e in L["parts"] if e["cat"] == "unsprung" and e["nodes"]
+                                       and e["nodes"][0][0] == m.group(1))
+        for w in wheels:
+            if w["kg"] is None:
+                continue
+            L.setdefault("stated", []).append(
+                {"label": f"wheel node {ids[w['node']]}", "stated_kg": w["kg"], "tol_kg": 0.051,
+                 "computed_kg": sum(e["mass_kg"] for e in L["parts"] if e["nodes"] and e["nodes"][0][0] == ids[w["node"]]),
+                 "source": "record assumption (the wheels as nodes), parts " + " + ".join(w["parts"])})
+        for s in L.get("stated", []):
+            s["diff_kg"] = None if s["computed_kg"] is None else s["computed_kg"] - s["stated_kg"]
+            s["agrees"] = s["diff_kg"] is not None and abs(s["diff_kg"]) <= s["tol_kg"]
+            if s["agrees"]:
+                s.pop("why", None)
+            elif "why" not in s:
+                s["why"] = "the design.json read here is not the design the tool weighed, or the loading differs"
     offs = []
     keep = []
     for p, e in zip(obj["parts"], obj["ledger"]["parts"]):
@@ -304,8 +398,16 @@ def build_b(args, vdir, rec, design) -> dict:
     obj["wall_x_mm"] = wx
     bn, bd, bp, bpd, any_nodes = [], [], [], [], set()
     any_parts = set()
+    wnodes = {w["node"] for w in wheels}
+    fnodes = [i for i in range(n) if i not in wnodes]
+    # each wheel's front (centre x + r) less the wall face per frame; the first frame at the wall (within TOL_MM)
+    for w, ow in zip(wheels, obj["wheels"]):
+        gap = [F[w["node"]][0] + w["r"] - wx for F in P]
+        k_hit = next((k for k, g in enumerate(gap) if g >= -TOL_MM), None)
+        ow.update(front_gap_min=min(-g for g in gap), beyond_max=max(max(gap), 0.0),
+                  t_wall_s=float(frames["t_s"][k_hit]) if k_hit is not None else None)
     for k, F in enumerate(P):
-        over = [(F[i][0] - wx, i) for i in range(n) if F[i][0] > wx + TOL_MM]
+        over = [(F[i][0] - wx, i) for i in fnodes if F[i][0] > wx + TOL_MM]
         bn.append(len(over))
         bd.append(max((d for d, _ in over), default=0.0))
         any_nodes |= {i for _, i in over}
@@ -328,18 +430,30 @@ def build_b(args, vdir, rec, design) -> dict:
     obj["series"] = {"t": common.pack_f32(dec["t_s"]), "decel": common.pack_f32(dec["values"]),
                      "crush": common.pack_f32(cr["values"])}
     obj["units"] = {"deceleration": dec.get("unit", "g"), "crush": cr.get("unit", "mm")}
-    obj["stop"] = stop_of(rec)
+    obj["stop"] = st = stop_of(rec)
+    goes_on = bool(st and st["goes_on"])
     obj["hot_spots"] = hot_spots_of(rec)
     dv = dec["values"]
     least = next((h for h in obj["hot_spots"] if isinstance(h["value"], (int, float))), None)
+    max_crush, at_split = common.result(rec, "max_crush"), common.result(rec, "crush_at_split")
+    free = re.search(r"nothing touched the wall after ([\d.]+) ms", _assumption(rec, r"nothing touched the wall after") or "")
     obj["summary"] = {
         "t_end_s": float(frames["t_s"][-1]),
         "peak_decel": common.result(rec, "peak_decel") if common.result(rec, "peak_decel") is not None else max(dv, default=0.0),
         # the series is the wall's impulse per 1 ms / (mass x 1 ms) at even steps: its mean is the speed lost / time
         "mean_decel": sum(dv) / len(dv) if dv else None,
-        "crush_end": common.result(rec, "crush_at_split") if common.result(rec, "crush_at_split") is not None else (cr["values"][-1] if cr["values"] else None),
+        # a run stopped at the split: the crush then; a run going on: the record's max_crush over the run
+        "crush_end": (max_crush if goes_on and max_crush is not None else at_split if at_split is not None
+                      else (cr["values"][-1] if cr["values"] else None)),
+        "crush_at_split": at_split,
         "crush_max": max(cr["values"], default=None),
         "least_room": least,
+        "margin": margin_of(rec, lc),
+        "crumple_length": common.result(rec, "crumple_length"),
+        "goes_on": goes_on,
+        # after the split (the run going on): from the split to the end of the record
+        "after": {"t0_s": st["t_s"], "t1_s": float(frames["t_s"][-1])} if goes_on and st["t_s"] is not None else None,
+        "wall_free_after_s": float(free.group(1)) / 1000.0 if free else None,
     }
     mass = _assumption(rec, r"^mass [\d.]+ kg")
     obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
@@ -363,12 +477,26 @@ def build_b(args, vdir, rec, design) -> dict:
            if b["parts_any"] else ""),
     ] + ([f"箱を動かす節点がない部品 (その場に置く): {len(dropped)} 個"] if dropped else [])
     obj["notes"].append("部品の箱は壁面で切って描く (箱は壁に当たらない扱いなので、壁の先は描かない)。")
-    st = obj["stop"]
-    if st:
+    full = st and st["t_s"] is not None and st["piece_pct"] is not None and st["limit_pct"] is not None
+    if st and goes_on:
+        obj["notes"].append(f"フレームの分離: {st['t_s'] * 1000:.1f} ms、{st['member']} が折れて、座席側から質量の "
+                            f"{st['piece_pct']:g} % の塊が離れた ({st['limit_pct']:g} % 以上は C1 で NG)。塊どうしは要素の接触で"
+                            f"押し合うので、計算は {obj['summary']['t_end_s'] * 1000:.0f} ms まで続く (グラフの網かけ = 分離の後)。"
+                            if full else "フレームの分離: " + st["text"][:200])
+    elif st:
         obj["notes"].append(f"計算の停止: {st['t_s'] * 1000:.1f} ms、{st['member']} が折れて、座席側から質量の "
                             f"{st['piece_pct']:g} % の塊が離れた (K2 は塊どうしの接触がないため、{st['limit_pct']:g} % 以上で止める)。"
-                            if st["t_s"] is not None and st["piece_pct"] is not None and st["limit_pct"] is not None
-                            else "計算の停止: " + st["text"][:200])
+                            if full else "計算の停止: " + st["text"][:200])
+    if obj["wheels"]:
+        obj["notes"].append("車輪は中心の節点 1 つ (半径 " + "、".join(sorted({f"{w['r']:g}" for w in obj["wheels"]})) + " mm の輪で描く)。"
+                            "取付の節点へは細い線 (ピン結合のリンク: 伸び縮みだけ、曲がらない) でつなぐ。中心の x + 半径 で壁に当たり、"
+                            "そこで止まる (はね返らない)。車輪と部品の箱はフレームの要素には当たらない。")
+    if obj["summary"]["wall_free_after_s"] is not None:
+        obj["notes"].append(f"{obj['summary']['wall_free_after_s'] * 1000:.1f} ms より後は何も壁に当たっていない "
+                            "(座席側の塊は前に何もないまま進む)。")
+    obj["notes"].append("ピークの減速度は乗員への入力: 車全体の質量の減速度を 1 ms ごとにならした値 (壁が受けた力積 ÷ 質量 ÷ 1 ms)。"
+                        + ("車輪が壁に当たった瞬間は、その車輪が 1 ステップで止まるので短いピークが出る。"
+                           if any(w["t_wall_s"] is not None for w in obj["wheels"]) else ""))
     if "stress" in obj["colour"]:
         obj["notes"].append("軸応力 = 記録の部材の軸力 / 設計の断面積 (引張 +)。ヒンジ回転 = 記録の部材の両端の塑性ヒンジ回転の大きい方。"
                             "どちらも部材ごとの値で、部材の要素は同じ色。")

@@ -98,6 +98,31 @@ HV.crashB = async function (D, ctx) {
   const near = tv => { let b = 0, bd = Infinity; ts.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; };
   let kPeak = 0; dec.forEach((v, i) => { if (v > dec[kPeak]) kPeak = i; });
   for (let i = 0; i < np; i++) boxes.colour(i, [0.72, 0.72, 0.75]);
+  // wheels (K2 fcd3f2b8): a tyre ring at each wheel centre node, thin lines for its links to the mount nodes;
+  // the wheel's own box is not drawn (the ring stands for it)
+  const WH = D.wheels || [];
+  const wheels = WH.length ? new HV.Wheels(ctx.view, WH.map(w => ({ c: w.c, r: w.r, width: w.width, spring: false }))) : null;
+  let links = null;
+  if (wheels) {
+    ctx.root.add(wheels.group);
+    const nl = WH.reduce((s, w) => s + w.mounts.length, 0), lg = new T.BufferGeometry();
+    lg.setAttribute('position', new T.BufferAttribute(new Float32Array(Math.max(1, nl) * 6), 3));
+    links = new T.LineSegments(lg, ctx.view.material(new T.LineBasicMaterial({ color: 0x0b6e4f, transparent: true, opacity: 0.7 })));
+    ctx.root.add(links);
+    const wid = new Set(WH.map(w => w.id));
+    D.parts.forEach((p, j) => { if (wid.has(p.id)) boxes.show[j] = false; });
+  }
+  function moveWheels(k) {
+    if (!wheels) return;
+    const at = i => [pos[(k * n + i) * 3], pos[(k * n + i) * 3 + 1], pos[(k * n + i) * 3 + 2]];
+    const a = links.geometry.attributes.position; let j = 0;
+    WH.forEach((w, i) => {
+      const c = at(w.node); wheels.set(i, [c[0] - w.c[0], c[1] - w.c[1], c[2] - w.c[2]]);
+      for (const m of w.mounts) { a.setXYZ(j++, ...c); a.setXYZ(j++, ...at(m)); }
+    });
+    a.needsUpdate = true; links.geometry.computeBoundingSphere();
+  }
+  const after = (D.summary || {}).after;
   const brokenSet = k => new Set(M.broken[k] || []);
   const arr = { stress, hinge, strain, fold };
   const val = (k, e) => arr[S.what][k * ne + e];
@@ -118,9 +143,17 @@ HV.crashB = async function (D, ctx) {
     const c = spec(), br = brokenSet(k);
     beams.colourMembers(e => br.has(D.frame.member_ids[e]) ? [0.8, 0.8, 0.8] : HV.colour(c, val(k, e)));
     boxes.off = D.parts.map((_, j) => [poff[(k * np + j) * 3], poff[(k * np + j) * 3 + 1], poff[(k * np + j) * 3 + 2]]); boxes.update();
+    moveWheels(k);
   }
   const tx = Array.from(ts), tfx = Array.from(tf), sm = D.summary || {}, u = D.units;
-  const stopText = () => { const s = D.stop; return s && s.t_s !== null ? `停止 ${(1000 * s.t_s).toFixed(1)} ms: ${s.member} が折れ、座席側から ${s.piece_pct ?? '?'} % の塊が離れた` : `記録の終わり ${(1000 * tf[nF - 1]).toFixed(1)} ms`; };
+  const stopText = () => {
+    const s = D.stop;
+    if (!s || s.t_s === null) return `記録の終わり ${(1000 * tf[nF - 1]).toFixed(1)} ms`;
+    return `${s.goes_on ? '分離' : '停止'} ${(1000 * s.t_s).toFixed(1)} ms: ${s.member} が折れ、座席側から ${s.piece_pct ?? '?'} % の塊が離れた`;
+  };
+  const okng = ok => ok === null || ok === undefined ? '' : `<span class="${ok ? 'ok' : 'ng'}">${ok ? 'OK' : 'NG'}</span>`;
+  const isAfter = k => !!after && tf[k] > after.t0_s;
+  const bands = after ? [{ x0: after.t0_s, x1: after.t1_s, label: '分離の後', col: 'rgba(150,150,150,0.18)' }] : [];
   const ctl = {
     nT: nF, t0: 0, playMs: 60, viewDir: [0.25, -1.25, 0.45], times: tfx,
     timeNote: `t = 0 で接触、記録の ${nF} 時刻 (補間なし)。再生は実時間の倍率`,
@@ -128,19 +161,22 @@ HV.crashB = async function (D, ctx) {
     setScale() {},
     setTime(i) { S.k = i; update(); },
     setLog(on) { S.log = on; update(); },
-    timeText(k) { const j = near(tf[k]); return `t = ${(1000 * tf[k]).toFixed(2)} ms   減速度 ${dec[j].toFixed(1)} ${u.deceleration}   つぶれ ${cr[j].toFixed(0)} ${u.crush}   破断 ${(M.broken[k] || []).length}`; },
+    timeText(k) { const j = near(tf[k]); return `t = ${(1000 * tf[k]).toFixed(2)} ms   減速度 ${dec[j].toFixed(1)} ${u.deceleration}   つぶれ ${cr[j].toFixed(0)} ${u.crush}   破断 ${(M.broken[k] || []).length}${isAfter(k) ? '   分離の後' : ''}`; },
     hud() {
-      return [stopText(),
-              `ピーク ${HV.fmt(sm.peak_decel)} ${u.deceleration}、平均 ${HV.fmt(sm.mean_decel)} ${u.deceleration}、つぶれ ${HV.fmt(sm.crush_end)} ${u.crush} (停止まで)   色: ${LABEL[S.what]}`];
+      const mg = sm.margin, s = D.stop;
+      const j = [mg ? `乗員の余裕 ${HV.fmt(mg.value)} ${mg.unit} ${mg.ok === null ? '' : mg.ok ? 'OK' : 'NG'}` : '',
+                 s && s.piece_pct !== null && s.limit_pct !== null ? `分離の塊 ${s.piece_pct} % (${s.limit_pct} % 以上で NG) ${s.ok ? 'OK' : 'NG'}` : ''].filter(Boolean).join('   ');
+      return [stopText() + (j ? `   判定: ${j}` : ''),
+              `ピーク ${HV.fmt(sm.peak_decel)} ${u.deceleration}、平均 ${HV.fmt(sm.mean_decel)} ${u.deceleration}、つぶれ ${HV.fmt(sm.crush_end)} ${u.crush}${sm.goes_on ? '' : ' (停止まで)'}   色: ${LABEL[S.what]}`];
     },
     contour: spec,
     plot() {
       const c = tf[S.k], mk = [{ x: ts[kPeak], label: 'ピーク', col: '#c0c' }];
       const P = [
-        { title: '減速度', unit: u.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, cursor: c },
-        { title: 'つぶれ (前端から座席の取付まで)', unit: u.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#a03000' }], marks: mk, cursor: c },
+        { title: '減速度', unit: u.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, bands, cursor: c },
+        { title: 'つぶれ (前端から座席の取付まで)', unit: u.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#a03000' }], marks: mk, bands, cursor: c },
       ];
-      if (S.sel && force[S.sel]) P.push({ title: `軸力 ${S.sel} (部材をクリックで切替)`, unit: 'kN', xlabel: 't [s]', x: tfx, ys: [{ v: Array.from(force[S.sel], v => v / 1000), col: '#0a6b2a' }], marks: [], cursor: c });
+      if (S.sel && force[S.sel]) P.push({ title: `軸力 ${S.sel} (部材をクリックで切替)`, unit: 'kN', xlabel: 't [s]', x: tfx, ys: [{ v: Array.from(force[S.sel], v => v / 1000), col: '#0a6b2a' }], marks: [], bands, cursor: c });
       return P;
     },
     plotClick(_, tv) { let b = 0, bd = Infinity; tf.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; },
@@ -157,14 +193,21 @@ HV.crashB = async function (D, ctx) {
              (brokenSet(k).has(mid) ? '<br><b>この時刻までに破断</b>' : '') + (mid === stopMember ? '<br><b>この部材が折れて計算が止まった</b>' : '');
     },
     extraInputs() {
-      const hs = D.hot_spots || [], lr = sm.least_room;
-      const okng = h => h.ok === null || h.ok === undefined ? '' : `<span class="${h.ok ? 'ok' : 'ng'}">${h.ok ? 'OK' : 'NG'}</span>`;
-      return `<div class="h" style="margin-top:4px">結果 (停止まで)</div><table>` +
-        `<tr><td>停止</td><td>${HV.esc(stopText())}</td></tr>` +
+      const hs = D.hot_spots || [], lr = sm.least_room, mg = sm.margin, s = D.stop;
+      const ms = t => `${(1000 * t).toFixed(1)} ms`;
+      const judged = (mg ? `<tr><td>乗員の余裕</td><td>${HV.fmt(mg.value)} ${HV.esc(mg.unit)} (${HV.esc(mg.op)} ${HV.fmt(mg.limit)}、${HV.esc(mg.where)})</td><td>${okng(mg.ok)}</td></tr>` : '') +
+        (s && s.piece_pct !== null ? `<tr><td>フレームの分離</td><td>座席側から ${s.piece_pct} % の塊 (${s.limit_pct} % 以上は NG)、${s.t_s !== null ? ms(s.t_s) : ''} ${HV.esc(s.member || '')}</td><td>${okng(s.ok)}</td></tr>` : '');
+      return `<div class="h" style="margin-top:4px">判定</div><table>${judged}</table>` +
+        `<div class="h" style="margin-top:4px">結果${sm.goes_on ? '' : ' (停止まで)'}</div><table>` +
+        `<tr><td>${s && s.goes_on ? '分離' : '停止'}</td><td>${HV.esc(stopText())}</td></tr>` +
         `<tr><td>減速度</td><td>ピーク ${HV.fmt(sm.peak_decel)} ${u.deceleration}、平均 ${HV.fmt(sm.mean_decel)} ${u.deceleration}</td></tr>` +
-        `<tr><td>つぶれ</td><td>${HV.fmt(sm.crush_end)} ${u.crush}</td></tr>` +
-        (lr ? `<tr><td>乗員の箱までのすき間</td><td>最小 ${HV.fmt(lr.value)} ${HV.esc(lr.unit)} (${HV.esc(lr.where)}) ${okng(lr)}</td></tr>` : '') + '</table>' +
-        (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td><td>${okng(h)}</td></tr>`).join('')}</table></details>` : '');
+        `<tr><td>つぶれ</td><td>${HV.fmt(sm.crush_end)} ${u.crush}${sm.goes_on && sm.crush_at_split !== null ? ` (分離まで ${HV.fmt(sm.crush_at_split)} ${u.crush})` : ''}</td></tr>` +
+        (sm.crumple_length !== null && sm.crumple_length !== undefined ? `<tr><td>つぶれてよい長さ</td><td>${HV.fmt(sm.crumple_length)} ${u.crush}</td></tr>` : '') +
+        (WH.length ? `<tr><td>車輪が壁に当たる</td><td>${WH.map(w => `${HV.esc(w.id)} ${w.t_wall_s !== null ? ms(w.t_wall_s) : '当たらない'}`).join('、')}</td></tr>` : '') +
+        (lr ? `<tr><td>乗員の箱までのすき間</td><td>最小 ${HV.fmt(lr.value)} ${HV.esc(lr.unit)} (${HV.esc(lr.where)}) ${okng(lr.ok)}</td></tr>` : '') + '</table>' +
+        `<details><summary>減速度のピークとは</summary><div>乗員への入力。車全体の質量の減速度を 1 ms ごとにならした値 (壁が受けた力積 ÷ 質量 ÷ 1 ms)。` +
+        `${WH.some(w => w.t_wall_s !== null) ? '前の車輪が壁に当たった瞬間は、車輪が 1 ステップで止まるので短いピークが出る。' : ''}</div></details>` +
+        (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td><td>${okng(h.ok)}</td></tr>`).join('')}</table></details>` : '');
     },
     panel(div) {
       const h = document.createElement('h3'); h.textContent = '色の量 (B)'; div.appendChild(h);

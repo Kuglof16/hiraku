@@ -1,6 +1,6 @@
 // Plot pane for series: one or more panels side by side, each with its own y axis.
 // panel = {title, xlabel, unit, x: [...], ys: [{name, v: [...], col}], marks: [{x, label, col}],
-//          cursor: x value or null, logy: bool}
+//          bands: [{x0, x1, label, col}], cursor: x value or null, logy: bool}
 window.HV = window.HV || {};
 (function (HV) {
   'use strict';
@@ -46,6 +46,13 @@ window.HV = window.HV || {};
       g.fillStyle = '#333'; g.font = 'bold 11px system-ui, sans-serif';
       g.fillText(p.title + (p.unit ? ` [${p.unit}]` : ''), L, 13);
       g.font = '10px system-ui, sans-serif'; g.fillStyle = '#555'; g.fillText(p.xlabel || '', L + w - g.measureText(p.xlabel || '').width, T + h + 25);
+      // bands (a shaded x range, e.g. after the frame split)
+      for (const b of p.bands || []) {
+        const a = X(Math.max(b.x0, x0)), z = X(Math.min(b.x1, x1));
+        if (!(z > a)) continue;
+        g.fillStyle = b.col || 'rgba(160,160,160,0.18)'; g.fillRect(a, T, z - a, h);
+        if (b.label) { g.fillStyle = '#666'; g.fillText(b.label, Math.min(a + 4, L + w - g.measureText(b.label).width - 2), T + h - 4); }
+      }
       // marks
       for (const m of p.marks || []) {
         if (m.x < x0 || m.x > x1) continue;
