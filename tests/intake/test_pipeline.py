@@ -4,6 +4,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from hiraku import contract
 from hiraku.intake import IntakeError, events as ev, hearing, load_product
@@ -100,6 +101,22 @@ class MailboxTest(unittest.TestCase):
                                       clock=lambda: t[0])
         self.assertIsNone(got)
         self.assertEqual(sum(naps), 2.0)
+
+    def test_read_waits_out_a_busy_file(self):
+        hearing.save_answer(self.run_path, {"answers": {"Q40": 1}})
+        real = Path.read_text
+        busy = [2]
+
+        def flaky(self_, *a, **k):  # Windows: the file is being replaced; open() says "Permission denied" for a moment
+            if self_.name == hearing.ANSWER_FILE and busy[0]:
+                busy[0] -= 1
+                raise PermissionError(13, "Permission denied")
+            return real(self_, *a, **k)
+
+        with mock.patch.object(Path, "read_text", flaky):
+            got = hearing.read_answer(self.run_path)
+        self.assertEqual(got["answers"], {"Q40": 1})
+        self.assertEqual(busy[0], 0)
 
     def test_wait_returns_what_arrives(self):
         def late():

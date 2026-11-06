@@ -44,14 +44,15 @@ def _cmd_run(a: argparse.Namespace) -> int:
         done = json.loads(a.intake_events.read_text(encoding="utf-8")) if a.intake_events else None
         ctx = start_run(a.requirements, design_path=a.design, root=a.runs, slug=slug,
                         intake=not a.no_intake, intake_events=done,
-                        driver="scripted" if a.scripted else "agent_sdk")
+                        driver="scripted" if a.scripted else "agent_sdk",
+                        # said as soon as the folder exists: the screen (webserve.launch) waits for this line
+                        on_folder=lambda p: print(f"run folder: {p}", flush=True))
     except (FileNotFoundError, SolversMissing, CatalogError, ValueError) as e:  # json errors are ValueErrors
         print(f"cannot start the run: {e}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:  # start_run has marked the folder stopped, if it was made
         print(f"{STOPPED_BY_USER} while the run was starting", file=sys.stderr)
         return 130
-    print(f"run folder: {ctx.store.path}")
     try:
         if a.scripted:
             run_scripted(ctx)

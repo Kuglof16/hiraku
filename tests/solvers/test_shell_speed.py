@@ -49,7 +49,10 @@ def _run(env: dict, min_elements: int | None = None) -> tuple[dict, float]:
         # the ladder's levels (4,000 to 24,000 elements) peak far below the demo frame's bytes per element,
         # so the estimate is lowered here to let them go to other processes
         patches += [mock.patch.object(frame_shell, "PARALLEL_MIN_ELEMENTS", min_elements),
-                    mock.patch.object(frame_shell, "BYTES_PER_ELEMENT", 20_000)]
+                    mock.patch.object(frame_shell, "BYTES_PER_ELEMENT", 20_000),
+                    # and the memory read as plenty, so a full test run's own memory or a busy PC does not
+                    # keep the levels in this process (the memory rule itself is tested in test_shell_memory)
+                    mock.patch.object(frame_shell, "_memory", return_value=(60e9, 0.3e9))]
     for p in patches:
         p.start()
     try:
