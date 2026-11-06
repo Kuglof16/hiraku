@@ -53,7 +53,7 @@
    "cuts": [
     "N08b"
    ],
-   "video": "${WORK}/clips/n08b_v6_1080p.mp4",
+   "video": "${WORK}/clips/n08b_v7_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
@@ -87,13 +87,13 @@
    "cuts": [
     "N09b"
    ],
-   "video": "${WORK}/clips/n09b_w_1080p.mp4"
+   "video": "${WORK}/clips/n09b_v37_1080p.mp4"
   },
   {
    "cuts": [
     "N14"
    ],
-   "video": "${WORK}/clips/real/n14_real_1080p.mp4"
+   "video": "${WORK}/clips/n14_w_1080p.mp4"
   },
   {
    "cuts": [
@@ -105,13 +105,13 @@
    "cuts": [
     "N11"
    ],
-   "video": "${WORK}/clips/n11_w_1080p.mp4"
+   "video": "${WORK}/clips/n11_hand_1080p.mp4"
   },
   {
    "cuts": [
     "N12"
    ],
-   "video": "${WORK}/clips/n12_w_1080p.mp4"
+   "video": "${WORK}/clips/n12_concept_1080p.mp4"
   },
   {
    "cuts": [
@@ -123,13 +123,13 @@
    "cuts": [
     "N13a"
    ],
-   "video": "${WORK}/clips/n13a_w_1080p.mp4"
+   "video": "${WORK}/clips/n13a_marks_1080p.mp4"
   },
   {
    "cuts": [
     "N13b"
    ],
-   "video": "${WORK}/clips/n13b_w_1080p.mp4"
+   "video": "${WORK}/clips/n13b_marks_1080p.mp4"
   },
   {
    "cuts": [
@@ -147,7 +147,7 @@
    "cuts": [
     "N17"
    ],
-   "video": "${WORK}/clips/real/n17_next_1080p.mp4",
+   "video": "${WORK}/clips/n17_w_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5

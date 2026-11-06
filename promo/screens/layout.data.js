@@ -1823,13 +1823,13 @@ window.PROMO_LAYOUT = {
       "_note": "column widths, left to right; they add up to table.w"
     },
     "text": {
-      "head_px": 24,
-      "head_small_px": 20,
-      "q_px": 36,
-      "q_sub_px": 24,
-      "value_px": 44,
-      "value_small_px": 32,
-      "note_px": 22,
+      "head_px": 30,
+      "head_small_px": 26,
+      "q_px": 42,
+      "q_sub_px": 30,
+      "value_px": 52,
+      "value_small_px": 38,
+      "note_px": 28,
       "_note": "note_px was 20 in the first stills; raised to 22 so the stress row's 'one of three runs' reads at a glance (value_small_px 34 -> 32 to keep the two hand values with their notes in the row)",
       "diff_px": 36,
       "tick_px": 64
