@@ -10,6 +10,7 @@
 // the recorded `t`. Either way the recorded value stays in `t_rec`, the seek
 // bar, ?t= and window.hiraku.seek all use display time.
 
+import { fetchEvents } from "./eventread.js";
 import { applyEvent, initialState } from "./state.js";
 
 export const SPEEDS = [0.5, 1, 2, 4, 8];
@@ -205,10 +206,8 @@ export class EventFeed {
   }
 
   async readOnce() {
-    const url = `/api/runs/${encodeURIComponent(this.runId)}/events?offset=${this.offset}`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw Object.assign(new Error(`${res.status} ${url}`), { status: res.status });
-    const body = await res.json();
+    // (fetchEvents throws "<status> <path>" with .status on a failed request, as main's read did)
+    const body = await fetchEvents(this.runId, this.offset);
     const moved = body.next_offset !== this.offset || !!body.reset;
     this.offset = body.next_offset;
     // ask again at once only when this read got somewhere; a line still being written

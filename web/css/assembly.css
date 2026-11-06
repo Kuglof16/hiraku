@@ -13,6 +13,8 @@
 .asm-steps .ck { white-space: nowrap; }
 .asm-steps .ok { color: var(--green, #2f7d4f); font-weight: 700; margin-left: 2px; }
 .asm-steps .ng { color: var(--red, #c8402a); font-weight: 700; margin-left: 2px; }
+/* tool room and hand reach: a caution, not red (red is for a part that does not fit) */
+.asm-steps .ck-tool_clearance .ng, .asm-steps .ck-hand_reach .ng { color: #b26b00; }
 .asm-steps .tx { margin-top: 2px; }
 .asm-steps .tx .aside { display: inline-block; max-width: 100%; } /* (as app.css .aside; cut.html has no app.css) */
 .asm-steps .fz { margin-top: 2px; color: var(--muted, #6b665c); font-size: 0.9em; }

@@ -18,3 +18,56 @@ rules:
     basis: >-
       engineering assumption: the whole mass is shared equally by the supports and the spring is linear,
       so the static deflection is load / stiffness
+  # needs: uj_angle_max_deg (new)
+  - id: UJ-01
+    text: 操舵の軸を折る所の折れ角は、どの 1 か所でも上限 (要件) 以下
+    kinds: [steering]
+    check: uj_angle_max_deg <= req_Q83
+    trust: 3
+    basis: >-
+      assumption: the limit is the requirement item R1-01 (35 deg by default, the maximum operating angle of
+      Borgeson single steering universal joints, "U-Joint & Shaft General Instructions" item 1), read 2026-11-06,
+      https://sdda.semadata.org/Standard/Borgeson/JOINT_SHAFT_GENERAL.pdf). Going past it can make the joint bind
+      (same item). The angle of a joint is the angle between the axes of the two shafts it joins
+
+  # needs: uj_count (new), uj_angle_diff_deg (new)
+  - id: UJ-02
+    text: 操舵の軸を 2 か所で折るなら、2 つの折れ角の差は 1 度以下
+    kinds: [steering]
+    check: uj_count < 2 or uj_angle_diff_deg <= 1
+    trust: 3
+    basis: >-
+      The two angles must be equal for an even output: Huco Universal Joints catalogue section 2, PDF p. 2, rule 1,
+      read 2026-11-06 (https://theengineer.markallengroup.com/production/content/uploads/2012/05/universal_joints.pdf);
+      NSK US 8,965,743 B2 (joint angle at the upper joint equal to that at the lower joint), read 2026-11-06
+      (https://patents.google.com/patent/US8965743B2/en). The allowed difference is the requirement item R1-03
+      (1 deg by default, borrowed from Spicer's rule 2 for vehicle propeller shafts,
+      https://spicerparts.com/node/202, read 2026-11-06): an assumption for a steering shaft
+
+  # needs: uj_count (new), uj_phase_error_deg (new)
+  - id: UJ-03
+    text: 操舵の軸を 2 か所で折るなら、2 つの継手の向き合わせ (位相) の正しい向きからのずれは 7 度以下
+    kinds: [steering]
+    check: uj_count < 2 or uj_phase_error_deg <= 7
+    trust: 3
+    basis: >-
+      The right phase (inner forks in line when the shaft is bent in one plane): Huco Universal Joints catalogue
+      section 2, PDF p. 2, rule 2, read 2026-11-06; ididit instructions 8000000021, PDF p. 5 step 4, read 2026-11-06
+      (https://static.speedwaymotors.com/pdf/4461216-INS.pdf), which adds that a wrong phase can give early wear or
+      binding. The allowed error is the requirement item R1-04 (7 deg by default, the example of NSK US 8,965,743 B2,
+      read 2026-11-06): an assumption
+
+  # needs: steer_speed_variation_pct (new; computed in code from the joint angles and the phase, see the proposal)
+  - id: UJ-04
+    text: ハンドルを一定に回したときの、車輪の側の回転の速さのむらは上限 (要件) 以下
+    kinds: [steering]
+    check: steer_speed_variation_pct <= req_Q84
+    trust: 3
+    basis: >-
+      The fluctuation of one joint, w_out/w_in = cos a / (1 - cos^2 t * sin^2 a), max 1/cos a, min cos a:
+      Mustansiriyah University lecture note "universal joint", PDF p. 7-8, read 2026-11-06 (secondary,
+      https://uomustansiriyah.edu.iq/media/lectures/5/5_2021_12_11!08_27_23_PM.pdf); output between w cos a and
+      w sec a, at 5 deg +/-0.4 %, 7 deg +/-0.8 %, 10 deg +/-1.5 %: Huco Universal Joints catalogue section 2, PDF p. 2,
+      read 2026-11-06. The limit is the requirement item R1-02 (10 % by default, the example allowable torque
+      variation rate of NSK US 8,965,743 B2, read 2026-11-06): an assumption. This rule covers one joint as well,
+      where UJ-02 and UJ-03 do not apply

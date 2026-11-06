@@ -700,4 +700,10 @@ def all_formulas() -> list[Formula]:
             + library_rops.all_formulas() + library_mount.all_formulas()
             + library_powertrain.all_formulas()
             + library_loadpath.all_formulas() + library_spray.all_formulas() + library_entry.all_formulas()
-            + library_bracket.all_formulas())
+            + library_bracket.all_formulas() + _turning())
+
+
+def _turning() -> list[Formula]:
+    from . import library_turning  # the K2 team's turning circle (turning.min_radius, turning.required_steer)
+
+    return library_turning.all_formulas()

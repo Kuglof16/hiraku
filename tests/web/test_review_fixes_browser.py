@@ -331,7 +331,8 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         calls = page.evaluate(
             """async () => { const { EventFeed } = await import('/js/player.js'); const real = window.fetch; let calls = 0;
               // a line still being written: the server's next_offset stays at 5 of 100 bytes
-              window.fetch = async () => { calls += 1; return new Response(JSON.stringify({ events: [], next_offset: 5, size: 100, reset: false, bad_lines: 0 })); };
+              // (the ndjson form: no lines, where to read next in the headers)
+              window.fetch = async () => { calls += 1; return new Response('', { headers: { 'X-Hiraku-Next-Offset': '5', 'X-Hiraku-Size': '100', 'X-Hiraku-Reset': '0', 'X-Hiraku-Bad-Lines': '0' } }); };
               try { const feed = new EventFeed('x', () => {}); await feed.readAll(); } finally { window.fetch = real; }
               return calls; }"""
         )

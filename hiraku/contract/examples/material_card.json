@@ -1,0 +1,21 @@
+{
+  "id": "stkr400",
+  "name": "JIS G 3466 STKR400 (square and rectangular steel tube for general structure)",
+  "name_ja": "一般構造用角形鋼管 STKR400",
+  "category": "steel",
+  "standard": "JIS G 3466",
+  "properties": {
+    "E_MPa": {
+      "value": 205000.0,
+      "kind": "typical",
+      "source": "common design value for carbon steel (data/materials/materials.json); no document read",
+      "checked": false
+    },
+    "yield_MPa": {
+      "value": 245.0,
+      "kind": "standard_minimum",
+      "source": "JIS G 3466 minimum yield point for STKR400 (data/materials/materials.json); the standard's text not read",
+      "checked": false
+    }
+  }
+}

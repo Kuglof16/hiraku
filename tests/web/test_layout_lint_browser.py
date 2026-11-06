@@ -45,6 +45,7 @@ HELD = "20261104-200000-held"  # held: a load case without a criterion counting 
 MODULES = "20261104-210000-modules"  # modules: tests.web.modules_fixture.RUN_ID
 JOINTS = "20261102-207000-joints"  # joints: the frozen offroad-4w v1 alone (test_joints_browser.joints_events)
 FIRSTTIME = "20261105-200000-firsttime"  # many load cases sharing ids, long log ids, a long change (tests.web.firsttime_fixture)
+RUNUP = "20261106-120000-n06-runup"  # N06's step tile with run 2 at 330 and 100 mm (tests.web.runup_fixture.RUN_ID)
 HEAT = "20261106-120000-heat"  # heat: the energy's flow on a thermal record cut from a showcase run (tests.web.heat_fixture)
 
 READY = "window.hiraku && window.hiraku.ready"
@@ -98,6 +99,9 @@ SCREENS = (
     # the shapes of a real record a first-time viewer opened: the chips' row, the log, the change line
     Screen("作業台 (試験が多い)", f"?run={FIRSTTIME}&tab=bench&pace=0&t=1e6&on=names"),
     Screen("解析結果 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
+    # N06's step tile with the two runs at the step (tests.web.runup_fixture): large at 4.2 s, in the list at 6 s
+    Screen("N06 (段差の二つの走り)", f"cut.html?cut=n06&run={RUNUP}&t=4.2"),
+    Screen("N06 (段差の二つの走り・一覧)", f"cut.html?cut=n06&run={RUNUP}&t=6"),
     # heat: the flow's legend and its loss tags (the run's thermal record at its end), and in the video layout.
     # Known (found when these rows were added; they come from the showcase record's own words, not from
     # the flow): #log, the record's long bracketed asides broken across lines (paren); #card-cmp, the
@@ -152,6 +156,9 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     from tests.web.firsttime_fixture import firsttime_events
 
     _write_run(runs, FIRSTTIME, firsttime_events())
+    from tests.web.runup_fixture import runup_events
+
+    _write_run(runs, RUNUP, runup_events(RUNUP))
     from tests.web.heat_fixture import RUN_ID as HEAT_RUN, heat_events  # heat:
 
     assert HEAT_RUN == HEAT

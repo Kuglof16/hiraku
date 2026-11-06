@@ -61,9 +61,14 @@ body.video .statusrow, body.no-status .statusrow { display: none; }
 body.no-status .stage, body.video .stage { grid-template-rows: 64px 56px minmax(0, 1fr) 0 var(--band); }
 body.video .hint { display: none; }
 /* the video has no replay bar (the bench's): ?t= and window.hiraku.seek move the replay without
-   it. What stood above it comes down by the bar's height. A7's assembly bar stays (its track and
-   "手順 n / N" show the steps one by one), only its ▶ goes. */
-body.video .playbar, body.video .asm-bar .as-play { display: none; }
+   it. What stood above it comes down by the bar's height. A7 keeps only its band "手順 n / N"
+   (at the bar's left): its track, its ▶ and its switches (接合, モジュール) go, and its list of
+   steps does not take the pointer (the order follows the replay's time, assembly.js timedU). */
+body.video .playbar, body.video .asm-bar .as-play, body.video .asm-bar .as-track { display: none; }
+body.video .asm-bar { right: auto; }
+body.video .asm-bar .as-label { min-width: 0; text-align: left; }
+body.video .asm-3d > .asm-joints-btn, body.video .asm-3d > .modtoggles { display: none; }
+body.video .asm-side .asm-steps { pointer-events: none; }
 body.video .legend, body.video .running { bottom: 12px; }
 body.video .animbar { bottom: 12px; }
 body.video .viewport.has-anim .running, body.video .viewport.has-anim .legend, body.video .graph { bottom: 60px; }
@@ -882,7 +887,7 @@ body.video .domain-head .dh-close { display: none; }
 .runlist button:disabled { color: var(--muted); border-color: var(--line); cursor: default; }
 .runlist button.go { color: var(--panel); background: var(--ink); }
 .runlist .why { color: var(--muted); font-size: 13px; }
-.runlist .confirm { color: var(--red); font-size: 14px; font-weight: 600; }
+.runlist .confirm { color: var(--orange, #b26b00); font-size: 14px; font-weight: 600; } /* caution, not a verdict: red is for a failed verdict only */
 .runlist .demo-runs { border: 1.5px solid var(--ink); border-radius: 12px; padding: 2px 12px; margin-bottom: 6px; }
 .runlist .demo-runs .lreq:last-child { border-bottom: none; }
 .runlist .demo .dhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 17px; }
@@ -890,7 +895,7 @@ body.video .domain-head .dh-close { display: none; }
 .runlist .demo .shows { font-size: 14px; margin-top: 2px; }
 .runlist .demo .err { color: var(--red); font-size: 14px; }
 .runlist .demo .cost { font-size: 14px; margin-top: 2px; }
-.runlist .demo .cost.over { color: var(--red); font-weight: 600; }
+.runlist .demo .cost.over { color: var(--orange, #b26b00); font-weight: 600; }
 .runlist .over { color: var(--red); font-size: 13px; font-weight: 600; }
 .runlist .demo-a1 { font-size: 15px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 14px; text-decoration: none; white-space: nowrap; }
 .runlist .keyless { margin: 4px 0 8px; padding: 8px 12px; font-size: 15px; background: var(--card, #fffdf8); border: 1.5px solid var(--line); border-radius: 10px; }
@@ -955,7 +960,7 @@ body.video .mode .stop-btn { display: none; }
 .runlist .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .runlist .more .cuts { display: flex; gap: 6px; margin-top: 2px; }
 .runlist .more .cut { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
-.runlist .more .cost.over { color: var(--red); }
+.runlist .more .cost.over { color: var(--orange, #b26b00); }
 .runlist .demo .dhead + .more { margin-left: 0; }
 /* a new request, first in the list */
 .runlist .fresh-top { display: flex; align-items: baseline; gap: 14px; margin: 0 0 10px; }

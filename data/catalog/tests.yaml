@@ -19,6 +19,8 @@ tests:
   - {id: S3, domain: handling, title: 回避 (ダブルレーンチェンジ), applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50]}
   - {id: S4, domain: handling, title: 制動と前のめり, applies_if: self_propelled, requirement_keys: [Q11, Q50, Q52, Q53]}
   - {id: S5, domain: handling, title: 凸凹の横斜面, applies_if: self_propelled and rough, requirement_keys: [Q12, Q14]}
+  # S6: the circle the outermost wheel draws at full lock against Q58; K2 builds the load case (build: to come)
+  - {id: S6, domain: handling, title: 小回り (最小回転半径), applies_if: self_propelled, requirement_keys: [Q58]}
   - {id: F1, domain: aero, title: 横風, applies_if: outdoor and self_propelled, requirement_keys: [Q16, Q18]}
   - {id: F2, domain: aero, title: 空気抵抗, applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50, Q54]}
   - {id: F3, domain: aero, title: 液体のこぼれ, applies_if: liquid and self_propelled, requirement_keys: [Q42, Q51]}
@@ -87,6 +89,10 @@ tests:
   - {id: R6, domain: strength, title: 電池の取付の振動, applies_if: battery and self_propelled, requirement_keys: [Q73]}
   - {id: R7, domain: strength, title: 操作部の荷重 (手と足の力を枠まで伝え、動かない), applies_if: ride and self_propelled, requirement_keys: [Q66, Q67, Q68, Q69]}
   - {id: R8, domain: strength, title: 荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える), applies_if: always, requirement_keys: [Q61, Q75, Q76, Q77, Q78]}
+  # R9: the suspension's brackets on the frame (part.joint, contract 40645e0), one load case per corner from K2's mount
+  # forces of the load cases that feed it (hiraku.catalog.builders.mounts_r9; its tolerance R9_TOL). Stage 1 shows the
+  # utilisations; the criteria (R9_CRITERIA, each <= 1) come with stage 2
+  - {id: R9, domain: strength, title: サスペンション取付, applies_if: self_propelled and rough, requirement_keys: []}
   - {id: N1, domain: nvh, title: 固有振動数と加振, applies_if: vibration, requirement_keys: []}
   - {id: N2, domain: nvh, title: 乗り心地, applies_if: ride and self_propelled, requirement_keys: [Q12]}
   - {id: N3, domain: nvh, title: 騒音, applies_if: electric and lean, requirement_keys: []}

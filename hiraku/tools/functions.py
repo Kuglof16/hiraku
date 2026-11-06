@@ -268,10 +268,20 @@ def _records_section(ctx: RunContext, args: Record) -> Record:
     shape = {"prediction": ("predictions", _compact_prediction), "analysis": ("analyses", _compact_analysis),
              "comparison": ("comparisons", None), "cause": ("causes", None), "verdict": ("verdicts", None)}
     out: Record = {}
-    for k in kinds:
-        key, fn = shape[k]
-        out[key] = [fn(x) if fn else x for x in s.records(k) if of_case(x)]
+    # in reading(): a record file is parsed once and kept while its stat stays the same (a long run's 1468 records
+    # took 1.3 s on every call without it); the compact analyses use none of the fields reading() leaves out, and
+    # the other kinds are only copied out (json.dumps by the tool's wrapper)
+    with s.reading():
+        for k in kinds:
+            key, fn = shape[k]
+            out[key] = [fn(x) if fn else dict(x) for x in s.records(k) if of_case(x)]
     return out
+
+
+def _record_counts(s: Any) -> Record:
+    """How many records of each kind the run has (read in reading(): files kept while unchanged)."""
+    with s.reading():
+        return {k: len(s.records(k)) for k in RECORD_KINDS}
 
 
 def context_overview(ctx: RunContext) -> Record:
@@ -284,7 +294,7 @@ def context_overview(ctx: RunContext) -> Record:
                         "stage": load_case_stage(ctx, lc), **({"feeds": lc["feeds"]} if lc.get("feeds") else {})}
                        for lc in ctx.load_cases],
         "judgements": {j["domain"]: j["state"] for j in s.judgements()} if ctx.version else {},
-        "records": {k: len(s.records(k)) for k in RECORD_KINDS},
+        "records": _record_counts(s),
         "sections_available": dict(SECTION_HINTS),
     }
 
@@ -2061,8 +2071,9 @@ def rule_check(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
     return out
 
 
-# The intake department's MCP tools; their functions are in hiraku.intake.tools.TOOLS (mcp.py registers them).
-INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check")
+# The intake department's MCP tools; their functions are in hiraku.intake.tools.TOOLS (mcp.py registers them;
+# find_tradeoffs reads the sensitivities hiraku.tools.tradeoff_data collects).
+INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design), tool
 # making (with its template), the report and the intake tools.
 RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, *contract.MCP_TOOLS_PACKAGER, "propose_design", "make_tool", "check_tool",

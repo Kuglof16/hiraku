@@ -20,6 +20,9 @@
 //                   ?t= and seek, back or forth, show the tab of that time). Before the first entry the tab
 //                   is chosen as without it; an unknown tab name is left out; wins over ?tab=; a tab
 //                   pressed by hand ends it. Names as ?tab= (bench, grid, A1, A2, A4, A5, A7)
+//                   A7 so shown (or ?t= with &asm_from=) puts its parts in on the replay's time, one each
+//                   0.4 s from when it came up (assembly.js PART_S); &asm_from=-6 starts with
+//                   the last 6 parts, &asm_from=<step> at that step (the ones before in place)
 //   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
 //                   見せる / 作業台 switch at the top right turns it on and off
@@ -236,6 +239,20 @@ function plannedTab(t) {
   let tab = null;
   for (const p of ui.tabPlan) if (p.t <= t + 1e-9) tab = p.tab;
   return tab;
+}
+
+// A7 on the replay's clock (assembly.js timedU): with ?tabs= showing A7, from the time that run of
+// A7 entries began; else with ?t= and &asm_from=, from its record's arrival (from: null); else none
+// (its own bar; ?t= alone opens it on the vehicle built, as before).
+function asmClock() {
+  const at = player.playhead;
+  let from = null;
+  for (const p of ui.tabPlan) {
+    if (p.t > at + 1e-9) break;
+    from = p.tab === "A7" ? from ?? p.t : null;
+  }
+  if (from !== null) return { at, from };
+  return params.has("t") && params.has("asm_from") ? { at, from: null } : null;
 }
 
 function currentTab(s) {
@@ -1838,7 +1855,7 @@ function draw() {
   // the pets of the list (the workbench; hidden in the present mode) or of the grid
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
-  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
+  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
