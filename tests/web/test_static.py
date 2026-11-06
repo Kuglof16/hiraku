@@ -63,6 +63,20 @@ class ContractCoverageTest(unittest.TestCase):
         self.assertTrue(keys)
         self.assertEqual([k for k in keys if k not in contract.UNITS], [])
 
+    def test_beyond_knows_every_open_tests_phrase_of_judge(self):
+        """beyond.js tells a domain with tests still open by phrases of judge.py's summary
+        (NOT_ALL_JUDGED). Every such phrase judge.py writes (判定の無い試験, まだ…試験) must be in
+        the list, or a domain with open tests reads as OK on the screen."""
+        listed = re.findall(r'"([^"]+)"', re.search(r"const NOT_ALL_JUDGED = \[(.*?)\];", read(JS / "beyond.js"), re.S).group(1))
+        judge = read(WEB.parent / "hiraku" / "tools" / "judge.py")
+        # (a phrase may hold a space, まだ OK にできない試験; it ends before a quote or a newline)
+        phrases = set(re.findall(r"(判定の無い試験|まだ[^\"':。、\n]*?試験)", judge))
+        self.assertTrue(phrases)
+        self.assertEqual(sorted(p for p in phrases if p not in listed), [])
+        # the phrases design-ok-ng-words writes, and the older one of saved records
+        for p in ("まだ判定を出せない試験", "まだ OK にできない試験", "まだ合格にできない試験"):
+            self.assertIn(p, listed)
+
 
 class FilesTest(unittest.TestCase):
     def web_files(self):
