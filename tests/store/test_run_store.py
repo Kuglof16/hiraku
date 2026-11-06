@@ -322,6 +322,20 @@ class RunStoreTest(unittest.TestCase):
         self.assertEqual([e["seq"] for e in ev], list(range(len(ev))))
         self.assertGreaterEqual(ev[-1]["t"], ev[-2]["t"])
 
+    def test_reopen_can_leave_kinds_out(self):
+        """open(skip_kinds=...): those events are left out of events() unparsed, and a new event still takes
+        the seq after the file's last line, even when that line is a skipped kind."""
+        self.store.emit("agent.said", agent="lead", text="一")
+        last = self.store.emit("agent.said", agent="lead", text="二")
+        kinds = [e["kind"] for e in RunStore.open(self.store.path).events()]
+        self.assertIn("run.started", kinds)
+        again = RunStore.open(self.store.path, skip_kinds=frozenset({"agent.said"}))
+        self.assertEqual([e["kind"] for e in again.events()], [k for k in kinds if k != "agent.said"])
+        e = again.emit("agent.stopped", agent="lead", data={"agent_id": "lead", "stop_code": "done"})
+        self.assertEqual(e["seq"], last["seq"] + 1)
+        self.assertGreaterEqual(e["t"], last["t"])
+        self.assertEqual([x["seq"] for x in RunStore.open(self.store.path).events()], list(range(len(kinds) + 1)))
+
     def test_reopen_reads_the_records_only_for_a_new_id(self):
         """A reader (the plugin's hook command) reopens without reading every record file; the id counters
         are counted on the first next_id, so a writer still continues from the highest id on disk."""
