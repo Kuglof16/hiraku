@@ -68,6 +68,30 @@ class FindTradeoffsToolTest(ToolsTestCase):
             with self.assertRaises(ToolError):
                 call("find_tradeoffs", make_ctx(self.root), variables=["tower_t"])
 
+    def test_without_variables_the_registered_defaults_are_used(self):
+        seen = []
+
+        def collector(ctx, paths, only):
+            seen.append(paths)
+            return fake_collector(ctx, paths, only)
+
+        with mock.patch.object(tradeoff, "collector", collector), mock.patch.object(tradeoff, "default_variables", lambda ctx: ["tower_t", "variables.gear"]):
+            ctx = make_ctx(self.root)
+            call("find_tradeoffs", ctx)
+            call("find_tradeoffs", ctx, variables=["x"])
+        self.assertEqual(seen, [["variables.tower_t", "variables.gear"], ["variables.x"]])
+
+    def test_empty_registered_defaults_ask_for_variables(self):
+        with mock.patch.object(tradeoff, "collector", fake_collector), mock.patch.object(tradeoff, "default_variables", lambda ctx: []):
+            with self.assertRaises(ToolError) as e:
+                call("find_tradeoffs", make_ctx(self.root))
+        self.assertIn("variables", str(e.exception))
+
+    def test_the_registration_sets_the_default(self):
+        with mock.patch.object(tradeoff, "default_variables", None):
+            tradeoff.register_default_variables(len)
+            self.assertIs(tradeoff.default_variables, len)
+
     def test_the_tool_is_in_the_contract(self):
         self.assertIn("find_tradeoffs", tools.TOOLS)
         self.assertEqual(tools.TOOLS["find_tradeoffs"]["input_schema"]["additionalProperties"], False)
