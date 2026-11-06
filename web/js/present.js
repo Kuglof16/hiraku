@@ -8,7 +8,7 @@
 // The words for the hooks' notices (what happened / what comes next) and whether a stopped
 // action was later done are here too: the workbench uses them as well.
 
-import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, agentLongName, esc, fmt, fmtQ, fmtVU, isYesNo, judgedWords, opLabel, quantityName, ruleOf, verLabel } from "./labels.js";
 import { FIELD_JA } from "./fields.js";
 import { judgedVerdict, valueFromJa, judgementState } from "./state.js";
 import { judgedResult, referenceResults } from "./judged.js";
@@ -19,8 +19,8 @@ import { versionChangeLine } from "./proposals.js";
 
 const HOOK_WORDS = {
   HK1: { what: "予測の前に解析しようとしたので、止めました", next: "先に手計算で予測を記録してから、解析します" },
-  HK2: { what: "照合がすんでいないツールを使おうとしたので、止めました", next: "照合ずみのツールで解析します" },
-  HK3: { what: "予測と解析が食い違ったまま進もうとしたので、止めました", next: "食い違いの原因を書いてから進みます" },
+  HK2: { what: "判定がすんでいないツールを使おうとしたので、止めました", next: "判定ずみのツールで解析します" },
+  HK3: { what: "予測と解析が不一致のまま進もうとしたので、止めました", next: "不一致の原因を書いてから進みます" },
   HK4: { what: "判定がそろう前に終わろうとしたので、止めました", next: "残りの判定を出してから終わります" },
   // modules: HK6 (docs/contract.md: a designer changes only its own module; build_version is refused on a clash or a part outside its space)
   HK6: { what: "モジュールの持ち場の外を変えようとしたので、止めました", next: "自分のモジュールの中で直すか、パッケージ役に渡します" },
@@ -74,7 +74,7 @@ export function openCause(s) {
     const lc = p?.load_case_id ?? null;
     if (lc && passedAfter(lc, s.firstSeqOf[id])) continue;
     const lcRec = (s.project?.load_cases ?? []).find((x) => x.load_case_id === lc);
-    return { id, key: `${id}|${s.seqOf[id]}`, text: roundLongDecimals(c.cause ?? ""), domain: p?.domain ?? lcRec?.domain ?? null,
+    return { id, key: `${id}|${s.seqOf[id]}`, text: roundLongDecimals(judgedWords(c.cause ?? "")), domain: p?.domain ?? lcRec?.domain ?? null,
       // the load case's title up to its first ":" or bracket (the short name)
       version: p?.design_version ?? null, lcTitle: lcRec?.title ? String(lcRec.title).split(/[:：(（]/)[0].trim() || null : null };
   }
@@ -83,22 +83,22 @@ export function openCause(s) {
 
 export function causeNoteHtml(c) {
   const where = [c.domain ? DOMAIN_JA[c.domain] ?? c.domain : null, c.version != null ? `v${c.version}` : null, c.lcTitle].filter(Boolean).join("・");
-  return `<small>食い違いの原因 (Claude が書いた)${where ? `・${esc(where)}` : ""}</small><div class="tx">${esc(c.text)}</div>`;
+  return `<small>不一致の原因 (Claude が書いた)${where ? `・${esc(where)}` : ""}</small><div class="tx">${esc(c.text)}</div>`;
 }
 
 // ---- a verdict in words --------------------------------------------------------------
 
 const limitWord = (op) => (op === "<=" || op === "<" ? "許容" : op === ">=" || op === ">" ? "必要" : "基準");
 
-// 解析 123.6 MPa ≤ 許容 156.7 MPa → 合格
+// 解析 123.6 MPa ≤ 許容 156.7 MPa → OK
 export function verdictLine(verdict) {
   if (!verdict) return "";
-  return `${valueFromJa(verdict)} ${fmtQ(verdict.value)} ${opLabel(verdict.op)} ${limitWord(verdict.op)} ${fmtQ(verdict.limit)} → ${verdict.pass ? "合格" : "不合格"}`;
+  return `${valueFromJa(verdict)} ${fmtQ(verdict.value)} ${opLabel(verdict.op)} ${limitWord(verdict.op)} ${fmtQ(verdict.limit)} → ${verdict.pass ? "OK" : "NG"}`;
 }
 
 export function verdictSentence(verdict) {
   if (!verdict) return null;
-  return { ok: !!verdict.pass, text: verdict.pass ? "基準を満たした" : "基準を満たさない" };
+  return { ok: !!verdict.pass, text: verdict.pass ? "OK" : "NG" };
 }
 
 // 基準: 最大応力 ≤ 156.7 MPa (the load case's criterion, before a verdict)
@@ -209,6 +209,12 @@ function verdictCard(c, numTool = null) {
   return { crit: from + verdictLine(verdict), verdict: verdictSentence(verdict) };
 }
 
+// The quantity a verdict judged: its comparison's (frame_shell: the hot-spot stress for a
+// max_stress criterion), else its own.
+export function judgedQuantityOf(s, verdict) {
+  return s.comparisons?.[verdict?.comparison_id]?.quantity ?? verdict?.quantity ?? null;
+}
+
 // A record id in words (chg-0013, ver-0077, ana-0083, ...): such words are shown only under ?dev=1.
 const RECORD_ID = /\b[a-z]+-\d{3,}\b/;
 
@@ -225,11 +231,11 @@ const SCENES = [
       const wait = picked.length - green.length - red.length;
       const names = (list) => list.map(([d]) => DOMAIN_JA[d]).join("・");
       return {
-        what: `判定が合格の分野 (${verLabel(c.s.currentVersion)})`,
+        what: `判定が OK の分野 (${verLabel(c.s.currentVersion)})`,
         value: `${green.length} / ${picked.length}`,
         src: "各分野の判定の記録",
-        crit: red.length ? `基準を満たさない分野: ${names(red)}` : wait ? `判定を待っている分野: ${wait}` : "",
-        verdict: wait && !red.length ? null : { ok: !red.length, text: red.length ? "基準を満たさない分野がある" : "全分野で基準を満たした" },
+        crit: red.length ? `NG の分野: ${names(red)}` : wait ? `判定を待っている分野: ${wait}` : "",
+        verdict: wait && !red.length ? null : { ok: !red.length, text: red.length ? `NG ${red.length} 分野` : "全分野 OK" },
       };
     },
   },
@@ -242,13 +248,16 @@ const SCENES = [
       if (!rec) return null;
       const n = rec.interferences.length;
       const lc = (c.s.project?.load_cases ?? []).find((x) => x.load_case_id === rec.ana.load_case_id);
-      const v = Object.values(c.s.verdicts ?? {}).filter((x) => x.load_case_id === rec.ana.load_case_id).at(-1) ?? null;
+      // OK / NG only from a verdict on the number shown (the interference count); a verdict of the
+      // load case on another quantity (e.g. the gap count) is not put beside it
+      const v = Object.values(c.s.verdicts ?? {}).filter((x) => x.load_case_id === rec.ana.load_case_id && judgedQuantityOf(c.s, x) === "interference_count").at(-1) ?? null;
+      const critLc = lc?.criterion?.quantity === "interference_count" ? lc : null;
       return {
         what: "部品どうしの干渉",
         value: `${n} か所`,
         src: `解析の結果・手順 ${rec.steps.length}`,
-        crit: v ? verdictLine(v) : criterionLine(lc),
-        verdict: verdictSentence(v) ?? { ok: n === 0, text: n === 0 ? "干渉は記録されていない" : `干渉が ${n} か所 記録された` },
+        crit: v ? verdictLine(v) : criterionLine(critLc),
+        verdict: verdictSentence(v) ?? { ok: null, text: n === 0 ? "干渉は記録されていない" : `干渉が ${n} か所 記録された` },
         extra: rec.interferences.slice(0, 2).map((x) => `${x.a} × ${x.b}・${fmt(x.depth_mm, 3)} mm`),
       };
     },
@@ -269,7 +278,8 @@ const SCENES = [
       // packager's own words (change_reason, with record ids) only under ?dev=1
       // (a version with no recorded change, e.g. parts added by a designer: its change_reason as
       // written when it names no record id)
-      const said = ct.compare ? c.s.designs?.[ct.compare.nowVersion]?.change_reason : null;
+      const saidRaw = ct.compare ? c.s.designs?.[ct.compare.nowVersion]?.change_reason : null;
+      const said = saidRaw ? judgedWords(saidRaw) : saidRaw;
       const why = ct.compare ? versionChangeLine(c.s, ct.compare.nowVersion) ?? (said && !RECORD_ID.test(said) ? said : null) : null;
       const dev = said && said !== why ? [`${verLabel(ct.compare.nowVersion)} の記録の文: ${said}`] : [];
       // The large number is the judged quantity: the verdict's value, else (no verdict yet) the
@@ -307,8 +317,11 @@ const SCENES = [
       const verdict = sceneVerdict(c);
       const num = verdict && !isYesNo(verdict.quantity) ? judgedNumber(c, verdict) : null;
       const base = verdictCard(c, num ? num.tool : f?.tool);
+      // the wheel's force as the large number is not what the verdict judged (climbed, a yes / no):
+      // it says 参考 when a verdict is shown beside it
+      const refWhat = (w) => (base.verdict || climbed !== null ? `${JUDGED_JA.refTag}: ${w}` : w);
       return {
-        ...(num ?? { what: f?.what ?? "", value: f?.value ?? "", src: f ? `解析の結果・${c.toolTitle(f.tool)}` : "" }),
+        ...(num ?? { what: refWhat(f?.what ?? ""), value: f?.value ?? "", src: f ? `解析の結果・${c.toolTitle(f.tool)}` : "" }),
         ref: num && f ? [`${f.what} ${f.value}`] : [],
         ...base,
         // the climb, when a record says it; otherwise the verdict's sentence
@@ -324,11 +337,14 @@ const SCENES = [
     card(c) {
       const { shown, pred } = c.chain;
       const verdict = sceneVerdict(c);
-      const r = shown?.results?.[0];
+      // before a verdict: the judged quantity's result when the analysis has it, else its first
+      // result under 参考 (not the number the criterion is held to)
+      const jr = judgedResult(shown, c.chain.loadCase?.criterion);
+      const r = jr ?? shown?.results?.[0];
       const num = verdict
         ? judgedNumber(c, verdict)
         : r
-          ? { what: quantityName(r.quantity), value: fmtVU(r.value, r.unit), src: `解析の結果・${c.toolTitle(shown.tool)}` }
+          ? { what: jr ? `${JUDGED_JA.number}: ${quantityName(r.quantity)}` : `${JUDGED_JA.refTag}: ${quantityName(r.quantity)}`, value: fmtVU(r.value, r.unit), src: `解析の結果・${c.toolTitle(shown.tool)}` }
           : pred
             ? { what: quantityName(pred.quantity), value: fmtVU(pred.value, pred.unit), src: "予測 (手計算)" }
             : null;
@@ -380,7 +396,8 @@ export function presentCardHtml(scene, now, opts = {}) {
     `<div class="pc-scene">${esc(scene.title)}</div>` +
     num +
     (c.crit ? `<div class="pc-crit">${esc(c.crit)}</div>` : "") +
-    (c.verdict ? `<div class="pc-verdict ${c.verdict.ok ? "ok" : "bad"}">${esc(c.verdict.text)}</div>` : "") +
+    // ok null: a statement that is not a verdict (no colour)
+    (c.verdict ? `<div class="pc-verdict ${c.verdict.ok == null ? "plain" : c.verdict.ok ? "ok" : "bad"}">${esc(c.verdict.text)}</div>` : "") +
     // values shown beside the judged one that the verdict does not use, small and under their heading
     (c.ref?.length ? `<div class="pc-ref" data-role="reference"><div class="pc-ref-h">${esc(JUDGED_JA.ref)}</div><ul>${c.ref.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "") +
     (c.note ? `<div class="pc-note" data-role="not-judged">${esc(c.note)}</div>` : "") +

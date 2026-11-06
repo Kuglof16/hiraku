@@ -17,10 +17,10 @@
 //   rows as keep them readable. The dotted card carries the new tool's name as its tag (a
 //   label, under it and flush with its right edge: cardName, e.g. "転倒の守りを確かめるツール");
 //   the other cards have no names. From write_s the dotted card fills as the code is written,
-//   and once every check has passed it is solid, shows "照合 ✓" and its tag turns green: the
+//   and once every check has passed it is solid, shows "判定 ✓" and its tag turns green: the
 //   green says the tool passed its checks, never that the design passed (the run's verdicts
-//   are not shown). The story's label limit (4) counts the ticks, the tag and "照合 ✓"; when
-//   they would be more, "照合 ✓" joins the tag as one label. The shelf stays so to the end
+//   are not shown). The story's label limit (4) counts the ticks, the tag and "判定 ✓"; when
+//   they would be more, "判定 ✓" joins the tag as one label. The shelf stays so to the end
 //   (times.shelf_s is the end of the ticks).
 // - code: from times.write_s a few lines of the tool's code (from its analyse / run
 //   method), typed in up to times.check_s; small, a glimpse (data-kind "note"); the caret
@@ -28,7 +28,7 @@
 // - check: from times.check_s the known-answer checks (tool.checked checks): the check's
 //   quantity in words, the known answer and the tool's, and a short source; each is ticked
 //   (✓, or ✕ when it failed) one after another up to times.shelf_s.
-// The ticks, the new card's name and its "照合 ✓" are labels (data-kind); no number is emphasised. No
+// The ticks, the new card's name and its "判定 ✓" are labels (data-kind); no number is emphasised. No
 // record id, test id or tool name is shown (the code is the tool's own text).
 // Positions, sizes, colours, the length and the times come from layout.json n13; a missing
 // key is named on the page.
@@ -77,7 +77,7 @@ export function n13Records(s, events) {
   const usedBy = (name) => s.order.analyses.map((id) => s.analyses[id]).filter((a) => a.tool === name && a.status === "ok");
   const made = checked.filter((e) => e.data.origin === "claude" && e.data.usable && usedBy(e.data.name).length);
   const ev = params.get("tool") ? checked.filter((e) => e.data.name === params.get("tool") && e.data.usable).at(-1) : made.at(-1);
-  if (!ev) throw new Error(params.get("tool") ? `使えるツール ${params.get("tool")} の照合の記録が無い` : "Claude が作って解析に使ったツールの記録が無い");
+  if (!ev) throw new Error(params.get("tool") ? `使えるツール ${params.get("tool")} の判定の記録が無い` : "Claude が作って解析に使ったツールの記録が無い");
   const tool = ev.data;
   const attempt = checked.filter((e) => e.data.name === tool.name && e.seq <= ev.seq).length;
   const usable = checked.filter((e) => e.seq < ev.seq && e.data.usable).map((e) => e.data.name);
@@ -114,7 +114,7 @@ export function missingLine(tool) {
 
 // The new card's mark once every check has passed (green: the tool passed its checks, not
 // the design).
-export const CHECKED_MARK = "照合 ✓";
+export const CHECKED_MARK = "判定 ✓";
 
 // The cards in rows: { rows, perRow, w, h }, the fewest rows whose cards are at least
 // CARD_MIN_W wide and fit the height given, else the rows with the widest cards that fit.
@@ -169,7 +169,7 @@ export class CutN13 {
     const titlePx = Math.max(L.min_text_px, S.title_px, st.bodyPx);
     const room = S.h - 2 * BORDER_PX - 2 * PAD_Y_PX - titlePx * 1.6 - sx * 1.2 * 2 - 10 - 4 - sx * 1.6 - sx * 1.2;
     const fit = cardRows(n, S.w - 2 * BORDER_PX - 2 * PAD_X_PX, room);
-    // the mark "照合 ✓" is a label of its own on the new card while the ticks, the name and it
+    // the mark "判定 ✓" is a label of its own on the new card while the ticks, the name and it
     // keep within the story's label limit; else it joins the name (one label)
     const nChecks = (this.tool.checks ?? []).length;
     this.markJoined = nChecks + 2 > (st.limits?.label ?? Infinity);

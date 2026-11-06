@@ -310,7 +310,7 @@ class GridCutTest(unittest.TestCase):
         if name == "n15":
             self.assertEqual(got["header"]["text"], f"繰り返し {got['version'] - 1} 回")
         else:
-            self.assertEqual(got["header"]["text"], f"設計の版 {got['version']}・直し {got['version'] - 1} 回")
+            self.assertEqual(got["header"]["text"], f"設計 v{got['version']}・直し {got['version'] - 1} 回")
 
     def test_n04_on_a_version_on_the_way(self):
         """?version=1: the grid, the header, marks from version 1's judgements (none on nvh, its
@@ -387,7 +387,7 @@ class GridCutTest(unittest.TestCase):
         self.assertEqual(lit[1.3], {"crash": ("green", GREEN_RGB), "nvh": ("red", RED_RGB)})
         marks = {x["key"].split(".")[-1]: x["mark"] for x in shots[1.3]["tiles"]}
         self.assertEqual((marks["crash"], marks["nvh"]), ("✓", "✕"))  # the colour is the record's judgement
-        self.assertEqual(shots[1.3]["header"]["text"], "設計の版 1・直し 0 回")
+        self.assertEqual(shots[1.3]["header"]["text"], "設計 v1・直し 0 回")
         asm = shots[3.5]["assembly"]
         self.assertTrue(asm["shown"])
         self.assertEqual((asm["lit"], asm["border"]), ("red", RED_RGB))
@@ -498,7 +498,7 @@ class GridCutTest(unittest.TestCase):
             self.assertEqual({d: tiles[d]["recorded"] for d in SHOWN}, {"strength": "red", "thermal": "red", "handling": "green"})
             self.assertEqual(tiles["strength"]["beyond"], [["限界の外 1 (狙いどおり NG)", BEYOND_NG_RGB]])
             self.assertEqual(tiles["thermal"]["beyond"], [["限界の外 1 (狙いどおり NG)", BEYOND_NG_RGB]])
-            self.assertEqual(tiles["handling"]["beyond"], [["限界の外 1: 落ちるはずが通った", BEYOND_PASSED_RGB]])
+            self.assertEqual(tiles["handling"]["beyond"], [["限界の外 1: NG のはずが OK", BEYOND_PASSED_RGB]])
             for d in ("crash", "nvh", "aero", "powertrain", "assembly"):
                 self.assertEqual(tiles[d]["beyond"], [], d)
             for d in SHOWN:
