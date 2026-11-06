@@ -59,6 +59,18 @@
     animation-delay: calc(var(--t-right) - 0.4s);
   }
   @keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  /* under the first figure: 100 companies, lit one after another while the voice reads the figure;
+     the share lit is the figure itself (DATA, rounded), the rest stay dim */
+  .dots {
+    display: grid;
+    grid-template-columns: repeat(10, calc(16 * var(--u)));
+    gap: calc(6 * var(--u));
+    justify-content: center;
+    margin-top: calc(30 * var(--u));
+  }
+  .dots i { width: calc(16 * var(--u)); height: calc(16 * var(--u)); border-radius: calc(3 * var(--u));
+            background: rgba(241, 236, 224, 0.14); }
+  .dots i.lit { background: var(--warm); }
 
   .bars {
     position: absolute;
@@ -118,7 +130,7 @@
 <body data-duration="10">
 <div class="stage">
   <div class="safe">
-    <div class="fig left" data-box="n08b.fig.left"><div class="num" data-box="n08b.fig.left.num" data-kind="number"></div><div class="cap" data-box="n08b.fig.left.cap">製造業の企業のうち、中小企業</div></div>
+    <div class="fig left" data-box="n08b.fig.left"><div class="num" data-box="n08b.fig.left.num" data-kind="number"></div><div class="cap" data-box="n08b.fig.left.cap">製造業の企業のうち、中小企業</div><div class="dots" data-box="n08b.fig.left.dots"></div></div>
     <div class="divider" data-box="n08b.divider"></div>
     <div class="fig right" data-box="n08b.fig.right"><div class="num" data-box="n08b.fig.right.num" data-kind="number"></div><div class="cap" data-box="n08b.fig.right.cap">従業員 100 人以内の会社で「CAE を導入」と答えた技術者</div></div>
     <div class="bars" data-box="n08b.bars" data-kind="graph"></div>
@@ -165,6 +177,22 @@
 
   document.querySelector(".left .num").innerHTML = pctHtml(smePct);
   document.querySelector(".right .num").innerHTML = pctHtml(DATA.cae_adoption.small.pct);
+  // the first figure counts up to Math.round(smePct) while the voice reads it (from its rise to just before the
+  // second figure), and the 100 companies under it light with the count; the rest stay dim
+  const lit = Math.round(smePct);
+  const dotsEl = document.querySelector(".dots");
+  dotsEl.innerHTML = Array.from({ length: 100 }, () => "<i></i>").join("");
+  const dots = [...dotsEl.children];
+  const tl = window.promoLayout.cutRules.times;
+  const c0 = tl.left_s, c1 = tl.right_s - 0.2;
+  const ease = (u) => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 2);
+  const leftNum = document.querySelector(".left .num");
+  const countUp = (t) => {
+    const n = Math.round(lit * ease((t - c0) / (c1 - c0)));
+    leftNum.innerHTML = pctHtml(n);
+    dots.forEach((d, k) => d.classList.toggle("lit", k < n));
+  };
+  document.addEventListener("DOMContentLoaded", () => window.promo.onSeek(countUp));  // timeline.js comes after this script
 
   // Bars share one scale (layout.json n08b.bars.px_per_pct).
   const { px, cutRules } = window.promoLayout;

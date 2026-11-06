@@ -43,11 +43,11 @@ from pathlib import Path
 
 try:
     from promo.export import ENCODERS, ffmpeg_path, pick_encoder, video_args
-    from promo.subs import burn_command
+    from promo.subs import band_spans, burn_command
     from promo.voice import cuts_in_order, parse_script
 except ImportError:  # run as a script: promo/ is on sys.path
     from export import ENCODERS, ffmpeg_path, pick_encoder, video_args
-    from subs import burn_command
+    from subs import band_spans, burn_command
     from voice import cuts_in_order, parse_script
 
 DESIGN_W, DESIGN_H = 1920, 1080
@@ -635,8 +635,10 @@ def build(table: Table, out: Path, height: int, subs: Path | None, audio: Path |
     run(join_command(files, sp, table.fps, film, height, ffmpeg, encoder))
     if subs:
         # the ass filter is given a bare file name: Windows drive colons break its option parser
+        # the band only while a line is up (none over a cut's silent start, e.g. N00 before its voice)
+        band_at = band_spans(subs.read_text(encoding="utf-8"))
         run(swap_encoder(burn_command(film, Path(subs.name), out, audio.resolve() if audio else None,
-                                      ffmpeg=ffmpeg), encoder),
+                                      ffmpeg=ffmpeg, spans=band_at), encoder),
             cwd=subs.resolve().parent)
     else:
         run(mux_command(film, audio.resolve() if audio else None, out, ffmpeg))

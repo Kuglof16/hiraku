@@ -417,8 +417,8 @@ _DAMAGE_ASSUME = ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力の
 
 # A known bias, not worked on (the analysis department's comparisons, 2026-11-03): on the revised version and
 # the version with rail_t 4.5 mm the hand calculation of the end cross member comes out 26-31 % below the tool.
-_END_BIAS = ("偏り (直していない): 直しの版と rail_t 4.5 mm の版では、端の横の部材の手計算が道具より 26〜31 % 小さく出る "
-             "(解析部の照合、2026-11-03)")
+_END_BIAS = ("偏り (直していない): 直しの版と rail_t 4.5 mm の版では、端の横の部材の手計算がツールより 26〜31 % 小さく出る "
+             "(解析部が比べた結果、2026-11-03)")
 
 
 def _damage_from(prefix: str, place: str, extra: tuple[str, ...] = ()) -> Record:

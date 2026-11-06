@@ -179,21 +179,21 @@ STAGE_NAMES_JA = {0: "レイアウトと規則", 1: "軽い計算", 2: "車の�
 
 def load_case_stage(ctx: RunContext, load_case: Record) -> int | None:
     """The lowest stage among the usable tools on the shelf whose tests cover the load case's test
-    (test_family), that apply to the version's kind of design (applies_to), and that give the quantity its criterion judges (_gives; all covering tools when
+    (test_family), that apply to the version's design (functions.not_applying), and that give the quantity its criterion judges (_gives; all covering tools when
     none says so). None when no usable tool covers it (no tool checks it, so HK5 does not wait for
     it). Without the tools (the plugin's hook command) the run's server worked it out (ctx.stages)."""
     kept = ((getattr(ctx, "stages", None) or {}).get("cases") or {})
     if not ctx.tools and load_case["load_case_id"] in kept:
         got = kept[load_case["load_case_id"]]
         return None if got is None else int(got)
-    from hiraku.tools.functions import design_kind
+    from hiraku.tools.functions import not_applying
 
     fam = test_family(load_case["test_id"])
-    kind = design_kind(ctx)
-    # a tool for other kinds of design (tool_spec.applies_to, e.g. the care bed's use_fatigue) does not check this one
+    # a tool that does not apply to this design (its applies(design), else tool_spec.applies_to, e.g. the care
+    # bed's use_fatigue) does not check it; rules.stop_reason names such tools and why
     covering = [n for n, s in ctx.specs.items()
                 if s.get("usable") and any(test_family(t) == fam for t in s.get("tests") or [])
-                and (not s.get("applies_to") or kind in s["applies_to"])]
+                and not_applying(ctx, n) is None]
     q = (load_case.get("criterion") or {}).get("quantity")
     if q:
         giving = [n for n in covering if _gives(ctx.tools.get(n), q) is not False]
