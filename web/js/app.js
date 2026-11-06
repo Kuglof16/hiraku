@@ -1885,7 +1885,9 @@ function fitOverlays() {
   if (!nowEl.hidden && tg.offsetWidth) {
     const room = tg.offsetLeft - nowEl.offsetLeft - 12;
     const under = room < 360;
-    const top = under ? tg.offsetTop + tg.offsetHeight + 8 : 10; // (10: .now's own top)
+    // (under: below the toggles and the full-screen button, which is the taller; 10: .now's own top)
+    const exBottom = ex.offsetParent === viewport ? ex.offsetTop + ex.offsetHeight : 0;
+    const top = under ? Math.max(tg.offsetTop + tg.offsetHeight, exBottom) + 8 : 10;
     let width = under ? viewport.clientWidth - 2 * nowEl.offsetLeft : room;
     // the legend beside it (across its width, and within two lines' height below its top)
     const beside = lgIn && lg.offsetLeft < nowEl.offsetLeft + width + 12 && lg.offsetTop < top + 80;
