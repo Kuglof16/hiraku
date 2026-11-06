@@ -123,6 +123,21 @@ COARSE = {"frame_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_c
           "frame_tubes": {"element_size": {"value": 40.0, "unit": "mm"}, "hot_spot_facets": {"value": 8, "unit": "1"}}}
 
 
+def other_case_quantities(tool) -> list[str]:
+    """The quantities a tool gives only in a load case of another of its tests: frame_static's R9 pin case
+    (bolt_utilisation) reads K2's mount series from an upstream analysis, here a synthetic one (as test_r9_bracket)."""
+    if tool.name != "frame_static":
+        return []
+    from tests.solvers.test_r9_bracket import _series
+
+    up = {"S4-brake": _series(DESIGN, "RR", "uca_rear", (0.0, 5000.0, 0.0))}
+    lc = load_case("R9-bolt-rear-x", "R9", tool.domain, supports="RL,RR")
+    rec = tool.run(DESIGN, lc, PRED, {"upstream_analyses": up})
+    if rec["status"] != "ok":
+        raise AssertionError(f"frame_static R9: {rec.get('error')}")
+    return [r["quantity"] for r in rec["results"]]
+
+
 class DeclarationsTest(unittest.TestCase):
     """load_case_params and predicts: what the design department wires load cases and predictions from."""
 
@@ -152,6 +167,7 @@ class DeclarationsTest(unittest.TestCase):
             rec = t.run(design_for(t), required_case(t, t.tests[0]), PRED, params)
             self.assertEqual(rec["status"], "ok", f"{t.name}: {rec.get('error')}")
             got = [r["quantity"] for r in rec["results"]]
+            got += other_case_quantities(t)
             for p in t.predicts:
                 head, _, tail = p.quantity.partition("<")
                 tail = tail.partition(">")[2]
