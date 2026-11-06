@@ -179,9 +179,11 @@ class RolloverToolsTest(unittest.TestCase):
             names = [p["name"] for p in tool.describe()["params"]]
             self.assertEqual(len(names), len(set(names)))
 
-    def test_not_in_tools(self):
-        """The rollover tools are not on the catalog's shelf: TOOLS (and so every existing tool) is unchanged."""
-        self.assertNotIn("rollover_tilt", TOOLS)
+    def test_on_the_shelf(self):
+        """rollover_tilt is in TOOLS as a planned_only tool (it covers no test: the plan of S1's drive record names
+        it); rollover_lane_change is not on the shelf."""
+        self.assertIsInstance(TOOLS["rollover_tilt"], RolloverTiltTool)
+        self.assertTrue(TOOLS["rollover_tilt"].planned_only)
         self.assertNotIn("rollover_lane_change", TOOLS)
 
     @SLOW
@@ -201,6 +203,37 @@ class RolloverToolsTest(unittest.TestCase):
         self.assertLess(res["max_contact_depth"], 0.05)
         n = {len(s["values"]) for s in rec["series"] if "t_s" in s}
         self.assertEqual(len(n), 1)  # every time channel has a value at every sample
+
+    @SLOW
+    def test_the_drive_record_of_s1_on_the_demo_design(self):
+        """S1's drive record (hiraku.catalog.build DRIVE_BUILDERS) on the demo design: rollover_tilt runs, rolls over,
+        and its tip_angle matches the plan's prediction (PLANS_DRIVE) within the case's tolerance, so a scripted run
+        compares it and goes on."""
+        from hiraku import contract, solvers
+        from hiraku.catalog import load_catalog
+        from hiraku.catalog.build import DRIVE_BUILDERS, recipe_for
+        from hiraku.catalog.builders import PLANS
+        from tests.solvers.k2.test_builders import demo
+
+        design, req = demo()
+        (lc,) = DRIVE_BUILDERS["S1"](load_catalog(), req, design)
+        step = recipe_for(PLANS, lc)
+        (p,) = step["predictions"]
+        from hiraku.catalog.summary import design_summary
+        summary = design_summary(design)
+        got = {"from": p["inputs_from"](design, lc), "load": summary["loadings"][lc["params"]["loading"]],
+               "summary": summary}  # the refs of S1's prediction: from.<x>, load.<x>, summary.<x>
+        inputs = {k: got[ref.split(".", 1)[0]][ref.split(".", 1)[1]] for k, ref in p["inputs"].items()}
+        pred = solvers.formula_registry().evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
+        rec = TOOLS[step["tool"]].run(design, lc, [{"prediction_id": "pred-0001"}],
+                                      {"stiffness_study": False, "record_hz": 10.0})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        res = {r["quantity"]: r for r in rec["results"]}
+        self.assertEqual(res["rollover"]["value"], 1.0)
+        self.assertAlmostEqual(res["hold_angle"]["value"] - res["tip_angle"]["value"], 1.0, places=9)
+        self.assertEqual(res[p["quantity"]]["unit"], pred["unit"])
+        self.assertLess(abs(res[p["quantity"]]["value"] - pred["value"]) / abs(pred["value"]), lc["tolerance_rel"])
 
 
 class DesignPointsTest(unittest.TestCase):

@@ -6,7 +6,8 @@ body's hull, rings on the wheels' outer faces; each a penalty spring and damper 
 so the run goes on through the fall until the body lies at rest or after_tip_s past the tip. Nothing is
 posed by hand: the vehicle starts upright on its wheels and only the test's own input moves it.
 
-Two tools (not in TOOLS; the catalog does not name them), the same watch of the run:
+Two tools, the same watch of the run (rollover_tilt is in TOOLS, planned_only: only the plan of S1's drive
+record names it; rollover_lane_change is not in TOOLS):
 - rollover_tilt (S1): the tilt table turned as the tilt tool turns it (scenario.tilt_sweep, the tyres on
   the table's high friction) until the upper wheels have lost their load, then turned on to
   hold_past degrees past that angle and held there while the vehicle falls onto the table.
@@ -35,7 +36,7 @@ from ..road import flat, table_with_floor
 from ..scenario import hold, new_sim, side_gravity, tilt_sweep
 from ..sim import Sim, quat_from_euler
 from ..units import G0
-from .base import MOTOR, MU, TIPPED_ROLL, K2Tool, P, _box, _half_width, _res, _side_ids
+from .base import MOTOR, MU, TIPPED_ROLL, K2Tool, P, Pair, _box, _half_width, _res, _side_ids
 from .lane_change import DLC_OFFSET, dlc_path, dlc_scene
 
 REST_SPEED = 0.05     # m/s: the body is at rest below this speed ...
@@ -436,6 +437,13 @@ class RolloverTiltTool(_RolloverBase):
     name = "rollover_tilt"
     title = "横転 (傾斜台を倒れる角度より先まで傾け、車体と台の接触つき、K2)"
     tests = ["S1"]
+    # only the plan of S1's drive record names it (hiraku.catalog.builders.k2_tests PLANS_DRIVE): a run with S1
+    # checks it, and it covers no test, so S1's stage and tool stay the tilt tool's
+    planned_only = True
+    # tip_angle is the tilt tool's tilt_angle (the same tilt_sweep, the side that tips first): the same pair
+    pairs = (Pair("tip_angle", "tilt.spring_roll_angle", "theta",
+                  note="the angle at which the upper wheels lose their load, as the tilt tool's tilt_angle; the body "
+                       "rolls on its springs, the roll axis of vertical-slider supports on the ground"),)
     params = (P("direction", None, "both", "which way the table tips; right = the table's right side goes down; "
                 "both: the side with the smaller tip angle (both turned without recording first)",
                 choices=("both", "right", "left")),

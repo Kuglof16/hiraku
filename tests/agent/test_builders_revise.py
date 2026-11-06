@@ -167,6 +167,28 @@ class LaneChangeDriveTest(unittest.TestCase):
         self.assertEqual(contract.errors("load_case", drive), [])
         self.assertEqual(len(by_id), 2)
 
+    def test_the_tilt_rollover_drive_record_is_past_the_tip_and_not_judged(self):
+        """requirements `drive`: S1's tilt case held S1_DRIVE_PAST_DEG past the tip (rollover_tilt's hold_past), no
+        criterion, feeding nothing; S1's own case is unchanged."""
+        from hiraku.catalog.build import DRIVE_TITLE, S1_DRIVE_PAST_DEG
+        from tests.solvers.k2.test_builders import demo
+
+        design, req = demo()
+        alone = build_load_cases(load_catalog(), req, design, ["S1", "S3"])
+        out = build_load_cases(load_catalog(), req, design, ["S1", "S3"], drive=["S1", "S3"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        s1 = next(lc for lc in out if lc["test_id"] == "S1" and "criterion" in lc)
+        self.assertEqual(s1, next(lc for lc in alone if lc["test_id"] == "S1"))
+        drive = by_id[s1["load_case_id"] + "-rollover-drive"]
+        self.assertEqual(drive["load_case_id"], f"S1-tilt-{s1['params']['loading']}-rollover-drive")
+        self.assertEqual(drive["test_id"], "S1")
+        self.assertEqual(drive["params"], dict(s1["params"], hold_past={"value": S1_DRIVE_PAST_DEG, "unit": "deg"}))
+        self.assertTrue(drive["title"].startswith(DRIVE_TITLE))
+        self.assertNotIn("criterion", drive)
+        self.assertNotIn("feeds", drive)
+        self.assertEqual(contract.errors("load_case", drive), [])
+        self.assertEqual(len(by_id), 4)  # S1, S3 and their drive records
+
 
 class SystemCheckTest(BuildersCase, unittest.TestCase):
     """A system rule (category system) that hits a part turns the assembly tile red."""
