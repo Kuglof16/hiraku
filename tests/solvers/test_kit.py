@@ -156,8 +156,9 @@ class CheckTest(unittest.TestCase):
         # before the plates weighed their own sheets (ladder_4w.PLATE_T_MM); 642.00 kg while a sheet weighed area x
         # thickness x density, before the catalogue's unit mass with the checkers (ladder_4w.PLATE_KG_M2); 644.95 kg
         # before the clevis brackets at the front lower arms' pivots and the dampers' tops (kit/arms.pivot_brackets);
-        # 645.24 kg before the joints' struts and the brake pushrod (kit/joints.py)
-        self.assertAlmostEqual(q["mass"]["value"], 646.16, delta=0.01)
+        # 645.24 kg before the joints' struts and the brake pushrod (kit/joints.py); 646.16 kg before the rear lower
+        # arms' brackets reached the rail's outer face (kit/mounts.place, 4 x 0.18 kg)
+        self.assertAlmostEqual(q["mass"]["value"], 646.87, delta=0.01)
         # the front lower arm's clevis bracket (kit/arms.pivot_brackets), 30 mm below its pivot, at the height
         # the suspension box had (30 mm below the lower arm) before the arms were parts
         self.assertEqual(q["ground_clearance"]["value"], 150.0)
