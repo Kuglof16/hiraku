@@ -27913,7 +27913,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: AIST; not reachable)",
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)",
       "value": "若年女性 5 % 〜 若年男性 95 %"
      },
      {
