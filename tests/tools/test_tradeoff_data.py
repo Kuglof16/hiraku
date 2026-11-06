@@ -54,6 +54,20 @@ class CollectTest(unittest.TestCase):
             self.assertIn(named, said)
         self.assertNotIn("H1-interference", said)  # a count held at 0 is left out without a word
 
+    def test_a_number_that_moved_nothing_is_named(self):
+        got, _ = self.collect({"max_stress"}, paths=("variables.v", "variables.wheelbase"))
+        said = " ".join(got["skipped"])
+        self.assertIn("wheelbase", said)  # the stub's terms move only variables.v
+        self.assertIn("形の変数", said)
+        self.assertNotIn("v:", said)
+
+    def test_default_variables_are_the_direct_ones_the_design_has(self):
+        design = {"archetype": "ladder_4w", "variables": {"gear_ratio": {}, "motor_peak_power": {}, "wheelbase": {}}}
+        ctx = SimpleNamespace(version=1, store=SimpleNamespace(design=lambda: design))
+        self.assertEqual(tradeoff_data.default_variables(ctx), ["variables.motor_peak_power", "variables.gear_ratio"])
+        ctx = SimpleNamespace(version=1, store=SimpleNamespace(design=lambda: {"archetype": "care_bed", "variables": {}}))
+        self.assertEqual(tradeoff_data.default_variables(ctx), [])
+
     def test_a_named_quantity_is_looked_at_whatever_its_tool(self):
         got, asked = self.collect({"max_hot_spot_stress", "knee_room"})
         self.assertEqual(asked, ["H3-body-size", "R1s-step100"])
