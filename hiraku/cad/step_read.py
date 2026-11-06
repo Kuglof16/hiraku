@@ -537,7 +537,19 @@ def _shell_faces(f: _File, shell_ref, M: np.ndarray, unit: float, angle: float) 
     return out
 
 
-def _integrate(faces: list[Face]) -> tuple[np.ndarray, str, list, np.ndarray]:
+def _integrate(faces: list[Face], about: np.ndarray | None = None) -> tuple[np.ndarray, str, list, np.ndarray]:
+    """[V, Sx, Sy, Sz] about the point `about` (the result is shifted back), method, notes, sample points.
+    Integrating about a point of the solid keeps a tessellated solid's numbers the same wherever it is."""
+    if about is not None:
+        moved = []
+        for fc in faces:
+            p = dict(fc.params)
+            if "origin" in p:
+                p["origin"] = p["origin"] - about
+            moved.append(Face(fc.surface, p, [L - about for L in fc.loops], fc.same_sense, fc.edge_kinds))
+        total, method, notes, extra = _integrate(moved)
+        total[1:] += total[0] * about
+        return total, method, notes, extra + about if len(extra) else extra
     total = np.zeros(4)
     method, notes = "exact", []
     extra = []
@@ -573,9 +585,10 @@ def _solid(f: _File, ent: Entity, M: np.ndarray, unit: float, angle: float, prod
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     notes: list = []
     try:
-        total, method, notes, extra = _integrate(faces)
+        about = (lo + hi) / 2
+        total, method, notes, extra = _integrate(faces, about)
         for vf in void_faces:
-            vt, vm, vn, _ = _integrate(vf)
+            vt, vm, vn, _ = _integrate(vf, about)
             if vt[0] > 0:  # a void shell given outward: subtract it
                 vt = -vt
             total += vt
