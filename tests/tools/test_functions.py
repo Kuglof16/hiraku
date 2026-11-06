@@ -655,6 +655,16 @@ class SafeSideTest(RunCase, unittest.TestCase):
         with mock.patch.object(judge, "beyond_results", return_value=[]):  # within its criterion: nothing more said
             self.assertNotIn("ツール", rules.cannot_judge_text(self.ctx))
 
+    def test_an_ended_case_without_a_criterion_leaves_nothing_unjudged(self):
+        """A load case judged by nothing (P1-step100 feeds R1): ending its step on a cause does not stop the run."""
+        cmp = self.r1_mismatch(1.5)
+        record_cause(self.ctx, self.args(cmp, ends_case=True))
+        self.assertIn("R1-step100", rules.cannot_judge_text(self.ctx))
+        lc = self.ctx.load_case("R1-step100")
+        with mock.patch.object(type(self.ctx), "load_case", lambda c, i: {k: v for k, v in lc.items() if k != "criterion"}):
+            self.assertEqual(rules.ended_cases(self.ctx), {"R1-step100"})  # still not waited for (HK4, HK5)
+            self.assertIsNone(rules.cannot_judge_text(self.ctx))
+
     def test_a_cause_without_ends_case_ends_nothing(self):
         cmp = self.r1_mismatch(1.5)
         cause = record_cause(self.ctx, self.args(cmp))["cause"]

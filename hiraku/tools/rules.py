@@ -547,7 +547,10 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
 def cannot_judge_text(ctx: RunContext) -> str | None:
     """The load cases this run cannot judge (unpredictable_cases), in a sentence; None when there are none."""
     cannot = unpredictable_cases(ctx)
-    ended = sorted(ended_cases(ctx) - set(cannot))
+    # a load case with no criterion (P1-step100 feeds R1 and is judged by nothing) leaves no judgement out when
+    # its step ends on a cause: only the cases with a criterion are named, so ending such a step does not stop the run
+    ended = sorted(lc_id for lc_id in ended_cases(ctx) - set(cannot)
+                   if not ctx.has_load_case(lc_id) or ctx.load_case(lc_id).get("criterion"))
     parts = []
     if cannot:
         named = "、".join(f"{lc_id} ({q})" for lc_id, q in cannot.items())
