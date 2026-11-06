@@ -5923,6 +5923,201 @@
         }
       }
     },
+    "tool_input.export_step": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 設計の版を STEP (ISO 10303-21) のファイルにして実行のフォルダに書く。部材と部品が 1 つずつ名前つきの立体になる。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Missing: the latest version."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "Where to write, relative to the run's folder. Missing: cad/design_v<N>.step."
+        }
+      }
+    },
+    "tool_input.import_step": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 実行のフォルダの中の STEP を読み、設計の記録 (design) と、立体ごとに何になったか (部材・部品) を返す。版は作らない。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "A STEP file inside the run's folder, relative to it (cad/frame.step). Paths outside the run's folder are refused."
+        },
+        "density_kg_m3": {
+          "description": "Density for the parts' masses: one number for every solid, or {solid name or '*': number}. Missing: masses are null.",
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          ]
+        }
+      }
+    },
+    "tool_input.edit_step": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 実行のフォルダの中の STEP の立体を動かす・回す・消す・足す・断面を変えて、別のファイルに書く。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "edits"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "A STEP file inside the run's folder, relative to it (cad/frame.step). Paths outside the run's folder are refused."
+        },
+        "out_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "Where to write, relative to the run's folder. Missing: <name>_edit<N>.step next to path (never over it)."
+        },
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "op",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "enum": [
+                  "move",
+                  "rotate",
+                  "delete",
+                  "add_box",
+                  "set_section",
+                  "set_wall",
+                  "add_brace"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "by_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "axis": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "angle_deg": {
+                "type": "number"
+              },
+              "about_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "center_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "size_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rpy_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "section": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "shape",
+                  "dims_mm"
+                ],
+                "properties": {
+                  "shape": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "dims_mm": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                }
+              },
+              "t_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "from_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "to_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            }
+          }
+        }
+      }
+    },
     "tool_input.import_knowledge": {
       "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). 人が渡したファイル (Markdown・CSV/TSV の表・テキスト) を読み、規則にする。text と filename で渡す (または実行のフォルダの knowledge/ の中の path)。「A は B 以上」のような文はコードが式にする。式にできなかった文は 結果の needs_formula に番号 (c3 など) つきで返る: それぞれ、1 つの部品について はい / いいえ で答える式 check (結果の facts の名前だけ。要件は req_Q15、設計の変数は var_<名前>) を書いて formulas={番号: {check, kinds?, category?}} に入れ、同じ filename と text でもう一度呼ぶ。規則にならない文は skip={番号: 理由}。式の計算はコードがする。kinds は対象の部品の種類 (battery, seat, body など。frame は骨組み、support は接地点)。",
       "type": "object",
