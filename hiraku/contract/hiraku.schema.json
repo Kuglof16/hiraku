@@ -3195,6 +3195,30 @@
           },
           "description": "Why each flag was set (or left unset), in the lead's words."
         },
+        "added_tests": {
+          "type": "array",
+          "description": "Tests Claude added to the code's choice (add_tests), each with its reason. Adding only: the code's tests stay.",
+          "items": {
+            "type": "object",
+            "required": [
+              "test_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "test_id": {
+                "$ref": "#/$defs/test_id"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_addition_reason": {
+          "type": "string",
+          "description": "Why Claude reviewed the choice and added nothing."
+        },
         "picks": {
           "type": "array",
           "items": {
@@ -5289,6 +5313,35 @@
           }
         },
         "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_input.add_tests": {
+      "description": "Lead: after the code's choice of domains and tests, Claude reviews it and adds tests from the catalog it judges necessary for this product, each with a reason, or says why it adds none. It cannot remove the code's tests.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "test_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "test_id": {
+                "$ref": "#/$defs/test_id"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_addition_reason": {
           "type": "string"
         }
       }
