@@ -484,8 +484,10 @@ def build_b(args, vdir, rec, design) -> dict:
     obj["summary"] = {
         "t_end_s": float(frames["t_s"][-1]),
         "peak_decel": common.result(rec, "peak_decel") if common.result(rec, "peak_decel") is not None else max(dv, default=0.0),
-        # the series is the wall's impulse per 1 ms / (mass x 1 ms) at even steps: its mean is the speed lost / time
-        "mean_decel": sum(dv) / len(dv) if dv else None,
+        # the record's mean_decel (speed lost / time to the stop); a record without it: the series' mean (the series
+        # is the wall's impulse per 1 ms / (mass x 1 ms) at even steps)
+        "mean_decel": (common.result(rec, "mean_decel") if common.result(rec, "mean_decel") is not None
+                       else sum(dv) / len(dv) if dv else None),
         # a run stopped at the split: the crush then; a run going on: the record's max_crush over the run
         "crush_end": (max_crush if goes_on and max_crush is not None else at_split if at_split is not None
                       else (cr["values"][-1] if cr["values"] else None)),

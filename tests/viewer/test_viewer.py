@@ -287,13 +287,15 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual(hs[0]["ok"], hs[0]["value"] >= hs[0]["limit"])
         dv = common.series(rec, "deceleration")["values"]
         self.assertAlmostEqual(o["summary"]["peak_decel"], common.result(rec, "peak_decel"))
-        self.assertAlmostEqual(o["summary"]["mean_decel"], sum(dv) / len(dv))
+        # the record's mean_decel when it has one (speed lost / time to the stop), else the series' mean
+        md = common.result(rec, "mean_decel")
+        self.assertAlmostEqual(o["summary"]["mean_decel"], md if md is not None else sum(dv) / len(dv))
         self.assertAlmostEqual(o["summary"]["crush_end"], common.result(rec, "crush_at_split"))
         # the wall at the front-most part box, as the record's scene gives it
         self.assertEqual(o["wall_x_mm"], 415.0)
 
     def test_crash_contact_record(self):
-        # K2 8a24cd15: element contact, wheel nodes on no element touching the wall through the tyre spring, C1
+        # K2 9bffe19c (the run goes on to the vehicle's full stop): element contact, wheel nodes on no element touching the wall through the tyre spring, C1
         # judged by the least room over the run (occupant_space_margin) and frame_split_fraction (C1-split)
         o = make("crash", "crash_contact")
         rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
@@ -302,10 +304,11 @@ class FieldDataTest(unittest.TestCase):
         sm = o["summary"]
         self.assertIsNone(sm["after"])
         self.assertAlmostEqual(sm["crush_end"], common.result(rec, "max_crush"))
+        self.assertAlmostEqual(sm["mean_decel"], common.result(rec, "mean_decel"))
         mg = sm["margin"]
         self.assertAlmostEqual(mg["value"], common.result(rec, "occupant_space_margin"))
         self.assertEqual((mg["op"], mg["limit"], mg["ok"], mg["load_case_id"]), (">=", 0.0, mg["value"] >= 0.0, "C1-40kmh"))
-        self.assertEqual((mg["where"], mg["member"], mg["t_s"]), ("occupant_L.foot_L", "tower_post_LA2", 0.0673))
+        self.assertEqual((mg["where"], mg["member"], mg["t_s"]), ("occupant_L.foot_L", "dash_post_L", 0.0757))
         least = min(h["value"]["value"] for h in rec["hot_spots"] if h["quantity"] == "occupant_space_margin")
         self.assertAlmostEqual(least, mg["value"])
         sp = sm["split"]
