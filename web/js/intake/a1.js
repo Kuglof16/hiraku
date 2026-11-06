@@ -3,7 +3,7 @@
 import { FLAGS, SPEED_CLASSES } from "./data.js";
 import { fill, h } from "./dom.js";
 import { askingPanel } from "./a2.js";
-import { DOMAIN_PLAIN, domainCards, saidOf } from "./model.js";
+import { DOMAIN_PLAIN, addedTests, domainCards, saidOf } from "./model.js";
 
 const GLOW_S = 0.5; // seconds the glow of a newly lit card lasts
 export const REPLY_STEP_S = 0.5; // with a playback time, the domains answer one after another, this many seconds apart
@@ -89,6 +89,8 @@ function card(c, api, ui) {
         lit ? h("span", { class: "in-mark" }, "調べる") : null),
       c.state === "draft" ? h("p", { class: "in-draft" }, "製品の性質から当てた候補です (まだ決めていません)") : null,
       said.text ? h("p", { class: "in-reason", title: said.full || "" }, said.text) : null,
+      // what Claude added to the code's choice, with the reason it gave (the record's own words)
+      ...(c.added || []).map((a) => h("p", { class: "in-added", title: `${a.id} ${a.title}` }, h("span", { class: "in-add-mark" }, "足した"), `${a.title}: ${a.reason}`)),
       lit && c.testIds?.length ? h("details", { class: "in-tests" }, h("summary", {}, "くわしく"),
         c.testCount !== null ? h("span", { class: "in-count", title: "荷重などの条件を作って確かめられる確認の数" }, `確認 ${c.testCount} 件`) : null,
         c.testIds.map((t) => h("code", {}, t)),
@@ -114,6 +116,15 @@ export function inTurn(cards, time, step = REPLY_STEP_S) {
   });
 }
 
+/** One line on Claude's review of the code's choice: what it added, or why it added nothing (both are in the record). */
+function reviewLine(m) {
+  const added = addedTests(m);
+  const parts = [];
+  if (added.length) parts.push(`Claude が ${added.length} 件の確認を足しました`);
+  if (m.domains?.no_addition_reason) parts.push(`見直して、足すものは無いと確かめました: ${m.domains.no_addition_reason}`);
+  return parts.join("。");
+}
+
 export function renderA1(el, m, api, ui) {
   const cards = inTurn(domainCards(m).sort((a, b) => ORDER[a.state] - ORDER[b.state]), ui.time); // the ones that light first (stable: domain order inside)
   const lit = cards.filter((c) => c.state === "lit").length;
@@ -127,6 +138,7 @@ export function renderA1(el, m, api, ui) {
     : decided && !waitN ? { title: "HIRAKU が調べることを選びました", note: `${lit} 個を調べ${offN ? `、${offN} 個は今回は見ません` : ""}` }
     : m.domains && !waitN ? { title: "調べることは、決まっている内容からです", note: `7 つのうち ${lit} 個` }
     : { title: "HIRAKU が、何を調べるか考えています", note: lit ? `${lit} / 7` : "" };
+  const review = reviewLine(m);
   const ask = askingPanel(m, api, ui);
   el.classList?.[ask ? "add" : "remove"]("has-ask");
   const want = m.want || m.domains?.want || [...m.chat].reverse().find((c) => c.who === "user")?.text || "";
@@ -154,6 +166,7 @@ export function renderA1(el, m, api, ui) {
           : null),
       h("div", { class: "in-block" },
         h("h2", {}, headline.title, h("small", {}, headline.note)),
+        review ? h("p", { class: "in-review" }, review) : null,
         h("div", { class: "in-cards" }, cards.map((c) => card(c, api, ui))),
         assembly.length ? h("p", { class: "in-foot" }, "組み立てやすさ・人への当たりは、上の 7 つとは別に見ます ",
           h("details", { class: "in-tests" }, h("summary", {}, "くわしく"), assembly.map((t) => h("code", {}, t)))) : null),

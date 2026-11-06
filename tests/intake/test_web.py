@@ -763,6 +763,23 @@ console.log(JSON.stringify({ step: REPLY_STEP_S, a: states(1.0), b: states(1.0 +
         self.assertEqual({d: s for d, s in got["z"].items() if d in ("handling", "aero", "thermal", "nvh")},
                          {"handling": "lit", "aero": "lit", "thermal": "off", "nvh": "off"})
 
+    def test_what_claude_added_is_marked_with_its_reason_and_the_review_is_said(self):
+        got = self.run_body("""
+const withAdd = e(2, 2, 'domains.picked', { want: 'w', flags: {}, flag_reasons: { ride: 'x' },
+  picks: [{ domain: 'handling', shown_name: '操安', reason: '悪路を走るので倒れないかを確かめる', test_ids: ['S2'] },
+          { domain: 'nvh', shown_name: '音振', reason: '機械の上に置くので共振を見る', test_ids: ['N1'] }],
+  off: [], assembly_test_ids: [], added_tests: [{ test_id: 'N1', reason: '機械の上に置くので共振を見る' }] });
+events = [picked, withAdd]; intake.update();
+const added = card('nvh').all('p').filter((p) => p.className === 'in-added').map((p) => p.text());
+const none = e(3, 3, 'domains.picked', { want: 'w', flags: {}, flag_reasons: { ride: 'x' }, picks: [], off: [], assembly_test_ids: [], no_addition_reason: '足すものは無い' });
+events = [none]; intake.update();
+console.log(JSON.stringify({ added, review: el.text() }));
+""")
+        self.assertEqual(len(got["added"]), 1)
+        self.assertIn("足した", got["added"][0])
+        self.assertIn("機械の上に置くので共振を見る", got["added"][0])
+        self.assertIn("足すものは無いと確かめました: 足すものは無い", got["review"])
+
     def test_the_headline_counts_what_was_picked(self):
         got = self.run_body("""console.log(JSON.stringify({ text: el.text() }));""")
         self.assertIn("HIRAKU が調べることを選びました", got["text"])
