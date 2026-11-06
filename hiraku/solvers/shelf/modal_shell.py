@@ -39,8 +39,16 @@ ELEMENT_SIZE_RANGE_MM = (10.0, 20.0)
 ELEMENT_SIZE = Param("element_size", "mm", "target edge of the shell elements (the version's mesh record has the default "
                      f"size; another size is solved but not drawn on it); {ELEMENT_SIZE_RANGE_MM[0]:g} to "
                      f"{ELEMENT_SIZE_RANGE_MM[1]:g} mm", default=ELEMENT_SIZE_MM)
+SUSPENSION = Param("suspension", None, "how the wheels hold the frame: spring (each wheel centre rigid (RBE2) on its "
+                   "wheel mount, on the beam model's vertical spring, with stiff in-plane holds) or linkage (the arms, "
+                   "tie rod, knuckle and wheel, coil spring and tyre of k1_shell.linkage; the vehicle on its tyres)",
+                   default="spring", choices=("spring", "linkage"))
+TYRE_STIFFNESS = Param("tyre_stiffness", "N/mm", "linkage only: the tyre's vertical rate (without it: the design "
+                       "variable tyre_stiffness, else 60 N/mm)")
 N_MODES_MAX = 40
 LABEL_SHAPE = "モードの形 (シェルの節の変位、いちばん大きい所を 1)"
+LABEL_SHAPE_LINKAGE = ("モードの形 (シェルの節とサスペンションの点 (per_node: 腕・タイロッドの節、車輪の中心と接地点、"
+                       "フレームの側の取付点) の変位、全部でいちばん大きい所を 1)")
 LABEL_STRAIN = ("モードのひずみ (要素の中心の von Mises 応力 = E x ひずみ、外と内の面の大きい方、そのモードの最大を 1。"
                 "大きさは相対で、応力の値ではない)")
 MASS_ASSUMPTION = ("質量: シェルの要素は集中質量 (rho t 面積の 1/4 を各節の並進に、その t^2/12 倍を 3 つの回転に。面内の回転にも)。"
@@ -56,6 +64,30 @@ EIGEN_ASSUMPTION = ("固有値: scipy の eigsh を shift-invert (sigma = (2 pi 
                     "解く。つなぎ目の剛な棒 (RBE2) は K と M の両方に同じ縮約 T をかける。モードは M で正規直交かと残差を確かめた")
 KIND_ASSUMPTION = ("モードの分け方は modal と同じ: シェルの節の並進の、最小二乗の剛体の動きからのずれが {f:g} 以上ならフレームが"
                    "曲がるモード (フレームの部材の要素の節だけでも {f:g} 以上なら first_frame_mode、そうでなければロールバーなど)")
+LINKAGE_ASSUMPTIONS = (
+    "サスペンション (linkage): 下と上の腕 (A 形の 2 本の脚、下の腕はダンパーの下の取付を通す横の管つき) とタイロッドを丸管 "
+    "{d:g} x {t:g} mm ({mat}) の梁 (Euler-Bernoulli、脚ごとに {n} 要素) にした。腕の内側の軸はブッシュ (軸に直角 "
+    "{kr:g} N/mm、軸方向 {ka:g} N/mm: K2 の値、K2 の仮定) の並進のばねで、軸まわりの回転は自由 (ブッシュのねじりの剛さは K2 に"
+    "無いので入れていない)。フレームの側は、取付点を持つ設計の節 (mount_carriers: 点にある節、なければ金具の carried_by、"
+    "なければ支えの frame_node) の壁の節に剛な棒 (RBE2) でつないだ金具の節で、取付点はその節に剛につく",
+    "ナックル・車輪・ブレーキは 1 つの剛体 (部品の質量と慣性の和、平行軸の項つき) で、腕の外の端とタイロッドの外の端に"
+    "ボールジョイント (並進の硬いばね {kj:g} N/mm、ペナルティ、回転は自由) でつなぐ。タイロッドの内の端もボールジョイントで、"
+    "棒の方向だけ棒と直列に K2 のタイロッドの剛さ {ktr:g} N/mm になるばね。2 つの球の継手の間の棒は自分の軸まわりに"
+    "自由に回るので、その回転だけ内の端でねじりのばね {ks:g} N mm/rad で止めた (ステアリングは止めてある)",
+    "ばね: コイルばねを damper_lower から damper_upper への軸方向のばね 1 本にし、その剛さは、車輪の中心の上下の剛さ "
+    "(フレームを止め、タイヤを外して計算) が K2 のホイールレート stiffness_N_per_mm になるように決めた (レバー比は "
+    "腕の形から計算)。ダンパーは減衰だけで剛さが無いので、減衰の無い固有値の解析には入らない。静的な荷重 (ばねの"
+    "予荷重) による幾何剛性は入れていない",
+    "タイヤ: 接地点 (車輪の中心から半径だけ下) と地面の間の上下のばね {kt:g} N/mm ({kt_from})。K2 には横と前後の"
+    "静的なタイヤの剛さが無い (コーナリングと縦の剛さは滑りに対する力) ので横と前後は自由: 車は前後・横・ヨーに "
+    "0 Hz の剛体のモードを持ち、それは数えて分けた (zero_modes)。ほかに支えのばねやペナルティの止めは無い",
+    "質量 (linkage): 腕・タイロッドの部品の質量を梁の節に長さの割合で (回転の慣性も小さく入れる)、ボールジョイントは腕の"
+    "外の節、ダンパーは半分ずつ両端、ドライブシャフトなど他の部品は半分を剛体、半分をフレーム (支えの frame_node) に",
+    "モードの種類 (linkage): 運動エネルギーの割合で分けた。フレーム (シェルと金具の節) が 0.5 以上なら、シェルが"
+    "剛体のように動けば車体のモード (上下・ピッチ・ロールは剛体の動きの大きい成分で)、曲がればフレームのモード (0.8 未満は"
+    "coupled)。そうでなければ、車輪の剛体が腕より大きければ車輪のモード (前・後の軸、左右が同じ向きなら hop、逆なら tramp)、"
+    "腕が大きければ腕の局所のモード",
+)
 
 
 class ModalShell(BuiltinTool):
@@ -74,7 +106,7 @@ class ModalShell(BuiltinTool):
         Param("n_modes", "1", f"number of modes to compute (1 to {N_MODES_MAX})", default=20.0),
         LOADING,
     )
-    run_params = (ELEMENT_SIZE,)
+    run_params = (ELEMENT_SIZE, SUSPENSION, TYRE_STIFFNESS)
     predicts = (
         Predicts("first_body_mode", "modal.quarter_car", "f", "the body bouncing on suspension and tyre springs"),
         Predicts("first_body_mode", "modal.spring_mass", "f", "k = all suspension springs together, m = the sprung mass"),
@@ -131,12 +163,26 @@ class ModalShell(BuiltinTool):
         lo, hi = ELEMENT_SIZE_RANGE_MM
         if not lo <= size <= hi:
             raise LoadCaseError(f"run parameter element_size must be {lo:g} to {hi:g} mm, got {size:g} mm")
-        r = smodal.modes(design, n, element_size_mm=size)
+        susp = run_param(params, SUSPENSION)
+        tyre = run_param(params, TYRE_STIFFNESS)
+        if tyre is not None and susp != "linkage":
+            raise LoadCaseError("run parameter tyre_stiffness is for suspension linkage only")
+        if tyre is not None and not tyre > 0.0:
+            raise LoadCaseError(f"run parameter tyre_stiffness must be > 0, got {tyre:g} N/mm")
+        r = smodal.modes(design, n, element_size_mm=size, suspension=susp, tyre_stiffness_N_per_mm=tyre)
         mm, sol = r["model"], r["solve"]
-        if sol.orthonormality > smodal.ORTHO_TOL or float(np.max(sol.residuals)) > smodal.RESIDUAL_TOL:
+        res = float(np.max(sol.residuals[r["keep"]]))
+        if sol.orthonormality > smodal.ORTHO_TOL or res > smodal.RESIDUAL_TOL:
             raise DesignError(f"the shell modes did not pass their checks (M-orthonormality {sol.orthonormality:.1e}, "
-                              f"largest residual {float(np.max(sol.residuals)):.1e}); the model is badly held")
+                              f"largest residual {res:.1e}); the model is badly held")
         f, flex, lflex = r["frequencies"], r["flexibility"], r["ladder_flexibility"]
+        if susp == "linkage":
+            nz = len(r["zero_modes"]["frequencies"])
+            if nz != 3:
+                raise DesignError(f"the vehicle on its tyres has {nz} modes below {smodal.ZERO_HZ:g} Hz, not the 3 "
+                                  "rigid ones (fore-aft, sideways, yaw): a mechanism in the linkage or a part not held")
+            if len(f) < n:
+                raise DesignError(f"only {len(f)} elastic modes were found of the {n} asked")
         n_fields = min(FIELD_MODES, len(f))
 
         def mode_row(quantity: str, i: int) -> Record:
@@ -145,12 +191,15 @@ class ModalShell(BuiltinTool):
                 row["field_index"] = 2 * i  # the mode_shape field; its strain field follows it
             return row
 
-        kinds = [("body on springs" if x < FLEX_LIMIT else "frame" if lx >= FLEX_LIMIT else "roll bar")
-                 for x, lx in zip(flex, lflex)]
+        if susp == "linkage":
+            kinds = linkage_kinds(r, design)
+        else:
+            kinds = [("body on springs" if x < FLEX_LIMIT else "frame" if lx >= FLEX_LIMIT else "roll bar")
+                     for x, lx in zip(flex, lflex)]
         results = [mode_row(f"mode_{i + 1}", i) for i in range(len(f))]
-        body = [i for i, k in enumerate(kinds) if k == "body on springs"]
-        ladder = [i for i, k in enumerate(kinds) if k == "frame"]
-        other = [i for i, k in enumerate(kinds) if k == "roll bar"]
+        body = [i for i, k in enumerate(kinds) if k.startswith("body")]
+        ladder = [i for i, k in enumerate(kinds) if k.startswith("frame")]
+        other = [i for i, k in enumerate(kinds) if k.startswith("roll bar")]
         if body:
             results.append(mode_row("first_body_mode", body[0]))
         if not ladder:
@@ -158,6 +207,9 @@ class ModalShell(BuiltinTool):
         results.append(mode_row("first_frame_mode", ladder[0]))
         if other:
             results.append(mode_row("first_rollbar_mode", other[0]))
+        hop = [i for i, k in enumerate(kinds) if k.startswith("wheel hop")]
+        if hop:
+            results.append(mode_row("first_wheel_hop_mode", hop[0]))
         driven = [s for s in design["supports"] if s["actuation"]["drive"]] or design["supports"]
         radius = float(np.mean([s["radius_mm"] for s in driven]))
         f_wheel = (v / 3.6) / (2 * math.pi * radius / 1000.0)
@@ -167,7 +219,7 @@ class ModalShell(BuiltinTool):
         if gear is not None:
             exc["motor"] = f_wheel * units.to_unit(gear, "1", "gear_ratio")
             results.append(result("motor_rotation_frequency", exc["motor"], "Hz"))
-        frame = [float(fi) for fi, x in zip(f, flex) if x >= FLEX_LIMIT]
+        frame = [float(f[i]) for i, k in enumerate(kinds) if k.startswith(("frame", "roll bar"))]
         gaps = {k: min(abs(fr - fe) / fe for fr in frame) * 100.0 for k, fe in exc.items() if fe > 0}
         if gaps:
             nearest = min(gaps, key=gaps.get)
@@ -178,6 +230,8 @@ class ModalShell(BuiltinTool):
         cmp_results, cmp_effects = beam_comparison(design, r, kinds, n)
         results += cmp_results
         effects = mode_effects(r, kinds, n_fields) + cmp_effects + model_effects(mm, sol, r)
+        if susp == "linkage":
+            effects += linkage_effects(r, kinds)
         fields = []
         mesh, why = mesh_of(design, params)
         if mesh is not None:
@@ -189,8 +243,24 @@ class ModalShell(BuiltinTool):
         if not fields:  # no field: the results carry no field_index
             for row in results:
                 row.pop("field_index", None)
-        assumptions = [MASS_ASSUMPTION, SPRING_ASSUMPTION.format(k=smodal.HOLD_STIFFNESS),
-                       EIGEN_ASSUMPTION.format(s=smodal.SIGMA_HZ), KIND_ASSUMPTION.format(f=FLEX_LIMIT)]
+        if susp == "linkage":
+            from hiraku.designgen.kit.arms import ARM_D_MM, ARM_T_MM
+
+            from ..k1_shell import linkage as lk
+
+            c0 = next(iter(mm.linkage["corners"].values()))
+            t_from = next(x for x in mm.linkage["notes"] if x.startswith("tyre "))
+            s_ = MASS_ASSUMPTION.split("。")  # the shell's lumped mass, the RBE3 node points, the gussets
+            assumptions = ["。".join([s_[0], s_[2], s_[4], LINKAGE_ASSUMPTIONS[4]])] + [
+                a.format(d=ARM_D_MM, t=ARM_T_MM, mat=mm.linkage["notes"][1], n=lk.N_SEG, kr=c0["bushings"]["radial"],
+                         ka=c0["bushings"]["axial"], kj=lk.JOINT_STIFFNESS, ktr=c0["bushings"]["tie_rod"],
+                         ks=lk.SPIN_STIFFNESS, kt=mm.linkage["tyre_N_per_mm"], kt_from=t_from.split(" from ", 1)[1])
+                for a in LINKAGE_ASSUMPTIONS[:4]] + [LINKAGE_ASSUMPTIONS[5]] + [
+                n_ for n_ in mm.linkage["notes"][2:]]
+            assumptions += [EIGEN_ASSUMPTION.format(s=smodal.SIGMA_HZ), KIND_ASSUMPTION.format(f=FLEX_LIMIT)]
+        else:
+            assumptions = [MASS_ASSUMPTION, SPRING_ASSUMPTION.format(k=smodal.HOLD_STIFFNESS),
+                           EIGEN_ASSUMPTION.format(s=smodal.SIGMA_HZ), KIND_ASSUMPTION.format(f=FLEX_LIMIT)]
         timings = {f"shell_modal_{k[:-2]}": float(val) for k, val in r["timings"].items() if k.endswith("_s")}
         return {"results": results, "fields": fields, "effects": effects, "assumptions": assumptions,
                 "timings_s": timings}
@@ -237,7 +307,7 @@ def beam_comparison(design: Record, r: dict, kinds: list[str], n: int) -> tuple[
                                  f"{fb:.3f} Hz, MAC {M[i, j]:.2f} on the design nodes (value: shell / beam - 1)"),
                         "value": fs / fb - 1.0 if fb > 0 else 0.0, "unit": "1"})
     if bi is not None:
-        fi = next(i for i, k in enumerate(kinds) if k == "frame")
+        fi = next(i for i, k in enumerate(kinds) if k.startswith("frame"))
         effects.append({"name": (f"first frame mode: shell {r['frequencies'][fi]:.3f} Hz (mode {fi + 1}), beam "
                                  f"{bf[bi]:.3f} Hz (mode {bi + 1}); value: shell / beam - 1"),
                         "value": float(r["frequencies"][fi] / bf[bi] - 1.0), "unit": "1"})
@@ -247,6 +317,108 @@ def beam_comparison(design: Record, r: dict, kinds: list[str], n: int) -> tuple[
 def mode_effects(r: dict, kinds: list[str], n_fields: int) -> list[Record]:
     return [{"name": f"mode {i + 1} ({kinds[i]}): share of the shape (mesh node translations) that bends the frame",
              "value": float(r["flexibility"][i]), "unit": "1"} for i in range(len(r["frequencies"]))]
+
+
+def _wheel_motion(r: dict, i: int, sid: str) -> tuple[np.ndarray, np.ndarray]:
+    """(translation at the wheel centre, rotation) of support sid's wheel body in mode i (the solver's scale)."""
+    from ..k1_shell.linkage import offset_rows
+
+    mm = r["model"]
+    info = mm.linkage["corners"][sid]["info"]
+    u6 = r["phi"][:, i].reshape(-1, 6)[info.body]
+    node, d = mm.linkage["asm"].points[f"{sid}.wheel_center"]
+    return offset_rows(d) @ u6, u6[3:]
+
+
+def linkage_kinds(r: dict, design: Record) -> list[str]:
+    """The kind of each elastic mode of the linkage model from its kinetic energy shares (LINKAGE_ASSUMPTIONS)."""
+    from ..k1_frame.analyze import rigid_fit
+
+    mm = r["model"]
+    X = mm.mesh.nodes
+    c = X.mean(axis=0)
+    sup = design["supports"]
+    pos = {s["id"]: np.asarray(s["position_mm"], float) for s in sup}
+    xs = np.array(list(pos.values()))
+    half_wb = (float(xs[:, 0].max() - xs[:, 0].min()) / 2.0) or 1.0
+    half_tr = (float(xs[:, 1].max() - xs[:, 1].min()) / 2.0) or 1.0
+    front = {k for k, p in pos.items() if p[0] > float(xs[:, 0].mean())}
+    out = []
+    for i, en in enumerate(r["energies"]):
+        ke = en["kinetic"]
+        fr = ke.get("frame", 0.0)
+        wheels = {k.split(":", 1)[1]: v for k, v in ke.items() if k.startswith("wheel:")}
+        arms = {k.split(":", 1)[1]: v for k, v in ke.items() if k.startswith("arms:")}
+        w_all, a_all = sum(wheels.values()), sum(arms.values())
+        if fr >= 0.5:
+            if r["flexibility"][i] < FLEX_LIMIT:
+                t, th = rigid_fit(list(X - c), list(r["shapes"][i]))
+                comps = {"bounce": abs(t[2]), "roll": abs(th[0]) * half_tr, "pitch": abs(th[1]) * half_wb,
+                         "fore-aft": abs(t[0]), "sideways": abs(t[1]), "yaw": abs(th[2]) * half_wb}
+                k = "body " + max(comps, key=comps.get)
+            else:
+                k = "frame" if r["ladder_flexibility"][i] >= FLEX_LIMIT else "roll bar"
+            if fr < 0.8:
+                k += " (coupled with the wheels)" if w_all >= a_all else " (coupled with the arms)"
+        elif w_all >= a_all:
+            sid = max(wheels, key=wheels.get)
+            share_f = sum(v for s, v in wheels.items() if s in front) / (w_all or 1.0)
+            axle = "front" if share_f > 0.75 else "rear" if share_f < 0.25 else "both axles"
+            t, th = _wheel_motion(r, i, sid)
+            radius = mm.linkage["corners"][sid]["info"].radius
+            if float(np.linalg.norm(th)) * radius > float(np.linalg.norm(t)):
+                ax = int(np.argmax(np.abs(th)))
+                k = f"wheel {('camber', 'spin / wind-up', 'steer')[ax]} rotation ({axle})"
+            else:
+                ax = int(np.argmax(np.abs(t)))
+                if ax == 2:
+                    mates = [s for s in wheels if (s in front) == (sid in front) and s != sid]
+                    phase = ""
+                    if mates and wheels[mates[0]] > 0.2 * wheels[sid]:
+                        z2 = _wheel_motion(r, i, mates[0])[0][2]
+                        phase = ", in phase" if z2 * t[2] > 0 else ", anti-phase (tramp)"
+                    k = f"wheel hop ({axle}{phase})"
+                else:
+                    k = f"wheel {('fore-aft', 'sideways')[ax]} ({axle})"
+            if fr >= 0.2:
+                k += " (coupled with the frame)"
+        else:
+            k = f"arm local ({max(arms, key=arms.get)})"
+            if fr >= 0.2:
+                k += " (coupled with the frame)"
+        out.append(k)
+    return out
+
+
+def linkage_effects(r: dict, kinds: list[str]) -> list[Record]:
+    """Energy shares per mode, the rigid modes set apart, and each corner's linkage values."""
+    out = []
+    for i, en in enumerate(r["energies"]):
+        ke, se = en["kinetic"], en["strain"]
+        wheels = sum(v for k, v in ke.items() if k.startswith("wheel:"))
+        arms = sum(v for k, v in ke.items() if k.startswith("arms:"))
+        per = ", ".join(f"{k.split(':')[1]} {v:.2f}" for k, v in sorted(ke.items()) if k.startswith("wheel:"))
+        strain = ", ".join(f"{k} {v:.3f}" for k, v in se.items())
+        out.append({"name": (f"mode {i + 1} ({kinds[i]}) {float(r['frequencies'][i]):.3f} Hz: kinetic energy frame "
+                             f"{ke.get('frame', 0.0):.3f}, wheels {wheels:.3f} ({per}), arms {arms:.3f}; strain energy "
+                             f"{strain} (value: the frame's kinetic share)"),
+                    "value": float(ke.get("frame", 0.0)), "unit": "1"})
+    z = r["zero_modes"]
+    out.append({"name": (f"{len(z['frequencies'])} rigid modes below the elastic ones (free on the tyres fore-aft, "
+                         f"sideways and in yaw), set apart; their frequencies (Hz): "
+                         + ", ".join(f"{float(x):.2e}" for x in z["frequencies"])), "value": float(len(z["frequencies"])),
+                "unit": "1"})
+    for sid, c in r["model"].linkage["corners"].items():
+        info = c["info"]
+        J = np.diag(info.body_inertia_kg_mm2) / 1e6
+        out.append({"name": (f"{sid}: coil spring {info.spring_rate:.3f} N/mm along the damper for the wheel rate "
+                             f"{info.wheel_rate:g} N/mm (motion ratio {info.motion_ratio:.4f}, linkage compliance "
+                             f"{c['linkage_compliance']:.2e} mm/N); wheel body {info.body_mass_kg:.3f} kg, inertia "
+                             f"about its centre of mass x / y / z {J[0]:.4f} / {J[1]:.4f} / {J[2]:.4f} kg m^2 "
+                             f"(parts: {', '.join(c['parts'].ids.get('rigid', []))}); tyre {info.tyre_rate:g} N/mm; "
+                             f"mounts on frame nodes {c['carriers']} (value: the coil spring rate)"),
+                    "value": float(info.spring_rate), "unit": "N/mm"})
+    return out
 
 
 def model_effects(mm, sol, r: dict) -> list[Record]:
@@ -261,7 +433,9 @@ def model_effects(mm, sol, r: dict) -> list[Record]:
                   f"(beam model: density A L {beam_frame:.2f} kg), parts {mm.part_mass_kg:.2f} kg; rigid translation "
                   f"x / y / z through M: {tm[0]:.3f} / {tm[1]:.3f} / {tm[2]:.3f} kg"), "value": mm.total_mass_kg,
          "unit": "kg"},
-        {"name": "springs at the wheel centres (N/mm): " + ", ".join(f"{k} {v:g}" for k, v in mm.springs.items())},
+        {"name": ("springs at the wheel centres (N/mm): " if mm.suspension == "spring" else
+                  "coil spring rates along the damper axes (N/mm, for K2's wheel rates): ")
+                 + ", ".join(f"{k} {v:.4g}" for k, v in mm.springs.items())},
         {"name": "largest |Phi^T M Phi - I| of the shell modes (M-orthonormality)", "value": sol.orthonormality,
          "unit": "1"},
         {"name": "largest relative residual |K phi - omega^2 M phi| / |K phi| of the shell modes",
@@ -275,9 +449,15 @@ def mode_fields(r: dict, kinds: list[str], n_fields: int, mesh_id: str) -> list[
     mm = r["model"]
     for i in range(n_fields):
         fi = float(r["frequencies"][i])
-        out.append({"kind": "mode_shape", "label": f"mode {i + 1} ({kinds[i]}): {LABEL_SHAPE}", "unit": "1",
-                    "frequency_Hz": fi, "mesh_id": mesh_id,
-                    "per_mesh_node": [[round(float(x), 4) + 0.0 for x in u] for u in r["shapes"][i]]})
+        u = r["shapes"][i]
+        row = {"kind": "mode_shape", "label": f"mode {i + 1} ({kinds[i]}): {LABEL_SHAPE}", "unit": "1",
+               "frequency_Hz": fi, "mesh_id": mesh_id}
+        if "point_shapes" in r:  # linkage: mesh and linkage points on one scale (the largest of them all = 1)
+            u = u * (r["mesh_scale"][i] / r["scale"][i])
+            row["label"] = f"mode {i + 1} ({kinds[i]}): {LABEL_SHAPE_LINKAGE}"
+            row["per_node"] = {k: [round(float(x), 4) + 0.0 for x in v] for k, v in r["point_shapes"][i].items()}
+        row["per_mesh_node"] = [[round(float(x), 4) + 0.0 for x in v] for v in u]
+        out.append(row)
         strain = smodal.mode_strain(mm, r["phi"][:, i])
         out.append({"kind": "stress", "label": f"mode {i + 1} ({kinds[i]}): {LABEL_STRAIN}", "unit": "1",
                     "frequency_Hz": fi, "mesh_id": mesh_id, "surface": "max",
