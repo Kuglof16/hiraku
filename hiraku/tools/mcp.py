@@ -263,6 +263,7 @@ for _name, _t in INTAKE_TOOLS.items():
 HANDLERS["rule_check"] = rule_check  # the intake's, then the assembly tile again (system rules)
 HANDLERS["write_load_case"] = write_load_case  # hiraku.tools.load_case_writer
 from hiraku.tools import cad_tools  # noqa: E402,F401 (adds export_step, import_step, edit_step to the tables above)
+from hiraku.tools import cfd_tools  # noqa: E402,F401 (adds cfd_aero to the tables above)
 
 
 def _text(obj: Any) -> str:
