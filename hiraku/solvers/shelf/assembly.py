@@ -80,21 +80,31 @@ class Assembly(BuiltinTool):
         a = from_box([0, 0, 0], [1000, 1000, 1000])
         out.append(check_record("two 1 m cubes 0.01 mm apart", "overlap", -0.01,
                                 overlap(a, from_box([1000.01, 0, 0], [1000, 1000, 1000])), "mm", 1e-6,
-                                "separating axis test: a gap of 0.01 mm is found as -0.01"))
+                                "separating axis test: a gap of 0.01 mm is found as -0.01",
+                                case_ja="1 m の立方体 2 つが 0.01 mm 離れている",
+                                source_ja="分離軸の判定: 0.01 mm のすき間は -0.01 と出る"))
         out.append(check_record("two 1 m cubes 0.01 mm into each other", "overlap", 0.01,
                                 overlap(a, from_box([999.99, 0, 0], [1000, 1000, 1000])), "mm", 1e-6,
-                                "separating axis test: an overlap of 0.01 mm is found as +0.01"))
+                                "separating axis test: an overlap of 0.01 mm is found as +0.01",
+                                case_ja="1 m の立方体 2 つが 0.01 mm めり込んでいる",
+                                source_ja="分離軸の判定: 0.01 mm のめり込みは +0.01 と出る"))
         out.append(check_record("1 m cube and the same cube turned 45 deg about z, centres 1.2 m apart", "overlap",
                                 500.0 * math.sqrt(2) + 500.0 - 1200.0, overlap(a, from_box([1200, 0, 0], [1000, 1000, 1000], [0, 0, 45])),
-                                "mm", 1e-6, "the turned cube reaches 500 sqrt(2) mm along x"))
+                                "mm", 1e-6, "the turned cube reaches 500 sqrt(2) mm along x",
+                                case_ja="1 m の立方体と、同じ立方体を z 軸まわりに 45° 回したもの。中心は 1.2 m 離れている",
+                                source_ja="回した立方体は x の向きに 500 sqrt(2) mm まで届く"))
         rod = from_points([0, 0, 0], [1000, 0, 0], 20.0)
         out.append(check_record("two 1 m rods 40 mm across, crossed at right angles 100 mm apart", "capsule_overlap", -60.0,
                                 capsule_overlap(rod, from_points([500, -500, 100], [500, 500, 100], 20.0)), "mm", 1e-9,
-                                "capsules: the axes are 100 mm apart, less the two 20 mm radii"))
+                                "capsules: the axes are 100 mm apart, less the two 20 mm radii",
+                                case_ja="太さ 40 mm、長さ 1 m の棒 2 本が、100 mm 離れて直角に交わる",
+                                source_ja="カプセル (棒の形): 軸どうしの 100 mm から、2 本の半径 20 mm を引く"))
         out.append(check_record("rod end 30 mm off a 1 m cube's corner along the diagonal", "capsule_overlap",
                                 20.0 - 30.0, capsule_box_overlap(from_points(np.full(3, 500 + 30 / math.sqrt(3)),
                                                                              np.full(3, 900.0), 20.0), a), "mm", 1e-9,
-                                "capsule and box: the corner is the nearest point of the cube, 30 mm from the axis end"))
+                                "capsule and box: the corner is the nearest point of the cube, 30 mm from the axis end",
+                                case_ja="棒の端が、1 m の立方体の角から対角線の向きに 30 mm 離れている",
+                                source_ja="カプセルと箱: 立方体でいちばん近いのは角で、軸の端から 30 mm"))
         # a cup (bottom and four walls) with something inside and a lid: the content goes in before the lid
         parts = [_part("bottom", "body", [0, 0, 5], [200, 200, 10]),
                  _part("wall_px", "body", [95, 0, 60], [10, 200, 100]), _part("wall_mx", "body", [-95, 0, 60], [10, 200, 100]),
@@ -104,7 +114,9 @@ class Assembly(BuiltinTool):
         order = [k for k, _ in asm["order"]]
         out.append(check_record("cup, content and lid", "lid_after_content",
                                 1.0, float(order.index("part:lid") > order.index("part:content")), "1", 0.0,
-                                "taking apart: the lid has to come off before the content can come out"))
+                                "taking apart: the lid has to come off before the content can come out",
+                                case_ja="カップと、その中身とふた",
+                                source_ja="ばらす順: ふたを外さないと中身を出せない"))
         # a part shut in by fixed frame members on all six sides cannot come out: an 80 mm cube
         # inside six 20 mm plates 10 mm away (plates along y for the x sides, along x for the others)
         plates = {"px": ((60, -80, 0), (60, 80, 0), "side"), "mx": ((-60, -80, 0), (-60, 80, 0), "side"),
@@ -120,7 +132,9 @@ class Assembly(BuiltinTool):
         shut["materials"] = {"m": {"name": "m", "E_MPa": 1.0, "nu": 0.3, "density_kg_m3": 1.0, "yield_MPa": 1.0, "source": "check", "verified": True}}
         asm = disassemble(shut)
         out.append(check_record("part shut in by fixed members on six sides", "blocked_parts", 1.0, float(len(asm["blocked"])),
-                                "1", 0.0, "nothing can move it out along any of the six directions"))
+                                "1", 0.0, "nothing can move it out along any of the six directions",
+                                case_ja=f"動かない部材に {len(plates)} 方から囲まれた部品",
+                                source_ja=f"{len(plates)} つのどの向きにも動かして出せない"))
         # a steered wheel next to a fixed bar: free steer where the inner corner reaches the bar
         clearance = 80.0
         wheel_y, half_w, half_l = 550.0, 100.0, 300.0
@@ -138,7 +152,11 @@ class Assembly(BuiltinTool):
         got = sweep(design)["free_steer"]["X"]
         out.append(check_record("600 x 200 mm wheel 80 mm from a bar, steered", "free_steer_angle", expected, got, "deg", 1e-3,
                                 "the inner corner moves in by w cos(a) + l sin(a) - w; free until that equals the clearance "
-                                "(plus the 1 mm counted as touching)"))
+                                "(plus the 1 mm counted as touching)",
+                                case_ja=(f"{2 * half_l:g} x {2 * half_w:g} mm の車輪を、{clearance:g} mm 離れた棒のそばで"
+                                         "かじを切る"),
+                                source_ja=(f"内側の角は w cos(a) + l sin(a) - w だけ内へ寄る。それがすき間 ({TOUCH_MM:g} mm "
+                                           "までは触れているだけとみて足す) と同じになるまで切れる")))
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:

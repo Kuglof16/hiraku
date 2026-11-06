@@ -256,6 +256,9 @@ offroad-4w:
       tool: step_climb_dynamic
       stage: 3
       say: 段差を K2 で走らせて、前輪が段の角から浮く瞬間の押す力と前輪の荷重を、偶力を入れた式と比べます
+      # No record_run: speed here. With it the record is run 2 (the drive over the step at 10 km/h), and R1s
+      # (frame_shell) and R9 read their upstream mount forces from that record's vectors and series, so R1s-step100
+      # moved by +15 % (QA's trial 6b, cmp-0139). The drive for the screen needs a record that feeds no load case.
       predictions: *p1_pushed
     # Past the limit (requirements `beyond`): the same steps at the 250 mm step. On the demo vehicle the
     # lever rule is off by -51 % there and the couple formula matches, as at 100 mm; the beam formula is

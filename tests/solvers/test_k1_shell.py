@@ -572,7 +572,8 @@ class KnownAnswersTest(unittest.TestCase):
         print(f"  shell_known_answers: {len(rows)} checks in {dt:.2f} s")
         self.assertTrue(all(r["pass"] for r in rows))
         for r in rows:
-            self.assertEqual(set(r), {"case", "quantity", "expected", "got", "unit", "tolerance_rel", "pass", "source"})
+            self.assertEqual(set(r), {"case", "quantity", "expected", "got", "unit", "tolerance_rel", "pass", "source",
+                                      "case_ja", "source_ja"})  # the Japanese for the screen (contract bf6712f)
 
 
 class LoadSpreadTest(unittest.TestCase):

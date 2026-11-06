@@ -112,7 +112,7 @@ export const DEMOS = {
       "value": "若年女性 5 % 〜 若年男性 95 %",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)"
      },
      {
       "key": "Q33",
@@ -121,7 +121,7 @@ export const DEMOS = {
       "unit": "kg",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)"
      },
      {
       "key": "Q40",
@@ -12235,7 +12235,7 @@ export const DEMOS = {
      {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -14456,7 +14456,7 @@ export const DEMOS = {
      {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -15678,7 +15678,7 @@ export const DEMOS = {
      {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -16101,7 +16101,7 @@ export const DEMOS = {
      {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -16747,7 +16747,7 @@ export const DEMOS = {
      {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
        {
         "center_mm": [
@@ -17033,7 +17033,7 @@ export const DEMOS = {
      {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -27913,7 +27913,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: AIST; not reachable)",
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)",
       "value": "若年女性 5 % 〜 若年男性 95 %"
      },
      {
@@ -29927,7 +29927,7 @@ export const DEMOS = {
       "value": "若年女性 5 % 〜 若年男性 95 %",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)"
      },
      {
       "key": "Q33",
@@ -29936,7 +29936,7 @@ export const DEMOS = {
       "unit": "kg",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)"
      },
      {
       "key": "Q35",
@@ -41890,7 +41890,7 @@ export const DEMOS = {
      {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -44111,7 +44111,7 @@ export const DEMOS = {
      {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -45333,7 +45333,7 @@ export const DEMOS = {
      {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -45756,7 +45756,7 @@ export const DEMOS = {
      {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -46402,7 +46402,7 @@ export const DEMOS = {
      {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
        {
         "center_mm": [
@@ -46688,7 +46688,7 @@ export const DEMOS = {
      {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
