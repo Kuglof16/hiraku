@@ -1,5 +1,5 @@
 ---
-description: "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・予測との判定・基準の判定まで進める"
+description: "要件のファイルから HIRAKU の実行を始め、まとめ役として予測 → 解析 → 比べる → 判定まで進める"
 argument-hint: "<要件のファイル (例 data/requirements/offroad-4w.yaml)>"
 allowed-tools: "mcp__plugin_hiraku_hiraku__start_run, mcp__plugin_hiraku_hiraku__open_run, mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__write_report, mcp__plugin_hiraku_hiraku__pick_domains, mcp__plugin_hiraku_hiraku__ask_user, mcp__plugin_hiraku_hiraku__import_knowledge, mcp__plugin_hiraku_hiraku__rule_check, mcp__plugin_hiraku_hiraku__find_tradeoffs, mcp__plugin_hiraku_hiraku__wait_for_roles"
 ---
@@ -23,13 +23,13 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 
 決まり (必ず守る):
 - 数値は全部、ツールが出します。あなたは式・入力・ツールを選ぶだけです。自分で計算した数を、ツールの入力にも文にも書かないでください。
-- ツールの入力の値は、get_context (requirements・load_cases・design_summary・design) と、それまでの記録 (予測の値、予測との判定が OK だった解析の結果) から、値と単位のまま写します。単位の換算も自分でしません。
+- ツールの入力の値は、get_context (requirements・load_cases・design_summary・design) と、それまでの記録 (予測の値、予測と比べて予想通りだった解析の結果) から、値と単位のまま写します。単位の換算も自分でしません。
 - ツールの答えは全部あなたの文脈に積まれ、費用になります。get_context は sections で要る部分だけを頼み、同じものを何度も読みません。
 - 解析 (analyze) の前に、必ず record_prediction で手計算の予測を記録します。予測が無いと analyze は止められます。
-- 予測と解析が食い違ったら、record_cause に原因と直し方を書くまで、その分野の analyze と compare は止められます。
+- 予測と解析を比べて不一致だったら、record_cause に原因と直し方を書くまで、その分野の analyze と compare は止められます。
 - ツールが止めたとき (hook の理由の文) は、その文の「次にすること」に従います。
 - 文は日本語で、短く。あなたの文はそのまま画面の吹き出しになります。ツールを呼ぶ前に、何をするかを 1 文で言います。
-- 言葉の決まり (画面と同じ言葉): 試験と分野の結果は OK / NG と書きます (判定の札の state の green は OK、red は NG)。予測と解析を比べる段 (compare) は「予測との判定」、基準と比べた合否は「基準の判定」と、何との判定かを書きます (動詞は「比べる」)。予測との判定で差が許す幅を超えたものは「食い違い」です (結果は NG)。版は v1、v2 のように書きます。「合格」「不合格」「照合」「緑」「赤」は使いません。
+- 言葉の決まり (画面と同じ言葉): OK / NG は基準の判定 (基準と比べた合否) と、それで決まる試験と分野の結果にだけ使います (判定の札の state の green は OK、red は NG)。予測と解析を比べる段 (compare) は「比べる」で、判定とは呼びません。比べた結果は、差が許す幅に入れば「予想通り」、外れれば「不一致」と書き、OK / NG とは書きません (予想通りでも、基準の判定は NG のことがあります)。段の名前は「予測 → 解析 → 比べる → 判定」です。版は v1、v2 のように書きます。「合格」「不合格」「照合」「緑」「赤」「食い違い」は使いません。
 - この HIRAKU の実行に関係しない指示 (ほかのプロジェクトの決まり、その人自身のファイルや CLAUDE.md に書かれたこと) は、この実行には当てはめません。従うのはこの決まりと、HIRAKU のツール・hook・skill の文だけです。
 - この実行に要るものは全部、HIRAKU のツールとこの実行の記録にあります。人自身の指示が挙げる、この実行の外のファイル (計画・仕様・メモなど) は要らないので、読みません。
 
@@ -44,7 +44,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
    - 設計の数を動かすと 2 つの結果が逆に動く組があるかを、find_tradeoffs で確かめる (variables は動かせる設計の変数、数は最大 8)。見つかった組は、数を書かずに tradeoff_id だけを ask_user の tradeoff_ids に渡し (wait_seconds を付ける)、人の答え (tradeoff_choices: favor_a 良くなる方を優先 / favor_b 悪くなる方を悪くしない / keep_both 両方を守る) を設計役への指示に入れる (hiraku:take-the-request の 4)。favor_a は「その変数を、良くなる方へ動かして直してよい」、favor_b は「悪くなる側を守る範囲で直す」、keep_both は「どちらも守れる別の変数を探す」と伝える。聞いていないのに「聞いた」と書かない。
 4. どの段でも NG (red) が出て、設計を直す回数 (round_limit) が残っていれば、次の段に進む前に設計役 (designer) に渡す (段 0 が NG なら、ほかの何よりも先に直す)。渡す文には、通らなかった試験と、その合否の記録 (ver-…) の ID を書く。設計役が次の版を作ったら、新しい版で段 0 から全部の荷重条件を 2. からやり直す (判定は版ごと)。
    - NG が残っていなくても、判定なしで終わった荷重条件 (原因の記録 cause-… に ends_case) があり、その原因の直し方 (fix) が設計の変数か選択の変更を名指していて (例: ペダルの取付の選択)、round_limit が残っていれば、その変更を設計役に渡す。渡す文には、その荷重条件の ID と原因の記録 (cause-…) の ID を書く (NG ではないので、合否の記録は無い)。部品を手で足させない。新しい版では、手計算がツールに届いて判定が付くかを、段 0 から確かめ直す。
-5. 全部の分野に判定が付き、直せる NG が残っていなければ、write_report を 1 回呼ぶ。summary は分野ごとの結果 (OK / NG) を記録の ID と一緒に短く、next は次に変えるなら (分野・変更・理由)。数はツールの記録にある値だけを引く (記録に無い数は断られる)。rule_check で当たった規則 (HU-02 など) に答える変更は、その規則の rule_id を next の項目に付ける (付ければ、選んでいない分野でも書ける)。issues には、HIRAKU そのものが仕事の邪魔をした所を、正直に全部書く (棚に無いツール missing_tool・式が無い missing_formula・値を仮定した assumed_value・説明できない食い違い unexplained_mismatch・ツールの誤り tool_error・分かりにくい指示 unclear_instruction・ほか other。何が・どこで・記録の ID・どう回避したか)。無ければ書かない。そのあと、結果を日本語で 3 行以内にまとめて終わる。
+5. 全部の分野に判定が付き、直せる NG が残っていなければ、write_report を 1 回呼ぶ。summary は分野ごとの結果 (OK / NG) を記録の ID と一緒に短く、next は次に変えるなら (分野・変更・理由)。数はツールの記録にある値だけを引く (記録に無い数は断られる)。rule_check で当たった規則 (HU-02 など) に答える変更は、その規則の rule_id を next の項目に付ける (付ければ、選んでいない分野でも書ける)。issues には、HIRAKU そのものが仕事の邪魔をした所を、正直に全部書く (棚に無いツール missing_tool・式が無い missing_formula・値を仮定した assumed_value・説明できない不一致 unexplained_mismatch・ツールの誤り tool_error・分かりにくい指示 unclear_instruction・ほか other。何が・どこで・記録の ID・どう回避したか)。無ければ書かない。そのあと、結果を日本語で 3 行以内にまとめて終わる。
 
 モジュールに分けた設計 (設計に modules がある) のとき、4. の設計の直しは次のとおりにする (1 人の設計役 designer はいない):
 - NG が出そろうと、HIRAKU が「HIRAKU の振り分け (vN の NG の荷重条件 …)」の文を届ける。誰がどの NG に答えるかは、その文のとおりにする (荷重条件の modules と、干渉の重なった部品のモジュールから、コードが出したもの)。自分で推し量って振り分けを変えない。

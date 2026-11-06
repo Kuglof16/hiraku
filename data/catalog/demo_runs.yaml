@@ -38,8 +38,8 @@ runs:
   - id: n11-n12
     title: 重心の高さの単位の取り違え
     shows: >-
-      要件の荷の重心の高さを 62 cm のつもりで 62 mm と書いた。hooks が予測の無い解析を止め、予測との判定で
-      手計算と解析が食い違い、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと合う
+      要件の荷の重心の高さを 62 cm のつもりで 62 mm と書いた。hooks が予測の無い解析を止め、手計算と解析を比べると
+      不一致になり、原因 (単位の取り違え) を書いて、荷を設計どおりにして予測し直すと予想通りになる
     file: offroad-4w-n12.yaml
     # scripted only: in the first Claude run of this file (driver claude_code_plugin, 2026-11-03) the lead
     # predicted first and took the loaded centre of gravity from design_summary (the design's cargo at its

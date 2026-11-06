@@ -207,7 +207,7 @@ class Hooks:
             if not hits or hits[-1]["status"] == "match":
                 return None
             c = hits[-1]
-            return (f"食い違いです (差 {c['diff_rel'] * 100:.1f} %、許す幅 {c['tolerance_rel'] * 100:.0f} %)。"
+            return (f"予測と比べた結果は不一致です (差 {c['diff_rel'] * 100:.1f} %、許す幅 {c['tolerance_rel'] * 100:.0f} %)。"
                     f"record_cause(comparison_id=\"{c['comparison_id']}\", cause=..., fix=...) を書くまで、"
                     f"この分野の analyze と compare は止まります")
         if short == "revise_design" and rules.design_modules(self.ctx) is not None:

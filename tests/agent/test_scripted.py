@@ -107,7 +107,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "green")
         self.assertIsNone(self.ctx.project.get("stop_reason"))
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertTrue(any(t.startswith("安全側の食い違いとして") and "基準の判定を出しました: OK" in t for t in said))
+        self.assertTrue(any(t.startswith("安全側の不一致として") and "基準の判定を出しました: OK" in t for t in said))
         self.assert_events_fit()
 
     def test_with_rule_check_every_version_gets_its_rules_once(self):
@@ -342,7 +342,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
         self.assertTrue(any("v1 に NG はありません。R1-step100 は判定なしで終わりました" in t for t in said))
         self.assertIn("R1 が判定なしで終わったので直します (試験)", said)
-        self.assertEqual(len([t for t in said if "判定なしで終わりました (食い違いの原因の記録)" in t]), 1)  # used once
+        self.assertEqual(len([t for t in said if "判定なしで終わりました (不一致の原因の記録)" in t]), 1)  # used once
         self.assert_events_fit()
 
     def test_end_and_retry_together_are_a_plan_error(self):

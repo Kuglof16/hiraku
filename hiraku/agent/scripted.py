@@ -145,7 +145,7 @@ def room_for(previous: Record, merged: Record) -> dict[str, list[Record]]:
     return {m: fresh[m] for m in contract.MODULES if m in out_mods and m in fresh}
 
 
-REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
+REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・不一致と原因・確かめていない値は、記録からツールが入れました"
 
 
 def scripted_summary(ctx: RunContext) -> str:
@@ -265,8 +265,8 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         if hit is None and expected_for(expected, cmp) is not None:
             hit = cmp
             continue
-        _say(ctx, agent, lc, f"{cmp['quantity']} が食い違いました (差 {cmp['diff_rel'] * 100:.1f} %)。"
-                             f"台本にこの食い違いの原因は書かれていないので、ここで止めます")
+        _say(ctx, agent, lc, f"{cmp['quantity']} を予測と比べると不一致でした (差 {cmp['diff_rel'] * 100:.1f} %)。"
+                             f"台本にこの不一致の原因は書かれていないので、ここで止めます")
         raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (the plan has none for it)")
     return hit
 
@@ -301,7 +301,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if hit is None:
         return  # matched; the plan's retry is not needed
     expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)
-    _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
+    _say(ctx, agent, lc, f"{hit['quantity']} を予測と比べると不一致でした (差 {hit['diff_rel'] * 100:+.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録します")
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
@@ -317,7 +317,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
         if retry is not None:
             raise ScriptError(f"the plan gives {hit['comparison_id']} both safe_side and a retry")
         how = ("手計算は値に届かないが、力の道は手計算で確かめてあるので、ツールの値で" if expected.get("tool_decides")
-               else "安全側の食い違いとして、不利な方の値 (予測) で")
+               else "安全側の不一致として、不利な方の値 (予測) で")
         _say(ctx, agent, lc, f"{how}基準の判定を出しました: {'OK' if ver['pass'] else 'NG'} — {verdict_line(ver)}")
         return
     if expected.get("end"):
@@ -697,7 +697,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                     break
                 names = "、".join(sorted(set(revisions[at]["answers_ended"]) & ended))
                 s.emit("agent.said", agent="lead",
-                       text=f"v{ctx.version} に NG はありません。{names} は判定なしで終わりました (食い違いの原因の記録)。"
+                       text=f"v{ctx.version} に NG はありません。{names} は判定なしで終わりました (不一致の原因の記録)。"
                             "原因の直し方にある設計の変更を、設計役に頼みます")
                 revise(f"{names} を判定できるようにするため、設計を直します", at)
                 continue
