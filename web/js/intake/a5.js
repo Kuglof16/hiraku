@@ -12,7 +12,7 @@ const BY_JA = { code: "文の型からコード", claude: "Claude" }; // no chec
 function status(state, off, finished = false) {
   if (off) return h("span", { class: "in-st off" }, "使わない");
   if (!state.checked) return h("span", { class: "in-st none" }, finished ? "この実行では調べていません" : "まだ調べていません");
-  if (state.isAdvice) return h("span", { class: "in-st adv", title: "合否には数えません" }, state.advice.length ? `助言 ${state.advice.length}` : "助言のルール (いまは当たりなし)");
+  if (state.isAdvice) return h("span", { class: "in-st adv", title: "判定には数えません" }, state.advice.length ? `助言 ${state.advice.length}` : "助言のルール (いまは当たりなし)");
   if (state.hits.length) return h("span", { class: "in-st hit" }, `引っかかった ${state.hits.length}`);
   if (!state.targets) return h("span", { class: "in-st none" }, "当てはまる部品なし");
   if (state.notEvaluable.length === state.targets) return h("span", { class: "in-st unk" }, "判定できません");
@@ -78,7 +78,7 @@ function detail(m, rule, ui) {
             !c.targets?.length ? h("span", { class: "in-empty" }, "この設計に、当てはまる部品がありません") : null),
           measured(m, rule),
           st.hits.length ? h("ul", { class: "in-hits" }, st.hits.map((x) => h("li", {}, h("code", {}, x.part_id), " ", x.message))) : null,
-          st.advice.length ? [h("p", { class: "in-foot" }, "助言です。合否には数えず、設計も止めません。"),
+          st.advice.length ? [h("p", { class: "in-foot" }, "助言です。判定には数えず、設計も止めません。"),
             h("ul", { class: "in-hits adv" }, st.advice.map((x) => h("li", {}, h("code", {}, x.part_id), " ", x.message)))] : null,
           st.notEvaluable.length
             ? h("p", { class: "in-foot" }, "判定に必要なデータが設計に無いので、判定していません: ",

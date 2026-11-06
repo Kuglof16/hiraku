@@ -282,7 +282,7 @@ def add_at(buf: np.ndarray, i: int, sig: np.ndarray) -> None:
         buf[i:i + m] += sig[:m]
 
 
-def render(lines: list[Line], rate: int = RATE, seed: int = 1, start: float = 0.0, end: float | None = None,
+def render(lines: list[Line], rate: int = RATE, seed: int = 1, start: float = 0.0, end: float | None = None, fade_in_s: float = FADE_IN_S,
            screens: Path = SCREENS) -> tuple[np.ndarray, list[Stretch], int]:
     """The music from ``start`` to ``end`` (s), and the stretches and the number
     of grains. A part equals the same samples of the whole."""
@@ -297,7 +297,7 @@ def render(lines: list[Line], rate: int = RATE, seed: int = 1, start: float = 0.
     for g in grains:
         add_at(dry, round(g.t * rate) - i0, grain_sound(g, rate))
     out = dry + REVERB_WET * reverb(dry, rate, seed)
-    out *= (smooth_step(t / FADE_IN_S) * smooth_step((total - t) / FADE_OUT_S) * MASTER)[:, None]
+    out *= ((smooth_step(t / fade_in_s) if fade_in_s > 0 else 1.0) * smooth_step((total - t) / FADE_OUT_S) * MASTER)[:, None]
     shown = [g for g in grains if i_start <= round(g.t * rate) < i_end]
     return out[i_start - i0:], sts, len(shown)
 
@@ -409,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--start", type=float, default=0.0)
     p.add_argument("--end", type=float, default=None)
+    p.add_argument("--fade-in", type=float, default=FADE_IN_S, help="seconds the music swells in from silence (0: it starts at full level, e.g. after the opening)")
     p = sub.add_parser("mix")
     p.add_argument("music", type=Path)
     p.add_argument("voice", type=Path)
@@ -422,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "render":
         lines = parse_script(a.script.read_text(encoding="utf-8"))
-        music, sts, count = render(lines, seed=a.seed, start=a.start, end=a.end)
+        music, sts, count = render(lines, seed=a.seed, start=a.start, end=a.end, fade_in_s=a.fade_in)
         write_wav(a.out, music, RATE)
         for s in sts:
             print(f"{s.start:7.2f} - {s.end:7.2f}  {s.density:3.1f} grains/s  colour {s.tones}")

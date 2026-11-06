@@ -9,8 +9,8 @@ import numpy as np
 from ..checks import _check
 from ..crash_beam import known, measure
 from ..crash_beam.mesh import MIN_ELEMENT_RADII, N_SUB, build_mesh
-from ..crash_beam.sim import (COURANT, MAX_FIELD_NODES, PENALTY, REC_DT, WINDOW, contract_has_node_motion, node_motion,
-                              run_crash)
+from ..crash_beam.sim import (COURANT, MAX_FIELD_NODES, PENALTY, REC_DT, SPLIT_STOP_SHARE, WINDOW, contract_has_node_motion,
+                              default_picks, member_end_hinges, member_forces, node_motion, run_crash)
 from ..model import DesignError
 from ..units import G0
 from .base import K2Tool, P, Pair, _box, _res
@@ -113,49 +113,84 @@ class CrashBeamTool(K2Tool):
             notes.append(f"a beam element breaks (is removed) when the plastic hinge rotation at one of its ends passes "
                          f"{math.degrees(lim):g} deg (assumed; no source in the repository, 確かめていない)")
         mesh = build_mesh(design)
-        run = run_crash(mesh, speed, t_lim, mu=mu, hinge_lim=lim)
+        occ = [p for p in design.get("parts", []) if p.get("kind") == "occupant"]
+        seat = sorted({k for p in occ for k in mesh.node_parts.get(p["id"], {})})
+        xr = mesh.x0[:, 0]
+        if seat:
+            ref, ref_text = seat, "the occupants' seat mount nodes (" + ", ".join(mesh.node_ids[k] for k in seat) + ")"
+        else:
+            ref = [int(i) for i in np.nonzero(xr <= xr.min() + 1e-9)[0]]
+            ref_text = "the rear-most nodes (no occupant on board: the vehicle's length)"
+        front = [int(i) for i in np.nonzero(xr >= xr.max() - 1e-9)[0]]
+        # the wall touches the front-most of the frame and the part boxes it carries, so no box starts past it
+        carried = [p for p in design.get("parts", []) if p.get("box") and mesh.node_parts.get(p["id"])]
+        box_x = max((measure.box_front(p) for p in carried), default=-math.inf)
+        wall = max(float(xr.max()), box_x)
+        run = run_crash(mesh, speed, t_lim, mu=mu, hinge_lim=lim, wall=wall, keep=ref)
+        split = run.extra.get("split")
         M = run.total_mass
         dec = run.decel() / G0
         tt = run.t_all
         v_end = float(run.momentum[-1][0]) / M
         t_end = float(tt[-1])
         mean = (speed - max(v_end, 0.0)) / t_end / G0 if t_end > 0 else 0.0
-        occ =[p for p in design.get("parts", []) if p.get("kind") == "occupant"]
-        seat = sorted({k for p in occ for k in mesh.node_parts.get(p["id"], {})})
-        if seat:
-            ref, ref_text = seat, "the occupants' seat mount nodes (" + ", ".join(mesh.node_ids[k] for k in seat) + ")"
-        else:
-            xr = mesh.x0[:, 0]
-            ref = [int(i) for i in np.nonzero(xr <= xr.min() + 1e-9)[0]]
-            ref_text = "the rear-most nodes (no occupant on board: the vehicle's length)"
         crush = measure.shortening(run, ref)
         k_crush = int(np.argmax(crush))
-        res = [_res("peak_decel", float(dec.max()), "g"),
-               _res("mean_decel", mean, "g"),
-               _res("max_crush", float(crush.max()) * 1000.0, "mm", "front-most nodes to " + ("seat mounts" if seat
-                                                                                               else "rear-most nodes"))]
+        res = [_res("peak_decel", float(dec.max()), "g")]
+        if split is None:
+            res += [_res("mean_decel", mean, "g"),
+                    _res("max_crush", float(crush.max()) * 1000.0, "mm",
+                         "front-most nodes to " + ("seat mounts" if seat else "rear-most nodes"))]
+        else:
+            split_members = sorted({mesh.member_of[e] for e in split["elements"]})
+            res += [_res("frame_split_time", split["t"], "s", ", ".join(split_members)),
+                    _res("crush_at_split", float(crush.max()) * 1000.0, "mm",
+                         "front-most nodes to " + ("seat mounts" if seat else "rear-most nodes"))]
+            notes.append(
+                f"the frame split at {split['t'] * 1000:.1f} ms when {', '.join(split_members)} broke: a piece with "
+                f"{split['share'] * 100:.1f} % of the whole mass came apart from {ref_text} (the run stops at a piece of "
+                f"{SPLIT_STOP_SHARE * 100:g} % or more, HIRAKU's choice, no source). K2 has no contact between the "
+                "pieces (the rest would pass through it), so the run stops there: peak_decel is up to the split, "
+                "crush_at_split is the crush then (not the final crush), and mean_decel, max_crush, "
+                "occupant_space_margin and occupant_space_left are not computed (the vehicle had not stopped)")
+        small = [p for p in run.extra.get("pieces", []) if split is None or p["share"] < split["share"]]
+        if small:
+            notes.append("smaller pieces broken off the seats' side, run on without contact with the rest: " + "; ".join(
+                f"at {p['t'] * 1000:.1f} ms, {len(p['nodes'])} nodes ({p['share'] * 100:.1f} % of the mass: "
+                + ", ".join(sorted({mesh.member_of[e] for e in range(mesh.ne)
+                                    if all(int(n) in set(p['nodes']) for n in mesh.con[e])}) or ["no whole member"]) + ")"
+                for p in small))
         if occ:
             # the crush the structure ahead of the occupants can take, as the hand calculation reads it: from the
             # front-most node back to the front face of the front-most occupant part box, along x
-            front_occ = max(occ, key=lambda p: p["box"]["center_mm"][0] + p["box"]["size_mm"][0] / 2.0)
-            face = (front_occ["box"]["center_mm"][0] + front_occ["box"]["size_mm"][0] / 2.0) / 1000.0
-            crumple = float(mesh.x0[:, 0].max()) - face
+            front_occ = max(occ, key=measure.box_front)
+            crumple = float(xr.max()) - measure.box_front(front_occ)
             res.append(_res("crumple_length", crumple * 1000.0, "mm", front_occ["id"]))
-            res.append(_res("occupant_space_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
-            notes.append("occupant_space_margin: crumple_length (the front-most node to the front face of the "
-                         "front-most occupant part box, along x, at the start) less max_crush; the hand calculation "
-                         "crash_beam.occupant_margin reads the same")
+            if split is None:
+                res.append(_res("occupant_space_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
+                notes.append("occupant_space_margin: crumple_length (the front-most node to the front face of the "
+                             "front-most occupant part box, along x, at the start) less max_crush; the hand calculation "
+                             "crash_beam.occupant_margin reads the same")
         room = measure.occupant_room(run, occ, mesh.node_parts)
         # hot_spots: each frame member's least room to an occupant box, a place the hand calculation (the crush
-        # from the front) does not look at (e.g. a side rail bending into the foot box)
-        self._places = [{"where": mid, "quantity": "occupant_space_left", "value": r_["room"] * 1000.0, "unit": "mm",
+        # from the front) does not look at (e.g. a side rail bending into the foot box); as the load case's
+        # criterion quantity (occupant_space_margin), the quantity hot_spots reads at a place
+        self._places = [{"where": mid, "quantity": "occupant_space_margin", "value": r_["room"] * 1000.0, "unit": "mm",
                          "judged": False}
                         for mid, r_ in sorted(measure.occupant_room_by_member(run, occ, mesh.node_parts).items())]
-        if room is not None:
+        if self._places:
+            notes.append("hot_spots: each frame member's least room (over the run" + (", up to the split" if split else "")
+                         + ") to an occupant part box, read as occupant_space_left (the place's occupant_space_margin)")
+        if room is not None and split is None:
             res.append(_res("occupant_space_left", room["room"] * 1000.0, "mm", room["part"]))
-        elif occ:
+        elif occ and room is None:
             notes.append("no structure is ahead of the occupants' part boxes (in their y-z extent): occupant_space_left "
                          "is not given")
+        past = measure.parts_past_wall(run, carried, mesh.node_parts)
+        if past:
+            notes.append("part boxes past the wall face, taken as crushed against it (the boxes have no contact; they "
+                         "move with their carried_by nodes): " + ", ".join(f"{p} {d * 1000:.1f} mm" for p, d in
+                                                                         sorted(past.items(), key=lambda kv: -kv[1])))
         bat = [p for p in design.get("parts", []) if p.get("kind") == "battery"]
         bat_row = None
         if bat:
@@ -176,6 +211,21 @@ class CrashBeamTool(K2Tool):
         t_s = [round(float(tt[k]), 6) for k in rows]
         series = [{"channel": "deceleration", "unit": "g", "t_s": t_s, "values": [float(dec[k]) for k in rows]},
                   {"channel": "crush", "unit": "mm", "t_s": t_s, "values": [float(crush[k]) * 1000.0 for k in rows]}]
+        # the members' axial force and the plastic hinge rotation at each end, at node_motion's frames
+        picks = default_picks(run, dec)
+        t_p = [round(float(tt[k]), 6) for k in picks]
+        forces = [member_forces(run, k) for k in picks]
+        hinges_t = [member_end_hinges(run, k) for k in picks]
+        for m in sorted(set(mesh.member_of)):
+            series.append({"channel": f"member_axial_force.{m}", "unit": "N", "t_s": t_p,
+                           "values": [float(f.get(m, 0.0)) for f in forces]})
+        for (m, end) in sorted(hinges_t[-1]):
+            series.append({"channel": f"member_hinge.{m}.{end}", "unit": "deg", "t_s": t_p,
+                           "values": [math.degrees(h[(m, end)]) for h in hinges_t]})
+        notes.append("member_axial_force.<member> (N, + tension): of the member's elements not broken then, the axial "
+                     "force E A / L0 (length - L0 - plastic elongation) of the largest size, 0 when all are broken; "
+                     "member_hinge.<member>.<end node> (deg): the plastic hinge rotation sqrt(theta_y^2 + theta_z^2) at "
+                     "that end of the member; both at the node_motion field's frames")
         lo, hi = mesh.x0.min(axis=0), mesh.x0.max(axis=0)
         width, height = hi[1] - lo[1], hi[2]
         scene = [_box("wall", "剛体の壁", (run.wall_x, lo[1] - 0.25 * width, 0.0),
@@ -199,8 +249,9 @@ class CrashBeamTool(K2Tool):
             "effect, no local buckling of the tube walls (a tube squashes at A f_y instead of folding progressively)",
             f"mass {M:.1f} kg: frame {frame_kg:.1f} kg on its element nodes, parts {M - frame_kg:.1f} kg; "
             + "; ".join(mesh.notes),
-            f"the wall: a rigid plane x = {run.wall_x * 1000:.0f} mm touching the front-most frame node(s) "
-            f"({', '.join(mesh.node_ids[k] for k in measure.front_nodes(run))}); contact of the nodes only, by a penalty "
+            f"the wall: a rigid plane x = {run.wall_x * 1000:.0f} mm, at the front-most of the frame's nodes "
+            f"({', '.join(mesh.node_ids[k] for k in front)}, x = {xr.max() * 1000:.0f} mm) and the part boxes they carry; "
+            f"contact of the nodes only, by a penalty "
             f"spring {PENALTY:g} x the node's mass / dt^2; the part boxes, the wheels and the bumper do not touch the "
             "wall, and the frame's pieces do not touch each other (a broken-off piece does not push on the rest)",
             "no gravity and no ground (the crash forces are many times the weight over the run)",
