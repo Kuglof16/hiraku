@@ -68,6 +68,23 @@ class CollectTest(unittest.TestCase):
         ctx = SimpleNamespace(version=1, store=SimpleNamespace(design=lambda: {"archetype": "care_bed", "variables": {}}))
         self.assertEqual(tradeoff_data.default_variables(ctx), [])
 
+    def test_when_k5_rebuilds_the_shape_tools_and_variables_are_looked_at(self):
+        with mock.patch.object(tradeoff_data, "k5_rebuilds", lambda: True):
+            got, asked = self.collect(set(), paths=("variables.v", "variables.wheelbase"))
+            design = {"archetype": "ladder_4w", "variables": {"rail_t": {}, "gear_ratio": {}, "wheelbase": {}}}
+            ctx = SimpleNamespace(version=1, store=SimpleNamespace(design=lambda: design))
+            defaults = tradeoff_data.default_variables(ctx)
+        self.assertEqual(asked[:2], ["H3-body-size", "R1-step100"])  # the assembly too, still no shells
+        self.assertNotIn("R1s-step100", asked)
+        self.assertLessEqual(len(asked), tradeoff_data.DEFAULT_CASES_MAX)
+        self.assertNotIn("形の変数", " ".join(got["skipped"]))
+        self.assertEqual(defaults, ["variables.rail_t", "variables.gear_ratio"])
+
+    def test_the_flag_is_false_until_k5_sets_it(self):
+        from hiraku.solvers import k5_sensitivity
+
+        self.assertEqual(tradeoff_data.k5_rebuilds(), bool(getattr(k5_sensitivity, "REBUILDS_DESIGN", False)))
+
     def test_a_named_quantity_is_looked_at_whatever_its_tool(self):
         got, asked = self.collect({"max_hot_spot_stress", "knee_room"})
         self.assertEqual(asked, ["H3-body-size", "R1s-step100"])

@@ -28,6 +28,17 @@ SHAPE_STAGE = 0
 DEFAULT_CASES_MAX = 6
 
 
+def k5_rebuilds() -> bool:
+    """Whether K5 builds the design again for each number it moves (k5_sensitivity.REBUILDS_DESIGN, which the K2
+    team sets when it does): then shape variables and the shape-measuring tools can be seen, and the limits above
+    that stand for 'a number changed without a rebuild' are lifted. False while the flag is absent."""
+    try:
+        from hiraku.solvers import k5_sensitivity
+    except ImportError:
+        return False
+    return bool(getattr(k5_sensitivity, "REBUILDS_DESIGN", False))
+
+
 def _none_allowed(crit: Record) -> bool:
     """A criterion that allows none of something (a count, unit 1, at most 0: interferences, joint gaps, free parts,
     parts outside their space). Its quantity is a whole number held at 0, so a design number has no elasticity on it
@@ -49,6 +60,7 @@ def collect(ctx: Any, paths: list[str], only: set[str]) -> Record:
     meta: dict[str, Record] = {}
     bases: dict[str, Record] = {}
     skipped: list[str] = []
+    rebuilds = k5_rebuilds()
     for lc in ctx.load_cases:
         crit = lc.get("criterion")
         if not crit or (only and crit["quantity"] not in only) or crit["quantity"] in sens:
@@ -64,7 +76,7 @@ def collect(ctx: Any, paths: list[str], only: set[str]) -> Record:
             skipped.append(f"{lc['load_case_id']}: 重い計算のツール ({ana['tool']}) の合否なので、quantities に "
                            f"{crit['quantity']} を名指したときだけ感度を出す (変数ごとにツールを回し直すので時間がかかる)")
             continue
-        if not only and stage <= SHAPE_STAGE:
+        if not only and not rebuilds and stage <= SHAPE_STAGE:
             skipped.append(f"{lc['load_case_id']}: 部品の形から測るツール ({ana['tool']}) の合否で、感度は設計を組み直さずに"
                            "数だけを変えるので動かない。quantities に名指したときだけ見る")
             continue
@@ -87,9 +99,10 @@ def collect(ctx: Any, paths: list[str], only: set[str]) -> Record:
         bases[q] = {"value": float(value["value"]), "record_id": ana["analysis_id"]}
     still = [p for p in paths if not _moved_anything(sens, p)]
     if sens and still:
-        skipped.append(f"{'・'.join(p.removeprefix('variables.') for p in still)}: どの結果も動かなかった。形の変数 (部品や部材の"
-                       "寸法・位置を決めるもの) なら、感度は設計を組み直さずに数だけを変えるので、まだ見られない "
-                       "(default_variables の変数か、ツールが値をそのまま読む変数を使う)")
+        names = "・".join(p.removeprefix("variables.") for p in still)
+        skipped.append(f"{names}: 見た結果のどれも動かなかった" if rebuilds else
+                       f"{names}: どの結果も動かなかった。形の変数 (部品や部材の寸法・位置を決めるもの) なら、感度は設計を"
+                       "組み直さずに数だけを変えるので、まだ見られない (default_variables の変数か、ツールが値をそのまま読む変数を使う)")
     return {"sens": sens, "meta": meta, "bases": bases, "skipped": skipped}
 
 
@@ -116,12 +129,22 @@ DIRECT_VARIABLES = {
 }
 
 
+# When K5 builds the design again (k5_rebuilds), the defaults may be shape variables too: a few, per design type,
+# that HIRAKU expects to pull two results apart (a thicker rail wall: less stress, more mass and a slower launch;
+# a higher gear ratio: a quicker launch, a lower top speed). HIRAKU's choice, not measured.
+REBUILT_DEFAULTS = {
+    "ladder_4w": ["rail_t", "tower_t", "motor_peak_power", "gear_ratio", "front_spring_rate", "bumper_stroke"],
+}
+
+
 def default_variables(ctx: Any) -> list[str]:
-    """find_tradeoffs' variables when the caller names none: the design type's DIRECT_VARIABLES that the current
-    design has, as paths (empty for a design type with no list: the caller then names them)."""
+    """find_tradeoffs' variables when the caller names none: the design type's DIRECT_VARIABLES (or, when K5 rebuilds
+    the design, REBUILT_DEFAULTS) that the current design has, as paths (empty for a design type with no list: the
+    caller then names them)."""
     design = ctx.store.design() if ctx.version else {}
     have = design.get("variables") or {}
-    return [f"variables.{n}" for n in DIRECT_VARIABLES.get(design.get("archetype") or "", []) if n in have]
+    table = REBUILT_DEFAULTS if k5_rebuilds() else DIRECT_VARIABLES
+    return [f"variables.{n}" for n in table.get(design.get("archetype") or "", []) if n in have]
 
 
 tradeoff.register_collector(collect)
