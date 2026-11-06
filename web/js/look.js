@@ -517,6 +517,9 @@ export const MATERIAL_OF = {
     wheel: { finish: "rubber" },
     // the backrest and the cushion are separate parts of kind seat: the same cover
     seat: { finish: "vinyl" },
+    // a seat's back and its head restraint as parts of their own kinds: the seat's cover
+    seatback: { finish: "vinyl" },
+    head_restraint: { finish: "vinyl" },
     seat_belt: { finish: "fabric", color: "#1e1f22" },
     body: { finish: "body_paint" },
     battery: { finish: "resin", color: "#2e3a48" },
@@ -645,7 +648,8 @@ export function occupantSub(segment) {
 export const CONTOUR_FADE = 0.5;
 
 // Colours of the parts in the diagram look (pale, see-through).
-const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6", link: "#6b665c", damper: "#3a3e44", ball_joint: "#6b665c" };
+// (seatback, head_restraint: the seat's colour, parts of the seat)
+const ZU_PART = { battery: "#e8c547", seat: "#e9b872", seatback: "#e9b872", head_restraint: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6", link: "#6b665c", damper: "#3a3e44", ball_joint: "#6b665c" };
 // the diagram look's thin suspension parts (arms, damper, ball joints): less see-through than a box,
 // so a 25 mm tube reads; the coil of a damper its spring red
 const ZU_SOLID = { link: 0.75, damper: 0.75, ball_joint: 0.75 };
