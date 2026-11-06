@@ -508,6 +508,12 @@ class IntakeTest(unittest.TestCase):
         d["written_by"] = "someone"
         self.assertNotEqual(contract.errors("design", d), [])
 
+    def test_claude_may_add_tests_to_the_choice(self):
+        self.assertIn("add_tests", contract.MCP_TOOLS_LATER)
+        self.assertEqual(contract.errors("tool_input.add_tests", {"tests": [{"test_id": "R1", "reason": "the shelf carries a load"}]}), [])
+        self.assertEqual(contract.errors("tool_input.add_tests", {"no_addition_reason": "the choice covers the use"}), [])
+        self.assertNotEqual(contract.errors("tool_input.add_tests", {"tests": [{"test_id": "R1"}]}), [])
+
     def test_rule_questions_in_the_hearing(self):
         q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}
         self.assertEqual(contract.errors("hearing_asked", {"rule_questions": [q]}), [])

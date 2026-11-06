@@ -1307,6 +1307,16 @@
           "exclusiveMinimum": 0,
           "description": "Allowed |analyzed - predicted| / |predicted| for a match. Set by code from the catalog or tool spec, never by the model."
         },
+        "written_by": {
+          "enum": [
+            "claude"
+          ],
+          "description": "Set by write_load_case: Claude wrote this load case. Absent for one built from the catalog."
+        },
+        "basis": {
+          "type": "string",
+          "description": "write_load_case: why this load case stands for the use, its source or an assumption said as one."
+        },
         "feeds": {
           "type": "array",
           "items": {
@@ -3194,6 +3204,30 @@
             "type": "string"
           },
           "description": "Why each flag was set (or left unset), in the lead's words."
+        },
+        "added_tests": {
+          "type": "array",
+          "description": "Tests Claude added to the code's choice (add_tests), each with its reason. Adding only: the code's tests stay.",
+          "items": {
+            "type": "object",
+            "required": [
+              "test_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "test_id": {
+                "$ref": "#/$defs/test_id"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_addition_reason": {
+          "type": "string",
+          "description": "Why Claude reviewed the choice and added nothing."
         },
         "picks": {
           "type": "array",
@@ -5293,6 +5327,35 @@
         }
       }
     },
+    "tool_input.add_tests": {
+      "description": "Lead: after the code's choice of domains and tests, Claude reviews it and adds tests from the catalog it judges necessary for this product, each with a reason, or says why it adds none. It cannot remove the code's tests.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "test_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "test_id": {
+                "$ref": "#/$defs/test_id"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_addition_reason": {
+          "type": "string"
+        }
+      }
+    },
     "tool_input.write_design": {
       "description": "Designer only: a design Claude writes itself (nodes, members, sections, materials, parts, supports), for a product no archetype fits or a layout no archetype can make. The first call makes version 1, a later call the next version. The tool sets design_version, parent_version and change_reason, runs check_design and refuses a design that fails.",
       "type": "object",
@@ -5347,7 +5410,9 @@
                   "add_part",
                   "set_part",
                   "remove_part",
+                  "add_support",
                   "set_support",
+                  "remove_support",
                   "set_material",
                   "set_variable"
                 ]
@@ -5395,6 +5460,10 @@
               },
               "part": {
                 "type": "object"
+              },
+              "support": {
+                "type": "object",
+                "description": "add_support: the support record."
               },
               "material": {
                 "type": "object"
