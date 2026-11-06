@@ -269,6 +269,111 @@ def clearance(run: CrashRun, body: np.ndarray, parts: list[dict], shares: dict[s
     return out
 
 
+def room_to_boxes(run: CrashRun, body: np.ndarray, boxes: list[dict], elements: list[int], radius: np.ndarray,
+                  rows: list[int] | None = None, step: float = 0.005) -> dict:
+    """clearance() for many elements at once, with a radius per element: the least room over the rows between the
+    elements (their axes sampled every `step` or closer at the start length, the ends included, less radius[e]) and
+    each box, in the body frame (body: in_body_frame's positions).
+
+    boxes: [{"id", "center_mm", "size_mm", "rpy_deg" (optional), "shares": {node: kg}}]; a box moves with its share
+    nodes (the mean displacement, weighted) and keeps its axes. An element is left out from the row its time is past
+    its break. Returns {box id: {"room" (m), "element", "row", "start" (row 0), "size_mm" (the box's), "by_member":
+    {member: least room}, "series": [least room per row], "depth": {member: intrusion}}}.
+
+    The room inside a box is minus the depth to its nearest face, so it bottoms out at the box's middle. "depth" does
+    not: for each member whose room went below 0, the face it came in through (at the first such row, the face of the
+    largest of |q| - h at its deepest sample, q in the box's axes) and from then on the largest depth of its capsule
+    past that face's plane along the face's inward normal, h_a + r - s q_a (s = the face's sign), over the samples
+    whose other two coordinates are within the box's half sizes + r: {"depth" (m), "face" ("+y" etc., the box's
+    axes), "entered_row", "row", "element"}."""
+    from hiraku.solvers.k0_handcalc.rigid import rpy_matrix
+
+    mesh = run.mesh
+    rows = list(range(len(run.t_all))) if rows is None else rows
+    els = np.asarray(elements, dtype=np.int64)
+    if not len(els):
+        return {}
+    ii, jj = mesh.con[els, 0], mesh.con[els, 1]
+    counts = np.maximum(2, np.ceil(mesh.l0[els] / step).astype(np.int64) + 1)
+    owner = np.repeat(np.arange(len(els)), counts)  # sample -> position in els
+    starts = np.concatenate([[0], np.cumsum(counts)[:-1]])
+    frac = (np.arange(int(counts.sum())) - np.repeat(starts, counts)) / np.repeat(counts - 1, counts)
+    rad = np.asarray(radius, float)[els]
+    members = [mesh.member_of[e] for e in els]
+    names = sorted(set(members))
+    mem_idx = np.array([names.index(m) for m in members])
+    broke = np.array([run.broken_at.get(int(e), np.inf) for e in els])
+    tt = run.t_all
+    prep = []
+    for b in boxes:
+        sh = b["shares"]
+        idx = np.array(list(sh.keys()), dtype=np.int64)
+        wts = np.array(list(sh.values()), dtype=float)
+        wts = wts / wts.sum() if wts.sum() > 0.0 else np.ones(len(idx)) / len(idx)
+        rot = rpy_matrix(b["rpy_deg"]) if b.get("rpy_deg") else None
+        prep.append((b["id"], np.asarray(b["center_mm"], float) / 1000.0, np.asarray(b["size_mm"], float) / 2000.0,
+                     rot, idx, wts))
+    out = {}
+    for bid, c0, h, rot, idx, wts in prep:
+        out[bid] = {"room": np.inf, "element": -1, "row": -1, "start": None, "size_mm": (2000.0 * h).tolist(),
+                    "by_member": dict.fromkeys(names, np.inf), "series": [], "depth": {}}
+    s_mem = mem_idx[owner]  # sample -> member index
+    s_rad = rad[owner]
+    for k in rows:
+        pk = body[k]
+        a, d = pk[ii], pk[jj] - pk[ii]
+        pts = a[owner] + frac[:, None] * d[owner]
+        gone = broke <= tt[k] + 1e-12
+        for bid, c0, h, rot, idx, wts in prep:
+            c = c0 + (pk[idx] - mesh.x0[idx]).T @ wts
+            q = pts - c
+            if rot is not None:
+                q = q @ rot
+            dd = np.abs(q) - h
+            outside = np.linalg.norm(np.maximum(dd, 0.0), axis=1)
+            sd = np.where(np.all(dd <= 0.0, axis=1), dd.max(axis=1), outside)
+            per = np.minimum.reduceat(sd, starts) - rad
+            per[gone] = np.inf
+            o = out[bid]
+            j = int(np.argmin(per))
+            if k == rows[0]:
+                o["start"] = float(per[j])
+            o["series"].append(float(per[j]))
+            if per[j] < o["room"]:
+                o["room"], o["element"], o["row"] = float(per[j]), int(els[j]), int(k)
+            low = np.full(len(names), np.inf)
+            np.minimum.at(low, mem_idx, per)
+            for m_i, m in enumerate(names):
+                if low[m_i] < o["by_member"][m]:
+                    o["by_member"][m] = float(low[m_i])
+                if low[m_i] < 0.0 and m not in o["depth"]:  # it came in: the face of its deepest sample
+                    s_all = np.flatnonzero((s_mem == m_i) & ~gone[owner])
+                    s0 = int(s_all[np.argmin(sd[s_all] - s_rad[s_all])])
+                    a = int(np.argmax(dd[s0]))
+                    o["depth"][m] = {"axis": a, "sign": 1.0 if q[s0, a] >= 0.0 else -1.0, "depth": -np.inf,
+                                     "entered_row": int(k), "row": -1, "element": -1}
+            for m, dp in o["depth"].items():
+                sel = np.flatnonzero((s_mem == names.index(m)) & ~gone[owner])
+                if not len(sel):
+                    continue
+                a, sg = dp["axis"], dp["sign"]
+                qa, r_s = q[sel], s_rad[sel]
+                lat = np.ones(len(sel), bool)
+                for b_ in range(3):
+                    if b_ != a:
+                        lat &= np.abs(qa[:, b_]) <= h[b_] + r_s
+                if not lat.any():
+                    continue
+                dep = np.where(lat, h[a] + r_s - sg * qa[:, a], -np.inf)
+                j = int(np.argmax(dep))
+                if dep[j] > dp["depth"]:
+                    dp.update(depth=float(dep[j]), row=int(k), element=int(els[owner[sel[j]]]))
+    for o in out.values():
+        for dp in o["depth"].values():
+            dp["face"] = ("+" if dp.pop("sign") > 0 else "-") + "xyz"[dp.pop("axis")]
+    return out
+
+
 def broken_members(run: CrashRun) -> list[str]:
     """The members with a broken element, in the order they broke."""
     out = []

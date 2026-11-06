@@ -1,6 +1,6 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
-H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). R7 and R8 (load_path)
+H5 assembly; and R4 (the roll bar), judged by K2's rollover_beam (R4-rollover). R7 and R8 (load_path)
 are in load_path.py, H6 (spray_reach) in spray.py, joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
@@ -978,8 +978,13 @@ R4_REAR_FRACTION = 1.0 / 6.0
 # held, and the clearance is a difference of that deflection and the gap: 25 % (assumption).
 R4_TOL = 0.25
 
-# No PLAN: the tool that loads the roll bar and judges it is not on the shelf (HIRAKU's Claude writes it in the run).
-# Its prediction is R4_PREDICTIONS, inputs read off the design by r4_inputs
+# R4 is judged by K2's rollover_beam (stage 3): the vehicle tipped over on the tilt table to the roll bar's first
+# touch (the rigid body with its ground contact), then the frame as yielding beams landing on the ground in that state.
+# The one load case is R4-rollover (R4_ROLLOVER_ID). The static push of Code 4 (the former R4-rops) is not built: no
+# tool on the shelf loads the roll bar that way, and a tool for it made in a run (tests R4, giving
+# rops_occupant_clearance at a lighter stage) would set R4's stage below rollover_beam's (shelf.load_case_stage takes the
+# lowest stage of the tools covering the test family and the quantity). Its formulas stay as the hand calculation.
+# The hand calculation is R4_PREDICTIONS (after the path check), inputs read off the design by r4_inputs
 # (hiraku.solvers.k0_handcalc.rops_inputs.rops_inputs: frame_inputs.portal_frame_inputs's "side", "rear" and "top"
 # dicts as from.side_<k>, from.rear_<k>, from.top_<k>, and the gaps g_side, g_rear, g_top), in this order:
 #   frame_static.portal_frame_side  E_in = lc.side_energy           -> delta_E (sideways at the top)
@@ -1050,11 +1055,18 @@ R4_PREDICTIONS = [
 ]
 
 
+R4_ROLLOVER_ID = "R4-rollover"
+# R4-rollover's title and basis say what it is (the tool's record says the same, rollover_beam.NOT_A_STANDARD)
+R4_NOT_A_STANDARD = "HIRAKU 独自の計算の確かめ。規格の試験ではない"
+
+
 def r4_rops(spec: Record, req: Record, design: Record) -> Record:
-    """R4: the side, rear and crushing loads of OECD Code 4 (borrowed), on the roll bar; the occupants' space
-    must stay clear. A catalog param side_energy, rear_energy, crush_force or rear_fraction wins over the value
-    from the code and the reference mass. Q64 (ROPS) and Q31 (the body sizes the space is made for) are listed
-    when the requirements have them; Q64 saying there is none is an error."""
+    """R4: the vehicle tipped over on the tilt table past its limit lands on its roll bar (rollover_beam); the frame
+    must stay out of the occupants' space. The params carry OECD Code 4's side, rear and crushing loads (borrowed)
+    for the hand calculation (R4_PREDICTIONS, the static push; the landing does not read them). A catalog param
+    side_energy, rear_energy, crush_force or rear_fraction wins over the value from the code and the reference mass.
+    Q64 (ROPS) and Q31 (the body sizes the space is made for) are listed when the requirements have them; Q64 saying
+    there is none is an error."""
     from hiraku.solvers.k0_handcalc import units
 
     load, keys = loading(req, design)
@@ -1081,21 +1093,28 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
         raise BuildError(f"{spec['id']}: the energies and the force must be positive and rear_fraction within 0..0.5")
     req_keys = (["Q64"] if q64 is not None else []) + (["Q31"] if entry(req, "Q31") else [])
     return {
-        "load_case_id": "R4-rops",
+        "load_case_id": R4_ROLLOVER_ID,
         "test_id": "R4",
         "domain": spec["domain"],
-        "title": (f"横転の保護枠: 横から {side:g} J・後ろから {rear:g} J を吸わせ、上から {crush / 1000:g} kN で押す "
-                  f"(OECD Code 4 の静的試験を借りる、{LOADING_JA[load]})"),
+        "title": (f"横転: 傾斜台を倒れる角度より先まで傾けて車を床に落とし、ロールバーと骨組みが乗員の空間に入らないか "
+                  f"({R4_NOT_A_STANDARD}。手計算は OECD Code 4 の静的試験の形を借りる: 横 {side:g} J・後ろ {rear:g} J・"
+                  f"上 {crush / 1000:g} kN、{LOADING_JA[load]})"),
         "params": {"side_energy": q(side, "J"), "rear_energy": q(rear, "J"), "crush_force": q(crush, "N"),
                    "rear_fraction": q(frac, "1"), "loading": load},
         "requirement_keys": req_keys + keys,
         "criterion": {"quantity": "rops_occupant_clearance", "op": ">=", "limit": q(0.0, "mm"),
-                      "basis": ("R4 (OECD Code 4, 3.5.2.2, 3.5.3.2 and 3.8, borrowed): the roll bar, deflected by "
-                                "each loading, must not enter the occupants' space; the smallest gap over the loadings "
-                                "between the roll bar's members and the space of k4_geometry.occupant_spaces (the "
-                                "occupant box, widened to AIST D2 and raised to AIST I1 of a young male 95th "
-                                "percentile) stays at 0 mm or more. The code's second condition (the clearance zone "
-                                "left unprotected under the ground plane) is not in this quantity"),
+                      "basis": ("R4: in a rollover (the tilt table past the angle the vehicle tips at; it falls onto "
+                                "the floor and lands on its roll bar) no frame member enters the occupants' space; the "
+                                "smallest gap over the landing between the frame's members (the roll bar and the rest) "
+                                "and the space of k4_geometry.occupant_spaces (the occupant box, widened to AIST D2 and "
+                                "raised to AIST I1 of a young male 95th percentile) stays at 0 mm or more. "
+                                f"{R4_NOT_A_STANDARD}. OECD Code 4 (2.1: tractors of at least 600 kg, as read on "
+                                "2026-11-03, the 600 kg not in README's table of checked values) and ISO 3471 (about "
+                                "700 kg and up: 確かめていない) are static tests for machines of 600-700 kg and up; "
+                                "whether ANSI/ROHVA 1 has a dynamic test was not checked. Code 4 (3.5.2.2, 3.5.3.2) "
+                                "stops its static loading at the same space; its loads are the hand calculation's, and "
+                                f"R4's {crush / 1000:g} kN from above (Code 4's 20 N/kg at the reference mass "
+                                f"{R4_REFERENCE_MASS_KG:g} kg gives 10 kN) is 「HIRAKU の仮定」"),
                       "requirement_keys": req_keys},
         "tolerance_rel": tolerance(spec, R4_TOL),
     }
@@ -1108,6 +1127,34 @@ from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa:
 # C1's two plans decide by the tool (tool_decides): the path check by hand comes first (judge.path_check reads it)
 for _plan in (C1_PLAN, C1_SPLIT_PLAN):
     _plan["predictions"].insert(0, _PATH_PREDICTION)
+
+# R4 judged by K2's rollover_beam (the tool decides, tool_decides): the path check first, then the static push of the
+# roll bar as a portal frame (R4_PREDICTIONS: the three deflections and the gap at them)
+R4_ROLLOVER_PLAN = {
+    "tool": "rollover_beam",
+    "say": ("ロールバーを柱 2 本と上の梁の門形とみて、OECD Code 4 の静的試験のエネルギーと力で押したときの乗員の空間までの"
+            "隙間を先に見積もります (判定は、傾斜台で倒して骨組みが床に落ちる計算で)"),
+    "predictions": [_PATH_PREDICTION] + R4_PREDICTIONS,
+    "expected_mismatch": {
+        "quantity": "rops_occupant_clearance",
+        "source": ("the K2 department's rollover_beam on the video run 20261106-200134's version 5 (two_cargo): -167 mm "
+                   "(the measure's floor at the space's middle: side_bar_R2 went 589 mm past the right occupant's "
+                   "space's outer face, through its 495 mm width; the largest plastic hinge turn 47 deg, "
+                   "side_post_RSG_1, and the roll bar top 991 mm off at the end) against the static push's +63.5 mm, 2026-11-06; the same NG with the break angle 45 or "
+                   "90 deg, the floor friction 1, the mesh at K2's sprung mass and the ground contact at half or twice "
+                   "its stiffness"),
+        "cause": ("手計算は、ロールバーだけを足に立つ門形として、Code 4 の決まったエネルギーと力で静かに押し、そのたわみで乗員の"
+                  "空間までの隙間を見る。倒れて床に落ちる計算では、車が自分の重さと回る勢いで床に当たり、ロールバーが大きく"
+                  "倒れ (上の端が終わりに 1 m 近く動く)、まわりの骨組み (床に先に当たる側の横の棒と柱) も床に押されて乗員の空間に入る。手計算は横の棒も、"
+                  "落ちる勢いも見ない"),
+        "fix": ("倒れて落ちる形を手で解く式は無い。手計算はロールバーを静かに押す場合の値として残し、合否は落ちる計算の値 "
+                "(骨組みの部材から乗員の空間までのいちばん小さい隙間) で出す。直すなら、床に当たる側の横の棒と柱を支える "
+                "(斜めの支え)、ロールバーの柱の根元を強くする"),
+        "tool_decides": True,
+        "tool_decides_reason": ("倒れて床に落ちる形 (自分の重さと回る勢い、まわりの骨組み) は手で解けない。手計算 (門形の静的な"
+                                "押し) は値に届かないので、力の道を手計算で確かめたうえで、落ちる計算の値で決める"),
+    },
+}
 from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E402  (H6: spray.py)
 from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)
@@ -1133,7 +1180,7 @@ BUILDERS = {
     "H5": h5_assembly,
 }
 # H1 and H5 by load case (a test's own key would serve its other cases too)
-PLANS = {"C1": C1_PLAN, C1_SPLIT_ID: C1_SPLIT_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
+PLANS = {"C1": C1_PLAN, C1_SPLIT_ID: C1_SPLIT_PLAN, R4_ROLLOVER_ID: R4_ROLLOVER_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
          "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
          "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
          "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS,

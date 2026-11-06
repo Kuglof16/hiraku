@@ -231,7 +231,7 @@ def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0
               use_jit: bool = True, dt: float | None = None, wall: float | None = None,
               keep: list[int] | None = None, stop_share: float = SPLIT_STOP_SHARE, contact: bool = True,
               stop_at_split: bool | None = None, wall_dir=None, velocity=None, spin=None, about=None,
-              gravity=None, until_limit: bool = False) -> CrashRun:
+              gravity=None, until_limit: bool = False, stop_when=None) -> CrashRun:
     """The frame moving at `speed` (m/s, +x) into a rigid wall at x = `wall` (default its front-most frame node).
 
     keep: nodes of the main piece (e.g. the occupants' seat mounts). After each break the pieces apart from the
@@ -250,8 +250,9 @@ def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0
     `speed` along wall_dir, or +x); with it, run.speed is its part along wall_dir. spin (rad/s, design frame): the
     frame starts turning as a rigid body about `about` (m, default its mass centre, new_state). gravity (m/s^2,
     design frame): a force mass x gravity on every node. until_limit: run to time_limit (no stop when the speed
-    toward the wall is spent; the split's stop still applies). Without wall_dir the run is the x wall's, step for
-    step."""
+    toward the wall is spent; the split's stop still applies). stop_when(mesh, state, impulse, chunk_s): called after
+    each record chunk (in the turned axes), a non-empty text stops the run with that reason. Without wall_dir the run
+    is the x wall's, step for step."""
     if stop_at_split is None:
         stop_at_split = not contact
     Q = None if wall_dir is None else wall_basis(wall_dir)
@@ -323,6 +324,11 @@ def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0
                     stopped = (f"a piece with {big * 100:.1f} % of the mass broke off the seats' side (at least "
                                f"{stop_share * 100:g} %; the run stops at the split)")
                     break
+        if stop_when is not None:
+            why = stop_when(mesh, st, imp, per * dt)
+            if why:
+                stopped = why
+                break
         if until_limit:
             continue
         v_now = mom[-1][0] / M
