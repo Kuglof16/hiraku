@@ -1534,10 +1534,13 @@ const TAB_HEADS = {
   A1(s) {
     const picks = s.intake.picked?.picks ?? [];
     const names = picks.map((p) => p.shown_name ?? DOMAIN_JA[p.domain] ?? p.domain);
-    const seven = picks.filter((p) => DOMAINS.includes(p.domain)).length; // (組み立て is looked at apart from the 7)
+    const seven = picks.filter((p) => DOMAINS.includes(p.domain) && p.domain !== "assembly").length; // (組み立て is looked at apart from the 7)
+    const asm = picks.some((p) => p.domain === "assembly");
+    const of7 = seven >= 7 ? "7 分野すべて" : `7 分野のうち ${seven}`;
     return [
-      s.project?.want ? `作りたいもの: ${s.project.want}` : "作りたいものを待っている",
-      ["調べる分野", picks.length ? `${listJa(names)} (7 分野のうち ${seven})` : "まだ決まっていない", ""],
+      // (the request itself is in the bar above ① and in the chat: not a third time here)
+      picks.length ? `調べる分野が決まった (${of7}${asm ? "、ほかに組み立て" : ""})` : "作りたいものを待っている",
+      ["調べる分野", picks.length ? `${listJa(names)}` : "まだ決まっていない", ""],
       !picks.length ? "作りたいものから、調べる分野を選ぶ" : s.intake.questions.length ? "② 確認したいことで、足りない値に答える" : "③ 解析で、試験ごとに予測と解析を比べる",
     ];
   },
@@ -1548,9 +1551,9 @@ const TAB_HEADS = {
     const open = [...cards].filter((c) => c.classList.contains("open")).length;
     const byDefault = s.intake.answers.filter((a) => a.source === "default").length;
     return [
-      qs ? `質問 ${qs} 件・答えが無いもの ${open} 件` : "聞くことはまだ無い",
-      ["標準の値", byDefault ? `${byDefault} 件は答えずに標準の値のまま (確かめていない値は報告に載る)` : "答えずに標準の値にしたものは無い", byDefault ? "warn" : ""],
-      !qs ? "足りない値があれば、ここで聞く" : open ? "質問に答える (答えなければ標準の値)" : "③ 解析へ (答えはそろった)",
+      qs ? `決まっていないことを ${qs} つ聞きます${open ? ` (まだ答えていないもの ${open})` : ""}` : "聞くことは無い",
+      ["標準の値", byDefault ? `分からない所 ${byDefault} つは、標準の値で進めました (確かめていない値として報告に載ります)` : "どれにも答えがあります", byDefault ? "warn" : ""],
+      !qs ? "③ 解析へ" : open ? "質問に答える (答えなければ標準の値で進めます)" : "③ 解析へ (答えはそろった)",
     ];
   },
   A5(s) {
@@ -2715,9 +2718,11 @@ let gridWasFixed = false;
 function gridAtEnd(on) {
   const fix = GRID_FIXED && on && !player.live;
   document.body.classList.toggle("grid-fixed", fix);
-  if (fix && !gridWasFixed) {
+  // (every frame while ④ shows: the record may still be loading, and nothing moves the time here)
+  if (fix && player.duration > 0 && (player.playing || player.playhead < player.duration)) {
     player.playing = false;
-    if (player.playhead < player.duration) player.seek(player.duration);
+    player.seek(player.duration);
+    drawn.rev = -2;
   }
   gridWasFixed = fix;
 }

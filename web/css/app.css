@@ -1377,3 +1377,5 @@ body:not(.video) #roundcard { max-width: 46%; max-height: 24%; overflow: hidden;
 body:not(.video) #roundcard .rc-list .pr { display: none; }
 body:not(.video) #roundcard .rc-list .pw { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 92%; vertical-align: bottom; }
 body:not(.video) #now { max-width: 62%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ① ② : the hooks' line would sit on the request's bar at the top: it goes to the bottom instead */
+body[data-intake-tab="A1"]:not(.video) .hookline, body[data-intake-tab="A2"]:not(.video) .hookline { top: auto !important; bottom: 70px; }
