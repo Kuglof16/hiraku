@@ -325,6 +325,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 - Claude Code のセッションを「部署」として並べて作った。統括部 (契約を書き、成果を確かめて main に取り込む)・設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部・受付部と、プラグインの道で HIRAKU を回して困った所を集める実験部 (コードは書かない)。部署ごとに git worktree と branch を持つ (`docs/contract.md` の冒頭)。
 - 始めは部署ごとの branch (`claude/dept-*`、`origin` にも push してある) で作り、部署の branch から main に入れた。
 - 2026-11-06 からは、1 つの機能を 1 本の branch (`claude/<部署>-<機能>`、main から切る) で作る。品質保証部が、通った機能の branch を 1 本ずつ main の上に重ねて試し、通れば main を進める。1 本が落ちても、ほかは待たない (`docs/contract.md`)。merge のコミットは「Merge <branch> <コミット> into the trial」の形で残る (例: bc58c4b「Merge intake-material-cards 5e0a8379 into the trial」)。
+
 ### 契約と持ち場
 
 - 部署どうしの決まりは `docs/contract.md`。形の正本は `hiraku/contract/hiraku.schema.json` で、食い違ったら schema が正しい (`docs/contract.md`)。
@@ -357,6 +358,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 - `codex` という字を含むコミット (大文字小文字を区別しない) は 2 件ある。35975dd「first_look: cuts and screens seen as a first-time viewer, judged by an image model」と c22c311「first_look: say plainly when the Codex CLI is not installed」。
   - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部のツール。
   - このコミットにも `Co-Authored-By: Claude` の行がある。
+- 遅い試験は 2026-11-05 から EC2 の上で回している。EC2 の用意と試験の起動は Codex のセッションが行い、結果を統括部と品質保証部に返す。
 - 全部の branch のコミット 2,177 件のうち、1,652 件に `Co-Authored-By: Claude` の行がある (2026-11-06。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
 
 ## 期間中に作ったもの
