@@ -5,7 +5,8 @@
 //   ?src=<url>      read an events.jsonl from any URL instead
 //   ?t=12.5         stop at t = 12.5 s and draw that frame (for frame-by-frame video export; the intake
 //                   screens get the time too, intake.setTime, so their lit cards' glow is the same at the same t)
-//   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row
+//   ?video=1        video layout: keep the bottom 170 px empty for subtitles, hide the status row; ③'s tests
+//                   are the one-line row of chips over the 3D (?board=1: the board of every test, as without video=1)
 //   ?status=0       hide the bottom status row only
 //   ?speed=2        replay speed; ?autoplay=0 opens paused at 0; ?live=0 replays a running run instead of following it
 //   ?on=modules     turn overlays on at load (modules, spaces: off by default)
@@ -29,7 +30,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -1248,10 +1249,13 @@ function renderLog(s, resolved) {
 }
 
 // The tests over the 3D: per domain its pet and its tests' boxes, each with its state (test_board.js).
+// ?video=1 (without ?board=1): the one-line row of chips instead, so the 3D keeps its height in the video.
 // span: ④'s open domain (its tests only, its own 自動 / pick: ui.gridLc, not ③'s ui.pinnedLc)
+const TEST_CHIPS = params.get("video") === "1" && params.get("board") !== "1";
 function renderTests(s, lcId, span = null) {
   const all = s.project?.load_cases ?? [];
   const cases = span ? all.filter((c) => c.domain === span.domain) : all;
+  if (TEST_CHIPS) return renderTestChips(cases, lcId, span);
   // the board of every test at a glance (js/test_board.js)
   const pets = agentPets ? { has: (id) => agentPets.has(id) } : null;
   const { html } = boardHtml(s, cases, { lcId, auto: !(span ? ui.gridLc : ui.pinnedLc), pets, withRest: !span });
@@ -1261,6 +1265,33 @@ function renderTests(s, lcId, span = null) {
   el.classList.add("board");
   el.innerHTML = html;
   agentPets?.mount(el, "board");
+}
+
+// The row of chips (?video=1): many load cases show the id (and, for an id shared by several, a
+// short name from the title) and the row scrolls sideways, the chosen one kept in sight; the whole
+// title is the tooltip.
+const MANY_TESTS = 12;
+function renderTestChips(cases, lcId, span) {
+  const shorts = caseShortNames(cases);
+  const auto = `<button class="auto ${(span ? ui.gridLc : ui.pinnedLc) ? "" : "on"}" data-lc="">自動</button>`;
+  const html =
+    auto +
+    cases
+      .map((c) => {
+        const short = shorts.get(c.load_case_id);
+        return `<button class="test ${c.load_case_id === lcId ? "on" : ""}" data-lc="${esc(c.load_case_id)}" title="${esc(c.load_case_id)}: ${esc(c.title)}"><span class="tid">${esc(c.test_id)}${short ? `<small>${esc(short)}</small>` : ""}</span><span class="ttl">${esc(c.title)}</span></button>`;
+      })
+      .join("");
+  if (html === drawn.tests) return;
+  drawn.tests = html;
+  const el = $("tests");
+  el.classList.remove("board");
+  el.classList.toggle("many", cases.length > MANY_TESTS);
+  // (a row that scrolls sideways on purpose: not a text running out of its box)
+  if (cases.length > MANY_TESTS) el.dataset.lint = "overflow";
+  else delete el.dataset.lint;
+  el.innerHTML = html;
+  el.querySelector(".test.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 // The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
@@ -1275,22 +1306,23 @@ fetch(getUrl("/api/formulas"), { cache: "no-store" })
   .catch(() => {});
 
 // A "くわしく" (details[data-keep]) stays open or shut across the cards' redraws.
-// ?more=1 opens them all (the right column's くわしく too) until one is shut by hand.
+// ?more=1 opens the right column's くわしく (the cards under it) and the tabs' folds; the small
+// くわしく inside the cards (式と入力, 基準の根拠, ...) stay shut until opened by hand, so a
+// prediction's formula does not fill the column.
 const MORE_ALL = params.get("more") === "1";
 const openMore = new Set();
-const shutMore = new Set();
 document.addEventListener(
   "toggle",
   (ev) => {
     const d = ev.target;
     if (!(d instanceof HTMLDetailsElement) || !d.dataset.keep) return;
-    if (d.open) [openMore.add(d.dataset.keep), shutMore.delete(d.dataset.keep)];
-    else [openMore.delete(d.dataset.keep), shutMore.add(d.dataset.keep)];
+    if (d.open) openMore.add(d.dataset.keep);
+    else openMore.delete(d.dataset.keep);
   },
   true,
 );
 function keepOpen(el) {
-  for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep) || (MORE_ALL && !shutMore.has(d.dataset.keep));
+  for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep);
 }
 // (?zoom= on a card folded under the chain's くわしく, e.g. cmp: that くわしく open, so the card is there to move in on)
 if (MORE_ALL || (ZOOM && $("chain-more").querySelector(ZOOM.selector))) $("chain-more").open = true;
@@ -2005,8 +2037,11 @@ function renderGrid(s) {
   // the pictures kept are copied at once; new ones are drawn once the grid has settled and the
   // page has loaded, one a task (a record loading renders the grid at each event, and a picture
   // costs frames of the software renderer)
+  // (a frame fixed at t, ?t= or a seek as the video's export does: all of them now, so the frame
+  // filmed has its pictures whichever redraw came last)
   clearTimeout(tilePicTimer);
-  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 0)) {
+  tilePicTimer = null;
+  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, ui.frozen ? Infinity : 0)) {
     const step = () => {
       const loaded = document.readyState === "complete";
       tilePicTimer = loaded && board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 1) ? null : setTimeout(step, loaded ? 0 : TILE_PIC_WAIT_MS);
@@ -2499,6 +2534,13 @@ async function seekAndDraw(t) {
   draw();
   await nextFrame();
   draw();
+  // ④'s grid: the frame at t has its tiles' pictures (renderGrid draws new ones on a timer, one a
+  // task, which a frame filmed right after the seek would come before)
+  if (!$("view-grid").hidden) {
+    clearTimeout(tilePicTimer);
+    tilePicTimer = null;
+    board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale);
+  }
   await nextFrame();
   document.documentElement.dataset.t = String(player.playhead);
   return player.playhead;
