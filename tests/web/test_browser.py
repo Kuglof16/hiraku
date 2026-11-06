@@ -307,7 +307,7 @@ class BrowserReplayTest(unittest.TestCase):
         events = claude_like_events()
         for ev in events:
             self.assertEqual(contract.errors("event", ev), [])
-        page, errors = self.open("run=sample&pace=0&t=0")
+        page, errors = self.open("run=sample&pace=0&t=0&agents=open")  # (one row per agent, the bundles open)
         got = page.evaluate(
             """async (events) => {
               await window.hiraku.load(events, events.at(-1).t + 0.5);
@@ -319,7 +319,7 @@ class BrowserReplayTest(unittest.TestCase):
                 bubbleLines: Math.round(b.getBoundingClientRect().height / lineH(b) / (window.innerWidth / 1920)),
                 logLines: Math.round(li.getBoundingClientRect().height / lineH(li) / (window.innerWidth / 1920)),
                 fullInTitle: li.title.length,
-                agents: document.querySelectorAll("#agents li").length,
+                agents: document.querySelectorAll("#agents li:not(.agroup)").length,
                 many: document.getElementById("agents").classList.contains("many"),
               };
             }""",
@@ -881,7 +881,7 @@ class BrowserReplayTest(unittest.TestCase):
         page.close()
 
     def test_a_new_request_from_A1_to_a_run(self):
-        """?new=1: write the request in A1 and send it, answer the hearing, then 台本で始める starts a
+        """?new=1: write the request in A1 and send it, answer the hearing, then 決まった手順で始める starts a
         run on the saved request (with its intake events) and the screen follows it."""
         from hiraku.webserve.launch import Launcher
         from tests.web.fake_launch import fake_command, fake_reader
@@ -911,8 +911,19 @@ class BrowserReplayTest(unittest.TestCase):
             page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
             page.click("#view-intake button:has-text('送る')")
             page.wait_for_function("window.hiraku.request.state.state && !window.hiraku.request.state.busy")
-            self.assertIn("分野が決まりました", page.text_content("#draftbar"))
             self.assertGreater(page.evaluate("window.hiraku.request.state.events.length"), 0)
+            # the domains are picked: A1's question box has 答えて進める / 標準の値のまま進める, so the bar's
+            # 質問に答える / 標準の値のまま進める are not shown twice; on A5 (no box) the bar has them
+            page.wait_for_selector("#intake-host .in-ask-top")
+            self.assertTrue(page.evaluate("document.querySelector('#draftbar .draft-ask').hidden"))
+            self.assertNotIn("分野が決まりました", page.text_content("#draftbar"))
+            page.click(".tab[data-tab='A5']")
+            page.wait_for_function("!document.querySelector('#draftbar .draft-ask').hidden")
+            self.assertEqual(page.evaluate("[...document.querySelectorAll('#draftbar .draft-ask button')].map((b) => b.textContent)"),
+                             ["質問に答える", "標準の値のまま進める"])
+            page.click("#draftbar button[data-draft-ask='questions']")  # back to A1, the questions in sight
+            page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A1' && document.querySelector('#intake-host .in-ask-top')?.checkVisibility()")
+            page.wait_for_function("document.querySelector('#draftbar .draft-ask').hidden")
             page.evaluate("async () => { await window.hiraku.request.answer({ answers: { Q30: 'two_cargo', Q40: 150, Q50: 40, Q70: '私有地だけ' } }); }")
             page.wait_for_selector("#draftbar button[data-start='scripted']")
             self.assertIn("要件がそろいました", page.text_content("#draftbar"))
@@ -928,6 +939,45 @@ class BrowserReplayTest(unittest.TestCase):
             if lau.proc and lau.proc.poll() is None:
                 lau.proc.kill()
                 lau.proc.wait()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_the_draft_bar_sends_the_standard_values(self):
+        """標準の値のまま進める on the bar (shown on A5, where there is no question box) answers the hearing
+        with no answers (the intake's useDefaults): the answer goes to the server. Before a run the
+        version and cost pills are not shown."""
+        from hiraku.webserve.launch import Launcher
+        from tests.web.fake_launch import fake_command, fake_reader
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "requirements").mkdir()
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(SAMPLE_EVENTS, "20261103-120000-offroad-4w-fake", 20.0),
+                       reader=fake_reader, wait_s=20, demo_runs_file=tmp / "no-demo-runs.yaml")
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            posted = []
+            page.on("request", lambda r: posted.append((r.url.split("/api/")[-1], r.post_data_json)) if r.method == "POST" else None)
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/?new=1")
+            page.wait_for_selector("#draftbar")
+            self.assertEqual(page.evaluate("[document.getElementById('pill-version').checkVisibility(), document.getElementById('pill-cost').checkVisibility()]"), [False, False])
+            page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
+            page.click("#view-intake button:has-text('送る')")
+            page.wait_for_selector("#intake-host .in-ask-top")
+            page.click(".tab[data-tab='A5']")
+            page.click("#draftbar button[data-draft-ask='defaults']")
+            page.wait_for_function("window.hiraku.request.state.done")
+            answer = [body for url, body in posted if url == "request/answer"]
+            self.assertEqual(len(answer), 1)
+            self.assertEqual(answer[0]["answers"], {})
+            self.assertEqual(page.evaluate("[document.getElementById('pill-version').checkVisibility(), document.getElementById('pill-cost').checkVisibility()]"), [False, False])
+            self.assertEqual(errors, [])
+            page.close()
+        finally:
+            server.shutdown()
+            server.server_close()
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_a_file_dropped_on_A5_reaches_the_run_started_here(self):
@@ -1599,7 +1649,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(got["order"], ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"])
         self.assertEqual(sorted(got["red"]), ["assembly", "crash"])
-        self.assertEqual(got["flow"], ["版 1 赤 4", "版 2 赤 2"])
+        self.assertEqual(got["flow"], ["v1 赤 4", "v2 赤 2"])
         self.assertIn("繰り返しの上限", got["banner"])
         self.assertIn("電池 × cross1 8 mm 干渉", got["assembly"])
         self.assertIn("電池 43 ℃", got["thermal"])

@@ -813,6 +813,7 @@ export function assemblyJointControls(host, view, onChange = null) {
     onChange?.(on);
   };
   btn.addEventListener("click", () => set(!view.joints.on));
-  const want = new URLSearchParams(location.search).get("on")?.split(",").includes("joints") ?? false;
+  // on at first, as the workbench's toggle (app.js); ?off=joints turns it off at load
+  const want = !(new URLSearchParams(location.search).get("off")?.split(",").includes("joints") ?? false);
   return { set, want, refresh: () => renderJointLegend(host, view.joints, view.joints.on) };
 }

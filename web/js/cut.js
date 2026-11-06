@@ -20,7 +20,7 @@ import { BAND_COLORS } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
 import { CutN04, CutN15 } from "./cut_grid.js";
-import { NG_WORD, OK_WORD, esc, fmt } from "./labels.js";
+import { NG_WORD, OK_WORD, SCRIPTED_CUT_JA, esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
 import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
@@ -733,6 +733,28 @@ function checkStory() {
   return story.last;
 }
 
+// ---- what drove the run --------------------------------------------------------
+// A run the record says was scripted (project.driver "scripted", contract) is a fixed
+// sequence played back with no Claude: the cut says so in small text in the top right,
+// in the margin above layout.safe (no cut draws there; the story note is top left), so it
+// covers no picture, tag or subtitle. Nothing for a run driven by Claude, nor for an older
+// record without a driver (not guessed). A note (data-kind "note"): not counted by the story.
+
+function addDriverTag(layout, s) {
+  if (s.project?.driver !== "scripted") return;
+  const safe = layout.safe ?? { x: 96, y: 60, w: 1728 };
+  const px = layout.min_text_px ?? 18;
+  const h = Math.ceil(px * 1.2) + 6; // line-height 1.2, padding 2 + border 1 a side
+  const el = document.createElement("p");
+  el.className = "cut-driver";
+  el.dataset.box = "driver";
+  el.dataset.kind = "note";
+  el.dataset.driver = "scripted";
+  el.textContent = SCRIPTED_CUT_JA;
+  Object.assign(el.style, { right: `${(layout.stage?.w ?? STAGE_W) - safe.x - safe.w}px`, top: `${Math.max(0, safe.y - h - 12)}px`, fontSize: `${px}px` });
+  $("stage").append(el);
+}
+
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;
 const STAGE_H = 1080;
@@ -783,8 +805,10 @@ async function main() {
     const name = params.get("cut") ?? "n05";
     if (!CUTS[name]) throw new Error(`no cut named ${name}`);
     const [layout, events] = await Promise.all([loadLayout(), readRun(params.get("run") ?? "sample")]);
+    const s = stateOf(events);
     // the events too, in seq order, for the cuts that read them as they came (N09, N13, N14)
-    cut = new CUTS[name](layout, stateOf(events), [...events].sort((a, b) => a.seq - b.seq));
+    cut = new CUTS[name](layout, s, [...events].sort((a, b) => a.seq - b.seq));
+    if (!ONLY_HERO) addDriverTag(layout, s);
     if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
     await looksReady(); // the real look's Poly Haven files, so a frame at ?t= is the same every time
     window.hiraku.cut = cut;
