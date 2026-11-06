@@ -139,14 +139,14 @@ const TEST_ID = /(^|[^A-Za-z0-9])[A-Z][0-9]{1,2}([^A-Za-z0-9]|$)/;
 
 /** What a domain's pet says. Only words of the record: the reason of domains.picked when it is not the code's own
  *  sentence (that one lists test ids), else the domain's plain words; a domain left off says so and gives the record's
- *  reason up to its colon (the rest names tests). `full` is the whole reason, for the details. */
+ *  reason up to its colon (the rest names tests; a sentence that still names tests is left to the details). `full` is the whole reason, for the details. */
 export function saidOf(c) {
   const reason = (c.reason || "").trim();
   const code = TEST_ID.test(reason);
   if (c.state === "wait") return { text: "…考えています", full: "" };
   if (c.state === "off") {
     const head = reason.includes(":") ? reason.split(":")[0].trim() : reason;
-    return { text: head ? `今回は見ません。${head}` : "今回は見ません", full: reason };
+    return { text: head && !TEST_ID.test(head) ? `今回は見ません。${head}` : "今回は見ません", full: reason }; // a sentence naming tests stays in the details
   }
   if (!reason || code) return { text: DOMAIN_PLAIN[c.domain] ? `「${DOMAIN_PLAIN[c.domain]}」を調べます` : "", full: reason, code };
   return { text: reason, full: reason, code };

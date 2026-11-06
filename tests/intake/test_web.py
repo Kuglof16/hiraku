@@ -725,11 +725,12 @@ const card = (d) => el.all('article').find((a) => a.dataset.domain === d);
     def test_the_bubble_has_the_records_words_the_codes_sentence_is_made_plain_and_an_off_domain_says_so(self):
         got = self.run_body("""
 const say = (d) => card(d).all('p').find((p) => p.className === 'in-reason').text();
-console.log(JSON.stringify({ handling: say('handling'), aero: say('aero'), thermal: say('thermal'), nvhWait: say('nvh') }));
+console.log(JSON.stringify({ handling: say('handling'), aero: say('aero'), thermal: say('thermal'), nvhWait: say('nvh'), offCode: saidOf({ domain: 'crash', state: 'off', reason: '要件のファイルの試験 (H1・R7) に、この分野の試験が無い' }).text }));
 """)
         self.assertEqual(got["handling"], "悪路を走るので、旋回で倒れないかを確かめます")  # Claude's words, as the record has them
         self.assertEqual(got["aero"], "「風」を調べます")  # the code's sentence lists test ids: plain words instead
         self.assertEqual(got["thermal"], "今回は見ません。この製品の性質では当てはまる試験が無い")
+        self.assertEqual(got["offCode"], "今回は見ません")  # a reason that names tests (as the code writes it) is left to the details
         self.assertEqual(got["nvhWait"], "今回は見ません")  # decided, and the record names no reason
 
     def test_each_domain_has_one_pet_place_that_stays_when_the_screen_is_drawn_again(self):
