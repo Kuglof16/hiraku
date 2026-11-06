@@ -20,7 +20,9 @@ from .magic_formula import DEFAULT_TYRE, MF61, load_coefficients
 from .mass import combine, items_symmetric, member_items, part_items
 from .units import G0, si
 
-UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake"}
+# brake_caliper: designgen's kind for the caliper on the knuckle (kit/safety.py); an inboard brake (on the body)
+# would be another kind
+UNSPRUNG_KINDS = {"wheel", "tire", "tyre", "hub", "upright", "knuckle", "brake", "brake_caliper"}
 # arms, dampers, ball joints (kit/arms.py): half of each one's mass moves with the wheel (an assumption, no
 # source: one end on the wheel, the other on the body)
 HALF_UNSPRUNG_KINDS = {"suspension", "link", "damper", "ball_joint"}
