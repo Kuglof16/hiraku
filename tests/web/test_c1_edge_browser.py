@@ -148,8 +148,13 @@ class C1EdgeBrowserTest(unittest.TestCase):
         self.assertTrue(head["next"] and head["below"] and head["seen"], head)
         self.assertEqual(head["color"], ORANGE)
         self.assertFalse(head["clipped"])
+        # opened (③'s くわしく), the card's 境目 line is whole too
+        page.click("#chain-more > summary")
+        self.assertFalse(page.evaluate(BENCH)["clipped"])
         # the fold stays open across a redraw
         page.click("#card-ana details[data-keep='ana-asm'] summary")
+        # (the details' toggle event comes a task after the click: let it arrive before the redraw)
+        page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", edge_events())
         self.assertTrue(page.evaluate("document.querySelector(\"#card-ana details[data-keep='ana-asm']\").open"))
         page.close()
