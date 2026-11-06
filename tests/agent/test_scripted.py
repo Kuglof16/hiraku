@@ -457,8 +457,9 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
         self.assertIn("ana.P1.wheel_load_{load.rail_joint.support}", refs)
         for r in refs:
             self.assertFalse(r.startswith(("design.section.", "summary.member_length.", "design.support.")), r)
-        # at each step height: P1 once, R1 twice; P1 driven once at each (the tyre's push at 100 mm, the spin at 250 mm)
-        self.assertEqual(len(chain), 8)
+        # at each step height: P1 once, R1 twice; P1 driven once at each (the tyre's push at 100 mm, the spin at 250 mm);
+        # R1s once at 100 mm (the hot spot on version 5 after the seat's brackets, tool_decides)
+        self.assertEqual(len(chain), 9)
         for em in chain:
             self.assertTrue(em["source"] and em["cause"] and em["fix"])
 
