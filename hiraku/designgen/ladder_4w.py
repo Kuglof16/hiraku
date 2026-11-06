@@ -60,7 +60,7 @@ from __future__ import annotations
 import functools
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +91,9 @@ class Var:
     lo: float | None = None  # None: not a design choice (a requirement or a fixed value)
     hi: float | None = None
     meaning: str = ""
+    # where an outside or assumed value comes from (contract: design.variables[...]["basis"]); None for the
+    # variables the design chooses
+    basis: str | None = None
 
     @property
     def revisable(self) -> bool:
@@ -217,7 +220,9 @@ VARIABLES: dict[str, Var] = {
     "fatigue_slope": Var("1", 3.0, meaning="IIW form, not checked"),
     "fatigue_knee_cycles": Var("1", 1e7, meaning="IIW form, not checked"),
     "fatigue_slope_after_knee_constant_amplitude": Var("1", 22.0, meaning="assumption"),
-    "tyre_stiffness": Var("N/mm", 150.0, meaning="assumption"),
+    # 80 N/mm: a round value between the two BKT ATV radials in TYRE_STIFFNESS_BASIS (76.1 and 85.7 N/mm); it
+    # replaces an unsourced 150 N/mm
+    "tyre_stiffness": Var("N/mm", 80.0, meaning="vertical stiffness of one tyre (see basis)"),
     # tyre and suspension details of the 3D vehicle model (K2), assumptions with no source
     "tyre_damping_ratio": Var("1", 0.05, meaning="assumption: vertical damping ratio of the tyre"),
     "tyre_slip_stiffness_coeff": Var("1", 10.0, meaning="assumption: longitudinal slip stiffness per unit slip, "
@@ -242,6 +247,9 @@ VARIABLES: dict[str, Var] = {
                       f"{GUSSET_LEG_MM:g} mm, 1.5 x the cross member width, an assumption)"),
     "gusset_thickness": Var("mm", 2.3, 1.6, 4.5, "gusset plate thickness (used when gusset_leg > 0); the default (the "
                             "tube wall) is an assumption"),
+    "gusset_ends": Var("1", 0.0, 0.0, 1.0, "1: gussets (gusset_leg, gusset_thickness) also at the frame's two end "
+                       "corners, where a rail ends on its end cross member (an L joint: the inside corner only); 0: "
+                       "the T joints only. Written into design.variables only when it is 1"),
     "cross_members_through": Var("1", 0.0, 0.0, 1.0, "1: the cross members pass through a hole in the rail's inner "
                                  "wall to its outer wall and are welded to both (needs cross_h - cross_t < rail_h - "
                                  "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
@@ -266,12 +274,48 @@ VARIABLES: dict[str, Var] = {
     "rollbar_b": Var("mm", 40.0, 25.0, 80.0, "square tube width (rollbar_square = 1)"),
     "rollbar_t": Var("mm", 2.3, 1.6, 4.5, "roll bar tube wall"),
 }
-SWITCHES = ("cross_members_through", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
+TYRE_STIFFNESS_BASIS = (
+    "not the maker's value: computed by HIRAKU as the mean stiffness from 0 to the rated load (rated load / (outer "
+    "diameter / 2 - static loaded radius)) from the rated load and static loaded radius of BKT ATV radials 25x10 R12 "
+    "(76.1 N/mm) and 26x12 R12 (85.7 N/mm) on a retailer's product page (secondary; it says the data come from the "
+    "maker), read 2026-11-06; inflation pressure not given; with the maker's +-2 % outer diameter tolerance the range "
+    "is 44 to 113 N/mm; the page's text not checked")
+TYRE_STIFFNESS_RANGE_N_MM = (44.0, 113.0)  # the ends of the range in TYRE_STIFFNESS_BASIS
+# Where the outside and assumed values come from (design.variables[...]["basis"]), copied from their meaning and
+# the comments above; the variables the design chooses and the requirements (Q50, Q40, seats, cargo_height) have none.
+_BASIS = {
+    **dict.fromkeys(
+        ("drivetrain_efficiency", "motor_efficiency", "controller_efficiency", "regen_efficiency", "aux_power",
+         "battery_resistance", "mass_factor", "rolling_resistance", "battery_heat_capacity",
+         "battery_thermal_resistance", "motor_heat_capacity", "motor_thermal_resistance", "controller_heat_capacity",
+         "controller_thermal_resistance", "drag_coefficient", "frontal_area", "side_force_coefficient", "side_area",
+         "centre_of_pressure_height", "front_cornering_stiffness", "rear_cornering_stiffness", "bumper_stiffness",
+         "fatigue_fat_class", "fatigue_slope_after_knee_constant_amplitude", "tyre_damping_ratio",
+         "tyre_slip_stiffness_coeff", "bump_stop_factor", "driveshaft_diameter", "driveshaft_wall"),
+        "assumption"),
+    "occupant_mass": "Q33: AIST anthropometric database 1991-92 item N1 Weight, young adult male 95th percentile "
+                     "(the README lists it as not checked)",
+    "battery_voltage": "16 x 3.2 V: cell nominal voltage, EVE LF50K product specification LF50K-73103 Ver. D, section "
+                       "3 (checked 2026-11-03); 16 in series is HIRAKU's choice",
+    "battery_max_temperature": "cell limit, EVE LF50K product specification, section 3 (checked)",
+    "controller_max_temperature": "Curtis 1234/36/38 manual, Appendix D Table D-1 (checked)",
+    "motor_max_temperature": "assumption: insulation class F of IEC 60085 (not checked)",
+    "air_density": "ICAO standard atmosphere (ICAO Doc 7488), sea level (not checked)",
+    "fatigue_slope": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, "
+                     "2nd ed., Springer 2016 (not checked)",
+    "fatigue_knee_cycles": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and "
+                           "Components, 2nd ed., Springer 2016 (not checked)",
+    "tyre_stiffness": TYRE_STIFFNESS_BASIS,
+}
+VARIABLES.update({k: replace(VARIABLES[k], basis=b) for k, b in _BASIS.items()})
+DERIVED_BASIS = {"tyre_relaxation_length": "assumption"}  # basis of the DERIVED variables that have one
+SWITCHES = ("cross_members_through", "gusset_ends", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
 ROLLBAR_VARS = ("rollbar", "rollbar_height", "rollbar_width", "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b",
                 "rollbar_t")
 ROLLBAR_MATERIALS = {0.0: "stkm13a", 1.0: "stkr400"}  # by rollbar_square (assumption)
 # Optional variables, written into design.variables only when one of their group differs from its default.
-OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
+OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "gusset_ends": ("gusset_ends",),
+            "cross_members_through": ("cross_members_through",)}
 LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
@@ -315,9 +359,12 @@ def spec() -> list[Record]:
         r: Record = {"name": name, "unit": v.unit, "default": v.default, "revisable": v.revisable, "meaning": v.meaning}
         if v.revisable:
             r.update(min=v.lo, max=v.hi)
+        if v.basis:
+            r["basis"] = v.basis
         out.append(r)
     for name, (unit, meaning) in DERIVED.items():
-        out.append({"name": name, "unit": unit, "revisable": False, "derived": True, "meaning": meaning})
+        out.append({"name": name, "unit": unit, "revisable": False, "derived": True, "meaning": meaning,
+                    **({"basis": DERIVED_BASIS[name]} if name in DERIVED_BASIS else {})})
     return out
 
 
@@ -847,9 +894,14 @@ SIDE_NET_COVER_MM = 100.0  # every point R at least this far inside the net's ta
 SIDE_NET_FRONT_GAP_MM = 100.0  # the net's front end at least this far behind the front wheels' tyres
 FENDER_T_MM = 3.0  # fender wall (assumption)
 FENDER_PIECES = 4
-HDPE = {"name": "HDPE (high-density polyethylene), molded", "E_MPa": 1000.0, "nu": 0.4, "density_kg_m3": 950.0,
-        "yield_MPa": 25.0, "source": "assumption: round values of the order of HDPE's; not checked against a cited "
-                                    "source", "verified": False}
+# nu 0.46: Goodfellow's generic HDPE page, as the material card does
+HDPE = {"name": "HDPE (high-density polyethylene), molded", "E_MPa": 1000.0, "nu": 0.46, "density_kg_m3": 950.0,
+        "yield_MPa": 25.0, "source": "material card data/materials/cards/hdpe.json: E 1000 MPa and yield 25 MPa are "
+                                    "round values inside Goodfellow's generic HDPE ranges (E 0.5-1.2 GPa, tensile "
+                                    "strength 15-40 MPa; product page 'HDPE Granules' ET32-GL-000110, secondary), not "
+                                    "checked; density 950 kg/m3 from the same page (checked 2026-11-06); nu 0.46 is "
+                                    "the value the card's nu note says that page lists (not checked)",
+        "verified": False}
 # The occupants' bodies as parts (kit/body.py, hiraku.contract.loading.person_of: the parts of a person
 # share the id before the first "."): the trunk keeps the occupant's id, the limbs are <id>.<segment>_<L|R>.
 BODY_PARTS = True
@@ -1198,7 +1250,9 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
         others = [p for p in lay.parts if p["kind"] not in GUSSET_NEIGHBOURS]  # the gussets keep out of these
-        for st in tee:
+        # gusset_ends: also the front and rear end corners (L joints: the rail ends on its end cross member)
+        ends = [list(stations)[0], list(stations)[-1]] if v.get("gusset_ends", 0.0) == 1 else []
+        for st in tee + ends:
             for side in "LR":
                 lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho,
                                                avoid=others))
@@ -1250,6 +1304,10 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     variables["motor_rotor_inertia"] = _q(drive["rotor_inertia"], "kg*m^2")
     variables["reducer_output_inertia"] = _q(drive["gear_inertia"], "kg*m^2")
     variables[drivetrain.DROP_VARIABLE] = _q(drop, "mm")
+    for k, q in variables.items():
+        basis = VARIABLES[k].basis if k in VARIABLES else DERIVED_BASIS.get(k)
+        if basis:
+            q["basis"] = basis
     design = {
         "design_version": version,
         "parent_version": parent,

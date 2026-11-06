@@ -184,6 +184,9 @@ class Frame:
         centroid, box.size_mm [leg along the through tube, leg along the branch, thickness] (the
         shell mesher's convention), mass = density x leg^2 / 2 x thickness, carried_by [node].
         The through tube must run along x and the branch along y (a ladder's rail and cross member).
+        At an L joint (the frame's corner: the tube along x ends at `node` too) only the side that
+        tube runs on gets gussets (the inside corner); the shell mesh takes the larger tube (by area)
+        as the one the other ends on, so the tube along x must be the larger one there.
         Each gusset lies on the side wall of the through tube's piece on its own side (front or rear),
         so a joint between two rail pieces of different widths puts each on its own piece's wall.
         avoid: parts (contract records with a box) the gussets keep out of; a gusset whose box would
@@ -200,9 +203,13 @@ class Frame:
             raise FrameError(f"gussets need the branch {branch!r} to run along y from node {node!r}")
         u_in /= np.linalg.norm(u_in)
         hosts = self._along_x_at(node, branch)
-        if len(hosts) != 2:
-            raise FrameError(f"node {node!r} is not a T joint: {len(hosts)} other members end there, not 2")
+        if len(hosts) not in (1, 2):
+            raise FrameError(f"node {node!r} is not a T or L joint: {len(hosts)} other members end there, not 1 or 2")
         br = self.sections[m["section"]]["dims_mm"]
+        # an L joint (the frame's corner: the through tube ends at the node) gets the gussets on the side its tube
+        # runs on only (the inside corner)
+        sides = [sx for sx in (1.0, -1.0)
+                 if any(sx * (self.nodes[x["node_b"] if x["node_a"] == node else x["node_a"]][0] - p[0]) > 0 for x in hosts)]
 
         def piece(sx: float) -> dict:  # the through tube's piece on the front (sx 1) or rear (sx -1) side
             ahead = [x for x in hosts if sx * (self.nodes[x["node_b"] if x["node_a"] == node else x["node_a"]][0] - p[0]) > 0]
@@ -211,6 +218,8 @@ class Frame:
         mass = density_kg_m3 * 1e-9 * leg * leg / 2.0 * thickness
         out, off = [], []
         for sx, fb in ((1.0, "front"), (-1.0, "rear")):
+            if sx not in sides:
+                continue
             host = piece(sx)
             y_wall = p[1] + u_in[1] * (host["b"] - host["t"]) / 2.0
             for sz, ul in ((1.0, "upper"), (-1.0, "lower")):

@@ -697,7 +697,10 @@ def build(values: dict | None = None, *, version: int = 1, parent: int | None = 
     material = json.loads(MATERIALS.read_text(encoding="utf-8"))[MATERIAL]
 
     variables = {k: _q(v[k], VARIABLES[k].unit) for k in VARIABLES}
-    variables["tyre_relaxation_length"] = _q(r, "mm")
+    for k, var in VARIABLES.items():
+        if var.basis:  # the outside and assumed values shared with ladder_4w carry its basis
+            variables[k]["basis"] = var.basis
+    variables["tyre_relaxation_length"] = {**_q(r, "mm"), "basis": "assumption"}
     variables["wheel_inertia"] = _q(WHEEL_MASS_KG * (r / 1000.0) ** 2 / 2.0, "kg*m^2")
     variables["upper_joint_z"] = _q(float(uz), "mm")
     variables["damper_upper_y"] = _q(float(dy), "mm")
