@@ -85,6 +85,18 @@ class CollectTest(unittest.TestCase):
 
         self.assertEqual(tradeoff_data.k5_rebuilds(), bool(getattr(k5_sensitivity, "REBUILDS_DESIGN", False)))
 
+    def test_two_load_cases_of_one_quantity_are_both_looked_at(self):
+        """P2's top speed on the 14 % grade (held by the power) and on the flat (held by the motor's speed): the
+        second is keyed top_speed@<its load case>, its K5 terms renamed, so intake.tradeoff.find reads both."""
+        two = [lc("P2-grade14", "top_speed", "launch", op=">", limit={"value": 0.0, "unit": "km/h"}),
+               lc("P2-flat", "top_speed", "launch", op=">=", limit={"value": 40.0, "unit": "km/h"})]
+        with mock.patch(f"{__name__}.LCS", two):
+            got, asked = self.collect({"top_speed"})
+        self.assertEqual(asked, ["P2-grade14", "P2-flat"])
+        self.assertEqual(set(got["sens"]), {"top_speed", "top_speed@P2-flat"})
+        self.assertEqual(got["sens"]["top_speed@P2-flat"][0]["name"], "top_speed@P2-flat to variables.v")
+        self.assertEqual(got["meta"]["top_speed@P2-flat"]["label"], "P2-flat")
+
     def test_a_named_quantity_is_looked_at_whatever_its_tool(self):
         got, asked = self.collect({"max_hot_spot_stress", "knee_room"})
         self.assertEqual(asked, ["H3-body-size", "R1s-step100"])
