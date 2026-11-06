@@ -583,7 +583,8 @@ def stage_blocked(ctx: RunContext) -> dict[str, str]:
                 continue
             reds = [(m, lc) for m, lc, what in lower_stage_left(ctx, n, skip=lc_id) if what.startswith("NG")]
             if reds:
-                out[lc_id] = ("低い段の NG が残るので判定していない ("
+                # the contract's words (docs/contract.md HK5); qa.check_run looks for 低い段の赤 in stop_reason
+                out[lc_id] = ("低い段の赤が残るので判定していない ("
                               + "、".join(f"{_stage_ja(m)} の {lc['load_case_id']}" for m, lc in reds) + ")")
     return out
 

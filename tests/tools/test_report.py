@@ -217,7 +217,7 @@ class ReportTest(RunCase, unittest.TestCase):
 
     def test_the_scripted_runs_summary_is_for_the_reader(self):
         rep = json.loads((self.ctx.store.path / layout.REPORT_FILE).read_text(encoding="utf-8"))
-        self.assertEqual(rep["summary"], "台本の運転で、設計の版 1 は選んだ 1 分野 (強度信頼性) がすべて合格")
+        self.assertEqual(rep["summary"], "台本の運転で、設計の v1 は選んだ 1 分野 (強度信頼性) がすべて OK")
 
     def test_the_scripted_run_fills_next_by_code(self):
         rep = json.loads((self.ctx.store.path / layout.REPORT_FILE).read_text(encoding="utf-8"))

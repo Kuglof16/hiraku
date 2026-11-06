@@ -199,7 +199,7 @@ class HooksTest(RunCase, unittest.TestCase):
         self.ctx.project["round_limit"] = 0  # version 1 is the last
         red_lc = {"load_case_id": "H1-steer", "domain": "assembly"}
         with mock.patch.object(rules, "load_case_stage", return_value=1), \
-                mock.patch.object(rules, "lower_stage_left", return_value=[(0, red_lc, "赤、ver-0009")]):
+                mock.patch.object(rules, "lower_stage_left", return_value=[(0, red_lc, "NG、ver-0009")]):
             blocked = rules.stage_blocked(self.ctx)
             self.assertEqual(list(blocked), ["R1-step100"])
             self.assertIn("H1-steer", blocked["R1-step100"])
@@ -423,7 +423,7 @@ class ModuleScopeHookTest(ModuleCase, unittest.TestCase):
         self.assertIn("build_version", hint)
         self.assertEqual(self.pre("build_version", {"reason": "まとめ"}, "packager"), {})
         build_version(self.ctx, {"reason": "まとめ"}, "packager")
-        self.assertIn("版 2", self.hooks.next_step("build_version", {"reason": "まとめ"}))
+        self.assertIn("v2", self.hooks.next_step("build_version", {"reason": "まとめ"}))
 
 
 if __name__ == "__main__":
