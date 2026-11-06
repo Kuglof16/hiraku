@@ -87,14 +87,17 @@ HV.crashB = async function (D, ctx) {
   const M = D.motion, B = D.beyond, C = D.colour, hasRec = !!C.stress;
   const [tf, pos, strain, fold, poff, ts, dec, cr] = await Promise.all([M.t, M.pos, C.strain, C.fold, D.part_off,
     D.series.t, D.series.decel, D.series.crush].map(HV.unpack));
-  const [stress, hinge] = hasRec ? await Promise.all([HV.unpack(C.stress), HV.unpack(C.hinge)]) : [null, null];
+  const [stress, hinge, stressAvg, hingeCol] = hasRec ? await Promise.all([C.stress, C.hinge, C.stress_avg || C.stress, C.hinge_colour || C.hinge].map(HV.unpack)) : [null, null, null, null];
+  const runMaxHinge = hasRec && !!C.hinge_running_max;
+  const avgMs = 1000 * (C.avg_s || 0), dtMs = 1000 * (C.dt_s || 0);
   const force = {};
   if (hasRec) for (const [m, p] of Object.entries(C.force)) force[m] = await HV.unpack(p);
   const nF = tf.length, n = beams.nodes0.length / 3, ne = D.frame.members.length, np = D.parts.length;
   // the grown box for the camera: every frame
   for (let i = 0; i < pos.length; i += 3) for (let a = 0; a < 3; a++) { ctx.lo[a] = Math.min(ctx.lo[a], pos[i + a]); ctx.hi[a] = Math.max(ctx.hi[a], pos[i + a]); }
   const stopMember = D.stop && D.stop.member;
-  const S = { k: 0, what: hasRec ? 'stress' : 'fold', log: false, sel: stopMember && force[stopMember] ? stopMember : null };
+  // the default colour: the end hinge rotation (it grows as the frame folds; the axial stress swings frame to frame)
+  const S = { k: 0, what: hasRec ? 'hinge' : 'fold', log: false, sel: stopMember && force[stopMember] ? stopMember : null };
   const near = tv => { let b = 0, bd = Infinity; ts.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; };
   let kPeak = 0; dec.forEach((v, i) => { if (v > dec[kPeak]) kPeak = i; });
   for (let i = 0; i < np; i++) boxes.colour(i, [0.72, 0.72, 0.75]);
@@ -124,23 +127,27 @@ HV.crashB = async function (D, ctx) {
   }
   const after = (D.summary || {}).after;
   const brokenSet = k => new Set(M.broken[k] || []);
-  const arr = { stress, hinge, strain, fold };
+  const arr = { stress, stress_avg: stressAvg, hinge: hingeCol, strain, fold };
   const val = (k, e) => arr[S.what][k * ne + e];
   // colour range: by default the whole run's largest (members not broken; computed by src/crash.py), so an instant
   // with almost nothing (t = 0) is not stretched over its own near-zero range; the choice 'now' fits this instant,
   // but never below 1 % of the run's largest
-  const RUN_MAX = { stress: C.stress_absmax, hinge: C.hinge_max, strain: C.strain_absmax, fold: C.fold_max };
+  const RUN_MAX = { stress: C.stress_absmax, stress_avg: C.stress_avg_absmax ?? C.stress_absmax, hinge: C.hinge_max, strain: C.strain_absmax, fold: C.fold_max };
   const runMax = () => Math.max(RUN_MAX[S.what] || 0, 1e-6);
   const frameMax = k => { let mx = 0; const br = brokenSet(k); for (let e = 0; e < ne; e++) if (!br.has(D.frame.member_ids[e])) mx = Math.max(mx, Math.abs(val(k, e))); return Math.max(mx, 0.01 * runMax()); };
   S.range = 'run';
   const rangeNote = (m, unit) => S.range === 'run' ? `範囲は計算全体の最大 ${HV.fmt(m)}${unit}` : `範囲はこの時刻の最大 ${HV.fmt(m)}${unit} (全体 ${HV.fmt(runMax())}${unit})`;
   const SPEC = {
-    stress: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: '部材の軸応力 (− 圧縮、+ 引張)', note: `軸力 / 断面積。${rangeNote(m, ' MPa')}。灰色 = 破断` }),
-    hinge: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '部材の端のヒンジ回転 (大きい方)', note: `${rangeNote(m, '°')}。灰色 = 破断` }),
+    stress: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: '部材の軸応力 (− 圧縮、+ 引張)', note: `軸力 / 断面積、記録の各時刻の値そのまま。${rangeNote(m, ' MPa')}。灰色 = 破断` }),
+    stress_avg: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: `部材の軸応力の ${HV.fmt(avgMs)} ms の平均 (− 圧縮、+ 引張)`,
+                        note: `軸力 / 断面積を、その時刻の前後 ${HV.fmt(avgMs / 2)} ms の記録の値で平均。${rangeNote(m, ' MPa')}。灰色 = 破断` }),
+    hinge: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, scale: 'seq', unit: '°',
+                   title: runMaxHinge ? '部材の端の塑性ヒンジ回転 (大きい方、その時刻までの最大)' : '部材の端の塑性ヒンジ回転 (大きい方)',
+                   note: `${runMaxHinge ? '記録の回転は少し戻る時刻があるので、その時刻までの最大で色。' : ''}${rangeNote(m, '°')}。灰色 = 破断` }),
     strain: m => ({ min: -m, max: m, log: false, unit: '%', title: '要素の軸ひずみ (− 縮み、+ 伸び)', note: `${rangeNote(m, ' %')}。灰色 = 破断` }),
     fold: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '要素の端の折れ角 (t = 0 から)', note: `${rangeNote(m, '°')}。灰色 = 破断` }),
   };
-  const LABEL = { stress: '部材の軸応力 MPa', hinge: '端のヒンジ回転 °', strain: '要素の軸ひずみ %', fold: '要素の端の折れ角 °' };
+  const LABEL = { stress: '部材の軸応力 MPa', stress_avg: `部材の軸応力 (${HV.fmt(avgMs)} ms の平均) MPa`, hinge: runMaxHinge ? '端のヒンジ回転 (その時刻までの最大) °' : '端のヒンジ回転 °', strain: '要素の軸ひずみ %', fold: '要素の端の折れ角 °' };
   const spec = () => SPEC[S.what](S.range === 'run' ? runMax() : frameMax(S.k));
   function update() {
     const k = S.k;
@@ -199,7 +206,9 @@ HV.crashB = async function (D, ctx) {
       if (force[mid]) { S.sel = mid; setTimeout(HV.refresh, 0); }
       return `<b>${HV.esc(mid)}</b> ${HV.esc(D.frame.member_names[e])}<br>` +
              (hasRec ? `${HV.qhtml('member_axial_force')} ${force[mid] ? HV.fmt(force[mid][k] / 1000) + ' kN' : '-'}<br>軸応力 ${HV.fmt(stress[k * ne + e])} MPa (軸力 / 断面積 ${HV.fmt(C.area_mm2[mid])} mm²)<br>` +
-                       `${HV.qhtml('member_hinge')} ${HV.fmt(hinge[k * ne + e])}° (${(C.hinge_ends[mid] || []).map(HV.esc).join(', ')})<br>` : '') +
+                       (C.stress_avg ? `軸応力の ${HV.fmt(avgMs)} ms の平均 ${HV.fmt(stressAvg[k * ne + e])} MPa<br>` : '') +
+                       `${HV.qhtml('member_hinge')} ${HV.fmt(hinge[k * ne + e])}° (${(C.hinge_ends[mid] || []).map(HV.esc).join(', ')})` +
+                       (runMaxHinge ? `、その時刻までの最大 ${HV.fmt(hingeCol[k * ne + e])}°` : '') + '<br>' : '') +
              `要素 ${HV.esc(ids[na])} - ${HV.esc(ids[nb])}: 軸ひずみ ${HV.fmt(strain[k * ne + e])} %、折れ角 ${HV.fmt(fold[k * ne + e])}°` +
              (brokenSet(k).has(mid) ? '<br><b>この時刻までに破断</b>' : '') + (mid === stopMember ? '<br><b>この部材が折れて計算が止まった</b>' : '');
     },
@@ -230,8 +239,10 @@ HV.crashB = async function (D, ctx) {
     },
     panel(div) {
       const h = document.createElement('h3'); h.textContent = '色の量 (B)'; div.appendChild(h);
-      for (const [k, lab] of [['stress', '部材の軸応力 (軸力 / 断面積)'], ['hinge', '部材の端のヒンジ回転 (大きい方)'], ['fold', '要素の端の折れ角 (形から)']]) {
+      for (const [k, lab] of [['hinge', runMaxHinge ? '部材の端の塑性ヒンジ回転 (その時刻までの最大)' : '部材の端の塑性ヒンジ回転 (大きい方)'],
+                              ['stress', '軸応力 (そのまま)'], ['stress_avg', `軸応力 (${HV.fmt(avgMs)} ms の平均)`], ['fold', '要素の端の折れ角 (形から)']]) {
         if (!hasRec && k !== 'fold') continue;
+        if (k === 'stress_avg' && !C.stress_avg) continue;
         const l = document.createElement('label'); l.style.display = 'block';
         const r = document.createElement('input'); r.type = 'radio'; r.name = 'crashcol'; r.id = 'crashcol_' + k; r.checked = S.what === k;
         r.onchange = () => { S.what = k; update(); HV.refresh(); };
@@ -242,6 +253,12 @@ HV.crashB = async function (D, ctx) {
       for (const [v, t] of [['run', '計算全体の最大で色'], ['now', 'この時刻の最大で色']]) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
       sel.value = S.range; sel.onchange = () => { S.range = sel.value; update(); HV.refresh(); };
       const row = document.createElement('div'); row.className = 'row'; row.appendChild(sel); div.appendChild(row);
+      if (hasRec && dtMs > 0) {   // closed by default
+        const d = document.createElement('details'); d.id = 'crashStressWhy';
+        d.innerHTML = `<summary>軸応力の色がコマごとに跳ぶわけ</summary><div>軸応力の揺れは計算 (減衰なし) の中を走る本物の波で、` +
+                      `記録の間隔 ${HV.fmt(dtMs, 2)} ms ごとに取り出しているので、色がコマの間で跳ぶ。</div>`;
+        div.appendChild(d);
+      }
     },
   };
   update();

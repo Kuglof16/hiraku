@@ -183,10 +183,62 @@ def _at_frames(s: dict, t_frames: list[float]) -> list[float]:
     return out
 
 
+AVG_S = 0.005  # the moving average of the axial stress: 5 ms, centred on the frame (2.5 ms before and after)
+
+
+def _avg_at_frames(s: dict, t_frames: list[float], window_s: float = AVG_S) -> list[float]:
+    """A series' mean over the samples within window_s / 2 of each frame time (the record's own samples; at the
+    run's start and end the window is cut short there)."""
+    t, v = s.get("t_s") or [], s["values"]
+    h = window_s / 2.0 + 1e-12
+    out, lo, hi, acc = [], 0, 0, 0.0
+    for tf in t_frames:   # frame times rise: a sliding window over the samples
+        while hi < len(t) and t[hi] <= tf + h:
+            acc += float(v[hi])
+            hi += 1
+        while lo < hi and t[lo] < tf - h:
+            acc -= float(v[lo])
+            lo += 1
+        out.append(acc / (hi - lo) if hi > lo else 0.0)
+    return out
+
+
+def flicker_share(vals: list[float], nF: int, ne: int, span: float, skip=None, frac: float = 0.05) -> list[float]:
+    """Per inner frame k (1 .. nF-2): the share of the members (those not in skip(k)) whose value turns back
+    there, both steps (k-1 -> k and k -> k+1) larger than frac x span (span: the colour range, max - min)."""
+    lim, out = frac * span, []
+    for k in range(1, nF - 1):
+        sk = skip(k) if skip else ()
+        n = c = 0
+        for e in range(ne):
+            if e in sk:
+                continue
+            n += 1
+            d1, d2 = vals[k * ne + e] - vals[(k - 1) * ne + e], vals[(k + 1) * ne + e] - vals[k * ne + e]
+            c += d1 * d2 < 0 and abs(d1) > lim and abs(d2) > lim
+        out.append(c / n if n else 0.0)
+    return out
+
+
+def decreases(vals: list[float], nF: int, ne: int, span: float, skip=None, frac: float = 0.01) -> dict:
+    """Where a value goes back from one frame to the next by more than frac x span: the members that ever do,
+    the frames where any does, and the count of (member, frame) steps."""
+    lim, mem, frm, steps = frac * span, set(), set(), 0
+    for k in range(1, nF):
+        sk = skip(k) if skip else ()
+        for e in range(ne):
+            if e not in sk and vals[(k - 1) * ne + e] - vals[k * ne + e] > lim:
+                mem.add(e)
+                frm.add(k)
+                steps += 1
+    return {"members": sorted(mem), "frames": sorted(frm), "steps": steps}
+
+
 def member_results(rec: dict, t_frames: list[float], members: list[str], design: dict) -> dict | None:
     """Per member at the frames: axial force (N, + tension, series member_axial_force.<m>), axial stress =
-    force / A (MPa; A of the member's section in the design, viewer.src.nvh.section_props), and the larger of
-    its end hinge rotations (deg, series member_hinge.<m>.<end node>). None when the record has neither."""
+    force / A (MPa; A of the member's section in the design, viewer.src.nvh.section_props), the axial stress
+    averaged over AVG_S around each frame (from the force series' own samples), and the larger of its end hinge
+    rotations (deg, series member_hinge.<m>.<end node>). None when the record has neither."""
     from viewer.src.nvh import section_props
     ser = {s["channel"]: s for s in rec.get("series", []) or []}
     if not any(c.startswith(("member_axial_force.", "member_hinge.")) for c in ser):
@@ -194,16 +246,18 @@ def member_results(rec: dict, t_frames: list[float], members: list[str], design:
     dmem = {m["id"]: m for m in design.get("members", [])}
     secs = design.get("sections", {})
     nF = len(t_frames)
-    out = {"force": {}, "stress": {}, "hinge": {}, "area": {}, "ends": {}}
+    out = {"force": {}, "stress": {}, "stress_avg": {}, "hinge": {}, "area": {}, "ends": {}}
     for m in members:
         s = ser.get(f"member_axial_force.{m}")
         f = _at_frames(s, t_frames) if s else [0.0] * nF
+        fa = _avg_at_frames(s, t_frames) if s else [0.0] * nF
         sp = section_props(secs.get(dmem.get(m, {}).get("section")))
         A = sp["A"] if sp else None
         out["area"][m] = A
         if s:
             out["force"][m] = f
         out["stress"][m] = [x / A for x in f] if A else [0.0] * nF
+        out["stress_avg"][m] = [x / A for x in fa] if A else [0.0] * nF
         ends = [c for c in ser if c.startswith(f"member_hinge.{m}.")]
         out["ends"][m] = [c.rsplit(".", 1)[1] for c in ends]
         hs = [_at_frames(ser[c], t_frames) for c in ends]
@@ -371,10 +425,29 @@ def build_b(args, vdir, rec, design) -> dict:
     mem = member_results(rec, frames["t_s"], sorted(set(emem)), design)
     if mem is not None:
         stress = [mem["stress"][emem[e]][k] for k in range(nF) for e in range(ne)]
+        stress_avg = [mem["stress_avg"][emem[e]][k] for k in range(nF) for e in range(ne)]
         hinge = [mem["hinge"][emem[e]][k] for k in range(nF) for e in range(ne)]
+        tt = frames["t_s"]
+        hmax = max((hinge[i] for i in whole), default=0.0)
+        # the default colour: the end hinge rotation; where it goes back (by more than 1 % of its range from one
+        # frame to the next, members not broken then), the running maximum up to each frame instead
+        skip = lambda k: {e for e in range(ne) if emem[e] in set(brk[k]) or emem[e] in set(brk[k - 1])}
+        back = decreases(hinge, nF, ne, hmax, skip)
+        run = back["steps"] > 0
+        hcol = list(hinge)
+        if run:
+            for k in range(1, nF):
+                for e in range(ne):
+                    hcol[k * ne + e] = max(hcol[k * ne + e], hcol[(k - 1) * ne + e])
         obj["colour"].update({
+            "hinge_colour": common.pack_f32(hcol, [nF, ne]), "hinge_running_max": run,
+            "hinge_back": {"members": sorted({emem[e] for e in back["members"]}), "frames": len(back["frames"]),
+                           "steps": back["steps"]},
             "stress": common.pack_f32(stress, [nF, ne]), "hinge": common.pack_f32(hinge, [nF, ne]),
+            "stress_avg": common.pack_f32(stress_avg, [nF, ne]), "avg_s": AVG_S,
+            "dt_s": (tt[-1] - tt[0]) / (nF - 1) if nF > 1 else None,
             "stress_absmax": max((abs(stress[i]) for i in whole), default=0.0),
+            "stress_avg_absmax": max((abs(stress_avg[i]) for i in whole), default=0.0),
             "hinge_max": max((hinge[i] for i in whole), default=0.0),
             "force": {m: common.pack_f32(v) for m, v in mem["force"].items()},
             "area_mm2": mem["area"], "hinge_ends": mem["ends"]})
@@ -558,8 +631,11 @@ def build_b(args, vdir, rec, design) -> dict:
                         + ("車輪が壁に当たった瞬間は、その車輪が 1 ステップで止まるので短いピークが出る。"
                            if not tyre and any(w["t_wall_s"] is not None for w in obj["wheels"]) else ""))
     if "stress" in obj["colour"]:
-        obj["notes"].append("軸応力 = 記録の部材の軸力 / 設計の断面積 (引張 +)。ヒンジ回転 = 記録の部材の両端の塑性ヒンジ回転の大きい方。"
-                            "どちらも部材ごとの値で、部材の要素は同じ色。")
+        C = obj["colour"]
+        obj["notes"].append("色の既定はヒンジ回転 = 記録の部材の両端の塑性ヒンジ回転の大きい方"
+                            + ("。記録の回転は少し戻る時刻があるので、その時刻までの最大で色をつける" if C["hinge_running_max"] else "")
+                            + f"。軸応力 = 記録の部材の軸力 / 設計の断面積 (引張 +)、そのままと {C['avg_s'] * 1000:g} ms の平均 "
+                            f"(その時刻の前後 {C['avg_s'] * 500:g} ms の記録の値) を選べる。どれも部材ごとの値で、部材の要素は同じ色。")
     return obj
 
 

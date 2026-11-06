@@ -159,8 +159,12 @@ window.HV = window.HV || {};
       view.materials.length = 0; showInfo(null);
       st.field = field; st.ctl = null; st.ctx = null;
       const got = [];
-      for (const v of (HV.fields[field] || {}).variants || [{ key: field }]) { const d = await loadData(v.key); if (d) got.push(Object.assign({ D: d }, v)); }
-      const cur = got.find(g => g.key === want) || got[0];
+      // a lazy variant (another design's record, e.g. sets before / after a fix) is loaded only when asked for
+      for (const v of (HV.fields[field] || {}).variants || [{ key: field }]) {
+        if (v.lazy && v.key !== want) { got.push(Object.assign({ D: null }, v)); continue; }
+        const d = await loadData(v.key); if (d) got.push(Object.assign({ D: d }, v));
+      }
+      const cur = got.find(g => g.key === want && g.D) || got.find(g => g.D);
       const D = cur ? cur.D : null;
       st.variant = cur ? cur.key : null;
       if (!D) {
@@ -177,19 +181,20 @@ window.HV = window.HV || {};
       st.ctl = ctl;
       if (ctl.panel) ctl.panel($('fieldpanel'));
       // two records of one field (beam and shell): a switch above the field's own panel, only for the same design
-      const same = got.length > 1 && got.every(g => g.D.source.design_key && g.D.source.design_key === D.source.design_key);
+      const loaded = got.filter(g => g.D && !g.always && !cur.always);   // a lazy / other-design variant does not count
+      const same = loaded.length > 1 && loaded.every(g => g.D.source.design_key && g.D.source.design_key === D.source.design_key);
       if (got.length > 1) {
         const box = document.createElement('div'); box.id = 'variants';
         const h = document.createElement('h3'); h.textContent = 'モデル'; box.appendChild(h);
         const row = document.createElement('div'); row.className = 'row';
         for (const g of got) {
           const b = document.createElement('button'); b.id = 'var_' + g.key; b.textContent = g.label;
-          b.classList.toggle('on', g === cur); b.disabled = !same && g !== cur;
+          b.classList.toggle('on', g === cur); b.disabled = !same && g !== cur && !g.always && !cur.always;
           b.onclick = () => { if (g !== cur) open(field, g.key); };
           row.appendChild(b);
         }
         box.appendChild(row);
-        if (!same) { const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'ほかの記録は別の設計 (比べられない)'; box.appendChild(m); }
+        if (!same && loaded.length > 1) { const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'ほかの記録は別の設計 (比べられない)'; box.appendChild(m); }
         $('fieldpanel').prepend(box);
       }
       // every part of the design as its box (the field's own boxes, or grey ones added here) and how it enters

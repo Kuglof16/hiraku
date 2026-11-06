@@ -70,7 +70,7 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
         out["switch"] = page.evaluate("[...document.querySelectorAll('#switch button')].map(b => b.textContent)")
         # the code names after the Japanese quantity names (small grey type) in the inputs pane
         out["codes"] = page.evaluate("[...document.querySelectorAll('#inputs .code')].map(e => e.textContent)")
-        out["contour"] = page.evaluate("(() => { const c = HV.state.ctl && HV.state.ctl.contour && HV.state.ctl.contour(); return c ? { min: c.min, max: c.max, note: c.note || '' } : null; })()")
+        out["contour"] = page.evaluate("(() => { const c = HV.state.ctl && HV.state.ctl.contour && HV.state.ctl.contour(); return c ? { min: c.min, max: c.max, note: c.note || '', title: c.title || '', scale: c.scale || '' } : null; })()")
         out["legend_shown"] = page.evaluate("getComputedStyle(document.getElementById('legend')).display !== 'none'")
         # coloured pixels in the 3D view (not the background)
         out["drawn_px"] = page.evaluate("""() => { HV.view.draw(); const c = HV.view.renderer.domElement; const g = document.createElement('canvas');
