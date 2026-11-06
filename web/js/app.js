@@ -26,7 +26,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -50,7 +50,7 @@ import { judgedContour, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
-import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
+import { designerColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
@@ -69,7 +69,8 @@ const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
 const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of replay
 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
-const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : id?.startsWith("designer.") ? moduleColor(id.slice(9)) : "#c9c3b6"); // modules: designer.<module>
+// (a design role designer.structure its own colour, an older record's designer.<module> its module's)
+const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : designerColor(id) ?? "#c9c3b6");
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
 const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
@@ -913,7 +914,7 @@ function renderAgents(s) {
   const rows = entries.reduce((n, e) => n + (e.group && ui.openGroups.has(e.group) ? 1 + e.ids.length : 1), 0);
   const ul = $("agents");
   ul.classList.toggle("many", rows > 6);
-  ul.classList.toggle("lots", rows > 8); // modules: the six module designers come on top of the others
+  ul.classList.toggle("lots", rows > 8); // modules: the module designers (an older record's six) come on top of the others
   ul.classList.toggle("pets", !!agentPets);
   ul.innerHTML = entries.map((e) => (e.group ? agentGroupHtml(s, e.group, e.ids) : agentRowHtml(s, e.id))).join("");
   agentPets?.mount(ul, "bench");
@@ -931,7 +932,10 @@ $("agents").addEventListener("click", (ev) => {
 function rank(id) {
   const fixed = ["lead", "designer", "packager"];
   if (fixed.includes(id)) return fixed.indexOf(id);
-  if (id.startsWith("designer.")) return 1.5; // modules: the module designers after the designer, in the record's order
+  // modules: the module designers after the designer: the design roles in the contract's order
+  // (structure, mechanism, electric), an older record's designer.<module> in the record's order
+  if (designerRole(id)) return 1.5 + DESIGNER_ROLES.indexOf(designerRole(id)) / 10;
+  if (id.startsWith("designer.")) return 1.5;
   if (id.startsWith("cae.")) return 3 + DOMAINS.indexOf(id.slice(4));
   return 20;
 }
@@ -2582,7 +2586,7 @@ $("view-intake").addEventListener("change", (ev) => {
 });
 
 fitStage();
-// the module names (designer.<module> → 「枠の設計役」) from the start, so a record still being read
+// the module names (an older record's designer.<module> → 「枠の設計役」) from the start, so a record still being read
 // does not show the ids; drawn again once they are in
 loadModuleNames().then(() => (drawn.rev = -1));
 if (ui.present) applyPresent();
