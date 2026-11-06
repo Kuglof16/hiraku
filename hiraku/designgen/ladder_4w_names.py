@@ -120,6 +120,7 @@ VARIABLE_NAMES_JA = {
     "side_net_pitch": "網の目の間隔", "rollbar_foot_b": "外へ出す足の管の幅", "rollbar_foot_h": "外へ出す足の管の高さ",
     "rollbar_foot_t": "外へ出す足の管の厚さ", "rollbar_stays": "ロールバーの後ろの支え (あり・なし)",
     "rollbar_stay_d": "後ろの支えの管の太さ", "rollbar_stay_t": "後ろの支えの管の厚さ",
+    "rollbar_stay_at": "後ろの支えの足の位置 (ロールバーの足から後ろの端までの割合)",
     "rollbar_front_posts": "前の柱 (4 本柱にするか)", "side_opening": "乗り降りの開口 (なし・網・扉)",
     "side_bar_reach": "横の守りの前の柱の位置 (肩と腰の点より前へ)", "grab_bar": "握り棒 (あり・なし)",
     "grab_bar_d": "握り棒の太さ", "grab_bar_t": "握り棒の管の厚さ", "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
