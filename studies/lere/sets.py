@@ -83,8 +83,9 @@ SETS = {
     "RECP2": _s({**B50, **CH60F, "rail_b": 45, **P2}, "REC + roll bar tube 48.6 x 3.2 (raises the roll bar mode)"),
     "RECP2t90": _s({**B50, **CH60F, "rail_b": 45, **P2}, "RECP2 at tyre 90 N/mm", 90),
     # the front tower post LA2 at tyre 90 (REC90 147.6 MPa) and the roll bar mode (7.2 Hz) on REC
-    "RECt6": _s({**B50, **CH60F, "rail_b": 45, "tower_t": 6.0}, "REC + tower posts 6 mm wall"),
-    "RECt6t90": _s({**B50, **CH60F, "rail_b": 45, "tower_t": 6.0}, "RECt6 at tyre 90 N/mm", 90),
+    # tower_t is already at its top (4.5): the posts' section grows instead (tower_b 40, which fits on rail_b 45)
+    "RECb40": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40}, "REC + tower tubes 40 x 40 (from 35)"),
+    "RECb40t90": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40}, "RECb40 at tyre 90 N/mm", 90),
     "RECc32": _s({**B50, **CH60F, "rail_b": 45, **C32}, "REC + cross members 3.2 mm wall"),
     "RECc32t90": _s({**B50, **CH60F, "rail_b": 45, **C32}, "RECc32 at tyre 90 N/mm", 90),
     "RECc45": _s({**B50, **CH60F, "rail_b": 45, **C45}, "REC + cross members 4.5 mm wall"),
