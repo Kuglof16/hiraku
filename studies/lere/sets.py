@@ -80,6 +80,8 @@ SETS = {
     "REC": _s({**B50, **CH60F, "rail_b": 45}, "B50 + Ch60f + rails 45 mm wide"),
     "REC90": _s({**B50, **CH60F, "rail_b": 45}, "REC at tyre 90 N/mm", 90),
     "REC45": _s({**B50, **CH60F, "rail_b": 45}, "REC at tyre 45 N/mm", 45),
+    "RECP2": _s({**B50, **CH60F, "rail_b": 45, **P2}, "REC + roll bar tube 48.6 x 3.2 (raises the roll bar mode)"),
+    "RECP2t90": _s({**B50, **CH60F, "rail_b": 45, **P2}, "RECP2 at tyre 90 N/mm", 90),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
              "N1 upper bound: B50 + C45 + S2g0 (stays 48.6 x 3.2, gussets off) + roll bar 48.6 x 3.2"),
 }
