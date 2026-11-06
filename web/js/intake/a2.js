@@ -152,6 +152,7 @@ export function renderA2(el, m, api, ui) {
   const bySource = (s) => m.requirements.filter((r) => r.source === s).length;
   fill(el,
     h("section", { class: "in-left" },
+      ui.petsSlot || null,
       h("h2", {}, "HIRAKU からの質問", h("small", {}, rows.length || rules.length ? `${[rows.length ? `確認したいこと ${rows.length} 件` : "", rules.length ? `ルール ${rules.length} 件` : ""].filter(Boolean).join("・")}` : "")),
       h("div", { class: "in-qs", dataset: { keepScroll: "a2-qs" } },
         rows.length || rules.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui))]

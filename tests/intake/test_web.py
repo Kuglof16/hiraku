@@ -651,3 +651,24 @@ class StaticTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class PetsSlotTest(unittest.TestCase):
+    """A2 keeps an empty place for the host's own pets; what the host mounts there stays when A2 draws again."""
+
+    def test_the_slot_is_on_a2_and_keeps_what_was_mounted(self):
+        got = node(f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+const api = {{ events: () => [], onEvent: () => () => {{}} }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2' }});
+const slots = () => el.all('div').filter((d) => d.dataset && d.dataset.slot === 'pets');
+const before = slots().length;
+const mine = new El('span');
+intake.petsSlot.append ? intake.petsSlot.append(mine) : intake.petsSlot.children.push(mine);
+intake.update();
+const after = slots();
+console.log(JSON.stringify({{ before, after: after.length, same: after[0] === intake.petsSlot, kept: intake.petsSlot.children.length }}));
+""")
+        self.assertEqual((got["before"], got["after"], got["same"], got["kept"]), (1, 1, True, 1))
