@@ -188,6 +188,87 @@ def reaches_occupants(run: CrashRun, nodes: list[int], parts: list[dict]) -> boo
     return False
 
 
+def rigid_fit(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(R, t): the rotation and shift that take the points a (k, 3) nearest to the points b in least squares,
+    b ~ a R^T + t (Kabsch's method: the SVD of the cross covariance, with the sign fixed to a rotation)."""
+    ca, cb = a.mean(axis=0), b.mean(axis=0)
+    H = (a - ca).T @ (b - cb)
+    U, _, Vt = np.linalg.svd(H)
+    s = np.sign(np.linalg.det(Vt.T @ U.T))
+    R = Vt.T @ np.diag([1.0, 1.0, s]) @ U.T
+    return R, cb - ca @ R.T
+
+
+def in_body_frame(run: CrashRun, ref: list[int]) -> np.ndarray:
+    """(rows, n, 3) m: every record row's node positions with the rigid motion of the ref nodes taken out (rigid_fit
+    of their start positions onto their positions then): the deformation seen from the body the ref nodes belong to,
+    in the design frame."""
+    out = np.empty_like(run.positions)
+    a = run.mesh.x0[ref]
+    for k, p in enumerate(run.positions):
+        R, t = rigid_fit(a, p[ref])
+        out[k] = (p - t) @ R
+    return out
+
+
+def segment_box_distance(a: np.ndarray, b: np.ndarray, centre: np.ndarray, half: np.ndarray,
+                         rot: np.ndarray | None = None, step: float = 0.002) -> float:
+    """m, the least signed distance from the segment a-b to a box (centre, half sizes, its axes the columns of rot,
+    default the design axes): positive outside (the Euclidean distance), negative inside (minus the depth to the
+    nearest face). The segment is sampled every `step` (the ends included)."""
+    n = max(2, int(np.ceil(float(np.linalg.norm(b - a)) / step)) + 1)
+    s = np.linspace(0.0, 1.0, n)[:, None]
+    q = a + s * (b - a) - centre
+    if rot is not None:
+        q = q @ rot
+    d = np.abs(q) - half
+    out = np.linalg.norm(np.maximum(d, 0.0), axis=1)
+    inside = np.all(d <= 0.0, axis=1)
+    sd = np.where(inside, d.max(axis=1), out)
+    return float(sd.min())
+
+
+def clearance(run: CrashRun, body: np.ndarray, parts: list[dict], shares: dict[str, dict[int, float]],
+              elements: list[int], rows: list[int] | None = None, step: float = 0.005) -> dict:
+    """The least room over the rows between the elements (their axes less their contact radius: the tube's surface,
+    for a round tube) and each part box, in the body frame (body: in_body_frame's positions). A box moves with its
+    carried_by nodes (the mean displacement, weighted by the part's shares) and keeps its axes (rpy_deg turns it).
+    {part id: {"room" (m, negative: inside the box), "element", "row", "start" (row 0)}} for the parts with shares.
+    An element is left out from the row its time is past its break."""
+    from hiraku.solvers.k0_handcalc.rigid import rpy_matrix
+
+    mesh = run.mesh
+    rows = list(range(len(run.t_all))) if rows is None else rows
+    out: dict[str, dict] = {}
+    for p in parts:
+        sh = shares.get(p["id"])
+        if not sh or not p.get("box"):
+            continue
+        idx = np.array(list(sh.keys()))
+        wts = np.array(list(sh.values()), dtype=float)
+        wts = wts / wts.sum() if wts.sum() > 0.0 else np.ones(len(idx)) / len(idx)
+        c0 = np.asarray(p["box"]["center_mm"], float) / 1000.0
+        h = np.asarray(p["box"]["size_mm"], float) / 2000.0
+        rot = rpy_matrix(p["box"]["rpy_deg"]) if p["box"].get("rpy_deg") else None
+        best, start = None, None
+        for k in rows:
+            pk = body[k]
+            c = c0 + (pk[idx] - mesh.x0[idx]).T @ wts
+            for e in elements:
+                if run.broken_at.get(e, np.inf) <= run.t_all[k] + 1e-12:
+                    continue
+                i, j = mesh.con[e]
+                r = segment_box_distance(pk[i], pk[j], c, h, rot, step) - float(mesh.crad[e])
+                if k == rows[0] and (start is None or r < start):
+                    start = r
+                if best is None or r < best["room"]:
+                    best = {"room": r, "element": int(e), "row": int(k)}
+        if best is not None:
+            best["start"] = start
+            out[p["id"]] = best
+    return out
+
+
 def broken_members(run: CrashRun) -> list[str]:
     """The members with a broken element, in the order they broke."""
     out = []
