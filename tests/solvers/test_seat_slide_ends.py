@@ -38,8 +38,8 @@ class SlideEndsTest(unittest.TestCase):
 
     def test_an_obstacle_reached_only_at_the_front_end(self):
         d = slid(300.0)
-        sid = sorted(slide_ends(d)[0][2])[0]
-        seat = next(p for p in d["parts"] if p["id"] == sid)
+        moved = slide_ends(d)[0][2]  # the seat with its seatback and head restraint
+        seat = next(p for p in d["parts"] if p["id"] in moved and p["kind"] == "seat")
         c, s = seat["box"]["center_mm"], seat["box"]["size_mm"]
         block = {"id": "test_block", "name": "block", "kind": "body", "mass_kg": 1.0, "carried_by": [d["nodes"][0]["id"]],
                  "box": {"center_mm": [c[0] + s[0] / 2 + 60.0, c[1], c[2]], "size_mm": [20.0, 50.0, 50.0]}}

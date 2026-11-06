@@ -344,7 +344,11 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
         for i, k in ((1, "lca_front"), (2, "lca_rear")):
             if leg_feet[i] is None:
                 p = hp[k]
-                ys = sorted((float(p[1]) - sy * BRACKET_PAD_MM, ry))
+                # the box reaches the rail's outer face, not only its centre line: each cheek is welded along the
+                # rail's whole bottom wall (about rail_b, not rail_b / 2), which the pin's offset below and inboard
+                # needs (R9: plate / weld utilisation 2.5 / 2.2 welded to the centre line, under 1 to the outer face)
+                y_out = ry + sy * rail["b"] / 2.0
+                ys = sorted((float(p[1]) - sy * BRACKET_PAD_MM, y_out))
                 zs = sorted((float(p[2]) - BRACKET_PAD_MM, max(rail["z"] - rail["h"] / 2.0, float(p[2]) + BRACKET_PAD_MM)))
                 lo = [float(p[0]) - BRACKET_HALF_X_MM, ys[0], zs[0]]
                 hi = [float(p[0]) + BRACKET_HALF_X_MM, ys[1], zs[1]]

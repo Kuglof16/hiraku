@@ -183,7 +183,8 @@ class AssemblyToolTest(unittest.TestCase):
         self.assertLess(r["free_steer_angle"]["value"], r["max_steer_angle"]["value"])
         self.assertEqual(r["blocked_parts"]["value"], 0.0)
         # H5: the parts, not the four corners going on; each corner's suspension box is 8 parts (kit/arms.py)
-        self.assertEqual(r["assembly_steps"]["value"], 44.0 + 4 * 7 + 1)  # + the brake pushrod (kit/joints.py)
+        # + the brake pushrod (kit/joints.py), + each seat's back and head restraint (ladder_4w)
+        self.assertEqual(r["assembly_steps"]["value"], 44.0 + 4 * 7 + 1 + 4)
         seq = rec["assembly"]
         self.assertEqual([s["order"] for s in seq], list(range(1, len(seq) + 1)))
         self.assertTrue(all(s["no_interference"] for s in seq))

@@ -204,10 +204,17 @@ def on_board(design: Record, load_case: Record) -> Record:
         raise LoadCaseError(str(e)) from None
 
 
+def plate_parts(design: Record) -> frozenset[str]:
+    """Parts the shell mesh may carry as plates: gussets, and suspension mount brackets (kind bracket with
+    joint; k1_shell.brackets meshes those that stand on a tube wall)."""
+    return frozenset(p["id"] for p in design.get("parts", [])
+                     if p.get("kind") == "gusset" or (p.get("kind") == "bracket" and p.get("joint")))
+
+
 def mesh_of(design: Record, params: dict) -> tuple[Record | None, str | None]:
     """The version's shell mesh passed in params["mesh"] (tools with needs_mesh), or None and why
     it is not used: none passed (known-answer checks, unit tests), or made from another design. Its elements
-    belong to the design's members or to its gusset parts."""
+    belong to the design's members, its gusset parts or its suspension mount brackets (plate_parts)."""
     mesh = (params or {}).get("mesh")
     if mesh is None:
         return None, None
@@ -215,7 +222,7 @@ def mesh_of(design: Record, params: dict) -> tuple[Record | None, str | None]:
     if int(mesh.get("design_version", -1)) != version:
         return None, f"mesh {mesh.get('mesh_id')} is of design version {mesh.get('design_version')}, not {version}; not drawn"
     members = {m["id"] for m in design.get("members", [])}
-    members |= {p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset"}  # plates meshed with the frame
+    members |= plate_parts(design)  # plates meshed with the frame
     stray = sorted(set(mesh.get("element_member", [])) - members)
     if stray:
         return None, f"mesh {mesh.get('mesh_id')} has elements of {', '.join(stray[:3])}, not members of this design; not drawn"

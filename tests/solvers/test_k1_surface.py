@@ -9,6 +9,7 @@ from hiraku import contract, solvers
 from hiraku.solvers.k1_frame import build
 from hiraku.solvers.k1_frame.surface import LABEL, surface_field, wall_von_mises
 from hiraku.solvers.shelf import fixtures
+from hiraku.solvers.shelf.base import plate_parts
 
 B, H, T = 40.0, 80.0, 2.0
 RECT = {"shape": "rect_tube", "dims_mm": {"b": B, "h": H, "t": T}}
@@ -113,7 +114,11 @@ class FrameStaticOnTheMeshTest(unittest.TestCase):
         painted = {}
         for m, v in zip(self.mesh["element_member"], f["per_element"]):
             painted[m] = max(painted.get(m, 0.0), v)
+        plates = plate_parts(self.design)  # gussets and mount brackets: plates of the mesh, not beam members
         for m, v in painted.items():  # element centres are not at the corners, where the beam stress is largest
+            if m in plates:
+                self.assertEqual(v, 0.0, m)  # the beam model carries them as mass only: drawn at 0
+                continue
             self.assertLessEqual(v, per_member[m] * (1 + 1e-6), m)
         worst = max(per_member, key=per_member.get)
         self.assertGreater(painted[worst], 0.5 * per_member[worst])
