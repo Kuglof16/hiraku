@@ -31,9 +31,12 @@ Per step (central differences, the velocities at the half steps):
    within cdist + skin when it was made; it is made again when a node has moved more than skin / 2
    since then (its displacement less the mean displacement of all nodes): then no pair left out can
    have come within cdist (each axis point moves at most as far as its nodes do);
-7. the wall, a rigid plane x = xw: a node whose x + nrad passes it (nrad: a wheel's radius, else 0)
-   gets the penalty force kpen (x + nrad - xw) back, and a Coulomb friction force against its sliding
-   velocity, at most mu times that force (and at most the force that stops the sliding in half a step);
+7. the wall, a rigid plane x = xw: a frame node (nrad = 0) past it gets the penalty force kpen (x - xw)
+   back; a wheel node (nrad > 0, the wheel's radius) touches it when x + nrad would pass it, and the
+   contact is perfectly plastic: the wall force is the one that brings x + nrad to the wall at the end
+   of the step and no more (it only pushes, so the wheel does not spring back from the wall as a
+   penalty spring would throw it back). Both get a Coulomb friction force against their sliding
+   velocity, at most mu times the wall force (and at most the force that stops the sliding in half a step);
 8. the velocities (mass-proportional damping alpha, 0 in a crash) and the positions; the node rotations
    R <- exp([w dt]x) R with the spin w in the design frame (isotropic rotational inertia: no gyroscopic term).
 """
@@ -387,9 +390,17 @@ def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive
             fc[1] = 0.0
             fc[2] = 0.0
             if wall_on != 0:
-                g = x[i, 0] + nrad[i] - xw
-                if g > 0.0:
-                    fn = kpen[i] * g
+                fn = 0.0
+                if nrad[i] > 0.0:  # a wheel: perfectly plastic, x + nrad stops at the wall (no spring-back)
+                    vfree = (damp_a * v[i, 0] + dt * (fext[i, 0] - fint[i, 0] + fcon[i, 0]) / m[i]) * damp_b
+                    vlim = (xw - nrad[i] - x[i, 0]) / dt
+                    if fix[i, 0] == 0 and vfree > vlim:
+                        fn = (vfree - vlim) * m[i] / (dt * damp_b)
+                else:
+                    g = x[i, 0] - xw
+                    if g > 0.0:
+                        fn = kpen[i] * g
+                if fn > 0.0:
                     fc[0] = -fn
                     vt = math.sqrt(v[i, 1] * v[i, 1] + v[i, 2] * v[i, 2])
                     if vt > 0.0 and mu > 0.0:

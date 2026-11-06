@@ -65,15 +65,6 @@ def load_case(speed=40.0, **params):
             "params": dict({"speed": q(speed, "km/h"), "loading": "two_cargo"}, **params), "tolerance_rel": 0.15}
 
 
-def small_frame_no_wheels():
-    """small_frame without the wheel parts (no wheel nodes): at 40 km/h the front rails break and, at 76 ms, the
-    side rails behind the dash hoop, which with the hoop and the front cross member come apart from the seats' side
-    (2.7 % of the mass)."""
-    d = small_frame()
-    d["parts"] = [p for p in d["parts"] if p["kind"] != "wheel"]
-    return d
-
-
 class KnownAnswers(unittest.TestCase):
     def test_every_own_check_passes(self):
         checks = TOOLS["crash_beam"].own_checks()
@@ -157,16 +148,17 @@ class ContactKnownAnswers(unittest.TestCase):
     def test_wheel_node_touches_the_wall_at_wall_less_its_radius(self):
         """A node of radius r = 0.3 m (18 kg) moves at 1 m/s toward the wall at x = 1 m from 2 mm short of touching.
 
-        Hand check: the wall acts on a node when x + r > wall, so from x = wall - r = 0.7 m on: the last step with
-        no wall force starts at x <= 0.7 m and the first with one at 0.7 m < x <= 0.7 m + v dt. The penalty spring
-        m / dt^2 stops the node within about v / omega = v dt of that, and it leaves at the speed it came (an
-        undamped spring; the discrete spring's time steps make it 1e-3 at most)."""
+        Hand check: the wall acts on a wheel node when x + r would pass the wall, so at x = wall - r = 0.7 m: the
+        first step it pushes starts within one step's travel short of it, 0.7 m - v dt < x <= 0.7 m (dt = 1e-5 s,
+        v dt = 0.01 mm), the step before it starts at most there. The contact is perfectly plastic (a tyre and rim
+        crush, they do not throw the wheel back): the node ends that step at x = 0.7 m exactly (to round-off), never
+        passes it, and stays there at rest."""
         w = self.w
-        self.assertLessEqual(w["last_free_x"], w["expected"])
-        self.assertGreater(w["first_touch_x"], w["expected"])
-        self.assertLessEqual(w["first_touch_x"], w["expected"] + w["speed"] * w["dt"] + 1e-12)
-        self.assertLessEqual(w["deepest"] - w["expected"], 2.0 * w["speed"] * w["dt"])
-        self.assertAlmostEqual(w["speed_after"] / -w["speed"], 1.0, delta=1e-3)
+        self.assertLessEqual(w["last_free_x"], w["expected"] - w["speed"] * w["dt"] + 1e-12)
+        self.assertLessEqual(w["first_touch_x"], w["expected"] + 1e-12)
+        self.assertGreater(w["first_touch_x"], w["expected"] - w["speed"] * w["dt"] - 1e-12)
+        self.assertAlmostEqual(w["deepest"], w["expected"], delta=1e-12)
+        self.assertAlmostEqual(w["speed_after"], 0.0, delta=1e-9)
 
     def test_closest_points_of_two_segments(self):
         from hiraku.solvers.k2_vehicle.crash_beam.kernel import closest, closest_py
@@ -234,7 +226,13 @@ class Kernel(unittest.TestCase):
             st.imp = imp
         self.assertTrue(a.yielded.any())
         self.assertFalse(a.alive.all())  # some broke: every branch of the kernel has run
-        for k in ("x", "v", "R", "w", "up", "tp", "thp", "fint", "imp"):
+        self.assertGreater(int(a.cstat[2]), 0)  # elements touched each other
+        self.assertGreater(int(a.cstat[0]), 1)  # the contact pair list was made again
+        # the front wheels start at the wall (x + r = the rail ends' x): the wheel branch of the wall has run
+        self.assertTrue(np.any(np.abs(mesh.x0[mesh.n_frame:, 0] + mesh.nrad[mesh.n_frame:] - wall) < 1e-12))
+        np.testing.assert_array_equal(a.cstat, b.cstat)
+        np.testing.assert_array_equal(a.cpairs[:a.cnp[0]], b.cpairs[:b.cnp[0]])
+        for k in ("x", "v", "R", "w", "up", "tp", "thp", "fint", "fcon", "imp"):
             ga, gb = getattr(a, k), getattr(b, k)
             scale = max(1e-9, float(np.max(np.abs(gb))))
             self.assertLessEqual(float(np.max(np.abs(ga - gb))), 1e-12 * scale, k)
@@ -281,7 +279,9 @@ class NodeMotion(unittest.TestCase):
         self.assertEqual(len(fr["broken"]), n)
         self.assertNotIn("max_decel_g", fr)
         self.assertEqual({len(p) for p in fr["positions_mm"]}, {len(f["nodes"])})
-        self.assertEqual(len(f["members"]), self.mesh.ne)
+        self.assertEqual(len(f["members"]), len(self.mesh.frame_elements()))  # the wheel links left out
+        self.assertEqual(len(f["nodes"]), self.mesh.n)  # the wheel nodes among the nodes
+        self.assertEqual(self.mesh.n - self.mesh.n_frame, 4)
         ids = set(f["nodes"])
         for a, b, mid in f["members"]:
             self.assertIn(a, ids)
@@ -315,27 +315,39 @@ class Tool(unittest.TestCase):
     def res(self, rec=None):
         return {r["quantity"]: r for r in (rec or self.rec)["results"]}
 
-    def test_a_large_piece_breaking_off_stops_the_run(self):
-        """At 40 km/h the side rails break behind the occupants' feet and a piece of 7.9 % of the mass comes apart
-        from the seats' side: with no contact between pieces the rest would pass through it, so the run stops."""
-        r = self.res()
-        self.assertIn("frame_split_time", r)
-        self.assertEqual(r["frame_split_time"]["unit"], "s")
-        self.assertTrue(r["frame_split_time"]["where"])
-        self.assertIn("crush_at_split", r)
+    def test_a_large_piece_breaking_off_is_reported_and_can_stop_the_run(self):
+        """With the hinges breaking at 25 deg, at 40 km/h the side rails between the front axle and the seats break
+        and a piece of 9.3 % of the mass comes apart from the seats' side at about 23 ms. By default the run goes on
+        (the pieces touch each other) and the results say when the split happened (C1: NG); with stop_at_split it
+        stops there, and the results that need the stop are not given."""
+        on = TOOLS["crash_beam"].run(self.d, load_case(hinge_break_angle=q(25.0, "deg")),
+                                     [{"prediction_id": "pred-0001"}], {})
+        stop = TOOLS["crash_beam"].run(self.d, load_case(hinge_break_angle=q(25.0, "deg"), stop_at_split=True),
+                                       [{"prediction_id": "pred-0001"}], {})
+        for rec in (on, stop):
+            self.assertEqual(rec["status"], "ok", rec.get("error"))
+            self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        r_on, r = self.res(on), self.res(stop)
+        for rr in (r_on, r):
+            self.assertEqual(rr["frame_split_time"]["unit"], "s")
+            self.assertIn("rail_L_AM", rr["frame_split_time"]["where"])
+            self.assertIn("crush_at_split", rr)
+        self.assertAlmostEqual(r_on["frame_split_time"]["value"], r["frame_split_time"]["value"], delta=1e-9)
         for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
             self.assertNotIn(name, r)
-        notes = self.rec["assumptions"]
-        self.assertTrue(any("split" in n and "not computed" in n for n in notes), notes)
-        self.assertTrue(any("smaller pieces" in n for n in notes), notes)  # the front cross member, 0.5 %
+            self.assertIn(name, r_on)
+        self.assertGreaterEqual(r_on["max_crush"]["value"], r_on["crush_at_split"]["value"])
+        self.assertTrue(any("split" in n and "not computed" in n for n in stop["assumptions"]))
+        self.assertTrue(any("split" in n and "goes on past the split" in n for n in on["assumptions"]))
         t_split = r["frame_split_time"]["value"]
-        self.assertLessEqual(self.rec["series"][0]["t_s"][-1], t_split + 1e-6)  # the series' t_s are to 1 us
+        self.assertLessEqual(stop["series"][0]["t_s"][-1], t_split + 1e-6)  # the series' t_s are to 1 us
+        self.assertGreater(on["series"][0]["t_s"][-1], t_split + 1e-3)
 
     def test_member_series_at_the_node_motion_frames(self):
         series = {s["channel"]: s for s in self.whole["series"]}
         force = [c for c in series if c.startswith("member_axial_force.")]
         hinge = [c for c in series if c.startswith("member_hinge.")]
-        self.assertEqual(len(force), len(set(build_mesh(self.d).member_of)))
+        self.assertEqual(len(force), len(self.d["members"]))  # the design's members (no wheel links)
         self.assertEqual(len(hinge), 2 * len(force))  # each member's two ends
         self.assertEqual({series[c]["unit"] for c in hinge}, {"deg"})
         if "fields" in self.whole:
@@ -440,18 +452,26 @@ class DemoDesign(unittest.TestCase):
         res = {r["quantity"]: r for r in rec["results"]}
         for name in ("peak_decel", "battery_mount_force", "broken_members", "max_plastic_rotation"):
             self.assertIn(name, res)
-        # at 40 km/h the tower posts break and the towers and the dash (4.6 % of the mass) come apart from the
-        # seats' side at 66 ms: the run stops there (the pieces have no contact with each other)
-        self.assertAlmostEqual(res["frame_split_time"]["value"], 0.066, delta=0.005)
-        self.assertIn("tower_post", res["frame_split_time"]["where"])
-        self.assertNotIn("occupant_space_margin", res)
+        # at 40 km/h the front rails break, then the rails between the front axle and the seats: the front comes
+        # apart from the seats' side at about 56 ms (C1: NG, frame_split_time). The pieces touch each other, so the run
+        # goes on past the split; the seats' piece then moves on with nothing ahead of it that touches, to the time limit
+        self.assertAlmostEqual(res["frame_split_time"]["value"], 0.056, delta=0.006)
+        self.assertIn("_AS1", res["frame_split_time"]["where"])
+        for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
+            self.assertIn(name, res)
         self.assertGreater(res["crush_at_split"]["value"], 0.0)
+        self.assertGreaterEqual(res["max_crush"]["value"], res["crush_at_split"]["value"])
+        self.assertTrue(any("goes on past the split" in a for a in rec["assumptions"]))
+        contact_note = next(a for a in rec["assumptions"] if a.startswith("contact between the frame's elements"))
+        self.assertIn("pair-steps in contact", contact_note)
+        self.assertNotIn(" 0 pair-steps", contact_note)
         # no part box starts past the wall (it is at the front-most of the frame and the boxes on it)
         wall = next(a for a in rec["assumptions"] if a.startswith("the wall: a rigid plane"))
         self.assertIn("x = 415 mm", wall)
         self.assertGreater(res["peak_decel"]["value"], 0.0)
         self.assertIn(res["battery_mount_force"]["where"], {"LS1", "RS1", "LS2", "RS2"})
         self.assertTrue(any(a.startswith("mass 646.2 kg") or "kg: frame" in a for a in rec["assumptions"]))
+        self.assertTrue(any("radius 300 mm" in a and "wheel_FL" in a for a in rec["assumptions"]))  # the wheel nodes
 
 
 if __name__ == "__main__":

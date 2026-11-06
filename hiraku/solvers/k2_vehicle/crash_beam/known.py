@@ -15,7 +15,8 @@
    the momentum is kept, and the least distance between the axes stays above the sum of the contact
    radii less the penetration bound from the penalty stiffness (all the relative kinetic energy in the
    contact spring);
-7. a wheel node of radius r moving into the wall: the wall acts from x = wall - r on.
+7. a wheel node of radius r moving into the wall: the wall acts from x = wall - r on and stops it there
+   (the wheel's wall contact is perfectly plastic).
 All cases are built here from section and material values chosen for the test (not a design's).
 """
 
@@ -260,7 +261,8 @@ def tube_crosswise(length_mm: float = 600.0, gap_mm: float = 20.0, speed: float 
 def wheel_into_wall(radius: float = 0.3, wall: float = 1.0, speed: float = 1.0, mass: float = 18.0,
                     use_jit: bool = True) -> dict:
     """One node of radius `radius` (a wheel) moving at `speed` (+x) into the wall at x = wall, from 2 mm short of
-    touching: the node's x at the first step the wall pushes, the last x before it, the deepest x and the speed after."""
+    touching: the node's x at the start of the first step the wall pushes, the last x before it with no push, the
+    deepest x over the run and the speed after (the wheel's wall contact is perfectly plastic: kernel step 7)."""
     from .mesh import Mesh
 
     mesh = Mesh(["wheel~centre"], np.array([[wall - radius - 0.002, 0.0, 0.0]]), np.array([mass]), np.array([1.0]),
@@ -269,16 +271,14 @@ def wheel_into_wall(radius: float = 0.3, wall: float = 1.0, speed: float = 1.0, 
     dt = 1e-5
     st = sim.new_state(mesh, (speed, 0.0, 0.0), dt)
     first, before, deepest = None, None, -math.inf
-    for _ in range(2000):
+    for _ in range(1000):
         x = float(st.x[0, 0])
         imp = sim.advance(mesh, st, 1, dt, wall=wall, use_jit=use_jit)
-        deepest = max(deepest, x)
+        deepest = max(deepest, x, float(st.x[0, 0]))
         if imp[0] != 0.0 and first is None:
             first = x
         if first is None:
             before = x
-        if first is not None and st.v[0, 0] < 0.0 and imp[0] == 0.0:
-            break
     return {"first_touch_x": first, "last_free_x": before, "expected": wall - radius, "deepest": deepest,
             "speed_after": float(st.v[0, 0]), "dt": dt, "speed": speed}
 

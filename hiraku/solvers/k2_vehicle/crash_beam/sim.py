@@ -141,8 +141,11 @@ class CrashRun:
 
 
 SPLIT_STOP_SHARE = 0.03  # a piece broken off the seats' side with this share of the whole mass is the split (C1: NG)
-STOP_SHARE = 0.01  # the run stops when the whole vehicle's speed toward the wall is down to this share of the start
-                   # (a fully plastic crush comes to rest without turning back; HIRAKU's choice)
+STOP_SHARE = 0.05  # the run stops when the whole vehicle's speed toward the wall is down to this share of the start
+                   # (its kinetic energy then 0.25 % of the start's at most if all of it were along x; a fully plastic
+                   # crush comes to rest without turning back, and a frame that yaws off the wall drifts on at a few
+                   # tenths of a m/s with no wall force: e.g. showcase 20261105-150416 v3 at 0.32 m/s from 95 ms on;
+                   # HIRAKU's choice)
 
 
 def pieces(mesh: Mesh, alive: np.ndarray, keep: list[int]) -> list[list[int]]:
@@ -318,9 +321,10 @@ def default_picks(run: CrashRun, decel_g: np.ndarray | None = None) -> list[int]
 
 def node_motion(run: CrashRun, label: str, picks: list[int] | None = None, decel_g: np.ndarray | None = None) -> dict:
     """The field record of kind "node_motion": the mesh nodes' positions (mm, 0.1 mm) at the picked
-    record rows, the members as the elements' node pairs with their member id, and the members broken
-    by each frame. The picks: frame_picks with the peak deceleration's, the first yield's and the
-    first break's rows."""
+    record rows, the members as the elements' node pairs with their member id (the wheel links are not
+    members and are left out; the wheel nodes are among the nodes), and the members broken by each
+    frame. The picks: frame_picks with the peak deceleration's, the first yield's and the first break's
+    rows."""
     mesh = run.mesh
     tt = run.t_all
     if picks is None:
@@ -330,7 +334,8 @@ def node_motion(run: CrashRun, label: str, picks: list[int] | None = None, decel
         ids = sorted({mesh.member_of[e] for e, tb in run.broken_at.items() if tb <= tt[k] + 1e-12})
         broken.append(ids)
     return {"kind": "node_motion", "label": label, "unit": "mm", "nodes": list(mesh.node_ids),
-            "members": [[mesh.node_ids[a], mesh.node_ids[b], mesh.member_of[e]] for e, (a, b) in enumerate(mesh.con)],
+            "members": [[mesh.node_ids[mesh.con[e, 0]], mesh.node_ids[mesh.con[e, 1]], mesh.member_of[e]]
+                        for e in mesh.frame_elements()],
             "frames": {"t_s": [float(tt[k]) for k in picks],
                        "positions_mm": [[[round(float(c) * 1000.0, 1) for c in p] for p in run.positions[k]] for k in picks],
                        "broken": broken}}

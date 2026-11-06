@@ -10,7 +10,7 @@ from ..checks import _check
 from ..crash_beam import known, measure
 from ..crash_beam.mesh import MIN_ELEMENT_RADII, N_SUB, build_mesh
 from ..crash_beam.sim import (CONTACT_PENALTY, CONTACT_SKIN, COURANT, MAX_FIELD_NODES, PENALTY, REC_DT, SPLIT_STOP_SHARE,
-                              WINDOW, contract_has_node_motion, default_picks, member_end_hinges, member_forces, node_motion,
+                              STOP_SHARE, WINDOW,contract_has_node_motion, default_picks, member_end_hinges, member_forces, node_motion,
                               run_crash)
 from ..model import DesignError
 from ..units import G0
@@ -139,12 +139,12 @@ class CrashBeamTool(K2Tool):
                                   f"上限 {c['bound'] * 1000:.2f} mm 以内か)",
                           source_ja="相対の運動エネルギーが全部接触のばねに入っても、めり込みは v √(μ / k) まで"))
         w = known.wheel_into_wall()
-        out.append(_check(f"a wheel node of radius 0.3 m moving at {w['speed']:g} m/s into the wall at x = 1 m: x of the "
-                          "node at the first step the wall pushes", "first_touch_x", w["expected"], w["first_touch_x"], "m",
-                          1.5 * w["speed"] * w["dt"] / w["expected"], "the wall acts on a node of radius r when x + r > wall: "
-                          "from x = wall - r (within one step's travel)",
-                          case_ja="半径 0.3 m の車輪の点を 1 m/s で x = 1 m の壁に当てる: 壁が押し始めた時の点の x",
-                          source_ja="半径 r の点は x + r が壁を越えると押される: x = 壁 - r から (1 ステップの移動の幅で)"))
+        out.append(_check(f"a wheel node of radius 0.3 m moving at {w['speed']:g} m/s into the wall at x = 1 m: the "
+                          "deepest x of the node", "deepest_x", w["expected"], w["deepest"], "m", 1e-9,
+                          "the wall acts on a wheel node of radius r when x + r would pass the wall, perfectly plastic: "
+                          "the node stops at x = wall - r",
+                          case_ja="半径 0.3 m の車輪の点を 1 m/s で x = 1 m の壁に当てる: 点がいちばん進んだ x",
+                          source_ja="半径 r の車輪の点は x + r が壁を越えようとすると押される (跳ね返らない): x = 壁 - r で止まる"))
         return out
 
     def run(self, design: dict, load_case: dict, predictions: list[dict], params: dict | None = None) -> dict:
@@ -318,9 +318,11 @@ class CrashBeamTool(K2Tool):
             + "; ".join(mesh.notes),
             f"the wall: a rigid plane x = {run.wall_x * 1000:.0f} mm, at the front-most of the frame's nodes "
             f"({', '.join(mesh.node_ids[k] for k in front)}, x = {xr.max() * 1000:.0f} mm) and the part boxes they carry; "
-            f"it touches the frame's nodes and the wheel nodes (a wheel when its centre's x + its radius passes the "
-            f"wall), by a penalty spring {PENALTY:g} x the node's mass / dt^2; the part boxes and the bumper do not touch "
-            "the wall",
+            f"it touches the frame's nodes by a penalty spring {PENALTY:g} x the node's mass / dt^2, and the wheel nodes "
+            "when a wheel centre's x + its radius would pass the wall, perfectly plastic (the wheel stops at the wall and "
+            "does not spring back; HIRAKU's choice standing in for the tyre and rim crushing, their stiffness is not "
+            "modelled: a wheel is stopped within one step, which shows as a short peak in the deceleration when the "
+            "front wheels reach the wall); the part boxes and the bumper do not touch the wall",
             f"contact between the frame's elements that share no node (pieces broken apart, a member folding onto "
             f"another), frictionless: each element a capsule of radius half its section's larger outer dimension "
             f"(pairs closer than that at the start, near the joints: from their starting distance); a penalty spring "
@@ -342,6 +344,14 @@ class CrashBeamTool(K2Tool):
             "y-z extent, ahead of its rear face) back to the box's front face; negative: the structure is inside the box",
             f"run: {run.stopped} at {t_end * 1000:.1f} ms ({run.steps} steps); speed at the end {v_end:.2f} m/s",
         ]
+        if v_end > STOP_SHARE * speed:
+            pushed = np.nonzero(run.impulse[:, 0] != 0.0)[0]
+            t_wall = float(tt[pushed[-1] + 1]) if len(pushed) else 0.0
+            notes.append(f"the vehicle had not stopped at the time limit ({v_end:.2f} m/s toward the wall, more than "
+                         f"{STOP_SHARE * 100:g} % of the start): max_crush, mean_decel and the rooms are up to "
+                         f"{t_end * 1000:.0f} ms and would change in a longer run"
+                         + (f"; nothing touched the wall after {t_wall * 1000:.1f} ms (the frame, or the seats' piece of "
+                            "it, moving on with nothing ahead of it that K2 makes touch)" if t_end - t_wall > 0.01 else ""))
         if room is not None:
             notes.append(f"occupant_space_left at the start: {room['start'] * 1000:.0f} mm "
                          f"(the least over the run at {tt[room['row']] * 1000:.1f} ms)")

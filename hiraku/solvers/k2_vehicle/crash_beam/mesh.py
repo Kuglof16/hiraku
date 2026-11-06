@@ -21,7 +21,7 @@ without a frame node to the mesh node nearest the support. The total is the desi
 Wheels: each part of kind "wheel" becomes a node of its own at the wheel's centre (its box centre)
 carrying the wheel's mass and the masses of the knuckles and brake calipers (kinds "knuckle",
 "brake_caliper") that rest on the same support; its radius for the wall is the support's radius_mm
-(else half the box's x size). It is joined to the frame by LINKS: pin-ended axial springs (no bending,
+(else half the box's x size): it touches the wall when x + radius reaches it (kernel step 7). It is joined to the frame by LINKS: pin-ended axial springs (no bending,
 no torsion, no yield, they never break) standing in for the suspension arms. The frame nodes they go
 to (the mounts): the wheel's carried_by nodes when it has them; else the carried_by nodes of the
 parts reached from the wheel through connects_to by load-carrying connections over parts without
