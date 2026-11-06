@@ -2797,7 +2797,7 @@ def rule_check(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
 
 # The intake department's MCP tools; their functions are in hiraku.intake.tools.TOOLS (mcp.py registers them;
 # find_tradeoffs reads the sensitivities hiraku.tools.tradeoff_data collects).
-INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs")
+INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs", "add_tests")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design, and for a design
 # Claude writes write_design, edit_design and check_design), tool making (with its template), the report and the
 # intake tools.
