@@ -47,7 +47,7 @@ export const TAB_JA = {
   A2: { no: "②", name: "確認したいこと", tip: "HIRAKU が足りない情報を聞きます。答えなくても標準の値で進めます", id: "A2" },
   bench: { no: "③", name: "解析", tip: "予測と解析を照らし合わせる様子を 3D で見ます", id: "A3 (bench)" },
   // the grid's tiles: the domains, and assembly (tiles.js TILE_ORDER); the count from DOMAINS
-  grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析を再生します`, id: "A6 (grid)" },
+  grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析をビューアで見られます`, id: "A6 (grid)" },
   A7: { no: "⑤", name: "組み立て", tip: "組み立ての順番を 3D で確かめます", id: "A7" },
   A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、判定の結果を見ます", id: "A4" },
   A5: { no: "", name: "守るルール", tip: "設計のチェックに使うルールを見ます。ファイルを置くと足せます", id: "A5" },
