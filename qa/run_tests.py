@@ -176,29 +176,63 @@ def _lock_byte(f) -> bool:
         return False
 
 
-def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_tests", queue: str = "suite"):
+def _first_waiting(queue: str) -> dict | None:
+    """Another live process waiting for this lock with first=True (its note), or None. Notes of ended
+    processes are removed."""
+    for note in sorted(LOCK_DIR.glob(f"{queue}.first-*.json")):
+        try:
+            rec = json.loads(note.read_text(encoding="utf-8"))
+            pid = int(rec["pid"])
+        except (OSError, ValueError, KeyError, TypeError):
+            continue  # being written or removed
+        if pid == os.getpid():
+            continue
+        if _alive(pid):
+            return rec
+        note.unlink(missing_ok=True)
+    return None
+
+
+def take_queue(jobs: int, wait: bool = True, say=print, what: str = "qa.run_tests", queue: str = "suite",
+               first: bool = False):
     """The machine-wide suite lock: the open lock file (keep it open while the suite runs; the OS frees
     the lock when the process ends), or None when another run holds it and wait is False. what: the
     holder's job, shown to those waiting (qa.slot takes the same lock for other heavy jobs). queue: the
     lock's name ("suite": the test suite and heavy jobs; "browser": the browser suite, which may run
-    beside the plain suite but not beside another browser suite)."""
+    beside the plain suite but not beside another browser suite). first: a run that goes before the
+    others (QA's trial merges): while one waits, a run without first does not take the lock; a holder
+    is never stopped."""
     LOCK_DIR.mkdir(exist_ok=True)
     lock_file, info_file = f"{queue}.lock", f"{queue}.json"
+    note = LOCK_DIR / f"{queue}.first-{os.getpid()}.json"
+    if first and wait:
+        note.write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "what": what,
+                                    "since": time.strftime("%H:%M")}), encoding="utf-8")
     f = open(LOCK_DIR / lock_file, "a+b")
     shown = None
-    while not _lock_byte(f):
-        if not wait:
-            f.close()
-            return None
-        try:
-            holder = json.loads((LOCK_DIR / info_file).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            holder = {}
-        if holder.get("pid") != shown:
-            shown = holder.get("pid")
-            say(f"waiting for {holder.get('pid', '?')} ({holder.get('what', 'qa.run_tests')}, {holder.get('root', '?')}, "
-                f"since {holder.get('started', '?')})", flush=True)
-        time.sleep(POLL_S)
+    try:
+        while True:
+            ahead = None if first else _first_waiting(queue)
+            if ahead is None and _lock_byte(f):
+                break
+            if not wait:
+                f.close()
+                return None
+            if ahead is not None:
+                holder = {"pid": ahead.get("pid"), "what": f"{ahead.get('what', 'qa.run_tests')}, first in line",
+                          "root": ahead.get("root"), "started": ahead.get("since")}
+            else:
+                try:
+                    holder = json.loads((LOCK_DIR / info_file).read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    holder = {}
+            if holder.get("pid") != shown:
+                shown = holder.get("pid")
+                say(f"waiting for {holder.get('pid', '?')} ({holder.get('what', 'qa.run_tests')}, "
+                    f"{holder.get('root', '?')}, since {holder.get('started', '?')})", flush=True)
+            time.sleep(POLL_S)
+    finally:
+        note.unlink(missing_ok=True)
     (LOCK_DIR / info_file).write_text(json.dumps({"pid": os.getpid(), "root": str(ROOT), "jobs": jobs, "what": what,
                                                   "started": time.strftime("%H:%M")}), encoding="utf-8")
     return f
@@ -573,6 +607,9 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"classes whose last peak was {HEAVY_GB:g} GB or more that may run at once (default 2)")
     ap.add_argument("--no-wait", action="store_true",
                     help="run at once, without waiting for the machine-wide suite lock (emergencies only)")
+    ap.add_argument("--first", action="store_true",
+                    help="QA's trial merges: take the lock before the waiting runs without --first (a running "
+                         "holder is not stopped)")
     ap.add_argument("--browser", action="store_true",
                     help=f"the screen's tests with the browser on ({BROWSER_SWITCH}=1, as python -m tests.web.browser): "
                          f"tests.web only, {BROWSER_JOBS} processes unless --jobs, with a lock of its own (it may "
@@ -596,7 +633,7 @@ def main(argv: list[str] | None = None) -> int:
     # kept open for the whole run: the lock is held while this file is open (the OS frees it at exit)
     queue = None if args.no_wait else take_queue(args.jobs, say=lambda *a, **k: print(*a, file=sys.stderr, **k),
                                                  what="qa.run_tests --browser" if args.browser else "qa.run_tests",
-                                                 queue="browser" if args.browser else "suite")
+                                                 queue="browser" if args.browser else "suite", first=args.first)
 
     start = time.perf_counter()
     before = _others()

@@ -94,7 +94,10 @@ class ToolsTest(unittest.TestCase):
         self.assertAlmostEqual(r["soc_used"]["value"] + r["soc_end"]["value"], 100.0, places=9)
         self.assertGreater(r["range"]["value"], 20.0)
         self.assertAlmostEqual(sum(e["share"] for e in rec["effects"]), 1.0, places=9)
-        self.assertEqual({s["channel"] for s in rec["series"]}, {"speed", "grade", "power.battery", "current.battery", "soc"})
+        self.assertEqual({s["channel"] for s in rec["series"]}, {"speed", "grade", "power.battery", "current.battery", "soc",
+                                                                 "power.controller", "power.motor", "power.reducer",
+                                                                 "power.wheel", "loss.battery", "loss.controller",
+                                                                 "loss.motor", "loss.reducer"})
         empty = results(TOOLS["drive_energy"].run(DESIGN, lc("P4", "P4", "powertrain", **LOOP, loading="empty"), PRED, {}))
         self.assertLess(empty["energy_used"]["value"], r["energy_used"]["value"])
 

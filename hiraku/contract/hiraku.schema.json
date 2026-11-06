@@ -71,6 +71,27 @@
         }
       }
     },
+    "design_variable": {
+      "type": "object",
+      "required": [
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the value comes from: a standard or catalogue (edition and table, or 'not checked'), or 'assumption'. Optional; a variable chosen by the design has none."
+        }
+      }
+    },
     "vec3": {
       "type": "array",
       "items": {
@@ -333,6 +354,121 @@
         },
         "source": {
           "type": "string"
+        }
+      }
+    },
+    "material_card": {
+      "description": "One material's properties, each with its own source (data/materials/cards/<id>.json). The solvers keep reading design.materials; a card says where each value comes from.",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "category",
+        "properties"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "The key in data/materials/materials.json and design.materials when the material is there."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name_ja": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": [
+            "steel",
+            "aluminium",
+            "copper",
+            "polymer",
+            "rubber",
+            "other"
+          ]
+        },
+        "standard": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The standard that defines the material, e.g. JIS G 3466."
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the values hold for, e.g. thickness up to 16 mm, or room temperature."
+        },
+        "properties": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "E_MPa",
+              "nu",
+              "density_kg_m3",
+              "yield_MPa",
+              "tensile_MPa",
+              "elongation_pct",
+              "fatigue_limit_MPa",
+              "thermal_conductivity_W_mK",
+              "specific_heat_J_kgK",
+              "thermal_expansion_per_K",
+              "max_service_degC",
+              "resistivity_ohm_m"
+            ]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "value",
+              "kind",
+              "source",
+              "checked"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "kind": {
+                "enum": [
+                  "standard_minimum",
+                  "typical",
+                  "computed",
+                  "assumption"
+                ],
+                "description": "A guaranteed minimum of a standard, a typical value, a value computed from others, or an assumption."
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Document, edition and table or page; a secondary source says so. For an assumption, why this value."
+              },
+              "checked": {
+                "type": "boolean",
+                "description": "True only when the value was read in the source named here."
+              },
+              "checked_on": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "if": {
+              "properties": {
+                "checked": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "checked_on"
+              ]
+            }
+          }
         }
       }
     },
@@ -995,7 +1131,7 @@
         "variables": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/quantity"
+            "$ref": "#/$defs/design_variable"
           },
           "description": "Named design variables, e.g. wheelbase, track, cg_height."
         },
@@ -1529,6 +1665,11 @@
         "where": {
           "type": "string",
           "description": "Member, node, support or part id where the value occurs."
+        },
+        "field_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index in the same analysis's fields of the field this value was read from (e.g. the mode shape whose frequency is first_frame_mode)."
         }
       }
     },
@@ -2127,6 +2268,10 @@
         "channel": {
           "type": "string",
           "description": "e.g. speed, soc, temp.battery, wheel_load.FL."
+        },
+        "part_id": {
+          "type": "string",
+          "description": "The design part the series belongs to (e.g. each battery's temperature, power or loss)."
         },
         "unit": {
           "$ref": "#/$defs/unit"
@@ -3180,6 +3325,12 @@
           "items": {
             "$ref": "#/$defs/rule_question"
           }
+        },
+        "tradeoff_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tradeoff_question"
+          }
         }
       },
       "anyOf": [
@@ -3191,6 +3342,11 @@
         {
           "required": [
             "rule_questions"
+          ]
+        },
+        {
+          "required": [
+            "tradeoff_questions"
           ]
         }
       ]
@@ -3244,6 +3400,33 @@
                 "enum": [
                   "revise_design",
                   "drop_rule"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "tradeoff_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "tradeoff_id",
+              "choice"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tradeoff_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "choice": {
+                "enum": [
+                  "favor_a",
+                  "favor_b",
+                  "keep_both"
                 ]
               },
               "note": {
@@ -5369,6 +5552,42 @@
             "$ref": "#/$defs/rule_question"
           },
           "description": "Rule hits that need the person's decision (change the design or drop the rule); asked with the requirement questions."
+        },
+        "tradeoff_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "tradeoff_id values returned by find_tradeoffs. The numbers in the question come from the code, never from this call."
+        }
+      }
+    },
+    "tool_input.find_tradeoffs": {
+      "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). 感度の記録 (K5) から、1 つの設計の数を動かすと 1 つの結果は良くなり別の結果は悪くなる組を探す。数はコードが記録から入れて返す。人に聞くなら、返った tradeoff_id を ask_user の tradeoff_ids に渡す。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Missing: the latest version with a sensitivity record."
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Design variables to look at. Missing: every variable with a sensitivity record."
+        },
+        "quantities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Result quantities to compare. Missing: every quantity with a sensitivity record."
         }
       }
     },
@@ -5494,6 +5713,90 @@
         "workaround": {
           "type": "string",
           "description": "What the agent did instead, e.g. made a tool in the run, assumed a value."
+        }
+      }
+    },
+    "tradeoff_side": {
+      "description": "One of the two results of a trade-off: its value now and after the step, read from the sensitivity record.",
+      "type": "object",
+      "required": [
+        "name",
+        "unit",
+        "now",
+        "after",
+        "record_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "now": {
+          "type": "number"
+        },
+        "after": {
+          "type": "number"
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The sensitivity analysis the two values come from."
+        }
+      }
+    },
+    "tradeoff_question": {
+      "description": "A design variable that makes one result better and another worse: the person chooses which to favour. Every number is written by the code from a sensitivity record (hiraku/intake), never by the model.",
+      "type": "object",
+      "required": [
+        "tradeoff_id",
+        "variable",
+        "step_pct",
+        "text",
+        "a",
+        "b"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tradeoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The design variable moved."
+        },
+        "step_pct": {
+          "type": "number",
+          "description": "How far the variable moves between now and after."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The question in the person's words."
+        },
+        "a": {
+          "$ref": "#/$defs/tradeoff_side",
+          "description": "The result that gets better."
+        },
+        "b": {
+          "$ref": "#/$defs/tradeoff_side",
+          "description": "The result that gets worse."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "favor_a",
+              "favor_b",
+              "keep_both"
+            ]
+          },
+          "description": "Missing: all three."
         }
       }
     },

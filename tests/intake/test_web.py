@@ -533,6 +533,52 @@ console.log(JSON.stringify({{ top, sent: sent.map((b) => b.answers), defaults: s
         self.assertTrue(got["nothing"] and got["note"])  # nothing was read from the words: it says so and why
         self.assertTrue(got["noDash"])  # limits that are not decided are not shown as "—"
 
+    def test_the_standard_values_button_waits_for_the_questions_that_need_an_answer(self):
+        got = self.a2("""
+button('標準の値のまま進める').listeners.click[0]();
+await wait();
+const refused = { sent: sent.length, said: el.text().includes('答えが要る質問 (積載) に答えてから、押してください') };
+// answered with the question that needs an answer still without one (the draft came back with Q40 open): it asks again
+events = [asked, e(2, 5, 'hearing.answered', { answers: [], rule_answers: [] })];
+intake.update();
+const t = el.text();
+const card = el.all('article').find((a) => a.dataset.key === 'Q40');
+console.log(JSON.stringify({ refused, again: card.className.includes('asking'), stillAnswerable: !el.all('button').find((b) => b.text() === '答えて進める').disabled,
+  confirmLeft: el.all('article').find((a) => a.dataset.key === 'Q34').className.includes('open') }));
+""")
+        self.assertEqual(got["refused"], {"sent": 0, "said": True})  # nothing is sent, and it says why
+        self.assertTrue(got["again"] and got["stillAnswerable"])  # the question is open and the answer button works: no dead end
+        self.assertTrue(got["confirmLeft"])  # the question that does not need an answer is closed as "no answer"
+
+    def test_the_questions_that_need_an_answer_come_first_in_the_hearing(self):
+        got = self.a2("""
+events = [e(1, 1, 'hearing.asked', { questions: [
+  { req_key: 'Q03', name: '使う頻度', text: 'a', ask: 'confirm' }, { req_key: 'Q11', name: '路面', text: 'b', ask: 'confirm' },
+  { req_key: 'Q40', name: '積載', text: 'c', ask: 'must' }, { req_key: 'Q20', name: '水', text: 'd', ask: 'confirm' },
+  { req_key: 'Q50', name: '最高速度', text: 'e', ask: 'must' }] })];
+intake.update();
+console.log(JSON.stringify(el.all('article').map((a) => a.dataset.key)));
+""")
+        self.assertEqual(got[:2], ["Q40", "Q50"])
+        self.assertEqual(got[2:], ["Q03", "Q11", "Q20"])  # the others keep their order
+
+    def test_a_finished_run_without_any_rule_check_says_so_and_does_not_say_not_yet(self):
+        got = self.a5("""
+const { DEMOS } = await import(%s);
+const { buildModel } = await import(%s);
+const { renderA5 } = await import(%s);
+const events = DEMOS[Object.keys(DEMOS)[0]].filter((e) => e.kind !== 'rule_check.recorded');
+const draw = (list) => {
+  const m = buildModel(list, { picksFinal: true });
+  const el = new El('div');
+  renderA5(el, m, { events: () => [] }, { screen: 'A5', mode: 'category', filter: 'all', query: '', selected: null, collapsed: new Set(), disabled: new Set(), dropped: [], litSeen: new Set(), rerender() {} });
+  return el.text();
+};
+const open = draw(events), done = draw([...events, { seq: 9999, t: 9999, ts: 'x', run_id: 'r', kind: 'run.finished', data: { status: 'done', stop_code: 'done' } }]);
+console.log(JSON.stringify({ openNotYet: open.includes('まだ調べていません'), doneThisRun: done.includes('この実行では調べていません'), doneNotYet: done.includes('まだ調べていません') }));
+""" % (json.dumps(url('demo-events.js')), json.dumps(url('model.js')), json.dumps(url('a5.js'))))
+        self.assertEqual(got, {"openNotYet": True, "doneThisRun": True, "doneNotYet": False})
+
     def test_a_replay_that_cannot_take_files_says_so(self):
         got = self.a5("""
 const [el, root] = mount({});
@@ -651,3 +697,52 @@ class StaticTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TradeoffQuestionTest(unittest.TestCase):
+    """A2 draws a trade-off (two results that pull apart) with the code's numbers and sends the person's choice."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ tradeoffRows }} from "{url('model.js')}";
+const e = (seq, kind, data) => ({{ seq, t: seq, ts: 'x', run_id: 'r', kind, data }});
+const side = (name, unit, now, after) => ({{ name, unit, now, after, record_id: 'ana-0001' }});
+const asked = e(1, 'hearing.asked', {{ tradeoff_questions: [{{ tradeoff_id: 'variables.t:u:m', variable: 'variables.t', step_pct: 10,
+  text: 't を 10 % 上げると、a は良くなり、b は悪くなります。どちらを優先しますか。', a: side('走って当たる', '1', 0.8, 0.704), b: side('質量', 'kg', 400, 432) }}] }});
+const answered = e(2, 'hearing.answered', {{ answers: [], tradeoff_answers: [{{ tradeoff_id: 'variables.t:u:m', choice: 'favor_a' }}] }});
+let events = [asked];
+const sent = [];
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => sent.push(b) }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2' }});
+{{BODY}}
+"""
+
+    def run_body(self, body: str) -> dict:
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_rows_have_the_three_choices_and_the_answer(self):
+        got = self.run_body("""
+const open1 = tradeoffRows(intake.model).map((r) => [r.tradeoff_id, r.state, r.choices]);
+events = [asked, answered]; intake.update();
+const done = tradeoffRows(intake.model).map((r) => [r.state, r.answer && r.answer.choice]);
+console.log(JSON.stringify({ open1, done }));
+""")
+        self.assertEqual(got["open1"], [["variables.t:u:m", "asking", ["favor_a", "favor_b", "keep_both"]]])
+        self.assertEqual(got["done"], [["answered", "favor_a"]])
+
+    def test_the_card_shows_the_numbers_and_sends_the_choice(self):
+        got = self.run_body("""
+const card = el.all('article').find((a) => a.dataset.tradeoff === 'variables.t:u:m');
+const text = card.text();
+const buttons = card.all('button').map((b) => b.text());
+card.all('button').find((b) => b.text().includes('質量を悪くしない')).listeners.click[0]();
+el.all('button').find((b) => b.text() === '答えて進める').listeners.click[0]();
+await new Promise((r) => setTimeout(r, 20));
+console.log(JSON.stringify({ text, buttons, sent }));
+""")
+        for part in ("0.8", "0.704", "400", "432", "どちらを優先しますか"):
+            self.assertIn(part, got["text"])
+        self.assertEqual(got["buttons"], ["走って当たるを良くする方を優先", "質量を悪くしない方を優先", "どちらも守る方法を探す"])
+        self.assertEqual(got["sent"][0]["tradeoffAnswers"], [{"tradeoff_id": "variables.t:u:m", "choice": "favor_b"}])

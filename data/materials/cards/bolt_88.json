@@ -1,0 +1,38 @@
+{
+  "id": "bolt_88",
+  "name": "Property class 8.8 bolt steel (ISO 898-1)",
+  "name_ja": "強度区分 8.8 のボルト用鋼 (ISO 898-1)",
+  "category": "steel",
+  "standard": "ISO 898-1:2013",
+  "condition": "bolts, screws and studs of property class 8.8, nominal diameter d <= 16 mm, machined test pieces, tested at ambient temperature (10 degC to 35 degC); for d > 16 mm the standard's minima are higher (Rm 830 MPa, Rp0.2 660 MPa)",
+  "properties": {
+    "tensile_MPa": {
+      "value": 800.0,
+      "kind": "standard_minimum",
+      "source": "ISO 898-1:2013(E), 4th edition, Table 3 No. 1 (tensile strength Rm, minimum, class 8.8, d <= 16 mm); read in the publisher's free sample PDF (iTeh, pp. 8-9)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "yield_MPa": {
+      "value": 640.0,
+      "kind": "standard_minimum",
+      "source": "ISO 898-1:2013(E), Table 3 No. 3 (stress at 0.2 % non-proportional elongation Rp0.2, minimum, class 8.8, d <= 16 mm; the standard gives no lower yield strength ReL for 8.8); read in the iTeh sample PDF, pp. 8-9",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "elongation_pct": {
+      "value": 12.0,
+      "kind": "standard_minimum",
+      "source": "ISO 898-1:2013(E), Table 3 No. 6 (percentage elongation after fracture A of machined test pieces, minimum, class 8.8); read in the iTeh sample PDF, pp. 8-9",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "max_service_degC": {
+      "value": 150.0,
+      "kind": "assumption",
+      "source": "ISO 898-1:2013(E), Clause 1 Scope, Note 1 (informative, not a requirement): such fasteners are used from -50 degC to +150 degC, and outside that range a fastener metallurgist should be consulted (up to +300 degC); the upper end is taken here as the maximum service temperature; read in the iTeh sample PDF, p. 1",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

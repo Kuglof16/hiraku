@@ -166,6 +166,19 @@ requirements:
     source: default
     trust: 3
     basis: assumption
+  - key: Q58
+    name: 最小回転半径の上限
+    value: 12
+    unit: m
+    source: default
+    trust: 3
+    basis: 'assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a
+      vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read
+      2026-11-05 in the e-Gov law text (https://laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知
+      平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上),
+      read 2026-11-05 (https://www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程
+      (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A
+      (https://www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked'
   - key: Q60
     name: 倒れない角度 (Q30 の組で)
     value: 24
@@ -426,4 +439,4 @@ requirements:
 tests: [P1, R1, R1s, N1, R8, R7, H1, H3, H6, H7, P3]  # R1s: the rail joints' hot spot on the shells (stage 3), as in the video file
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 6  # HK5: one revision per red stage (layout, the opening, the motor, the joints: data/catalog/scripted.yaml uses 4), and spares for a run with Claude
-cost_limit_usd: 2.0
+cost_limit_usd: 80.0  # the person's choice (11/6), above the estimate of a real Claude run in data/catalog/demo_runs.yaml (demo)
