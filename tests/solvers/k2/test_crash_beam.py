@@ -229,8 +229,11 @@ class Tool(unittest.TestCase):
         self.assertEqual(r["frame_split_time"]["unit"], "s")
         self.assertTrue(r["frame_split_time"]["where"])
         self.assertIn("crush_at_split", r)
-        for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
+        for name in ("mean_decel", "max_crush", "crush_margin", "occupant_space_left"):
             self.assertNotIn(name, r)
+        # C1's two quantities: the least room up to the split (an upper bound) and the broken-off piece's share
+        self.assertIn("occupant_space_margin", r)
+        self.assertGreater(r["frame_split_fraction"]["value"], 0.03)
         notes = self.rec["assumptions"]
         self.assertTrue(any("split" in n and "not computed" in n for n in notes), notes)
         self.assertTrue(any("smaller pieces" in n for n in notes), notes)  # the front cross member, 0.5 %
@@ -350,7 +353,9 @@ class DemoDesign(unittest.TestCase):
         # seats' side at 66 ms: the run stops there (the pieces have no contact with each other)
         self.assertAlmostEqual(res["frame_split_time"]["value"], 0.066, delta=0.005)
         self.assertIn("tower_post", res["frame_split_time"]["where"])
-        self.assertNotIn("occupant_space_margin", res)
+        # C1 by this tool: the dash goes into the foot box before the split, and the towers and dash break off
+        self.assertLess(res["occupant_space_margin"]["value"], 0.0)
+        self.assertAlmostEqual(res["frame_split_fraction"]["value"], 0.046, delta=0.005)
         self.assertGreater(res["crush_at_split"]["value"], 0.0)
         # no part box starts past the wall (it is at the front-most of the frame and the boxes on it)
         wall = next(a for a in rec["assumptions"] if a.startswith("the wall: a rigid plane"))
