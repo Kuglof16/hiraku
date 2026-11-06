@@ -123,6 +123,20 @@ SETS = {
                      "RECSb40 at tyre 90 N/mm", 90),
     "RECSb40b": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, **S2, "rollbar_stay_at": 0.35},
                    "RECSb40 with stays 48.6 x 3.2"),
+    # K2's rollover on RECSb40: the roll bar holds, the side bar side_bar_R2 enters the occupant box: side bars
+    # stronger (a) or further out (b)
+    # (a) needs rollbar_width >= 1315: the 48.6 side posts at 1265 go 1.8 mm into the floor (the generator's check)
+    "RECSb40sb": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
+                     "side_bar_d": 48.6, "side_bar_t": 3.2, "rollbar_width": 1315},
+                    "RECSb40 with side bars 48.6 x 3.2 (roll bar 1315 wide, the least for them)"),
+    "RECSb40w": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
+                    "rollbar_width": 1300}, "RECSb40 with the roll bar (and side frames) 1300 wide (from 1265)"),
+    "RECSb40w14": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
+                      "rollbar_width": 1400}, "RECSb40 with the roll bar 1400 wide (the range's top)"),
+    "RECSb40c3": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
+                     "side_bar_count": 3}, "RECSb40 with 3 side bars each side"),
+    "RECSb40c4": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35,
+                     "side_bar_count": 4}, "RECSb40 with 4 side bars each side"),
     "RECSb40f80": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.8},
                      "RECSb40 with the foot at 0.8 (behind the rear arms)"),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
