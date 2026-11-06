@@ -48,7 +48,7 @@ import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
-import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, referenceResults } from "./judged.js";
@@ -153,12 +153,20 @@ function fitStage() {
 
 // ---- 3D -------------------------------------------------------------------
 const viewport = $("viewport");
-const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
+const look = lookFromParams(params); // the photograph-like look by default; ?look=plain: the diagram
 document.body.classList.add(`look-${look}`);
 // joints: the real look opens with the joint marks off (they make the parts see-through, joints.js
 // partLook), so the vehicle is seen as it is; ?on=joints or the 接合 button shows them
 if (look === "real" && !(params.get("on") ?? "").split(",").includes("joints")) ui.toggles.joints = false;
-const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
+// a software renderer (the WebGL driver's name, agent_pets.js): the real look's cheapest quality
+// unless ?quality= says otherwise (look.js qualityFromParams)
+function softwareGL() {
+  const gl = document.createElement("canvas").getContext("webgl2");
+  const name = glRendererName(gl);
+  gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  return isSoftwareRenderer(name);
+}
+const quality = qualityFromParams(params, softwareGL()); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 // sky: the real look shows the sky with its horizon behind the vehicle (look.js Look.sky)
 const bench = new Workbench3D(viewport, look, { quality, sky: true });
 const modLayer = new ModuleLayer(bench); // modules:

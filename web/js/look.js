@@ -1,5 +1,5 @@
-// The two looks of the 3D view, chosen with ?look= (the default is "zu" on the workbench;
-// on the video's cut pages the layout's look key of the cut, "real" without it: cutLookOf):
+// The two looks of the 3D view, chosen with ?look= (the default is "real" on the workbench,
+// ?look=plain the diagram, lookFromParams; on the video's cut pages the layout's look key of the cut, "real" without it: cutLookOf):
 //   zu    the diagram: unbleached paper and black ink, grey members, pale parts,
 //         a ruled ground
 //   real  a photograph-like view: outdoor sky light (image-based), sun shadows,
@@ -94,13 +94,20 @@ export const QUALITY = {
 };
 export const DEFAULT_QUALITY = "high";
 
-export function qualityFromParams(params) {
+// software: the page draws with a software renderer (SwiftShader, llvmpipe: agent_pets.js
+// isSoftwareRenderer); without ?quality= it gets the cheapest quality (no ambient occlusion, no
+// multisampling: the real look is the workbench's default, and those make a frame take seconds there)
+export const SOFTWARE_QUALITY = "low";
+export function qualityFromParams(params, software = false) {
   const q = params.get("quality");
-  return q in QUALITY ? q : DEFAULT_QUALITY;
+  return q in QUALITY ? q : software ? SOFTWARE_QUALITY : DEFAULT_QUALITY;
 }
 
+// The workbench's look: the real look by default; ?look=plain the diagram (?look=zu, its old
+// name, too). (The cut pages' look is cutLookOf's.)
+export const PLAIN_PARAMS = ["plain", "zu"];
 export function lookFromParams(params) {
-  return params.get("look") === "real" ? "real" : "zu";
+  return PLAIN_PARAMS.includes(params.get("look")) ? "zu" : "real";
 }
 
 // The look of a cut: ?look= when it is given (to compare the two), else the layout's

@@ -161,27 +161,41 @@ class RealLookBrowserTest(unittest.TestCase):
                 self.assertLessEqual(abs(c["pixel"][ch] - c["legend"][ch]), TOLERANCE, f"{look} {c}")
 
     def test_beam_contour_has_the_legend_colours(self):
-        for look, quality in (("zu", None), ("real", None), ("real", "low")):
-            q = f"&quality={quality}" if quality else ""
+        # the workbench's default is the real look (look.js lookFromParams), at the low quality on
+        # this software renderer (qualityFromParams): no look given is that; ?look=plain the diagram
+        for look, quality in (("plain", None), ("real", "high"), (None, None), ("real", "low")):
+            q = (f"&look={look}" if look else "") + (f"&quality={quality}" if quality else "")
             # off=joints: the members' colours, not the weld beads over them (the joints are on at first)
-            page, errors = self.open(f"run=sample&pace=0&t=9&look={look}{q}&off=joints")
+            page, errors = self.open(f"run=sample&pace=0&t=9{q}&off=joints")
             got = page.evaluate(PIXELS, False)
             self.assertEqual(errors, [], look)
             self.assertEqual(got["bands"], 10)
-            self.assertEqual(got["post"], look == "real" and quality != "low")
+            self.assertEqual(got["post"], quality == "high")  # the post passes (AO, multisampling): high only
             self.assert_legend_colours(got, f"{look} {quality}")
             # every member of the sample has a value
             self.assertEqual(len(got["checks"]), 7)
             page.close()
 
     def test_shell_contour_has_the_legend_colours(self):
-        for look in ("zu", "real"):
+        for look in ("plain", "real"):
             page, errors = self.open(f"run={self.shell_run}&pace=0&t=1e6&look={look}&off=joints")
             page.evaluate("() => window.hiraku.seek(1e6)")
             got = page.evaluate(PIXELS, True)
             self.assertEqual(errors, [], look)
             self.assertGreaterEqual(len(got["checks"]), 20, look)
             self.assert_legend_colours(got, look)
+            page.close()
+
+    def test_the_workbench_opens_in_the_real_look(self):
+        """No ?look=: the real look (at the low quality on a software renderer such as this one);
+        ?look=plain, and its old name ?look=zu, the diagram."""
+        read = "() => ({ look: window.hiraku.bench.look.name, quality: window.hiraku.bench.look.quality, body: document.body.className })"
+        for query, want in (("", ("real", "low")), ("&look=plain", ("zu", "low")), ("&look=zu", ("zu", "low")), ("&quality=high", ("real", "high"))):
+            page, errors = self.open(f"run=sample&pace=0&t=0{query}")
+            got = page.evaluate(read)
+            self.assertEqual((got["look"], got["quality"]), want, query)
+            self.assertIn(f"look-{want[0]}", got["body"].split(), query)
+            self.assertEqual(errors, [], query)
             page.close()
 
     def demo_events(self):
@@ -221,7 +235,9 @@ class RealLookBrowserTest(unittest.TestCase):
 
     def test_materials_and_fall_backs_without_assets(self):
         events = self.demo_events()
-        page, errors = self.open("run=sample&pace=0&t=0&look=real", self.bare_base)
+        # quality=high: the post passes and the soft shadows checked below (this software renderer
+        # would get the low quality without it: look.js qualityFromParams)
+        page, errors = self.open("run=sample&pace=0&t=0&look=real&quality=high", self.bare_base)
         got = page.evaluate(
             """async (events) => {
               await window.hiraku.load(events, 1);
