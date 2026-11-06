@@ -24,6 +24,21 @@ NAMES_FILE = Path(__file__).with_name("domain_names.yaml")
 ANALYSIS_DOMAINS: tuple[str, ...] = tuple(d for d in contract.DOMAINS if d != "assembly")
 
 
+# What tells that a run can have Claude write a load case for a test no builder makes (write_load_case,
+# docs/contract.md "Claude が書く設計"). hiraku.tools, above this package, registers its writer when it is there;
+# until then (nothing registered) the tests without a builder are left out of the picks, as before.
+load_case_writer = None
+
+
+def register_load_case_writer(fn) -> None:
+    global load_case_writer
+    load_case_writer = fn
+
+
+def can_write_load_cases() -> bool:
+    return load_case_writer is not None
+
+
 class IntakeError(ValueError):
     """Bad input to an intake function. The message says what is wrong and what to send instead."""
 
@@ -100,8 +115,24 @@ def has_builder(catalog: Catalog, test_id: str, product: str | None = None) -> b
 
 
 def buildable(catalog: Catalog, test_ids: list[str], product: str | None = None) -> list[str]:
-    """The tests a run of this product can build a case for (the others would stay pending)."""
+    """The tests a run of this product can build a case for (the others would stay pending, or Claude writes them)."""
     return [tid for tid in test_ids if has_builder(catalog, tid, product)]
+
+
+def runnable(catalog: Catalog, test_ids: list[str], product: str | None = None) -> list[str]:
+    """The tests a run takes in: those with a builder, and, when Claude can write load cases, all the others too."""
+    if can_write_load_cases():
+        return list(test_ids)
+    return buildable(catalog, test_ids, product)
+
+
+def written_note(catalog: Catalog, test_ids: list[str], product: str | None = None) -> str:
+    """What the card says about the tests whose load case Claude writes ("" when none)."""
+    ids = [t for t in test_ids if not has_builder(catalog, t, product)] if can_write_load_cases() else []
+    if not ids:
+        return ""
+    names = "・".join(f"{tid} {catalog.test(tid)['title']}" for tid in ids)
+    return f"{names} は Claude が荷重条件を書く"
 
 
 def unbuilt_note(catalog: Catalog, test_ids: list[str]) -> str:
@@ -113,13 +144,13 @@ def unbuilt_note(catalog: Catalog, test_ids: list[str]) -> str:
 
 
 def code_reason(catalog: Catalog, domain: str, test_ids: list[str], flags: dict[str, bool],
-                unbuilt: list[str] | None = None) -> str:
+                unbuilt: list[str] | None = None, written: str = "") -> str:
     """The reason the code writes when Claude gave none: which flags make which tests apply.
     `unbuilt` are applicable tests with no builder: they light the domain but are not run."""
     lit = "・".join(symbol(f) for f in _lit_flags(catalog, [*test_ids, *(unbuilt or [])], flags))
     tests = "・".join(f"{tid} {catalog.test(tid)['title']}" for tid in test_ids)
     base = (f"{lit} に当てはまるので、{tests} を当てる" if lit else f"{tests} を当てる") if tests else f"{lit} に当てはまる"
-    note = unbuilt_note(catalog, unbuilt or [])
+    note = "。".join(n for n in (written, unbuilt_note(catalog, unbuilt or [])) if n)
     return f"{base}。{note}" if note else base
 
 
@@ -181,12 +212,13 @@ def pick_domains(
             off.append({"domain": d, "reason": "人が外した"})
         else:
             name = (shown_names.get(d) or "").strip() or default_name(d, flags, speed_class, ids)
-            runnable = buildable(catalog, ids, product)  # test_ids are the ones a run can build a case for
-            unbuilt = [t for t in ids if t not in runnable]
+            taken = runnable(catalog, ids, product)  # test_ids: a builder makes the case, or Claude writes it
+            unbuilt = [t for t in ids if t not in taken]
+            written = written_note(catalog, taken, product)
             given = (reasons.get(d) or "").strip()
-            note = unbuilt_note(catalog, unbuilt)
-            reason = (f"{given}。{note}" if given and note else given) or code_reason(catalog, d, runnable, flags, unbuilt)
-            picks.append({"domain": d, "shown_name": name, "reason": reason, "test_ids": runnable})
+            note = "。".join(n for n in (written, unbuilt_note(catalog, unbuilt)) if n)
+            reason = (f"{given}。{note}" if given and note else given) or code_reason(catalog, d, taken, flags, unbuilt, written)
+            picks.append({"domain": d, "shown_name": name, "reason": reason, "test_ids": taken})
     record: Record = {"want": want.strip(), "flags": flags}
     if speed_class is not None:
         record["speed_class"] = speed_class
@@ -194,7 +226,7 @@ def pick_domains(
         record["flag_reasons"] = {f: flag_reasons[f] for f in FLAGS if f in flag_reasons}
     record["picks"] = picks
     record["off"] = off
-    record["assembly_test_ids"] = buildable(catalog, by_domain["assembly"], product)
+    record["assembly_test_ids"] = runnable(catalog, by_domain["assembly"], product)
     return record
 
 
