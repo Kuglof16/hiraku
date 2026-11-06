@@ -13,14 +13,14 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from viewer.src import assembly, common, crash, nvh, nvh_shell
+from viewer.src import assembly, common, crash, names, nvh, nvh_shell
 
 ROOT = Path(__file__).resolve().parents[2]
 FX = Path(__file__).resolve().parent / "fixtures"
 VIEWER = ROOT / "viewer"
 SCRIPTS = {"nvh": nvh, "crash": crash, "assembly": assembly}
 COMMON_KEYS = {"field", "title", "source", "frame", "parts", "scene", "vectors", "results", "assumptions",
-               "inputs", "notes", "ledger"}
+               "inputs", "notes", "ledger", "tyre"}
 LEDGER_CATS = set(common.CATEGORIES)
 
 
@@ -200,7 +200,7 @@ class FieldDataTest(unittest.TestCase):
         self.assertTrue(any("a(t)/a_max" in t for t in o["notes"]))
         self.assertEqual(o["wall_x_mm"], o["scene"][0]["c"][0] - o["scene"][0]["s"][0] / 2)
         labels = {r["label"] for r in o["inputs"]}
-        self.assertTrue({"speed", "wall", "mass"} <= labels, labels)
+        self.assertTrue({"速さ", "壁", "質量"} <= labels, labels)
         # the page never moves the A vehicle: no crush(t) translation in its code path
         js = (VIEWER / "js" / "crash.js").read_text(encoding="utf-8")
         a_part = js[js.index("HV.crashA"):js.index("HV.crashB = ")]
@@ -243,7 +243,7 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual(len(b["parts"]), nF)
         self.assertTrue(any("壁面" in t for t in o["notes"]))
         self.assertTrue(any("変形 ×1" in t for t in o["notes"]))
-        self.assertTrue({"speed", "wall", "wall friction", "beam break", "mass", "mesh"} <= {r["label"] for r in o["inputs"]})
+        self.assertTrue({"速さ", "壁", "壁の摩擦", "梁が折れる角度", "質量", "梁の分割"} <= {r["label"] for r in o["inputs"]})
         for k in ("t", "decel", "crush"):
             self.assertEqual(len(common.unpack_f32(o["series"][k])), len(common.series(rec, "deceleration")["t_s"]))
         # --tool picks the kind; a run with only A falls back to A
@@ -287,10 +287,66 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual(hs[0]["ok"], hs[0]["value"] >= hs[0]["limit"])
         dv = common.series(rec, "deceleration")["values"]
         self.assertAlmostEqual(o["summary"]["peak_decel"], common.result(rec, "peak_decel"))
-        self.assertAlmostEqual(o["summary"]["mean_decel"], sum(dv) / len(dv))
+        # the record's mean_decel when it has one (speed lost / time to the stop), else the series' mean
+        md = common.result(rec, "mean_decel")
+        self.assertAlmostEqual(o["summary"]["mean_decel"], md if md is not None else sum(dv) / len(dv))
         self.assertAlmostEqual(o["summary"]["crush_end"], common.result(rec, "crush_at_split"))
         # the wall at the front-most part box, as the record's scene gives it
         self.assertEqual(o["wall_x_mm"], 415.0)
+
+    def test_crash_contact_record(self):
+        # K2 9bffe19c (the run goes on to the vehicle's full stop): element contact, wheel nodes on no element touching the wall through the tyre spring, C1
+        # judged by the least room over the run (occupant_space_margin) and frame_split_fraction (C1-split)
+        o = make("crash", "crash_contact")
+        rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
+        nm = rec["fields"][0]
+        self.assertIsNone(o["stop"])  # no frame_split_time: no piece that can reach the occupants broke off
+        sm = o["summary"]
+        self.assertIsNone(sm["after"])
+        self.assertAlmostEqual(sm["crush_end"], common.result(rec, "max_crush"))
+        self.assertAlmostEqual(sm["mean_decel"], common.result(rec, "mean_decel"))
+        mg = sm["margin"]
+        self.assertAlmostEqual(mg["value"], common.result(rec, "occupant_space_margin"))
+        self.assertEqual((mg["op"], mg["limit"], mg["ok"], mg["load_case_id"]), (">=", 0.0, mg["value"] >= 0.0, "C1-40kmh"))
+        self.assertEqual((mg["where"], mg["member"], mg["t_s"]), ("occupant_L.foot_L", "dash_post_L", 0.0757))
+        least = min(h["value"]["value"] for h in rec["hot_spots"] if h["quantity"] == "occupant_space_margin")
+        self.assertAlmostEqual(least, mg["value"])
+        sp = sm["split"]
+        self.assertAlmostEqual(sp["value"], common.result(rec, "frame_split_fraction"))
+        self.assertEqual((sp["op"], sp["limit"], sp["load_case_id"], sp["ok"]), ("<=", 0.03, "C1-split", sp["value"] <= 0.03))
+        (pc,) = sp["pieces"]
+        self.assertAlmostEqual(pc.pop("t_s"), 0.0133)
+        self.assertEqual(pc, {"nodes": 5, "pct": 1.5, "members": ["cross_F"]})
+        self.assertEqual(sp["not_counted"], 1)
+        cm = sm["crush_margin"]
+        self.assertAlmostEqual(cm["value"], common.result(rec, "crumple_length") - common.result(rec, "max_crush"))
+        self.assertTrue(o["tyre_spring"])
+        self.assertIsNone(sm["wall_free_after_s"])
+        # the four wheel nodes: radius, links to the mounts the record names, the first frame at the wall by hand
+        W = {w["id"]: w for w in o["wheels"]}
+        self.assertEqual(sorted(W), ["wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR"])
+        fl = W["wheel_FL"]
+        self.assertEqual((fl["r"], fl["kg"], fl["parts"]), (300.0, 18.0, ["wheel_FL", "knuckle_FL", "caliper_FL"]))
+        self.assertEqual(fl["mount_ids"], ["LAl1", "LAl2", "LAu1", "LAu2"])
+        self.assertEqual([o["frame"]["node_ids"][i] for i in fl["mounts"]], fl["mount_ids"])
+        P, wx = nm["frames"]["positions_mm"], o["wall_x_mm"]
+        k = next(k for k, F in enumerate(P) if F[fl["node"]][0] + 300.0 >= wx - crash.TOL_MM)
+        self.assertEqual(fl["t_wall_s"], nm["frames"]["t_s"][k])
+        self.assertIsNone(W["wheel_RL"]["t_wall_s"])
+        # wheel nodes are not counted as frame nodes beyond the wall; parts on a wheel move with its node
+        self.assertEqual(len(o["frame"]["members"]), len(nm["members"]))
+        e = next(x for x in o["ledger"]["parts"] if x["id"] == "knuckle_FL")
+        self.assertEqual(e["nodes"][0][0], "wheel_FL~centre")
+        j = [p["id"] for p in o["parts"]].index("knuckle_FL")
+        off = common.unpack_f32(o["part_off"])
+        npt, last = len(o["parts"]), len(P) - 1
+        for a in range(3):
+            self.assertAlmostEqual(off[(last * npt + j) * 3 + a], P[-1][fl["node"]][a] - P[0][fl["node"]][a], places=3)
+        rows = {s["label"]: s for s in o["ledger"]["stated"]}
+        self.assertTrue(rows["wheel node wheel_FL~centre"]["agrees"])
+        self.assertTrue(any("離れた塊" in t and "cross_F" in t for t in o["notes"]))
+        self.assertTrue(any("タイヤのばね" in t for t in o["notes"]))
+        self.assertTrue(any("乗員への入力" in t and "1 ステップで止まる" not in t for t in o["notes"]))
 
     def test_rigid_fit(self):
         # one node: its translation, no rotation
@@ -558,6 +614,75 @@ def _system_python_with_playwright():
     return exe if r.returncode == 0 else None
 
 
+def js_fmt(v):
+    """HV.fmt (js/core.js) for 0.01 <= |v| < 1000: 4 significant digits, no trailing zeros."""
+    assert 0.01 <= abs(v) < 1000
+    return f"{v:.4g}"
+
+
+class TyreRowTest(unittest.TestCase):
+    """The tyre stiffness as an input row, from the record's design, for the tools that use it (common.tyre_row)."""
+
+    def test_row_from_the_design(self):
+        basis = ("60 N/mm, range 45 to 90 N/mm: HIRAKU's judgement from three sources on ATV-class tyres (not "
+                 "measurements of this vehicle's tyre)")
+        d = {"variables": {"tyre_stiffness": {"value": 60.0, "unit": "N/mm", "basis": basis}}}
+        r = common.tyre_row(d, "crash_beam")
+        self.assertEqual((r["label"], r["value"]), ("タイヤの剛さ", "60 N/mm"))
+        self.assertIn("3 つの資料からの判断 45〜90 の中ほど", r["source"])
+        self.assertIn("150 N/mm", common.tyre_row({"variables": {"tyre_stiffness": {"value": 150.0, "unit": "N/mm"}}}, "tilt")["value"])
+        self.assertIn("出典なし", common.tyre_row({"variables": {"tyre_stiffness": {"value": 150.0, "unit": "N/mm"}}}, "tilt")["source"])
+        for tool in ("modal", "modal_shell", "frame_static", "thermal", "drive_energy", "assembly", "crash"):
+            self.assertIsNone(common.tyre_row(d, tool), tool)   # K1 on the suspension springs, K3, K4, crash A: no tyre
+
+    def test_crash_record_design(self):
+        o = make("crash", "crash_contact")
+        p = common.find_analysis(FX / "crash_contact", "crash_beam")[0]
+        vdir = p if p.is_dir() else p.parents[1]
+        t = (common.read_json(vdir / "design.json").get("variables") or {}).get("tyre_stiffness")
+        self.assertEqual(o["tyre"]["value"], f"{t['value']:g} N/mm" if t else "設計にない (ツールの既定)")
+        self.assertIsNone(make("crash")["tyre"])   # crash A (1-D) has no tyre
+
+
+class NamesTest(unittest.TestCase):
+    """The page's names from where HIRAKU's screen takes them (viewer/src/names.py -> viewer/js/names.js)."""
+
+    def test_names_js_up_to_date(self):
+        self.assertEqual((VIEWER / "js" / "names.js").read_text(encoding="utf-8"), names.render(),
+                         "run python -m viewer.src.names")
+
+    def test_field_names_from_the_contract(self):
+        from hiraku import contract
+        labels = names.field_labels()
+        for f, d in names.FIELD_DOMAIN.items():
+            with self.subTest(field=f):
+                if f == "fatigue":
+                    self.assertEqual(labels[f], "疲労")
+                else:
+                    self.assertTrue(labels[f].startswith(contract.DOMAIN_NAMES_JA[d]), labels[f])
+                # each field's script takes its button's label from js/names.js, not a text of its own
+                self.assertRegex((VIEWER / "js" / f"{f}.js").read_text(encoding="utf-8"),
+                                 r"\n  label: HV\.FIELD_LABEL\." + f + r",")
+        self.assertEqual((labels["handling"], labels["powertrain"], labels["nvh"]), ("操安", "動力", "音振"))
+        self.assertEqual(labels["strength"], "強度信頼性 (静的強度)")
+        self.assertEqual(len(set(labels.values())), len(labels))   # the two strength fields told apart
+        self.assertEqual(set(names.FIELD_DOMAIN), set(re.search(r"FIELD_ORDER = \[([^\]]*)\]", (VIEWER / "js" / "main.js")
+                         .read_text(encoding="utf-8")).group(1).replace("'", "").replace(" ", "").split(",")))
+        self.assertEqual(names.title("nvh", "x", "シェル"), "音振 (シェル): x")
+        self.assertEqual(names.retitle({"title": "強度: y"})["title"], "強度信頼性: y")
+
+    def test_quantity_names_from_labels_js(self):
+        q = names.quantity_names()
+        text = (ROOT / "web" / "js" / "labels.js").read_text(encoding="utf-8")
+        block = text[text.index("const QUANTITY_JA = {"):]
+        block = block[:block.index("\n};")]
+        keys = set(re.findall(r'^\s*([A-Za-z_]\w*):\s*"', block, re.M))
+        self.assertEqual(set(q), keys)
+        self.assertEqual(q["occupant_space_margin"], "乗員の空間の余裕")
+        self.assertEqual(names.channel_names()["deceleration"], "減速度")
+        self.assertFalse(set(names.VIEWER_QUANTITY_JA) & set(q))   # the viewer's own words only where labels.js has none
+
+
 class PageTest(unittest.TestCase):
     """The page opened from disk in headless Chromium, with each field's data made from the fixtures.
     Needs Playwright for the system Python (py) and the network (three.js from jsDelivr)."""
@@ -581,6 +706,11 @@ class PageTest(unittest.TestCase):
         same = make("nvh")
         same["source"]["design_key"] = make_shell()["source"]["design_key"]
         common.write_data("nvh", same, cls.dir_b / "data")
+        # the crash_beam record with contact (K2 9bffe19c on) as the crash field
+        cls.dir_c = Path(cls.tmp.name) / "viewer_c"
+        shutil.copytree(cls.dir, cls.dir_c)
+        cls.crash_c = make("crash", "crash_contact")
+        common.write_data("crash", cls.crash_c, cls.dir_c / "data")
 
     @classmethod
     def tearDownClass(cls):
@@ -605,6 +735,24 @@ class PageTest(unittest.TestCase):
         self.assertIn("軸応力", out["panel"])
         self.assertIn("ホットスポット", out["inputs"] + out["page_text"])
         self.assertGreater(out["boxes_moved"], 0)
+
+    def test_crash_contact_page_header_names_and_range(self):
+        # at t = 0 (nothing deformed yet): the header's least room is the record's, the colour range the run's largest
+        out = self._check(self.dir_c, "crash")
+        rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
+        least = common.result(rec, "occupant_space_margin")
+        self.assertIn(f"乗員の空間の余裕 {js_fmt(least)} mm", out["hud"])
+        self.assertAlmostEqual(self.crash_c["summary"]["margin"]["value"], least)
+        self.assertAlmostEqual(out["contour"]["max"], self.crash_c["colour"]["stress_absmax"], places=3)
+        self.assertGreater(out["contour"]["max"], 1.0)
+        self.assertIn("計算全体の最大", out["contour"]["note"])
+        # quantity names: the Japanese name, the code name after it (small grey type)
+        self.assertIn("(occupant_space_margin)", out["codes"])
+        self.assertIn("乗員の空間の余裕 (occupant_space_margin)", out["inputs"])
+        self.assertIn("(frame_split_fraction)", out["codes"])
+        # the field buttons: the contract's domain names, in the page's order
+        self.assertEqual(out["switch"], [names.field_labels()[f] for f in ["strength", "fatigue", "rops", "nvh", "crash", "handling",
+                                                                            "powertrain", "aero", "thermal", "assembly"]])
 
     def test_nvh_parts_move_with_the_frame(self):
         out = self._check(self.dir, "nvh")

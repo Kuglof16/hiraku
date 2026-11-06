@@ -4,7 +4,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.nvh = {
-  label: 'NVH (固有振動)',
+  label: HV.FIELD_LABEL.nvh,   // js/names.js: the contract's DOMAIN_NAMES_JA
   variants: [{ key: 'nvh', label: '梁' }, { key: 'nvh_shell', label: 'シェル' }],
   async init(D, ctx) {
     if (D.model === 'shell') return HV.nvhShell(D, ctx);
@@ -64,8 +64,8 @@ HV.fields.nvh = {
       contour: spec,
       plot() {
         if (!frf) return [];
-        const marks = D.modes.map((m, i) => ({ x: m.f_Hz, label: `mode ${i + 1}`, col: i === S.mode ? '#d00' : '#999', w: i === S.mode ? 2 : 1, dash: i === S.mode ? [] : [3, 3] }))
-          .concat((D.lines || []).map(l => ({ x: l.f_Hz, label: l.label, col: '#2a6', dash: [6, 3] })));
+        const marks = D.modes.map((m, i) => ({ x: m.f_Hz, label: `モード ${i + 1}`, col: i === S.mode ? '#8e6bbf' : '#999', w: i === S.mode ? 2 : 1, dash: i === S.mode ? [] : [3, 3] }))
+          .concat((D.lines || []).map(l => ({ x: l.f_Hz, label: l.label, col: '#2f7d4f', dash: [6, 3] })));
         return [{ title: `周波数応答 ${D.frf.channel} (クリックで近いモード)`, unit: D.frf.y_unit, xlabel: `周波数 [${D.frf.x_unit}]`,
                   x: Array.from(frf.x), ys: [{ name: '', v: Array.from(frf.y), col: '#1f4e9c' }], marks, cursor: null, logy: true }];
       },
@@ -186,8 +186,8 @@ HV.nvhShell = async function (D, ctx) {
     plot() {
       const x = D.modes.map(m => m.n);
       const ys = [{ name: 'シェル', v: D.modes.map(m => m.f_Hz), col: '#1f4e9c' },
-                  { name: '梁 (MAC で対応)', v: D.modes.map(m => m.beam ? m.beam.f_Hz : NaN), col: '#c60' }];
-      const marks = [{ x: D.modes[S.mode].n, label: `mode ${D.modes[S.mode].n}`, col: '#d00', w: 2 }];
+                  { name: '梁 (MAC で対応)', v: D.modes.map(m => m.beam ? m.beam.f_Hz : NaN), col: '#e9893a' }];
+      const marks = [{ x: D.modes[S.mode].n, label: `モード ${D.modes[S.mode].n}`, col: '#8e6bbf', w: 2 }];
       return [{ title: 'モードの周波数: シェルと、対応する梁のモード (クリックでモード)', unit: 'Hz', xlabel: 'シェルのモード番号', x, ys, marks, cursor: null, logy: false }];
     },
     plotClick(_, x) { let b = 0, bd = Infinity; D.modes.forEach((m, i) => { const d = Math.abs(m.n - x); if (d < bd) { bd = d; b = i; } }); pick(b); },
