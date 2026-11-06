@@ -59,6 +59,33 @@ export function resolvedHooks(s) {
   return out;
 }
 
+// ---- the cause of a mismatch, until its judgement is OK -------------------------------
+
+// The newest cause (cause.recorded, the words Claude wrote) still open on the records applied so
+// far: open until a verdict of the same load case that passed is recorded after the cause was
+// first recorded. Null when none is open. { id, key, text, domain, version, lcTitle }
+export function openCause(s) {
+  const predOf = (c) => s.predictions?.[s.comparisons?.[c.comparison_id]?.prediction_id] ?? null;
+  const passedAfter = (lc, seq) =>
+    (s.order.verdicts ?? []).some((id) => s.firstSeqOf[id] > seq && s.verdicts[id]?.pass === true && s.verdicts[id]?.load_case_id === lc);
+  for (const id of [...(s.order.causes ?? [])].reverse()) {
+    const c = s.causes[id];
+    const p = predOf(c);
+    const lc = p?.load_case_id ?? null;
+    if (lc && passedAfter(lc, s.firstSeqOf[id])) continue;
+    const lcRec = (s.project?.load_cases ?? []).find((x) => x.load_case_id === lc);
+    return { id, key: `${id}|${s.seqOf[id]}`, text: roundLongDecimals(c.cause ?? ""), domain: p?.domain ?? lcRec?.domain ?? null,
+      // the load case's title up to its first ":" or bracket (the short name)
+      version: p?.design_version ?? null, lcTitle: lcRec?.title ? String(lcRec.title).split(/[:：(（]/)[0].trim() || null : null };
+  }
+  return null;
+}
+
+export function causeNoteHtml(c) {
+  const where = [c.domain ? DOMAIN_JA[c.domain] ?? c.domain : null, c.version != null ? `v${c.version}` : null, c.lcTitle].filter(Boolean).join("・");
+  return `<small>食い違いの原因 (Claude が書いた)${where ? `・${esc(where)}` : ""}</small><div class="tx">${esc(c.text)}</div>`;
+}
+
 // ---- a verdict in words --------------------------------------------------------------
 
 const limitWord = (op) => (op === "<=" || op === "<" ? "許容" : op === ">=" || op === ">" ? "必要" : "基準");
@@ -94,7 +121,21 @@ export function nowSentence(s, chain, toolTitle) {
   if (s.status === "stopped") return "実行が途中で止まりました";
   if (s.status === "failed") return "実行が失敗しました";
   const act = s.activity;
-  return act ? `いま: ${agentLongName(act.agent) || "HIRAKU"} — ${act.text}` : "";
+  return act ? `いま: ${agentLongName(act.agent) || "HIRAKU"} — ${roundLongDecimals(act.text)}` : "";
+}
+
+// A number an agent wrote with 4 or more decimals (knee room -69.25456961280076 mm) to 4
+// significant digits (-69.25); its whole part is kept as it is (12345.678 -> 12346). Only
+// the record's number rounded; the words around it as written.
+const LONG_DECIMAL = /(?<![\w.-])-?\d+\.\d{4,}(?![\d.])/g; // (not inside an id such as pred-0017)
+export function roundLongDecimals(text) {
+  return String(text ?? "").replace(LONG_DECIMAL, (m) => {
+    const x = Number(m);
+    if (!Number.isFinite(x)) return m;
+    if (Math.abs(x) >= 1000) return String(Math.round(x));
+    const r = Number(x.toPrecision(4));
+    return Math.abs(r) >= 1e-4 || r === 0 ? String(r) : m;
+  });
 }
 
 // ---- the scenes ------------------------------------------------------------------------

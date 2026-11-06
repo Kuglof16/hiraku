@@ -1,0 +1,17 @@
+{
+  "id": "pvc_cable",
+  "name": "PVC insulation of automotive low-voltage cable (AVSS thin-wall type)",
+  "name_ja": "自動車用低圧電線の PVC 絶縁体 (AVSS 薄肉形)",
+  "category": "polymer",
+  "standard": "JASO D 611 (AVSS); the standard's text not read",
+  "condition": "PVC insulation of AVSS cable (JASO D 611 thin-wall, nominal insulation thickness 0.3 mm for 0.3 to 1.25 mm2); other cable types (AVS, CAVS, heat-resistant AVSSX/AVSSH) have other ratings and are not covered",
+  "properties": {
+    "max_service_degC": {
+      "value": 80.0,
+      "kind": "assumption",
+      "source": "secondary: the cable's heat-resistance class of 80 degC (AVSS, all sizes), stated on Allied Wire & Cable 'AVSS Wire' page (cites JASO D625/D609), RR Kabel 'AVSS - Ultra Thin Wall PVC Insulation' page (-40 degC to +80 degC, cites JASO D 611) and Dongguan Wenchang AVSS page (cites JASO D 611); the pages are undated; no datasheet of Sumitomo, Yazaki, Furukawa or Fujikura was opened; the rated class is taken as the maximum service temperature (the schema has no kind for a rating)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

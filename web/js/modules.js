@@ -295,6 +295,9 @@ body.present .roundcard .pr { display: none; }
 .asm-3d .modlegend { bottom: 80px; }
 .viewport.has-anim > .modlegend { bottom: 120px; } /* over the load case's animation bar, as .legend */
 .petbox .modmark { position: absolute; left: 0; bottom: 0; width: 13px; height: 13px; border-radius: 3px; background: var(--mod); border: 1.5px solid #fff; z-index: 1; }
+/* a design role's mark (designer.structure): larger, with the role's first letter (構・機・電) */
+.petbox .modmark[data-designer-role] { width: 16px; height: 16px; box-sizing: border-box; color: #fff; font-size: 10px; font-weight: 700; line-height: 13px; text-align: center; }
+.petbox .modmark[data-designer-role="electric"] { color: #1b1a17; }
 .pet.modpet { box-shadow: 0 0 0 3px var(--mod) inset; }
 `;
 let styled = false;

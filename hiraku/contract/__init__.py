@@ -157,8 +157,12 @@ MODULE_NAMES_JA = {
     "powertrain": "動力",
     "body": "車体",
 }
-MODULE_DESIGNERS = tuple(f"designer.{m}" for m in MODULES if m != "package")
-MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "import_knowledge", "rule_check", "write_report")
+# The design roles do not depend on what is being made. A design type's modules each name one of them as owner.
+MODULE_DESIGNERS = ("designer.structure", "designer.mechanism", "designer.electric")
+DESIGNER_ROLES_JA = {"structure": "構造", "mechanism": "機構", "electric": "電気"}
+# The roles of runs recorded before the three: still read from saved records, never given new work.
+LEGACY_MODULE_DESIGNERS = tuple(f"designer.{m}" for m in MODULES if m != "package")
+MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "import_knowledge", "rule_check", "write_report", "find_tradeoffs")
 MCP_TOOLS_TOOLMAKER = ("make_tool", "check_tool")  # Claude writes a tool in the run and checks it (in RUN_TOOLS)
 
 

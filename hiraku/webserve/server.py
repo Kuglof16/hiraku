@@ -9,6 +9,10 @@ Standard library only. Routes:
     GET /api/runs/<run_id>/events?offset=N
                                         complete lines of events.jsonl from byte N on,
                                         parsed; next_offset tells where to read next
+    GET /api/runs/<run_id>/events?offset=N&format=ndjson
+                                        the same lines' bytes as they are (application/x-ndjson,
+                                        not parsed); next offset, size, reset and the lines
+                                        skipped for length in X-Hiraku-* headers
     GET /api/launch, POST /api/launch   start a run from the screen (launch.py); GET also lists
                                         the demo runs of data/catalog/demo_runs.yaml
     POST /api/launch/stop               ask that run to stop (stop.request in its folder)
@@ -97,6 +101,11 @@ MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the 
 # analysis.finished with per-element values of a large mesh); a longer line is skipped as bad.
 MAX_LINE_BYTES = 64 * 1024 * 1024
 _SCAN_BYTES = 1024 * 1024  # block size when looking for the end of a long line
+# ?format=ndjson: the response headers that carry what the JSON form has beside its events
+EVENTS_NEXT_OFFSET = "X-Hiraku-Next-Offset"
+EVENTS_SIZE = "X-Hiraku-Size"
+EVENTS_RESET = "X-Hiraku-Reset"
+EVENTS_BAD_LINES = "X-Hiraku-Bad-Lines"  # only the lines skipped for their length (not JSON-checked)
 KNOWLEDGE_MAX_BYTES = 2_000_000  # the body of a dropped knowledge file (its text in JSON)
 REQUEST_MAX_BYTES = 1_000_000  # an A1/A2 request carries its draft back
 
@@ -127,12 +136,13 @@ def tool_versions(tools_dir: Path) -> dict[str, list[int]]:
     return {k: sorted(v) for k, v in sorted(out.items())}
 
 
-def read_events(path: Path, offset: int) -> dict[str, Any]:
-    """Parse the complete lines of `path` from byte `offset` on.
+def read_event_lines(path: Path, offset: int) -> dict[str, Any]:
+    """The bytes of the complete lines of `path` from byte `offset` on, not parsed.
 
-    Returns events, next_offset (where the next read starts), size, reset
-    (true when the file got shorter than offset, so reading restarted at 0)
-    and bad_lines (lines that were not JSON objects, or longer than MAX_LINE_BYTES).
+    Returns data (the lines' bytes as they are in the file), next_offset (where the
+    next read starts), size, reset (true when the file got shorter than offset, so
+    reading restarted at 0) and bad_lines (lines skipped for being longer than
+    MAX_LINE_BYTES; their bytes are not in data).
 
     At most MAX_READ_BYTES are read, except when the first line is longer: then that
     one line is read to its newline (up to MAX_LINE_BYTES; a longer one is counted
@@ -142,11 +152,10 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
     size = path.stat().st_size if path.exists() else 0
     if offset < 0 or offset > size:
         offset, reset = 0, True
-    events: list[dict[str, Any]] = []
     bad = 0
     next_offset = offset
+    complete = b""
     if size > offset:
-        complete = b""
         with path.open("rb") as f:
             f.seek(offset)
             chunk = f.read(min(size - offset, MAX_READ_BYTES))
@@ -164,21 +173,32 @@ def read_events(path: Path, offset: int) -> dict[str, Any]:
                         complete = f.read(next_offset - offset)
                     else:
                         bad += 1
-        if complete:
-            for raw in complete.splitlines():
-                raw = raw.strip()
-                if not raw:
-                    continue
-                try:
-                    obj = json.loads(raw.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    bad += 1
-                    continue
-                if isinstance(obj, dict):
-                    events.append(obj)
-                else:
-                    bad += 1
-    return {"events": events, "next_offset": next_offset, "size": size, "reset": reset, "bad_lines": bad}
+    return {"data": complete, "next_offset": next_offset, "size": size, "reset": reset, "bad_lines": bad}
+
+
+def read_events(path: Path, offset: int) -> dict[str, Any]:
+    """Parse the complete lines of `path` from byte `offset` on (read_event_lines).
+
+    Returns events, next_offset, size, reset and bad_lines (lines that were not
+    JSON objects, or longer than MAX_LINE_BYTES).
+    """
+    out = read_event_lines(path, offset)
+    events: list[dict[str, Any]] = []
+    bad = out["bad_lines"]
+    for raw in out.pop("data").splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            obj = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            bad += 1
+            continue
+        if isinstance(obj, dict):
+            events.append(obj)
+        else:
+            bad += 1
+    return {"events": events, **out, "bad_lines": bad}
 
 
 def _newline_after(f, start: int, size: int) -> int | None:
@@ -583,6 +603,21 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json({"error": "offset must be an integer"}, HTTPStatus.BAD_REQUEST)
             return
+        if query.get("format", [""])[0] == "ndjson":
+            # the lines' bytes as they are (not parsed here); where to read next in the headers
+            out = read_event_lines(path, offset)
+            data = out["data"]
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", CONTENT_TYPES[".jsonl"])
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header(EVENTS_NEXT_OFFSET, str(out["next_offset"]))
+            self.send_header(EVENTS_SIZE, str(out["size"]))
+            self.send_header(EVENTS_RESET, "1" if out["reset"] else "0")
+            self.send_header(EVENTS_BAD_LINES, str(out["bad_lines"]))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         body = read_events(path, offset)
         body["run_id"] = run_id
         self._send_json(body)
@@ -675,6 +710,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # socketserver's listen backlog is 5; a page asks for its modules on several connections at
+    # once, and with a busy machine the accept loop falls behind (a browser test saw
+    # ERR_CONNECTION_REFUSED with other browser tests running beside it)
+    request_queue_size = 64
+
     # On Windows SO_REUSEADDR (HTTPServer's default) lets a second socket bind a port another
     # server already listens on, so a second HIRAKU would quietly share the port with an old one.
     # There the port is bound exclusively instead: a port in use fails with OSError.

@@ -23,13 +23,16 @@ from hiraku.webserve.server import make_server
 from tests.web.modules_fixture import RUN_ID, module_design, module_events, outside_parts
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 
 PLAIN = "20261104-210100-plain"  # the same run without modules
+# the record's six per-module designers: the contract's LEGACY_MODULE_DESIGNERS once it has the three
+# design roles (dabec03f), its MODULE_DESIGNERS before
+SIX = tuple(getattr(contract, "LEGACY_MODULE_DESIGNERS", contract.MODULE_DESIGNERS))
 FALLBACK = {"frame": "#2b6e40", "suspension": "#8db33a", "steering": "#e2759f", "occupant": "#917430", "powertrain": "#8f415b", "body": "#57b8a0"}
 # (powertrain: the pets' #7d2240, made lighter for the 3D by proposals.js readable)
 OUTSIDE = "#e0201a"
@@ -124,8 +127,10 @@ class ModuleRecordTest(unittest.TestCase):
         self.assertEqual(joints, {"weld", "bolt", "pin"})
 
 
-@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
-class ModulesBrowserTest(unittest.TestCase):
+class _ModulesPage(unittest.TestCase):
+    """The server on the module records and a browser (no tests of its own: the tests are in two
+    classes, so a runner that puts each class in its own process runs them side by side)."""
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp())
@@ -152,10 +157,11 @@ class ModulesBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": size[0], "height": size[1]})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
-        page.wait_for_timeout(150)
+        # drawn: the fonts in, and two frames of the screen's own loop after the replay reached t
+        page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
         self.addCleanup(page.close)
         self.addCleanup(lambda: self.assertEqual(errors, []))
         return page
@@ -169,6 +175,11 @@ class ModulesBrowserTest(unittest.TestCase):
             if parts or members:
                 out[mid] = (parts, members)
         return out
+
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class ModulesBrowserTest(_ModulesPage):
+    """The module colours and spaces, the round card, the variables' names."""
 
     def test_module_colours_and_legend(self):
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6&on=modules")
@@ -277,16 +288,23 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual(got[0], ["型が付けた名前を 3 mm に", "no_such_variableを 2 mm に"])
         self.assertEqual(got[1], ["レールの板厚を 3 mm に", "no_such_variableを 2 mm に"])
 
+
+@unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
+class ModulesLookBrowserTest(_ModulesPage):
+    """The same picture at t, the designers' pets, A7's switches, a design without modules."""
+
     def test_same_picture_at_t(self):
         q = f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_PENDING}&on=modules,spaces"
-        a, b = self.open(q), self.open(q)
+        # at the stage's own size (scale 1): at 1280 x 720 the stage is drawn at 2/3 and the card's
+        # edges fall between pixels, which can round differently from one page to the next
+        a, b = self.open(q, size=(1920, 1080)), self.open(q, size=(1920, 1080))
         for sel in ("#roundcard", ".modlegend", "#log"):
             self.assertEqual(a.locator(sel).inner_html(), b.locator(sel).inner_html(), sel)
         self.assertEqual(a.evaluate("window.hiraku.modules.shown()"), b.evaluate("window.hiraku.modules.shown()"))
         self.assertEqual(a.locator("#roundcard").screenshot(), b.locator("#roundcard").screenshot())
 
     def test_six_designers_in_the_agents_list(self):
-        names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in contract.MODULE_DESIGNERS]
+        names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in SIX]
         # (the designers are one bundle 「設計役 ×n」 in the list; ?agents=open opens it)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6&agents=open")
         text = page.locator("#agents").inner_text()
@@ -296,7 +314,7 @@ class ModulesBrowserTest(unittest.TestCase):
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6&agents=open")
         if page.evaluate("document.documentElement.dataset.agentPets") != "on":
             self.skipTest("no pets on this server")
-        for a in contract.MODULE_DESIGNERS:
+        for a in SIX:
             box = page.locator(f'#agents .petbox[data-agent="{a}"]')
             self.assertEqual(box.count(), 1, a)
             own = page.evaluate(f"window.hiraku.pets().roles.has('{a}')")
@@ -343,7 +361,7 @@ class ModulesBrowserTest(unittest.TestCase):
             self.skipTest("no pets on this server")
         # the packager in the assembly tile's corner, the module designers in the head
         self.assertEqual(page.locator('.tile[data-domain="assembly"] [data-pet-slot="packager"]').count(), 1)
-        for a in contract.MODULE_DESIGNERS:
+        for a in SIX:
             self.assertEqual(page.locator(f'#grid-head [data-pet-slot="{a}"]').count(), 1, a)
 
     def test_assembly_tab_switches(self):
@@ -358,8 +376,13 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual(page.locator("#view-asm .modlegend .mout").get_attribute("data-outside"), "1")
         # A7 of a design without modules: no switches
         page = self.open(f"run={PLAIN}&tab=A7&pace=0&pets=0&t=1e6")
-        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.view.design", timeout=20000)
-        page.wait_for_timeout(200)
+        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.view.design && document.querySelector('#view-asm .modtoggles')", timeout=60000)
+        # A7 updates its switches each frame it draws (assembly.js render -> modules.js update): two
+        # more frames, so they were updated with this design before they are looked at
+        bar = page.evaluate("""() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => {
+            const bar = document.querySelector('#view-asm .modtoggles');
+            r({ hidden: bar.hidden, buttons: bar.querySelectorAll('[data-toggle]').length }); })))""")
+        self.assertEqual(bar, {"hidden": True, "buttons": 0})
         self.assertEqual(page.locator('#view-asm .modtoggles [data-toggle="modules"]').count(), 0)
 
     def test_no_switches_without_modules(self):

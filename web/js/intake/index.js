@@ -40,7 +40,7 @@ export function mountIntake(host, api, options = {}) {
   ensureCss();
   const ui = {
     screen: options.screen || "A1",
-    draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, ruleAnswers: {},
+    draft: typeof options.want === "string" ? options.want : "", note: "", answers: {}, ruleAnswers: {}, tradeoffAnswers: {},
     onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, picksFinal: !!options.picksFinal, time: null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,

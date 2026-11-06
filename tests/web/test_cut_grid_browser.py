@@ -255,7 +255,7 @@ class GridCutTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(url)
+        page.goto(url, wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors

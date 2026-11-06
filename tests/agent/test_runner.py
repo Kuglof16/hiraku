@@ -44,7 +44,7 @@ class OptionsTest(RunCase, unittest.TestCase):
             self.assertIn(f"mcp__hiraku__{name}", o.allowed_tools)
         self.assertIn("mcp__hiraku__get_tool_template", o.allowed_tools)
         self.assertIn("mcp__hiraku__build_version", o.allowed_tools)  # the run tools (the tool refuses designs without modules)
-        self.assertEqual(len(o.allowed_tools), 20)
+        self.assertEqual(len(o.allowed_tools), 21)  # with find_tradeoffs (intake)
         self.assertEqual(o.permission_mode, "dontAsk")
         self.assertTrue(o.strict_mcp_config)
         self.assertEqual(o.skills, ["hiraku:find-the-cause", "hiraku:predict-then-analyze", "hiraku:take-the-request"])
@@ -53,7 +53,7 @@ class OptionsTest(RunCase, unittest.TestCase):
         self.assertTrue(Path(o.plugins[0]["path"]).is_dir())
         self.assertEqual(o.model, "claude-opus-5-5")
         self.assertEqual(o.effort, "high")
-        self.assertEqual(o.max_budget_usd, 2.0)  # cost_limit_usd of the requirements file
+        self.assertEqual(o.max_budget_usd, 80.0)  # cost_limit_usd of the requirements file (offroad-4w.yaml)
         self.assertEqual(set(o.agents), {"cae-strength", "designer"})
         self.assertIn("mcp__hiraku__record_prediction", o.agents["cae-strength"].tools)
         self.assertNotIn("mcp__hiraku__revise_design", o.agents["cae-strength"].tools)

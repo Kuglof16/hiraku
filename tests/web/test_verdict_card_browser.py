@@ -15,14 +15,17 @@ import copy
 import json
 import os
 import re
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.shell_fixture import shell_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -128,7 +131,8 @@ def changed_events(events):
 class VerdictCardBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -141,13 +145,14 @@ class VerdictCardBrowserTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, query, events=None):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         if events is not None:

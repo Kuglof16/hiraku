@@ -25,7 +25,7 @@ export function emptyModel() {
     designVersion: 0,
     domains: null, // the domains_picked data, or the project's picks until one arrives
     domainsFromProject: false,
-    hearing: { asked: null, answered: null, ruleQuestions: [] },
+    hearing: { asked: null, answered: null, ruleQuestions: [], tradeoffQuestions: [] },
     requirements: [], // {key, name, value, unit, source, trust, basis, note, fresh}
     docs: new Map(), // doc_id -> {doc, rules}
     checks: new Map(), // rule_id -> rule_check
@@ -90,6 +90,10 @@ export function apply(m, e) {
         const kept = ruleRows(m).filter((r) => !r.answer).map(({ rule_id, parts, text, choices }) => ({ rule_id, parts, text, choices }));
         const fresh = d.rule_questions || [];
         m.hearing.ruleQuestions = [...fresh, ...kept.filter((k) => !fresh.some((f) => f.rule_id === k.rule_id))];
+        // the same for the trade-offs (two results that pull apart): unanswered ones stay, answered ones go
+        const keptT = tradeoffRows(m).filter((r) => !r.answer).map(({ answer, state, ...q }) => q);
+        const freshT = d.tradeoff_questions || [];
+        m.hearing.tradeoffQuestions = [...freshT, ...keptT.filter((k) => !freshT.some((f) => f.tradeoff_id === k.tradeoff_id))];
       }
       m.hearing.asked = d;
       m.hearing.answered = null; // a new asking: the earlier answers are in the requirements already
@@ -154,7 +158,9 @@ export function hearingRows(m) {
   const answers = new Map((m.hearing.answered?.answers || []).map((a) => [a.key, a]));
   return asked.map((q) => {
     const a = answers.get(q.req_key);
-    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
+    // a question that needs an answer stays open until it has one (the answered event may have come without it)
+    const unanswered = q.ask === "must" ? (m.finished ? "ended" : "asking") : m.hearing.answered ? "open" : m.finished ? "ended" : "asking";
+    return { ...q, answer: a || null, state: a ? (a.source === "hearing" ? "answered" : "defaulted") : unanswered };
   });
 }
 
@@ -166,6 +172,23 @@ export function ruleRows(m) {
     const a = answers.get(q.rule_id) || null;
     return { ...q, choices: q.choices || ["revise_design", "drop_rule"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
   });
+}
+
+/** The trade-offs the lead asked about (hearing.asked tradeoff_questions), each with the person's answer once there is one. */
+export function tradeoffRows(m) {
+  const asked = m.hearing.tradeoffQuestions || [];
+  const answers = new Map((m.hearing.answered?.tradeoff_answers || []).map((a) => [a.tradeoff_id, a]));
+  return asked.map((q) => {
+    const a = answers.get(q.tradeoff_id) || null;
+    return { ...q, choices: q.choices || ["favor_a", "favor_b", "keep_both"], answer: a, state: a ? "answered" : m.hearing.answered ? "open" : m.finished ? "ended" : "asking" };
+  });
+}
+
+/** What each choice of a trade-off says, in the words of the two results. */
+export function tradeoffChoiceJa(q, choice) {
+  if (choice === "favor_a") return `${q.a.name}を良くする方を優先`;
+  if (choice === "favor_b") return `${q.b.name}を悪くしない方を優先`;
+  return "どちらも守る方法を探す";
 }
 
 export const RULE_CHOICE_JA = { revise_design: "設計を直す", drop_rule: "このルールを使わない" };
@@ -187,7 +210,9 @@ export function allRules(m) {
 export function ruleState(m, rule) {
   const c = m.checks.get(rule.rule_id);
   if (!c) return { checked: false, targets: 0, hits: [], notEvaluable: [], pass: null };
-  return { checked: true, targets: c.targets.length, hits: c.hits, notEvaluable: c.not_evaluable || [], pass: c.pass, designVersion: c.design_version };
+  if (c.level === "advice") // an advice rule: its hits are notes, never a failure; the parts it cannot judge are not shown
+    return { checked: true, targets: c.targets.length, hits: [], advice: c.hits, isAdvice: true, notEvaluable: [], pass: true, designVersion: c.design_version };
+  return { checked: true, targets: c.targets.length, hits: c.hits, advice: [], isAdvice: false, notEvaluable: c.not_evaluable || [], pass: c.pass, designVersion: c.design_version };
 }
 
 const OP_JA = { "<=": "以下", ">=": "以上", "<": "より小さい", ">": "より大きい" };
@@ -206,11 +231,12 @@ export function checkedRows(m, rule) {
   const c = m.checks.get(rule.rule_id);
   if (!c || !c.checked) return [];
   const hitIds = new Set((c.hits || []).map((h) => h.part_id));
+  const isAdvice = c.level === "advice";
   const lim = simpleLimit(rule.check);
   return c.checked.map((row) => {
     const values = Object.entries(row.values).map(([name, value]) => ({ name, value, unchecked: (row.unchecked || []).includes(name) }));
     const own = lim && row.values[lim.name] !== undefined ? row.values[lim.name] : null;
-    return { part_id: row.part_id, hit: hitIds.has(row.part_id), values,
+    return { part_id: row.part_id, hit: !isAdvice && hitIds.has(row.part_id), ...(isAdvice && hitIds.has(row.part_id) ? { advice: true } : {}), values,
       need: lim && own !== null ? { name: lim.name, now: own, op: lim.op, opJa: OP_JA[lim.op], limit: lim.limit } : null,
       unchecked: (row.unchecked || []).length > 0 };
   });

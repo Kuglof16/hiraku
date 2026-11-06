@@ -25,7 +25,7 @@ from tests.web.node_motion_fixture import RUN_ID, T_ANALYSIS, node_motion_events
 from tests.web.test_layout_lint_browser import ENABLED, READY, WIDTHS, Screen, describe, lint
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 

@@ -6,7 +6,7 @@
 //
 // No three.js here: state.js uses proposalText for the log lines.
 
-import { agentName, designNumberName, esc, fmt, judgedWords, moduleName, unitLabel, verLabel } from "./labels.js";
+import { agentName, designNumberName, designerModule, designerRole, esc, fmt, judgedWords, moduleName, moduleOwner, unitLabel, verLabel } from "./labels.js";
 
 // The module colours: pet3d.js v10 ROLES (the rows with a module) when the page has them, else
 // the same values here. package is the packager's (its pet's colour, app.js PET_COLORS.packager).
@@ -20,6 +20,24 @@ const MODULE_COLORS = {
   body: "#57b8a0",
 };
 export const OUTSIDE_COLOR = "#e0201a"; // a part outside its module's space
+
+// The design roles' colours (labels.js DESIGNER_ROLES; pet3d.js has no row for them). Screen choice:
+// none red, each apart from the six module colours above and the other roles' (CIELAB distance 18
+// or more, worked out once by hand): navy for structure, orchid for mechanism, yellow for electric.
+export const DESIGNER_ROLE_COLORS = {
+  structure: "#2e4a7d",
+  mechanism: "#cc66cc",
+  electric: "#e6d34a",
+};
+
+// A module designer's colour: a design role's own, an older record's designer.<module> its module's;
+// null for any other agent.
+export function designerColor(id) {
+  const r = designerRole(id);
+  if (r) return DESIGNER_ROLE_COLORS[r];
+  const m = designerModule(id);
+  return m ? moduleColor(m) : null;
+}
 
 export function moduleColor(m) {
   return readable(petModuleColor(m));
@@ -93,7 +111,8 @@ const isOver = (s) => ["done", "stopped", "failed"].includes(s.status);
 
 // One row: the designer (with the module's colour), what it changes and why.
 function rowHtml(chg, base) {
-  const who = agentName(chg.agent_id ?? `designer.${chg.module_id}`);
+  // (no agent_id: the module's owner in the design, else, an older record, designer.<module>)
+  const who = agentName(chg.agent_id ?? moduleOwner(chg.module_id, base));
   return (
     `<li data-change="${esc(chg.change_id)}" data-module="${esc(chg.module_id)}"><span class="mdot" style="--mod:${moduleColor(chg.module_id)}"></span>` +
     `<span class="pw"><b>${esc(who)}</b>: ${esc(changeWords(chg, base).join("・") || "変更")}</span>` +
@@ -114,7 +133,7 @@ export function roundCardHtml(s, playhead) {
   const pending = isOver(s) ? [] : pendingProposals(s);
   if (pending.length) {
     const base = s.designs[pending[0].baseVersion] ?? s.designs[s.currentVersion];
-    const who = new Set(pending.map((p) => p.agent_id)).size;
+    const who = new Set(pending.map((p) => p.agent_id ?? moduleOwner(p.module_id, base))).size;
     return (
       `<div class="rc-head" data-round="pending">${esc(verLabel(pending[0].baseVersion ?? s.currentVersion))} を直す提案: 設計役 ${who} 人が並べて出した</div>` +
       `<ol class="rc-list">${pending.map((p) => rowHtml(p, base)).join("")}</ol>` +

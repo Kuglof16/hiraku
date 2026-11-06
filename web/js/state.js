@@ -419,7 +419,7 @@ export function applyEvent(s, ev) {
         ? `判定: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) OK`
         : `判定: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) NG (食い違い)。` +
           (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
-      logRecord(s, ev, d.comparison_id, ok ? "ok" : "bad", `${who(ev)}: ${txt}`);
+      logRecord(s, ev, d.comparison_id, ok ? "ok" : "warn", `${who(ev)}: ${txt}`); // a mismatch: attention, not NG
       if (!again) {
         if (agent) agent.status = ok ? "判定した" : MISMATCH_STATUS;
         setActivity(s, ev, txt);

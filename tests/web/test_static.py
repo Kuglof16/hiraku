@@ -102,6 +102,18 @@ class ContractCoverageTest(unittest.TestCase):
         order = re.search(r"export const DOMAINS = \[(.*?)\]", src).group(1)
         self.assertEqual([s.strip().strip('"') for s in order.split(",")], list(contract.DOMAINS))
 
+    def test_designer_roles_match_the_contract(self):
+        """labels.js DESIGNER_ROLES_JA is the contract's DESIGNER_ROLES_JA (same keys, names and order), and
+        the roles are the contract's MODULE_DESIGNERS. Skipped while the contract has no such table."""
+        roles = getattr(contract, "DESIGNER_ROLES_JA", None)
+        if roles is None:
+            self.skipTest("the contract has no DESIGNER_ROLES_JA yet")
+        src = read(JS / "labels.js")
+        block = re.search(r"export const DESIGNER_ROLES_JA = \{(.*?)\};", src, re.S).group(1)
+        js = dict(re.findall(r'^\s*(\w+):\s*"([^"]*)"', block, re.M))
+        self.assertEqual(list(js.items()), list(roles.items()))
+        self.assertEqual([f"designer.{r}" for r in js], list(contract.MODULE_DESIGNERS))
+
     def test_every_field_kind_is_drawn(self):
         src = read(JS / "fields.js")
         order = re.search(r"export const FIELD_ORDER = \[(.*?)\]", src).group(1)

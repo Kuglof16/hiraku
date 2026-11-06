@@ -17,7 +17,7 @@ from pathlib import Path
 from tests.web.test_layout_lint_browser import ASSEMBLY, DOMAINS, ENABLED, HEARING, READY, WIDTHS, start_servers
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -85,7 +85,7 @@ class TabsBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": size[0], "height": size[1]})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.bases['saved']}/?{query}")
+        page.goto(f"{self.bases['saved']}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function(wait, timeout=60000)
         if wait == READY:
             page.evaluate("window.hiraku.ready")

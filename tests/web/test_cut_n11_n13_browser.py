@@ -280,7 +280,7 @@ class CutN11N13Test(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/cut.html?cut={cut}&run={run}&t=0")
+        page.goto(f"{self.base}/cut.html?cut={cut}&run={run}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         out = {}
@@ -511,7 +511,7 @@ class CutN11N13Test(unittest.TestCase):
             del node[last]
             base = self.serve(layout, f"layout-missing-{i}.json")
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0")
+            page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
             err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
             self.assertIn(f"layout.json の {cut} に無い: ", err, (cut, key))

@@ -47,9 +47,14 @@ class CrosswindHotSpotsTest(unittest.TestCase):
     def test_both_wind_sides_are_rows(self):
         lc = {"load_case_id": "F1-wind30", "test_id": "F1", "params": {"wind_speed": q(30.0, "m/s"), "wind_from": "left"},
               "criterion": {"quantity": "critical_wind_speed", "op": ">=", "limit": q(30.0, "m/s"), "basis": "test"}}
-        rec = TOOLS["crosswind"].run(box_design(wheel_mass=15.0), lc, [{"prediction_id": "pred-0001"}], {})
+        # a light, tall box that tips near the 30 m/s gust (31.3 m/s, about 6 s of ramp): the plain box tips only at
+        # 170 m/s after 97 s of ramp, held by friction 2 while it slides, which ended without a value on Linux
+        design = box_design(mass=250.0, cg_z=1.0, box_size=(2.0, 1.0, 1.4), wheel_mass=15.0)
+        rec = TOOLS["crosswind"].run(design, lc, [{"prediction_id": "pred-0001"}], {})
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        self.assertFalse(any(a.startswith("no critical_wind_speed") for a in rec.get("assumptions", [])),
+                         rec.get("assumptions"))
         rows = {(r["where"], r["quantity"]): r for r in rec["hot_spots"]}
         left, right = rows[("wind from the left", "critical_wind_speed")], rows[("wind from the right", "critical_wind_speed")]
         self.assertTrue(left["predicted"])
@@ -84,6 +89,41 @@ class SlopeHotSpotsTest(unittest.TestCase):
         # the box is symmetric: the other side tips at nearly the same angle
         self.assertAlmostEqual(right["value"]["value"], left["value"]["value"], delta=0.5)
         self.assertGreater(right["utilisation"], 1.0)
+
+
+class WindRampStopTest(unittest.TestCase):
+    """crosswind.wind_ramp says why it has no critical wind speed (the tool writes it in the assumptions)."""
+
+    def setUp(self):
+        from hiraku.solvers.k2_vehicle.drive import Aero
+        from hiraku.solvers.k2_vehicle.model import build_vehicle
+        self.veh = build_vehicle(box_design(mass=250.0, cg_z=1.0, box_size=(2.0, 1.0, 1.4), wheel_mass=15.0),
+                                 {"mu": 2.0})
+        tool = TOOLS["crosswind"]
+        tool.opts, tool._vars, tool._assumed = {}, {}, []
+        self.aero = tool.aero(self.veh, {})
+        self.Aero = Aero
+
+    def test_the_ramp_stops_at_v_max_or_on_a_load_that_is_not_finite(self):
+        from hiraku.solvers.k2_vehicle.shelf.crosswind import wind_ramp
+        tipped = wind_ramp(self.veh, self.aero, True)
+        self.assertEqual(tipped["stopped"], "tipped")
+        self.assertEqual(tipped["v_crit"], tipped["v_stop"])
+        short = wind_ramp(self.veh, self.aero, True, v_max=5.0)
+        self.assertEqual((short["v_crit"], short["stopped"]), (None, "v_max"))
+        self.assertGreaterEqual(short["v_stop"], 5.0)
+
+        class Broken:  # a wind force that is not a number: the loads that follow are not finite
+            def __init__(self, a):
+                self.a = a
+
+            def forces(self, sim, wind_world=(0.0, 0.0, 0.0)):
+                out = self.a.forces(sim, wind_world)
+                return [((f[0], float("nan"), f[2]), p) for f, p in out]
+
+        nan = wind_ramp(self.veh, Broken(self.aero), True)
+        self.assertEqual((nan["v_crit"], nan["stopped"]), (None, "not finite"))
+        self.assertLess(nan["v_stop"], 1.0)  # it stops at once, not at v_max
 
 
 if __name__ == "__main__":
