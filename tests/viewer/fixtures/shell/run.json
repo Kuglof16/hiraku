@@ -1,0 +1,39 @@
+{
+ "load_case": {
+  "load_case_id": "N1-40kmh",
+  "test_id": "N1",
+  "domain": "nvh",
+  "title": "固有振動数と、40 km/h での車輪とモーターの回る速さ (2 人 + 荷)",
+  "params": {
+   "speed": {
+    "value": 40.0,
+    "unit": "km/h"
+   },
+   "loading": "two_cargo"
+  },
+  "requirement_keys": [
+   "Q50",
+   "Q30",
+   "Q33",
+   "Q40"
+  ],
+  "criterion": {
+   "quantity": "first_frame_mode",
+   "op": ">=",
+   "limit": {
+    "value": 7.073553026306459,
+    "unit": "Hz"
+   },
+   "basis": "フレームのいちばん低い固有振動数を、Q50 40 km/h での車輪の回転 (5.89 Hz) より 20% 上に離す (幅は HIRAKU の仮定で、一般の目安としては確かめていない。路面の凹凸の加振は入れていない)",
+   "requirement_keys": [
+    "Q50"
+   ]
+  },
+  "tolerance_rel": 0.15,
+  "modules": [
+   "frame",
+   "steering"
+  ]
+ },
+ "element_size_mm": 20.0
+}

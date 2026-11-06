@@ -3,14 +3,14 @@
 
 The run goes in chunks of REC_DT (the kernel's own steps inside, at the stable step); after each chunk
 the node positions, the wall's impulse and the yields and breaks are written down, and the run stops
-once the whole vehicle's velocity (its momentum over its mass) is no longer toward the wall, or at
-the time limit.
+once the whole vehicle's velocity toward the wall (its momentum over its mass) is down to STOP_SHARE of
+the start, or at the time limit.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -19,6 +19,12 @@ from .mesh import Mesh, stable_dt
 
 COURANT = 0.8         # the time step is this share of the elements' stable step 2 / omega_max
 PENALTY = 1.0         # wall stiffness of a node: PENALTY m / dt^2 (with COURANT 0.8: (omega dt)^2 <= 2.56 + 1.0 < 4)
+CONTACT_PENALTY = 0.05  # element contact: (omega dt)^2 of one pair's spring on its contact point's mass (kernel step 6);
+                        # a point at a node can be in up to 4 pairs (0.2), a wheel link adds LINK_SHARE^2 x 2.56 (0.1):
+                        # 2.56 + 1.0 + 0.2 + 0.1 < 4 (HIRAKU's choice)
+TYRE_PENALTY_MAX = PENALTY  # a wheel node's tyre spring: k_t dt^2 / m at most this (it takes the place of the frame
+                            # nodes' wall penalty in that budget; a wheel node has no element, only links)
+CONTACT_SKIN = 0.01   # m, the contact pair list keeps the pairs within their contact distance + this
 REC_DT = 1e-4         # s, the record's step
 WINDOW = 1e-3         # s, the deceleration and the mount forces are averaged over this (from the momentum)
 
@@ -41,6 +47,11 @@ class State:
     fext: np.ndarray
     fint: np.ndarray
     kpen: np.ndarray
+    cpairs: np.ndarray       # (pairs that can touch, 2) the contact pair list (kernel step 6)
+    cnp: np.ndarray          # (1,) its length; -1: make it at the next step
+    xref: np.ndarray         # (n, 3) the positions when it was made
+    fcon: np.ndarray         # (n, 3) the contact forces of the last step
+    cstat: np.ndarray        # (3,) the lists made, the longest list, the pair-steps in contact
     t: float = 0.0
 
     def copy(self) -> "State":
@@ -48,14 +59,31 @@ class State:
                         for k in self.__dataclass_fields__})
 
 
-def new_state(mesh: Mesh, velocity=(0.0, 0.0, 0.0), dt: float | None = None) -> State:
+def mass_centre(mesh: Mesh) -> np.ndarray:
+    """m, the mass centre of all the mesh's nodes at the start."""
+    return mesh.mass @ mesh.x0 / float(mesh.mass.sum())
+
+
+def new_state(mesh: Mesh, velocity=(0.0, 0.0, 0.0), dt: float | None = None, spin=None, about=None) -> State:
+    """The state at the start: every node at velocity, or (spin, rad/s in the design frame) a rigid body turning
+    about the point `about` (m; default the mass centre) that moves at velocity: v = velocity + spin x (x - about),
+    and every node's own spin w = spin."""
     n, ne = mesh.n, mesh.ne
     v = np.tile(np.asarray(velocity, float), (n, 1))
+    w = np.zeros((n, 3))
+    if spin is not None:
+        om = np.asarray(spin, float)
+        c = mass_centre(mesh) if about is None else np.asarray(about, float)
+        v = v + np.cross(om, mesh.x0 - c)
+        w = np.tile(om, (n, 1))
     kpen = np.zeros(n) if dt is None else PENALTY * mesh.mass / (dt * dt)
-    return State(x=mesh.x0.copy(), v=v, R=np.tile(np.eye(3), (n, 1, 1)), w=np.zeros((n, 3)), up=np.zeros(ne),
+    can = max(1, int(np.count_nonzero(mesh.cdist > 0.0)) // 2)
+    return State(x=mesh.x0.copy(), v=v, R=np.tile(np.eye(3), (n, 1, 1)), w=w, up=np.zeros(ne),
                  tp=np.zeros(ne), thp=np.zeros((ne, 2, 2)), alive=np.ones(ne, dtype=np.int8),
                  yielded=np.zeros(ne, dtype=np.int8), fix=np.zeros((n, 6), dtype=np.int8), vpre=np.zeros((n, 6)),
-                 fext=np.zeros((n, 6)), fint=np.zeros((n, 6)), kpen=kpen)
+                 fext=np.zeros((n, 6)), fint=np.zeros((n, 6)), kpen=kpen, cpairs=np.zeros((can, 2), dtype=np.int64),
+                 cnp=np.array([-1], dtype=np.int64), xref=mesh.x0.copy(), fcon=np.zeros((n, 3)),
+                 cstat=np.zeros(3, dtype=np.int64))
 
 
 def time_step(mesh: Mesh) -> float:
@@ -63,16 +91,24 @@ def time_step(mesh: Mesh) -> float:
 
 
 def advance(mesh: Mesh, st: State, nsteps: int, dt: float, *, alpha: float = 0.0, wall: float | None = None,
-            mu: float = 0.0, hinge_lim: float = math.inf, use_jit: bool = True) -> np.ndarray:
-    """nsteps steps of dt; returns the wall's impulse on the frame over them (N s, 3)."""
+            mu: float = 0.0, hinge_lim: float = math.inf, use_jit: bool = True, contact: bool = True) -> np.ndarray:
+    """nsteps steps of dt; returns the wall's impulse on the frame over them (N s, 3). contact: the elements touch
+    each other (kernel step 6)."""
     imp = np.zeros(3)
     fn = kernel.advance if use_jit else kernel.advance_py
     fn(int(nsteps), float(dt), st.x, st.v, st.R, st.w, mesh.mass, mesh.inertia, mesh.con, mesh.l0, mesh.e0,
        mesh.prop, st.up, st.tp, st.thp, st.alive, st.yielded, st.fix, st.vpre, st.fext, float(alpha),
        0 if wall is None else 1, 0.0 if wall is None else float(wall), st.kpen, float(mu),
-       float(min(hinge_lim, 1e300)), st.fint, imp)
+       float(min(hinge_lim, 1e300)), st.fint, imp, mesh.nrad, mesh.ktyre, mesh.hsec, mesh.link, mesh.cdist, st.cpairs,
+       st.cnp, st.xref, float(CONTACT_SKIN), float(CONTACT_PENALTY if contact else 0.0), st.fcon, st.cstat)
     st.t += nsteps * dt
     return imp
+
+
+def tyre_omega_dt2(mesh: Mesh, dt: float) -> float:
+    """The largest (omega dt)^2 = k_t dt^2 / m of the wheel nodes' tyre springs on their own masses (0 without)."""
+    on = mesh.ktyre > 0.0
+    return float((mesh.ktyre[on] * dt * dt / mesh.mass[on]).max()) if on.any() else 0.0
 
 
 def hinge_rotations(st: State) -> np.ndarray:
@@ -100,6 +136,8 @@ class CrashRun:
     steps: int
     per: int                 # kernel steps per record row
     extra: dict = field(default_factory=dict)
+    wall_dir: np.ndarray | None = None  # the unit direction the frame moves into the wall (None: +x); wall_x is
+                                        # then the plane's offset along it (the plane p . wall_dir = wall_x)
 
     @property
     def t_all(self) -> np.ndarray:
@@ -111,8 +149,10 @@ class CrashRun:
 
     def decel(self, window: float = WINDOW) -> np.ndarray:
         """(k + 1,) the whole mass's deceleration (m/s^2, + slowing down) over the window ending at each
-        record time: the wall's x impulse over it / (mass x window) (before t = 0 there is no impulse)."""
-        cum = np.concatenate([[0.0], np.cumsum(self.impulse[:, 0])])
+        record time: the wall's x impulse (along wall_dir when given) over it / (mass x window) (before t = 0 there
+        is no impulse)."""
+        along = self.impulse[:, 0] if self.wall_dir is None else self.impulse @ self.wall_dir
+        cum = np.concatenate([[0.0], np.cumsum(along)])
         w = self.window_rows(window)
         k = np.arange(len(cum))
         return -(cum - cum[np.maximum(k - w, 0)]) / (self.total_mass * w * self.chunk)
@@ -126,38 +166,235 @@ class CrashRun:
         return max(1, int(round(window / self.chunk)))
 
 
+SPLIT_STOP_SHARE = 0.03  # a piece broken off the seats' side with this share of the whole mass is the split (C1: NG)
+STOP_SHARE = 0.05  # the run stops when the whole vehicle's speed toward the wall is down to this share of the start
+                   # (its kinetic energy then 0.25 % of the start's at most if all of it were along x; a fully plastic
+                   # crush comes to rest without turning back, and a frame that yaws off the wall drifts on at a few
+                   # tenths of a m/s with no wall force: e.g. showcase 20261105-150416 v3 at 0.32 m/s from 95 ms on;
+                   # HIRAKU's choice). Below it the run goes on while the wall still pushes (QUIET_S): on design v1
+                   # the towers still fell back into the foot box after 5 %, the least room -164 mm at 5 %, -191 mm at
+                   # the full stop (K2's runs, 2026-11-06)
+QUIET_S = 2e-3  # s: below STOP_SHARE the run stops once the wall has given no impulse over this long (a drift)
+
+
+def pieces(mesh: Mesh, alive: np.ndarray, keep: list[int]) -> list[list[int]]:
+    """The pieces (node lists) the elements alive leave apart from the one holding `keep`'s first node."""
+    parent = list(range(mesh.n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for e in np.nonzero(alive)[0]:
+        i, j = mesh.con[e]
+        parent[find(int(i))] = find(int(j))
+    comps: dict[int, list[int]] = {}
+    for k in range(mesh.n):
+        comps.setdefault(find(k), []).append(k)
+    main = find(int(keep[0]))
+    return [nodes for r, nodes in comps.items() if r != main]
+
+
+def wall_basis(d) -> np.ndarray:
+    """3 x 3 orthonormal, right-handed, its first row the unit vector along d: Q @ d = |d| e_x (Q = 1 for d on +x)."""
+    d = np.asarray(d, float)
+    n = float(np.linalg.norm(d))
+    if not n > 0.0:
+        raise ValueError("the wall's direction must be a non-zero vector")
+    d = d / n
+    a = np.array([0.0, 1.0, 0.0]) if abs(float(d[1])) < 0.9 else np.array([0.0, 0.0, 1.0])
+    u = a - float(a @ d) * d
+    u /= np.linalg.norm(u)
+    return np.array([d, u, np.cross(d, u)])
+
+
+def turned_mesh(mesh: Mesh, Q: np.ndarray) -> Mesh:
+    """The mesh turned by Q (x -> Q x): the node positions and the elements' local axes at the start; everything
+    else (sections, masses, contact distances, the wheels' radii) does not depend on the direction."""
+    return replace(mesh, x0=mesh.x0 @ Q.T, e0=np.einsum("ij,ejk->eik", Q, mesh.e0), node_ids=list(mesh.node_ids),
+                   member_of=list(mesh.member_of))
+
+
+def _turn_state_back(st: State, Q: np.ndarray) -> None:
+    """A state of the turned mesh (turned_mesh) in the design frame again: vectors x' -> Q^T x', R' -> Q^T R' Q."""
+    for k in ("x", "v", "w", "fcon", "xref"):
+        setattr(st, k, getattr(st, k) @ Q)
+    for k in ("fint", "fext", "vpre"):
+        a = getattr(st, k)
+        setattr(st, k, np.concatenate([a[:, :3] @ Q, a[:, 3:] @ Q], axis=1))
+    st.R = np.einsum("ji,njk,kl->nil", Q, st.R, Q)
+
+
 def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0, hinge_lim: float = math.inf,
-              use_jit: bool = True, dt: float | None = None) -> CrashRun:
-    """The frame moving at `speed` (m/s, +x) into a rigid wall at its front-most node, x = max x0."""
-    dt = time_step(mesh) if dt is None else dt
-    st = new_state(mesh, (speed, 0.0, 0.0), dt)
-    wall = float(mesh.x0[:, 0].max())
+              use_jit: bool = True, dt: float | None = None, wall: float | None = None,
+              keep: list[int] | None = None, stop_share: float = SPLIT_STOP_SHARE, contact: bool = True,
+              stop_at_split: bool | None = None, wall_dir=None, velocity=None, spin=None, about=None,
+              gravity=None, until_limit: bool = False, stop_when=None) -> CrashRun:
+    """The frame moving at `speed` (m/s, +x) into a rigid wall at x = `wall` (default its front-most frame node).
+
+    keep: nodes of the main piece (e.g. the occupants' seat mounts). After each break the pieces apart from the
+    main one are found: each is written in run.extra["pieces"] ({"t", "nodes", "share"}: its share of the whole
+    mass); the first one with at least `stop_share` is the split (run.extra["split"] = {"t", "elements" broken in
+    that record step, "share"}). contact: the elements touch each other (a broken-off piece pushes on the rest);
+    stop_at_split: the run stops at the split (default: only without contact, where the rest would pass through
+    the piece). Every record row also keeps the elements' plastic axial elongation and plastic hinge rotations
+    (run.extra["up"], ["thp"]), for the members' forces; run.extra["contact"] the contact pair list's counts.
+
+    A wall of any direction: wall_dir (a vector, made unit) is the direction the frame moves into the wall, the
+    plane p . wall_dir = wall (its normal -wall_dir; default wall: the frame node furthest along wall_dir). The
+    kernel's wall is x only, so the mesh is turned to put wall_dir on x (wall_basis, turned_mesh: the same physics
+    in turned axes), run, and its record turned back (run.wall_dir; the friction is on the plane, the wheels touch
+    it at their radius as on the x wall). velocity: the frame's velocity at the start (m/s, design frame; default
+    `speed` along wall_dir, or +x); with it, run.speed is its part along wall_dir. spin (rad/s, design frame): the
+    frame starts turning as a rigid body about `about` (m, default its mass centre, new_state). gravity (m/s^2,
+    design frame): a force mass x gravity on every node. until_limit: run to time_limit (no stop when the speed
+    toward the wall is spent; the split's stop still applies). stop_when(mesh, state, impulse, chunk_s): called after
+    each record chunk (in the turned axes), a non-empty text stops the run with that reason. Without wall_dir the run
+    is the x wall's, step for step."""
+    if stop_at_split is None:
+        stop_at_split = not contact
+    Q = None if wall_dir is None else wall_basis(wall_dir)
+    km = mesh if Q is None else turned_mesh(mesh, Q)
+    dt = time_step(km) if dt is None else dt
+    tyre_w2 = tyre_omega_dt2(km, dt)
+    if tyre_w2 > TYRE_PENALTY_MAX:
+        raise ValueError(f"the tyre's wall spring is too stiff for the time step: (omega dt)^2 = k_t dt^2 / m = "
+                         f"{tyre_w2:.3g} on a wheel node, more than {TYRE_PENALTY_MAX:g} (dt {dt:.3g} s)")
+    if Q is None and velocity is None and spin is None:
+        st = new_state(km, (speed, 0.0, 0.0), dt)
+    else:
+        v0 = (np.array([speed, 0.0, 0.0]) if Q is None else speed * Q[0]) if velocity is None else np.asarray(velocity, float)
+        if Q is not None:
+            v0 = Q @ v0
+            speed = float(v0[0])
+        elif velocity is not None:
+            speed = float(v0[0])
+        st = new_state(km, v0, dt, spin=None if spin is None else (np.asarray(spin, float) if Q is None
+                                                                    else Q @ np.asarray(spin, float)),
+                       about=None if about is None else (np.asarray(about, float) if Q is None
+                                                         else Q @ np.asarray(about, float)))
+    if gravity is not None:
+        g = np.asarray(gravity, float) if Q is None else Q @ np.asarray(gravity, float)
+        st.fext[:, :3] += km.mass[:, None] * g[None, :]
+    mesh_out, mesh = mesh, km  # the loop runs on the (turned) mesh; the record is turned back at the end
+    wall = float(mesh.x0[:mesh.n_frame, 0].max()) if wall is None else float(wall)
     per = max(1, int(round(REC_DT / dt)))
     M = float(mesh.mass.sum())
     ts, imps, pos, vel, mom = [], [], [st.x.copy()], [st.v.copy()], [mesh.mass @ st.v]
+    ups, thps = [st.up.copy()], [st.thp.copy()]
     broken_at, first_yield = {}, None
     stopped = f"time limit {time_limit:g} s"
     steps = 0
+    extra: dict = {"pieces": [], "tyre_omega_dt2": tyre_w2}
+    seen: set[tuple[int, ...]] = set()
     while st.t < time_limit - 0.5 * dt:
         alive0 = st.alive.copy()
-        imp = advance(mesh, st, per, dt, wall=wall, mu=mu, hinge_lim=hinge_lim, use_jit=use_jit)
+        imp = advance(mesh, st, per, dt, wall=wall, mu=mu, hinge_lim=hinge_lim, use_jit=use_jit, contact=contact)
         steps += per
         ts.append(st.t)
         imps.append(imp)
         pos.append(st.x.copy())
         vel.append(st.v.copy())
         mom.append(mesh.mass @ st.v)
-        for e in np.nonzero(alive0 != st.alive)[0]:
-            broken_at[int(e)] = st.t
+        ups.append(st.up.copy())
+        thps.append(st.thp.copy())
+        new = [int(e) for e in np.nonzero(alive0 != st.alive)[0]]
+        for e in new:
+            broken_at[e] = st.t
         if first_yield is None and st.yielded.any():
             first_yield = st.t
         if not np.all(np.isfinite(st.x)):
             raise ValueError(f"the beam frame run went unstable at t = {st.t:.4g} s (dt {dt:.3g} s)")
-        if mom[-1][0] / M <= 0.0:
-            stopped = "the vehicle stopped (its momentum toward the wall reached 0)"
+        if new and keep:
+            big = None
+            for nodes in pieces(mesh, st.alive, keep):
+                key = tuple(nodes)
+                if key in seen:
+                    continue
+                seen.add(key)
+                share = float(mesh.mass[nodes].sum()) / M
+                extra["pieces"].append({"t": st.t, "nodes": nodes, "share": share})
+                if share >= stop_share and (big is None or share > big):
+                    big = share
+            if big is not None and "split" not in extra:
+                extra["split"] = {"t": st.t, "elements": new, "share": big}
+                if stop_at_split:
+                    stopped = (f"a piece with {big * 100:.1f} % of the mass broke off the seats' side (at least "
+                               f"{stop_share * 100:g} %; the run stops at the split)")
+                    break
+        if stop_when is not None:
+            why = stop_when(mesh, st, imp, per * dt)
+            if why:
+                stopped = why
+                break
+        if until_limit:
+            continue
+        v_now = mom[-1][0] / M
+        if v_now <= 0.0:
+            stopped = "the vehicle stopped (its speed toward the wall, its momentum / its mass, reached 0)"
             break
-    return CrashRun(mesh, dt, speed, wall, np.array(ts), np.array(imps).reshape(-1, 3), np.array(pos), np.array(vel),
-                    np.array(mom), broken_at, first_yield, st, stopped, steps, per)
+        quiet = max(1, int(round(QUIET_S / (per * dt))))
+        if (v_now <= STOP_SHARE * speed and len(imps) >= quiet
+                and all(abs(float(i[0])) == 0.0 for i in imps[-quiet:])):
+            stopped = (f"the vehicle drifts off the wall (its speed toward the wall below {STOP_SHARE * 100:g} % of the "
+                       f"start, and no wall force for {QUIET_S * 1000:g} ms)")
+            break
+    extra["up"], extra["thp"] = np.array(ups), np.array(thps)
+    extra["contact"] = {"on": bool(contact), "lists": int(st.cstat[0]), "longest": int(st.cstat[1]),
+                        "pair_steps": int(st.cstat[2]), "pairs_possible": int(np.count_nonzero(mesh.cdist > 0.0)) // 2}
+    imps_a, pos_a, vel_a, mom_a = np.array(imps).reshape(-1, 3), np.array(pos), np.array(vel), np.array(mom)
+    if Q is not None:  # back to the design frame
+        imps_a, pos_a, vel_a, mom_a = imps_a @ Q, pos_a @ Q, vel_a @ Q, mom_a @ Q
+        _turn_state_back(st, Q)
+    return CrashRun(mesh_out, dt, speed, wall, np.array(ts), imps_a, pos_a, vel_a, mom_a, broken_at, first_yield, st,
+                    stopped, steps, per, extra, wall_dir=None if Q is None else Q[0].copy())
+
+
+def member_forces(run: CrashRun, k: int) -> dict[str, float]:
+    """{member: N} at record row k: of the member's elements alive then, the axial force E A / L0 (l - L0 - u_p),
+    at most the yield load A f_y in size, of the largest size (signed, + tension); a member with none alive is left
+    out."""
+    mesh = run.mesh
+    p = run.positions[k]
+    t = run.t_all[k]
+    up = run.extra["up"][k]
+    out: dict[str, float] = {}
+    for e in mesh.frame_elements():
+        if run.broken_at.get(e, math.inf) <= t + 1e-12:
+            continue
+        i, j = mesh.con[e]
+        ln = float(np.linalg.norm(p[j] - p[i]))
+        # the positions are a kernel step ahead of u_p (central differences): the force the kernel takes there is
+        # returned to the yield load, as it does
+        n = float(np.clip(mesh.prop[e, 0] / mesh.l0[e] * (ln - mesh.l0[e] - up[e]), -mesh.prop[e, 4], mesh.prop[e, 4]))
+        m = mesh.member_of[e]
+        if m not in out or abs(n) > abs(out[m]):
+            out[m] = n
+    return out
+
+
+def member_end_hinges(run: CrashRun, k: int) -> dict[tuple[str, str], float]:
+    """{(member, end node id): rad} at record row k: the plastic hinge rotation sqrt(theta_y^2 + theta_z^2) at each
+    end of each member (the end of the member's element at that node)."""
+    mesh = run.mesh
+    thp = run.extra["thp"][k]
+    by_member: dict[str, list[int]] = {}
+    for e in mesh.frame_elements():
+        by_member.setdefault(mesh.member_of[e], []).append(e)
+    out = {}
+    for m, els in by_member.items():
+        count: dict[int, int] = {}
+        for e in els:
+            for n in mesh.con[e]:
+                count[int(n)] = count.get(int(n), 0) + 1
+        for e in els:
+            for side in (0, 1):
+                n = int(mesh.con[e][side])
+                if count[n] == 1:  # an end of the member
+                    out[(m, mesh.node_ids[n])] = float(math.sqrt(float(thp[e, side, 0]) ** 2 + float(thp[e, side, 1]) ** 2))
+    return out
 
 
 # ------------------------------------------------------------------ the field of a run
@@ -182,25 +419,34 @@ def frame_picks(n_samples: int, special: list[int], even: int = 120, most: int =
 MAX_FIELD_NODES = 300  # the contract's limit on a node_motion field's nodes
 
 
+def default_picks(run: CrashRun, decel_g: np.ndarray | None = None) -> list[int]:
+    """frame_picks with the peak deceleration's, the first yield's and the first break's rows (node_motion's
+    frames; the members' series are kept at the same rows)."""
+    tt = run.t_all
+    dec = run.decel() if decel_g is None else decel_g
+    peak = int(np.argmax(dec)) if len(dec) else 0
+    fy = None if run.first_yield is None else int(np.searchsorted(tt, run.first_yield - 1e-12))
+    fb = None if not run.broken_at else int(np.searchsorted(tt, min(run.broken_at.values()) - 1e-12))
+    return frame_picks(len(tt), [peak, fy, fb])
+
+
 def node_motion(run: CrashRun, label: str, picks: list[int] | None = None, decel_g: np.ndarray | None = None) -> dict:
     """The field record of kind "node_motion": the mesh nodes' positions (mm, 0.1 mm) at the picked
-    record rows, the members as the elements' node pairs with their member id, and the members broken
-    by each frame. The picks: frame_picks with the peak deceleration's, the first yield's and the
-    first break's rows."""
+    record rows, the members as the elements' node pairs with their member id (the wheel links are not
+    members and are left out; the wheel nodes are among the nodes), and the members broken by each
+    frame. The picks: frame_picks with the peak deceleration's, the first yield's and the first break's
+    rows."""
     mesh = run.mesh
     tt = run.t_all
     if picks is None:
-        dec = run.decel() if decel_g is None else decel_g
-        peak = int(np.argmax(dec)) if len(dec) else 0
-        fy = None if run.first_yield is None else int(np.searchsorted(tt, run.first_yield - 1e-12))
-        fb = None if not run.broken_at else int(np.searchsorted(tt, min(run.broken_at.values()) - 1e-12))
-        picks = frame_picks(len(tt), [peak, fy, fb])
+        picks = default_picks(run, decel_g)
     broken = []
     for k in picks:
         ids = sorted({mesh.member_of[e] for e, tb in run.broken_at.items() if tb <= tt[k] + 1e-12})
         broken.append(ids)
     return {"kind": "node_motion", "label": label, "unit": "mm", "nodes": list(mesh.node_ids),
-            "members": [[mesh.node_ids[a], mesh.node_ids[b], mesh.member_of[e]] for e, (a, b) in enumerate(mesh.con)],
+            "members": [[mesh.node_ids[mesh.con[e, 0]], mesh.node_ids[mesh.con[e, 1]], mesh.member_of[e]]
+                        for e in mesh.frame_elements()],
             "frames": {"t_s": [float(tt[k]) for k in picks],
                        "positions_mm": [[[round(float(c) * 1000.0, 1) for c in p] for p in run.positions[k]] for k in picks],
                        "broken": broken}}

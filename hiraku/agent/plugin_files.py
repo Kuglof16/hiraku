@@ -21,8 +21,8 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.roles import (CAE_EFFORT, CAE_TOOLS, DESIGNER_EFFORT, DESIGNER_TOOLS, MODULE_DESIGNER_TOOLS,
-                                MODULE_PACKAGER_TOOLS, PLUGIN_DIR, PLUGIN_NAME, module_designer_skills, plugin_skills,
-                                sdk_name)
+                                MODULE_PACKAGER_TOOLS, PLUGIN_DIR, PLUGIN_NAME, designer_skills, module_designer_skills,
+                                plugin_skills, sdk_name)
 
 GENERATED = "<!-- written by python -m hiraku.agent.plugin_files from hiraku/agent/prompts.py; do not edit -->"
 
@@ -59,7 +59,7 @@ def agent_files() -> dict[str, str]:
     owner it is), and the packager with build_version and its rules for modules (they say they hold for a design
     with modules)."""
     out = {"agents/designer.md": _agent("designer", prompts.DESIGNER_DESCRIPTION, prompts.DESIGNER_PROMPT,
-                                        DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False),
+                                        DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False, skill_names=designer_skills()),
            "agents/packager.md": _agent("packager", prompts.cae_description("assembly", modules=True),
                                         prompts.cae_prompt("assembly", modules=True), MODULE_PACKAGER_TOOLS,
                                         CAE_EFFORT, skills=True)}
@@ -96,7 +96,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 
 def command_files() -> dict[str, str]:
     tools = [plugin_tool(n) for n in ("start_run", "open_run", "get_context", "write_report", "pick_domains", "ask_user",
-                                      "import_knowledge", "rule_check", "find_tradeoffs", "wait_for_roles")]
+                                      "import_knowledge", "rule_check", "find_tradeoffs", "add_tests", "wait_for_roles")]
     fields = {"description": "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める",
               "argument-hint": "<要件のファイル (例 data/requirements/offroad-4w.yaml)>",
               "allowed-tools": ", ".join(tools)}

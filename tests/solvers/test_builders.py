@@ -8,6 +8,7 @@ from pathlib import Path
 from hiraku import contract, solvers
 from hiraku.catalog import load_catalog, load_requirements
 from hiraku.catalog.builders import BUILDERS, PLANS, BuildError
+from hiraku.solvers.k2_vehicle.shelf.crash_beam import EDGE_NOTE
 from hiraku.tools.summary import design_summary
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -114,7 +115,8 @@ class BuildersTest(unittest.TestCase):
         for tid in OURS:
             got = BUILDERS[tid](spec(tid), REQ, DESIGN)
             cls.cases.update({lc["load_case_id"]: lc for lc in got} if isinstance(got, list) else {tid: got})
-        cls.runs = {key: tool_for(lc["test_id"]).run(DESIGN, lc, PRED, run_params(lc)) for key, lc in cls.cases.items()
+        # each case on its plan's tool (C1 is judged by K2's crash_beam, N1 by modal_shell) with the plan's params
+        cls.runs = {key: TOOLS[plan_for(lc)["tool"]].run(DESIGN, lc, PRED, run_params(lc)) for key, lc in cls.cases.items()
                     if SLOW or lc["test_id"] not in HEAVY}
 
     def test_every_test_has_a_builder(self):
@@ -165,7 +167,9 @@ class BuildersTest(unittest.TestCase):
         for key, lc in self.cases.items():
             tid = lc["test_id"]
             plan = plan_for(lc)
-            self.assertEqual(plan["tool"], tool_for(tid).name)
+            tool = TOOLS[plan["tool"]]
+            self.assertIn(tid, tool.tests)
+            self.assertEqual(plan["tool"], "crash_beam" if tid == "C1" else tool_for(tid).name)
             if key not in self.runs:  # HEAVY: analysed in the slow tests only
                 continue
             got = {r["quantity"]: r for r in self.runs[key]["results"]}
@@ -180,8 +184,9 @@ class BuildersTest(unittest.TestCase):
                 preds[p["quantity"]] = out
                 if (tid, p["formula_id"]) in NOT_YET_LISTED:
                     self.assertEqual(FORMULAS.get(p["formula_id"]).formula_id, p["formula_id"])
-                else:
-                    self.assertIn(p["formula_id"], tool_for(tid).formulas)
+                else:  # a shelf tool lists its formulas; a K2 tool names them from its pairs (formula_ids)
+                    listed = tool.formulas if hasattr(tool, "formulas") else tool.formula_ids()
+                    self.assertIn(p["formula_id"], listed)
                 if p["quantity"] not in got:  # an intermediate hand value, not compared
                     continue
                 ana = got[p["quantity"]]
@@ -189,6 +194,13 @@ class BuildersTest(unittest.TestCase):
                 # as compare: a prediction of 0 divides by |analysed| (0 when both are 0)
                 rel = ((ana["value"] - out["value"]) / abs(out["value"]) if out["value"] else
                        (0.0 if not ana["value"] else (ana["value"] - out["value"]) / abs(ana["value"])))
+                edge = next((a for a in self.runs[key].get("assumptions", []) if a.startswith(EDGE_NOTE)), "")
+                if f"{p['quantity']} <=" in edge or f"{p['quantity']} >=" in edge:
+                    # the record says the tool's verdict on this quantity turns inside crash_beam's break_band (a
+                    # member at the break angle's edge, decided by the arithmetic's last digits): no fixed comparison
+                    self.assertTrue("Members that break in one run and not in another" in edge
+                                    or "Unbroken at" in edge, edge)
+                    continue
                 if p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
                     self.assertGreater(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
                 else:
@@ -240,7 +252,7 @@ class BuildersTest(unittest.TestCase):
             BUILDERS["R3"](CATALOG.test("R3"), req, DESIGN)
         req = copy.deepcopy(REQ)
         req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q65"]
-        self.assertEqual(BUILDERS["C1"](CATALOG.test("C1"), req, DESIGN)["params"]["speed"]["value"], 40.0)  # Q50
+        self.assertEqual(BUILDERS["C1"](CATALOG.test("C1"), req, DESIGN)[0]["params"]["speed"]["value"], 40.0)  # Q50
 
     def test_t1_past_the_limit(self):
         """The ambient where the hand calculation puts the battery 5 K over its limit: the analysis is over it too."""
@@ -292,7 +304,7 @@ class BuildersTest(unittest.TestCase):
 
     def test_catalog_tolerance_wins(self):
         spec = dict(CATALOG.test("C1"), tolerance_rel=0.07)
-        self.assertEqual(BUILDERS["C1"](spec, REQ, DESIGN)["tolerance_rel"], 0.07)
+        self.assertEqual({lc["tolerance_rel"] for lc in BUILDERS["C1"](spec, REQ, DESIGN)}, {0.07})
 
 
 def hop_limit_by_hand(design, loading):
@@ -376,7 +388,8 @@ class N1HopTest(unittest.TestCase):
 
 
 class RopsBuilderTest(unittest.TestCase):
-    """R4: no tool on the shelf and no plan (HIRAKU's Claude makes the tool in the run); the load case alone."""
+    """R4: one load case, R4-rollover, judged by K2's rollover_beam (the rollover on the tilt table with the frame as
+    beams); the hand calculation is the static push of OECD Code 4 (borrowed) after the path check."""
 
     @classmethod
     def setUpClass(cls):
@@ -385,7 +398,7 @@ class RopsBuilderTest(unittest.TestCase):
 
     def test_load_case_fits_the_contract(self):
         contract.validate("load_case", self.lc)
-        self.assertEqual(self.lc["load_case_id"], "R4-rops")
+        self.assertEqual(self.lc["load_case_id"], "R4-rollover")
         self.assertEqual(self.lc["domain"], CATALOG.test("R4")["domain"])
 
     def test_values_are_code_4_at_the_reference_mass(self):
@@ -404,6 +417,12 @@ class RopsBuilderTest(unittest.TestCase):
         c = self.lc["criterion"]
         self.assertEqual((c["quantity"], c["op"], c["limit"]), ("rops_occupant_clearance", ">=", {"value": 0.0, "unit": "mm"}))
         self.assertIn("Code 4", c["basis"])
+        self.assertIn("rollover", c["basis"])
+        for text in (c["basis"], self.lc["title"]):
+            self.assertIn("HIRAKU 独自の計算の確かめ。規格の試験ではない", text)
+            self.assertNotIn("規格に基づく", text)
+        for s in ("ISO 3471", "ROHVA", "「HIRAKU の仮定」", "10 kN"):
+            self.assertIn(s, c["basis"])
         self.assertIn("Q31", self.lc["requirement_keys"])
 
     def test_requirement_keys_from_the_catalog_entry(self):
@@ -418,9 +437,29 @@ class RopsBuilderTest(unittest.TestCase):
         with self.assertRaisesRegex(BuildError, "Q64"):
             BUILDERS["R4"](CATALOG.test("R4"), req, self.rb)
 
-    def test_no_plan_and_no_shelf_tool(self):
+    def test_plan_by_load_case_with_rollover_beam_alone_on_the_shelf(self):
+        """The plan is keyed by the load case: rollover_beam, the path check first, then R4_PREDICTIONS (the criterion's
+        quantity last); every formula is one the tool pairs; the expected mismatch decides by the tool, with its cause.
+        rollover_beam is the only tool covering R4 and its stage is 3 (no lighter tool takes R4's stage)."""
+        from hiraku.catalog.builders.analysis import R4_PREDICTIONS
+        from hiraku.catalog.builders.load_path import PATH_PREDICTION
+        from hiraku.solvers.k2_vehicle.shelf import TOOLS as K2_TOOLS
+
         self.assertNotIn("R4", PLANS)
-        self.assertFalse([t for t in TOOLS.values() if "R4" in t.tests])
+        plan = plan_for(self.lc)
+        self.assertIs(plan, PLANS["R4-rollover"])
+        self.assertEqual(plan["tool"], "rollover_beam")
+        self.assertEqual(plan["predictions"], [PATH_PREDICTION] + R4_PREDICTIONS)
+        self.assertEqual(plan["predictions"][-1]["quantity"], self.lc["criterion"]["quantity"])
+        tool = K2_TOOLS["rollover_beam"]
+        for p in plan["predictions"]:
+            self.assertIn(p["formula_id"], tool.formula_ids())
+        exp = plan["expected_mismatch"]
+        self.assertEqual(exp["quantity"], "rops_occupant_clearance")
+        self.assertTrue(exp["tool_decides"] and exp["tool_decides_reason"] and exp["cause"] and exp["source"])
+        self.assertNotIn("safe_side", exp)
+        self.assertEqual([t.name for t in TOOLS.values() if "R4" in t.tests], ["rollover_beam"])
+        self.assertEqual((tool.stage, tool.planned_only), (3, False))
 
     def test_hand_formulas_named_for_the_prediction_evaluate(self):
         """The formulas the builder's comment names, with frame_inputs and the load case's params."""

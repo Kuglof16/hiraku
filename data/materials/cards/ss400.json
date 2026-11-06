@@ -9,19 +9,21 @@
     "E_MPa": {
       "value": 205000.0,
       "kind": "typical",
-      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
-      "checked": false
+      "source": "secondary: MLIT (Japan) building-works structural design document, chapter 4, table 4.2.1 (material constants), p. 4-3, https://www.mlit.go.jp/gobuild/content/001517904.pdf; the same document's table 4.1.1 names the steel as SS400 (JIS G 3101); it does not name the standard its constants come from; E = 2.05e5 N/mm2",
+      "checked": true,
+      "checked_on": "2026-11-06"
     },
     "nu": {
       "value": 0.3,
       "kind": "typical",
-      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
-      "checked": false
+      "source": "secondary: MLIT (Japan) building-works structural design document, chapter 4, table 4.2.1 (material constants), p. 4-3, https://www.mlit.go.jp/gobuild/content/001517904.pdf; the same document's table 4.1.1 names the steel as SS400 (JIS G 3101); it does not name the standard its constants come from; nu = 0.3",
+      "checked": true,
+      "checked_on": "2026-11-06"
     },
     "density_kg_m3": {
       "value": 7850.0,
       "kind": "typical",
-      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "source": "data/materials/materials.json; not read for SS400 (EN 1993-1-1 / EN 1991-1-1 Table A.4 give about 7850 for structural steel in general, read on eurocodeapplied.com, secondary, 2026-11-06: not this steel)",
       "checked": false
     },
     "yield_MPa": {

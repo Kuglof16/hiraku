@@ -85,15 +85,6 @@ requirements:
     source: default
     trust: 3
     basis: assumption (indoor, 5 to 35 degC; the makers publish no operating temperature)
-  - key: Q31
-    name: 体格の範囲
-    value: 子どもを含む
-    source: default
-    trust: 1
-    basis: >-
-      ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https://www.iso.org/standard/69569.html.
-      Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403);
-      the standard itself not checked in this repository
   - key: Q34
     name: 弱い人がいるか
     value: 客の子ども

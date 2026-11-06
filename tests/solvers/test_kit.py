@@ -157,10 +157,10 @@ class CheckTest(unittest.TestCase):
         # thickness x density, before the catalogue's unit mass with the checkers (ladder_4w.PLATE_KG_M2); 644.95 kg
         # before the clevis brackets at the front lower arms' pivots and the dampers' tops (kit/arms.pivot_brackets);
         # 645.24 kg before the joints' struts and the brake pushrod (kit/joints.py); 646.16 kg before the rear lower
-        # arms' brackets reached the rail's outer face (kit/mounts.place, 4 x 0.18 kg: 646.87 kg) and while the rear
-        # towers' posts leaned 20 mm out (kit/mounts: their tops now over the rails, the arms to the dampers' tops 20 mm
-        # longer: 646.24 kg); both
-        self.assertAlmostEqual(q["mass"]["value"], 646.94, delta=0.01)
+        # arms' brackets reached the rail's outer face (kit/mounts.place, 4 x 0.18 kg), while the rear towers' posts
+        # leaned 20 mm out (kit/mounts: their tops now over the rails, the arms to the dampers' tops 20 mm longer) and
+        # before the seats' mount brackets on the seat's rear cross member (ladder_4w._seat_mounts, 0.35 kg): all three
+        self.assertAlmostEqual(q["mass"]["value"], 647.29, delta=0.01)
         # the front lower arm's clevis bracket (kit/arms.pivot_brackets), 30 mm below its pivot, at the height
         # the suspension box had (30 mm below the lower arm) before the arms were parts
         self.assertEqual(q["ground_clearance"]["value"], 150.0)

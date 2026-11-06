@@ -47,6 +47,9 @@ export function mountIntake(host, api, options = {}) {
     onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, picksFinal: !!options.picksFinal, time: null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
+    // the domains answer one after another with a playback time: in the video layout (body.video) or when the host asks (option replyInTurn)
+    replyInTurn: options.replyInTurn ?? (typeof document !== "undefined" && !!document.body?.classList?.contains("video")),
+    petSlots: new Map(), // domain -> the place of that domain's pet on A1 (kept across redraws; the host mounts the pet into it)
     petsSlot: h("div", { class: "a2-pets", dataset: { slot: "pets" } }), // a place on A2 the host mounts its own pets into
   };
   const nav = h("nav", { class: "in-nav", hidden: options.nav === false });
@@ -124,5 +127,5 @@ export function mountIntake(host, api, options = {}) {
   const showQuestions = () => { show("A1"); panes.A1.querySelector?.(".in-ask-top")?.scrollIntoView?.({ block: "start" }); };
 
   draw();
-  return { get petsSlot() { return ui.petsSlot; }, show, update, setWant, setTime, useDefaults, showQuestions, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
+  return { get petsSlot() { return ui.petsSlot; }, get petSlots() { return ui.petSlots; }, show, update, setWant, setTime, useDefaults, showQuestions, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
 }

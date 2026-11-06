@@ -944,7 +944,7 @@
       update(t, s) { fe.setValues(vals(t, s)); },
       contour(t, s) {
         const load = loadFactor(t, s);
-        const lines = [s === "mismatch" ? "荷重: 体重が左足に偏る (食い違い)" : `荷重 ${Math.round(load * 100)} %` + (s === "working" ? " (増分)" : "")];
+        const lines = [s === "mismatch" ? "荷重: 体重が左足に偏る (不一致)" : `荷重 ${Math.round(load * 100)} %` + (s === "working" ? " (増分)" : "")];
         return Object.assign(stats(vals(t, s)), { load, loadCase: s === "mismatch" ? "mismatch" : "settled", info: lines });
       },
     };
@@ -1110,7 +1110,7 @@
       contour(t, s) {
         const L = loadFactor(t, s);
         const info = [
-          s === "mismatch" ? "穴のふちから亀裂が伸びた (食い違い)" : `引っぱる荷重 ${Math.round(L * 100)} %` + (s === "working" ? " (増分)" : ""),
+          s === "mismatch" ? "穴のふちから亀裂が伸びた (不一致)" : `引っぱる荷重 ${Math.round(L * 100)} %` + (s === "working" ? " (増分)" : ""),
           "穴の上下のふちに集中 (公称の 3 倍 = 1.0)",
         ];
         return Object.assign(stats(vals(t, s)), { info });
@@ -1237,7 +1237,7 @@
         flowMat.userData.flow.uSep.value = s === "mismatch" ? 1 : 0;
       },
       contour(t, s) {
-        const info = s === "mismatch" ? ["流れ: 肩の後ろではく離 (食い違い)", "後ろは低い圧力のまま (流れが逆に回る)"] : ["先端のよどみ点がいちばん高い (Cp = 1)", s === "working" ? "肩は流れが速く低い · 流れの線が速い (作業中)" : "肩は流れが速く低い (Cp = −1.25)"];
+        const info = s === "mismatch" ? ["流れ: 肩の後ろではく離 (不一致)", "後ろは低い圧力のまま (流れが逆に回る)"] : ["先端のよどみ点がいちばん高い (Cp = 1)", s === "working" ? "肩は流れが速く低い · 流れの線が速い (作業中)" : "肩は流れが速く低い (Cp = −1.25)"];
         return Object.assign(stats(vals(t, s)), { info });
       },
     };
@@ -1350,7 +1350,7 @@
       },
       contour(t, s) {
         const tau = tauOf(t, s);
-        const info = [s === "mismatch" ? "右の角に当たった (オフセット、食い違い)" : "前の下に当たった (正面)", `当たってから ${tau.toFixed(2)} 秒 · 応力の波が広がる` + (s === "working" ? " (くり返し)" : "")];
+        const info = [s === "mismatch" ? "右の角に当たった (オフセット、不一致)" : "前の下に当たった (正面)", `当たってから ${tau.toFixed(2)} 秒 · 応力の波が広がる` + (s === "working" ? " (くり返し)" : "")];
         return Object.assign(stats(vals(t, s)), { info });
       },
     };
@@ -1449,7 +1449,7 @@
       },
       contour(t, s) {
         const r = solve(t, s);
-        const info = [s === "mismatch" ? "別のモード (3 つの山) が出た (食い違い)" : "2 次のモード (横長 ⇄ 縦長)", `振幅 ${(r.mo.amp / AMAX).toFixed(2)} · ${r.mo.f.toFixed(2)} 回/秒 (誇張)`];
+        const info = [s === "mismatch" ? "別のモード (3 つの山) が出た (不一致)" : "2 次のモード (横長 ⇄ 縦長)", `振幅 ${(r.mo.amp / AMAX).toFixed(2)} · ${r.mo.f.toFixed(2)} 回/秒 (誇張)`];
         return Object.assign(stats(r.v), { info });
       },
     };
@@ -1514,7 +1514,7 @@
         f.uGain.value = s === "working" ? 0.35 + 0.65 * ramp(t) : 1;
       },
       contour(t, s) {
-        const info = s === "working" ? [`下から温まっている ${Math.round(ramp(t) * 100)} %`, "非定常の熱伝導 (erfc)"] : s === "mismatch" ? ["右の脇に熱だまり (食い違い)", "下から加熱・まわりへ放熱"] : ["下から加熱・まわりへ放熱 (定常)", "線 = 等温線"];
+        const info = s === "working" ? [`下から温まっている ${Math.round(ramp(t) * 100)} %`, "非定常の熱伝導 (erfc)"] : s === "mismatch" ? ["右の脇に熱だまり (不一致)", "下から加熱・まわりへ放熱"] : ["下から加熱・まわりへ放熱 (定常)", "線 = 等温線"];
         return Object.assign(stats(vals(t, s)), { info });
       },
     };
@@ -1658,7 +1658,7 @@
       },
       contour(t, s) {
         const p = progress(t, s);
-        const info = [`火炎が燃焼室の ${Math.round(Math.min(1, p * 1.12) * 100)} % まで広がった` + (s === "working" ? " (速い回転)" : ""), s === "mismatch" ? "奥で自己着火 (ノッキング、食い違い)" : "点火プラグから火炎面が広がる"];
+        const info = [`火炎が燃焼室の ${Math.round(Math.min(1, p * 1.12) * 100)} % まで広がった` + (s === "working" ? " (速い回転)" : ""), s === "mismatch" ? "奥で自己着火 (ノッキング、不一致)" : "点火プラグから火炎面が広がる"];
         return Object.assign(stats(vals(t, s)), { info });
       },
     };
@@ -1721,7 +1721,7 @@
       },
       contour(t, s) {
         const r = radius(t, s);
-        const info = [`フィレットの半径 r = ${r.toFixed(2)}` + (s === "working" ? " (動かしている)" : ""), s === "mismatch" ? "r が設計の値 0.30 からずれた (食い違い)" : "色は面の色 (コンターではない)"];
+        const info = [`フィレットの半径 r = ${r.toFixed(2)}` + (s === "working" ? " (動かしている)" : ""), s === "mismatch" ? "r が設計の値 0.30 からずれた (不一致)" : "色は面の色 (コンターではない)"];
         return { info };
       },
     };
@@ -2201,7 +2201,7 @@
         const info = [
           st === "working" ? `詰め方を試している · ${name(workOf(t).name)}を持ち上げて向きを変える`
             : st === "pass" ? "最後の 1 個が入って、ふたがぴったり閉じた"
-              : st === "mismatch" ? "上の T が箱からはみ出して入らない (食い違い)"
+              : st === "mismatch" ? "上の T が箱からはみ出して入らない (不一致)"
                 : "7 個の積み木が箱にすき間なく詰まっている",
           "色は積み木ごと (コンターではない)",
         ];
@@ -2367,7 +2367,7 @@
         const info = [
           s === "working" ? `組み立ての順番を試している · ${name(workOf(t).name)}の棒を抜いて戻す`
             : s === "pass" ? "最後の棒がぴたっと収まった"
-              : s === "mismatch" ? "横の上の棒が途中で引っかかって入らない (食い違い)"
+              : s === "mismatch" ? "横の上の棒が途中で引っかかって入らない (不一致)"
                 : "6 本の棒が 3 つの向きに噛み合っている",
           "色は棒の向きごと (コンターではない)",
         ];
@@ -2474,7 +2474,7 @@
         const info = [
           s === "working" ? `輪を外そうと試している · ${DEFS[workOf(t).k].label}を回す`
             : s === "pass" ? "輪がきれいに収まった"
-              : s === "mismatch" ? "前後の輪が引っかかって戻らない (食い違い)"
+              : s === "mismatch" ? "前後の輪が引っかかって戻らない (不一致)"
                 : "3 つの輪が絡み合って外れない",
           "色は輪ごと (コンターではない)",
         ];
@@ -2743,7 +2743,7 @@
       contour(t, s) {
         const a = accel(t, s);
         const v = [force(a, -1), force(a, 1)];
-        const info = [s === "working" ? "ダブルレーンチェンジ (作業中)" : s === "mismatch" ? "曲がりすぎて内側の車輪が浮いた (食い違い)" : "ゆるいコーナー", `横加速度 ${a.toFixed(2)} · ロール ${(ROLL * a).toFixed(3)} rad · 0.5 = 静止の荷重`];
+        const info = [s === "working" ? "ダブルレーンチェンジ (作業中)" : s === "mismatch" ? "曲がりすぎて内側の車輪が浮いた (不一致)" : "ゆるいコーナー", `横加速度 ${a.toFixed(2)} · ロール ${(ROLL * a).toFixed(3)} rad · 0.5 = 静止の荷重`];
         return Object.assign(stats(v), { info });
       },
     };

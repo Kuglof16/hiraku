@@ -71,7 +71,8 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam", "rollover_tilt",
+                                 "rollover_beam"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -133,8 +134,8 @@ class Declarations(unittest.TestCase):
 
     def test_stages_for_light_first(self):
         # contract tool_spec.stage (HK5): the K&C bench is a static one-corner model (1), the others
-        # integrate the vehicle in time (2)
-        want = {"kc_bench": 1, "crash_beam": 3}
+        # integrate the vehicle in time (2); the frame as yielding beams is 3 (crash_beam, rollover_beam)
+        want = {"kc_bench": 1, "crash_beam": 3, "rollover_beam": 3}
         for name, tool in TOOLS.items():
             self.assertEqual(tool.describe()["stage"], want.get(name, 2), name)
 
@@ -143,7 +144,9 @@ class Declarations(unittest.TestCase):
             with self.subTest(tool=name):
                 desc = tool.describe()
                 self.assertEqual(desc["name"], name)
-                self.assertEqual(desc["tests"], tool.tests)
+                # a planned_only tool (rollover_tilt) names no test: it covers none, only a plan names it
+                self.assertEqual(desc["tests"], [] if tool.planned_only else tool.tests)
+                self.assertEqual(tool.planned_only, name == "rollover_tilt")
                 recs = desc["params"]
                 names = [p["name"] for p in recs]
                 self.assertEqual(len(names), len(set(names)))
@@ -158,6 +161,17 @@ class Declarations(unittest.TestCase):
                             self.assertEqual(contract.errors("quantity", p["default"]), [])
                             self.assertEqual(p["default"]["unit"], p["unit"])
                 json.dumps(desc)
+
+    def test_rollover_tilt_is_checked_with_s1_and_covers_no_test(self):
+        from hiraku.tools.shelf import tools_for_tests
+        self.assertIn("rollover_tilt", tools_for_tests(TOOLS, ["S1", "S3"]))
+        self.assertNotIn("rollover_tilt", tools_for_tests(TOOLS, ["S3", "P1"]))
+        # shelf.load_case_stage and list_tools(test_id) read the spec's tests: S1 keeps the tilt tool alone
+        desc = TOOLS["rollover_tilt"].describe()
+        self.assertEqual(desc["tests"], [])
+        self.assertEqual([n for n, t in TOOLS.items() if "S1" in t.describe()["tests"]], ["tilt"])
+        self.assertEqual([(p["quantity"], p["formula_id"], p["output"]) for p in desc["predicts"]],
+                         [("tip_angle", "tilt.spring_roll_angle", "theta")])
 
     def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()

@@ -72,7 +72,10 @@ class BracketMeshTest(unittest.TestCase):
             [f"bracket_damper_{s}" for s in ("FL", "FR", "RL", "RR")]
             + [f"bracket_lca_{s}{i}" for s in ("FL", "FR") for i in (1, 2)]))
         for b in ms.brackets:
-            self.assertAlmostEqual(b.span_mm, 18.85, places=6)  # the rail's top or bottom wall, inner half
+            # the rear lower arms' brackets reach the rail's outer face (kit/mounts.place): welded along the rail's
+            # whole bottom wall, 37.7 mm; the others the rail's top or bottom wall's inner half, 18.85 mm
+            want = 37.7 if b.id.startswith(("bracket_lca_RL", "bracket_lca_RR")) else 18.85
+            self.assertAlmostEqual(b.span_mm, want, places=6, msg=b.id)
         # the convergence study's coarse level meshes the same brackets; there the upper arms' base line end (the
         # rail's centre line) would cut the tower posts' rings, so it is moved onto the nearest of the posts' own
         # lines inside the span (a shorter welded length at that level)

@@ -243,7 +243,7 @@ class DemoRollbarTest(unittest.TestCase):
     def test_prediction_list_resolves_in_order(self):
         """R4_PREDICTIONS as the scripted run resolves them: from.<name> off r4_inputs, lc.<param>, and pred.<quantity>
         of the predictions before it; the last one is the criterion's quantity."""
-        self.assertNotIn("R4", PLANS)  # still no plan: the tool is made in the run
+        self.assertNotIn("R4", PLANS)  # the plan is keyed by the load case (R4-rollover), these are its hand formulas
         self.assertEqual(R4_PREDICTIONS[-1]["quantity"], self.lc["criterion"]["quantity"])
         given = r4_inputs(RB, self.lc)
         preds = {}
