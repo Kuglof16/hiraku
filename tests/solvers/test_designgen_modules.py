@@ -50,7 +50,9 @@ class SplitTest(unittest.TestCase):
                 self.assertEqual(list(mods), ["package", "frame", "suspension", "steering", "occupant", "powertrain",
                                               "body"])
                 self.assertEqual(mods["package"]["owner"], "packager")
-                self.assertEqual(mods["frame"]["owner"], "designer.frame")
+                self.assertEqual(mods["frame"]["owner"], "designer.structure")
+                self.assertEqual(mods["suspension"]["owner"], "designer.mechanism")
+                self.assertEqual(mods["powertrain"]["owner"], "designer.electric")
                 self.assertEqual(mods["package"]["envelope"], [])
                 self.assertIn("wheelbase", mods["package"]["variables"])
                 envs = {k: m["envelope"] for k, m in mods.items()}
