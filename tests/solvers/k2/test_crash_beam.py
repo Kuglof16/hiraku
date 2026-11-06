@@ -670,33 +670,78 @@ def known_rotation(axis, angle):
     return np.eye(3) + math.sin(angle) * K + (1.0 - math.cos(angle)) * K @ K
 
 
+class BandNote(unittest.TestCase):
+    """break_band_note on hand-made runs: which members are at the edge, and whether a C1 verdict turns."""
+
+    R = math.radians
+
+    def test_a_member_broken_by_a_hair_and_the_split_turns(self):
+        # as on the EC2 trial: d breaks at 60 deg (a piece splits off) and not at 61; b stays a hair under 60
+        hinges = {"a": self.R(60.0), "d": self.R(60.06), "b": self.R(59.987), "c": self.R(30.0)}
+        note = tool_module.break_band_note(self.R(60.0), self.R(1.0), ["a", "d"], -546.0, 0.157, hinges,
+                                           [(self.R(61.0), ["a"], -191.0, 0.0)])
+        self.assertTrue(note.startswith(tool_module.EDGE_NOTE + " (the run made again with the break angle +1 deg)"))
+        self.assertIn("60 deg: 2 broken (a, d), occupant_space_margin -546 mm, frame_split_fraction 0.157; "
+                      "61 deg: 1 broken (a), occupant_space_margin -191 mm, frame_split_fraction 0.000", note)
+        self.assertIn("Members that break in one run and not in another: d.", note)
+        self.assertIn("Unbroken at 60 deg with a hinge within 1 deg under it: b 59.987 deg.", note)
+        self.assertIn("C1's verdict changes inside the band (frame_split_fraction <= 0.03)", note)
+        self.assertNotIn("occupant_space_margin >= 0", note)  # NG in both
+
+    def test_a_member_a_hair_under_names_the_edge_without_a_lower_run(self):
+        # as on this PC: b ends at 59.987 deg, unbroken at 60 and at 61; the verdicts hold in the two runs
+        hinges = {"a": self.R(60.0), "b": self.R(59.987)}
+        note = tool_module.break_band_note(self.R(60.0), self.R(1.0), ["a"], -191.0, 0.0, hinges,
+                                           [(self.R(61.0), ["a"], -190.0, 0.0)])
+        self.assertIn("The same members break in every run.", note)
+        self.assertIn("b 59.987 deg", note)
+        self.assertTrue(note.endswith("a member a hair under the break angle could still turn them on another computer"))
+
+    def test_the_same_members_and_nothing_near(self):
+        note = tool_module.break_band_note(self.R(60.0), self.R(1.0), ["a"], 20.0, 0.0,
+                                           {"a": self.R(60.0), "c": self.R(50.0)}, [(self.R(61.0), ["a"], 21.0, 0.0)])
+        self.assertTrue(note.endswith("C1's verdicts are the same in these runs"))
+
+    def test_the_margin_turns(self):
+        note = tool_module.break_band_note(self.R(60.0), self.R(1.0), ["a"], -3.0, 0.0, {"a": self.R(60.2)},
+                                           [(self.R(61.0), [], 6.0, 0.0)])
+        self.assertIn("C1's verdict changes inside the band (occupant_space_margin >= 0)", note)
+
+
 @SLOW
 class DemoDesign(unittest.TestCase):
-    def test_the_demo_design_runs_in_under_two_minutes(self):
+    def test_the_demo_design_runs_and_its_record_says_the_break_angle_edge(self):
         d = json.loads(DEMO.read_text(encoding="utf-8"))
         self.assertEqual((len(d["nodes"]), len(d["members"])), (44, 54))
         t0 = time.perf_counter()
-        rec = TOOLS["crash_beam"].run(d, load_case(), [{"prediction_id": "pred-0001"}], {})
+        rec = TOOLS["crash_beam"].run(d, load_case(break_band=q(1.0, "deg")), [{"prediction_id": "pred-0001"}], {})
         wall = time.perf_counter() - t0
-        self.assertLess(wall, 120.0)
+        self.assertLess(wall, 2 * 120.0)  # two runs: the break angle and 1 deg above it
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
         res = {r["quantity"]: r for r in rec["results"]}
         for name in ("peak_decel", "battery_mount_force", "broken_members", "max_plastic_rotation"):
             self.assertIn(name, res)
-        # at 40 km/h, with the front wheels on their tyres (the design's tyre_stiffness 150 N/mm), the front rails
-        # break and one rail between the front axle and the seats, but no piece of 3 % of the mass comes apart from
-        # the seats' side: no frame_split_time, and the vehicle stops (about 70 ms)
-        self.assertNotIn("frame_split_time", res)
-        self.assertEqual(res["broken_members"]["value"], 3.0)
-        self.assertIn("rail_L_FA", res["broken_members"]["where"])
+        # at 40 km/h, with the front wheels on their tyres, the front rails break; on 1afeaedd's demo v1 (tyre 150
+        # N/mm) rail_R_AS1 ended at the break angle's edge (59.987 deg on one computer, past 60 on another, where a
+        # piece split off). Which member sits at the edge moves with the design (its tyre, brackets, seats), so the
+        # count, the split, the margin's size and the members are not fixed here: the record must give the band's
+        # two runs and say what changes between them
+        self.assertGreaterEqual(res["broken_members"]["value"], 1.0)
+        edge = next(a for a in rec["assumptions"] if a.startswith(tool_module.EDGE_NOTE))
+        lim = float(tool_module.HINGE_BREAK_DEG)
+        self.assertIn(f"; {lim + 1.0:g} deg: ", edge)  # the run made again 1 deg higher
+        self.assertTrue("Members that break in one run and not in another" in edge
+                        or "The same members break in every run" in edge, edge)
+        self.assertTrue("C1's verdict changes inside the band" in edge or "C1's verdicts are the same" in edge, edge)
         for name in ("mean_decel", "max_crush", "crush_margin", "occupant_space_margin", "occupant_space_left"):
             self.assertIn(name, res)
-        # C1 by this tool: no piece of 3 % breaks off, but the tower posts come into the foot boxes
-        self.assertLess(res["frame_split_fraction"]["value"], 0.03)
+        # C1-40kmh is NG whichever way the edge goes: the tower posts come into the foot boxes
         self.assertLess(res["occupant_space_margin"]["value"], 0.0)
+        self.assertNotIn("occupant_space_margin >= 0", edge)  # the band's note names no flip of C1-40kmh's verdict
         self.assertTrue(any(a.startswith("run: the vehicle stopped") for a in rec["assumptions"]))
-        self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and "150 N/mm, the design's "
+        k_t = d["variables"]["tyre_stiffness"]["value"]  # the design's own (150 N/mm on 1afeaedd, 60 with tyre60)
+        self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and f"{k_t:g} N/mm, the design's "
                             "tyre_stiffness" in a for a in rec["assumptions"]))
         contact_note = next(a for a in rec["assumptions"] if a.startswith("contact between the frame's elements"))
         self.assertIn("pair-steps in contact", contact_note)
