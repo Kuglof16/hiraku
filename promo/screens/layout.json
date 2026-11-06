@@ -545,6 +545,13 @@
               "_note": "the six designs as a small list, row by row: each slot (w - (cols-1) gap_x) / cols x (h - (rows-1) gap_y) / rows = 288 x 247" },
     "tests": ["tilt_over", "step_stuck", "step_break", "battery_hot", "parts_clash", "wind"],
     "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
+    "runup": {
+      "tile": "step_stuck",
+      "order": ["stops", "climbs"],
+      "gap_px": 12,
+      "lead_share": 0.75,
+      "_note": "added by the screens department (2026-11-06), for the promo department to move: the tile that shows the step test's run 2 (rolling at the step at the load case's speed) as two panes stacked in order, the step it stops at (stops) over the step it climbs (climbs), gap_px apart; lead_share: the share of the tile's play given to the stretch both records have (the approach, the hit and the climb), the rest to the stopped run's later tries and standstill. Used only when the run holds such records (web/js/cut_n06.js)"
+    },
     "tile": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 } },
     "times": { "tiles_s": 0.6, "tile_in_s": 0.5, "tile_stagger_s": 0.55,
                "_note": "the sixth tile starts at 3.35 s and lands at 3.85 s, all within the first two sentences (0.41-2.79, 3.35-5.61 s in the maker's recording)" },
@@ -1126,8 +1133,8 @@
       "n06": {
         "message": "作ってみると、うまくいかない",
         "limits": {
-          "label": 6,
-          "why": "six failures, one tag each, no figures"
+          "label": 7,
+          "why": "six failures, one tag each, no figures; the step tile (n06.runup) shows two runs, each with its tag, whose step height and speed are the record's (7, 2026-11-06)"
         }
       },
       "n07": {
