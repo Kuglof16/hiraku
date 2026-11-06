@@ -38,12 +38,17 @@ export function elementKind(rec, i) {
 }
 
 // How many elements of each kind (kinds with none left out; "other" for an element of no known kind).
+// (elementKind's rule written out in one loop: a large mesh has some 100 000 elements)
 export function kindCounts(rec) {
   const out = {};
-  (rec.elements ?? []).forEach((_, i) => {
-    const k = elementKind(rec, i) ?? "other";
+  const els = rec.elements ?? [];
+  const given = rec.element_kind;
+  for (let i = 0; i < els.length; i += 1) {
+    const n = els[i].length;
+    const g = given?.[i];
+    const k = KINDS.includes(g) && n === COUNT[g] ? g : (BY_COUNT[n] ?? "other");
     out[k] = (out[k] ?? 0) + 1;
-  });
+  }
   return out;
 }
 
@@ -131,10 +136,18 @@ export function shellFreeEdges(rec) {
 }
 
 // "四角 12・六面体 8 節点 4": the counts of each kind in KINDS order, then any other.
+// Kept per elements list (with its element_kind): the replay applies a mesh.created again on
+// every rebuild of its state, and the record's lists do not change.
+const countTexts = new WeakMap(); // rec.elements -> { given: rec.element_kind, text }
 export function kindCountText(rec) {
+  const els = rec.elements;
+  const kept = els && typeof els === "object" ? countTexts.get(els) : undefined;
+  if (kept && kept.given === rec.element_kind) return kept.text;
   const c = kindCounts(rec);
-  return [...KINDS, "other"]
+  const text = [...KINDS, "other"]
     .filter((k) => c[k])
     .map((k) => `${KIND_JA[k] ?? "そのほか"} ${c[k]}`)
     .join("・");
+  if (els && typeof els === "object") countTexts.set(els, { given: rec.element_kind, text });
+  return text;
 }
