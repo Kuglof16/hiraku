@@ -106,7 +106,7 @@
    "cuts": [
     "N08"
    ],
-   "video": "${WORK}/clips/n08_1080p.mp4",
+   "video": "${WORK}/clips/n08_v6_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.25
@@ -120,7 +120,7 @@
    "cuts": [
     "N08b"
    ],
-   "video": "${WORK}/clips/n08b_v4_1080p.mp4",
+   "video": "${WORK}/clips/n08b_v6_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
@@ -146,7 +146,7 @@
    "cuts": [
     "N10"
    ],
-   "video": "${WORK}/clips/n10_60mpa_1080p.mp4"
+   "video": "${WORK}/clips/n10_v6_1080p.mp4"
   },
   {
    "cuts": [
@@ -164,19 +164,19 @@
    "cuts": [
     "N13a"
    ],
-   "video": "${WORK}/clips/v7/n13a_draft_1080p.mp4"
+   "video": "${WORK}/clips/n13a_160725_1080p.mp4"
   },
   {
    "cuts": [
     "N13b"
    ],
-   "video": "${WORK}/clips/v7/n13b_draft_1080p.mp4"
+   "video": "${WORK}/clips/n13b_160725_1080p.mp4"
   },
   {
    "cuts": [
     "N13c"
    ],
-   "video": "${WORK}/clips/v7/n13c_draft_1080p.mp4"
+   "video": "${WORK}/clips/n13c_160725_1080p.mp4"
   },
   {
    "cuts": [
