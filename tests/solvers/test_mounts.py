@@ -111,7 +111,16 @@ class MountMembersTest(unittest.TestCase):
         n = nodes(V1)
         rail_nodes = {k for k, q in n.items() if abs(abs(q[1]) - 350.0) < 1e-6 and abs(q[2] - 380.0) < 1e-6}
         # (the joints' struts, kit/joints.py, are brackets too, named fit_*: not these mounts)
-        brackets = [p for p in V1["parts"] if p["kind"] == "bracket" and not p["id"].startswith("fit_")]
+        # (the seatbacks' mounts on cross_S2, ladder_4w._seat_mounts, are brackets too, named bracket_seat_*: they
+        # carry the occupant module, not the chassis, so they are counted on their own below)
+        seat = [p for p in V1["parts"] if p["kind"] == "bracket" and p["id"].startswith("bracket_seat_")]
+        self.assertEqual(sorted(p["id"] for p in seat),
+                         [f"bracket_seat_{s}{i}" for s in ("L", "R") for i in (1, 2)])
+        for p in seat:
+            self.assertEqual(p["system"], "frame")
+            self.assertIn("cross_S2", {c["to"] for c in p["connects_to"]}, p["id"])
+            self.assertTrue(all(c["via"] == "weld" for c in p["connects_to"]), p["id"])
+        brackets = [p for p in V1["parts"] if p["kind"] == "bracket" and not p["id"].startswith(("fit_", "bracket_seat_"))]
         # two upper arm pivots and a tie rod end per wheel, the rear lower arms' two pivots, the column; and the
         # clevises kit/arms.pivot_brackets welds on bare nodes: the front lower arms' pivots (the lower legs'
         # ends) and every damper's top (the tower arm's tip)

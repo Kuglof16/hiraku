@@ -23,6 +23,16 @@ def slid(length=SLIDE, **more):
     return designgen.regenerate(V1, {"seat_slide": {"value": length, "unit": "mm"}, **more})
 
 
+_FIXED = []
+
+
+def fixed():
+    """v1 built by the generator (the fixed seat, with the seats' backs and head restraints)."""
+    if not _FIXED:
+        _FIXED.append(designgen.regenerate(V1, {}))
+    return _FIXED[0]
+
+
 class BestOffsetTest(unittest.TestCase):
     def test_no_travel(self):
         self.assertEqual(people.best_offset(lambda s: -abs(s - 30.0), 0.0), 0.0)
@@ -78,14 +88,17 @@ class SlideTest(unittest.TestCase):
         self.assertEqual(people.poses(self.d)["occupant_L"]["offset"]["big"], 0.0)  # the passenger's seat is fixed
 
     def test_seat_box_stays_at_the_middle(self):
-        a = {p["id"]: p for p in V1["parts"]}
+        base = fixed()
+        a = {p["id"]: p for p in base["parts"]}
         b = {p["id"]: p for p in self.d["parts"]}
-        for pid in ("seat_R", "seat_L", "seat_belt_L"):
+        for pid in ("seat_R", "seat_L", "seat_belt_L", "seatback_R", "head_restraint_R", "seatback_L", "head_restraint_L"):
             self.assertEqual(a[pid]["box"], b[pid]["box"], pid)
         # the same parts, but the belt's own fitting to its seat (kit/joints.py), made where the moved belt and the
         # seat's box (left at the middle) no longer touch
-        belt_fit = ("fit_seat_belt_R",)
-        self.assertEqual([p["id"] for p in V1["parts"] if not p["id"].startswith(belt_fit)],
+        # and the driver's seatback's fitting (kit/joints.py: its strut also misses the seat, its back included, at the
+        # travel's ends, so it goes to another member)
+        belt_fit = ("fit_seat_belt_R", "fit_seatback_R")
+        self.assertEqual([p["id"] for p in base["parts"] if not p["id"].startswith(belt_fit)],
                          [p["id"] for p in self.d["parts"] if not p["id"].startswith(belt_fit)])
 
     def test_belt_behind_the_rearmost_seat_back(self):
@@ -147,10 +160,15 @@ class SlideTest(unittest.TestCase):
         self.assertEqual(knee_space(self.d)["occupant_R"], (length, where))
         self.assertEqual(where, "steering_column")
 
-    def test_body_parts_where_the_big_person_sits(self):
+    def test_body_parts_on_the_seat_as_drawn(self):
+        """The driver's body parts stay on the seat as drawn (the travel's middle), the trunk's back on the seatback's
+        front face, as on the fixed seat; K4 seats each size at its own place with the seat moved under them. (They were
+        once moved to the large driver's place, behind the seat box left at the middle: 59.9 mm on this design.)"""
+        a = {p["id"]: p["box"] for p in fixed()["parts"] if p["id"].split(".")[0] == "occupant_R"}
         b = {p["id"]: p for p in self.d["parts"]}
-        g = self.ps["big"].legs["R"]
-        np.testing.assert_allclose(b["occupant_R.thigh_R"]["box"]["center_mm"], (g.hip + g.knee) / 2.0, atol=1e-6)
+        for pid, box in a.items():
+            self.assertEqual(b[pid]["box"], box, pid)
+        self.assertAlmostEqual(people._box(b["occupant_R"])[0][0], people._box(b["seatback_R"])[1][0], places=9)
         mass = lambda d: sum(p["mass_kg"] for p in d["parts"] if p["id"].split(".")[0] == "occupant_R")
         self.assertAlmostEqual(mass(self.d), mass(V1), places=9)
         self.assertEqual(interferences(self.d), [])
@@ -184,11 +202,31 @@ class SlideTest(unittest.TestCase):
             self.assertEqual(now, feet, s)
 
     def test_slide_does_not_move_other_parts(self):
-        a = {p["id"]: p["box"] for p in V1["parts"]}
+        a = {p["id"]: p["box"] for p in fixed()["parts"]}
         moved = sorted(p["id"] for p in self.d["parts"] if p["box"] != a.get(p["id"]))
-        # the belt's own fitting (kit/joints.py) goes with the belt
-        self.assertTrue(all(m.startswith(("occupant_R", "seat_belt_R", "fit_seat_belt_R")) for m in moved), moved)
+        # the belt's own fitting (kit/joints.py) goes with the belt; the driver's body stays on the seat
+        self.assertTrue(all(m.startswith(("seat_belt_R", "fit_seat_belt_R", "fit_seatback_R")) for m in moved), moved)
         self.assertIn("seat_belt_R", moved)
+
+
+class BeltStrutClearOfFloorTest(unittest.TestCase):
+    """A short travel (the scripted run's version 2: seat_slide 56 mm, the floor out to the side posts): the belt's
+    anchor strut ends behind the floor's rear edge, so the floor still goes in (assembly blocked_parts 0)."""
+
+    def test_short_travel_with_side_posts(self):
+        from hiraku.designgen.kit import joints
+        from hiraku.solvers.k4_geometry import assembly
+
+        d = slid(56.0, side_guard="bars_net", track={"value": 1220, "unit": "mm"},
+                 rollbar_width={"value": 1265, "unit": "mm"})
+        parts = {p["id"]: p for p in d["parts"]}
+        strut = parts["fit_seat_belt_R_side_post_RS2_1"]
+        floor = parts["floor"]["box"]
+        floor_rear = floor["center_mm"][0] - floor["size_mm"][0] / 2.0
+        anchor = next(c["at_mm"] for c in parts["seat_belt_R"]["connects_to"] if c["to"] == strut["id"])
+        self.assertLessEqual(anchor[0] + joints.STRUT_D_MM / 2.0,
+                             floor_rear - ladder_4w.BELT_FLOOR_GAP_MM + 1e-9)
+        self.assertEqual(assembly.disassemble(d)["blocked"], {})
 
 
 if __name__ == "__main__":

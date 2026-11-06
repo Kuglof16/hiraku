@@ -103,9 +103,11 @@ class FrameUtilisationTest(unittest.TestCase):
 
 
 class SeatsOnTheRollBarTest(unittest.TestCase):
-    """Version 1 with the seats hung on the roll bar's posts (mount_seats): the post is the most used member in
-    the tool, and K0's post (a cantilever from its foot that carries all of the seat and its occupant) is above it
-    within R8's tolerance."""
+    """Version 1 with the seats' belt anchors on the roll bar's posts (mount_seats): the seatbacks also stand on
+    cross_S2 through their mounting brackets (ladder_4w._seat_mounts), so the posts and the seat cross member share
+    the seats' load. K0's post (a cantilever from its foot that carries all of the seat and its occupant) stays the
+    upper bound: above the tool's most used member, on the safe side (no longer within R8's tolerance, since the
+    tool now has the second path K0 leaves out)."""
 
     def test_k0_post_against_the_tool(self):
         from hiraku.catalog.builders import BUILDERS
@@ -118,11 +120,9 @@ class SeatsOnTheRollBarTest(unittest.TestCase):
         lc = next(c for c in BUILDERS["R8"](SPECS["R8"], REQ, d) if c["load_case_id"] == "R8-stress")
         k0 = {k: v["value"] for k, v in REG.evaluate("load_path.frame_utilisation", frame_inputs(d, lc))["outputs"].items()}
         r = results(LoadPath().run(d, lc, [{"prediction_id": "p"}], {}))
-        self.assertTrue(r["max_utilisation"]["where"].startswith("rollbar_post"), r["max_utilisation"])
         self.assertEqual(k0["u"], k0["u_post"])
         tool = r["max_utilisation"]["value"]
-        self.assertGreater(k0["u"], tool)  # the post carries everything: K0 the larger
-        self.assertLessEqual(abs(tool - k0["u"]) / k0["u"], lc["tolerance_rel"], (k0["u"], tool))
+        self.assertGreater(k0["u"], tool)  # K0's post carries everything: the larger (the safe side)
 
 
 if __name__ == "__main__":

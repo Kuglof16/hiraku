@@ -14,10 +14,11 @@ from ..k4_geometry.joints import joint_gaps, outside_envelopes
 from ..k4_geometry.capsule import capsule_box_overlap, capsule_overlap, from_points
 from ..k4_geometry.model import TOUCH_MM
 from ..k4_geometry.motion import max_steer
-from ..k4_geometry.people import slide_ends
+from ..k4_geometry.people import occupants, slide_ends
 from ..k4_geometry.obb import from_box, overlap
 from ..k4_geometry.people import KNEE_COMFORT_SOURCE, PEDAL_KINDS
 from ..k4_geometry.people import SOURCE as AIST_SOURCE
+from ..k4_geometry.seats import restraint_results
 from .base import LOADING, BuiltinTool, Predicts, Record, check_record, on_board, result
 
 
@@ -35,6 +36,14 @@ def _plain(parts, nodes=(), members=(), supports=()):
 
 CACHE_SIZE = 8  # designs (with their occupants on board) whose results are kept in the process
 _CACHE: dict[str, Record] = {}
+
+
+# how the head restraint's measures of the requirements Q35-Q38 are reproduced (k4_geometry.seats.STANDARD's notes)
+HEADREST_STANDARD_RULE = (
+    "頭の後ろの高さ・幅・backset・背もたれとのすき間 (Q35-Q38、UN R17・FMVSS 202a の測り方を受付部が読んだもの) は、"
+    "次の簡略で測っている: R 点は大きい人 (AIST の m95) の腰の点 (規格は 50 パーセンタイルの男性の H 点。高さは厳しい側に出る)、"
+    "背もたれは直立 (背の角度 0) なので胴の線に沿う距離は鉛直の距離、上端から 65 mm 下の幅は箱の幅、"
+    "背もたれとのすき間は上下の隙間 (165 mm の球は再現していない)、backset は大きい人の頭の後ろから頭受けの前の面まで")
 
 
 class Assembly(BuiltinTool):
@@ -183,8 +192,12 @@ class Assembly(BuiltinTool):
         ends = []
         for label, d_end, moved in slide_ends(design):
             keys = {f"part:{pid}" for pid in moved}
+            # the seat's own rider is not moved with it here (the body is the large person at the middle; K4's poses
+            # seat each body size at its own place on the slide, people.fit): its body against the moved seat's back
+            # and head restraint is not an interference of the slide's end
+            riders = {f"part:{o['id']}" for o in occupants(design)}
             ends += [(a, b, o, f"seat at the slide's {label} end") for a, b, o in interferences(d_end, bodies(d_end))
-                     if a in keys or b in keys]
+                     if (a in keys or b in keys) and not _rider_pair(a, b, keys, riders)]
         static = sorted(static + [(a, b, o) for a, b, o, _ in ends], key=lambda t: -t[2])
         sw = sweep(design, bs)
         seq = steps(design, bs)
@@ -232,6 +245,10 @@ class Assembly(BuiltinTool):
                 groups[g] = (float(v), where)
         for g, (v, where) in groups.items():
             results.append(result(g, v, "mm", where))
+        # the head restraints against both body sizes' heads (k4_geometry.seats): the worst over the occupants, and
+        # per restraint (<q>.<part id>) and per body size there (<q>_<m95|f5>.<part id>), each quantity once
+        for q, (v, where) in restraint_results(design).items():
+            results.append(result(q, v, "mm", where))
         at_ends = {(a, b, o): c for a, b, o, c in ends}
         found = [{"a": _name(a), "b": _name(b), "depth_mm": float(o), "state": "rest",
                   "condition": at_ends.get((a, b, o), "at rest")} for a, b, o in static]
@@ -240,6 +257,8 @@ class Assembly(BuiltinTool):
         out = {"results": results, "assembly": seq, "interferences": found, "assumptions": [HAND_WAY_RULE]}
         if any(p["kind"] in PEDAL_KINDS for p in design.get("parts", [])):
             out["assumptions"].insert(0, PEDAL_RULE)
+        if any(q.startswith("headrest_height_above_R") for q in (r["quantity"] for r in results)):
+            out["assumptions"].append(HEADREST_STANDARD_RULE)
         if people:
             out["effects"] = [{"name": f"body sizes: {AIST_SOURCE}"}]
             if "knee_angle_room" in groups:
@@ -261,3 +280,12 @@ def _name(body_id: str) -> str:
     """'part:battery' -> 'battery', 'member:rail_L_FA' -> 'member rail_L_FA'."""
     kind, name = body_id.split(":", 1)
     return name if kind == "part" else f"member {name}"
+
+
+def _rider_pair(a: str, b: str, moved: set[str], riders: set[str]) -> bool:
+    """Whether a and b are a moved seat part (seat, back, head restraint) and a rider's body or one of its segments
+    (body ids "part:<occupant id>" and "part:<occupant id>.<segment>")."""
+    for x, y in ((a, b), (b, a)):
+        if x in moved and y.split(".", 1)[0] in riders:
+            return True
+    return False

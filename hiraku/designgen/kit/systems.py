@@ -43,7 +43,7 @@ SYSTEM_OF_KIND = {
     "tie_rod": "steering", "brake_pedal": "brake", "brake_master_cylinder": "brake", "brake_caliper": "brake",
     "wheel": "suspension", "suspension": "suspension", "knuckle": "suspension",
     "link": "suspension", "damper": "suspension", "ball_joint": "suspension",  # kit/arms.py
-    "seat": "seat", "seat_belt": "restraint", "rollbar": "rops", "occupant": "occupant", "cargo": "cargo",
+    "seat": "seat", "seatback": "seat", "head_restraint": "seat", "seat_belt": "restraint", "rollbar": "rops", "occupant": "occupant", "cargo": "cargo",
     "body": "body", "frame": "frame", "gusset": "frame", "bracket": "frame",
     "headlamp": "lighting", "taillamp": "lighting", "stoplamp": "lighting", "turn_signal": "lighting",
     "side_net": "restraint", "net_clip": "restraint", "fender": "body",
