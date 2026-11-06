@@ -106,6 +106,16 @@ def load_case_of(vdir: Path, load_case_id: str) -> Record | None:
         lc = read_json(lc_file)
         if lc.get("load_case_id") == load_case_id:
             return lc
+    # v<NNN>/load_cases.json: the set built for that version, else the nearest earlier version's (as
+    # RunStore.version_load_cases reads them; a run's own folder or one laid out from its events)
+    m = re.fullmatch(r"v(\d+)", vdir.name)
+    for n in range(int(m.group(1)) if m else 0, 1, -1):
+        f = vdir.parent / f"v{n:03d}" / "load_cases.json"
+        if f.is_file():
+            for lc in read_json(f).get("load_cases", []):
+                if lc.get("load_case_id") == load_case_id:
+                    return lc
+            break
     proj = vdir.parent / "project.json"
     if proj.is_file():
         for lc in read_json(proj).get("load_cases", []):
@@ -875,8 +885,8 @@ def judge(record: Record, load_case: Record | None) -> Record | None:
             "value": v, "ok": ok, "basis": crit.get("basis", "")}
 
 
-def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Callable[[argparse.ArgumentParser], None] | None = None,
-         argv: list[str] | None = None) -> Path:
+def parser(field: str, extra: Callable[[argparse.ArgumentParser], None] | None = None) -> argparse.ArgumentParser:
+    """The command line of a field's script (main); viewer.src.build makes the same arguments for one analysis."""
     ap = argparse.ArgumentParser(prog=f"python -m viewer.src.{field}",
                                  description=f"Write viewer/data/{field}.js from a run folder")
     ap.add_argument("run", type=Path, help="run folder (with v###/) or one version folder (with analyses/)")
@@ -885,7 +895,12 @@ def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Calla
     ap.add_argument("--analysis", help="analysis id, e.g. ana-0038")
     if extra:
         extra(ap)
-    args = ap.parse_args(argv)
+    return ap
+
+
+def main(field: str, build: Callable[[argparse.Namespace], Record], extra: Callable[[argparse.ArgumentParser], None] | None = None,
+         argv: list[str] | None = None) -> Path:
+    args = parser(field, extra).parse_args(argv)
     obj = build(args)
     path = write_data(field, obj, args.out)
     print(f"wrote {path} ({path.stat().st_size} bytes) from {obj['source']['version']} {obj['source']['analysis_id']}")
