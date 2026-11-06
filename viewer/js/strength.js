@@ -7,7 +7,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.strength = {
-  label: '強度',
+  label: HV.FIELD_LABEL.strength,   // js/names.js: the contract's 強度信頼性, with (静的強度) to tell it from 疲労
   async init(D, ctx) { return D.model === 'shell' ? HV.strengthShell(D, ctx) : HV.strengthBeam(D, ctx); },
 };
 
@@ -72,7 +72,7 @@ HV.strengthBeam = async function (D, ctx) {
     setLog(on) { S.log = on; update(); },
     timeText() { return `静的 (K1 の梁)   最大の応力 ${HV.fmt(D.stress.max)} ${D.stress.unit}   最大の変位 ${HV.fmt(D.disp.max)} mm`; },
     hud() {
-      return [(C ? `判定 ${C.quantity} ${HV.fmt(C.value)} ${C.op} ${HV.fmt(C.limit)} ${C.unit}: ${okngS(C.ok)}   ` : '') + `変形 ×${S.scale}、実寸ではない`,
+      return [(C ? `判定 ${HV.qtext(C.quantity)} ${HV.fmt(C.value)} ${C.op} ${HV.fmt(C.limit)} ${C.unit}: ${okngS(C.ok)}   ` : '') + `変形 ×${S.scale}、実寸ではない`,
               `色: 部材の相当応力   矢印 1 kN = 100 mm`];
     },
     contour: spec,
@@ -89,8 +89,8 @@ HV.strengthBeam = async function (D, ctx) {
     },
     extraInputs() {
       const hs = D.hot_spots || [];
-      return (C ? `<div class="h" style="margin-top:4px">判定</div><table><tr><td>${HV.esc(C.quantity)}</td><td>${HV.fmt(C.value)} ${C.op} ${HV.fmt(C.limit)} ${HV.esc(C.unit)} <span class="${C.ok ? 'ok' : 'ng'}">${okngS(C.ok)}</span></td></tr></table>` : '') +
-        (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.esc(h.quantity)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td></tr>`).join('')}</table></details>` : '');
+      return (C ? `<div class="h" style="margin-top:4px">判定</div><table><tr><td>${HV.qhtml(C.quantity)}</td><td>${HV.fmt(C.value)} ${C.op} ${HV.fmt(C.limit)} ${HV.esc(C.unit)} <span class="${C.ok ? 'ok' : 'ng'}">${okngS(C.ok)}</span></td></tr></table>` : '') +
+        (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.qhtml(h.quantity)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td></tr>`).join('')}</table></details>` : '');
     },
   };
 };

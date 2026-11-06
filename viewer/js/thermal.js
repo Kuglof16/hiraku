@@ -15,7 +15,7 @@ HV.interpAt = function (xs, ys, x) {   // linear, clamped; xs ascending
   return ys[lo] + (ys[hi] - ys[lo]) * (x - xs[lo]) / (xs[hi] - xs[lo]);
 };
 HV.fields.thermal = {
-  label: '熱',
+  label: HV.FIELD_LABEL.thermal,   // js/names.js: the contract's DOMAIN_NAMES_JA
   async init(D, ctx) {
     const beams = await ctx.addBeams();
     beams.colourMembers(() => [0.72, 0.72, 0.74]);
@@ -54,7 +54,7 @@ HV.fields.thermal = {
       timeText(k) { return `t = ${HV.fmt(t[k] / 60)} 分   ` + N.map(n => `${ja(n.name)} ${HV.fmt(nowT(n.name))} ℃`).join('   '); },
       hud() {
         const c = D.criterion;
-        return [(c ? `判定 ${c.quantity} ${HV.fmt(c.value)} ${c.unit} ${c.op} ${HV.fmt(c.limit)} ${c.unit}: ${okng(c.ok)}   ` : '') +
+        return [(c ? `判定 ${HV.qtext(c.quantity)}${HV.fmt(c.value)} ${c.unit} ${c.op} ${HV.fmt(c.limit)} ${c.unit}: ${okng(c.ok)}   ` : '') +
                 N.map(n => `${ja(n.name)} 最高 ${HV.fmt(n.max)} ℃` + (n.limit ? ` / 上限 ${HV.fmt(n.limit.value)} ${okng(n.ok)}` : '')).join('   '),
                 `色: 部品の温度 (その種類の熱回路の節点)。気温 ${HV.fmt(D.ambient_C)} ℃`];
       },

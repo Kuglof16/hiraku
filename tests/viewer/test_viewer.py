@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from viewer.src import assembly, common, crash, nvh, nvh_shell
+from viewer.src import assembly, common, crash, names, nvh, nvh_shell
 
 ROOT = Path(__file__).resolve().parents[2]
 FX = Path(__file__).resolve().parent / "fixtures"
@@ -614,6 +614,51 @@ def _system_python_with_playwright():
     return exe if r.returncode == 0 else None
 
 
+def js_fmt(v):
+    """HV.fmt (js/core.js) for 0.01 <= |v| < 1000: 4 significant digits, no trailing zeros."""
+    assert 0.01 <= abs(v) < 1000
+    return f"{v:.4g}"
+
+
+class NamesTest(unittest.TestCase):
+    """The page's names from where HIRAKU's screen takes them (viewer/src/names.py -> viewer/js/names.js)."""
+
+    def test_names_js_up_to_date(self):
+        self.assertEqual((VIEWER / "js" / "names.js").read_text(encoding="utf-8"), names.render(),
+                         "run python -m viewer.src.names")
+
+    def test_field_names_from_the_contract(self):
+        from hiraku import contract
+        labels = names.field_labels()
+        for f, d in names.FIELD_DOMAIN.items():
+            with self.subTest(field=f):
+                if f == "fatigue":
+                    self.assertEqual(labels[f], "疲労")
+                else:
+                    self.assertTrue(labels[f].startswith(contract.DOMAIN_NAMES_JA[d]), labels[f])
+                # each field's script takes its button's label from js/names.js, not a text of its own
+                self.assertRegex((VIEWER / "js" / f"{f}.js").read_text(encoding="utf-8"),
+                                 r"\n  label: HV\.FIELD_LABEL\." + f + r",")
+        self.assertEqual((labels["handling"], labels["powertrain"], labels["nvh"]), ("操安", "動力", "音振"))
+        self.assertEqual(labels["strength"], "強度信頼性 (静的強度)")
+        self.assertEqual(len(set(labels.values())), len(labels))   # the two strength fields told apart
+        self.assertEqual(set(names.FIELD_DOMAIN), set(re.search(r"FIELD_ORDER = \[([^\]]*)\]", (VIEWER / "js" / "main.js")
+                         .read_text(encoding="utf-8")).group(1).replace("'", "").replace(" ", "").split(",")))
+        self.assertEqual(names.title("nvh", "x", "シェル"), "音振 (シェル): x")
+        self.assertEqual(names.retitle({"title": "強度: y"})["title"], "強度信頼性: y")
+
+    def test_quantity_names_from_labels_js(self):
+        q = names.quantity_names()
+        text = (ROOT / "web" / "js" / "labels.js").read_text(encoding="utf-8")
+        block = text[text.index("const QUANTITY_JA = {"):]
+        block = block[:block.index("\n};")]
+        keys = set(re.findall(r'^\s*([A-Za-z_]\w*):\s*"', block, re.M))
+        self.assertEqual(set(q), keys)
+        self.assertEqual(q["occupant_space_margin"], "乗員の空間の余裕")
+        self.assertEqual(names.channel_names()["deceleration"], "減速度")
+        self.assertFalse(set(names.VIEWER_QUANTITY_JA) & set(q))   # the viewer's own words only where labels.js has none
+
+
 class PageTest(unittest.TestCase):
     """The page opened from disk in headless Chromium, with each field's data made from the fixtures.
     Needs Playwright for the system Python (py) and the network (three.js from jsDelivr)."""
@@ -637,6 +682,11 @@ class PageTest(unittest.TestCase):
         same = make("nvh")
         same["source"]["design_key"] = make_shell()["source"]["design_key"]
         common.write_data("nvh", same, cls.dir_b / "data")
+        # the crash_beam record with contact (K2 9bffe19c on) as the crash field
+        cls.dir_c = Path(cls.tmp.name) / "viewer_c"
+        shutil.copytree(cls.dir, cls.dir_c)
+        cls.crash_c = make("crash", "crash_contact")
+        common.write_data("crash", cls.crash_c, cls.dir_c / "data")
 
     @classmethod
     def tearDownClass(cls):
@@ -661,6 +711,24 @@ class PageTest(unittest.TestCase):
         self.assertIn("軸応力", out["panel"])
         self.assertIn("ホットスポット", out["inputs"] + out["page_text"])
         self.assertGreater(out["boxes_moved"], 0)
+
+    def test_crash_contact_page_header_names_and_range(self):
+        # at t = 0 (nothing deformed yet): the header's least room is the record's, the colour range the run's largest
+        out = self._check(self.dir_c, "crash")
+        rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
+        least = common.result(rec, "occupant_space_margin")
+        self.assertIn(f"乗員の空間の余裕 {js_fmt(least)} mm", out["hud"])
+        self.assertAlmostEqual(self.crash_c["summary"]["margin"]["value"], least)
+        self.assertAlmostEqual(out["contour"]["max"], self.crash_c["colour"]["stress_absmax"], places=3)
+        self.assertGreater(out["contour"]["max"], 1.0)
+        self.assertIn("計算全体の最大", out["contour"]["note"])
+        # quantity names: the Japanese name, the code name after it (small grey type)
+        self.assertIn("(occupant_space_margin)", out["codes"])
+        self.assertIn("乗員の空間の余裕 (occupant_space_margin)", out["inputs"])
+        self.assertIn("(frame_split_fraction)", out["codes"])
+        # the field buttons: the contract's domain names, in the page's order
+        self.assertEqual(out["switch"], [names.field_labels()[f] for f in ["strength", "fatigue", "nvh", "crash", "handling",
+                                                                            "powertrain", "aero", "thermal", "assembly"]])
 
     def test_nvh_parts_move_with_the_frame(self):
         out = self._check(self.dir, "nvh")

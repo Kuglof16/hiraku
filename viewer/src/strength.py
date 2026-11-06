@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from viewer.src import common, ledgers, nvh
+from viewer.src import common, ledgers, names, nvh
 
 NEAR_MM = 15.0  # mesh nodes within the nearest distance + this of a design node move a part box carried there
 
@@ -91,7 +91,7 @@ def build_beam(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "frame_static", version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
     lc = common.load_case_of(vdir, rec["load_case_id"])
-    obj = common.base_object("strength", "強度: フレームの梁の応力 (K1)", args.run, vdir, rec, design)
+    obj = common.base_object("strength", names.title("strength", "フレームの梁の応力 (K1)"), args.run, vdir, rec, design)
     obj["model"] = "beam"
     fr = obj["frame"]
     st = next((f for f in rec.get("fields", []) if f.get("kind") == "stress" and "per_member" in f), None)
@@ -162,7 +162,7 @@ def build_shell(args) -> dict:
     design = designgen.regenerate(base, changes) if changes else base
     rec = {"analysis_id": "frames", "tool": "frame_shell", "load_case_id": f"R1s (mounts from {meta.get('lc', 'K2')})"}
     name = args.name or common.run_name(args.run, vdir)
-    obj = common.base_object("strength", "強度: 段差を越えるときのフレームのシェルの応力", Path(args.run), vdir, rec, design)
+    obj = common.base_object("strength", names.title("strength", "段差を越えるときのフレームのシェルの応力"), Path(args.run), vdir, rec, design)
     obj["source"]["run"] = name
     obj["model"] = "shell"
     X, E, member, excl = z["nodes"], z["elements"], z["member"], z["excluded"].astype(bool)

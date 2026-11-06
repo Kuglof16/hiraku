@@ -7,7 +7,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.crash = {
-  label: '衝突',
+  label: HV.FIELD_LABEL.crash,   // js/names.js: the contract's DOMAIN_NAMES_JA
   async init(D, ctx) { return D.model === 'B' ? HV.crashB(D, ctx) : HV.crashA(D, ctx); },
 };
 
@@ -58,9 +58,9 @@ HV.crashA = async function (D, ctx) {
     plot() {
       const c = t[S.k], mk = [{ x: t[kPeak], label: 'ピーク', col: '#c0c' }];
       return [
-        { title: '減速度', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(a), col: '#1f4e9c' }], marks: mk, cursor: c },
-        { title: 'つぶれ (1次元)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(x), col: '#e9893a' }], marks: mk, cursor: c },
-        { title: '壁の力', unit: D.units.wall_force, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(F), col: '#0a6b2a' }], marks: mk, cursor: c },
+        { title: '減速度', code: 'deceleration', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(a), col: '#1f4e9c' }], marks: mk, cursor: c },
+        { title: 'つぶれ (1次元)', code: 'crush', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(x), col: '#e9893a' }], marks: mk, cursor: c },
+        { title: '壁の力', code: 'wall_force', unit: D.units.wall_force, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(F), col: '#0a6b2a' }], marks: mk, cursor: c },
       ];
     },
     plotClick(_, tv) { let b = 0, bd = Infinity; t.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; },
@@ -126,17 +126,22 @@ HV.crashB = async function (D, ctx) {
   const brokenSet = k => new Set(M.broken[k] || []);
   const arr = { stress, hinge, strain, fold };
   const val = (k, e) => arr[S.what][k * ne + e];
-  // colour range: the largest of this frame (members not broken), so the shape at each instant reads;
-  // the run's largest is said in the note
-  const frameMax = k => { let mx = 0; const br = brokenSet(k); for (let e = 0; e < ne; e++) if (!br.has(D.frame.member_ids[e])) mx = Math.max(mx, Math.abs(val(k, e))); return Math.max(mx, 1e-6); };
+  // colour range: by default the whole run's largest (members not broken; computed by src/crash.py), so an instant
+  // with almost nothing (t = 0) is not stretched over its own near-zero range; the choice 'now' fits this instant,
+  // but never below 1 % of the run's largest
+  const RUN_MAX = { stress: C.stress_absmax, hinge: C.hinge_max, strain: C.strain_absmax, fold: C.fold_max };
+  const runMax = () => Math.max(RUN_MAX[S.what] || 0, 1e-6);
+  const frameMax = k => { let mx = 0; const br = brokenSet(k); for (let e = 0; e < ne; e++) if (!br.has(D.frame.member_ids[e])) mx = Math.max(mx, Math.abs(val(k, e))); return Math.max(mx, 0.01 * runMax()); };
+  S.range = 'run';
+  const rangeNote = (m, unit) => S.range === 'run' ? `範囲は計算全体の最大 ${HV.fmt(m)}${unit}` : `範囲はこの時刻の最大 ${HV.fmt(m)}${unit} (全体 ${HV.fmt(runMax())}${unit})`;
   const SPEC = {
-    stress: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: '部材の軸応力 (− 圧縮、+ 引張)', note: `軸力 / 断面積。範囲はこの時刻の最大 (全体 ${HV.fmt(C.stress_absmax)})。灰色 = 破断` }),
-    hinge: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '部材の端のヒンジ回転 (大きい方)', note: `範囲はこの時刻の最大 (全体 ${HV.fmt(C.hinge_max)}°)。灰色 = 破断` }),
-    strain: m => ({ min: -m, max: m, log: false, unit: '%', title: '要素の軸ひずみ (− 縮み、+ 伸び)', note: `範囲はこの時刻の最大 (全体 ${HV.fmt(C.strain_absmax)} %)。灰色 = 破断` }),
-    fold: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '要素の端の折れ角 (t = 0 から)', note: `範囲はこの時刻の最大 (全体 ${HV.fmt(C.fold_max)}°)。灰色 = 破断` }),
+    stress: m => ({ min: -m, max: m, log: false, unit: 'MPa', title: '部材の軸応力 (− 圧縮、+ 引張)', note: `軸力 / 断面積。${rangeNote(m, ' MPa')}。灰色 = 破断` }),
+    hinge: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '部材の端のヒンジ回転 (大きい方)', note: `${rangeNote(m, '°')}。灰色 = 破断` }),
+    strain: m => ({ min: -m, max: m, log: false, unit: '%', title: '要素の軸ひずみ (− 縮み、+ 伸び)', note: `${rangeNote(m, ' %')}。灰色 = 破断` }),
+    fold: m => ({ min: S.log ? Math.max(0.01, m * 1e-3) : 0, max: m, log: S.log, unit: '°', title: '要素の端の折れ角 (t = 0 から)', note: `${rangeNote(m, '°')}。灰色 = 破断` }),
   };
   const LABEL = { stress: '部材の軸応力 MPa', hinge: '端のヒンジ回転 °', strain: '要素の軸ひずみ %', fold: '要素の端の折れ角 °' };
-  const spec = () => SPEC[S.what](frameMax(S.k));
+  const spec = () => SPEC[S.what](S.range === 'run' ? runMax() : frameMax(S.k));
   function update() {
     const k = S.k;
     beams.setNodes(pos.subarray(k * n * 3, (k + 1) * n * 3));
@@ -167,8 +172,8 @@ HV.crashB = async function (D, ctx) {
     hud() {
       const mg = sm.margin, s = D.stop, sp = sm.split;
       const tag = ok => ok === null || ok === undefined ? '' : ok ? ' OK' : ' NG';
-      const j = [mg ? `乗員までの最小のすき間 ${HV.fmt(mg.value)} ${mg.unit}${tag(mg.ok)}` : '',
-                 sp ? `ちぎれる塊 ${HV.fmt(sp.pct)} % (${sp.limit_pct !== null ? sp.op + ' ' + HV.fmt(sp.limit_pct) + ' %' : ''})${tag(sp.ok)}`
+      const j = [mg ? `${HV.qtext('occupant_space_margin')} ${HV.fmt(mg.value)} ${mg.unit}${tag(mg.ok)}` : '',
+                 sp ? `${HV.qtext('frame_split_fraction')} ${HV.fmt(sp.pct)} % (${sp.limit_pct !== null ? sp.op + ' ' + HV.fmt(sp.limit_pct) + ' %' : ''})${tag(sp.ok)}`
                     : s && s.piece_pct !== null && s.limit_pct !== null ? `分離の塊 ${s.piece_pct} % (${s.limit_pct} % 以上で NG)${tag(s.ok)}` : ''].filter(Boolean).join('   ');
       return [(j ? `判定: ${j}   ` : '') + (s && s.t_s !== null ? stopText() : `記録の終わり ${(1000 * tf[nF - 1]).toFixed(1)} ms`),
               `ピーク ${HV.fmt(sm.peak_decel)} ${u.deceleration}、平均 ${HV.fmt(sm.mean_decel)} ${u.deceleration}、つぶれ ${HV.fmt(sm.crush_end)} ${u.crush}${cut ? ' (停止まで)' : ''}   色: ${LABEL[S.what]}`];
@@ -179,10 +184,10 @@ HV.crashB = async function (D, ctx) {
       if (sm.margin && sm.margin.t_s !== null && sm.margin.t_s !== undefined) mk.push({ x: sm.margin.t_s, label: '最小のすき間', col: sm.margin.ok === false ? '#c8402a' : '#2b59c3' });
       for (const p of (sm.split && sm.split.pieces) || []) mk.push({ x: p.t_s, label: `塊 ${p.pct} %`, col: '#777' });
       const P = [
-        { title: '減速度', unit: u.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, bands, cursor: c },
-        { title: 'つぶれ (前端から座席の取付まで)', unit: u.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#e9893a' }], marks: mk, bands, cursor: c },
+        { title: '減速度', code: 'deceleration', unit: u.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, bands, cursor: c },
+        { title: 'つぶれ (前端から座席の取付まで)', code: 'crush', unit: u.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#e9893a' }], marks: mk, bands, cursor: c },
       ];
-      if (S.sel && force[S.sel]) P.push({ title: `軸力 ${S.sel} (部材をクリックで切替)`, unit: 'kN', xlabel: 't [s]', x: tfx, ys: [{ v: Array.from(force[S.sel], v => v / 1000), col: '#0a6b2a' }], marks: [], bands, cursor: c });
+      if (S.sel && force[S.sel]) P.push({ title: `${HV.qtext('member_axial_force')} ${S.sel} (部材をクリックで切替)`, code: `member_axial_force.${S.sel}`, unit: 'kN', xlabel: 't [s]', x: tfx, ys: [{ v: Array.from(force[S.sel], v => v / 1000), col: '#0a6b2a' }], marks: [], bands, cursor: c });
       return P;
     },
     plotClick(_, tv) { let b = 0, bd = Infinity; tf.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; },
@@ -193,17 +198,17 @@ HV.crashB = async function (D, ctx) {
       const e = beams.memberOf(hit), mid = D.frame.member_ids[e], [na, nb] = D.frame.members[e], ids = D.frame.node_ids;
       if (force[mid]) { S.sel = mid; setTimeout(HV.refresh, 0); }
       return `<b>${HV.esc(mid)}</b> ${HV.esc(D.frame.member_names[e])}<br>` +
-             (hasRec ? `軸力 ${force[mid] ? HV.fmt(force[mid][k] / 1000) + ' kN' : '-'}、軸応力 ${HV.fmt(stress[k * ne + e])} MPa (断面積 ${HV.fmt(C.area_mm2[mid])} mm²)、` +
-                       `端のヒンジ回転 ${HV.fmt(hinge[k * ne + e])}° (${(C.hinge_ends[mid] || []).map(HV.esc).join(', ')})<br>` : '') +
+             (hasRec ? `${HV.qhtml('member_axial_force')} ${force[mid] ? HV.fmt(force[mid][k] / 1000) + ' kN' : '-'}<br>軸応力 ${HV.fmt(stress[k * ne + e])} MPa (軸力 / 断面積 ${HV.fmt(C.area_mm2[mid])} mm²)<br>` +
+                       `${HV.qhtml('member_hinge')} ${HV.fmt(hinge[k * ne + e])}° (${(C.hinge_ends[mid] || []).map(HV.esc).join(', ')})<br>` : '') +
              `要素 ${HV.esc(ids[na])} - ${HV.esc(ids[nb])}: 軸ひずみ ${HV.fmt(strain[k * ne + e])} %、折れ角 ${HV.fmt(fold[k * ne + e])}°` +
              (brokenSet(k).has(mid) ? '<br><b>この時刻までに破断</b>' : '') + (mid === stopMember ? '<br><b>この部材が折れて計算が止まった</b>' : '');
     },
     extraInputs() {
       const hs = D.hot_spots || [], lr = sm.least_room, mg = sm.margin, s = D.stop, sp = sm.split, cm = sm.crush_margin;
       const ms = t => `${(1000 * t).toFixed(1)} ms`;
-      const judged = (mg ? `<tr><td>${HV.esc(mg.load_case_id || '')} 乗員の箱までの最小のすき間 (occupant_space_margin)</td><td>${HV.fmt(mg.value)} ${HV.esc(mg.unit)} ${HV.esc(mg.op)} ${HV.fmt(mg.limit)}、` +
+      const judged = (mg ? `<tr><td>${HV.esc(mg.load_case_id || '')} ${HV.qhtml('occupant_space_margin')}</td><td>${HV.fmt(mg.value)} ${HV.esc(mg.unit)} ${HV.esc(mg.op)} ${HV.fmt(mg.limit)}、` +
                          `${HV.esc(mg.where)}${mg.member ? ' ← ' + HV.esc(mg.member) : ''}${mg.t_s !== null && mg.t_s !== undefined ? '、' + ms(mg.t_s) : ''}</td><td>${okng(mg.ok)}</td></tr>` : '') +
-        (sp ? `<tr><td>${HV.esc(sp.load_case_id || '')} ちぎれる塊 (frame_split_fraction)</td><td>${HV.fmt(sp.pct)} % ${HV.esc(sp.op || '')} ${sp.limit_pct !== null ? HV.fmt(sp.limit_pct) + ' %' : ''}` +
+        (sp ? `<tr><td>${HV.esc(sp.load_case_id || '')} ${HV.qhtml('frame_split_fraction')}</td><td>${HV.fmt(sp.pct)} % ${HV.esc(sp.op || '')} ${sp.limit_pct !== null ? HV.fmt(sp.limit_pct) + ' %' : ''}` +
               `${sp.member ? '、' + HV.esc(sp.member) : ''}${sp.t_s !== null && sp.t_s !== undefined ? '、' + ms(sp.t_s) : ''}</td><td>${okng(sp.ok)}</td></tr>`
             : s && s.piece_pct !== null ? `<tr><td>フレームの分離</td><td>座席側から ${s.piece_pct} % の塊 (${s.limit_pct} % 以上は NG)、${s.t_s !== null ? ms(s.t_s) : ''} ${HV.esc(s.member || '')}</td><td>${okng(s.ok)}</td></tr>` : '');
       const pieces = (sp && sp.pieces) || [];
@@ -212,15 +217,16 @@ HV.crashB = async function (D, ctx) {
         (s && s.t_s !== null || !sp ? `<tr><td>${s && s.goes_on ? '分離' : '停止'}</td><td>${HV.esc(stopText())}</td></tr>` : '') +
         (pieces.length ? `<tr><td>座席側から離れた塊</td><td>${pieces.map(p => `${ms(p.t_s)} ${p.members.map(HV.esc).join(', ')} (${p.nodes} 節点、質量の ${p.pct} %)`).join('、')}` +
                          `${sp.not_counted ? `。乗員の箱の前に来ないので数えない塊 ${sp.not_counted} 個` : ''}</td></tr>` : '') +
-        `<tr><td>減速度</td><td>ピーク ${HV.fmt(sm.peak_decel)} ${u.deceleration}、平均 ${HV.fmt(sm.mean_decel)} ${u.deceleration}</td></tr>` +
-        `<tr><td>つぶれ</td><td>${HV.fmt(sm.crush_end)} ${u.crush}${sm.goes_on && sm.crush_at_split !== null ? ` (分離まで ${HV.fmt(sm.crush_at_split)} ${u.crush})` : ''}</td></tr>` +
-        (sm.crumple_length !== null && sm.crumple_length !== undefined ? `<tr><td>つぶれてよい長さ</td><td>${HV.fmt(sm.crumple_length)} ${u.crush}</td></tr>` : '') +
-        (cm ? `<tr><td>前のつぶれの残り (crush_margin)</td><td>${HV.fmt(cm.value)} ${HV.esc(cm.unit)} (つぶれてよい長さ − 最大のつぶれ、${HV.esc(cm.where)})</td></tr>` : '') +
+        `<tr><td>${HV.qhtml('peak_decel')}</td><td>${HV.fmt(sm.peak_decel)} ${u.deceleration}</td></tr>` +
+        `<tr><td>${HV.qhtml('mean_decel')}</td><td>${HV.fmt(sm.mean_decel)} ${u.deceleration}</td></tr>` +
+        `<tr><td>${HV.qhtml('max_crush')}</td><td>${HV.fmt(sm.crush_end)} ${u.crush}${sm.goes_on && sm.crush_at_split !== null ? ` (分離まで ${HV.fmt(sm.crush_at_split)} ${u.crush})` : ''}</td></tr>` +
+        (sm.crumple_length !== null && sm.crumple_length !== undefined ? `<tr><td>${HV.qhtml('crumple_length')}</td><td>${HV.fmt(sm.crumple_length)} ${u.crush}</td></tr>` : '') +
+        (cm ? `<tr><td>${HV.qhtml('crush_margin')}</td><td>${HV.fmt(cm.value)} ${HV.esc(cm.unit)} (つぶれてよい長さ − 最大のつぶれ、${HV.esc(cm.where)})</td></tr>` : '') +
         (WH.length ? `<tr><td>車輪が壁に当たる</td><td>${WH.map(w => `${HV.esc(w.id)} ${w.t_wall_s !== null ? ms(w.t_wall_s) : '当たらない'}`).join('、')}</td></tr>` : '') +
-        (lr && !(mg && mg.member) ? `<tr><td>乗員の箱までのすき間</td><td>最小 ${HV.fmt(lr.value)} ${HV.esc(lr.unit)} (${HV.esc(lr.where)}) ${okng(lr.ok)}</td></tr>` : '') + '</table>' +
+        (lr && !(mg && mg.member) ? `<tr><td>${HV.qhtml(lr.quantity || 'occupant_space_margin')}</td><td>最小 ${HV.fmt(lr.value)} ${HV.esc(lr.unit)} (${HV.esc(lr.where)}) ${okng(lr.ok)}</td></tr>` : '') + '</table>' +
         `<details><summary>減速度のピークとは</summary><div>乗員への入力。車全体の質量の減速度を 1 ms ごとにならした値 (壁が受けた力積 ÷ 質量 ÷ 1 ms)。` +
         `${!D.tyre_spring && WH.some(w => w.t_wall_s !== null) ?'前の車輪が壁に当たった瞬間は、車輪が 1 ステップで止まるので短いピークが出る。' : ''}</div></details>` +
-        (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td><td>${okng(h.ok)}</td></tr>`).join('')}</table></details>` : '');
+        (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.qhtml(h.quantity)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td><td>${okng(h.ok)}</td></tr>`).join('')}</table></details>` : '');
     },
     panel(div) {
       const h = document.createElement('h3'); h.textContent = '色の量 (B)'; div.appendChild(h);
@@ -231,6 +237,11 @@ HV.crashB = async function (D, ctx) {
         r.onchange = () => { S.what = k; update(); HV.refresh(); };
         l.append(r, ' ' + lab); div.appendChild(l);
       }
+      // the colour range: the whole run's largest (default) or this instant's
+      const sel = document.createElement('select'); sel.id = 'crashRange';
+      for (const [v, t] of [['run', '計算全体の最大で色'], ['now', 'この時刻の最大で色']]) { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); }
+      sel.value = S.range; sel.onchange = () => { S.range = sel.value; update(); HV.refresh(); };
+      const row = document.createElement('div'); row.className = 'row'; row.appendChild(sel); div.appendChild(row);
     },
   };
   update();

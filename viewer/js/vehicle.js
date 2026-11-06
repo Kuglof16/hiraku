@@ -34,13 +34,13 @@ window.HV = window.HV || {};
   };
   K2.judgeText = function (j) {
     if (!j) return '';
-    return `判定 ${j.ok === null ? '-' : j.ok ? 'OK' : 'NG'}: ${j.quantity} ${HV.fmt(j.value)} ${j.op} ${HV.fmt(j.limit)} ${j.unit}`;
+    return `判定 ${j.ok === null ? '-' : j.ok ? 'OK' : 'NG'}: ${HV.qtext(j.quantity)} ${HV.fmt(j.value)} ${j.op} ${HV.fmt(j.limit)} ${j.unit}`;
   };
   K2.judgeRow = function (D) {
     const j = D.judge, hs = D.hot_spots || [];
-    return (j ? `<div class="h" style="margin-top:4px">判定</div><table><tr><td>${HV.esc(j.quantity)}</td><td>${HV.fmt(j.value)} ${HV.esc(j.op)} ${HV.fmt(j.limit)} ${HV.esc(j.unit)}</td>` +
+    return (j ? `<div class="h" style="margin-top:4px">判定</div><table><tr><td>${HV.qhtml(j.quantity)}</td><td>${HV.fmt(j.value)} ${HV.esc(j.op)} ${HV.fmt(j.limit)} ${HV.esc(j.unit)}</td>` +
       `<td class="${j.ok ? 'ok' : 'ng'}">${j.ok === null ? '-' : j.ok ? 'OK' : 'NG'}</td></tr></table>` : '') +
-      (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.esc(h.quantity)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td></tr>`).join('')}</table></details>` : '');
+      (hs.length ? `<details><summary>ホットスポット (${hs.length})</summary><table>${hs.map(h => `<tr><td>${HV.esc(h.where)}</td><td>${HV.qhtml(h.quantity)}</td><td>${HV.fmt(h.value)} ${HV.esc(h.unit)}</td></tr>`).join('')}</table></details>` : '');
   };
 
   // ---------------------------------------------------------------- the replay

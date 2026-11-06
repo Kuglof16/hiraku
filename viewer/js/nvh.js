@@ -4,7 +4,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.nvh = {
-  label: 'NVH (固有振動)',
+  label: HV.FIELD_LABEL.nvh,   // js/names.js: the contract's DOMAIN_NAMES_JA
   variants: [{ key: 'nvh', label: '梁' }, { key: 'nvh_shell', label: 'シェル' }],
   async init(D, ctx) {
     if (D.model === 'shell') return HV.nvhShell(D, ctx);

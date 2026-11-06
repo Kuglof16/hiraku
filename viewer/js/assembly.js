@@ -4,7 +4,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.assembly = {
-  label: '組み立て',
+  label: HV.FIELD_LABEL.assembly,   // js/names.js: the contract's DOMAIN_NAMES_JA
   async init(D, ctx) {
     const beams = await ctx.addBeams();
     const boxes = ctx.addParts(D.parts, { opacity: 0.6 });
@@ -115,7 +115,7 @@ HV.fields.assembly = {
         let h = '';
         for (const c of D.checks || []) {
           h += `<div class="h" style="margin-top:6px">${HV.esc(c.tool)} ${HV.esc(c.load_case_id)} (${HV.esc(c.analysis_id)})</div><table>` +
-               c.results.map(r => `<tr><td>${HV.esc(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where)}</td></tr>`).join('') + '</table>';
+               c.results.map(r => `<tr><td>${HV.qhtml(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where)}</td></tr>`).join('') + '</table>';
         }
         if (D.interferences.length) {
           h += `<div class="h" style="margin-top:6px">干渉の組</div><table>` +

@@ -3,7 +3,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.handling = {
-  label: '操縦安定',
+  label: HV.FIELD_LABEL.handling,   // js/names.js: the contract's DOMAIN_NAMES_JA
   async init(D, ctx) {
     HV.K2.useCase('handling', D);
     const R = await HV.K2.Replay.make(D, ctx);

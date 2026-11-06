@@ -11,6 +11,32 @@ window.HV = window.HV || {};
   HV.FIELD_ORDER = ['strength', 'fatigue', 'nvh', 'crash', 'handling', 'powertrain', 'aero', 'thermal', 'assembly'];
   const $ = id => document.getElementById(id);
 
+  // A quantity's (or series channel's) Japanese name, as HIRAKU's screen names it (js/names.js: web/js/labels.js
+  // QUANTITY_JA / CHANNEL_JA, a dotted id read as its base's name and what follows the dot, as labels.js
+  // quantityName does; else the viewer's own word); null when none names it.
+  HV.qname = function (q) {
+    if (q === null || q === undefined || q === '') return null;
+    const Q = HV.QUANTITY_JA || {}, V = HV.QUANTITY_JA_VIEWER || {}, C = HV.CHANNEL_JA || {};
+    const one = s => Q[s] || V[s] || C[s] || null;
+    if (one(q)) return one(q);
+    const dot = String(q).indexOf('.');
+    if (dot > 0 && one(q.slice(0, dot))) return `${one(q.slice(0, dot))} (${q.slice(dot + 1)})`;
+    return null;
+  };
+  // HTML: the Japanese name first, then the code name in small grey type (the code alone when nothing names it)
+  HV.qhtml = function (q) {
+    const ja = HV.qname(q);
+    return ja ? `${HV.esc(ja)} <span class="code">(${HV.esc(q)})</span>` : `<span class="code">${HV.esc(q)}</span>`;
+  };
+  // plain text (header lines): the Japanese name, or the code
+  HV.qtext = q => HV.qname(q) || String(q ?? '');
+  // an input row's value that starts with a quantity and an operator (the 判定基準 row: "q >= 0 mm")
+  const CRIT_RE = /^([A-Za-z_][\w.]*) (>=|<=|>|<|==) (.*)$/;
+  HV.valueHtml = function (v) {
+    const m = CRIT_RE.exec(String(v ?? ''));
+    return m ? `${HV.qhtml(m[1])} ${HV.esc(m[2])} ${HV.esc(m[3])}` : HV.esc(v);
+  };
+
   function loadData(field) {
     return new Promise(resolve => {
       if (window.VIEW_DATA && window.VIEW_DATA[field]) return resolve(window.VIEW_DATA[field]);
@@ -196,8 +222,8 @@ window.HV = window.HV || {};
       $('source').textContent = `v${s.design_version ?? '?'}  ${s.run}  ${s.analysis_id}  ${s.load_case_id}`;
       $('source').title = `${s.run} ${s.version} ${s.analysis_id} | ${s.tool} ${s.load_case_id}`;
       // inputs; the longer explanations in closed panels
-      const rows = (D.inputs || []).map(r => `<tr><td><b>${HV.esc(r.label)}</b></td><td>${HV.esc(r.value)}</td><td class="muted">${HV.esc(r.source || '')}</td></tr>`).join('');
-      const res = (D.results || []).map(r => `<tr><td>${HV.esc(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where || '')}</td></tr>`).join('');
+      const rows = (D.inputs || []).map(r => `<tr><td><b>${HV.esc(r.label)}</b></td><td>${HV.valueHtml(r.value)}</td><td class="muted">${HV.esc(r.source || '')}</td></tr>`).join('');
+      const res = (D.results || []).map(r => `<tr><td>${HV.qhtml(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where || '')}</td></tr>`).join('');
       const asm = (D.assumptions || []).map(a => `<li>${HV.esc(a)}</li>`).join('');
       $('inputs').innerHTML = `<div class="h">入力 (条件と出どころ)</div><table>${rows}</table>` +
         (ctl.extraInputs ? ctl.extraInputs() : '') + surroundHtml(D, ctx, ctl) +

@@ -3,7 +3,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.aero = {
-  label: '空力',
+  label: HV.FIELD_LABEL.aero,   // js/names.js: the contract's DOMAIN_NAMES_JA
   async init(D, ctx) {
     HV.K2.useCase('aero', D);
     const T = window.THREE, R = await HV.K2.Replay.make(D, ctx), W = D.wind;

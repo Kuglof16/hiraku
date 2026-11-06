@@ -4,7 +4,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.powertrain = {
-  label: 'パワートレイン',
+  label: HV.FIELD_LABEL.powertrain,   // js/names.js: the contract's DOMAIN_NAMES_JA
   async init(D, ctx) {
     HV.K2.useCase('powertrain', D);
     const C = D.cases[HV.fields.powertrain.sel];

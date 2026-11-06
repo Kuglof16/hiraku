@@ -6,7 +6,7 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.fatigue = {
-  label: '疲労',
+  label: HV.FIELD_LABEL.fatigue,   // js/names.js: 疲労 (the strength domain's R3; strength itself: 強度信頼性 (静的強度))
   async init(D, ctx) {
     const T = window.THREE;
     const beams = await ctx.addBeams();

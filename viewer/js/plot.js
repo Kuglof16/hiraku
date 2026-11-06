@@ -44,7 +44,10 @@ window.HV = window.HV || {};
       for (const v of xt) { const x = X(v); g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + h); g.stroke(); g.fillText(HV.fmt(v), x - 8, T + h + 12); }
       g.strokeStyle = '#888'; g.strokeRect(L, T, w, h);
       g.fillStyle = '#333'; g.font = 'bold 11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
-      g.fillText(p.title + (p.unit ? ` [${p.unit}]` : ''), L, 13);
+      const head = p.title + (p.unit ? ` [${p.unit}]` : '');
+      g.fillText(head, L, 13);
+      // the series' code name after the Japanese title, small and grey (p.code: the record's channel)
+      if (p.code) { const x = L + g.measureText(head).width + 6; g.font = '10px Consolas, monospace'; g.fillStyle = '#6b665c'; g.fillText(`(${p.code})`, x, 13); }
       g.font = '10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.fillStyle = '#555'; g.fillText(p.xlabel || '', L + w - g.measureText(p.xlabel || '').width, T + h + 25);
       // bands (a shaded x range, e.g. after the frame split)
       for (const b of p.bands || []) {
