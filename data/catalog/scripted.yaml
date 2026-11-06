@@ -95,14 +95,28 @@ offroad-4w:
         H7: the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json: entry_handhold 0;
         on it with this side guard and grab bar (no fit): entry_handhold 3, entry_blocked 3 (the bolted net, red on version 2)
     - &rev_opening
-      say: 乗り降り (H7) の NG を直すため、横の守りの網の前の部分を、片手で外せる留め具の網にします
+      say: 乗り降り (H7) と膝の角度 (H3) の NG を直すため、横の守りの網の前の部分を、片手で外せる留め具の網にし、ペダルを少し前へ出します
       choices: {side_opening: clip_net}
+      # H3: the fit of the revision before (rev_layout) makes the smallest of its margins the largest, and foot_support
+      # (not judged) holds it at about -4.7 mm, so knee_angle_room is left at -4.6 mm. A longer seat travel would help
+      # but puts the seat on its mount brackets at the slide's end (seat_slide 66 mm: 5 mm into bracket_seat_R1/R2), so
+      # the pedals move instead (pedal_x, the packager's)
+      changes:
+        pedal_x: {value: -402, unit: mm}
       reason: >-
         H7: 横の守りの網がボルトで留まっていて、座席の横の乗り降りの開口に、動かない物がある。
         横の枠は腰と肩の点のまわりだけにし、その前の開口を、片手・一つの動作で外せる留め具の網でふさぐ
-        (開けられる網は開口をふさぐ物に数えない: Q47)
+        (開けられる網は開口をふさぐ物に数えない: Q47)。
+        H3: アクセルの足の膝の角度が楽な範囲を外れる (v2 で knee_angle_room -4.6 mm)。ペダルの位置を -393 mm から -402 mm へ
+        前に出し、大きい人と小さい人のどちらも膝の角度が楽な範囲に入るようにする (座席の前後の動く幅は、座席の取付け金具に当たるので広げない)
       source: >-
-        the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json with the previous
+        H3: the design department, 2026-11-07, on v3 of the demo scripted run 20261107-081718 (trial 7c2g 798619b0, with the
+        seat of claude/analysis-seat 032e7d20), seat_slide 56 mm: K4's people.fit through driver_fit.margins and the assembly
+        tool's interferences with pedal_x alone changed: -396 mm knee_angle_room -1.9, -398 0.0, -400 +1.9, -402 +3.8, -404
+        +3.7 mm; knee_room 406.3, foot_room 6.3, foot_support -4.7 mm the same and no interference at each. seat_slide 66 /
+        70 / 90 mm gives knee_angle_room +0.2 / +2.1 / +8.7 mm but the seat at its slide's end 5 / 7 / 10 mm into its mount
+        brackets (H1).
+        H7: the entry_opening tool (claude/dept-analysis-joints 947bc2b) on data/designs/offroad-4w-v1.json with the previous
         revision's choices and values (no fit): entry_blocked 3; with this choice 0, entry_handhold 3. The analysis department:
         clip_net and door both open (not counted by H7, not pushed on or stiffening in R8); the opening is 703 mm either way
     # The motor and the joints: the same entries as the video and N15 plans (R1s is in every offroad-4w file's
