@@ -479,6 +479,16 @@
     to   { opacity: 0; transform: scale(1.2); }
   }
 
+  /* the source of the price in the voice (one product's list price) */
+  .src {
+    position: absolute;
+    left: 96px;
+    top: 872px;
+    margin: 0;
+    font: 400 18px / 1.5 var(--font-ja);
+    color: var(--on-night-soft);
+    z-index: 5;
+  }
   .dim {
     position: absolute;
     inset: 0;
@@ -509,6 +519,9 @@
   </div>
   <div class="books" data-box="n08.books"></div>
   <div class="dim"></div>
+  <!-- Hitachi's SOLIDWORKS Simulation price page (https://www.hitachi.co.jp/products/it/industry/solution/swsimulation/price.html),
+       read 2026-11-06: Standard 630,000 yen, Premium 2,415,000 yen, single licence, before tax, "2024年2月現在" -->
+  <p class="src" data-box="n08.src" data-kind="note">価格の例: SOLIDWORKS Simulation 63 万〜241.5 万円 (1 ライセンス、税抜、日立の価格ページ、2024 年 2 月現在)</p>
   <div class="guide-band"></div>
   <div class="clock"></div>
 </div>

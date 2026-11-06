@@ -1,0 +1,31 @@
+{
+  "id": "copper",
+  "name": "Annealed copper conductor of electric wire (International Annealed Copper Standard)",
+  "name_ja": "電線の軟銅導体 (万国標準軟銅)",
+  "category": "copper",
+  "standard": "International Annealed Copper Standard (IACS, 100 % conductivity), as stated in NBS Handbook 100",
+  "condition": "annealed copper of 100 % IACS conductivity at 20 degC; the standard's defined reference values, not minima of a wire standard (JIS C 3102 not read); mechanical and thermal-conduction properties not found in a source read",
+  "properties": {
+    "resistivity_ohm_m": {
+      "value": 1.7241e-08,
+      "kind": "typical",
+      "source": "National Bureau of Standards Handbook 100 'Copper Wire Tables' (1966), section 1.1 and Appendix 5: volume resistivity of the International Annealed Copper Standard 0.017241 ohm mm2/m (1.7241 microhm cm) at 20 degC, a defined reference value; 1.7241e-08 ohm m is the unit conversion",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "density_kg_m3": {
+      "value": 8890.0,
+      "kind": "typical",
+      "source": "National Bureau of Standards Handbook 100 'Copper Wire Tables' (1966), section 1.1 and Appendix 5: density of the International Annealed Copper Standard taken as 8.89 g/cm3 at 20 degC (a defined value)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "thermal_expansion_per_K": {
+      "value": 1.7e-05,
+      "kind": "typical",
+      "source": "National Bureau of Standards Handbook 100 'Copper Wire Tables' (1966), section 1.1 and Appendix 5: coefficient of linear expansion 0.000017 per degC (at 20 degC) of the International Annealed Copper Standard",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

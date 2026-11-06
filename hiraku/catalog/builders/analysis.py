@@ -49,25 +49,31 @@ def c1_calc(design: Record, load_case: Record) -> Record:
     from hiraku.contract.loading import loading_of, on_board
     from hiraku.solvers.shelf.crash import occupant_space
 
-    space = occupant_space(on_board(design, loading_of(load_case)))
+    from hiraku.solvers.k0_handcalc.library_crash import crush_zone
+
+    loaded = on_board(design, loading_of(load_case))
+    space = occupant_space(loaded)
     if space is None:
         raise BuildError("no occupant on board, so there is no occupant space to keep")
-    return {"space": q(space, "mm")}
+    # the crush zone's mean crushing force from the front frame's tubes (library_crash.crush_zone), as the tool takes it
+    return {"space": q(space, "mm"), "crush_force": q(crush_zone(loaded)["force_N"], "N")}
 
 
-_C1_ASSUME = ["前はつぶれる所のばね 1 本とみる (バンパーのゴムは入れない)", "壁は動かない"]
+_C1_ASSUME = ["前のつぶれる所は、枠の管が畳まれてつぶれる平均の力 (剛塑性、戻らない) とみる (バンパーはばね)",
+              "つぶれる所が使える長さは、その長さの 70 % (仮定)", "壁は動かない"]
+_C1_IN = {"m": "load.mass", "v": "lc.speed", "F_m": "from.crush_force", "k_b": "design.var.bumper_stiffness",
+          "stroke": "design.var.bumper_stroke"}
 C1_PLAN = {
     "tool": "crash",
-    "say": "前をつぶれる所のばね 1 本とみて、壁に当たったときの減速度とつぶれ、乗員の前に残る長さを先に見積もります",
+    "say": "前の枠の管が畳まれてつぶれる平均の力から、壁に当たったときの減速度とつぶれ、乗員の前に残る長さを先に見積もります",
     "predictions": [
-        {"quantity": quantity, "formula_id": "crash.linear_spring", "output": output, "assumptions": _C1_ASSUME,
-         "inputs": {"m": "load.mass", "v": "lc.speed", "k": "design.var.crush_stiffness"}}
+        {"quantity": quantity, "formula_id": "crash.plastic_crush", "output": output, "assumptions": _C1_ASSUME,
+         "inputs": dict(_C1_IN), "inputs_from": c1_calc}
         for quantity, output in (("peak_deceleration", "a_max"), ("max_crush", "x_max"), ("crash_energy", "E"))
     ] + [
-        {"quantity": "occupant_space_margin", "formula_id": "crash.occupant_space_margin", "output": "margin",
+        {"quantity": "occupant_space_margin", "formula_id": "crash.plastic_occupant_space_margin", "output": "margin",
          "assumptions": _C1_ASSUME + ["つぶれは車の前の端から後ろへ進む"],
-         "inputs": {"m": "load.mass", "v": "lc.speed", "k": "design.var.crush_stiffness", "s": "from.space"},
-         "inputs_from": c1_calc},
+         "inputs": dict(_C1_IN, s="from.space"), "inputs_from": c1_calc},
     ],
 }
 

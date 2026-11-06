@@ -110,6 +110,30 @@ class ReadEventsTest(unittest.TestCase):
         c = read_events(self.path, b["next_offset"])
         self.assertEqual([e["seq"] for e in c["events"]], [2])
 
+    def test_lines_unparsed_end_where_the_parsed_read_ends(self):
+        # read_event_lines (the ndjson form) gives the bytes read_events parses: the same
+        # next_offset at every step, the over-long line skipped and counted the same way
+        first = _line(0, "run.started")
+        long = _line(1, "agent.said", text="x" * 300)
+        text = first + long + "not json" + CRLF + _line(2, "cost.updated") + '{"seq": 3, "kind": "agent.s'
+        self.path.write_bytes(text.encode("utf-8"))
+        self._limits(read=64, line=200)
+        offset, steps = 0, []
+        for _ in range(10):
+            parsed, lines = read_events(self.path, offset), webserver.read_event_lines(self.path, offset)
+            self.assertEqual([lines[k] for k in ("next_offset", "size", "reset")], [parsed[k] for k in ("next_offset", "size", "reset")])
+            self.assertEqual(lines["data"], self.path.read_bytes()[offset:lines["next_offset"]] if not lines["bad_lines"] else b"")
+            steps.append((lines["next_offset"], lines["bad_lines"], parsed["bad_lines"], [e["seq"] for e in parsed["events"]]))
+            if lines["next_offset"] == offset:
+                break
+            offset = lines["next_offset"]
+        n0, n1 = len(first.encode()), len((first + long).encode())
+        n2 = n1 + len("not json" + CRLF)
+        n3 = n2 + len(_line(2, "cost.updated").encode())
+        # the long line: skipped (bad in both); "not json": bad only once parsed; the
+        # half-written line: left for later
+        self.assertEqual(steps, [(n0, 0, 0, [0]), (n1, 1, 1, []), (n2, 0, 1, []), (n3, 0, 0, [2]), (n3, 0, 0, [])])
+
     def test_a_long_line_still_being_written_is_left_for_later(self):
         first = _line(0, "run.started")
         self.path.write_bytes((first + '{"seq": 1, "kind": "agent.said", "text": "' + "x" * 300).encode("utf-8"))
@@ -193,6 +217,33 @@ class ServerTest(unittest.TestCase):
         self.assertEqual([e["seq"] for e in out["events"]], [0, 1])
         _, _, body = self.get(f"/api/runs/{RUN_ID}/events?offset={out['next_offset']}")
         self.assertEqual(json.loads(body)["events"], [])
+
+    def test_events_as_ndjson_are_the_lines_as_they_are(self):
+        path = self.runs / RUN_ID / "events.jsonl"
+        raw = path.read_bytes()
+        status, headers, body = self.get(f"/api/runs/{RUN_ID}/events?offset=0&format=ndjson")
+        self.assertEqual(status, 200)
+        self.assertTrue(headers["Content-Type"].startswith("application/x-ndjson"))
+        self.assertEqual(body, raw)  # not parsed, not re-encoded
+        self.assertEqual(int(headers["Content-Length"]), len(raw))
+        self.assertEqual(
+            [headers[h] for h in ("X-Hiraku-Next-Offset", "X-Hiraku-Size", "X-Hiraku-Reset", "X-Hiraku-Bad-Lines")],
+            [str(len(raw)), str(len(raw)), "0", "0"],
+        )
+        # the same next offset and size as the JSON form; from the end: nothing, nothing moves
+        out = json.loads(self.get(f"/api/runs/{RUN_ID}/events?offset=0")[2])
+        self.assertEqual(out["next_offset"], len(raw))
+        self.assertEqual([json.loads(line) for line in body.splitlines()], out["events"])
+        _, headers, body = self.get(f"/api/runs/{RUN_ID}/events?offset={len(raw)}&format=ndjson")
+        self.assertEqual((body, headers["X-Hiraku-Next-Offset"]), (b"", str(len(raw))))
+        # an offset past the end starts again from 0 (reset), as the JSON form
+        _, headers, body = self.get(f"/api/runs/{RUN_ID}/events?offset={len(raw) + 99}&format=ndjson")
+        self.assertEqual((body, headers["X-Hiraku-Reset"]), (raw, "1"))
+
+    def test_events_as_ndjson_refuse_what_the_json_form_refuses(self):
+        self.assertEqual(self.get_error("/api/runs/..%5Csecret/events?format=ndjson"), 400)
+        self.assertEqual(self.get_error("/api/runs/20991231-000000-nothing/events?format=ndjson"), 404)
+        self.assertEqual(self.get_error(f"/api/runs/{RUN_ID}/events?offset=abc&format=ndjson"), 400)
 
     def test_sample_events(self):
         _, _, body = self.get("/api/runs/sample/events")
