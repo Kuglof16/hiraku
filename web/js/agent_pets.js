@@ -1,6 +1,7 @@
 // The agents as their 3D pets on the app's screen: the workbench's agent list (#agents)
 // and the all-domains grid (each domain's tile corner; lead, designer and any other
-// agent in the grid's head). One pet per agent of the record (s.agentOrder: agent.started's
+// agent in the grid's head), ③'s board of tests (each domain's head: test_board.js, place "board")
+// and the tool shelf's domain heads (shelf.js, place "shelf"). One pet per agent of the record (s.agentOrder: agent.started's
 // agent_id and every event's agent), as the role of promo/pets/pet3d.js (ROLES).
 //
 // Drawing is cut_pets.js's PetStage (the same as the cut pages): one WebGL renderer off the
@@ -32,6 +33,8 @@ const PET_SHADOW = 256; // the pets' shadow map (px a side): the list's pets are
 export const PET_LITE = true;
 export const PET_ANTIALIAS = true;
 export const PET_PAINTS = 1; // pets drawn in one frame while the replay plays (agent_pets.tick budget)
+const HELD_PLACES = new Set(["board", "shelf"]); // places drawn one picture per motion (tick)
+const HELD_AT = 0.3; // s into a motion at which such a place's picture is taken
 const PASS_HOPS = 3; // a pass reaction: this many hops of pet3d's pass (n00.motion.hop_period_s each)
 
 const BLOCK_SETTLE_S = 0.8; // pet3d.js v9 blocked: the pose no longer changes from this long after the block (promo/pets/README.md)
@@ -335,7 +338,11 @@ export class AgentPets {
   // how many pets may be drawn in this frame (playing: PET_PAINTS; a frame stopped at t, as
   // ?t= or a seek: all). Those whose motion or size changed go first, then the moving ones
   // that waited longest; the others keep their picture until a later frame.
+  // HELD (③'s board, the shelf's heads): the pose tells the motion, but is one picture per motion,
+  // drawn again only when the motion changes (HELD_AT s into it), not every PET_FPS step: those pets
+  // are many and small, and the list beside them moves.
   tick(s, events, t, place, budget = Infinity) {
+    const held = HELD_PLACES.has(place);
     // (the player re-times events into new objects: the last one tells a change)
     if (this.timeline.events !== events || this.timeline.n !== events.length || this.timeline.last !== events.at(-1)) {
       const { per, owners } = petTimeline(events);
@@ -363,7 +370,7 @@ export class AgentPets {
         if (k !== b.last) due.push({ p, b, k, pose: idleT, o: null, pet: "idle", w, h, first: true });
         continue;
       }
-      const { pose, o } = petPose(m.motion, m.since, tq, idleT, hop);
+      const { pose, o } = petPose(m.motion, m.since, held ? m.since + HELD_AT : tq, idleT, hop);
       const k = `${how.pet}|${pose.toFixed(4)}|${o ? o.since.toFixed(4) : "-"}|${w}x${h}`;
       if (k === b.last) continue;
       const first = !b.last || b.last.split("|")[0] !== how.pet || !b.last.endsWith(`|${w}x${h}`);
@@ -390,7 +397,8 @@ export class AgentPets {
 
   // The bubbles ([data-say] = agent id) of the place's rows and tiles.
   says(s, t, place) {
-    const root = place === "grid" ? document.getElementById("view-grid") : document.getElementById("agents");
+    // (③'s board and the shelf's heads have pets only, no bubbles: test_board.js, shelf.js)
+    const root = place === "grid" ? document.getElementById("view-grid") : place === "bench" ? document.getElementById("agents") : null;
     if (!root) return;
     for (const el of root.querySelectorAll("[data-say]")) {
       const id = el.dataset.say;

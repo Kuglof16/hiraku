@@ -22,6 +22,9 @@
 .sh-node { margin-bottom: 10px; }
 .sh-head { display: flex; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid var(--ink); font-size: 17px; }
 .sh-caret { width: 14px; color: var(--muted); }
+/* a domain's head: its agent's pet as the icon (js/shelf.js, drawn by agent_pets.js place "shelf") */
+.sh-head:has(.sh-pet) { align-items: center; }
+.sh-head .sh-pet { width: 40px; height: 40px; margin: -6px -4px -6px -6px; }
 .sh-n, .sh-nok { font-size: 14px; color: var(--muted); }
 .sh-nok { color: var(--green); }
 

@@ -1,0 +1,55 @@
+/* ③'s tests at a glance (js/test_board.js): the domains' groups wrap side by side over the 3D, each
+   with its head (the agent's pet and the domain's name) and its tests' boxes (at most MAX_COLS a
+   line). Sizes in the 1920x1080 stage's px: 8 domains with a few tests each stay within about a
+   quarter of the column's height. Colours: red for NG only; a mismatch orange. */
+
+.tests.board { display: flex; flex-wrap: wrap; gap: 5px 8px; align-items: stretch; overflow: visible; flex: none; }
+
+.tb-group {
+  display: flex; gap: 6px; align-items: stretch;
+  background: var(--panel); border: 1.5px solid var(--rule); border-radius: 9px; padding: 2px 5px 2px 2px;
+}
+.tb-group.at-work { border-color: var(--blue); }
+.tb-head { width: 60px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.tb-head .tb-pet { width: 28px; height: 28px; }
+.tb-head .tb-pet.none { display: none; }
+.tb-name { font-size: 12px; font-weight: 600; white-space: nowrap; line-height: 1.15; }
+.tb-group.dom-red .tb-name { color: var(--red); }
+
+.tb-cells { display: grid; grid-template-columns: repeat(var(--cols, 1), 80px); grid-auto-rows: 32px; gap: 3px; align-content: center; }
+
+.tests.board .test {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 4px; align-items: baseline;
+  width: 80px; height: 32px; padding: 1px 4px; min-width: 0;
+  border: 1.5px solid var(--line); border-radius: 7px; background: var(--card);
+  font-size: 12px; line-height: 1.15; text-align: left; white-space: nowrap; overflow: hidden;
+}
+.tests.board .test .tid { display: contents; }
+.tests.board .test .tid b { grid-column: 1; grid-row: 1; font-family: var(--mono); font-size: 13px; margin: 0; }
+.tests.board .test .tst { grid-column: 2; grid-row: 1; justify-self: end; font-size: 11.5px; font-weight: 700; }
+.tests.board .test .tnm {
+  grid-column: 1 / span 2; grid-row: 2; font-size: 11px; color: var(--muted); margin: 0; font-family: var(--font);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.tests.board .test.on { outline: 2.5px solid var(--ink); outline-offset: 1px; font-weight: inherit; }
+
+/* the states (test_board.js CASE_STATE) */
+.tests.board .test.st-wait { border-style: dashed; background: transparent; }
+.tests.board .test.st-wait .tst { color: var(--muted); font-weight: 400; }
+.tests.board .test.st-busy { border-color: var(--blue); background: #e8eefb; }
+.tests.board .test.st-busy .tst { color: var(--blue); }
+.tests.board .test.st-match { border-color: var(--green); background: #eef6f0; }
+.tests.board .test.st-match .tst { color: var(--green); font-weight: 600; }
+.tests.board .test.st-mismatch { border-color: var(--orange); background: var(--orange-pale); }
+.tests.board .test.st-mismatch .tst { color: var(--orange); }
+.tests.board .test.st-ok { border-color: var(--green); background: #d6ecdd; }
+.tests.board .test.st-ok .tst { color: var(--green); }
+.tests.board .test.st-ok.safe { box-shadow: inset 3px 0 0 var(--orange); } /* judged from a safe-side mismatch */
+.tests.board .test.st-ng { border-color: var(--red); background: var(--red-pale); }
+.tests.board .test.st-ng .tst { color: var(--red); }
+
+.tb-tail { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tests.board .auto { flex: none; white-space: nowrap; font-size: 14px; color: var(--muted); border: 1.5px dashed var(--line); border-radius: 999px; padding: 3px 12px; }
+.tests.board .auto.on { color: var(--blue); border-color: var(--blue); border-style: solid; }
+.tb-rest { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.tb-viewer:empty { display: none; } /* the place of a 「ビューアで見る」 button (another branch fills it) */
