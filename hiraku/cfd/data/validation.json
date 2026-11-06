@@ -1,0 +1,5070 @@
+{
+ "schema": 1,
+ "what": "GPU 流体計算の検証の記録。数値は run_case の出力そのまま。",
+ "tolerances": "許容の幅はこの作品が走らせる前に決めたもので、外部の基準ではない。外れたものは検証できていないまま残し、幅を広げない。",
+ "verified_words": {
+  "read": "値か式をその URL の本文で読んだ",
+  "secondary": "その URL が原典を引いている。原典そのものは読んでいない",
+  "確かめていない": "この値を書いたページを読めていない"
+ },
+ "tolerance_pct": {
+  "sphere": 5.0,
+  "sphere_turbulent": 10.0,
+  "plate": 10.0,
+  "cube": 10.0,
+  "ahmed25": 10.0,
+  "ahmed35": 10.0
+ },
+ "code": {
+  "kernels.cu": "642f4db8b887abf0",
+  "solver.py": "f57821f10df447e0",
+  "geometry.py": "512f19438f540a04"
+ },
+ "bodies": {
+  "cube": {
+   "body": "cube",
+   "re": 100000.0,
+   "reference": {
+    "value": 1.05,
+    "source": "Hoerner, Fluid-Dynamic Drag, redrawn table (Wikimedia Commons, CMG Lee), Re 1e4 to 1e6",
+    "url": "https://commons.wikimedia.org/wiki/File:Hoerner_fluid_dynamic_drag_coefficients.svg",
+    "verified": "secondary",
+    "note": "面を流れに向けた立方体。Hoerner の原典のページは読んでいない"
+   },
+   "other_references": [],
+   "levels": [
+    {
+     "cells": 12,
+     "cd": 0.9795906681308755,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.500018,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      144,
+      96,
+      96
+     ],
+     "steps": 24000,
+     "spread_pct": 2.0514739416762575,
+     "cd_quarters": [
+      0.9936077044410052,
+      0.9744607788139646,
+      0.9767825321193243,
+      0.973511657149208
+     ],
+     "cy": -0.010496067116960228,
+     "cz": 0.03661178585511227,
+     "cd_by_group": {
+      "body": 0.9795906681308755
+     },
+     "max_mach": 0.10859972375655474,
+     "last_stats": {
+      "max_dr": 0.0042294,
+      "min_dr": -0.003853,
+      "negative_f": 0,
+      "mass_dev": -70.95221686388527
+     },
+     "geometry": {
+      "solid_nodes": 1728,
+      "cut_links": 4176,
+      "projected_area_x_m2": 1.0,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.0,
+      "voxel_volume_diff_pct": 0.0
+     },
+     "memory_mib": 204.77705574035645,
+     "wall_s": 14.176284300046973,
+     "mlups": 2246.7450091907695,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "code_note": "今の geometry.py で走らせた",
+     "faulted": null,
+     "error_pct": -6.705650654202344
+    },
+    {
+     "cells": 16,
+     "cd": 0.9974815132541953,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.500024,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      192,
+      128,
+      128
+     ],
+     "steps": 32000,
+     "spread_pct": 1.1089043795607532,
+     "cd_quarters": [
+      0.9984283171094942,
+      0.999901723850366,
+      0.9902674479355681,
+      1.0013285641213527
+     ],
+     "cy": -0.011849138174632349,
+     "cz": -0.003019971348195238,
+     "cd_by_group": {
+      "body": 0.9974815132541953
+     },
+     "max_mach": 0.12589400303429865,
+     "last_stats": {
+      "max_dr": 0.0040271,
+      "min_dr": -0.0038403,
+      "negative_f": 0,
+      "mass_dev": -187.10016089860434
+     },
+     "geometry": {
+      "solid_nodes": 4096,
+      "cut_links": 7488,
+      "projected_area_x_m2": 1.0,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.0,
+      "voxel_volume_diff_pct": 0.0
+     },
+     "memory_mib": 478.7121391296387,
+     "wall_s": 38.15199719998054,
+     "mlups": 2638.4803781661876,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせたが、リンクと q と mask が今のものと同じなので同じ結果",
+     "faulted": null,
+     "error_pct": -5.001760642457597
+    },
+    {
+     "cells": 24,
+     "cd": 1.0464362661490216,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.500036,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      288,
+      192,
+      192
+     ],
+     "steps": 48000,
+     "spread_pct": 2.2219411540829332,
+     "cd_quarters": [
+      1.0316545401797652,
+      1.048650505193507,
+      1.0549057382285791,
+      1.0505342809942348
+     ],
+     "cy": 0.004274269236705993,
+     "cz": 0.013821469996138655,
+     "cd_by_group": {
+      "body": 1.0464362661490216
+     },
+     "max_mach": 0.13644229549520193,
+     "last_stats": {
+      "max_dr": 0.0040094,
+      "min_dr": -0.005899,
+      "negative_f": 0,
+      "mass_dev": -654.9762450358228
+     },
+     "geometry": {
+      "solid_nodes": 13824,
+      "cut_links": 16992,
+      "projected_area_x_m2": 1.0,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.0,
+      "voxel_volume_diff_pct": 0.0
+     },
+     "memory_mib": 1593.2845478057861,
+     "wall_s": 173.64448180003092,
+     "mlups": 2934.7776025895528,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせたが、リンクと q と mask が今のものと同じなので同じ結果",
+     "faulted": null,
+     "error_pct": -0.33940322390270117
+    }
+   ],
+   "tolerance_pct": 10.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "面が節点の面を通るよう半セルずらす (q = 1 の絞り込みの前のコード)",
+     "tag": "x+half_before_filter",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.431652174296738,
+     "change_from_base_pct": 46.148000473343245,
+     "cd_by_group": {
+      "body": 1.431652174296738
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11037934589405754,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "ef8edc714afa4621"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "同じ、q = 1 の絞り込みを外から試した",
+     "tag": "notouch_x+half",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9859674381455624,
+     "change_from_base_pct": 0.6509627155650843,
+     "cd_by_group": {
+      "body": 0.9859674381455624
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11606032913963324,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "ef8edc714afa4621"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "面が節点の面を通るよう半セルずらす",
+     "tag": "x+half",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9859674381456213,
+     "change_from_base_pct": 0.6509627155711017,
+     "cd_by_group": {
+      "body": 0.9859674381456213
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11130902928334249,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0771135593524779,
+     "change_from_base_pct": 2.5226864957164086,
+     "cd_by_group": {
+      "body": 1.0771135593524779
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11186018058272568,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.1900751285967248,
+     "change_from_base_pct": 10.885464620628182,
+     "cd_by_group": {
+      "body": 1.1900751285967248
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.11770556486419831,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "対称のまま 時間 t*=300",
+     "tag": "t300",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0773743813063115,
+     "change_from_base_pct": 2.547512260067708,
+     "cd_by_group": {
+      "body": 1.0773743813063115
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12299999999999998,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "対称のまま 横の幅 ±6",
+     "tag": "hw6_symmetric",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0638662644858432,
+     "change_from_base_pct": 1.2617718533041833,
+     "cd_by_group": {
+      "body": 1.0638662644858432
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 6.0,
+      "height": 6.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.15529166107682665,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "横の幅 ±6",
+     "tag": "hw6",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0326904651708657,
+     "change_from_base_pct": -1.705628075580079,
+     "cd_by_group": {
+      "body": 1.0326904651708657
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 6.0,
+      "height": 6.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11117553687749838,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "格子の風速 0.025",
+     "tag": "u0.025",
+     "cells": 12,
+     "u_lattice": 0.025,
+     "cd": 1.0712363141111039,
+     "change_from_base_pct": 1.96327382645054,
+     "cd_by_group": {
+      "body": 1.0712363141111039
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500009,
+     "max_mach": 0.0585679093019377,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "面が節点の面を通るよう半セルずらす",
+     "tag": "x+half",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.3047499455776015,
+     "change_from_base_pct": 24.18975554088383,
+     "cd_by_group": {
+      "body": 1.3047499455776015
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12167579874403947,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.1",
+     "tag": "x+0.1",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0526118105123001,
+     "change_from_base_pct": 0.19054139074861087,
+     "cd_by_group": {
+      "body": 1.0526118105123001
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.10992724866929036,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.25",
+     "tag": "x+0.25",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0178628380572188,
+     "change_from_base_pct": -3.1169631691255306,
+     "cd_by_group": {
+      "body": 1.0178628380572188
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11751042506943798,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.4",
+     "tag": "x+0.4",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.994009145859891,
+     "change_from_base_pct": -5.387424427065812,
+     "cd_by_group": {
+      "body": 0.994009145859891
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11100405398002362,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.45",
+     "tag": "x+0.45",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9962257851271111,
+     "change_from_base_pct": -5.176438490908886,
+     "cd_by_group": {
+      "body": 0.9962257851271111
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.10949931506635097,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+half+eps",
+     "tag": "x+half+eps",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.3109496822364242,
+     "change_from_base_pct": 24.779863846836815,
+     "cd_by_group": {
+      "body": 1.3109496822364242
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11760102040373628,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+half-eps",
+     "tag": "x+half-eps",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0013816992084006,
+     "change_from_base_pct": -4.6856841425255364,
+     "cd_by_group": {
+      "body": 1.0013816992084006
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1093828140065888,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.6",
+     "tag": "x+0.6",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.278626955850449,
+     "change_from_base_pct": 21.703296185811084,
+     "cd_by_group": {
+      "body": 1.278626955850449
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11608100619825794,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.75",
+     "tag": "x+0.75",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.1471610535455026,
+     "change_from_base_pct": 9.190003255965173,
+     "cd_by_group": {
+      "body": 1.1471610535455026
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1155837358800969,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.45",
+     "tag": "x+0.45",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.0081197071513175,
+     "change_from_base_pct": -6.068264570407811,
+     "cd_by_group": {
+      "body": 1.0081197071513175
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.1250775759279016,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.6",
+     "tag": "x+0.6",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.2681358157214244,
+     "change_from_base_pct": 18.158783214080575,
+     "cd_by_group": {
+      "body": 1.2681358157214244
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.1248230747898801,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.45",
+     "tag": "x+0.45",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.061891422224748,
+     "change_from_base_pct": -5.741343016699696,
+     "cd_by_group": {
+      "body": 1.061891422224748
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.1373408169482037,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "x+0.6",
+     "tag": "x+0.6",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.303167151864013,
+     "change_from_base_pct": 15.675466425847628,
+     "cd_by_group": {
+      "body": 1.303167151864013
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.14749915253993834,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "yz+0.1",
+     "tag": "yz+0.1",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0644245886618697,
+     "change_from_base_pct": 1.3149147127220484,
+     "cd_by_group": {
+      "body": 1.0644245886618697
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11294379133002398,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "yz+0.45",
+     "tag": "yz+0.45",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0384157768604776,
+     "change_from_base_pct": -1.1606768674667922,
+     "cd_by_group": {
+      "body": 1.0384157768604776
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.10988357475073332,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "yz+0.6",
+     "tag": "yz+0.6",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0415756476472482,
+     "change_from_base_pct": -0.8599115124806267,
+     "cd_by_group": {
+      "body": 1.0415756476472482
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11252866301525134,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "yz+0.9",
+     "tag": "yz+0.9",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0637477019567294,
+     "change_from_base_pct": 1.2504867395880526,
+     "cd_by_group": {
+      "body": 1.0637477019567294
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11515207336387827,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "plainBB_x+0.45",
+     "tag": "plainBB_x+0.45",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9978237922539498,
+     "change_from_base_pct": -5.024335695191329,
+     "cd_by_group": {
+      "body": 0.9978237922539498
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1426793608059694,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "plainBB_x+0.6",
+     "tag": "plainBB_x+0.6",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.1740137634420738,
+     "change_from_base_pct": 11.745919421333673,
+     "cd_by_group": {
+      "body": 1.1740137634420738
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12479062464784763,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "plainBB_x+0.75",
+     "tag": "plainBB_x+0.75",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.1283145101247585,
+     "change_from_base_pct": 7.39613644788748,
+     "cd_by_group": {
+      "body": 1.1283145101247585
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1124486549497147,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "plainBB_x+0.25",
+     "tag": "plainBB_x+0.25",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.0302793301502107,
+     "change_from_base_pct": -1.9351266624979435,
+     "cd_by_group": {
+      "body": 1.0302793301502107
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11549805193162349,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0",
+     "tag": "noclip_x+0",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9795906681308313,
+     "change_from_base_pct": -6.7598155358088,
+     "cd_by_group": {
+      "body": 0.9795906681308313
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1107348183725426,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.25",
+     "tag": "noclip_x+0.25",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9890939411875697,
+     "change_from_base_pct": -5.855267379470586,
+     "cd_by_group": {
+      "body": 0.9890939411875697
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11064537947876539,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.45",
+     "tag": "noclip_x+0.45",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9991012969887991,
+     "change_from_base_pct": -4.9027392151447025,
+     "cd_by_group": {
+      "body": 0.9991012969887991
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1136362618181362,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.6",
+     "tag": "noclip_x+0.6",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9916673574350506,
+     "change_from_base_pct": -5.61032241069489,
+     "cd_by_group": {
+      "body": 0.9916673574350506
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11147062393294477,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.75",
+     "tag": "noclip_x+0.75",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9827960960264972,
+     "change_from_base_pct": -6.454713927553546,
+     "cd_by_group": {
+      "body": 0.9827960960264972
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12389430979669729,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.45",
+     "tag": "noclip_x+0.45",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.016517686319619,
+     "change_from_base_pct": -5.2857813476473225,
+     "cd_by_group": {
+      "body": 1.016517686319619
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.1321385636368127,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.6",
+     "tag": "noclip_x+0.6",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.002035953694578,
+     "change_from_base_pct": -6.635119395349298,
+     "cd_by_group": {
+      "body": 1.002035953694578
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.12083708040167139,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.45",
+     "tag": "noclip_x+0.45",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.0640175939872492,
+     "change_from_base_pct": -5.55261365072619,
+     "cd_by_group": {
+      "body": 1.0640175939872492
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.13272754047295535,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "noclip_x+0.6",
+     "tag": "noclip_x+0.6",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.068897507189927,
+     "change_from_base_pct": -5.119448776189584,
+     "cd_by_group": {
+      "body": 1.068897507189927
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.15002499791701382,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "角をかすめるリンクを外す (実験用)",
+     "tag": "noclip",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 0.9795906681308437,
+     "change_from_base_pct": -6.759815535807623,
+     "cd_by_group": {
+      "body": 0.9795906681308437
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1136494610633944,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "角をかすめるリンクを外す (実験用)",
+     "tag": "noclip",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 0.9974815132541953,
+     "change_from_base_pct": -7.059480204329738,
+     "cd_by_group": {
+      "body": 0.9974815132541953
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.12589400303429865,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "角をかすめるリンクを外す (実験用)",
+     "tag": "noclip",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.0464362661490216,
+     "change_from_base_pct": -7.113217979314223,
+     "cd_by_group": {
+      "body": 1.0464362661490216
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.13644229549520193,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.050609963676168,
+     "change_from_base_pct": 7.249895069008994,
+     "cd_by_group": {
+      "body": 1.050609963676168
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11258729946135132,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.0732471858852937,
+     "change_from_base_pct": 7.595696925140949,
+     "cd_by_group": {
+      "body": 1.0732471858852937
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.1433213173257907,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.1265717719836408,
+     "change_from_base_pct": 7.657944246286963,
+     "cd_by_group": {
+      "body": 1.1265717719836408
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.14586500608439296,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    }
+   ],
+   "note": "格子を細かくするほど Cd は上がっていて (0.980, 0.997, 1.046)、収束していない。12 セルと 16 セルは基準より低い。修正前の geometry.py では、角をかすめるリンクのせいで 1.051, 1.073, 1.127 で、面の位置を半セル動かすと 12 セルで 0.99 から 1.31 まで動いた (findings)。基準は Hoerner の表を描き直した図の値で、原典のページは読んでいない。物体を格子の中央にぴったり置くと答えが変わるので、y, z に 0.13 と 0.26 セルずらしている。",
+   "finest": {
+    "cells": 24,
+    "cd": 1.0464362661490216,
+    "error_pct": -0.33940322390270117
+   },
+   "richardson": {
+    "monotone": true,
+    "reason": "単調だが次数が 0.1 から 8 に収まらないので外挿しない",
+    "values": [
+     0.9795906681308755,
+     0.9974815132541953,
+     1.0464362661490216
+    ]
+   },
+   "within_tolerance": true,
+   "settled": true,
+   "validated": true,
+   "conclusion": "一番細かい格子 (24 セル/代表長さ) で Cd = 1.046、基準 1.05 との差 -0.3 %。許容 ±10 % に入る。単調だが次数が 0.1 から 8 に収まらないので外挿しない格子を細かくするほど Cd は上がっていて (0.980, 0.997, 1.046)、収束していない。12 セルと 16 セルは基準より低い。修正前の geometry.py では、角をかすめるリンクのせいで 1.051, 1.073, 1.127 で、面の位置を半セル動かすと 12 セルで 0.99 から 1.31 まで動いた (findings)。基準は Hoerner の表を描き直した図の値で、原典のページは読んでいない。物体を格子の中央にぴったり置くと答えが変わるので、y, z に 0.13 と 0.26 セルずらしている。"
+  },
+  "plate": {
+   "body": "plate",
+   "re": 100000.0,
+   "reference": {
+    "value": 1.17,
+    "source": "Hoerner, Fluid-Dynamic Drag, redrawn table (Wikimedia Commons, CMG Lee), Re 1e4 to 1e6",
+    "url": "https://commons.wikimedia.org/wiki/File:Hoerner_fluid_dynamic_drag_coefficients.svg",
+    "verified": "secondary",
+    "note": "Hoerner の原典のページは読んでいない。図の注記には 1.18 とも 1.1 とも書かれる"
+   },
+   "other_references": [
+    {
+     "value": 1.17,
+     "source": "Wikipedia, Drag coefficient: a real square flat plate is often given as 1.17",
+     "url": "https://en.wikipedia.org/wiki/Drag_coefficient",
+     "verified": "read",
+     "note": "出典の指定のない記述 (citation needed)"
+    },
+    {
+     "value": 1.28,
+     "source": "NASA Glenn, Shape Effects on Drag: a flat plate has Cd = 1.28",
+     "url": "https://www.grc.nasa.gov/www/k-12/VirtualAero/BottleRocket/airplane/shaped.html",
+     "verified": "read",
+     "note": "板の形は書かれていない。正方形の値とは限らない"
+    }
+   ],
+   "levels": [
+    {
+     "cells": 12,
+     "cd": 1.2715023805456716,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.500018,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      144,
+      96,
+      96
+     ],
+     "steps": 24000,
+     "spread_pct": 1.448885928185206,
+     "cd_quarters": [
+      1.2756245994015676,
+      1.2817434903020477,
+      1.2653205612452891,
+      1.2633208712337816
+     ],
+     "cy": 0.045430689277603326,
+     "cz": 0.037966669706947134,
+     "cd_by_group": {
+      "body": 1.2715023805456716
+     },
+     "max_mach": 0.12294388964076253,
+     "last_stats": {
+      "max_dr": 0.0040457,
+      "min_dr": -0.0043067,
+      "negative_f": 0,
+      "mass_dev": -80.49729290486987
+     },
+     "geometry": {
+      "solid_nodes": 0,
+      "cut_links": 1440,
+      "projected_area_x_m2": 1.0,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.0,
+      "voxel_volume_diff_pct": -100.00000000000001
+     },
+     "memory_mib": 204.65914726257324,
+     "wall_s": 14.196891799918376,
+     "mlups": 2243.483746222756,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせたが、リンクと q と mask が今のものと同じなので同じ結果",
+     "faulted": null,
+     "error_pct": 8.675417140655695
+    },
+    {
+     "cells": 16,
+     "cd": 1.256723274286363,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.500024,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      192,
+      128,
+      128
+     ],
+     "steps": 32000,
+     "spread_pct": 3.950862617523103,
+     "cd_quarters": [
+      1.2895427594343274,
+      1.2492295050585098,
+      1.2398913493848351,
+      1.2482294832677792
+     ],
+     "cy": 0.007305915697443907,
+     "cz": 0.036219876531716044,
+     "cd_by_group": {
+      "body": 1.256723274286363
+     },
+     "max_mach": 0.13290936761568012,
+     "last_stats": {
+      "max_dr": 0.0039618,
+      "min_dr": -0.0048261,
+      "negative_f": 0,
+      "mass_dev": -201.2301094450793
+     },
+     "geometry": {
+      "solid_nodes": 0,
+      "cut_links": 2624,
+      "projected_area_x_m2": 1.0,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.0,
+      "voxel_volume_diff_pct": -100.0
+     },
+     "memory_mib": 478.5025291442871,
+     "wall_s": 41.33337750006467,
+     "mlups": 2435.3997202343917,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせたが、リンクと q と mask が今のものと同じなので同じ結果",
+     "faulted": null,
+     "error_pct": 7.412245665501116
+    },
+    {
+     "cells": 24,
+     "cd": 1.2331000991826995,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.500036,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      288,
+      192,
+      192
+     ],
+     "steps": 48000,
+     "spread_pct": 2.1361496486839866,
+     "cd_quarters": [
+      1.2216743028080075,
+      1.2310864627210834,
+      1.2480151662446206,
+      1.2316244649570862
+     ],
+     "cy": 0.006359608292213562,
+     "cz": 0.020584168240150146,
+     "cd_by_group": {
+      "body": 1.2331000991826995
+     },
+     "max_mach": 0.1487165088347625,
+     "last_stats": {
+      "max_dr": 0.0039472,
+      "min_dr": -0.0055199,
+      "negative_f": 0,
+      "mass_dev": -695.7101545514918
+     },
+     "geometry": {
+      "solid_nodes": 0,
+      "cut_links": 5856,
+      "projected_area_x_m2": 1.0,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.0,
+      "voxel_volume_diff_pct": -100.00000000000001
+     },
+     "memory_mib": 1592.804651260376,
+     "wall_s": 177.48591329995543,
+     "mlups": 2871.2584932796917,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせたが、リンクと q と mask が今のものと同じなので同じ結果",
+     "faulted": null,
+     "error_pct": 5.393170870316211
+    }
+   ],
+   "tolerance_pct": 10.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.29200687484001,
+     "change_from_base_pct": 1.6126194184189258,
+     "cd_by_group": {
+      "body": 1.29200687484001
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12477379532578144,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.2783181469794842,
+     "change_from_base_pct": 1.718347478316895,
+     "cd_by_group": {
+      "body": 1.2783181469794842
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.13018755700910897,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "対称のまま 時間 t*=300",
+     "tag": "t300",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.3056641916452079,
+     "change_from_base_pct": 2.6867280488201306,
+     "cd_by_group": {
+      "body": 1.3056641916452079
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12466314611784832,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "対称のまま 横の幅 ±6",
+     "tag": "hw6_symmetric",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.280469893920655,
+     "change_from_base_pct": 0.7052690983665233,
+     "cd_by_group": {
+      "body": 1.280469893920655
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 6.0,
+      "height": 6.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.11845505476762061,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "横の幅 ±6",
+     "tag": "hw6",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.238733981854155,
+     "change_from_base_pct": -2.5771401762892387,
+     "cd_by_group": {
+      "body": 1.238733981854155
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 6.0,
+      "height": 6.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.1228499084248743,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "格子の風速 0.025",
+     "tag": "u0.025",
+     "cells": 12,
+     "u_lattice": 0.025,
+     "cd": 1.3179160716864582,
+     "change_from_base_pct": 3.650303125729737,
+     "cd_by_group": {
+      "body": 1.3179160716864582
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500009,
+     "max_mach": 0.06397577666586002,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "角をかすめるリンクを外す (実験用)",
+     "tag": "noclip",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.2715023805456716,
+     "change_from_base_pct": 0.0,
+     "cd_by_group": {
+      "body": 1.2715023805456716
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12685897682072012,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 12,
+     "u_lattice": 0.05,
+     "cd": 1.2715023805456716,
+     "change_from_base_pct": 0.0,
+     "cd_by_group": {
+      "body": 1.2715023805456716
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500018,
+     "max_mach": 0.12294388964076253,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 16,
+     "u_lattice": 0.05,
+     "cd": 1.256723274286363,
+     "change_from_base_pct": 0.0,
+     "cd_by_group": {
+      "body": 1.256723274286363
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500024,
+     "max_mach": 0.13290936761568012,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 24,
+     "u_lattice": 0.05,
+     "cd": 1.2331000991826995,
+     "change_from_base_pct": 0.0,
+     "cd_by_group": {
+      "body": 1.2331000991826995
+     },
+     "domain_L": {
+      "upstream": 4.0,
+      "downstream": 8.0,
+      "half_width": 4.0,
+      "height": 4.0
+     },
+     "tau0": 0.500036,
+     "max_mach": 0.1487165088347625,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    }
+   ],
+   "note": "ただし格子を細かくするほど Cd は下がり続けていて (1.272, 1.257, 1.233)、収束していない。横幅を ±6 にすると 12 セルで 2.6 % 下がるので、高めの分の一部は箱の閉じ込め。基準は Hoerner の表を描き直した図の値で、原典のページは読んでいない。NASA の平板 1.28 は正方形かどうか書かれていない。物体を格子の中央にぴったり置くと答えが変わるので、y, z に 0.13 と 0.26 セルずらしている。",
+   "finest": {
+    "cells": 24,
+    "cd": 1.2331000991826995,
+    "error_pct": 5.393170870316211
+   },
+   "richardson": {
+    "monotone": true,
+    "reason": "単調だが次数が 0.1 から 8 に収まらないので外挿しない",
+    "values": [
+     1.2715023805456716,
+     1.256723274286363,
+     1.2331000991826995
+    ]
+   },
+   "within_tolerance": true,
+   "settled": true,
+   "validated": true,
+   "conclusion": "一番細かい格子 (24 セル/代表長さ) で Cd = 1.233、基準 1.17 との差 +5.4 %。許容 ±10 % に入る。単調だが次数が 0.1 から 8 に収まらないので外挿しないただし格子を細かくするほど Cd は下がり続けていて (1.272, 1.257, 1.233)、収束していない。横幅を ±6 にすると 12 セルで 2.6 % 下がるので、高めの分の一部は箱の閉じ込め。基準は Hoerner の表を描き直した図の値で、原典のページは読んでいない。NASA の平板 1.28 は正方形かどうか書かれていない。物体を格子の中央にぴったり置くと答えが変わるので、y, z に 0.13 と 0.26 セルずらしている。"
+  },
+  "ahmed25": {
+   "body": "ahmed25",
+   "re": 4290000.0,
+   "reference": {
+    "value": 0.2875,
+    "source": "SimScale's validation page, reading Fig. 4 of Ahmed et al. (1984), SAE 840300",
+    "url": "https://www.simscale.com/docs/validation-cases/aerodynamics-flow-around-the-ahmed-body/",
+    "verified": "secondary",
+    "note": "第三者が図から読み取った値で、表の値ではない。論文の本文は読んでいない。Re 4.29e6 の実験。SimScale はこの頁で投影面積に 0.115 m2 を使う"
+   },
+   "other_references": [
+    {
+     "value": 0.285,
+     "source": "Ahmed et al. (1984), SAE 840300, as commonly quoted",
+     "url": "https://www.sae.org/publications/technical-papers/content/840300/",
+     "verified": "確かめていない",
+     "note": "この値を書いたページを読めていない"
+    },
+    {
+     "value": 0.299,
+     "source": "Meile et al. (2011), CFD Letters 3(1), as listed in Table 1 of SimFlow's validation page",
+     "url": "https://help.sim-flow.com/validation/ahmed-body",
+     "verified": "secondary",
+     "note": "別の風洞の別の実験で、Re 2.784e6。Ahmed の値ではない。論文そのものは読んでいない"
+    }
+   ],
+   "levels": [
+    {
+     "cells": 42,
+     "cd": 0.7542585230443052,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5000014685314685,
+     "t_star": 30.0,
+     "average_last": 0.5,
+     "grid": [
+      229,
+      97,
+      80
+     ],
+     "steps": 25200,
+     "spread_pct": 0.9598792402445822,
+     "cd_quarters": [
+      0.7505062862197999,
+      0.752640127434863,
+      0.7577462572002776,
+      0.7561414213222806
+     ],
+     "cy": 0.024299524222570004,
+     "cz": 0.32615790351258933,
+     "cd_by_group": {
+      "body": 0.7092812594477389,
+      "stilts": 0.04497726359656635
+     },
+     "max_mach": 0.11614430679116389,
+     "last_stats": {
+      "max_dr": 0.0049734,
+      "min_dr": -0.0058437,
+      "negative_f": 0,
+      "mass_dev": -89.93817751947776
+     },
+     "geometry": {
+      "solid_nodes": 7548,
+      "cut_links": 12771,
+      "projected_area_x_m2": 0.11469352040816327,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 5.589225589225609,
+      "voxel_volume_diff_pct": 5.459038653818445
+     },
+     "memory_mib": 274.1750192642212,
+     "wall_s": 18.284727100050077,
+     "mlups": 2449.115469701342,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "code_note": "今の geometry.py で走らせた",
+     "faulted": null,
+     "error_pct": 162.35079062410617
+    },
+    {
+     "cells": 60,
+     "cd": 0.7158415852532884,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5000020979020979,
+     "t_star": 30.0,
+     "average_last": 0.5,
+     "grid": [
+      327,
+      138,
+      114
+     ],
+     "steps": 36000,
+     "spread_pct": 1.1373499400520322,
+     "cd_quarters": [
+      0.7165873850737897,
+      0.7188891239674634,
+      0.7171423318451825,
+      0.7107475001267176
+     ],
+     "cy": 0.003955579916411381,
+     "cz": 0.23977508790736737,
+     "cd_by_group": {
+      "nose": 0.44327616908581263,
+      "mid": 0.048397816201152924,
+      "rear": 0.17885538663742817,
+      "stilts": 0.04531221332889468
+     },
+     "max_mach": 0.11835877660739823,
+     "last_stats": {
+      "max_dr": 0.0053608,
+      "min_dr": -0.0036516,
+      "negative_f": 0,
+      "mass_dev": -252.15988560263673
+     },
+     "geometry": {
+      "solid_nodes": 20028,
+      "cut_links": 24754,
+      "projected_area_x_m2": 0.11574893250000003,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": -6.359326467222495,
+      "voxel_volume_diff_pct": -4.5164635263724735
+     },
+     "memory_mib": 780.6720962524414,
+     "wall_s": 62.07415929995477,
+     "mlups": 2983.48146940002,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせたが、リンクと q と mask が今のものと同じなので同じ結果",
+     "faulted": null,
+     "error_pct": 148.9883774794047
+    },
+    {
+     "cells": 84,
+     "cd": 0.6588522551440943,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5000029370629371,
+     "t_star": 30.0,
+     "average_last": 0.5,
+     "grid": [
+      458,
+      193,
+      160
+     ],
+     "steps": 50400,
+     "spread_pct": 0.9024814314466119,
+     "cd_quarters": [
+      0.6577553341382459,
+      0.6614865791487264,
+      0.6606265474040209,
+      0.6555405598853837
+     ],
+     "cy": 0.010789819203708377,
+     "cz": 0.22641431738606826,
+     "cd_by_group": {
+      "body": 0.6037545358339703,
+      "stilts": 0.055097719310123965
+     },
+     "max_mach": 0.13437522093005091,
+     "last_stats": {
+      "max_dr": 0.0054686,
+      "min_dr": -0.0065961,
+      "negative_f": 0,
+      "mass_dev": -674.6896165660318
+     },
+     "geometry": {
+      "solid_nodes": 56500,
+      "cut_links": 49551,
+      "projected_area_x_m2": 0.11532105229591838,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": -1.8166596902469567,
+      "voxel_volume_diff_pct": -1.3775774176471474
+     },
+     "memory_mib": 2122.446713447571,
+     "wall_s": 243.2755442999769,
+     "mlups": 2930.048797346654,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "code_note": "今の geometry.py で走らせた",
+     "faulted": null,
+     "error_pct": 129.1660017892502
+    }
+   ],
+   "tolerance_pct": 10.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "同じ形を前・中・後に分けて力を読む",
+     "tag": "split",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.7692222196296661,
+     "change_from_base_pct": -7.893685705084863e-12,
+     "cd_by_group": {
+      "nose": 0.46893114143795483,
+      "mid": 0.037570460933081855,
+      "rear": 0.21329006852203627,
+      "stilts": 0.04943054873659311
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.11409732687490974,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "同じ形を前・中・後に分けて力を読む",
+     "tag": "split",
+     "cells": 60,
+     "u_lattice": 0.05,
+     "cd": 0.7216708575971217,
+     "change_from_base_pct": 1.6497914145929826e-11,
+     "cd_by_group": {
+      "nose": 0.4447325702674807,
+      "mid": 0.05092662962630448,
+      "rear": 0.1792025121802111,
+      "stilts": 0.04680914552312546
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000020979020979,
+     "max_mach": 0.11979983305497549,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "Cs 0.1、前・中・後に分けて読む",
+     "tag": "split_cs0.1",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.7102736241930674,
+     "change_from_base_pct": -7.663402581510836,
+     "cd_by_group": {
+      "nose": 0.42644125901397134,
+      "mid": 0.01662205564764758,
+      "rear": 0.2174606204025819,
+      "stilts": 0.04974968912886652
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.13245150055775132,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "Cs 0.05、前・中・後に分けて読む",
+     "tag": "split_cs0.05",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.6646823113626079,
+     "change_from_base_pct": -13.59033912429627,
+     "cd_by_group": {
+      "nose": 0.3678097877344752,
+      "mid": 0.011486427437405433,
+      "rear": 0.2385976922537948,
+      "stilts": 0.04678840393693253
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.2793449480481077,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "Cs 0.05、前・中・後に分けて読む",
+     "tag": "split_cs0.05",
+     "cells": 60,
+     "u_lattice": 0.05,
+     "cd": 0.6367760151163728,
+     "change_from_base_pct": -11.763651197349157,
+     "cd_by_group": {
+      "nose": 0.3664503641966632,
+      "mid": 0.043086070887949086,
+      "rear": 0.18247534336897833,
+      "stilts": 0.0447642366627822
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000020979020979,
+     "max_mach": 0.28680690368259965,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "格子の風速 0.025",
+     "tag": "u0.025",
+     "cells": 42,
+     "u_lattice": 0.025,
+     "cd": 0.7927978960545073,
+     "change_from_base_pct": 3.064871999684171,
+     "cd_by_group": {
+      "body": 0.743006193789603,
+      "stilts": 0.04979170226490432
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000007342657342,
+     "max_mach": 0.05771394978685829,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "地面を空気と同じ速さで動かす (応力なし)",
+     "tag": "ground_with_air",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.7713631581053161,
+     "change_from_base_pct": 0.2783250952656857,
+     "cd_by_group": {
+      "body": 0.7189527132619761,
+      "stilts": 0.052410444843339975
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.11264990013311153,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "角をかすめるリンクを外し、前・中・後に分けて読む (実験用)",
+     "tag": "noclip_split",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.7637959569570079,
+     "change_from_base_pct": -0.7054219878529944,
+     "cd_by_group": {
+      "nose": 0.46650856274953156,
+      "mid": 0.03159406141249534,
+      "rear": 0.2208900843298928,
+      "stilts": 0.04480324846508807
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.11394998903027591,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "角をかすめるリンクを外し、前・中・後に分けて読む (実験用)",
+     "tag": "noclip_split",
+     "cells": 60,
+     "u_lattice": 0.05,
+     "cd": 0.7158415852532884,
+     "change_from_base_pct": -0.8077466732028249,
+     "cd_by_group": {
+      "nose": 0.44327616908581263,
+      "mid": 0.048397816201152924,
+      "rear": 0.17885538663742817,
+      "stilts": 0.04531221332889468
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000020979020979,
+     "max_mach": 0.11835877660739823,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.7692222196297268,
+     "change_from_base_pct": 1.9838949283629947,
+     "cd_by_group": {
+      "body": 0.7197916708931337,
+      "stilts": 0.04943054873659311
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.11409732687490974,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 60,
+     "u_lattice": 0.05,
+     "cd": 0.7216708575970026,
+     "change_from_base_pct": 0.8143243510575715,
+     "cd_by_group": {
+      "body": 0.6748617120738771,
+      "stilts": 0.04680914552312546
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000020979020979,
+     "max_mach": 0.1184702494299729,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 84,
+     "u_lattice": 0.05,
+     "cd": 0.656405531105254,
+     "change_from_base_pct": -0.3713615639526324,
+     "cd_by_group": {
+      "body": 0.6029567607110912,
+      "stilts": 0.05344877039416285
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000029370629371,
+     "max_mach": 0.12910112315545516,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    }
+   ],
+   "note": "基準の 0.2875 は SimScale が Ahmed の Fig. 4 から読み取った値で、表の値ではない。Meile (2011) の 0.299 は別の風洞、Re 2.78e6 の別の実験。どちらに比べても大きく外れる。丸い鼻先の肩から流れがはがれ (findings)、Cs を下げても、角をかすめるリンクを外しても直らない。格子を細かくすると下がるが遠い。地面は滑らかな壁の対数則で、地面の境界層は箱の入口から育つ。丸い物体の Cd はこの格子では信用できない。",
+   "finest": {
+    "cells": 84,
+    "cd": 0.6588522551440943,
+    "error_pct": 129.1660017892502
+   },
+   "richardson": {
+    "monotone": true,
+    "reason": "単調だが次数が 0.1 から 8 に収まらないので外挿しない",
+    "values": [
+     0.7542585230443052,
+     0.7158415852532884,
+     0.6588522551440943
+    ]
+   },
+   "within_tolerance": false,
+   "settled": true,
+   "validated": false,
+   "conclusion": "一番細かい格子 (84 セル/代表長さ) で Cd = 0.6589、基準 0.2875 との差 +129.2 %。許容 ±10 % に入らない。検証できていない。単調だが次数が 0.1 から 8 に収まらないので外挿しない基準の 0.2875 は SimScale が Ahmed の Fig. 4 から読み取った値で、表の値ではない。Meile (2011) の 0.299 は別の風洞、Re 2.78e6 の別の実験。どちらに比べても大きく外れる。丸い鼻先の肩から流れがはがれ (findings)、Cs を下げても、角をかすめるリンクを外しても直らない。格子を細かくすると下がるが遠い。地面は滑らかな壁の対数則で、地面の境界層は箱の入口から育つ。丸い物体の Cd はこの格子では信用できない。"
+  },
+  "sphere_re200": {
+   "body": "sphere",
+   "re": 200.0,
+   "reference": {
+    "value": 0.8056146866904639,
+    "source": "Schiller-Naumann correlation",
+    "url": "https://cpp.openfoam.org/v13/SchillerNaumannDrag_8C_source.html",
+    "verified": "read",
+    "note": "相関式。上限は Re 800 (arXiv:2401.10878) や 1000 (OpenFOAM) とされ、Re 1000 は上限いっぱい"
+   },
+   "other_references": [
+    {
+     "value": 0.767731559965325,
+     "source": "Morrison (2013) Eq. (1), fit to the curve in Schlichting (1955)",
+     "url": "https://galileoandeinstein.phys.virginia.edu/more_stuff/Applets/Projectile/DataCorrelationForSphereDrag2013.pdf",
+     "verified": "read",
+     "note": "相関式"
+    },
+    {
+     "value": 0.732,
+     "source": "Roos & Willmarth (1971), AIAA J. 9(2), measured, as listed in arXiv:2206.06875 Table 5",
+     "url": "https://arxiv.org/pdf/2206.06875",
+     "verified": "secondary",
+     "note": ""
+    },
+    {
+     "value": 0.77176,
+     "source": "Tabata & Itakura, computed, as listed in arXiv:2206.06875 Table 5",
+     "url": "https://arxiv.org/pdf/2206.06875",
+     "verified": "secondary",
+     "note": ""
+    },
+    {
+     "value": 0.7756342422322543,
+     "source": "correlation 24/Re (1 + 0.1935 Re^0.6305), arXiv:2206.06875 Table 5 Eq. (20)",
+     "url": "https://arxiv.org/pdf/2206.06875",
+     "verified": "read",
+     "note": ""
+    }
+   ],
+   "levels": [
+    {
+     "cells": 10,
+     "cd": 0.9025584094528528,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.5075,
+     "t_star": 40.0,
+     "average_last": 0.35,
+     "grid": [
+      160,
+      100,
+      100
+     ],
+     "steps": 8000,
+     "spread_pct": 0.0681099483286886,
+     "cd_quarters": [
+      0.9029364634935398,
+      0.9025729408210603,
+      0.9024025020695859,
+      0.9023217314272253
+     ],
+     "cy": 1.9349278583310628e-08,
+     "cz": 1.663155826432824e-08,
+     "cd_by_group": {
+      "body": 0.9025584094528528
+     },
+     "max_mach": 0.10260847918179081,
+     "last_stats": {
+      "max_dr": 0.0046619,
+      "min_dr": -0.0033074,
+      "negative_f": 0,
+      "mass_dev": -11.1050072917905
+     },
+     "geometry": {
+      "solid_nodes": 552,
+      "cut_links": 1896,
+      "projected_area_x_m2": 0.79,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 1.2658227848101276,
+      "voxel_volume_diff_pct": 5.2932761087267615
+     },
+     "memory_mib": 246.01055908203125,
+     "wall_s": 5.326139199896716,
+     "mlups": 2403.2417328199417,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。リンクは 1 本も変わらないので同じ結果",
+     "faulted": null,
+     "error_pct": 12.033509860730351
+    },
+    {
+     "cells": 14,
+     "cd": 0.8396310729728631,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.5105,
+     "t_star": 40.0,
+     "average_last": 0.35,
+     "grid": [
+      224,
+      140,
+      140
+     ],
+     "steps": 11200,
+     "spread_pct": 0.0727818760600711,
+     "cd_quarters": [
+      0.8400062198524189,
+      0.8396459683872508,
+      0.839476983046257,
+      0.8393951206055259
+     ],
+     "cy": 5.537337613098377e-09,
+     "cz": -2.5601117225055274e-08,
+     "cd_by_group": {
+      "body": 0.8396310729728631
+     },
+     "max_mach": 0.10197205499547413,
+     "last_stats": {
+      "max_dr": 0.0045458,
+      "min_dr": -0.0028477,
+      "negative_f": 0,
+      "mass_dev": -27.992991884926766
+     },
+     "geometry": {
+      "solid_nodes": 1472,
+      "cut_links": 3552,
+      "projected_area_x_m2": 0.7882653061224488,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.9708737864077718,
+      "voxel_volume_diff_pct": 2.293259207783176
+     },
+     "memory_mib": 665.0861911773682,
+     "wall_s": 19.058358799898997,
+     "mlups": 2580.100443919683,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。リンクは 1 本も変わらないので同じ結果",
+     "faulted": null,
+     "error_pct": 4.222413871591835
+    },
+    {
+     "cells": 20,
+     "cd": 0.8028102470737879,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.515,
+     "t_star": 40.0,
+     "average_last": 0.35,
+     "grid": [
+      320,
+      200,
+      200
+     ],
+     "steps": 16000,
+     "spread_pct": 0.0692373695627253,
+     "cd_quarters": [
+      0.8031532092071249,
+      0.8028220386776239,
+      0.8026683759009319,
+      0.802597364509471
+     ],
+     "cy": -2.3233653867314e-08,
+     "cz": -1.1729097375967316e-08,
+     "cd_by_group": {
+      "body": 0.8028102470737879
+     },
+     "max_mach": 0.10857209586261103,
+     "last_stats": {
+      "max_dr": 0.0041694,
+      "min_dr": -0.0024903,
+      "negative_f": 0,
+      "mass_dev": -75.68535225836479
+     },
+     "geometry": {
+      "solid_nodes": 4224,
+      "cut_links": 7224,
+      "projected_area_x_m2": 0.7850000000000001,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.636942675159222,
+      "voxel_volume_diff_pct": 0.8355216042014832
+     },
+     "memory_mib": 1917.4378242492676,
+     "wall_s": 69.7099458000157,
+     "mlups": 2937.8878099766625,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。リンクは 1 本も変わらないので同じ結果",
+     "faulted": null,
+     "error_pct": -0.348111778869975
+    }
+   ],
+   "tolerance_pct": 5.0,
+   "reference_usable": true,
+   "sensitivity": [],
+   "note": "D = 20 の -0.3 % は誤差が通り過ぎる途中の値で、精度ではない。外挿の 0.759 は Tabata & Itakura の計算値 0.7718、式 (20) の 0.7756、Morrison 0.7677 に近く、Schiller-Naumann のほうが Re 200 ではおよそ 4 % 高いと見られる。",
+   "finest": {
+    "cells": 20,
+    "cd": 0.8028102470737879,
+    "error_pct": -0.348111778869975
+   },
+   "richardson": {
+    "monotone": true,
+    "order": 1.7195232287504152,
+    "extrapolated": 0.7593143129266972,
+    "levels": [
+     10,
+     14,
+     20
+    ],
+    "error_pct": -5.747210735937891
+   },
+   "within_tolerance": true,
+   "settled": true,
+   "validated": true,
+   "conclusion": "一番細かい格子 (20 セル/代表長さ) で Cd = 0.8028、基準 0.8056 との差 -0.3 %。許容 ±5 % に入る。格子を外挿すると 0.7593 (次数 1.72、差 -5.7 %)。D = 20 の -0.3 % は誤差が通り過ぎる途中の値で、精度ではない。外挿の 0.759 は Tabata & Itakura の計算値 0.7718、式 (20) の 0.7756、Morrison 0.7677 に近く、Schiller-Naumann のほうが Re 200 ではおよそ 4 % 高いと見られる。"
+  },
+  "sphere_re100": {
+   "body": "sphere",
+   "re": 100.0,
+   "reference": {
+    "value": 1.0917310910948732,
+    "source": "Schiller-Naumann correlation",
+    "url": "https://cpp.openfoam.org/v13/SchillerNaumannDrag_8C_source.html",
+    "verified": "read",
+    "note": "相関式。上限は Re 800 (arXiv:2401.10878) や 1000 (OpenFOAM) とされ、Re 1000 は上限いっぱい"
+   },
+   "other_references": [
+    {
+     "value": 1.038186638787341,
+     "source": "Morrison (2013) Eq. (1), fit to the curve in Schlichting (1955)",
+     "url": "https://galileoandeinstein.phys.virginia.edu/more_stuff/Applets/Projectile/DataCorrelationForSphereDrag2013.pdf",
+     "verified": "read",
+     "note": "相関式"
+    },
+    {
+     "value": 1.08,
+     "source": "Roos & Willmarth (1971), AIAA J. 9(2), measured, as listed in arXiv:2206.06875 Table 5",
+     "url": "https://arxiv.org/pdf/2206.06875",
+     "verified": "secondary",
+     "note": ""
+    },
+    {
+     "value": 1.0895,
+     "source": "Tabata & Itakura, computed, as listed in arXiv:2206.06875 Table 5",
+     "url": "https://arxiv.org/pdf/2206.06875",
+     "verified": "secondary",
+     "note": ""
+    },
+    {
+     "value": 1.0870171641572397,
+     "source": "correlation 24/Re (1 + 0.1935 Re^0.6305), arXiv:2206.06875 Table 5 Eq. (20)",
+     "url": "https://arxiv.org/pdf/2206.06875",
+     "verified": "read",
+     "note": ""
+    }
+   ],
+   "levels": [
+    {
+     "cells": 10,
+     "cd": 1.199038010864387,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.515,
+     "t_star": 40.0,
+     "average_last": 0.35,
+     "grid": [
+      160,
+      100,
+      100
+     ],
+     "steps": 8000,
+     "spread_pct": 0.0049834847455623365,
+     "cd_quarters": [
+      1.1990780762277518,
+      1.1990340994385569,
+      1.1990215454398527,
+      1.1990183223513868
+     ],
+     "cy": 2.3268260474718623e-08,
+     "cz": -5.570419021265984e-08,
+     "cd_by_group": {
+      "body": 1.199038010864387
+     },
+     "max_mach": 0.09936146134191062,
+     "last_stats": {
+      "max_dr": 0.0043776,
+      "min_dr": -0.0031885,
+      "negative_f": 0,
+      "mass_dev": -11.514468785537133
+     },
+     "geometry": {
+      "solid_nodes": 552,
+      "cut_links": 1896,
+      "projected_area_x_m2": 0.79,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 1.2658227848101276,
+      "voxel_volume_diff_pct": 5.2932761087267615
+     },
+     "memory_mib": 246.01055908203125,
+     "wall_s": 5.329243300016969,
+     "mlups": 2401.8419275320457,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。リンクは 1 本も変わらないので同じ結果",
+     "faulted": null,
+     "error_pct": 9.829061446065257
+    },
+    {
+     "cells": 14,
+     "cd": 1.1477342310557561,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.521,
+     "t_star": 40.0,
+     "average_last": 0.35,
+     "grid": [
+      224,
+      140,
+      140
+     ],
+     "steps": 11200,
+     "spread_pct": 0.0049458368985381505,
+     "cd_quarters": [
+      1.1477723404729028,
+      1.147731231603637,
+      1.1477177767366784,
+      1.147715575409806
+     ],
+     "cy": -4.0463352937688605e-09,
+     "cz": -5.2436124898544714e-08,
+     "cd_by_group": {
+      "body": 1.1477342310557561
+     },
+     "max_mach": 0.09850329943712545,
+     "last_stats": {
+      "max_dr": 0.0044315,
+      "min_dr": -0.0029719,
+      "negative_f": 0,
+      "mass_dev": -29.70832382759488
+     },
+     "geometry": {
+      "solid_nodes": 1472,
+      "cut_links": 3552,
+      "projected_area_x_m2": 0.7882653061224488,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.9708737864077718,
+      "voxel_volume_diff_pct": 2.293259207783176
+     },
+     "memory_mib": 665.0861911773682,
+     "wall_s": 18.155457900022157,
+     "mlups": 2708.4130992884507,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。リンクは 1 本も変わらないので同じ結果",
+     "faulted": null,
+     "error_pct": 5.1297558911433505
+    },
+    {
+     "cells": 20,
+     "cd": 1.1217190424236294,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.53,
+     "t_star": 40.0,
+     "average_last": 0.35,
+     "grid": [
+      320,
+      200,
+      200
+     ],
+     "steps": 16000,
+     "spread_pct": 0.005096066098437283,
+     "cd_quarters": [
+      1.1217568470849348,
+      1.1217167729870423,
+      1.121702866081446,
+      1.1216996835410942
+     ],
+     "cy": -7.50205525663429e-09,
+     "cz": -3.446325686569358e-08,
+     "cd_by_group": {
+      "body": 1.1217190424236294
+     },
+     "max_mach": 0.10420844495529141,
+     "last_stats": {
+      "max_dr": 0.0041806,
+      "min_dr": -0.0025235,
+      "negative_f": 0,
+      "mass_dev": -82.73194589416867
+     },
+     "geometry": {
+      "solid_nodes": 4224,
+      "cut_links": 7224,
+      "projected_area_x_m2": 0.7850000000000001,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.636942675159222,
+      "voxel_volume_diff_pct": 0.8355216042014832
+     },
+     "memory_mib": 1917.4378242492676,
+     "wall_s": 69.13972740003373,
+     "mlups": 2962.1175509566747,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。リンクは 1 本も変わらないので同じ結果",
+     "faulted": null,
+     "error_pct": 2.7468258047576466
+    }
+   ],
+   "tolerance_pct": 5.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "球の中心を (0.25,0.25,0.25) セルずらす",
+     "tag": "off.25",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.192534084072388,
+     "change_from_base_pct": -0.5424287414633633,
+     "cd_by_group": {
+      "body": 1.192534084072388
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.1001299156096718,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "球の中心を (0.5,0.5,0.5) セルずらす",
+     "tag": "off.5",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.2129424657073085,
+     "change_from_base_pct": 1.1596341998280524,
+     "cd_by_group": {
+      "body": 1.2129424657073085
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.09934636379858097,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "格子の風速 0.025",
+     "tag": "u0.025",
+     "cells": 14,
+     "u_lattice": 0.025,
+     "cd": 1.1513670242667606,
+     "change_from_base_pct": 0.3165186776439288,
+     "cd_by_group": {
+      "body": 1.1513670242667606
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.5105,
+     "max_mach": 0.049851780309232686,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "角をかすめるリンクを外す (実験用)",
+     "tag": "noclip",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.199038010864387,
+     "change_from_base_pct": 0.0,
+     "cd_by_group": {
+      "body": 1.199038010864387
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.09936146134191062,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "角をかすめるリンクを外す (実験用)",
+     "tag": "noclip",
+     "cells": 14,
+     "u_lattice": 0.05,
+     "cd": 1.147734231055706,
+     "change_from_base_pct": -4.374278717023117e-12,
+     "cd_by_group": {
+      "body": 1.147734231055706
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.521,
+     "max_mach": 0.09850329943712545,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "時間 t*=150",
+     "tag": "t150",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.199014044007487,
+     "change_from_base_pct": -0.001998840460670781,
+     "cd_by_group": {
+      "body": 1.199014044007487
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10399086498342054,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "横の幅 ±3D",
+     "tag": "hw3",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.2404241867662835,
+     "change_from_base_pct": 3.4516150052708694,
+     "cd_by_group": {
+      "body": 1.2404241867662835
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 3.0,
+      "height": 3.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10073480034228488,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "横の幅 ±8D",
+     "tag": "hw8",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.1939023793269556,
+     "change_from_base_pct": -0.42831265488648684,
+     "cd_by_group": {
+      "body": 1.1939023793269556
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 8.0,
+      "height": 8.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10454616205294194,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "横の幅 ±12D",
+     "tag": "hw12",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.1935534630505236,
+     "change_from_base_pct": -0.457412339239327,
+     "cd_by_group": {
+      "body": 1.1935534630505236
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 12.0,
+      "height": 12.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10493712403148849,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "上流 3D",
+     "tag": "up3",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.235996604462605,
+     "change_from_base_pct": 3.0823537922350264,
+     "cd_by_group": {
+      "body": 1.235996604462605
+     },
+     "domain_L": {
+      "upstream": 3.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.1052240466813551,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "上流 10D",
+     "tag": "up10",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.1918727955254418,
+     "change_from_base_pct": -0.5975803330688256,
+     "cd_by_group": {
+      "body": 1.1918727955254418
+     },
+     "domain_L": {
+      "upstream": 10.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.1045346832395832,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "下流 6D",
+     "tag": "down6",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.2060833677689362,
+     "change_from_base_pct": 0.5875841166595119,
+     "cd_by_group": {
+      "body": 1.2060833677689362
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 6.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10250170730285423,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "下流 22D",
+     "tag": "down22",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.198443623921436,
+     "change_from_base_pct": -0.04957198500509241,
+     "cd_by_group": {
+      "body": 1.198443623921436
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 22.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10569200537410575,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "吸収層なし",
+     "tag": "sponge0",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.194621389040683,
+     "change_from_base_pct": -0.36834710690448746,
+     "cd_by_group": {
+      "body": 1.194621389040683
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10349057928140125,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "吸収層 16 セル",
+     "tag": "sponge16",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.2072783530007434,
+     "change_from_base_pct": 0.6872461141090858,
+     "cd_by_group": {
+      "body": 1.2072783530007434
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10240068359146827,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "吸収層の強さ 0.02",
+     "tag": "sigma0.02",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.197216790341196,
+     "change_from_base_pct": -0.15189014082029884,
+     "cd_by_group": {
+      "body": 1.197216790341196
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10388407000113155,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "吸収層の強さ 0.3",
+     "tag": "sigma0.3",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.1999759821404874,
+     "change_from_base_pct": 0.07822698426585006,
+     "cd_by_group": {
+      "body": 1.1999759821404874
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10365133863100852,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "格子の風速 0.025",
+     "tag": "u0.025",
+     "cells": 10,
+     "u_lattice": 0.025,
+     "cd": 1.2046127802630437,
+     "change_from_base_pct": 0.46493683670945085,
+     "cd_by_group": {
+      "body": 1.2046127802630437
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.5075,
+     "max_mach": 0.05302735143301049,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "格子の風速 0.1",
+     "tag": "u0.1",
+     "cells": 10,
+     "u_lattice": 0.1,
+     "cd": 1.1960740295520862,
+     "change_from_base_pct": -0.24719660973583357,
+     "cd_by_group": {
+      "body": 1.1960740295520862
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.53,
+     "max_mach": 0.20198044459798575,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "補間なしの跳ね返し",
+     "tag": "plainBB",
+     "cells": 10,
+     "u_lattice": 0.05,
+     "cd": 1.308099533848473,
+     "change_from_base_pct": 9.095751927452532,
+     "cd_by_group": {
+      "body": 1.308099533848473
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.515,
+     "max_mach": 0.10439540219760637,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    }
+   ],
+   "note": "D を細かくすると次数 2 で減る。t* = 150 でも値は変わらず、箱の広さの分は 1 % ほど、Mach でもない (findings)。",
+   "finest": {
+    "cells": 20,
+    "cd": 1.1217190424236294,
+    "error_pct": 2.7468258047576466
+   },
+   "richardson": {
+    "monotone": true,
+    "order": 2.135273499563059,
+    "extrapolated": 1.0989326234554213,
+    "levels": [
+     10,
+     14,
+     20
+    ],
+    "error_pct": 0.659643424950529
+   },
+   "within_tolerance": true,
+   "settled": true,
+   "validated": true,
+   "conclusion": "一番細かい格子 (20 セル/代表長さ) で Cd = 1.122、基準 1.092 との差 +2.7 %。許容 ±5 % に入る。格子を外挿すると 1.099 (次数 2.14、差 +0.7 %)。D を細かくすると次数 2 で減る。t* = 150 でも値は変わらず、箱の広さの分は 1 % ほど、Mach でもない (findings)。"
+  },
+  "sphere_re300": {
+   "body": "sphere",
+   "re": 300.0,
+   "reference": {
+    "value": 0.6838979398366829,
+    "source": "Schiller-Naumann correlation",
+    "url": "https://cpp.openfoam.org/v13/SchillerNaumannDrag_8C_source.html",
+    "verified": "read",
+    "note": "相関式。上限は Re 800 (arXiv:2401.10878) や 1000 (OpenFOAM) とされ、Re 1000 は上限いっぱい"
+   },
+   "other_references": [
+    {
+     "value": 0.6625619376221958,
+     "source": "Morrison (2013) Eq. (1), fit to the curve in Schlichting (1955)",
+     "url": "https://galileoandeinstein.phys.virginia.edu/more_stuff/Applets/Projectile/DataCorrelationForSphereDrag2013.pdf",
+     "verified": "read",
+     "note": "相関式"
+    }
+   ],
+   "levels": [
+    {
+     "cells": 10,
+     "cd": 0.7981554897596442,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.505,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      160,
+      100,
+      100
+     ],
+     "steps": 20000,
+     "spread_pct": 0.01398162883573168,
+     "cd_quarters": [
+      0.7982176574256186,
+      0.7981060622875084,
+      0.7981460904231626,
+      0.7981521489022874
+     ],
+     "cy": 0.008546774344352826,
+     "cz": 0.08812475910071396,
+     "cd_by_group": {
+      "body": 0.7981554897596442
+     },
+     "max_mach": 0.10425593508285272,
+     "last_stats": {
+      "max_dr": 0.0058984,
+      "min_dr": -0.0032041,
+      "negative_f": 0,
+      "mass_dev": -11.815131732921287
+     },
+     "geometry": {
+      "solid_nodes": 522,
+      "cut_links": 1808,
+      "projected_area_x_m2": 0.79,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 1.2658227848101276,
+      "voxel_volume_diff_pct": -0.4291845493562182
+     },
+     "memory_mib": 246.0067653656006,
+     "wall_s": 12.943037100019865,
+     "mlups": 2472.371805219572,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 16.706813000525543
+    },
+    {
+     "cells": 14,
+     "cd": 0.7217833479246272,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.507,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      224,
+      140,
+      140
+     ],
+     "steps": 28000,
+     "spread_pct": 0.1310459794023954,
+     "cd_quarters": [
+      0.7212737399171792,
+      0.7216718302835894,
+      0.7219682135231099,
+      0.7222196079746305
+     ],
+     "cy": -0.06265018868103521,
+     "cz": 0.019317429802160134,
+     "cd_by_group": {
+      "body": 0.7217833479246272
+     },
+     "max_mach": 0.10437241014750975,
+     "last_stats": {
+      "max_dr": 0.0049805,
+      "min_dr": -0.0029537,
+      "negative_f": 0,
+      "mass_dev": -28.714377894403924
+     },
+     "geometry": {
+      "solid_nodes": 1440,
+      "cut_links": 3544,
+      "projected_area_x_m2": 0.7882653061224488,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.9708737864077718,
+      "voxel_volume_diff_pct": 0.0694927032661594
+     },
+     "memory_mib": 665.0858478546143,
+     "wall_s": 44.8311063000001,
+     "mlups": 2742.0960611003193,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 5.539628924308704
+    },
+    {
+     "cells": 20,
+     "cd": 0.6847599923845764,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.51,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      320,
+      200,
+      200
+     ],
+     "steps": 40000,
+     "spread_pct": 0.11654282590780742,
+     "cd_quarters": [
+      0.684784897721112,
+      0.6843866220829999,
+      0.6846837890053824,
+      0.685184660728811
+     ],
+     "cy": 0.06398968668796647,
+     "cz": 0.01823979107485024,
+     "cd_by_group": {
+      "body": 0.6847599923845764
+     },
+     "max_mach": 0.11099054013743694,
+     "last_stats": {
+      "max_dr": 0.0041828,
+      "min_dr": -0.0027119,
+      "negative_f": 0,
+      "mass_dev": -75.96721341638772
+     },
+     "geometry": {
+      "solid_nodes": 4188,
+      "cut_links": 7214,
+      "projected_area_x_m2": 0.7850000000000001,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.318471337579611,
+      "voxel_volume_diff_pct": -0.02387204583433597
+     },
+     "memory_mib": 1917.4373950958252,
+     "wall_s": 170.5089765000157,
+     "mlups": 3002.774460967765,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 0.1260498822527989
+    }
+   ],
+   "tolerance_pct": 5.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 14,
+     "u_lattice": 0.05,
+     "cd": 0.7118188220258375,
+     "change_from_base_pct": -1.380542503154325,
+     "cd_by_group": {
+      "body": 0.7118188220258375
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.507,
+     "max_mach": 0.1040471047170463,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 20,
+     "u_lattice": 0.05,
+     "cd": 0.6659243361736579,
+     "change_from_base_pct": -2.750694611308424,
+     "cd_by_group": {
+      "body": 0.6659243361736579
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.51,
+     "max_mach": 0.11107159852995724,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    }
+   ],
+   "note": "D = 20 の +0.1 % は誤差が通り過ぎる途中の値で、精度ではない。外挿の 0.655 は Morrison 0.6626 に近い。",
+   "finest": {
+    "cells": 20,
+    "cd": 0.6847599923845764,
+    "error_pct": 0.1260498822527989
+   },
+   "richardson": {
+    "monotone": true,
+    "order": 2.2660236546552808,
+    "extrapolated": 0.6549970498336385,
+    "levels": [
+     10,
+     14,
+     20
+    ],
+    "error_pct": -4.225906867031359
+   },
+   "within_tolerance": true,
+   "settled": true,
+   "validated": true,
+   "conclusion": "一番細かい格子 (20 セル/代表長さ) で Cd = 0.6848、基準 0.6839 との差 +0.1 %。許容 ±5 % に入る。格子を外挿すると 0.655 (次数 2.27、差 -4.2 %)。D = 20 の +0.1 % は誤差が通り過ぎる途中の値で、精度ではない。外挿の 0.655 は Morrison 0.6626 に近い。"
+  },
+  "sphere_re500": {
+   "body": "sphere",
+   "re": 500.0,
+   "reference": {
+    "value": 0.5626653016291134,
+    "source": "Schiller-Naumann correlation",
+    "url": "https://cpp.openfoam.org/v13/SchillerNaumannDrag_8C_source.html",
+    "verified": "read",
+    "note": "相関式。上限は Re 800 (arXiv:2401.10878) や 1000 (OpenFOAM) とされ、Re 1000 は上限いっぱい"
+   },
+   "other_references": [
+    {
+     "value": 0.5674363859562425,
+     "source": "Morrison (2013) Eq. (1), fit to the curve in Schlichting (1955)",
+     "url": "https://galileoandeinstein.phys.virginia.edu/more_stuff/Applets/Projectile/DataCorrelationForSphereDrag2013.pdf",
+     "verified": "read",
+     "note": "相関式"
+    }
+   ],
+   "levels": [
+    {
+     "cells": 10,
+     "cd": 0.7228782241967702,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.503,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      160,
+      100,
+      100
+     ],
+     "steps": 20000,
+     "spread_pct": 4.267302472949833,
+     "cd_quarters": [
+      0.7346154828718461,
+      0.7037680825342815,
+      0.7258130947231397,
+      0.7273162366578134
+     ],
+     "cy": 0.01864792472611479,
+     "cz": 0.08639715941286567,
+     "cd_by_group": {
+      "body": 0.7228782241967702
+     },
+     "max_mach": 0.10607167388139022,
+     "last_stats": {
+      "max_dr": 0.0061542,
+      "min_dr": -0.0032031,
+      "negative_f": 0,
+      "mass_dev": -12.000264680916562
+     },
+     "geometry": {
+      "solid_nodes": 522,
+      "cut_links": 1808,
+      "projected_area_x_m2": 0.79,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 1.2658227848101276,
+      "voxel_volume_diff_pct": -0.4291845493562182
+     },
+     "memory_mib": 246.0067653656006,
+     "wall_s": 13.122877799905837,
+     "mlups": 2438.4895209669344,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 28.47392972408005
+    },
+    {
+     "cells": 14,
+     "cd": 0.6367861352327954,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.5042,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      224,
+      140,
+      140
+     ],
+     "steps": 28000,
+     "spread_pct": 2.946446696199301,
+     "cd_quarters": [
+      0.6447771338395389,
+      0.6276735941500421,
+      0.646436158193464,
+      0.6282576547481363
+     ],
+     "cy": -0.04996992588091278,
+     "cz": -0.012591675150965254,
+     "cd_by_group": {
+      "body": 0.6367861352327954
+     },
+     "max_mach": 0.10796527219434959,
+     "last_stats": {
+      "max_dr": 0.0052074,
+      "min_dr": -0.0029248,
+      "negative_f": 0,
+      "mass_dev": -26.88582799296546
+     },
+     "geometry": {
+      "solid_nodes": 1440,
+      "cut_links": 3544,
+      "projected_area_x_m2": 0.7882653061224488,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.9708737864077718,
+      "voxel_volume_diff_pct": 0.0694927032661594
+     },
+     "memory_mib": 665.0858478546143,
+     "wall_s": 44.13584290002473,
+     "mlups": 2785.2917701936794,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 13.173165892596561
+    },
+    {
+     "cells": 20,
+     "cd": 0.5940918271973609,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.506,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      320,
+      200,
+      200
+     ],
+     "steps": 40000,
+     "spread_pct": 2.4349287553869225,
+     "cd_quarters": [
+      0.5889569108727658,
+      0.5912912399775654,
+      0.5926965343325147,
+      0.6034226236065979
+     ],
+     "cy": 0.05990550889035789,
+     "cz": 0.012145296032124702,
+     "cd_by_group": {
+      "body": 0.5940918271973609
+     },
+     "max_mach": 0.11397368117245314,
+     "last_stats": {
+      "max_dr": 0.0041824,
+      "min_dr": -0.0028538,
+      "negative_f": 0,
+      "mass_dev": -87.81920104076234
+     },
+     "geometry": {
+      "solid_nodes": 4188,
+      "cut_links": 7214,
+      "projected_area_x_m2": 0.7850000000000001,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.318471337579611,
+      "voxel_volume_diff_pct": -0.02387204583433597
+     },
+     "memory_mib": 1917.4373950958252,
+     "wall_s": 167.0734214000404,
+     "mlups": 3064.520949589389,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 5.5852965301497415
+    }
+   ],
+   "tolerance_pct": 5.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 14,
+     "u_lattice": 0.05,
+     "cd": 0.5882121020224901,
+     "change_from_base_pct": -7.627997929406494,
+     "cd_by_group": {
+      "body": 0.5882121020224901
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.5042,
+     "max_mach": 0.10550876740821115,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 20,
+     "u_lattice": 0.05,
+     "cd": 0.535776023066156,
+     "change_from_base_pct": -9.815957981834345,
+     "cd_by_group": {
+      "body": 0.535776023066156
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.506,
+     "max_mach": 0.11321572328965618,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    }
+   ],
+   "note": "外挿では基準に近い。D = 20 では格子が足りない。",
+   "finest": {
+    "cells": 20,
+    "cd": 0.5940918271973609,
+    "error_pct": 5.5852965301497415
+   },
+   "richardson": {
+    "monotone": true,
+    "order": 2.199989073723592,
+    "extrapolated": 0.5582656673451305,
+    "levels": [
+     10,
+     14,
+     20
+    ],
+    "error_pct": -0.7819274213718974
+   },
+   "within_tolerance": false,
+   "settled": true,
+   "validated": false,
+   "conclusion": "一番細かい格子 (20 セル/代表長さ) で Cd = 0.5941、基準 0.5627 との差 +5.6 %。許容 ±5 % に入らない。検証できていない。格子を外挿すると 0.5583 (次数 2.20、差 -0.8 %)。外挿では基準に近い。D = 20 では格子が足りない。"
+  },
+  "sphere_re1000": {
+   "body": "sphere",
+   "re": 1000.0,
+   "reference": {
+    "value": 0.438288140019997,
+    "source": "Schiller-Naumann correlation",
+    "url": "https://cpp.openfoam.org/v13/SchillerNaumannDrag_8C_source.html",
+    "verified": "read",
+    "note": "相関式。上限は Re 800 (arXiv:2401.10878) や 1000 (OpenFOAM) とされ、Re 1000 は上限いっぱい"
+   },
+   "other_references": [
+    {
+     "value": 0.48405630783070797,
+     "source": "Morrison (2013) Eq. (1), fit to the curve in Schlichting (1955)",
+     "url": "https://galileoandeinstein.phys.virginia.edu/more_stuff/Applets/Projectile/DataCorrelationForSphereDrag2013.pdf",
+     "verified": "read",
+     "note": "相関式"
+    }
+   ],
+   "levels": [
+    {
+     "cells": 10,
+     "cd": 0.6778467399878729,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.5015,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      160,
+      100,
+      100
+     ],
+     "steps": 20000,
+     "spread_pct": 2.532448302594526,
+     "cd_quarters": [
+      0.6802181509765544,
+      0.6782061415961887,
+      0.6678982745588666,
+      0.6850643928198819
+     ],
+     "cy": -0.006167203008142796,
+     "cz": 0.07072632522474888,
+     "cd_by_group": {
+      "body": 0.6778467399878729
+     },
+     "max_mach": 0.12003624452639293,
+     "last_stats": {
+      "max_dr": 0.006145,
+      "min_dr": -0.0034218,
+      "negative_f": 0,
+      "mass_dev": -82.0847399287889
+     },
+     "geometry": {
+      "solid_nodes": 522,
+      "cut_links": 1808,
+      "projected_area_x_m2": 0.79,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 1.2658227848101276,
+      "voxel_volume_diff_pct": -0.4291845493562182
+     },
+     "memory_mib": 246.0067653656006,
+     "wall_s": 13.316010999958962,
+     "mlups": 2403.1220761306536,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 54.657787444795105
+    },
+    {
+     "cells": 14,
+     "cd": 0.572187582740083,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.5021,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      224,
+      140,
+      140
+     ],
+     "steps": 28000,
+     "spread_pct": 3.269474759094645,
+     "cd_quarters": [
+      0.5726632107343718,
+      0.5746712245697294,
+      0.5800617121242957,
+      0.5613541835319349
+     ],
+     "cy": 0.0010570313303652937,
+     "cz": 0.011966722314007147,
+     "cd_by_group": {
+      "body": 0.572187582740083
+     },
+     "max_mach": 0.12250755078769635,
+     "last_stats": {
+      "max_dr": 0.0054546,
+      "min_dr": -0.0030441,
+      "negative_f": 0,
+      "mass_dev": -31.409429629542416
+     },
+     "geometry": {
+      "solid_nodes": 1440,
+      "cut_links": 3544,
+      "projected_area_x_m2": 0.7882653061224488,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.9708737864077718,
+      "voxel_volume_diff_pct": 0.0694927032661594
+     },
+     "memory_mib": 665.0858478546143,
+     "wall_s": 43.82079709996469,
+     "mlups": 2805.316382528766,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 30.550551222758806
+    },
+    {
+     "cells": 20,
+     "cd": 0.5148695332838261,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.0,
+     "tau0": 0.503,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      320,
+      200,
+      200
+     ],
+     "steps": 40000,
+     "spread_pct": 1.2628266935325834,
+     "cd_quarters": [
+      0.5116106456650621,
+      0.5120837137237384,
+      0.5176712181782673,
+      0.5181125555682369
+     ],
+     "cy": 0.029365429164577947,
+     "cz": 0.017006322559964298,
+     "cd_by_group": {
+      "body": 0.5148695332838261
+     },
+     "max_mach": 0.1212447937026576,
+     "last_stats": {
+      "max_dr": 0.0042564,
+      "min_dr": -0.0029992,
+      "negative_f": 0,
+      "mass_dev": -79.718008352577
+     },
+     "geometry": {
+      "solid_nodes": 4188,
+      "cut_links": 7214,
+      "projected_area_x_m2": 0.7850000000000001,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.318471337579611,
+      "voxel_volume_diff_pct": -0.02387204583433597
+     },
+     "memory_mib": 1917.4373950958252,
+     "wall_s": 169.3315071000252,
+     "mlups": 3023.654656882953,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 17.472841784022506
+    }
+   ],
+   "tolerance_pct": 5.0,
+   "reference_usable": true,
+   "sensitivity": [
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 14,
+     "u_lattice": 0.05,
+     "cd": 0.5596903699098192,
+     "change_from_base_pct": -2.184111156417845,
+     "cd_by_group": {
+      "body": 0.5596903699098192
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.5021,
+     "max_mach": 0.11178371974487161,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    },
+    {
+     "what": "物体を格子の中央に置く (対称のまま、t*=100)",
+     "tag": "symmetric",
+     "cells": 20,
+     "u_lattice": 0.05,
+     "cd": 0.49387859440747145,
+     "change_from_base_pct": -4.076943287452828,
+     "cd_by_group": {
+      "body": 0.49387859440747145
+     },
+     "domain_L": {
+      "upstream": 5.0,
+      "downstream": 11.0,
+      "half_width": 5.0,
+      "height": 5.0
+     },
+     "tau0": 0.503,
+     "max_mach": 0.11663404305776251,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": false
+    }
+   ],
+   "note": "外挿では基準に近いが、Re 1000 は Schiller-Naumann の上限いっぱいで、Morrison は 0.484。D = 20 では格子が足りない。",
+   "finest": {
+    "cells": 20,
+    "cd": 0.5148695332838261,
+    "error_pct": 17.472841784022506
+   },
+   "richardson": {
+    "monotone": true,
+    "order": 1.939241674218557,
+    "extrapolated": 0.45738279615450395,
+    "levels": [
+     10,
+     14,
+     20
+    ],
+    "error_pct": 4.356644497301643
+   },
+   "within_tolerance": false,
+   "settled": true,
+   "validated": false,
+   "conclusion": "一番細かい格子 (20 セル/代表長さ) で Cd = 0.5149、基準 0.4383 との差 +17.5 %。許容 ±5 % に入らない。検証できていない。格子を外挿すると 0.4574 (次数 1.94、差 +4.4 %)。外挿では基準に近いが、Re 1000 は Schiller-Naumann の上限いっぱいで、Morrison は 0.484。D = 20 では格子が足りない。"
+  },
+  "sphere_re10000": {
+   "body": "sphere",
+   "re": 10000.0,
+   "reference": {
+    "value": 0.41671979437738177,
+    "source": "Clift-Gauvin correlation, quoted in arXiv:1810.08787 Eq. (4)",
+    "url": "https://arxiv.org/pdf/1810.08787",
+    "verified": "secondary",
+    "note": "原論文は読んでいない。論文は測定値との差 6 % 以内と書いている"
+   },
+   "other_references": [
+    {
+     "value": 0.393564428240075,
+     "source": "Morrison (2013) Eq. (1), fit to the curve in Schlichting (1955)",
+     "url": "https://galileoandeinstein.phys.virginia.edu/more_stuff/Applets/Projectile/DataCorrelationForSphereDrag2013.pdf",
+     "verified": "read",
+     "note": "相関式"
+    },
+    {
+     "value": 0.38,
+     "source": "lowest sphere Cd of the Newton regime, at Re 5e3, arXiv:1810.08787 citing Clift & Gauvin",
+     "url": "https://arxiv.org/pdf/1810.08787",
+     "verified": "secondary",
+     "note": ""
+    }
+   ],
+   "levels": [
+    {
+     "cells": 10,
+     "cd": 0.6891311790764117,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.50015,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      160,
+      100,
+      100
+     ],
+     "steps": 20000,
+     "spread_pct": 1.8908270841974704,
+     "cd_quarters": [
+      0.6880065809016274,
+      0.6916509292821847,
+      0.6819184635711044,
+      0.6949487425507306
+     ],
+     "cy": 0.005551019240492723,
+     "cz": 0.032945635010100054,
+     "cd_by_group": {
+      "body": 0.6891311790764117
+     },
+     "max_mach": 0.10650774619716633,
+     "last_stats": {
+      "max_dr": 0.0057574,
+      "min_dr": -0.0032026,
+      "negative_f": 0,
+      "mass_dev": -50.32864373778855
+     },
+     "geometry": {
+      "solid_nodes": 522,
+      "cut_links": 1808,
+      "projected_area_x_m2": 0.79,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 1.2658227848101276,
+      "voxel_volume_diff_pct": -0.4291845493562182
+     },
+     "memory_mib": 246.0067653656006,
+     "wall_s": 13.358303099987097,
+     "mlups": 2395.5138433736324,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 65.3703971768459
+    },
+    {
+     "cells": 14,
+     "cd": 0.5740681093463844,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.50021,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      224,
+      140,
+      140
+     ],
+     "steps": 28000,
+     "spread_pct": 0.7541594013761933,
+     "cd_quarters": [
+      0.5768198847062509,
+      0.5729143856965843,
+      0.5740476708933901,
+      0.5724904960893126
+     ],
+     "cy": -0.004510036303850572,
+     "cz": -0.010266890872705116,
+     "cd_by_group": {
+      "body": 0.5740681093463844
+     },
+     "max_mach": 0.1216067432340822,
+     "last_stats": {
+      "max_dr": 0.0051313,
+      "min_dr": -0.0028654,
+      "negative_f": 0,
+      "mass_dev": -149.6679481541918
+     },
+     "geometry": {
+      "solid_nodes": 1440,
+      "cut_links": 3544,
+      "projected_area_x_m2": 0.7882653061224488,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.9708737864077718,
+      "voxel_volume_diff_pct": 0.0694927032661594
+     },
+     "memory_mib": 665.0858478546143,
+     "wall_s": 45.572426899918355,
+     "mlups": 2697.4907496142196,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 37.75878110232218
+    },
+    {
+     "cells": 20,
+     "cd": 0.5105391217723051,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5003,
+     "t_star": 100.0,
+     "average_last": 0.5,
+     "grid": [
+      320,
+      200,
+      200
+     ],
+     "steps": 40000,
+     "spread_pct": 0.6790028623914066,
+     "cd_quarters": [
+      0.5096213163085531,
+      0.5090778631160856,
+      0.5109128692980341,
+      0.5125444383665475
+     ],
+     "cy": 0.0007228333747204801,
+     "cz": 0.016842078970608534,
+     "cd_by_group": {
+      "body": 0.5105391217723051
+     },
+     "max_mach": 0.1261689343697568,
+     "last_stats": {
+      "max_dr": 0.0041786,
+      "min_dr": -0.0027376,
+      "negative_f": 0,
+      "mass_dev": -393.24142596727785
+     },
+     "geometry": {
+      "solid_nodes": 4188,
+      "cut_links": 7214,
+      "projected_area_x_m2": 0.7850000000000001,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 0.318471337579611,
+      "voxel_volume_diff_pct": -0.02387204583433597
+     },
+     "memory_mib": 1917.4373950958252,
+     "wall_s": 172.12278370000422,
+     "mlups": 2974.6207270989394,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "code_note": "前の geometry.py で走らせた。今のものとリンクが少し違う (球は数千本のうち 8 から 16 本)",
+     "faulted": null,
+     "error_pct": 22.51376792290325
+    }
+   ],
+   "tolerance_pct": 10.0,
+   "reference_usable": true,
+   "sensitivity": [],
+   "note": "D = 20 では格子がまったく足りない (境界層はセルより薄い)。Smagorinsky 0.15、壁関数なし。基準は Clift-Gauvin の相関式で、測定値との差 6 % 以内とされる。",
+   "finest": {
+    "cells": 20,
+    "cd": 0.5105391217723051,
+    "error_pct": 22.51376792290325
+   },
+   "richardson": {
+    "monotone": true,
+    "order": 1.8880798644355763,
+    "extrapolated": 0.44442874840793306,
+    "levels": [
+     10,
+     14,
+     20
+    ],
+    "error_pct": 6.64930113817872
+   },
+   "within_tolerance": false,
+   "settled": true,
+   "validated": false,
+   "conclusion": "一番細かい格子 (20 セル/代表長さ) で Cd = 0.5105、基準 0.4167 との差 +22.5 %。許容 ±10 % に入らない。検証できていない。格子を外挿すると 0.4444 (次数 1.89、差 +6.6 %)。D = 20 では格子がまったく足りない (境界層はセルより薄い)。Smagorinsky 0.15、壁関数なし。基準は Clift-Gauvin の相関式で、測定値との差 6 % 以内とされる。"
+  },
+  "ahmed35": {
+   "body": "ahmed35",
+   "re": 4290000.0,
+   "reference": {
+    "value": 0.26,
+    "source": "Ahmed et al. (1984), SAE 840300, as commonly quoted",
+    "url": "https://www.sae.org/publications/technical-papers/content/840300/",
+    "verified": "確かめていない",
+    "note": "この値を書いたページを読めていない。検証の基準にはできない"
+   },
+   "other_references": [],
+   "levels": [
+    {
+     "cells": 42,
+     "cd": 0.7598836339575721,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5000014685314685,
+     "t_star": 30.0,
+     "average_last": 0.5,
+     "grid": [
+      229,
+      97,
+      80
+     ],
+     "steps": 25200,
+     "spread_pct": 2.071741197526842,
+     "cd_quarters": [
+      0.7528358585670024,
+      0.7622032496649734,
+      0.7685786808649655,
+      0.755916746733347
+     ],
+     "cy": 0.01794886605845689,
+     "cz": 0.3010228188656849,
+     "cd_by_group": {
+      "body": 0.7147974920120809,
+      "stilts": 0.045086141945491244
+     },
+     "max_mach": 0.11636107596614942,
+     "last_stats": {
+      "max_dr": 0.0048721,
+      "min_dr": -0.0057747,
+      "negative_f": 0,
+      "mass_dev": -92.51138105713412
+     },
+     "geometry": {
+      "solid_nodes": 7468,
+      "cut_links": 12657,
+      "projected_area_x_m2": 0.11469352040816327,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": 5.589225589225609,
+      "voxel_volume_diff_pct": 5.180320942228636
+     },
+     "memory_mib": 274.17010402679443,
+     "wall_s": 18.039792699972168,
+     "mlups": 2482.3682148004445,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "code_note": "今の geometry.py で走らせた",
+     "faulted": null,
+     "diff_from_unverified_pct": 192.2629361375277
+    },
+    {
+     "cells": 60,
+     "cd": 0.7235674610791073,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5000020979020979,
+     "t_star": 30.0,
+     "average_last": 0.5,
+     "grid": [
+      327,
+      138,
+      114
+     ],
+     "steps": 36000,
+     "spread_pct": 0.7472876938818102,
+     "cd_quarters": [
+      0.7233500330493097,
+      0.7212608796206955,
+      0.7266680102142727,
+      0.7229909214321513
+     ],
+     "cy": -0.010797805368151333,
+     "cz": 0.1873683204788869,
+     "cd_by_group": {
+      "body": 0.6782088600403592,
+      "stilts": 0.045358601038748086
+     },
+     "max_mach": 0.11971716668882537,
+     "last_stats": {
+      "max_dr": 0.005427,
+      "min_dr": -0.0038357,
+      "negative_f": 0,
+      "mass_dev": -251.24993912847168
+     },
+     "geometry": {
+      "solid_nodes": 19852,
+      "cut_links": 24586,
+      "projected_area_x_m2": 0.11574893250000003,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": -6.359326467222495,
+      "voxel_volume_diff_pct": -4.647515036166346
+     },
+     "memory_mib": 780.6647663116455,
+     "wall_s": 66.93350970000029,
+     "mlups": 2766.8817133609714,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "code_note": "今の geometry.py で走らせた",
+     "faulted": null,
+     "diff_from_unverified_pct": 178.2951773381182
+    },
+    {
+     "cells": 84,
+     "cd": 0.6727786660833805,
+     "u_lattice": 0.05,
+     "smagorinsky": 0.15,
+     "tau0": 0.5000029370629371,
+     "t_star": 30.0,
+     "average_last": 0.5,
+     "grid": [
+      458,
+      193,
+      160
+     ],
+     "steps": 50400,
+     "spread_pct": 1.2209404830456916,
+     "cd_quarters": [
+      0.672609372049615,
+      0.676159163007888,
+      0.6679449359123812,
+      0.674401193363638
+     ],
+     "cy": 0.006738996280085156,
+     "cz": 0.17832081722130125,
+     "cd_by_group": {
+      "body": 0.6178626347599916,
+      "stilts": 0.054916031323389
+     },
+     "max_mach": 0.13425684340099764,
+     "last_stats": {
+      "max_dr": 0.0054638,
+      "min_dr": -0.0056542,
+      "negative_f": 0,
+      "mass_dev": -681.3514910138115
+     },
+     "geometry": {
+      "solid_nodes": 56066,
+      "cut_links": 49225,
+      "projected_area_x_m2": 0.11532105229591838,
+      "shapes_without_cut_links": [],
+      "grid_area_x_diff_pct": -1.8166596902469567,
+      "voxel_volume_diff_pct": -1.3955722560730117
+     },
+     "memory_mib": 2122.43266582489,
+     "wall_s": 247.8946685999399,
+     "mlups": 2875.4519813830834,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "512f19438f540a04"
+     },
+     "code_note": "今の geometry.py で走らせた",
+     "faulted": null,
+     "diff_from_unverified_pct": 158.76102541668482
+    }
+   ],
+   "tolerance_pct": 10.0,
+   "reference_usable": false,
+   "sensitivity": [
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 42,
+     "u_lattice": 0.05,
+     "cd": 0.7723520706936561,
+     "change_from_base_pct": 1.6408350145859618,
+     "cd_by_group": {
+      "body": 0.722936743034516,
+      "stilts": 0.04941532765913999
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000014685314685,
+     "max_mach": 0.11528226229563678,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 60,
+     "u_lattice": 0.05,
+     "cd": 0.7317270557590013,
+     "change_from_base_pct": 1.127689554713407,
+     "cd_by_group": {
+      "body": 0.684816172819212,
+      "stilts": 0.046910882939789185
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000020979020979,
+     "max_mach": 0.11798177825410158,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    },
+    {
+     "what": "修正の前の geometry.py での同じ段",
+     "tag": "before_fix",
+     "cells": 84,
+     "u_lattice": 0.05,
+     "cd": 0.6685575270113073,
+     "change_from_base_pct": -0.6274186868389875,
+     "cd_by_group": {
+      "body": 0.614902152433456,
+      "stilts": 0.05365537457785127
+     },
+     "domain_L": {
+      "upstream": 1.25,
+      "downstream": 4.2,
+      "half_width": 1.15,
+      "height": 1.9
+     },
+     "tau0": 0.5000029370629371,
+     "max_mach": 0.13063039462544696,
+     "faulted": null,
+     "code": {
+      "kernels.cu": "642f4db8b887abf0",
+      "solver.py": "f57821f10df447e0",
+      "geometry.py": "0d7dc90f8df13022"
+     },
+     "before_the_geometry_fix": true
+    }
+   ],
+   "note": "基準の 0.26 はよく引かれる値だが、書かれたページを読めていない。25 度と同じく鼻先ではがれ、同じように大きく外れている。",
+   "finest": {
+    "cells": 84,
+    "cd": 0.6727786660833805,
+    "diff_from_unverified_pct": 158.76102541668482
+   },
+   "richardson": {
+    "monotone": true,
+    "reason": "単調だが次数が 0.1 から 8 に収まらないので外挿しない",
+    "values": [
+     0.7598836339575721,
+     0.7235674610791073,
+     0.6727786660833805
+    ]
+   },
+   "within_tolerance": false,
+   "settled": true,
+   "validated": false,
+   "conclusion": "一番細かい格子 (84 セル/代表長さ) で Cd = 0.6728、基準 0.26 との差 +158.8 %。許容 ±10 % に入らない。基準の値を読んで確かめられていないので、検証にはならない。単調だが次数が 0.1 から 8 に収まらないので外挿しない基準の 0.26 はよく引かれる値だが、書かれたページを読めていない。25 度と同じく鼻先ではがれ、同じように大きく外れている。"
+  }
+ },
+ "not_run_yet": [],
+ "findings": [
+  {
+   "title": "この記録の数値のコード",
+   "what": "各段の code に走らせたときのコードのハッシュ、code_note にその段と今の geometry.py の関係がある。Ahmed 25 度の 42, 84 セル、Ahmed 35 度の全部、立方体の 12 セルは今の geometry.py で走らせた。立方体の 16, 24 セル、平板の全部、Ahmed 25 度の 60 セルは前のコードの実行だが、リンクと q と mask が今のものと同じことを比べて確かめた (カーネルとソルバーも同じ)。立方体の 12 セルは今のコードで走らせて、同じリンクの前の実行と 13 桁一致した。球の Re 100 と 200 はリンクが 1 本も変わらない。球の Re 300 以上は前のコードのままで、数千本のうち 8 から 16 本のリンクが違い、走らせ直していない。下の findings の数値は、特に断らなければ修正の前のコードのもの。"
+  },
+  {
+   "title": "Ahmed 25 度の抗力は鼻先に集まる。Cs を下げても直らない",
+   "what": "同じ形を前 0.2 m、中、後 0.25 m に分けて力を読んだ。中の面は流れに平行なので、その抗力は摩擦だけになる。Cs 0.02 は発散した。",
+   "runs": [
+    {
+     "cells": 42,
+     "smagorinsky": 0.15,
+     "cd": 0.7692222196296661,
+     "cd_by_group": {
+      "nose": 0.46893114143795483,
+      "mid": 0.037570460933081855,
+      "rear": 0.21329006852203627,
+      "stilts": 0.04943054873659311
+     },
+     "cf_on_mid_faces": 0.005233394853576415,
+     "max_mach": 0.11409732687490974
+    },
+    {
+     "cells": 60,
+     "smagorinsky": 0.15,
+     "cd": 0.7216708575971217,
+     "cd_by_group": {
+      "nose": 0.4447325702674807,
+      "mid": 0.05092662962630448,
+      "rear": 0.1792025121802111,
+      "stilts": 0.04680914552312546
+     },
+     "cf_on_mid_faces": 0.007093848592142675,
+     "max_mach": 0.11979983305497549
+    },
+    {
+     "cells": 42,
+     "smagorinsky": 0.1,
+     "cd": 0.7102736241930674,
+     "cd_by_group": {
+      "nose": 0.42644125901397134,
+      "mid": 0.01662205564764758,
+      "rear": 0.2174606204025819,
+      "stilts": 0.04974968912886652
+     },
+     "cf_on_mid_faces": 0.002315376982922844,
+     "max_mach": 0.13245150055775132
+    },
+    {
+     "cells": 42,
+     "smagorinsky": 0.05,
+     "cd": 0.6646823113626079,
+     "cd_by_group": {
+      "nose": 0.3678097877344752,
+      "mid": 0.011486427437405433,
+      "rear": 0.2385976922537948,
+      "stilts": 0.04678840393693253
+     },
+     "cf_on_mid_faces": 0.0016000072595320574,
+     "max_mach": 0.2793449480481077
+    },
+    {
+     "cells": 60,
+     "smagorinsky": 0.05,
+     "cd": 0.6367760151163728,
+     "cd_by_group": {
+      "nose": 0.3664503641966632,
+      "mid": 0.043086070887949086,
+      "rear": 0.18247534336897833,
+      "stilts": 0.0447642366627822
+     },
+     "cf_on_mid_faces": 0.006001694311055795,
+     "max_mach": 0.28680690368259965
+    }
+   ],
+   "friction_textbook": {
+    "formula": "0.074 Re^-0.2, 確かめていない",
+    "value": 0.0034893156739441585
+   }
+  },
+  {
+   "title": "Ahmed 25 度は 60 セルで丸い鼻先の肩から流れがはがれる",
+   "what": "60 セル、Cs 0.15、中央面の平均場。屋根の上に x = 0.12 から 0.62 m、厚さ 3 から 4 セルの逆流の泡がある (x = 0.3 m で ux/U = -0.27)。前面の Cp は 1 に近く、肩の吸い込みは最初の流体節点で -0.8 ほど。鼻先の半径は 5.7 セルしかない。体から離れた Cp は 0.1 以内なので、圧力のずれで前後の抗力が入れ替わっているのではない。場の数値は実行の記録からでなく、その場で読んだもの。"
+  },
+  {
+   "title": "箱の面は正味の流れをほとんど通さない",
+   "what": "Ahmed 60 セルの平均場で、どの x の面でも平均の ux/U は 0.998 から 1.0004。物体のある面では流体の平均が 1.02 U、物体の上や横では 1.05 から 1.07 U になる。動圧で局所に 10 から 15 % ほど効く。物体の面積の割合は 2.2 %。"
+  },
+  {
+   "title": "物体を格子の中央にぴったり置くと答えが変わる",
+   "what": "板、立方体、Re 300 以上の球で、格子の中央に置くと y, z に 0.13 と 0.26 セルずらしたときと違う Cd になる。板と立方体では高く、球では低く出る。球は Re 300 で最後まで定常のまま、Re 500 と 1000 では t* = 45 から 55 まで対称の後流を保ってから跳ぶので、決まった区間の平均が跳びをまたぐ。板も渦のはがれが t* = 45 から 60 まで遅れる (ずらすと 15 から 20)。差の向きの理由は確かめていない。左右対称の設計を偏揺れ 0 で中央に置いた車両でも起きうるが、車両では試していない。",
+   "pairs": [
+    {
+     "body": "cube",
+     "re": 100000.0,
+     "cells": 12,
+     "centred_cd": 1.0771135593524779,
+     "offset_cd": 1.050609963676168,
+     "change_pct": 2.5226864957164086
+    },
+    {
+     "body": "cube",
+     "re": 100000.0,
+     "cells": 16,
+     "centred_cd": 1.1900751285967248,
+     "offset_cd": 1.0732471858852937,
+     "change_pct": 10.885464620628182
+    },
+    {
+     "body": "plate",
+     "re": 100000.0,
+     "cells": 12,
+     "centred_cd": 1.29200687484001,
+     "offset_cd": 1.2715023805456716,
+     "change_pct": 1.6126194184189258
+    },
+    {
+     "body": "plate",
+     "re": 100000.0,
+     "cells": 16,
+     "centred_cd": 1.2783181469794842,
+     "offset_cd": 1.256723274286363,
+     "change_pct": 1.718347478316895
+    },
+    {
+     "body": "sphere",
+     "re": 300.0,
+     "cells": 14,
+     "centred_cd": 0.7118188220258375,
+     "offset_cd": 0.7217833479246272,
+     "change_pct": -1.380542503154325
+    },
+    {
+     "body": "sphere",
+     "re": 300.0,
+     "cells": 20,
+     "centred_cd": 0.6659243361736579,
+     "offset_cd": 0.6847599923845764,
+     "change_pct": -2.750694611308424
+    },
+    {
+     "body": "sphere",
+     "re": 500.0,
+     "cells": 14,
+     "centred_cd": 0.5882121020224901,
+     "offset_cd": 0.6367861352327954,
+     "change_pct": -7.627997929406494
+    },
+    {
+     "body": "sphere",
+     "re": 500.0,
+     "cells": 20,
+     "centred_cd": 0.535776023066156,
+     "offset_cd": 0.5940918271973609,
+     "change_pct": -9.815957981834345
+    },
+    {
+     "body": "sphere",
+     "re": 1000.0,
+     "cells": 14,
+     "centred_cd": 0.5596903699098192,
+     "offset_cd": 0.572187582740083,
+     "change_pct": -2.184111156417845
+    },
+    {
+     "body": "sphere",
+     "re": 1000.0,
+     "cells": 20,
+     "centred_cd": 0.49387859440747145,
+     "offset_cd": 0.5148695332838261,
+     "change_pct": -4.076943287452828
+    }
+   ]
+  },
+  {
+   "title": "角をかすめるリンクが立方体の抗力を 30 % 動かしていた (voxelize の不具合、修正済み)",
+   "what": "voxelize は両端が流体の節点でも形にかかるリンクを切る。薄い板には要るが、中身のある物体では角をかすめる斜めのリンクまで切り、辺に沿った小さな柵のように働いていた。上流の辺のその本数が 8 から 100 に変わるところで Cd が 1.00 から 1.31 に跳び、跳びは 12, 16, 24 セルでほぼ縮まなかった。斜めのリンクの横の角に、そのリンクを切る形の中の固体の節点があるものを外すと、跳びは消える。geometry.py の _not_corner_clip がこれをする。板は 1 本も外れない。Ahmed と球にはほとんど効かない。柵という見方は読み取りで、外すと跳びが消えることが直接の証拠。",
+   "on_the_current_code": {
+    "face_exactly_on_a_node_plane_12_cells": 0.9859674381456213,
+    "baseline_12_cells": 0.9795906681308755
+   },
+   "scan_12_cells": [
+    {
+     "shift_cells": 0.0,
+     "front_q": 0.5,
+     "clip_links_near_front_edge": 52,
+     "cd": 1.050609963676168,
+     "cd_without_corner_clips": 0.9795906681308313
+    },
+    {
+     "shift_cells": 0.1,
+     "front_q": 0.6,
+     "clip_links_near_front_edge": 56,
+     "cd": 1.0526118105123001,
+     "cd_without_corner_clips": null
+    },
+    {
+     "shift_cells": 0.25,
+     "front_q": 0.75,
+     "clip_links_near_front_edge": 32,
+     "cd": 1.0178628380572188,
+     "cd_without_corner_clips": 0.9890939411875697
+    },
+    {
+     "shift_cells": 0.4,
+     "front_q": 0.9,
+     "clip_links_near_front_edge": 8,
+     "cd": 0.994009145859891,
+     "cd_without_corner_clips": null
+    },
+    {
+     "shift_cells": 0.45,
+     "front_q": 0.95,
+     "clip_links_near_front_edge": 8,
+     "cd": 0.9962257851271111,
+     "cd_without_corner_clips": 0.9991012969887991
+    },
+    {
+     "shift_cells": 0.6,
+     "front_q": 0.10000000000000009,
+     "clip_links_near_front_edge": 100,
+     "cd": 1.278626955850449,
+     "cd_without_corner_clips": 0.9916673574350506
+    },
+    {
+     "shift_cells": 0.75,
+     "front_q": 0.25,
+     "clip_links_near_front_edge": 76,
+     "cd": 1.1471610535455026,
+     "cd_without_corner_clips": 0.9827960960264972
+    }
+   ],
+   "both_sides_of_the_jump": [
+    {
+     "cells": 12,
+     "shift_0.45": 0.9962257851271111,
+     "shift_0.6": 1.278626955850449,
+     "shift_0.45_without": 0.9991012969887991,
+     "shift_0.6_without": 0.9916673574350506
+    },
+    {
+     "cells": 16,
+     "shift_0.45": 1.0081197071513175,
+     "shift_0.6": 1.2681358157214244,
+     "shift_0.45_without": 1.016517686319619,
+     "shift_0.6_without": 1.002035953694578
+    },
+    {
+     "cells": 24,
+     "shift_0.45": 1.061891422224748,
+     "shift_0.6": 1.303167151864013,
+     "shift_0.45_without": 1.0640175939872492,
+     "shift_0.6_without": 1.068897507189927
+    }
+   ],
+   "cube_levels_without_corner_clips": [
+    {
+     "cells": 12,
+     "cd": 0.9795906681308437,
+     "diff_from_1.05_pct": -6.705650654205364
+    },
+    {
+     "cells": 16,
+     "cd": 0.9974815132541953,
+     "diff_from_1.05_pct": -5.001760642457597
+    },
+    {
+     "cells": 24,
+     "cd": 1.0464362661490216,
+     "diff_from_1.05_pct": -0.33940322390270117
+    }
+   ],
+   "ahmed25_without_corner_clips": [
+    {
+     "cells": 42,
+     "cd": 0.7637959569570079,
+     "cd_with": 0.7692222196297268
+    },
+    {
+     "cells": 60,
+     "cd": 0.7158415852532884,
+     "cd_with": 0.7216708575970026
+    }
+   ],
+   "side_faces_scan_12_cells": [
+    {
+     "shift_cells": 0.1,
+     "cd": 1.0644245886618697
+    },
+    {
+     "shift_cells": 0.45,
+     "cd": 1.0384157768604776
+    },
+    {
+     "shift_cells": 0.6,
+     "cd": 1.0415756476472482
+    },
+    {
+     "shift_cells": 0.9,
+     "cd": 1.0637477019567294
+    }
+   ]
+  },
+  {
+   "title": "面が節点の面をちょうど通ると壁の位置が半セルずれていた (voxelize の不具合、修正済み)",
+   "what": "面の上の節点は固体になり、隣の節点からのリンクは t がちょうど 1 で hit の t_in < 1.0 に落ち、代わりの「固体の隣には必ずリンクを」が t = 0.5 を与えて、壁が本当の位置から半セルずれていた。立方体を x に半セルずらすと後ろの面の q が 0.5 になり、壁は x = 0.5833 と読めた (本当は 0.5417)。切りのよい mm の設計と切りのよい dx で起こりうる。Ahmed の 42 セルでは後ろの面がちょうど節点の面に乗り、800 本のリンクが q = 1 になる。修正前のその段にはこのずれが入っていた。t を 1 まで認める修正だけでは、丸めで面の上の節点が流体に残ったとき、隣からの q = 1 のリンクが形に触れるだけの片道の壁になり、12 セルの立方体が Cd 1.43 になった。遠い端が流体の q = 1 のリンクを外す一行を足して 0.99 に戻った。",
+   "cube_12_cells_shift_exactly_half": {
+    "before_the_q1_filter": 1.431652174296738,
+    "with_the_filter_tried_outside_the_code": 0.9859674381455624,
+    "with_the_filter_in_the_code": 0.9859674381456213
+   }
+  },
+  {
+   "title": "球 Re 100 の D = 10 で何が効くか",
+   "what": "t* = 60 から 150 で変わらない。横幅や上流の差は 8 D 以上でほぼ消え、基本の箱の分は合わせて 1 % ほど。格子の風速を下げると逆に少し上がるので Mach ではない。補間なしの跳ね返しでは誤差がほぼ倍。残りは格子で、D を細かくすると減っていく。",
+   "base_cd": 1.1990158123071473,
+   "runs": [
+    {
+     "tag": "t150",
+     "what": "時間",
+     "cd": 1.199014044007487,
+     "change_pct": -0.0001474792610811626
+    },
+    {
+     "tag": "hw3",
+     "what": "横幅",
+     "cd": 1.2404241867662835,
+     "change_pct": 3.453530306615238
+    },
+    {
+     "tag": "hw8",
+     "what": "横幅",
+     "cd": 1.1939023793269556,
+     "change_pct": -0.4264691864532044
+    },
+    {
+     "tag": "hw12",
+     "what": "横幅",
+     "cd": 1.1935534630505236,
+     "change_pct": -0.45556940955707725
+    },
+    {
+     "tag": "up3",
+     "what": "上流",
+     "cd": 1.235996604462605,
+     "change_pct": 3.084262257083936
+    },
+    {
+     "tag": "up10",
+     "what": "上流",
+     "cd": 1.1918727955254418,
+     "change_pct": -0.5957399984543033
+    },
+    {
+     "tag": "down6",
+     "what": "下流",
+     "cd": 1.2060833677689362,
+     "change_pct": 0.5894463933873828
+    },
+    {
+     "tag": "down22",
+     "what": "下流",
+     "cd": 1.198443623921436,
+     "change_pct": -0.047721504573838835
+    },
+    {
+     "tag": "sponge0",
+     "what": "吸収層",
+     "cd": 1.194621389040683,
+     "change_pct": -0.3665025282701295
+    },
+    {
+     "tag": "sponge16",
+     "what": "吸収層",
+     "cd": 1.2072783530007434,
+     "change_pct": 0.6891102359773971
+    },
+    {
+     "tag": "sigma0.02",
+     "what": "吸収層の強さ",
+     "cd": 1.197216790341196,
+     "change_pct": -0.15004155470556002
+    },
+    {
+     "tag": "sigma0.3",
+     "what": "吸収層の強さ",
+     "cd": 1.1999759821404874,
+     "change_pct": 0.08007983076492309
+    },
+    {
+     "tag": "u0.025",
+     "what": "格子の風速",
+     "cd": 1.2046127802630437,
+     "change_pct": 0.4667968427477964
+    },
+    {
+     "tag": "u0.1",
+     "what": "格子の風速",
+     "cd": 1.1960740295520862,
+     "change_pct": -0.24534978812335018
+    },
+    {
+     "tag": "plainBB",
+     "what": "補間なし",
+     "cd": 1.308099533848473,
+     "change_pct": 9.09777172424664
+    }
+   ]
+  },
+  {
+   "title": "壁の位置は衝突の方式で変わらない (1 次元の水路、numpy)",
+   "what": "平行な壁のあいだの流れを実験用の 1 次元計算で解き、放物線から壁の位置を読んだ。tau 0.515、幅 10 セルで、壁の位置のずれは regularized 0.024 セル、BGK 0.025 セル、TRT (Lambda 3/16) 0.000 セル。幅を倍にするとおよそ半分。regularized の壁は壁の位置のうえでは問題がない。"
+  }
+ ]
+}
