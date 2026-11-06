@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests.viewer import no_paths
 from types import SimpleNamespace
 
 import numpy as np
@@ -164,7 +166,7 @@ class FrfPageTest(unittest.TestCase):
         self.assertIn("入力の並び", out["panel"])
         self.assertIn("確かめていない", out["inputs"])
         self.assertIn("von Mises", out["info"])
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
 
 
 if __name__ == "__main__":

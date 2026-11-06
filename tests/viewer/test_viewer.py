@@ -13,6 +13,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from tests.viewer import no_paths
+
 from viewer.src import assembly, common, crash, names, nvh, nvh_shell
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -85,7 +87,7 @@ class FieldDataTest(unittest.TestCase):
                 self.assertNotIn("not_computed", o)
                 # no file path anywhere in the data: the run by its folder name only
                 text = json.dumps(o, ensure_ascii=False)
-                self.assertNotRegex(text, r"[A-Za-z]:\\\\|/Users/|/home/|\\\\Temp\\\\")
+                self.assertNotRegex(text, no_paths.IN_JSON)
                 self.assertEqual(o["source"]["run"], f if f != "crash" else "crash")
                 # the parts ledger: one entry per part box, in the same order, with a known category
                 L = o["ledger"]
@@ -656,7 +658,7 @@ class ShellDataTest(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             path = Path(d) / "nvh_shell.js"
             self.assertEqual(common.read_data_js(path)[0], "nvh_shell")
-            self.assertNotRegex(path.read_text(encoding="ascii"), r"[A-Za-z]:\\\\|/Users/|/home/")
+            self.assertNotRegex(path.read_text(encoding="ascii"), no_paths.IN_JSON_SHORT)
             src = sum(f.stat().st_size for f in (FX / "shell").rglob("*.json"))
             self.assertLess(path.stat().st_size, src / 3)   # packed: much smaller than the record and mesh
 
@@ -837,7 +839,7 @@ class PageTest(unittest.TestCase):
         self.assertGreater(out["boxes_moved"], 0)
         self.assertEqual(out["tyres"], 4)
         self.assertIn("別の設計", out["panel"])   # the beam fixture is another design: no comparison offered
-        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)
         self.assertFalse(out["notes_open"])
         beam = self._check(self.dir, "nvh")
         self.assertEqual(beam["variant"], "nvh")
@@ -875,7 +877,7 @@ class PageTest(unittest.TestCase):
                 self.assertGreater(out["nT"], 1)
                 self.assertGreater(out["drawn_px"], 1000)
                 self.assertNotIn("NOT COMPUTED", out["page_text"])
-                self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")   # no file paths on screen
+                self.assertNotRegex(out["page_text"], no_paths.ON_PAGE)   # no file paths on screen
                 self.assertEqual(out["over_view"], [])                               # no text over the 3D view
                 self.assertFalse(out["notes_open"])                                  # explanations closed by default
 
