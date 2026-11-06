@@ -697,3 +697,52 @@ class StaticTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TradeoffQuestionTest(unittest.TestCase):
+    """A2 draws a trade-off (two results that pull apart) with the code's numbers and sends the person's choice."""
+
+    SCRIPT = f"""{FAKE_DOM}
+import {{ mountIntake }} from "{url('index.js')}";
+import {{ tradeoffRows }} from "{url('model.js')}";
+const e = (seq, kind, data) => ({{ seq, t: seq, ts: 'x', run_id: 'r', kind, data }});
+const side = (name, unit, now, after) => ({{ name, unit, now, after, record_id: 'ana-0001' }});
+const asked = e(1, 'hearing.asked', {{ tradeoff_questions: [{{ tradeoff_id: 'variables.t:u:m', variable: 'variables.t', step_pct: 10,
+  text: 't を 10 % 上げると、a は良くなり、b は悪くなります。どちらを優先しますか。', a: side('走って当たる', '1', 0.8, 0.704), b: side('質量', 'kg', 400, 432) }}] }});
+const answered = e(2, 'hearing.answered', {{ answers: [], tradeoff_answers: [{{ tradeoff_id: 'variables.t:u:m', choice: 'favor_a' }}] }});
+let events = [asked];
+const sent = [];
+const api = {{ events: () => events, onEvent: () => () => {{}}, answerHearing: async (b) => sent.push(b) }};
+const el = new El('div');
+const intake = mountIntake(el, api, {{ screen: 'A2' }});
+{{BODY}}
+"""
+
+    def run_body(self, body: str) -> dict:
+        return node(self.SCRIPT.replace("{BODY}", body))
+
+    def test_the_rows_have_the_three_choices_and_the_answer(self):
+        got = self.run_body("""
+const open1 = tradeoffRows(intake.model).map((r) => [r.tradeoff_id, r.state, r.choices]);
+events = [asked, answered]; intake.update();
+const done = tradeoffRows(intake.model).map((r) => [r.state, r.answer && r.answer.choice]);
+console.log(JSON.stringify({ open1, done }));
+""")
+        self.assertEqual(got["open1"], [["variables.t:u:m", "asking", ["favor_a", "favor_b", "keep_both"]]])
+        self.assertEqual(got["done"], [["answered", "favor_a"]])
+
+    def test_the_card_shows_the_numbers_and_sends_the_choice(self):
+        got = self.run_body("""
+const card = el.all('article').find((a) => a.dataset.tradeoff === 'variables.t:u:m');
+const text = card.text();
+const buttons = card.all('button').map((b) => b.text());
+card.all('button').find((b) => b.text().includes('質量を悪くしない')).listeners.click[0]();
+el.all('button').find((b) => b.text() === '答えて進める').listeners.click[0]();
+await new Promise((r) => setTimeout(r, 20));
+console.log(JSON.stringify({ text, buttons, sent }));
+""")
+        for part in ("0.8", "0.704", "400", "432", "どちらを優先しますか"):
+            self.assertIn(part, got["text"])
+        self.assertEqual(got["buttons"], ["走って当たるを良くする方を優先", "質量を悪くしない方を優先", "どちらも守る方法を探す"])
+        self.assertEqual(got["sent"][0]["tradeoffAnswers"], [{"tradeoff_id": "variables.t:u:m", "choice": "favor_b"}])
