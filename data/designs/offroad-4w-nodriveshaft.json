@@ -2011,12 +2011,12 @@
         "center_mm": [
           -1325.0,
           -300.0,
-          881.95
+          886.95
         ],
         "size_mm": [
           60.0,
           460.0,
-          897.5
+          887.5
         ]
       },
       "mass_kg": 3.1377750000000004,
@@ -2036,13 +2036,13 @@
           ]
         },
         {
-          "to": "floor",
+          "to": "bracket_seat_R1",
           "via": "bolt",
           "carries": "load",
           "at_mm": [
-            -1295.0,
-            -70.0,
-            433.2
+            -1331.5,
+            -310.0,
+            443.2
           ]
         }
       ],
@@ -2086,6 +2086,88 @@
       "module": "occupant"
     },
     {
+      "id": "bracket_seat_R1",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -1331.5,
+          -310.0,
+          421.6
+        ],
+        "size_mm": [
+          17.0,
+          40.0,
+          43.200000000000045
+        ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+        "LS2",
+        "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "cross_S2",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1323.0,
+            -290.0,
+            400.0
+          ]
+        },
+        {
+          "to": "rail_R_S2H",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1340.0,
+            -330.0,
+            400.0
+          ]
+        }
+      ],
+      "module": "occupant"
+    },
+    {
+      "id": "bracket_seat_R2",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -1331.5,
+          -90.0,
+          421.6
+        ],
+        "size_mm": [
+          17.0,
+          40.0,
+          43.200000000000045
+        ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+        "LS2",
+        "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "cross_S2",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1323.0,
+            -70.0,
+            400.0
+          ]
+        }
+      ],
+      "module": "occupant"
+    },
+    {
       "id": "seatback_L",
       "name": "助手席の背もたれ (鋼板と樹脂の殻)",
       "kind": "seatback",
@@ -2093,12 +2175,12 @@
         "center_mm": [
           -1325.0,
           300.0,
-          881.95
+          886.95
         ],
         "size_mm": [
           60.0,
           460.0,
-          897.5
+          887.5
         ]
       },
       "mass_kg": 3.1377750000000004,
@@ -2118,13 +2200,13 @@
           ]
         },
         {
-          "to": "floor",
+          "to": "bracket_seat_L2",
           "via": "bolt",
           "carries": "load",
           "at_mm": [
-            -1295.0,
-            70.0,
-            433.2
+            -1331.5,
+            310.0,
+            443.2
           ]
         }
       ],
@@ -2165,6 +2247,88 @@
         }
       ],
       "system": "seat",
+      "module": "occupant"
+    },
+    {
+      "id": "bracket_seat_L1",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -1331.5,
+          90.0,
+          421.6
+        ],
+        "size_mm": [
+          17.0,
+          40.0,
+          43.200000000000045
+        ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+        "LS2",
+        "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "cross_S2",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1323.0,
+            70.0,
+            400.0
+          ]
+        }
+      ],
+      "module": "occupant"
+    },
+    {
+      "id": "bracket_seat_L2",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+        "center_mm": [
+          -1331.5,
+          310.0,
+          421.6
+        ],
+        "size_mm": [
+          17.0,
+          40.0,
+          43.200000000000045
+        ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+        "LS2",
+        "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+        {
+          "to": "rail_L_S2H",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1340.0,
+            330.0,
+            400.0
+          ]
+        },
+        {
+          "to": "cross_S2",
+          "via": "weld",
+          "carries": "load",
+          "at_mm": [
+            -1323.0,
+            290.0,
+            400.0
+          ]
+        }
+      ],
       "module": "occupant"
     },
     {
@@ -9840,32 +10004,6 @@
         {
           "id": "if-089",
           "between": [
-            "body",
-            "occupant"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -1185.0,
-            -150.0,
-            656.7750000000001
-          ]
-        },
-        {
-          "id": "if-090",
-          "between": [
-            "body",
-            "occupant"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -1185.0,
-            150.0,
-            656.7750000000001
-          ]
-        },
-        {
-          "id": "if-091",
-          "between": [
             "frame",
             "suspension"
           ],
@@ -9877,7 +10015,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -9890,7 +10028,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -9903,7 +10041,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-092",
           "between": [
             "frame",
             "suspension"
@@ -9916,7 +10054,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -9929,7 +10067,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -9942,7 +10080,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -9955,7 +10093,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -9968,7 +10106,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -9981,7 +10119,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -9994,7 +10132,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -10007,7 +10145,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -10020,7 +10158,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -10033,7 +10171,7 @@
           ]
         },
         {
-          "id": "if-104",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -10046,7 +10184,7 @@
           ]
         },
         {
-          "id": "if-105",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -10059,7 +10197,7 @@
           ]
         },
         {
-          "id": "if-106",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -10072,7 +10210,7 @@
           ]
         },
         {
-          "id": "if-107",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -10085,7 +10223,7 @@
           ]
         },
         {
-          "id": "if-108",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -10098,7 +10236,7 @@
           ]
         },
         {
-          "id": "if-109",
+          "id": "if-107",
           "between": [
             "frame",
             "suspension"
@@ -10111,7 +10249,7 @@
           ]
         },
         {
-          "id": "if-110",
+          "id": "if-108",
           "between": [
             "frame",
             "suspension"
@@ -10124,7 +10262,7 @@
           ]
         },
         {
-          "id": "if-111",
+          "id": "if-109",
           "between": [
             "frame",
             "suspension"
@@ -10137,7 +10275,7 @@
           ]
         },
         {
-          "id": "if-112",
+          "id": "if-110",
           "between": [
             "frame",
             "suspension"
@@ -12076,7 +12214,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -12089,7 +12227,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -12102,7 +12240,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -12115,7 +12253,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-092",
           "between": [
             "frame",
             "suspension"
@@ -12128,7 +12266,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -12141,7 +12279,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -12154,7 +12292,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -12167,7 +12305,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -12180,7 +12318,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -12193,7 +12331,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -12206,7 +12344,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -12219,7 +12357,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -12232,7 +12370,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -12245,7 +12383,7 @@
           ]
         },
         {
-          "id": "if-104",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -12258,7 +12396,7 @@
           ]
         },
         {
-          "id": "if-105",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -12271,7 +12409,7 @@
           ]
         },
         {
-          "id": "if-106",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -12284,7 +12422,7 @@
           ]
         },
         {
-          "id": "if-107",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -12297,7 +12435,7 @@
           ]
         },
         {
-          "id": "if-108",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -12310,7 +12448,7 @@
           ]
         },
         {
-          "id": "if-109",
+          "id": "if-107",
           "between": [
             "frame",
             "suspension"
@@ -12323,7 +12461,7 @@
           ]
         },
         {
-          "id": "if-110",
+          "id": "if-108",
           "between": [
             "frame",
             "suspension"
@@ -12336,7 +12474,7 @@
           ]
         },
         {
-          "id": "if-111",
+          "id": "if-109",
           "between": [
             "frame",
             "suspension"
@@ -12349,7 +12487,7 @@
           ]
         },
         {
-          "id": "if-112",
+          "id": "if-110",
           "between": [
             "frame",
             "suspension"
@@ -13285,7 +13423,7 @@
           ]
         },
         {
-          "id": "if-091",
+          "id": "if-089",
           "between": [
             "frame",
             "suspension"
@@ -13298,7 +13436,7 @@
           ]
         },
         {
-          "id": "if-092",
+          "id": "if-090",
           "between": [
             "frame",
             "suspension"
@@ -13311,7 +13449,7 @@
           ]
         },
         {
-          "id": "if-093",
+          "id": "if-091",
           "between": [
             "frame",
             "suspension"
@@ -13324,7 +13462,7 @@
           ]
         },
         {
-          "id": "if-094",
+          "id": "if-092",
           "between": [
             "frame",
             "suspension"
@@ -13337,7 +13475,7 @@
           ]
         },
         {
-          "id": "if-095",
+          "id": "if-093",
           "between": [
             "frame",
             "suspension"
@@ -13350,7 +13488,7 @@
           ]
         },
         {
-          "id": "if-096",
+          "id": "if-094",
           "between": [
             "frame",
             "suspension"
@@ -13363,7 +13501,7 @@
           ]
         },
         {
-          "id": "if-097",
+          "id": "if-095",
           "between": [
             "frame",
             "suspension"
@@ -13376,7 +13514,7 @@
           ]
         },
         {
-          "id": "if-098",
+          "id": "if-096",
           "between": [
             "frame",
             "suspension"
@@ -13389,7 +13527,7 @@
           ]
         },
         {
-          "id": "if-099",
+          "id": "if-097",
           "between": [
             "frame",
             "suspension"
@@ -13402,7 +13540,7 @@
           ]
         },
         {
-          "id": "if-100",
+          "id": "if-098",
           "between": [
             "frame",
             "suspension"
@@ -13415,7 +13553,7 @@
           ]
         },
         {
-          "id": "if-101",
+          "id": "if-099",
           "between": [
             "frame",
             "suspension"
@@ -13428,7 +13566,7 @@
           ]
         },
         {
-          "id": "if-102",
+          "id": "if-100",
           "between": [
             "frame",
             "suspension"
@@ -13441,7 +13579,7 @@
           ]
         },
         {
-          "id": "if-103",
+          "id": "if-101",
           "between": [
             "frame",
             "suspension"
@@ -13454,7 +13592,7 @@
           ]
         },
         {
-          "id": "if-104",
+          "id": "if-102",
           "between": [
             "frame",
             "suspension"
@@ -13467,7 +13605,7 @@
           ]
         },
         {
-          "id": "if-105",
+          "id": "if-103",
           "between": [
             "frame",
             "suspension"
@@ -13480,7 +13618,7 @@
           ]
         },
         {
-          "id": "if-106",
+          "id": "if-104",
           "between": [
             "frame",
             "suspension"
@@ -13493,7 +13631,7 @@
           ]
         },
         {
-          "id": "if-107",
+          "id": "if-105",
           "between": [
             "frame",
             "suspension"
@@ -13506,7 +13644,7 @@
           ]
         },
         {
-          "id": "if-108",
+          "id": "if-106",
           "between": [
             "frame",
             "suspension"
@@ -13519,7 +13657,7 @@
           ]
         },
         {
-          "id": "if-109",
+          "id": "if-107",
           "between": [
             "frame",
             "suspension"
@@ -13532,7 +13670,7 @@
           ]
         },
         {
-          "id": "if-110",
+          "id": "if-108",
           "between": [
             "frame",
             "suspension"
@@ -13545,7 +13683,7 @@
           ]
         },
         {
-          "id": "if-111",
+          "id": "if-109",
           "between": [
             "frame",
             "suspension"
@@ -13558,7 +13696,7 @@
           ]
         },
         {
-          "id": "if-112",
+          "id": "if-110",
           "between": [
             "frame",
             "suspension"
@@ -14147,12 +14285,12 @@
           "center_mm": [
             -1325.0,
             -300.0,
-            881.95
+            886.95
           ],
           "size_mm": [
             110.0,
             510.0,
-            947.5
+            937.5
           ]
         },
         {
@@ -14169,14 +14307,38 @@
         },
         {
           "center_mm": [
+            -1331.5,
+            -310.0,
+            421.6
+          ],
+          "size_mm": [
+            67.0,
+            90.0,
+            93.20000000000005
+          ]
+        },
+        {
+          "center_mm": [
+            -1331.5,
+            -90.0,
+            421.6
+          ],
+          "size_mm": [
+            67.0,
+            90.0,
+            93.20000000000005
+          ]
+        },
+        {
+          "center_mm": [
             -1325.0,
             300.0,
-            881.95
+            886.95
           ],
           "size_mm": [
             110.0,
             510.0,
-            947.5
+            937.5
           ]
         },
         {
@@ -14189,6 +14351,30 @@
             130.0,
             300.0,
             272.5
+          ]
+        },
+        {
+          "center_mm": [
+            -1331.5,
+            90.0,
+            421.6
+          ],
+          "size_mm": [
+            67.0,
+            90.0,
+            93.20000000000005
+          ]
+        },
+        {
+          "center_mm": [
+            -1331.5,
+            310.0,
+            421.6
+          ],
+          "size_mm": [
+            67.0,
+            90.0,
+            93.20000000000005
           ]
         },
         {
@@ -14655,32 +14841,6 @@
             -1045.0,
             150.0,
             497.40000000000003
-          ]
-        },
-        {
-          "id": "if-089",
-          "between": [
-            "body",
-            "occupant"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -1185.0,
-            -150.0,
-            656.7750000000001
-          ]
-        },
-        {
-          "id": "if-090",
-          "between": [
-            "body",
-            "occupant"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -1185.0,
-            150.0,
-            656.7750000000001
           ]
         }
       ],
@@ -15324,32 +15484,6 @@
             -1045.0,
             150.0,
             497.40000000000003
-          ]
-        },
-        {
-          "id": "if-089",
-          "between": [
-            "body",
-            "occupant"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -1185.0,
-            -150.0,
-            656.7750000000001
-          ]
-        },
-        {
-          "id": "if-090",
-          "between": [
-            "body",
-            "occupant"
-          ],
-          "via": "bolt",
-          "point_mm": [
-            -1185.0,
-            150.0,
-            656.7750000000001
           ]
         }
       ],

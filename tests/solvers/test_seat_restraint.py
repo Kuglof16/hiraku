@@ -74,7 +74,8 @@ class DefaultTest(unittest.TestCase):
             slo, shi = lo_hi(self.p[seat])
             blo, bhi = lo_hi(sb)
             self.assertAlmostEqual(bhi[0], slo[0], places=9)  # its front face is the seat back
-            self.assertAlmostEqual(blo[2], slo[2], places=9)  # down to the seat box's bottom, on its rear face
+            # down to a gap above the seat box's bottom (clear of the floor), on its rear face
+            self.assertAlmostEqual(blo[2], slo[2] + ladder_4w.SEATBACK_FLOOR_GAP_MM, places=9)
             self.assertAlmostEqual(bhi[2] - shi[2], big["shoulder_height"], places=9)
             hlo, hhi = lo_hi(hr)
             self.assertAlmostEqual(hhi[2] - shi[2], ladder_4w.VARIABLES["headrest_height"].default, places=9)

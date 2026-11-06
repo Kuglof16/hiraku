@@ -36,6 +36,7 @@ KIND_MODULE = {
 # A part is in the module of the variables that place it: the column's bracket and the bulkhead (and the dash members
 # below) move with steering_column_angle, steering_wheel_height and the column's place, so they are steering's
 ID_MODULE = (("toe_link_", "suspension"), ("stand_pedal", "steering"), ("bracket_column", "steering"),
+             ("bracket_seat_", "occupant"),  # under the seatbacks: they move with the seat's variables
              ("bulkhead", "steering"))
 
 MEMBER_MODULE = (("rail_", "frame"), ("cross_", "frame"), ("lower_", "frame"), ("tower_", "frame"), ("dash_", "steering"),
