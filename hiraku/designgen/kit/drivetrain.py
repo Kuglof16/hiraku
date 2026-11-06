@@ -44,7 +44,7 @@ CV_JOINT_KG = 0.8  # one constant velocity joint with its boot (assumption)
 REDUCER_SHARE = 0.4  # the reducer's share of the motor and reducer, without the shafts (assumption)
 REDUCER_LENGTH_MM = 160.0  # reducer case along x (assumption)
 REDUCER_BELOW_MM = 10.0  # the reducer's top this far below the cross member at the axle station (assumption)
-MOTOR_SIZE_MM = (250.0, 300.0, 220.0)  # motor case, x y z (the v1 motor box)
+MOTOR_SIZE_MM = (250.0, 300.0, 220.0)  # motor case, x y z (the v1 motor box; assumption, no source)
 # Turning inertia (assumptions): the rotor a solid cylinder of ROTOR_SHARE of the motor's mass and
 # radius ROTOR_RADIUS_MM; the reducer's output gear a disc of GEAR_SHARE of the reducer's mass and
 # radius GEAR_RADIUS_MM, turning with the wheels.

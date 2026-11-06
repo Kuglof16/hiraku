@@ -121,7 +121,7 @@ READ = """async ({ t, tab }) => {
   });
   const says = [...document.querySelectorAll("[data-say]")].filter(shown).map((e) => ({ agent: e.dataset.say, text: e.textContent, on: Number(e.style.opacity || 0) > 0 }));
   return { loaded: document.documentElement.dataset.agentPets ?? null, agents: window.hiraku.state().agentOrder, pets, says,
-           circles: [...document.querySelectorAll("#agents li .pet, #tiles .tile .pet")].filter(shown).length,
+           circles: [...document.querySelectorAll("#agents li:not(.agroup) .pet, #tiles .tile .pet")].filter(shown).length,
            names: [...document.querySelectorAll("#agents li")].map((li) => li.textContent) };
 }"""
 
@@ -154,11 +154,14 @@ class AgentPetsTest(unittest.TestCase):
         self.servers.append(server)
         return f"http://127.0.0.1:{server.server_address[1]}"
 
-    def open(self, base, query):
+    def open(self, base, query, bundles_open=True, motion="on"):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/?run={RUN}&pace=0&{query}", wait_until="domcontentloaded")
+        # (one row per agent: the bundles of the agents' list open, ?agents=open; the bundles have their own test)
+        # (?petmotion=on: the pets move as with a GPU, though this Chromium draws by SwiftShader; None: as detected)
+        pm = f"&petmotion={motion}" if motion else ""
+        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}{pm}&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -231,7 +234,7 @@ class AgentPetsTest(unittest.TestCase):
         # the judgement's line is the bubble of its domain's agent (the event's agent is system)
         grid = page.evaluate(READ, {"t": 12.2, "tab": "grid"})
         nvh = {s["agent"]: s["text"] for s in grid["says"] if s["on"]}
-        self.assertTrue(nvh["cae.nvh"].startswith("版 2 の判定は緑"), nvh)
+        self.assertTrue(nvh["cae.nvh"].startswith("v2 の判定は緑"), nvh)
         self.assertEqual(errors, [])
         page.close()
 
@@ -260,6 +263,47 @@ class AgentPetsTest(unittest.TestCase):
         self.assertEqual({p["agent"]: p["draws"] for p in still["pets"]}, {p["agent"]: p["draws"] for p in again["pets"]})
         self.assertEqual(errors_b, [])
         b.close()
+
+    def test_no_gpu_still_pictures(self):
+        """WebGL drawn by software (this Chromium's SwiftShader, as detected: no ?petmotion): each pet
+        is one still picture, drawn once and not again while the replay plays on, whatever its motion."""
+        self.need_pets()
+        page, errors = self.open(self.serve(), "tab=bench&t=0", motion=None)
+        got = page.evaluate("() => ({ still: document.documentElement.dataset.petsStill, name: window.hiraku.pets().rendererName })")
+        self.assertEqual(got["still"], "1", got)
+        self.assertRegex(got["name"], r"(?i)swiftshader", got)
+        # (a box is drawn again only when its size changes: the rows settle in the first frames)
+        page.evaluate(READ, {"t": 0.6, "tab": None})
+        first = page.evaluate(READ, {"t": 0.6, "tab": None})
+        self.assertTrue(first["pets"])
+        draws = {p["agent"]: p["draws"] for p in first["pets"]}
+        for t in (2.8, 5.3, 15.7, 1e6):  # waiting, mismatch, blocked, the end
+            later = page.evaluate(READ, {"t": t, "tab": None})
+            for p in later["pets"]:
+                self.assertEqual(p["draws"], draws[p["agent"]], (t, p["agent"]))  # not drawn again
+                self.assertEqual(p["look"], "idle", (t, p["agent"]))
+                self.assertGreater(p["ink"], 0, p["agent"])
+            self.assertEqual({p["agent"]: p["pixels"] for p in later["pets"]}, {p["agent"]: p["pixels"] for p in first["pets"]}, t)
+        # the state is still the record's (the row's words and data-pet-state), only the picture holds
+        self.assertEqual({p["agent"]: p["state"] for p in later["pets"]}["lead"], "idle")
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_which_renderer_is_software(self):
+        """agent_pets.js isSoftwareRenderer on the names drivers give (UNMASKED_RENDERER_WEBGL): software
+        ones (still pictures) and GPUs (moving pets, as before)."""
+        page, errors = self.open(self.serve(), "tab=bench&t=0", motion=None)
+        software = ["ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+                    "Google SwiftShader", "llvmpipe (LLVM 15.0.7, 256 bits)", "Mesa softpipe", "lavapipe",
+                    "ANGLE (Microsoft, Microsoft Basic Render Driver (0x0000008C) Direct3D11 vs_5_0 ps_5_0, D3D11)"]
+        gpu = ["ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+               "ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+               "Apple M2", "Mali-G78", "AMD Radeon RX 6600", "Adreno (TM) 740", ""]
+        got = page.evaluate("""async ([a, b]) => { const m = await import('/js/agent_pets.js');
+            return [a.map(m.isSoftwareRenderer), b.map(m.isSoftwareRenderer)]; }""", [software, gpu])
+        self.assertEqual(got, [[True] * len(software), [False] * len(gpu)])
+        self.assertEqual(errors, [])
+        page.close()
 
     def test_blocked_and_waiting_poses(self):
         """blocked (pet3d.js v9) flinches from the event's time (o.since: the pose time of the block)
@@ -347,6 +391,40 @@ class AgentPetsTest(unittest.TestCase):
         self.assertNotIn("手を止めた", got["say"])
         self.assertFalse(got["saying"])
         self.assertEqual((got["why"], got["shown"]), ("仕事を終えた", True))
+
+    def test_the_cae_roles_are_one_row_until_opened(self):
+        """The seven CAE agents are one row 「CAE 役 ×7」 (one designer, one lead: their own rows),
+        closed by default; its look follows the members (at work: the same class as a member's row at
+        work); pressed, it opens into the seven rows and closes again; the same t is the same list."""
+        base = self.serve()
+        rows = """() => [...document.querySelectorAll('#agents > li')].map((li) => ({
+            group: li.dataset.group ?? null, agent: li.dataset.agent ?? null, member: li.classList.contains('member'),
+            cls: ['active', 'alert', 'done'].filter((c) => li.classList.contains(c)),
+            text: li.querySelector('.ag-toggle')?.textContent ?? null, open: li.querySelector('.ag-toggle')?.getAttribute('aria-expanded') ?? null }))"""
+        for t in (0.25, 5.3, 1e6):
+            page, errors = self.open(base, f"tab=bench&t={t}", bundles_open=False)
+            closed = page.evaluate(rows)
+            text = page.inner_text("#agents")
+            self.assertEqual([r["agent"] or r["group"] for r in closed], ["lead", "designer", "packager", "cae"], t)
+            head = closed[3]
+            self.assertEqual((head["text"], head["open"]), ("▸CAE 役 ×7", "false"), t)
+            page.click("#agents [data-agent-group='cae']")
+            page.wait_for_selector("#agents li.member")
+            opened = page.evaluate(rows)
+            members = [r for r in opened if r["member"]]
+            self.assertEqual(sorted(r["agent"] for r in members), sorted(CAE), t)
+            self.assertEqual(opened[3]["open"], "true", t)
+            # the bundle's look: an alert first, else at work when one member is
+            want = ["alert"] if any("alert" in r["cls"] for r in members) else ["active"] if any("active" in r["cls"] for r in members) \
+                else ["done"] if all("done" in r["cls"] for r in members) else []
+            self.assertEqual(head["cls"], want, t)
+            page.click("#agents [data-agent-group='cae']")
+            page.wait_for_function("!document.querySelector('#agents li.member')")
+            again, errors2 = self.open(base, f"tab=bench&t={t}", bundles_open=False)
+            self.assertEqual((again.evaluate(rows), again.inner_text("#agents")), (closed, text), t)  # the same t: the same list
+            self.assertEqual(errors + errors2, [])
+            page.close()
+            again.close()
 
     def test_without_the_pets_file_circles_and_names(self):
         """No pet3d.js (404): the list is the circles and names as before, the tiles keep their circles."""

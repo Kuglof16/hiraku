@@ -29,6 +29,8 @@ import math
 
 import numpy as np
 
+# REFINE_RATIO, LIMIT_PCT, SINGULAR_ORDER, the 20 degrees and FLOOR_FACTOR: HIRAKU's choices, assumptions, no
+# source (CONVERGENCE_ASSUMPTION and ZZ_ASSUMPTION say so in the record)
 REFINE_RATIO = 2.0  # element size of one level over the next finer one
 LIMIT_PCT = 5.0  # largest change between the two finest levels accepted as converged
 SINGULAR_ORDER = 0.5  # values growing in size with an observed order at or below this (or diverging): singular

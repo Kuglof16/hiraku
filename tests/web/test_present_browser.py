@@ -1,4 +1,4 @@
-"""The present mode (?present=1, the 見せる / 作業台 switch) and the workbench's lighter labels.
+"""The present mode (?present=1, the 3D's corner button #expand-btn and Esc) and the workbench's lighter labels.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -134,25 +134,46 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertTrue(detail["shown"]["card-cmp"])
         page.click("#detail-btn")
         self.assertFalse(self.probe(page)["shown"]["log"])
-        page.click('#viewswitch [data-view="bench"]')
+        # the corner button of the 3D: back to the original size, then large again, then Esc
+        self.assertEqual(page.get_attribute("#expand-btn", "title"), "元の大きさに戻す (Esc)")
+        page.click("#expand-btn")
         back = self.probe(page)
         self.assertFalse(back["present"])
         for shown in ("log", "card-cmp", "hooks", "tabs", "toggles"):
             self.assertTrue(back["shown"][shown], shown)
         self.assertEqual(back["legendIn"], "viewport")
         self.assertNotIn("present=1", page.url)
-        page.click('#viewswitch [data-view="present"]')
+        self.assertEqual(page.get_attribute("#expand-btn", "title"), "大きく見る")
+        self.assertEqual(page.locator("#viewswitch [data-view]").count(), 0)  # no 見せる / 作業台 words
+        page.click("#expand-btn")
         again = self.probe(page)
         self.assert_present_counts(again)
         self.assertIn("present=1", page.url)
+        page.keyboard.press("Escape")
+        self.assertFalse(self.probe(page)["present"])
+        self.assertNotIn("present=1", page.url)
         self.assertEqual(errors, [])
         page.close()
+
+    def test_the_expand_button_sits_in_the_corner_and_not_in_the_film(self):
+        """The button is inside the 3D's top right, clear of the toggles; ?video=1 has none."""
+        page, errors = self.open("run=sample&pace=0&t=9")
+        got = page.evaluate("""() => { const r = (id) => document.getElementById(id).getBoundingClientRect();
+            const v = r("viewport"), b = r("expand-btn"), t = r("toggles");
+            return { inside: b.left >= v.left && b.right <= v.right && b.top >= v.top && b.bottom <= v.bottom,
+                     corner: v.right - b.right < 20 && b.top - v.top < 20, clear: t.right <= b.left || t.width === 0 }; }""")
+        self.assertEqual(got, {"inside": True, "corner": True, "clear": True})
+        page.close()
+        page, errors2 = self.open("run=sample&pace=0&t=9&video=1")
+        self.assertFalse(page.evaluate("document.getElementById('expand-btn').checkVisibility()"))
+        page.close()
+        self.assertEqual(errors + errors2, [])
 
     def test_four_scenes(self):
         shell, _, _ = shell_events()
         cases = [
             ("step", "run=sample&pace=0&t=0&present=1", sample_events(), ["反力", "基準を満たした"]),
-            ("shell", "run=sample&pace=0&t=0&present=1", shell, ["の最大", "補強の前 (版 1)", "補強の後 (版 2)", "ガセット"]),
+            ("shell", "run=sample&pace=0&t=0&present=1", shell, ["の最大", "補強の前 (v1)", "補強の後 (v2)", "ガセット"]),
             ("assembly", "run=sample&pace=0&t=0&present=1", assembly_events(focus_a7=True), ["干渉", "1 か所", "手順 3"]),
             ("grid", "run=sample&pace=0&t=0&present=1&tab=grid", domain_events(), ["判定が合格の分野", " / "]),
         ]

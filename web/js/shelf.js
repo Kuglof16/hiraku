@@ -223,8 +223,9 @@ export function mountShelf(el, api) {
     return h("li", { class: "sh-node", dataset: { branch: b.key } },
       h("button", { class: "sh-head", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); render(); } },
         h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), h("b", {}, b.label),
-        h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`),
-        h("span", { class: "sh-nok", title: "確かめが全部 OK のツールの数" }, `OK ${ok}`)),
+        // (the counts only once the shelf is built: before, only this run's tools are known)
+        shelf.ready ? h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`) : null,
+        shelf.ready ? h("span", { class: "sh-nok", title: "確かめが全部 OK のツールの数" }, `OK ${ok}`) : null),
       closed ? null : h("ul", {}, b.tools.map(row)));
   }
 
@@ -311,7 +312,8 @@ export function mountShelf(el, api) {
     fill(modeSeg, MODES.map(([k, label]) => h("button", { type: "button", class: ui.mode === k ? "on" : "", dataset: { mode: k }, onclick: () => { ui.mode = k; render(); } }, label)));
     fill(filterSeg, FILTERS.map(([k, label]) => h("button", { type: "button", class: ui.filter === k ? "on" : "", dataset: { filter: k }, onclick: () => { ui.filter = k; render(); } }, label)));
     const ok = tools.filter(allPassed).length;
-    sum.textContent = `${tools.length} ツール・OK ${ok}`;
+    // before the shelf is built only this run's tools are known: no count until then
+    sum.textContent = shelf.ready ? `${tools.length} ツール・OK ${ok}` : shelf.error ? "" : "棚を確かめています…";
     note.hidden = shelf.ready && !shelf.error && !shelf.failed;
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
     note.textContent = shelf.error ? `棚を読めませんでした: ${shelf.error}`

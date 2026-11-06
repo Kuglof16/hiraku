@@ -15,8 +15,8 @@ import numpy as np
 from ..k0_handcalc.units import STANDARD_GRAVITY
 from .powertrain import Powertrain
 
-BRAKE_DECEL = 1.5  # m/s^2, the driver's planned deceleration (assumption)
-COMFORT_ACCEL = 2.0  # m/s^2, the driver never asks for more (assumption)
+BRAKE_DECEL = 1.5  # m/s^2, the driver's planned deceleration (an assumption, HIRAKU's choice, no source)
+COMFORT_ACCEL = 2.0  # m/s^2, the driver never asks for more (an assumption, HIRAKU's choice, no source)
 
 
 @dataclass
@@ -27,7 +27,10 @@ class Segment:
 
 
 def forest_loop(grade_low: float, grade_high: float, v_low: float, v_high: float) -> list[Segment]:
-    """One 2 km lap (grades as rise/run, speeds in m/s)."""
+    """One 2 km lap (grades as rise/run, speeds in m/s).
+
+    The lap's layout (400 / 300 / 200 / 300 / 200 / 300 / 300 m, the middle speed the mean of the two) is
+    HIRAKU's choice, an assumption, no source; the grades and speeds come from the load case."""
     v_mid = (v_low + v_high) / 2.0
     return [
         Segment(400.0, 0.0, v_high),

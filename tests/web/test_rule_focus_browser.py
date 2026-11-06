@@ -120,6 +120,39 @@ class RuleFocusBrowserTest(unittest.TestCase):
         for _ in range(n):
             page.evaluate("() => new Promise((r) => requestAnimationFrame(() => r()))")
 
+    # A card's box, the same over this many frames in a row, counts as laid out.
+    STABLE_FRAMES = 5
+
+    def hover_until(self, page, selector, shown_js, tries=3):
+        """Hover a card once its box has stopped moving, until shown_js is true.
+
+        The intake screen can still be laying out when the card first appears. If the card moves
+        out from under the pointer after the hover, the browser sends mouseleave and the peek goes
+        away, so the wait for the peek never ends. So: wait for the box to keep still, hover, and
+        if the peek is not there, move off and hover again."""
+        for k in range(tries):
+            page.wait_for_function(
+                """([sel, n]) => {
+                  const el = document.querySelector(sel);
+                  if (!el) return false;
+                  const r = el.getBoundingClientRect();
+                  const key = [r.left, r.top, r.width, r.height].map((v) => Math.round(v)).join(",");
+                  const w = (window.__stableBox ??= {});
+                  if (w[sel]?.key === key) w[sel].n += 1; else w[sel] = { key, n: 0 };
+                  return w[sel].n >= n;
+                }""",
+                arg=[selector, self.STABLE_FRAMES],
+                polling="raf",
+            )
+            page.hover(selector)
+            try:
+                page.wait_for_function(shown_js, timeout=5000)
+                return
+            except Exception:
+                if k == tries - 1:
+                    raise
+                page.mouse.move(5, 5)
+
     def test_log_lines(self):
         page, errors = self.open("run=sample&pace=0&t=0")
         lines = page.evaluate("() => window.hiraku.state().log.filter((l) => l.kind.startsWith('hearing.')).map((l) => l.text)")
@@ -177,8 +210,7 @@ class RuleFocusBrowserTest(unittest.TestCase):
         page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A2'")
         card = f'#view-intake .in-rq[data-rule="{HIT_B["rule_id"]}"]'
         page.wait_for_selector(card)
-        page.hover(card)
-        page.wait_for_function("() => { const p = document.getElementById('rule-peek'); return p && !p.hidden; }")
+        self.hover_until(page, card, "() => { const p = document.getElementById('rule-peek'); return p && !p.hidden; }")
         self.frames(page)
         got = page.evaluate("""() => { const p = document.getElementById('rule-peek'); const r = p.getBoundingClientRect();
           const v = document.getElementById('view-intake').getBoundingClientRect();
@@ -196,8 +228,8 @@ class RuleFocusBrowserTest(unittest.TestCase):
         self.assertEqual(page.evaluate("() => window.hiraku.bench.litShown"), [])
         self.assertEqual(page.evaluate("() => window.hiraku.bench.litObjs.length"), 0)
         # the other hit: a part and a member
-        page.hover(f'#view-intake .in-rq[data-rule="{HIT_A["rule_id"]}"]')
-        page.wait_for_function("() => document.getElementById('rule-peek').dataset.lit === 'battery,cross1'")
+        self.hover_until(page, f'#view-intake .in-rq[data-rule="{HIT_A["rule_id"]}"]',
+                         "() => document.getElementById('rule-peek').dataset.lit === 'battery,cross1'")
         # on another tab the peek is not shown
         page.click('.tab[data-tab="bench"]')
         self.frames(page)

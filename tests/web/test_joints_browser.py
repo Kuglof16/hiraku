@@ -370,7 +370,8 @@ class JointsBrowserTest(unittest.TestCase):
         return page
 
     def bench(self, look="zu", on=True, run=JOINTS_RUN, size=(1280, 720)):
-        return self.open(f"?run={run}&tab=bench&pace=0&t=1e6&look={look}{'&on=joints' if on else ''}", size)
+        # the joints are on at first (app.js ui.toggles); on=False: ?off=joints
+        return self.open(f"?run={run}&tab=bench&pace=0&t=1e6&look={look}{'' if on else '&off=joints'}", size)
 
     def test_counts_match_the_design(self):
         want, rule = expected_counts(design())
@@ -664,8 +665,17 @@ class JointsBrowserTest(unittest.TestCase):
                 self.assertGreaterEqual(float(np.linalg.norm(lab(kc) - lab(mc))), COLOUR_APART, (k, kc, m, mc))
 
     def test_toggle_brings_them_in_and_out(self):
+        # on at first: the button lit, the marks and the legend there; ?on=joints (as before) the same
+        for query in ("", "&on=joints"):
+            page = self.open(f"?run={JOINTS_RUN}&tab=bench&pace=0&t=1e6&look=zu{query}")
+            got = page.evaluate(SUMMARY)
+            self.assertEqual(page.evaluate(BUTTON), "on", query)
+            self.assertTrue(got["on"] and got["group"], query)
+            self.assertIsNotNone(page.evaluate(LEGEND), query)
+            self.assertEqual(page.errors, [], query)
+            page.close()
         page = self.bench("zu", on=False)
-        self.assertEqual(page.evaluate(BUTTON), "")  # off at first
+        self.assertEqual(page.evaluate(BUTTON), "")  # ?off=joints: off at load
         got = page.evaluate(SUMMARY)
         self.assertFalse(got["on"])
         self.assertFalse(got["group"])
@@ -763,13 +773,25 @@ class JointsBrowserTest(unittest.TestCase):
         self.assertIn("節点 N1", text)  # a node: as before
 
     def test_assembly(self):
-        page = self.open(f"?run={ASM_RUN}&tab=A7&pace=0&t=1e6")
+        get = "() => window.hiraku.asm.view.joints.summary()"
+        frame = "() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))"
+        # ?off=joints: A7's switch off at load, no legend; pressed, on
+        page = self.open(f"?run={ASM_RUN}&tab=A7&pace=0&t=1e6&off=joints")
         page.wait_for_function("window.hiraku.asm && window.hiraku.asm.rec")
         btn = page.locator(".asm-3d > .asm-joints-btn")
         self.assertEqual(btn.get_attribute("class"), "asm-joints-btn")
+        self.assertFalse(page.evaluate(get)["on"])
+        self.assertFalse(page.locator(".asm-3d > .joint-legend").is_visible())
         btn.click()
-        page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
-        get = "() => window.hiraku.asm.view.joints.summary()"
+        page.evaluate(frame)
+        self.assertTrue(page.evaluate(get)["on"])
+        self.assertEqual(page.errors, [])
+        page.close()
+        # at first (as the workbench): on, without a press
+        page = self.open(f"?run={ASM_RUN}&tab=A7&pace=0&t=1e6")
+        page.wait_for_function("window.hiraku.asm && window.hiraku.asm.rec")
+        page.evaluate(frame)
+        self.assertEqual(page.locator(".asm-3d > .asm-joints-btn").get_attribute("class"), "asm-joints-btn on")
         got = page.evaluate(get)
         self.assertTrue(got["on"])
         self.assertTrue(page.locator(".asm-3d > .joint-legend").is_visible())
@@ -781,7 +803,6 @@ class JointsBrowserTest(unittest.TestCase):
         self.assertEqual(legend, got["counts"])
         # opened on the vehicle built: every mark shown
         self.assertTrue(all(m["shown"] for m in got["marks"]))
-        frame = "() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))"
 
         def at(u):
             page.evaluate(f"window.hiraku.asm.u = {u}")

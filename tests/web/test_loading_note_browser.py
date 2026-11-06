@@ -80,6 +80,29 @@ class LoadingNoteBrowserTest(unittest.TestCase):
         self.assertFalse(page.evaluate("() => document.getElementById('runlist').hidden"))
         self.assertEqual(errors, [])
 
+    def test_the_note_is_on_the_3d_only(self):
+        """While reading, the note is inside the 3D (#viewport): over the workbench it shows within the
+        3D's box; on another tab (④) it is not seen, and the tabs are never under it."""
+        held = """(() => { const real = window.fetch;
+          window.fetch = (u, o) => (String(u).includes("/events") ? new Promise(() => {}) : real(u, o)); })()"""
+        for tab, seen in (("bench", True), ("grid", False)):
+            with self.subTest(tab=tab):
+                page, errors = self.page()
+                page.add_init_script(held)
+                page.goto(f"{self.base}/?run={RUN}&tab={tab}", wait_until="domcontentloaded")
+                page.wait_for_selector("#loading-note", state="attached")
+                got = page.evaluate("""() => { const n = document.getElementById("loading-note");
+                  const r = n.getBoundingClientRect(), v = document.getElementById("viewport").getBoundingClientRect();
+                  const tabs = [...document.querySelectorAll(".tab")].map((b) => { const q = b.getBoundingClientRect();
+                    return document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2)?.closest(".tab") === b; });
+                  return { inView: n.parentElement.id, seen: n.checkVisibility(), within: r.left >= v.left && r.right <= v.right && r.top >= v.top && r.bottom <= v.bottom, tabs }; }""")
+                self.assertEqual(got["inView"], "viewport")
+                self.assertEqual(got["seen"], seen)
+                if seen:
+                    self.assertTrue(got["within"], got)
+                self.assertTrue(all(got["tabs"]), got)
+                self.assertEqual(errors, [])
+
     def test_the_note_goes_when_the_record_is_read(self):
         page, errors = self.page()
         page.goto(f"{self.base}/?run={RUN}&pace=0&t=9", wait_until="domcontentloaded")

@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
 
 from hiraku.designgen.ladder_4w import build  # noqa: E402
 
-CARGO_HEIGHT_MM = 1240.0
+CARGO_HEIGHT_MM = 1240.0  # a test value for those runs: an assumption, HIRAKU's choice, no source
 
 
 def main() -> None:

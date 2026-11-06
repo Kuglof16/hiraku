@@ -162,7 +162,8 @@ class RealLookBrowserTest(unittest.TestCase):
     def test_beam_contour_has_the_legend_colours(self):
         for look, quality in (("zu", None), ("real", None), ("real", "low")):
             q = f"&quality={quality}" if quality else ""
-            page, errors = self.open(f"run=sample&pace=0&t=9&look={look}{q}")
+            # off=joints: the members' colours, not the weld beads over them (the joints are on at first)
+            page, errors = self.open(f"run=sample&pace=0&t=9&look={look}{q}&off=joints")
             got = page.evaluate(PIXELS, False)
             self.assertEqual(errors, [], look)
             self.assertEqual(got["bands"], 10)
@@ -174,7 +175,7 @@ class RealLookBrowserTest(unittest.TestCase):
 
     def test_shell_contour_has_the_legend_colours(self):
         for look in ("zu", "real"):
-            page, errors = self.open(f"run={self.shell_run}&pace=0&t=1e6&look={look}")
+            page, errors = self.open(f"run={self.shell_run}&pace=0&t=1e6&look={look}&off=joints")
             page.evaluate("() => window.hiraku.seek(1e6)")
             got = page.evaluate(PIXELS, True)
             self.assertEqual(errors, [], look)

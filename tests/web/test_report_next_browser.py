@@ -106,7 +106,7 @@ class ReportNextBrowserTest(unittest.TestCase):
                 self.assertTrue(got["shown"], got)
                 self.assertTrue(got["inView"], got)
                 self.assertTrue(got["head"].startswith("次に変えるもの"), got)
-                self.assertIn("版 1 の報告から", got["head"])
+                self.assertIn("v1 の報告から", got["head"])
                 self.assertEqual([r["dom"] for r in got["rows"]], ["強度信頼性", "組み立て"])
                 self.assertEqual([r["change"] for r in got["rows"]], [n["change"] for n in NEXT])
                 # the change large, the reason small and shut under くわしく
@@ -116,6 +116,29 @@ class ReportNextBrowserTest(unittest.TestCase):
                 self.assertIn(NEXT[0]["reason"], got["rows"][0]["more"])
                 self.assertIn("決まり HU-02 への答え", got["rows"][1]["more"])
                 self.assertNotIn("HU-02", got["rows"][0]["more"])
+                page.close()
+
+    def test_design_numbers_by_their_names_paths_only_under_dev(self):
+        # the scripted run's next steps name the design's numbers by their paths (K5's): the screen
+        # says their names (labels.js designNumberName); the path only under ?dev=1
+        nxt = [{"domain": "powertrain", "change": "台本: variables.motor_peak_torque を大きくする", "reason": "坂で足りない (見本)"},
+               {"domain": "crash", "change": "台本: sections.rt40x80x4.5.dims_mm.t を小さくする", "reason": "余裕が大きい (見本)"},
+               {"domain": "nvh", "change": "台本: variables.no_such_thing を大きくする", "reason": "見本"}]
+        want = ["台本: モーターの最大トルク を大きくする", "台本: フレームの管の板厚 を小さくする", "台本: 設計の値 を大きくする"]
+        for dev in (False, True):
+            with self.subTest(dev=dev):
+                page, errors = self.open("run=sample&pace=0&t=0&tab=grid" + ("&dev=1" if dev else ""))
+                got = page.evaluate(PROBE, [events_with_report(nxt), 1e6])
+                self.assertEqual(errors, [])
+                changes = [r["change"] for r in got["rows"]]
+                if dev:
+                    self.assertEqual(changes, ["台本: モーターの最大トルク (variables.motor_peak_torque) を大きくする",
+                                               "台本: フレームの管の板厚 (sections.rt40x80x4.5.dims_mm.t) を小さくする",
+                                               "台本: 設計の値 (variables.no_such_thing) を大きくする"])
+                else:
+                    self.assertEqual(changes, want)
+                    for r in got["rows"]:
+                        self.assertNotRegex(r["change"] + r["more"], r"variables\.|sections\.|dims_mm")
                 page.close()
 
     def test_no_next_or_before_the_report_no_block(self):

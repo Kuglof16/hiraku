@@ -237,7 +237,9 @@ def _portal_rear() -> Formula:
                    "force-deflection polyline is E_in",
         inputs={**COMMON_INPUTS,
                 "f": {"unit": "1", "description": "load point's distance from the near (left) post over the span "
-                                                  "(R4: 1/6)", "min": 0, "max": 0.5},
+                                                  "(R4: 1/6, OECD Code 4 as the R4 load case gives it; checked "
+                                                  "2026-11-03, README, the table of values checked)",
+                 "min": 0, "max": 0.5},
                 "E_in": _ENERGY},
         outputs={
             "k": ("N/mm", "elastic stiffness at the load point along the vehicle", None),
