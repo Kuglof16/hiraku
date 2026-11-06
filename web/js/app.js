@@ -2068,7 +2068,9 @@ function startPlayback() {
 }
 function play() {
   if (params.has("t")) {
-    seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
+    // (A4 shown: ready once the shelf no longer changes by itself, so the frame is the same each time)
+    seekAndDraw(Number(params.get("t")) || 0).then(() => (shelf && !$("view-shelf").hidden ? shelf.settled() : null))
+      .then(() => readyResolve(player.playhead));
     return;
   }
   ui.frozen = false;
