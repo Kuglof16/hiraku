@@ -35,7 +35,7 @@
 import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
-import { applyEvent, chainFor, initialState, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
+import { applyEvent, chainFor, domainVerdicts, initialState, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
 import { SeriesChart } from "./chart.js";
 import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, frameIndex, onSharedScale, preferredField, sameField, variantName, variantOf } from "./fields.js";
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
@@ -47,7 +47,7 @@ import { DUMMY_NOTE_JA } from "./hybrid3.js"; // the workbench's くわしく un
 import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
-import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
+import { TileBoard, TILE_ORDER, headline, onlyTestsLine } from "./tiles.js";
 import { TileViews } from "./tile3d.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel, assemblyRecord } from "./assembly.js";
@@ -68,7 +68,7 @@ import { GripView } from "./grip_panel.js"; // grip: the tyres of a driving reco
 import { hasGrip } from "./grip_view.js"; // grip:
 import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
-import { loadViewerInfo, viewerButtonHtml, viewerRunId } from "./viewer_link.js"; // 「ビューアで見る」
+import { VIEWER_WORDS, loadViewerInfo, viewerButtonHtml, viewerProvisional, viewerRunId, viewerTarget, viewerUrl } from "./viewer_link.js"; // 「ビューアで見る」
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
@@ -181,9 +181,15 @@ const ui = {
   pinnedLc: null, // ③'s own pick (its test buttons); ④'s replay keeps its own (gridLc)
   // ④ 解析結果: the domain whose analyses replay inside the tab (a tile pressed, or ?domain=), its
   // own pick among the domain's tests, and where the replay was when it opened (closing goes back)
-  gridDomain: DOMAINS.includes(params.get("domain")) ? params.get("domain") : null,
+  // (the video only: elsewhere ④ is the run as it ended, and a tile opens the viewer, GRID_FIXED)
+  gridDomain: params.get("video") === "1" && DOMAINS.includes(params.get("domain")) ? params.get("domain") : null,
   gridLc: null,
   gridBack: null,
+  // ④ as the run ended (GRID_FIXED): the version picked in the head (null: the last), the analysis
+  // open in the viewer inside the tab ({ ana, field, url }), the line of an analysis with no viewer
+  gridVersion: null,
+  gridViewer: null,
+  gridNote: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
   toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true, grip: false }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis; grip: タイヤ (grip_panel.js)
@@ -525,11 +531,125 @@ let wholeMemo = { n: 0, last: null, state: initialState() };
 function wholeState() {
   const evs = player.events;
   const kept = wholeMemo.n <= evs.length && (wholeMemo.n === 0 || evs[wholeMemo.n - 1] === wholeMemo.last);
-  if (!kept) wholeMemo = { n: 0, last: null, state: initialState() };
+  if (!kept) wholeMemo = { n: 0, last: null, state: initialState(), gen: (wholeMemo.gen ?? 0) + 1 };
   for (let i = wholeMemo.n; i < evs.length; i++) applyEvent(wholeMemo.state, evs[i]);
   wholeMemo.n = evs.length;
   wholeMemo.last = evs.at(-1) ?? null;
   return wholeMemo.state;
+}
+
+// ---- ④ 解析結果 as the run ended (not the video) ------------------------------------------------
+// ④ is looked at once the run is done: it draws the whole record (wholeState), whatever the
+// replay's time, at the version picked in its head (the last by default). A tile, or a test's row in
+// it, opens that analysis in the viewer (viewer_link.js) inside the tab; an analysis the viewer has
+// no field for says its value and why in one line on its tile. The video (?video=1) keeps ④ on the
+// replay's clock and its domain replay, as filmed before.
+const GRID_FIXED = params.get("video") !== "1";
+let gridMemo = { w: null, n: -1, v: null, s: null };
+function gridState() {
+  const w = wholeState();
+  const v = ui.gridVersion != null && w.versions.includes(ui.gridVersion) ? ui.gridVersion : w.currentVersion;
+  if (v === w.currentVersion) return w;
+  if (gridMemo.w !== w || gridMemo.n !== wholeMemo.n || gridMemo.v !== v) gridMemo = { w, n: wholeMemo.n, v, s: { ...w, currentVersion: v } };
+  return gridMemo.s;
+}
+let gridDrawnKey = null;
+const gridKey = (gs) => `${wholeMemo.gen ?? 0}|${wholeMemo.n}|${gs.currentVersion}`;
+
+const anaOfVerdict = (s, x) => s.analyses[x.analysis_id ?? s.comparisons[x.comparison_id]?.analysis_id] ?? null;
+const lastInRecord = (s, list) => {
+  const at = new Map(s.order.analyses.map((id, i) => [id, i]));
+  return list.filter(Boolean).reduce((a, b) => (a && (at.get(a.analysis_id) ?? -1) > (at.get(b.analysis_id) ?? -1) ? a : b), null);
+};
+// The analysis a tile opens: the last one its verdicts were judged from, else the domain's last
+// analysis of the version (ok first), else of any version.
+function tileAnalysis(s, d) {
+  const v = s.currentVersion;
+  const judged = lastInRecord(s, domainVerdicts(s, d, v).map((x) => anaOfVerdict(s, x)));
+  if (judged) return judged;
+  const lcs = new Set((s.project?.load_cases ?? []).filter((c) => c.domain === d).map((c) => c.load_case_id));
+  const all = s.order.analyses.map((id) => s.analyses[id]).filter((a) => a && lcs.has(a.load_case_id));
+  const mine = all.filter((a) => a.design_version === v);
+  return mine.filter((a) => a.status === "ok").at(-1) ?? mine.at(-1) ?? all.at(-1) ?? null;
+}
+
+// The one line of an analysis the viewer cannot show: its verdict as recorded (the quantity, the
+// value, the limit, OK / NG), then why there is no viewer.
+function noViewerLine(s, ana, reason) {
+  const vs = Object.values(s.verdicts).filter((x) => anaOfVerdict(s, x)?.analysis_id === ana?.analysis_id);
+  const x = headline(vs);
+  const tid = (s.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id)?.test_id ?? ana?.load_case_id ?? "";
+  const value = x
+    ? `${x.test_id ?? x.load_case_id} ${quantityName(s.comparisons[x.comparison_id]?.quantity ?? x.quantity)} ${fmtQ(x.value)} ${opLabel(x.op)} ${fmtQ(x.limit)} ${x.pass === false ? "NG" : "OK"}`
+    : `${tid} 判定は記録に無い`;
+  return { value, why: `ビューアは無い: ${reason}` };
+}
+
+function openGridAnalysis(s, d, ana) {
+  const run = viewerRunId(s);
+  const t = viewerTarget(ana, run);
+  if (ana && t.field && run) {
+    ui.gridNote = null;
+    ui.gridViewer = { ana: ana.analysis_id, domain: d, field: t.field, url: viewerUrl(run, ana.analysis_id, t.field) };
+  } else {
+    ui.gridViewer = null;
+    ui.gridNote = { domain: d, ana: ana?.analysis_id ?? null, ...noViewerLine(s, ana, t.reason ?? VIEWER_WORDS.noField) };
+  }
+  showGridViewer(s);
+  showGridNote();
+}
+
+function closeGridViewer() {
+  ui.gridViewer = null;
+  showGridViewer(null);
+}
+
+// The viewer over ④'s list (an iframe of viewer/index.html), with 「← 解析結果の一覧へ」 (Esc too).
+function showGridViewer(s) {
+  let el = $("grid-viewer");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "grid-viewer";
+    el.className = "grid-viewer";
+    el.dataset.role = "grid-viewer";
+    el.innerHTML =
+      `<div class="gv-head"><button type="button" class="gv-back" data-act="grid-back">← 解析結果の一覧へ</button>` +
+      `<b class="gv-title"></b><span class="gv-sample"></span><span class="gv-esc">Esc でも戻る</span></div><iframe class="gv-frame" title="ビューア"></iframe>`;
+    $("view-grid").append(el);
+    // Esc pressed in the viewer (its own page, the same origin) goes back too
+    el.querySelector("iframe").addEventListener("load", (ev) => {
+      try {
+        ev.currentTarget.contentWindow.addEventListener("keydown", (k) => k.key === "Escape" && closeGridViewer());
+      } catch {
+        // (another origin: Esc on the page outside it still goes back)
+      }
+    });
+  }
+  const g = ui.gridViewer;
+  el.hidden = !g;
+  const frame = el.querySelector("iframe");
+  if (!g) {
+    if (frame.getAttribute("src")) frame.removeAttribute("src");
+    delete el.dataset.ana;
+    return;
+  }
+  const ana = s?.analyses?.[g.ana];
+  const tid = (s?.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id)?.test_id ?? ana?.load_case_id ?? g.ana;
+  el.querySelector(".gv-title").textContent = `${DOMAIN_JA[g.domain] ?? g.domain}・${tid}・${ana?.tool ?? ""} (${verLabel(ana?.design_version ?? "")})`;
+  el.querySelector(".gv-sample").textContent = viewerProvisional(viewerRunId(s)) ? VIEWER_WORDS.sample : "";
+  el.dataset.ana = g.ana;
+  el.dataset.field = g.field;
+  if (frame.getAttribute("src") !== g.url) frame.setAttribute("src", g.url);
+}
+
+// The line of an analysis with no viewer, on its tile (put back each time the tiles are drawn).
+function showGridNote() {
+  for (const el of $("tiles").querySelectorAll('[data-role="viewer-none"]')) el.remove();
+  const n = ui.gridNote;
+  if (!n) return;
+  const tile = $("tiles").querySelector(`.tile[data-domain="${n.domain}"]`) ?? $("tiles").querySelector(`.offchip[data-domain="${n.domain}"]`)?.parentElement;
+  if (!tile) return;
+  tile.insertAdjacentHTML("beforeend", `<div class="vnone" data-role="viewer-none" data-ana="${esc(n.ana ?? "")}"><b>${esc(n.value)}</b><span>${esc(n.why)}</span></div>`);
 }
 
 // The head over the 3D while a domain replays in ④: what it is, its time, and 格子に戻る.
@@ -2169,9 +2289,20 @@ function renderGrid(s) {
     tilePicTimer = setTimeout(step, TILE_PIC_WAIT_MS);
   }
   agentPets?.mount($("view-grid"), "grid");
+  // the fixed ④: a tile (or a chip of a domain not picked) with an analysis opens it in the viewer
+  // (pressed: openGridAnalysis), the version's boxes in the head pick the version shown
+  if (GRID_FIXED) {
+    for (const el of $("tiles").querySelectorAll(".tile[data-domain], .offchip[data-domain]")) {
+      const ana = tileAnalysis(s, el.dataset.domain);
+      el.classList.toggle("can-open", !!ana);
+      if (ana) el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (${ana.tool}) をビューアで見ます`;
+    }
+    for (const b of $("grid-head").querySelectorAll(".vbox[data-ver]")) b.classList.add("pick");
+    showGridNote();
+  }
   // a tile (or a chip of a domain not picked) whose domain has analysed something by now can
   // replay it in the tab (pressed: openDomain)
-  const spans = spansNow();
+  const spans = GRID_FIXED ? {} : spansNow();
   for (const el of $("tiles").querySelectorAll(".tile[data-domain], .offchip[data-domain]")) {
     const sp = spans[el.dataset.domain];
     const ok = !!sp && sp.t0 <= player.playhead + 1e-6;
@@ -2437,6 +2568,7 @@ onHeavy(() => {
   graphMemo = { ana: null, channels: null };
   contour = null;
   if (board) board.key = null;
+  gridDrawnKey = null;
   drawn.rev = -1;
 });
 
@@ -2472,13 +2604,16 @@ function drawNow() {
   const heatIn = tab === "bench" ? heat.inputs(s, chain.shown, s.designs[chain.pred?.design_version ?? s.currentVersion] ?? null, HEAT_FORCED) : null;
   const heatOn = !!heatIn && ui.toggles.heat;
   const over = runOver(); // (the top's words and the stop button change when the followed run ends)
-  if (s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present || over !== drawn.over || view !== drawn.view || (span?.domain ?? null) !== drawn.dom) {
+  // ④ as the run ended (GRID_FIXED): the whole record at the version picked, not the playhead's state
+  const gs = GRID_FIXED && view === "grid" ? gridState() : null;
+  if (!gs) gridDrawnKey = null;
+  if ((gs && gridKey(gs) !== gridDrawnKey) || s.rev !== drawn.rev || lcId !== drawn.lc || tab !== drawn.tab || togglesKey !== drawn.toggles || ui.present !== drawn.present || over !== drawn.over || view !== drawn.view || (span?.domain ?? null) !== drawn.dom) {
     // (④ replaying a domain: the top row keeps the whole run's version and status, and says in a line
     // which domain plays at which version; the video's frames as before)
     if (span && !VIDEO_LAYOUT) renderTop(wholeState(), { domain: span.domain, version: s.currentVersion });
-    else renderTop(s);
+    else renderTop(gs ? wholeState() : s);
     // (the chips ring ③'s load case on ③ only; on ④ the domain open there, else none)
-    renderChips(s, view === "bench" ? lcId : null, span?.domain);
+    renderChips(gs ?? s, view === "bench" ? lcId : null, span?.domain);
     // the side panels and the 3D only while the workbench shows (on ① ②, ④'s grid, the shelf and A7
     // they are hidden; showing the workbench again draws everything, the tab or view having changed)
     const benchShown = view === "bench" || ui.present;
@@ -2503,7 +2638,14 @@ function drawNow() {
     // the tab marked is the tab's own (④ stays marked while a domain replays in it)
     for (const b of document.querySelectorAll(".tab")) b.classList.toggle("on", b.dataset.tab === tab);
     markTabs(s);
-    if (view === "grid") renderGrid(s);
+    // (the fixed ④: drawn again only when the record or the version picked changed, so a replay
+    // going on behind it does not redraw the tiles, nor close a くわしく opened)
+    if (gs) {
+      if (gridKey(gs) !== gridDrawnKey) renderGrid(gs);
+      gridDrawnKey = gridKey(gs);
+    } else if (view === "grid") renderGrid(s);
+    document.body.classList.toggle("grid-fixed", !!gs);
+    if (!gs && ui.gridViewer) closeGridViewer();
     if (intakeTab) renderIntake(tab);
     if (tab === "A4") renderShelf();
 
@@ -2749,12 +2891,35 @@ $("tests").addEventListener("click", (ev) => {
 });
 // ④: a tile with analyses in the record replays its domain in the tab; 格子に戻る closes it
 $("tiles").addEventListener("click", (ev) => {
+  if (GRID_FIXED) {
+    // ④ as the run ended: a test's row opens its analysis, the tile (or a chip) the domain's
+    const s = gridState();
+    const row = ev.target.closest('[data-role="test-row"][data-ana], .num[data-ana]');
+    const tile = ev.target.closest(".tile[data-domain], .offchip[data-domain]");
+    if (!tile || ev.target.closest("a, summary, [data-role=viewer-none]")) return;
+    if (!row && ev.target.closest("details")) return;
+    const ana = row ? s.analyses[row.dataset.ana] : tileAnalysis(s, tile.dataset.domain);
+    if (ana) openGridAnalysis(s, tile.dataset.domain, ana);
+    return;
+  }
   const tile = ev.target.closest(".tile.can-replay[data-domain], .offchip.can-replay[data-domain]");
   if (!tile || ev.target.closest("a, details, summary")) return;
   openDomain(tile.dataset.domain);
 });
 $("view-bench").addEventListener("click", (ev) => {
   if (ev.target.closest("button[data-act=close-domain]")) closeDomain();
+});
+// the fixed ④: 「← 解析結果の一覧へ」 closes the viewer; a version's box in the head picks it
+$("view-grid").addEventListener("click", (ev) => {
+  if (ev.target.closest("button[data-act=grid-back]")) closeGridViewer();
+});
+$("grid-head").addEventListener("click", (ev) => {
+  const b = ev.target.closest(".vbox[data-ver]");
+  if (!b || !GRID_FIXED) return;
+  ui.gridVersion = Number(b.dataset.ver);
+  ui.gridNote = null;
+  closeGridViewer();
+  drawn.rev = -2;
 });
 $("legend").addEventListener("click", (ev) => {
   const b = ev.target.closest("button[data-field], button[data-variant], button[data-act], button[data-mode], button[data-metric]");
@@ -2815,6 +2980,14 @@ $("tabs").addEventListener("click", (ev) => {
 });
 $("expand-btn").addEventListener("click", () => setPresent(!ui.present));
 window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && (ui.gridViewer || ui.gridNote) && !$("view-grid").hidden) {
+    if (ui.gridViewer) closeGridViewer();
+    else {
+      ui.gridNote = null;
+      showGridNote();
+    }
+    return;
+  }
   if (ev.key === "Escape" && ui.present) {
     setPresent(false);
     return;
