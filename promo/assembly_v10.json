@@ -1,0 +1,180 @@
+{
+ "script": "${WORK}/script/narration_v10_timed.tsv",
+ "fps": 30,
+ "band": {
+  "top": 910,
+  "color": "#1b1a17"
+ },
+ "default_join": {
+  "kind": "dissolve",
+  "seconds": 0.25
+ },
+ "segments": [
+  {
+   "cuts": [
+    "N00"
+   ],
+   "video": {
+    "1080": "${WORK}/clips/n00_aroundname_1080p.mp4",
+    "2160": "${WORK}/clips/n00_2160p.mp4"
+   },
+   "join": {
+    "kind": "dissolve",
+    "seconds": 0.3
+   }
+  },
+  {
+   "cuts": [
+    "N06"
+   ],
+   "video": "${WORK}/clips/n06_app_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N07"
+   ],
+   "video": "${WORK}/clips/n07_app_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N08"
+   ],
+   "video": "${WORK}/clips/n08_v6_1080p.mp4",
+   "look": {
+    "grain": true,
+    "bloom": 0.25
+   },
+   "join": {
+    "kind": "dissolve",
+    "seconds": 0.4
+   }
+  },
+  {
+   "cuts": [
+    "N08b"
+   ],
+   "video": "${WORK}/clips/n08b_v6_1080p.mp4",
+   "look": {
+    "grain": true,
+    "bloom": 0.35
+   },
+   "join": {
+    "kind": "light",
+    "seconds": 0.4
+   }
+  },
+  {
+   "cuts": [
+    "N05"
+   ],
+   "video": "${WORK}/clips/n05_final_v7_1080p.mp4",
+   "look": {
+    "grain": true,
+    "bloom": 0.35
+   },
+   "join": {
+    "kind": "light",
+    "seconds": 0.5
+   }
+  },
+  {
+   "cuts": [
+    "N09"
+   ],
+   "video": "${WORK}/clips/real/n09_real_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N09b"
+   ],
+   "video": "${WORK}/clips/v10/n09b_placeholder_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N14"
+   ],
+   "video": "${WORK}/clips/real/n14_real_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N10"
+   ],
+   "video": "${WORK}/clips/n10_v6_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N11"
+   ],
+   "video": "${WORK}/clips/n11_app_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N12"
+   ],
+   "video": "${WORK}/clips/n12_app_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N12b"
+   ],
+   "video": "${WORK}/clips/v10/n12b_placeholder_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N13a"
+   ],
+   "video": "${WORK}/clips/n13a_160725_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N13b"
+   ],
+   "video": "${WORK}/clips/n13b_160725_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N13c"
+   ],
+   "video": "${WORK}/clips/n13c_160725_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N15"
+   ],
+   "video": "${WORK}/clips/n15_v5tag_1080p.mp4"
+  },
+  {
+   "cuts": [
+    "N17"
+   ],
+   "video": "${WORK}/clips/real/n17_next_1080p.mp4",
+   "join": {
+    "kind": "grain",
+    "seconds": 0.5
+   }
+  },
+  {
+   "cuts": [
+    "N17b"
+   ],
+   "video": "${WORK}/clips/n17b_1080p.mp4",
+   "look": {
+    "grain": true,
+    "bloom": 0.35
+   },
+   "join": {
+    "kind": "light",
+    "seconds": 0.6
+   }
+  },
+  {
+   "cuts": [
+    "N18"
+   ],
+   "video": {
+    "1080": "${WORK}/clips/n18_everywhere_1080p.mp4",
+    "2160": "${WORK}/clips/n18_2160p.mp4"
+   }
+  }
+ ]
+}
