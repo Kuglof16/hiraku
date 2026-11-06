@@ -119,13 +119,15 @@ def _moved_anything(sens: dict[str, list[Record]], path: str) -> bool:
 ZERO_SHARE = 1e-6  # an elasticity below this is no movement (a design number the tool does not read)
 
 # The design numbers a tool reads as they are (K5 can see them), per design type: on offroad-4w-v1 (2026-11-06),
-# rebuilding the design with each module variable 5 % up left the parts, members, nodes and sections the same for
-# these; motor_peak_power changes the motor's part too but the launch tool reads the number itself. The others
-# (wheelbase, track, rail_t, tower_b, ...) shape the parts and members, so a number changed without a rebuild moves
-# no result.
+# rebuilding the design with each module variable 5 % up left everything but the variables the same for these
+# (parts, members, nodes, sections, supports, ...); motor_peak_power changes the motor's part too but the launch
+# tool reads the number itself. The others shape the design: wheelbase, track, rail_t, tower_b, ... (parts and
+# members), and the spring rates (the supports, which the vehicle tools read: on run 075826 v5 the springs' K5
+# shares on S3, S4, S5 and R3 were all 0.0). rollbar_b changed nothing in the design and is left out (no tool seen
+# to read it).
 DIRECT_VARIABLES = {
-    "ladder_4w": ["motor_peak_power", "gear_ratio", "motor_max_speed", "front_spring_rate", "rear_spring_rate",
-                  "bumper_stroke", "crush_stiffness", "max_steer_angle"],
+    "ladder_4w": ["motor_peak_power", "gear_ratio", "motor_max_speed", "bumper_stroke", "crush_stiffness",
+                  "max_steer_angle"],
 }
 
 
