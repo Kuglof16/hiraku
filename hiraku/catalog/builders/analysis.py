@@ -719,7 +719,7 @@ H1_PLAN = {
          "assumptions": ["車輪は上から見て直径 x 幅の長方形", "車輪の中心を通る縦の軸で回る", "レールの面は前後に真っすぐ"],
          "inputs": {"w": "from.steer_w", "l": "from.steer_l", "c": "from.steer_c"}, "inputs_from": h1_calc},
         {"quantity": "free_steer_angle", "formula_id": "geometry.free_steer_angle_limited", "output": "theta",
-         "assumptions": ["ハンドルは max_steer_angle で止まる (組み立ての道具も、そこより先は回さない)"],
+         "assumptions": ["ハンドルは max_steer_angle で止まる (組み立てのツールも、そこより先は回さない)"],
          "inputs": {"theta_free": "pred.free_steer_angle_geometric", "theta_stop": "design.var.max_steer_angle"}},
     ],
 }
