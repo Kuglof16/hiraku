@@ -739,7 +739,12 @@ class DemoDesign(unittest.TestCase):
         # C1-40kmh is NG whichever way the edge goes: the tower posts come into the foot boxes
         self.assertLess(res["occupant_space_margin"]["value"], 0.0)
         self.assertNotIn("occupant_space_margin >= 0", edge)  # the band's note names no flip of C1-40kmh's verdict
-        self.assertTrue(any(a.startswith("run: the vehicle stopped") for a in rec["assumptions"]))
+        # the vehicle stops (about 70 ms), or, when the edge member breaks and a piece splits off, the piece still moves
+        # at the time limit (0.2 s): both are the edge's two sides
+        run_note = next(a for a in rec["assumptions"] if a.startswith("run: "))
+        self.assertTrue(run_note.startswith(("run: the vehicle stopped", "run: time limit")), run_note)
+        if run_note.startswith("run: time limit"):
+            self.assertIn("frame_split_time", res)
         k_t = d["variables"]["tyre_stiffness"]["value"]  # the design's own (150 N/mm on 1afeaedd, 60 with tyre60)
         self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and f"{k_t:g} N/mm, the design's "
                             "tyre_stiffness" in a for a in rec["assumptions"]))
