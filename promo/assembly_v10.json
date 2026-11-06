@@ -39,7 +39,7 @@
    "cuts": [
     "N08"
    ],
-   "video": "${WORK}/clips/n08_v6_1080p.mp4",
+   "video": "${WORK}/clips/n08_words_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.25
@@ -135,7 +135,7 @@
    "cuts": [
     "N13c"
    ],
-   "video": "${WORK}/clips/n13c_160725_1080p.mp4"
+   "video": "${WORK}/clips/n13c_real_1080p.mp4"
   },
   {
    "cuts": [
