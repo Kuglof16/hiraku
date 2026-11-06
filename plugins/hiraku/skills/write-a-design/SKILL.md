@@ -1,6 +1,6 @@
 ---
 name: write-a-design
-description: 合う設計の型が無い製品で、設計役 (designer) が設計そのもの (節点・部材・断面・材料・部品・支え) を書き、check_design で確かめ、write_design で版にし、通らなかった試験に答えて次の版を書く手順。型の版 1 を下書きにする方法と、check_design の断りの直し方
+description: 合う設計の型が無い製品で、設計役 (designer) が設計そのもの (節点・部材・断面・材料・部品・支え) を書き、check_design で確かめ、write_design で版にし、通らなかった試験に答えて次の版を edit_design (変える所だけ) で作る手順。型の版 1 を下書きにする方法と、check_design の断りの直し方
 ---
 
 # 設計そのものを書く
@@ -73,5 +73,26 @@ description: 合う設計の型が無い製品で、設計役 (designer) が設�
 
 1. `get_context(sections=["judgements", "records"], record_kinds=["verdict", "analysis"])` で、判定と解析の結果 (値・限界・場所 `where`) を読む。
 2. 通らなかった理由を記録の値で確かめ、変える所 (部材を足す・断面を太く・部品を動かす など) を決める。変える量は、記録にある不足の量を根拠に選ぶ。
-3. 今の版を `get_context` の `design` と `design_part` で読み、変える所だけを変えた設計の全体を `write_design` で出す。`reason` には、変えた所と理由、答える試験の記録 (ver-…) の ID を書く。ほかの試験を悪くしそうな変更 (重さ・重心・強さ) は、その心配も書く。
+3. 今の版を `get_context` の `design` と `design_part` で読み、id を確かめる。直すときは `edit_design(edits, reason)` で、変える所だけを `edits` に、当てる順に書く。全体を書き直すとき (形を大きく変えるとき) だけ `write_design` で設計の全体を出す。`reason` には、変えた所と理由、答える試験の記録 (ver-…) の ID を書く。ほかの試験を悪くしそうな変更 (重さ・重心・強さ) は、その心配も書く。
 4. 新しい版の番号と変えた所を、まとめ役に 1 行で返す。新しい版では全部の荷重条件がやり直しになる。回数は round_limit まで。
+
+### edit_design の edits
+
+`edits` は今の版の写しに上から順に当たる。1 つでも当てられないと、何番目の edit かを言って全部を断る (何も当てず、版も作らない)。当て終わると、`write_design` と同じに `check_design` で確かめて次の版にする (`written_by` と `based_on` は引き継ぐ)。
+
+| op | 欄 | すること |
+|---|---|---|
+| `add_node` | `id`・`xyz_mm`・(`joint`) | 節点を足す |
+| `move_node` | `id`・`xyz_mm` | 節点を動かす |
+| `remove_node` | `id` | 節点を外す。部材・部品の `carried_by`・`connects_to`・支えの `frame_node` が使っていれば断る |
+| `add_member` | `member` (契約の member の形) | 部材を足す。端の節点・断面・材料は先にあること |
+| `remove_member` | `id` | 部材を外す。部品の `connects_to` が使っていれば断る |
+| `split_member` | `id`・(`at_node`) | 部材を `at_node` で 2 本 (`<id>_a` と `<id>_b`) に分ける。`at_node` が無い節点なら部材の中点に作り、書かなければ `<id>_mid` を作る。ガセットや横の部材を途中につなぐ前に使う |
+| `set_section` | `key`・`section` (断面の record) | 断面を置き換えるか足す |
+| `assign_section` | `members`・`section` (断面のキー) | 部材に断面を当てる (一部の部材だけ太くする) |
+| `add_part` / `remove_part` | `part` / `id` | 部品を足す / 外す (部材の `part` や `connects_to` が使っていれば断る) |
+| `set_part` / `set_support` | `id`・`fields` | 欄を変える。値を `null` にするとその欄を外す。`id` は変えない |
+| `set_material` | `key`・`material` | 材料を置き換えるか足す |
+| `set_variable` | `name`・`value`・(`basis`) | 変数を置き換えるか足す |
+
+例: 下の棚の前の横の部材を中点で分けて、そこから上へ柱を 1 本足し、柱と分けた 2 本を太い断面にする: `split_member` (id: その部材) → `add_node` (柱の上の節点) → `set_section` (key: 太い断面) → `add_member` (柱) → `assign_section`。

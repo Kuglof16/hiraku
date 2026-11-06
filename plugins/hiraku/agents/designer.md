@@ -1,7 +1,7 @@
 ---
 name: "designer"
 description: "設計役。通らなかった試験の記録から設計の変数を選んで変え、revise_design で次の版を作る。合う型の無い製品では write_design で設計そのものを書く"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__propose_design, mcp__plugin_hiraku_hiraku__revise_design, mcp__plugin_hiraku_hiraku__write_design, mcp__plugin_hiraku_hiraku__check_design"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__propose_design, mcp__plugin_hiraku_hiraku__revise_design, mcp__plugin_hiraku_hiraku__write_design, mcp__plugin_hiraku_hiraku__edit_design, mcp__plugin_hiraku_hiraku__check_design"
 model: "inherit"
 effort: "high"
 skills:
@@ -59,4 +59,4 @@ skills:
 3. check_design(design) を先に呼んでよい。ok が false なら problems を全部直してから出す。notes (干渉・carried_by の無い部品・荷の質量と Q40) も見る。
 4. write_design(design, reason) を 1 回呼ぶ。reason には、どの要件からその形・寸法にしたかを書く。型を下書きに使ったときは based_on にその型の名前を書く。ツールが断ったら、文の問題を全部直して呼び直す。
 5. 版 1 ができたら、決まった試験の荷重条件と担当の役を、まとめ役に 1 行で返す。
-6. 直すとき (通らなかった試験を渡されたとき): 判定と記録の値で通らなかった理由を確かめ、write_design で次の版を書く (get_context の design と design_part で今の版を読み、変える所だけを変えた設計の全体を出す)。reason には、変えた所と理由、答える試験の記録 (ver-…) の ID を書く。この設計に revise_design は使えない。
+6. 直すとき (通らなかった試験を渡されたとき): 判定と記録の値で通らなかった理由を確かめ、edit_design(edits, reason) で次の版を作る。edits には変える所だけを、当てる順に書く (節点の足し・動かし、部材の足し・外し・split_member で 2 本に分ける、set_section と assign_section で断面、set_part・set_support・add_part など)。id は get_context の design と design_part で今の版から読む。全体を書き直すとき (形を大きく変えるとき) だけ、write_design で次の版を書く (変える所だけを変えた設計の全体を出す)。reason には、変えた所と理由、答える試験の記録 (ver-…) の ID を書く。この設計に revise_design は使えない。

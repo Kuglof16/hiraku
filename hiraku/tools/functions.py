@@ -1579,7 +1579,7 @@ def revise_design(ctx: RunContext, args: dict[str, Any], agent: str | None = Non
     v = ctx.version
     if v and ctx.store.design().get("written_by"):
         raise ToolError("この設計は Claude が書いた設計 (written_by) なので、revise_design では直しません (変数から組み直すと、"
-                        "書いた所が消えます)。次の版は write_design で書いてください")
+                        "書いた所が消えます)。次の版は edit_design (変える所だけ) か write_design (全体) で書いてください")
     _round_and_cost_left(ctx)
     design = ctx.store.design()
     choices = dict(args.get("choices") or {})
@@ -1892,15 +1892,26 @@ def write_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     design["written_by"] = "claude"  # contract ac46bf22: revise_design refuses it, and its kind is never guessed
     if based_on:
         design["based_on"] = based_on
+    first_note = (f"{', '.join(said)} はツールが付ける (archetype は型から作った設計の印、written_by と based_on は "
+                  "write_design が付ける) ので、書かれた値は外しました") if said else None
+    return _written_version(ctx, design, agent, "write_design", based_on, first_note)
+
+
+def _written_version(ctx: RunContext, design: Record, agent: str, tool: str, based_on: str | None = None,
+                     first_note: str | None = None) -> Record:
+    """write_design's and edit_design's way from a written design (with its version fields, written_by and
+    based_on set) to a version: check_design must pass (every problem said at once, nothing written); version 1
+    goes as propose_design's (first_version), a later version as revise_design's (design.created, the load cases
+    built again, pending tiles). The answer has the check's numbers and notes (first_note first)."""
+    v = ctx.version
     check = design_check(ctx, design)
     if check["problems"]:
         listed = " / ".join(f"({i}) {p}" for i, p in enumerate(check["problems"], 1))
         raise ToolError(f"この設計は版 {v + 1} にできません。check_design の問題が {len(check['problems'])} 件あります: "
-                        f"{listed}。全部を直して write_design を呼び直してください")
+                        f"{listed}。全部を直して {tool} を呼び直してください")
     notes = list(check["notes"])
-    if said:
-        notes.insert(0, f"{', '.join(said)} はツールが付ける (archetype は型から作った設計の印、written_by と based_on は "
-                        "write_design が付ける) ので、書かれた値は外しました")
+    if first_note:
+        notes.insert(0, first_note)
     if not v:
         load_cases = first_version(ctx, design, requirements_now(ctx), agent)
         out: Record = {"design_version": 1, "parent_version": None, "change_reason": design["change_reason"],
@@ -1919,6 +1930,294 @@ def write_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     out["check"] = {**{k: check[k] for k in ("counts", "mass_kg", "cargo_mass_kg", "frame_mass_kg", "Q40_kg",
                                               "occupants", "interferences") if k in check}, "notes": notes}
     return out
+
+
+# ---------------------------------------------------------------------------- edit_design
+# The fields each op of tool_input.edit_design reads: (required, optional). A field the op does not read is
+# refused: it is most likely meant for another op.
+EDIT_OPS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "add_node": (("id", "xyz_mm"), ("joint",)),
+    "move_node": (("id", "xyz_mm"), ()),
+    "remove_node": (("id",), ()),
+    "add_member": (("member",), ()),
+    "remove_member": (("id",), ()),
+    "split_member": (("id",), ("at_node",)),
+    "set_section": (("key", "section"), ()),
+    "assign_section": (("members", "section"), ()),
+    "add_part": (("part",), ()),
+    "set_part": (("id", "fields"), ()),
+    "remove_part": (("id",), ()),
+    "set_support": (("id", "fields"), ()),
+    "set_material": (("key", "material"), ()),
+    "set_variable": (("name", "value"), ("basis",)),
+}
+SPLIT_SUFFIXES = ("_a", "_b")  # split_member: the two new members are <id>_a (node_a side) and <id>_b
+SPLIT_MID_SUFFIX = "_mid"      # split_member without at_node: the new middle node is <id>_mid
+SPLIT_OFF_LINE_MM = 1.0        # an at_node farther than this from the member's line is said in the edit's line
+                               # (this tool's choice, no external source)
+
+
+def _xyz(p: list) -> str:
+    return "(" + ", ".join(f"{float(x):g}" for x in p) + ")"
+
+
+def _by_id(design: Record, key: str, id_: Any) -> Record | None:
+    return next((x for x in _items(design, key) if x.get("id") == id_), None)
+
+
+def _connects_to_users(design: Record, target: Any, skip: Any = None) -> list[str]:
+    """The parts whose connects_to names target (a part, member, node or support id)."""
+    return [f"部品 {p.get('id')} の connects_to" for p in _items(design, "parts") if p.get("id") != skip
+            and any(isinstance(c, dict) and c.get("to") == target for c in p.get("connects_to") or [])]
+
+
+def _node_users(design: Record, nid: str) -> list[str]:
+    users = [f"部材 {m.get('id')}" for m in _items(design, "members") if nid in (m.get("node_a"), m.get("node_b"))]
+    users += [f"部品 {p.get('id')} の carried_by" for p in _items(design, "parts") if nid in (p.get("carried_by") or [])]
+    users += _connects_to_users(design, nid)
+    users += [f"支え {s.get('id')} の frame_node" for s in _items(design, "supports") if s.get("frame_node") == nid]
+    return users
+
+
+def _missing_refs(design: Record, kind: str, item: Record) -> list[str]:
+    """The names an added or changed member, part or support uses that are not in the design (as _references)."""
+    nodes = {n.get("id") for n in _items(design, "nodes")}
+    sections, materials = design.get("sections") or {}, design.get("materials") or {}
+    out = []
+    if kind == "member":
+        out += [f"{end} {item.get(end)!r} は節点 (nodes) にありません" for end in ("node_a", "node_b")
+                if item.get(end) not in nodes]
+        if item.get("section") not in sections:
+            out.append(f"断面 {item.get('section')!r} は sections にありません ({_listed(sections) or 'なし'})")
+        if item.get("material") not in materials:
+            out.append(f"材料 {item.get('material')!r} は materials にありません ({_listed(materials) or 'なし'})")
+    elif kind == "part":
+        out += [f"carried_by {n!r} は節点 (nodes) にありません" for n in item.get("carried_by") or [] if n not in nodes]
+        if item.get("material") is not None and item.get("material") not in materials:
+            out.append(f"材料 {item.get('material')!r} は materials にありません")
+        known = ({x.get("id") for k in ("parts", "members", "supports") for x in _items(design, k)} | nodes
+                 | {item.get("id")})
+        hardpoint_of = {s.get("id") for s in _items(design, "supports")}
+        for c in item.get("connects_to") or []:
+            to = c.get("to") if isinstance(c, dict) else None
+            if to in known or (isinstance(to, str) and "." in to and to.split(".", 1)[0] in hardpoint_of):
+                continue
+            out.append(f"connects_to の to {to!r} は、部品・部材・節点・支えのどれにもありません")
+    elif kind == "support" and item.get("frame_node") is not None and item.get("frame_node") not in nodes:
+        out.append(f"frame_node {item.get('frame_node')!r} は節点 (nodes) にありません")
+    return out
+
+
+def _off_line_mm(p: list, a: list, b: list) -> float:
+    """The distance (mm) from p to the segment a-b."""
+    d = [y - x for x, y in zip(a, b)]
+    dd = sum(x * x for x in d)
+    t = 0.0 if dd == 0 else max(0.0, min(1.0, sum((q - x) * y for q, x, y in zip(p, a, d)) / dd))
+    return sum((q - (x + t * y)) ** 2 for q, x, y in zip(p, a, d)) ** 0.5
+
+
+def _apply_edit(design: Record, i: int, e: Record) -> str:
+    """Apply edit number i (from 1) to design in place and say what it did in a short sentence; a ToolError names
+    the edit when it cannot be applied (a missing or unused field, an id or key that is not there or is there
+    already, a reference it would break, a record that does not fit the contract)."""
+    op = e["op"]
+    label = " ".join([op, *(e[k] for k in ("id", "key", "name") if isinstance(e.get(k), str))])
+
+    def no(why: str):
+        raise ToolError(f"{i} 番目の edit ({label}) は当てられません: {why}。edits は 1 つも当てておらず、版は作っていません。"
+                        "直して edit_design を呼び直してください")
+
+    def fits(kind: str, record: Record) -> None:
+        errs = contract.errors(kind, record)
+        if errs:
+            no(f"契約の {kind} の形に合いません: " + "; ".join(errs[:LISTED_MAX]))
+
+    def refs(kind: str, record: Record) -> None:
+        missing = _missing_refs(design, kind, record)
+        if missing:
+            no("; ".join(missing))
+
+    need, may = EDIT_OPS[op]
+    lacking = [f for f in need if f not in e]
+    if lacking:
+        no(f"{op} には {', '.join(lacking)} が要ります")
+    unused = [f for f in e if f != "op" and f not in need and f not in may]
+    if unused:
+        no(f"{op} は {', '.join(unused)} を使いません (ほかの op の欄です)")
+    nodes, members, parts = (design.setdefault(k, []) for k in ("nodes", "members", "parts"))
+    sections, materials = design.setdefault("sections", {}), design.setdefault("materials", {})
+
+    if op == "add_node":
+        if _by_id(design, "nodes", e["id"]):
+            no(f"節点 {e['id']} はもうあります (動かすときは move_node)")
+        node = {"id": e["id"], "xyz_mm": list(e["xyz_mm"]), **({"joint": e["joint"]} if "joint" in e else {})}
+        fits("node", node)
+        nodes.append(node)
+        return f"add_node {e['id']} {_xyz(node['xyz_mm'])} mm"
+    if op in ("move_node", "remove_node"):
+        node = _by_id(design, "nodes", e["id"])
+        if node is None:
+            no(f"節点 {e['id']} はありません")
+        if op == "move_node":
+            old = node["xyz_mm"]
+            node["xyz_mm"] = list(e["xyz_mm"])
+            return f"move_node {e['id']} {_xyz(old)} → {_xyz(node['xyz_mm'])} mm"
+        users = _node_users(design, e["id"])
+        if users:
+            no(f"節点 {e['id']} は {_listed(users)} が使っているので、消すと参照が切れます。先にそれらを外すか変える edit を"
+               "前に置いてください")
+        nodes.remove(node)
+        return f"remove_node {e['id']}"
+    if op == "add_member":
+        m = copy.deepcopy(e["member"])
+        fits("member", m)
+        if _by_id(design, "members", m["id"]):
+            no(f"部材 {m['id']} はもうあります")
+        refs("member", m)
+        members.append(m)
+        return f"add_member {m['id']} ({m['node_a']}–{m['node_b']}, 断面 {m['section']}, 材料 {m['material']})"
+    if op in ("remove_member", "split_member"):
+        m = _by_id(design, "members", e["id"])
+        if m is None:
+            no(f"部材 {e['id']} はありません")
+        users = _connects_to_users(design, e["id"])
+        if users:
+            what = "消す" if op == "remove_member" else "2 本に分ける"
+            no(f"部材 {e['id']} は {_listed(users)} が使っているので、{what}と参照が切れます。先にその connects_to を変える "
+               "edit (set_part) を前に置いてください")
+        if op == "remove_member":
+            members.remove(m)
+            return f"remove_member {e['id']}"
+        new_ids = [e["id"] + s for s in SPLIT_SUFFIXES]
+        taken = [n for n in new_ids if _by_id(design, "members", n)]
+        if taken:
+            no(f"分けた部材の id {_listed(taken)} はもうあります")
+        a, b = m["node_a"], m["node_b"]
+        at = e.get("at_node") or e["id"] + SPLIT_MID_SUFFIX
+        if at in (a, b):
+            no(f"at_node {at} は部材の端の節点です。部材の途中の節点を選ぶか、まだ無い名前にして中点に作らせてください")
+        pa, pb = (_by_id(design, "nodes", n) for n in (a, b))
+        if pa is None or pb is None:
+            no(f"部材 {e['id']} の端の節点 ({a}, {b}) が nodes にありません")
+        node, said = _by_id(design, "nodes", at), ""
+        if node is None:
+            mid = [(x + y) / 2 for x, y in zip(pa["xyz_mm"], pb["xyz_mm"])]
+            nodes.append({"id": at, "xyz_mm": mid})
+            said = f"。節点 {at} を部材の中点 {_xyz(mid)} mm に作りました"
+        else:
+            off = _off_line_mm(node["xyz_mm"], pa["xyz_mm"], pb["xyz_mm"])
+            if off > SPLIT_OFF_LINE_MM:
+                said = f"。節点 {at} は部材 {e['id']} の線から {off:.4g} mm 離れているので、2 本は折れ線になります"
+        halves = [{**m, "id": new_ids[0], "node_b": at}, {**m, "id": new_ids[1], "node_a": at}]
+        if isinstance(m.get("name"), str):
+            halves[0]["name"], halves[1]["name"] = f"{m['name']} ({a} の側)", f"{m['name']} ({b} の側)"
+        k = members.index(m)
+        members[k:k + 1] = halves
+        return f"split_member {e['id']} → {new_ids[0]} ({a}–{at}), {new_ids[1]} ({at}–{b}){said}"
+    if op == "set_section":
+        if not isinstance(e["section"], dict):
+            no("set_section の section は断面の record (shape・dims_mm) です。部材に断面のキーを当てるのは assign_section")
+        fits("section", e["section"])
+        how = "置き換え" if e["key"] in sections else "追加"
+        sections[e["key"]] = copy.deepcopy(e["section"])
+        return f"set_section {e['key']} ({how})"
+    if op == "assign_section":
+        key = e["section"]
+        if not isinstance(key, str):
+            no("assign_section の section は断面のキー (sections の名前) です。断面の record を置くのは set_section")
+        if key not in sections:
+            no(f"断面 {key!r} は sections にありません ({_listed(sections) or 'なし'})。先に set_section で足してください")
+        if not e["members"]:
+            no("members に、断面を当てる部材の id を書いてください")
+        unknown = [mid for mid in e["members"] if _by_id(design, "members", mid) is None]
+        if unknown:
+            no(f"部材 {_listed(unknown)} はありません")
+        for mid in e["members"]:
+            _by_id(design, "members", mid)["section"] = key
+        return f"assign_section {key} → {_listed(e['members'])}"
+    if op == "add_part":
+        p = copy.deepcopy(e["part"])
+        fits("part", p)
+        if _by_id(design, "parts", p["id"]):
+            no(f"部品 {p['id']} はもうあります (変えるときは set_part)")
+        refs("part", p)
+        parts.append(p)
+        return f"add_part {p['id']} ({p.get('kind')}, {p.get('mass_kg')} kg)"
+    if op in ("set_part", "set_support"):
+        key, kind, what = ("parts", "part", "部品") if op == "set_part" else ("supports", "support", "支え")
+        old = _by_id(design, key, e["id"])
+        if old is None:
+            no(f"{what} {e['id']} はありません")
+        if "id" in e["fields"]:
+            no("id は fields で変えません (ほかの所の参照が切れます)")
+        new = {k: v for k, v in {**old, **copy.deepcopy(e["fields"])}.items() if v is not None}
+        fits(kind, new)
+        refs(kind, new)
+        items = design[key]
+        items[items.index(old)] = new
+        dropped = [k for k, v in e["fields"].items() if v is None]
+        return (f"{op} {e['id']}: {_listed(k for k in e['fields'] if k not in dropped) or '-'}"
+                + (f" (外した欄: {_listed(dropped)})" if dropped else ""))
+    if op == "remove_part":
+        p = _by_id(design, "parts", e["id"])
+        if p is None:
+            no(f"部品 {e['id']} はありません")
+        users = [f"部材 {m.get('id')} の part" for m in members if m.get("part") == e["id"]]
+        users += _connects_to_users(design, e["id"], skip=e["id"])
+        if users:
+            no(f"部品 {e['id']} は {_listed(users)} が使っているので、消すと参照が切れます。先にそれらを変える edit を前に"
+               "置いてください")
+        parts.remove(p)
+        return f"remove_part {e['id']}"
+    if op == "set_material":
+        fits("material", e["material"])
+        how = "置き換え" if e["key"] in materials else "追加"
+        materials[e["key"]] = copy.deepcopy(e["material"])
+        return f"set_material {e['key']} ({how})"
+    # set_variable
+    var = {"value": e["value"]["value"], "unit": e["value"]["unit"], **({"basis": e["basis"]} if "basis" in e else {})}
+    fits("design_variable", var)
+    variables = design.setdefault("variables", {})
+    how = "置き換え" if e["name"] in variables else "追加"
+    variables[e["name"]] = var
+    return f"set_variable {e['name']} = {var['value']:g} {var['unit']} ({how})"
+
+
+def edit_design(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> Record:
+    """The designer makes the next version of a design Claude wrote (written_by "claude") as edits applied in order
+    to a copy of the current version (docs/contract.md Claude が書く設計, tool_input.edit_design), instead of
+    writing the whole design again. An edit that names something not there, or would break a reference, is
+    refused by its number before anything is written. Then the same way as write_design's later versions
+    (_written_version): check_design must pass, round_limit and the cost limit, design.created, the load cases
+    built again, pending tiles; written_by and based_on are kept. Only the designer; not on a design from an
+    archetype (revise_design) nor on one with modules."""
+    _check_input("edit_design", args)
+    agent = agent or "designer"
+    if agent != "designer":
+        raise ToolError("設計を直せるのは設計役 (designer) だけです。まとめ役は設計役に、何をなぜ直すかを伝えて頼んでください")
+    if rules.design_modules(ctx) is not None:
+        raise ToolError("この設計はモジュールに分かれているので、edit_design は使いません。モジュールの設計役が revise_design "
+                        "(module つき) で提案し、パッケージ役が build_version で次の版を作ります")
+    reason = args["reason"].strip()
+    if not reason:
+        raise ToolError("reason に、変えた所と理由、答える試験の記録の ID を書いてください")
+    v = ctx.version
+    if not v:
+        raise ToolError("まだ設計の版がありません。edit_design は今の版を直すツールです。版 1 は write_design (合う型があれば "
+                        "propose_design) で作ってください")
+    current = ctx.store.design()
+    if current.get("written_by") != "claude":
+        raise ToolError(f"今の版 {v} は型から作った設計 (archetype {current.get('archetype')!r}) なので、edit_design では直し"
+                        "ません。型の設計は revise_design で変数を変えて直します (型で作れない形にするときは、write_design で"
+                        "設計の全体を書きます)")
+    _round_and_cost_left(ctx)
+    design = copy.deepcopy(current)
+    lines = [_apply_edit(design, i, e) for i, e in enumerate(args["edits"], 1)]
+    design = _as_version(ctx, {k: x for k, x in design.items() if k not in WRITE_FIELDS}, reason)
+    out = _written_version(ctx, design, agent, "edit_design")
+    return {"design_version": out["design_version"], "parent_version": out["parent_version"],
+            "change_reason": out["change_reason"], "edits_applied": lines, "redo": out["redo"],
+            "revisions_left": out["revisions_left"], "check": out["check"]}
 
 
 def _proposal_line(c: Record) -> Record:
@@ -2451,6 +2750,7 @@ FUNCTIONS = {
     "build_version": build_version,
     "propose_design": propose_design,
     "write_design": write_design,
+    "edit_design": edit_design,
     "check_design": check_design,
     "make_tool": make_tool,
     "check_tool": check_tool,
@@ -2475,7 +2775,8 @@ def rule_check(ctx: RunContext, args: dict[str, Any] | None = None, agent: str |
 # find_tradeoffs reads the sensitivities hiraku.tools.tradeoff_data collects).
 INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs")
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design, and for a design
-# Claude writes write_design and check_design), tool making (with its template), the report and the intake tools.
+# Claude writes write_design, edit_design and check_design), tool making (with its template), the report and the
+# intake tools.
 RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, *contract.MCP_TOOLS_PACKAGER, "propose_design",
-             "write_design", "check_design", "make_tool", "check_tool", "get_tool_template", "write_report", *INTAKE_TOOLS,
-             "write_load_case")  # hiraku.tools.load_case_writer (mcp.py registers it)
+             "write_design", "edit_design", "check_design", "make_tool", "check_tool", "get_tool_template", "write_report",
+             *INTAKE_TOOLS, "write_load_case")  # write_load_case: hiraku.tools.load_case_writer (mcp.py registers it)
