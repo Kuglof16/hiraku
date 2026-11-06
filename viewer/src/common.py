@@ -20,6 +20,7 @@ Every field's object has these keys (the page's shared parts read them):
     inputs [{label, value, source}]             (the case's inputs and where they come from)
     notes [text]                                (the longer explanations; the page keeps them in a closed panel)
     ledger {...}                                (parts_ledger: how each part enters the calculation)
+    tyre {label, value, source} | null          (tyre_row: the design's tyre_stiffness, for the tools that use it)
 plus the field's own keys (see each script).
 
 Packed arrays: {"dtype": "f32", "shape": [...], "b64": base64(gzip(little-endian bytes))}; "i16" (with "scale":
@@ -325,7 +326,43 @@ def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, d
         "assumptions": list(record.get("assumptions", []) or []),
         "inputs": [],
         "notes": [],
+        "tyre": tyre_row(design, record.get("tool", "")),
     }
+
+
+# The tools whose calculation uses design.variables.tyre_stiffness (hiraku/solvers: k2_vehicle.model and its shelf
+# tools, crash_beam's wheel at the wall, shelf.fatigue's quarter cars). frame_shell's step hit uses it through the
+# K2 run that gave its mount forces. K1 modal and frame_static stand on the suspension springs (k1_frame.model
+# restrain_on_wheels), K3 and K4 have no tyre.
+TYRE_TOOLS = {"crash_beam": "K2 の壁との接触 (タイヤの半径の向き)", "tilt": "K2 の車両モデル", "braking": "K2 の車両モデル",
+              "lane_change": "K2 の車両モデル", "offroad_roll": "K2 の車両モデル", "launch": "K2 の車両モデル",
+              "step_climb_dynamic": "K2 の車両モデル", "crosswind": "K2 の車両モデル", "turning": "K2 の車両モデル",
+              "fatigue": "疲労の 1/4 車 (路面からの輪の力)", "frame_shell": "取付の力を出した K2 の段差の計算"}
+NUM_JA = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def tyre_basis_ja(basis: str | None) -> str:
+    """The design's basis for tyre_stiffness in short Japanese ('3 つの資料からの判断 45〜90 の中ほど')."""
+    if not basis:
+        return "設計の値 (出典なし)"
+    n = re.search(r"from (\w+) sources", basis)
+    rng = re.search(r"range ([\d.]+) to ([\d.]+) N/mm", basis)
+    k = NUM_JA.get(n.group(1), n.group(1)) if n else None
+    out = (f"{k} つの資料からの判断" if k else "設計の出典 (basis) による")
+    if rng:
+        out += f" {float(rng.group(1)):g}〜{float(rng.group(2)):g} の中ほど"
+    return out if n or rng else "設計の出典 (basis) あり: " + basis[:60]
+
+
+def tyre_row(design: Record, tool: str) -> Record | None:
+    """The input row of the tyre stiffness, read from the record's design, for a tool that uses it; else None."""
+    if tool not in TYRE_TOOLS:
+        return None
+    v = (design.get("variables") or {}).get("tyre_stiffness")
+    if not isinstance(v, dict) or v.get("value") is None:
+        return {"label": "タイヤの剛さ", "value": "設計にない (ツールの既定)", "source": TYRE_TOOLS[tool]}
+    return {"label": "タイヤの剛さ", "value": f"{float(v['value']):g} {v.get('unit', 'N/mm')}",
+            "source": f"設計の tyre_stiffness: {tyre_basis_ja(v.get('basis'))}。{TYRE_TOOLS[tool]}で使う"}
 
 
 def case_inputs(lc: Record | None, load_case_id: str) -> list[Record]:

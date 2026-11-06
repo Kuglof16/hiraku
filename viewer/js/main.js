@@ -8,7 +8,7 @@ window.HV = window.HV || {};
 (function (HV) {
   'use strict';
   HV.fields = HV.fields || {};
-  HV.FIELD_ORDER = ['strength', 'fatigue', 'nvh', 'crash', 'handling', 'powertrain', 'aero', 'thermal', 'assembly'];
+  HV.FIELD_ORDER = ['strength', 'fatigue', 'rops', 'nvh', 'crash', 'handling', 'powertrain', 'aero', 'thermal', 'assembly'];
   const $ = id => document.getElementById(id);
 
   // A quantity's (or series channel's) Japanese name, as HIRAKU's screen names it (js/names.js: web/js/labels.js
@@ -222,7 +222,8 @@ window.HV = window.HV || {};
       $('source').textContent = `v${s.design_version ?? '?'}  ${s.run}  ${s.analysis_id}  ${s.load_case_id}`;
       $('source').title = `${s.run} ${s.version} ${s.analysis_id} | ${s.tool} ${s.load_case_id}`;
       // inputs; the longer explanations in closed panels
-      const rows = (D.inputs || []).map(r => `<tr><td><b>${HV.esc(r.label)}</b></td><td>${HV.valueHtml(r.value)}</td><td class="muted">${HV.esc(r.source || '')}</td></tr>`).join('');
+      // the tyre stiffness (src/common.py tyre_row: the record's design, for the tools that use it) after the case's inputs
+      const rows = (D.inputs || []).concat(D.tyre && !(D.inputs || []).some(r => r.label === D.tyre.label) ? [D.tyre] : []).map(r => `<tr><td><b>${HV.esc(r.label)}</b></td><td>${HV.valueHtml(r.value)}</td><td class="muted">${HV.esc(r.source || '')}</td></tr>`).join('');
       const res = (D.results || []).map(r => `<tr><td>${HV.qhtml(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where || '')}</td></tr>`).join('');
       const asm = (D.assumptions || []).map(a => `<li>${HV.esc(a)}</li>`).join('');
       $('inputs').innerHTML = `<div class="h">入力 (条件と出どころ)</div><table>${rows}</table>` +

@@ -21,6 +21,7 @@ HV.FIELD_DOMAIN = {
  "handling": "handling",
  "nvh": "nvh",
  "powertrain": "powertrain",
+ "rops": "strength",
  "strength": "strength",
  "thermal": "thermal"
 };
@@ -32,6 +33,7 @@ HV.FIELD_LABEL = {
  "handling": "操安",
  "nvh": "音振",
  "powertrain": "動力",
+ "rops": "強度信頼性 (ROPS)",
  "strength": "強度信頼性 (静的強度)",
  "thermal": "熱"
 };

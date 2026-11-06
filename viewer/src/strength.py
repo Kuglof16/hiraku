@@ -225,6 +225,9 @@ def build_shell(args) -> dict:
         {"label": "frames", "value": f"{len(ts)} instants of the step hit ({ts[0]:.3f} to {ts[-1]:.3f} s)",
          "source": f"saved frames of a frame_shell run with the mount forces of {meta.get('lc', 'K2')} (K2 {meta.get('k2_status', '')})"},
         {"label": "design", "value": lp.get("design", ""), "source": "load_paths.json design (the version's design with these variables)"},
+        *([{"label": "タイヤの剛さ", "value": f"{float(_tyre.group(1)):g} N/mm",
+            "source": "取付の力を出した K2 の段差の計算で使った値 (load_paths.json の設計の文。版の設計ファイルの値ではない)"}]
+          if (_tyre := re.search(r"tyre\s+([\d.]+)\s*N/mm", lp.get("design", ""))) else []),
         {"label": "parts layer", "value": "the version's design regenerated with " + (", ".join(f"{k} {v['value']:g}" for k, v in changes.items()) or "no change")
          + (f"; not applied (this generator has no such variable): {', '.join(unknown)}" if unknown else ""),
          "source": "hiraku.designgen.regenerate; the mesh itself is the saved one"},

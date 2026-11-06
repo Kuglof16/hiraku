@@ -20,7 +20,7 @@ FX = Path(__file__).resolve().parent / "fixtures"
 VIEWER = ROOT / "viewer"
 SCRIPTS = {"nvh": nvh, "crash": crash, "assembly": assembly}
 COMMON_KEYS = {"field", "title", "source", "frame", "parts", "scene", "vectors", "results", "assumptions",
-               "inputs", "notes", "ledger"}
+               "inputs", "notes", "ledger", "tyre"}
 LEDGER_CATS = set(common.CATEGORIES)
 
 
@@ -620,6 +620,30 @@ def js_fmt(v):
     return f"{v:.4g}"
 
 
+class TyreRowTest(unittest.TestCase):
+    """The tyre stiffness as an input row, from the record's design, for the tools that use it (common.tyre_row)."""
+
+    def test_row_from_the_design(self):
+        basis = ("60 N/mm, range 45 to 90 N/mm: HIRAKU's judgement from three sources on ATV-class tyres (not "
+                 "measurements of this vehicle's tyre)")
+        d = {"variables": {"tyre_stiffness": {"value": 60.0, "unit": "N/mm", "basis": basis}}}
+        r = common.tyre_row(d, "crash_beam")
+        self.assertEqual((r["label"], r["value"]), ("タイヤの剛さ", "60 N/mm"))
+        self.assertIn("3 つの資料からの判断 45〜90 の中ほど", r["source"])
+        self.assertIn("150 N/mm", common.tyre_row({"variables": {"tyre_stiffness": {"value": 150.0, "unit": "N/mm"}}}, "tilt")["value"])
+        self.assertIn("出典なし", common.tyre_row({"variables": {"tyre_stiffness": {"value": 150.0, "unit": "N/mm"}}}, "tilt")["source"])
+        for tool in ("modal", "modal_shell", "frame_static", "thermal", "drive_energy", "assembly", "crash"):
+            self.assertIsNone(common.tyre_row(d, tool), tool)   # K1 on the suspension springs, K3, K4, crash A: no tyre
+
+    def test_crash_record_design(self):
+        o = make("crash", "crash_contact")
+        p = common.find_analysis(FX / "crash_contact", "crash_beam")[0]
+        vdir = p if p.is_dir() else p.parents[1]
+        t = (common.read_json(vdir / "design.json").get("variables") or {}).get("tyre_stiffness")
+        self.assertEqual(o["tyre"]["value"], f"{t['value']:g} N/mm" if t else "設計にない (ツールの既定)")
+        self.assertIsNone(make("crash")["tyre"])   # crash A (1-D) has no tyre
+
+
 class NamesTest(unittest.TestCase):
     """The page's names from where HIRAKU's screen takes them (viewer/src/names.py -> viewer/js/names.js)."""
 
@@ -727,7 +751,7 @@ class PageTest(unittest.TestCase):
         self.assertIn("乗員の空間の余裕 (occupant_space_margin)", out["inputs"])
         self.assertIn("(frame_split_fraction)", out["codes"])
         # the field buttons: the contract's domain names, in the page's order
-        self.assertEqual(out["switch"], [names.field_labels()[f] for f in ["strength", "fatigue", "nvh", "crash", "handling",
+        self.assertEqual(out["switch"], [names.field_labels()[f] for f in ["strength", "fatigue", "rops", "nvh", "crash", "handling",
                                                                             "powertrain", "aero", "thermal", "assembly"]])
 
     def test_nvh_parts_move_with_the_frame(self):

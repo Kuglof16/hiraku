@@ -24,9 +24,11 @@ OUT = VIEWER / "js" / "names.js"
 # the page's field -> the contract's domain (fatigue is the strength domain's R3; the page tells the two apart by
 # their labels: FIELD_LABEL below)
 FIELD_DOMAIN = {"strength": "strength", "fatigue": "strength", "nvh": "nvh", "crash": "crash", "handling": "handling",
-                "powertrain": "powertrain", "aero": "aero", "thermal": "thermal", "assembly": "assembly"}
-# the two strength fields: the domain's name with the catalog's R1 / R1s title (静的強度), and 疲労 (R3 疲労・耐久)
-FIELD_SUFFIX = {"strength": " (静的強度)"}
+                "powertrain": "powertrain", "aero": "aero", "thermal": "thermal", "assembly": "assembly",
+                "rops": "strength"}
+# the strength fields: the domain's name with the catalog's R1 / R1s title (静的強度), 疲労 (R3 疲労・耐久), and R4
+# (the roll bar push-over, the contract has no domain of its own for it: the strength domain's tool rops_pushover)
+FIELD_SUFFIX = {"strength": " (静的強度)", "rops": " (ROPS)"}
 FIELD_OWN = {"fatigue": "疲労"}
 
 VIEWER_QUANTITY_JA = {   # not in web/js/labels.js QUANTITY_JA (the viewer's own words)
