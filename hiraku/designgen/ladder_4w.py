@@ -67,7 +67,7 @@ from typing import Any
 import numpy as np
 
 from hiraku.designgen.kit import arms, body, drivetrain, mounts, safety, steering, systems
-from hiraku.designgen.kit.frame import Frame
+from hiraku.designgen.kit.frame import Frame, FrameError
 from hiraku.designgen.kit.package import Item, Layout, bottom_at, front_at, left_at, rear_at, right_at, top_at
 from hiraku.designgen.kit.running_gear import Suspension, corner_name, four_wheels
 from hiraku.designgen.kit.sections import rect_tube, round_tube
@@ -242,6 +242,19 @@ VARIABLES: dict[str, Var] = {
                       f"{GUSSET_LEG_MM:g} mm, 1.5 x the cross member width, an assumption)"),
     "gusset_thickness": Var("mm", 2.3, 1.6, 4.5, "gusset plate thickness (used when gusset_leg > 0); the default (the "
                             "tube wall) is an assumption"),
+    "gusset_ends": Var("1", 0.0, 0.0, 1.0, "1: gussets (gusset_leg, gusset_thickness) also at the frame's two end "
+                       "corners, where a rail ends on its end cross member (an L joint: the inside corner only); 0: "
+                       "the T joints only. Written into design.variables only when it is 1"),
+    "tower_brace_b": Var("mm", 0.0, 0.0, 60.0, "0: no tower braces; else the square tube width of a diagonal brace at "
+                         "each rear tower post (LB, RB): from the post (tower_brace_at of its height) down and inboard "
+                         "to the rear axle's cross member (tower_brace_y), the tower's material. Written into "
+                         "design.variables (with tower_brace_t, _at, _y) only when one of them differs from its default"),
+    "tower_brace_t": Var("mm", 2.3, 1.6, 4.5, "tower brace tube wall (used when tower_brace_b > 0)"),
+    "tower_brace_at": Var("1", 0.5, 0.2, 0.8, "the tower brace's upper end on the rear post at this fraction of the post's "
+                          "length from the rail"),
+    "tower_brace_y": Var("mm", 0.0, 0.0, 400.0, "the tower brace's lower end on the rear axle's cross member this far "
+                         "inboard of the rail's inner wall; 0: at the gusset's leg tip (gusset_leg, or GUSSET_LEG_MM "
+                         "without gussets) plus half the brace's width"),
     "cross_members_through": Var("1", 0.0, 0.0, 1.0, "1: the cross members pass through a hole in the rail's inner "
                                  "wall to its outer wall and are welded to both (needs cross_h - cross_t < rail_h - "
                                  "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
@@ -266,12 +279,15 @@ VARIABLES: dict[str, Var] = {
     "rollbar_b": Var("mm", 40.0, 25.0, 80.0, "square tube width (rollbar_square = 1)"),
     "rollbar_t": Var("mm", 2.3, 1.6, 4.5, "roll bar tube wall"),
 }
-SWITCHES = ("cross_members_through", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
+SWITCHES = ("cross_members_through", "gusset_ends", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
 ROLLBAR_VARS = ("rollbar", "rollbar_height", "rollbar_width", "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b",
                 "rollbar_t")
 ROLLBAR_MATERIALS = {0.0: "stkm13a", 1.0: "stkr400"}  # by rollbar_square (assumption)
 # Optional variables, written into design.variables only when one of their group differs from its default.
-OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
+OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "gusset_ends": ("gusset_ends",),
+            "cross_members_through": ("cross_members_through",),
+            "tower_brace_b": ("tower_brace_b", "tower_brace_t", "tower_brace_at", "tower_brace_y")}
+TOWER_BRACE_MIN_MM = 20.0  # the smallest tower brace tube (HIRAKU's choice)
 LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
@@ -339,6 +355,9 @@ def _values(given: dict | None) -> dict[str, float]:
             raise DesignGenError(f"{name} is a switch: 0 or 1, got {val:g}")
         if name == "gusset_leg" and 0.0 < val < GUSSET_LEG_MIN_MM:
             raise DesignGenError(f"gusset_leg is 0 (no gussets) or {GUSSET_LEG_MIN_MM:g} to {var.hi:g} mm, got {val:g}")
+        if name == "tower_brace_b" and 0.0 < val < TOWER_BRACE_MIN_MM:
+            raise DesignGenError(f"tower_brace_b is 0 (no tower braces) or {TOWER_BRACE_MIN_MM:g} to {var.hi:g} mm, "
+                                 f"got {val:g}")
         if name in PLATE_T_VARS and val not in PLATE_KG_M2:
             raise DesignGenError(f"{name} is a standard sheet thickness: one of "
                                  f"{', '.join(f'{t:g}' for t in PLATE_KG_M2)} mm, got {val:g}")
@@ -1194,21 +1213,29 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
             p["carried_by"] = [n for n in cb if n not in ("LA", "RA")] or cb
         else:
             p["carried_by"] = [feet_nodes[n[0]] if n in ("LA", "RA") else n for n in cb]
+    if v["tower_brace_b"] > 0:
+        if 2.0 * v["tower_brace_t"] >= v["tower_brace_b"]:
+            raise DesignGenError(f"tower_brace_t ({v['tower_brace_t']:g} mm) must be less than half of tower_brace_b "
+                                 f"({v['tower_brace_b']:g} mm)")
+        brace = frame.section(*rect_tube(v["tower_brace_b"], v["tower_brace_b"], v["tower_brace_t"]))
+        build_tower_braces(frame, v, rail_y, brace)
     # joint reinforcement last, so that a design's other parts come first as in the design without it
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
         others = [p for p in lay.parts if p["kind"] not in GUSSET_NEIGHBOURS]  # the gussets keep out of these
-        for st in tee:
+        # gusset_ends: also the front and rear end corners (L joints: the rail ends on its end cross member)
+        ends = [list(stations)[0], list(stations)[-1]] if v.get("gusset_ends", 0.0) == 1 else []
+        for st in tee + ends:
             for side in "LR":
-                lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho,
-                                               avoid=others))
+                lay.parts.extend(frame.gussets(f"{side}{st}", cross_piece(frame, st, f"{side}{st}"), v["gusset_leg"],
+                                               v["gusset_thickness"], rho, avoid=others))
     if v["cross_members_through"] == 1:
         if v["cross_h"] - v["cross_t"] >= v["rail_h"] - v["rail_t"]:
             raise DesignGenError("cross_members_through = 1 needs cross members lower than the rails "
                                  "(cross_h - cross_t < rail_h - rail_t), else their walls would lie in the rails' walls")
         for st in tee:
             for side in "LR":
-                lay.parts.append(frame.through_part(f"{side}{st}", f"cross_{st}", rho))
+                lay.parts.append(frame.through_part(f"{side}{st}", cross_piece(frame, st, f"{side}{st}"), rho))
     foot = cross
     if any(v[k] for k in ZERO_OR_AT_LEAST):
         fb, fh, ft = (v[f"rollbar_foot_{k}"] or v[f"cross_{k}"] for k in ("b", "h", "t"))
@@ -1274,6 +1301,7 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     _check_tubes_through(design)
+    _check_post_footprints(design)
     if v["gusset_leg"] > 0:
         _check_gussets_meshable(design)
     from .kit import joints
@@ -1361,6 +1389,125 @@ def _check_tubes_through(design: Record) -> None:
                     " give one of them another section, or move one so they meet at separate nodes")
             raise DesignGenError(f"tubes ({names}) pass straight through each other at node {node!r}: the shell mesh "
                                  f"needs one of them to end there;{hint}")
+
+
+POST_FOOTPRINT_SPARE_MM = 1.0  # a post standing on a rail leaves at least this much of the rail's top face on each
+# side of its footprint (design department's decision, room for the fillet weld's toe: assumption, not sized)
+STAY_PREFIXES = ("rops_stay_",)  # braces that end on a rail but are not posts: rail_post_footprints leaves them out
+
+
+def rail_post_footprints(design: Record) -> list[Record]:
+    """The footprint across the rail (y) of every post that stands on a rail: a member with one end at a node where
+    a rail piece (a member rail_* along x) ends, rising from there at least as steeply as 45 degrees (members named
+    STAY_PREFIXES left out). The footprint is the post's section (K1's section axes, k1_shell.mesh.k1_axes; a round
+    tube's circle) cut by the plane of the rail piece's top face, with the post's lean. One record per post and rail
+    piece at its foot: {"member", "node", "rail", "rail_y", "rail_b", "y_min", "y_max", "spare_mm", "need_rail_b"}."""
+    from hiraku.solvers.k1_shell.mesh import k1_axes
+
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    secs = design["sections"]
+
+    def d_of(m: Record, start: str) -> np.ndarray:
+        end = m["node_b"] if m["node_a"] == start else m["node_a"]
+        return xyz[end] - xyz[start]
+
+    rails: dict[str, list[Record]] = {}
+    for m in design["members"]:
+        d = xyz[m["node_b"]] - xyz[m["node_a"]]
+        if m["id"].startswith("rail_") and abs(d[1]) <= 1e-9 and abs(d[2]) <= 1e-9:
+            for k in ("node_a", "node_b"):
+                rails.setdefault(m[k], []).append(m)
+    out = []
+    for m in design["members"]:
+        if m["id"].startswith("rail_") or m["id"].startswith(STAY_PREFIXES):
+            continue
+        for k in ("node_a", "node_b"):
+            node = m[k]
+            if node not in rails:
+                continue
+            d = d_of(m, node)
+            if d[2] <= 0.0 or d[2] < max(abs(d[0]), abs(d[1])):
+                continue
+            e = d / float(np.linalg.norm(d))
+            sec = secs[m["section"]]
+            dims = sec["dims_mm"]
+            base = xyz[node]
+            for r in rails[node]:
+                rd = secs[r["section"]]["dims_mm"]
+                z_face = float(base[2]) + float(rd["h"]) / 2.0
+                c = base + (z_face - float(base[2])) / float(e[2]) * e  # the post's axis at the top face
+                if sec.get("shape") == "round_tube":
+                    half = float(dims["d"]) / 2.0 * math.hypot(1.0, float(e[1] / e[2]))
+                    ys = [float(c[1]) - half, float(c[1]) + half]
+                else:
+                    ey, ez = k1_axes(e)
+                    ys = []
+                    for u in (-1.0, 1.0):
+                        for w in (-1.0, 1.0):
+                            p = c + u * float(dims["h"]) / 2.0 * ey + w * float(dims["b"]) / 2.0 * ez
+                            ys.append(float((p + (z_face - float(p[2])) / float(e[2]) * e)[1]))
+                y0, b = float(base[1]), float(rd["b"])
+                lo, hi = min(ys), max(ys)
+                out.append({"member": m["id"], "node": node, "rail": r["id"], "rail_y": y0, "rail_b": b,
+                            "y_min": lo, "y_max": hi, "spare_mm": min(lo - (y0 - b / 2.0), (y0 + b / 2.0) - hi),
+                            "need_rail_b": 2.0 * (max(hi - y0, y0 - lo) + POST_FOOTPRINT_SPARE_MM)})
+    return out
+
+
+def _check_post_footprints(design: Record) -> None:
+    """Every post standing on a rail (rail_post_footprints) leaves POST_FOOTPRINT_SPARE_MM of the rail's top face on
+    each side of its footprint; else DesignGenError naming the post, how far it reaches and the rail_b it needs."""
+    for f in rail_post_footprints(design):
+        if f["spare_mm"] < POST_FOOTPRINT_SPARE_MM - 1e-6:
+            how = (f"reaches {-f['spare_mm']:.1f} mm past the rail's side" if f["spare_mm"] < 0.0 else
+                   f"leaves only {f['spare_mm']:.1f} mm of the top face on one side")
+            raise DesignGenError(
+                f"post {f['member']} on rail {f['rail']} (node {f['node']}): its footprint on the rail's top face, y "
+                f"{f['y_min']:.1f} to {f['y_max']:.1f} mm on a rail {f['rail_b']:g} mm wide centred at y "
+                f"{f['rail_y']:.1f} mm, {how}; at least {POST_FOOTPRINT_SPARE_MM:g} mm each side needs rail_b of at "
+                f"least {f['need_rail_b']:.1f} mm, or a narrower post")
+
+
+def cross_piece(frame: Frame, station: str, node: str) -> str:
+    """The id of the station's cross member piece that ends at `node`: cross_<station>, or after build_tower_braces
+    split it, cross_<station>_L / cross_<station>_R at the left / right rail."""
+    for m in frame.members:
+        if (m["id"] == f"cross_{station}" or m["id"].startswith(f"cross_{station}_")) and node in (m["node_a"], m["node_b"]):
+            return m["id"]
+    raise DesignGenError(f"no cross member of station {station} ends at node {node}")
+
+
+def build_tower_braces(frame: Frame, v: dict, rail_y: float, section: str) -> list[str]:
+    """The tower braces (tower_brace_b > 0): at each rear tower post (tower_post_<side>B) a straight member
+    tower_brace_<side>B of `section` from the rear axle's cross member up to the post. The post is split at
+    tower_brace_at of its length from the rail (node <side>BV; pieces tower_post_<side>B and tower_post_<side>B_up);
+    cross_B at tower_brace_y inboard of the rail's inner wall (0: the gusset's leg tip plus half the brace's width;
+    node <side>BW; pieces cross_B_L / cross_B_R at the rails, cross_B between the braces). Returns the braces' ids."""
+    leg = v["gusset_leg"] if v["gusset_leg"] > 0 else GUSSET_LEG_MM
+    d = v["tower_brace_y"] or leg + v["tower_brace_b"] / 2.0
+    out = []
+    for side, sy in (("L", 1.0), ("R", -1.0)):
+        pid = f"tower_post_{side}B"
+        post = next((m for m in frame.members if m["id"] == pid), None)
+        if post is None:
+            raise DesignGenError(f"tower_brace_b needs the rear tower's single post {pid} (the rails either side of "
+                                 f"the rear axle kept whole)")
+        a, b = (np.asarray(frame.nodes[post[k]], float) for k in ("node_a", "node_b"))
+        top = frame.split(pid, f"{side}BV", a + v["tower_brace_at"] * (b - a), (pid, pid + "_up"))
+        y = sy * (rail_y - v["rail_b"] / 2.0 - d)
+        if sy * y <= 0.0:
+            raise DesignGenError(f"tower_brace_y ({d:g} mm inboard of the rail) reaches past the centre line")
+        cid = cross_piece(frame, "B", f"{side}B")
+        c = frame.members[[m["id"] for m in frame.members].index(cid)]
+        at_rail = "node_a" if c["node_a"] == f"{side}B" else "node_b"
+        p0 = np.asarray(frame.nodes[c[at_rail]], float)
+        ids = (f"cross_B_{side}", "cross_B") if at_rail == "node_a" else ("cross_B", f"cross_B_{side}")
+        try:
+            foot = frame.split(cid, f"{side}BW", [p0[0], y, p0[2]], ids)
+        except FrameError as e:
+            raise DesignGenError(f"the tower brace's foot: {e}") from None
+        out.append(frame.member(f"tower_brace_{side}B", foot, top, section))
+    return out
 
 
 BATTERY_IDS = ("battery", "battery2")  # the packs' part ids (battery_split of them)

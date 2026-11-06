@@ -17,7 +17,11 @@ mesh of the tube walls:
   Unsprung parts (carrier "support") load the same nodes.
 - or mount loads: the forces the body receives at the suspension mounts
   (K2's mount series, in the body's axes), each at its hard point, carried
-  in where the design takes it (k1_frame.analyze.mount_carriers): on the
+  in where the design takes it (k1_frame.analyze.mount_carriers; analyze_shell's
+  mount_path picks the path: "brackets" (default) as below; "joint" every
+  mount on the joint nodes even where its bracket is meshed; "footprint"
+  the meshed brackets on their pin holes and a bracket not meshed over the
+  mesh nodes of its carrier's members inside its box, mount_footprints): on the
   joint nodes of the frame node at the point (a tower's top), shared over
   the joints of a bracket's carried_by nodes, else spread over the
   support's wheel mount as the ground forces are; a moment per support (a
@@ -277,6 +281,52 @@ def _mounts(design: dict, mount_loads: dict) -> dict:
     return out
 
 
+FOOTPRINT_GROW_MM = 3.0  # a bracket's box grown by this to take the carrier's mid-surface nodes under its base face
+#                          (half the thickest wall, 4.5 mm, plus 0.75 mm)
+
+
+def mount_footprints(design: dict, fr: "ShellFrame", carriers: dict) -> dict:
+    """{(support, mount): (bracket id, mesh nodes)} for the mounts whose bracket (the part of kind bracket whose box
+    holds the hard point, as mount_carriers) is not meshed: the mesh nodes of the members at its carried_by nodes
+    (the bracket plates' own nodes left out) inside its box grown by FOOTPRINT_GROW_MM. A bracket whose grown box
+    takes fewer than 3 such nodes is left out (its mount keeps the joint-node path)."""
+    from ..k0_handcalc.rigid import rpy_matrix
+
+    ms = fr.mesh
+    meshed = {b.id for b in ms.brackets}
+    plate_nodes = set()
+    for b in ms.brackets:
+        for els in b.elements:
+            plate_nodes.update(int(n) for n in np.ravel(np.asarray(ms.elements)[els]))
+    members = np.asarray(ms.element_member)
+    E = np.asarray(ms.elements)
+    out = {}
+    for s in design.get("supports", []):
+        for mount, xyz in ((s.get("suspension") or {}).get("hardpoints_mm") or {}).items():
+            if ms.bracket_of(s["id"], mount) is not None:
+                continue
+            q = np.asarray(xyz, float)
+            for p in design.get("parts", []):
+                if str(p.get("kind", "")).lower() != "bracket" or not p.get("carried_by") or p["id"] in meshed:
+                    continue
+                b = p["box"]
+                R = rpy_matrix(b["rpy_deg"]) if b.get("rpy_deg") else np.eye(3)
+                c, h = np.asarray(b["center_mm"], float), np.asarray(b["size_mm"], float) / 2.0
+                if not np.all(np.abs(R.T @ (q - c)) <= h + 1.0):
+                    continue
+                cb = set(p["carried_by"])
+                mids = {m["id"] for m in design["members"] if m["node_a"] in cb or m["node_b"] in cb}
+                els = np.nonzero(np.isin(members, list(mids)))[0]
+                cand = np.unique(E[els])
+                cand = np.array([n for n in cand if int(n) not in plate_nodes], int)
+                loc = (ms.nodes[cand] - c) @ R
+                inside = cand[np.all(np.abs(loc) <= h + FOOTPRINT_GROW_MM, axis=1)]
+                if len(inside) >= 3:
+                    out[(s["id"], mount)] = (p["id"], inside)
+                break
+    return out
+
+
 def mount_balance(F: np.ndarray, m_tot: float, gvec: np.ndarray, inertia_N) -> float:
     """How far the mount forces and the weight (F, N) are from balancing the inertia force passed with them,
     over the weight; raises DesignError past BALANCE_TOL (no inertia force: nothing to check, 0)."""
@@ -297,7 +347,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
                   step_supports: list[str] | None = None, ground_forces: dict | None = None,
                   inertia_N: np.ndarray | None = None, frame: ShellFrame | None = None,
                   element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True,
-                  mount_loads: dict | None = None, gravity_mps2=None) -> dict:
+                  mount_loads: dict | None = None, gravity_mps2=None, mount_path: str = "brackets") -> dict:
     """Solve the shell frame (see the module notes). Arguments as k1_frame.analyze; `frame`
     reuses a built and factorised ShellFrame of the same design; weld_strips as mesh.build_mesh.
 
@@ -370,18 +420,40 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         acc[0] += force
         acc[1] += np.asarray(moment, float) + np.cross(np.asarray(about, float) - fr.node_xyz[node], force)
 
+    if mount_path not in ("brackets", "joint", "footprint"):
+        raise ValueError(f"mount_path must be brackets, joint or footprint, got {mount_path!r}")
     carriers = mount_carriers(design) if mount_loads is not None else {}
+    footprints = mount_footprints(design, fr, carriers) if mount_loads is not None and mount_path == "footprint" else {}
+    paths = []  # where each mount force went: (support, mount, point, force, how, node ids, nodal forces (n, 3))
+
+    def record(sid, kind, p, f, how, dF):
+        nz = np.nonzero(np.any(dF.reshape(-1, 6)[:, :3] != 0.0, axis=1))[0]
+        paths.append({"support": sid, "mount": kind, "point_mm": np.asarray(p, float), "force_N": np.asarray(f, float),
+                      "how": how, "nodes": nz, "nodal_N": dF.reshape(-1, 6)[nz, :3].copy()})
+
     for sid, g in ground.items():
         fn = fr.support_node[sid]
         for kind, p, f in g["vectors"]:
-            bk = ms.bracket_of(sid, kind) if mount_loads is not None else None
+            bk = ms.bracket_of(sid, kind) if mount_loads is not None and mount_path != "joint" else None
             if bk is not None:  # a meshed bracket: on its pin holes' edges
-                Fv += pin_load(X, bk, f, n_dof)
+                dF = pin_load(X, bk, f, n_dof)
+                Fv += dF
+                if mount_loads is not None:
+                    record(sid, kind, p, f, f"pin holes of {bk.id}", dF)
+                continue
+            fp = footprints.get((sid, kind))
+            if fp is not None:  # a bracket not meshed: over the carrier's wall nodes under its box
+                bid, at_nodes = fp
+                dF = spread_load(X, at_nodes, force=f, about=p, n_dof=n_dof)
+                Fv += dF
+                record(sid, kind, p, f, f"footprint of {bid}", dF)
                 continue
             at = carriers.get(sid, {}).get(kind) or []
             for n in at:
                 if n not in ms.joints:
                     raise DesignError(f"the {kind} mount of {sid} is carried by node {n!r}, which no member uses")
+            if mount_loads is not None:
+                before = Fv.copy()
             if len(at) == 1:
                 put(at[0], f, np.zeros(3), p)
             elif at:
@@ -389,6 +461,9 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
                     put(n, fn_, mn, fr.node_xyz[n])
             else:
                 put(fn, f, np.zeros(3), p, fr.mount_nodes(fn))
+            if mount_loads is not None:
+                record(sid, kind, p, f, (f"joint nodes of {', '.join(at)}" if at else f"wheel mount of {fn}"),
+                       Fv - before)
         if np.any(g.get("moment_Nmm", 0.0)):
             put(fn, np.zeros(3), g["moment_Nmm"], fr.node_xyz[fn], fr.mount_nodes(fn))
     for it in parts:
@@ -477,6 +552,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "ground_total_N": sum(g["force_N"] for g in ground.values()),
         "balance_off": off,
         "joint_loads": joint_loads,
+        "mount_paths": paths,
         "residual_ratio": residual,
         "inertia_accel": accel,
         "inertia_alpha": alpha,

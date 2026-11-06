@@ -27,6 +27,12 @@ def member_name(m: dict) -> str:
         return f"{SIDE[g[1]]}のレール ({_where(a)}から{_where(b)}まで)"
     if (g := re.fullmatch(r"cross_(\w+)", mid)) and g[1] in STATION:
         return f"{STATION[g[1]]}の横の部材"
+    if (g := re.fullmatch(r"cross_(\w+)_([LR])", mid)) and g[1] in STATION:
+        return f"{STATION[g[1]]}の横の部材 ({SIDE[g[2]]}のレールから斜めの支えの足まで)"
+    if (g := re.fullmatch(r"tower_brace_([LR])([AB])", mid)):
+        return f"{'前' if g[2] == 'A' else '後ろ'}{SIDE[g[1]]}の塔の斜めの支え (横の部材から柱へ)"
+    if (g := re.fullmatch(r"tower_post_([LR])([AB])_up", mid)):
+        return f"{'前' if g[2] == 'A' else '後ろ'}{SIDE[g[1]]}のサスペンションの塔の柱 (斜めの支えより上)"
     if mid == "dash_cross":
         return "ダッシュの横の部材 (コラムの金具を持つ)"
     if (g := re.fullmatch(r"dash_post_([LR])", mid)):
@@ -91,7 +97,10 @@ VARIABLE_NAMES_JA = {
     "cross_b": "横の部材の管の幅", "cross_h": "横の部材の管の高さ", "cross_t": "横の部材の管の厚さ",
     "tower_b": "塔とダッシュの管の幅", "tower_t": "塔とダッシュの管の厚さ", "lower_b": "下の脚の管の幅",
     "lower_t": "下の脚の管の厚さ", "lower_cross": "下の横の部材 (あり・なし)", "gusset_leg": "ガセットの辺の長さ",
-    "gusset_thickness": "ガセットの板の厚さ", "cross_members_through": "横の部材がレールを通り抜けるか",
+    "gusset_thickness": "ガセットの板の厚さ", "gusset_ends": "フレームの両端の角にもガセット (あり・なし)",
+    "cross_members_through": "横の部材がレールを通り抜けるか",
+    "tower_brace_b": "後ろの塔の斜めの支えの管の幅 (0 はなし)", "tower_brace_t": "後ろの塔の斜めの支えの管の厚さ",
+    "tower_brace_at": "斜めの支えの上の端の柱の高さの割合", "tower_brace_y": "斜めの支えの下の端のレールからの距離",
     "mount_floor": "床・荷台・前の囲いの取付の金具", "mount_electrics": "電池・制御器・配線箱の取付の金具",
     "mount_seats": "座席とベルトの取付の金具", "mount_drive": "モーターと減速機の取付の金具",
     "wheel_radius": "タイヤの半径", "wheel_width": "タイヤの幅", "front_spring_rate": "前のばねの硬さ",
