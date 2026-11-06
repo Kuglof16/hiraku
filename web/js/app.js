@@ -63,6 +63,7 @@ import { GripView } from "./grip_panel.js"; // grip: the tyres of a driving reco
 import { hasGrip } from "./grip_view.js"; // grip:
 import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
+import { loadViewerInfo, viewerButtonHtml, viewerRunId } from "./viewer_link.js"; // 「ビューアで見る」
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
@@ -1203,7 +1204,7 @@ function renderChain(s, chain) {
     p.className = "card wait";
     p.innerHTML = `<h3>1. 予測<small>手計算の段</small></h3><div>${loadCase ? `${esc(loadCase.test_id)} の予測はまだ。hooks は予測の無い解析を止める (HK1)` : "試験がまだ無い"}</div>`;
   }
-  // 2. analysis
+  // 2. analysis (with 「ビューアで見る」, viewer_link.js)
   const a = $("card-ana");
   if (ana) {
     // the name wraps, the value and its unit do not (app.css .card td); the record's own name in the title
@@ -1225,7 +1226,8 @@ function renderChain(s, chain) {
       `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
       (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "") +
-      (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "");
+      (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
+      `<div class="vrow">${viewerButtonHtml(viewerRunId(s), ana)}</div>`;
   } else if (running) {
     a.className = "card busy";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div title="${esc(running.tool)}">${esc(toolShort(s, running.tool))} で解析中…</div>`;
@@ -2783,6 +2785,8 @@ fitStage();
 // the module names (an older record's designer.<module> → 「枠の設計役」) from the start, so a record still being read
 // does not show the ids; drawn again once they are in
 loadModuleNames().then(() => (drawn.rev = -1));
+// the viewer's answers provisional or not, and the fields with no sample (viewer_link.js); drawn again once in
+loadViewerInfo(() => (drawn.rev = -1));
 if (ui.present) applyPresent();
 else $("expand-btn").innerHTML = EXPAND_SVG.out;
 requestAnimationFrame(loop);
