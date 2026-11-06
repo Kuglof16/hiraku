@@ -144,7 +144,13 @@ offroad-4w:
         tower_brace_at: {value: 0.5, unit: '1'}
         mount_plate_t: {value: 9, unit: mm}
         mount_weld_leg: {value: 6.3, unit: mm}
+        # the roll bar's rear stays (the user's choice, 2026-11-06: 42.7 x 2.3, the defaults, foot at 0.35 of the way
+        # from the roll bar's foot to the rear end, clear of the corner gusset at E)
+        rollbar_stays: {value: 1, unit: '1'}
+        rollbar_stay_at: {value: 0.35, unit: '1'}
       reason: >-
+        ロールバー: 後ろの支え (42.7 mm・厚さ 2.3 mm の丸管) を、ロールバーの上の角から、ロールバーの足から後ろの端までの 0.35 の所の
+        レールへ足し、ロールバーの揺れを上げる (N1) と、横転で後ろへ倒れるのを止める (R4)。
         R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、レールの肉厚を 2.3 mm から 4.5 mm、
         幅を 40 mm から 45 mm にし、つなぎ目と両端の角に脚 120 mm・厚さ 4.5 mm のガセットを足し、横の部材の高さを 40 mm から 60 mm
         (ロールバーの足は 70 mm) にする (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)。後ろの塔の柱の足を、
