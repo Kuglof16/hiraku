@@ -338,7 +338,12 @@ def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if tradeoff.collector is None:
         raise ToolError("この実行には、感度を集めるしくみ (hiraku.tools 側の collector) がまだ登録されていません")
     design = _store(ctx).design()
-    names = list(args.get("variables") or [f"variables.{k}" for k in (design.get("variables") or {})])
+    if args.get("variables"):
+        names = list(args["variables"])
+    elif tradeoff.default_variables is not None:
+        names = list(tradeoff.default_variables(ctx) or [])
+    else:
+        names = [f"variables.{k}" for k in (design.get("variables") or {})]
     paths = [p if p.startswith(_PATH_ROOTS) else f"variables.{p}" for p in names][:_MAX_VARIABLES]
     if not paths:
         raise ToolError("動かす設計の数がありません。variables に設計の変数の名前 (または variables.<名前> などの道) を渡してください")

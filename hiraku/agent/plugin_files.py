@@ -5,9 +5,9 @@
 tests/agent/test_plugin_path.py checks that the files equal what this writes now, so a change
 of a prompt is followed by running this.
 
-- agents/<name>.md: designer, designer-<module> for every module designer, packager and cae-<domain>
-  for every domain but assembly. In the person's Claude Code they are hiraku:designer,
-  hiraku:designer-<module>, hiraku:packager, hiraku:cae-<domain> (agent_id_from_sdk takes the
+- agents/<name>.md: designer, designer-<role> for every design role (structure, mechanism, electric), packager and
+  cae-<domain> for every domain but assembly. In the person's Claude Code they are hiraku:designer,
+  hiraku:designer-<role>, hiraku:packager, hiraku:cae-<domain> (agent_id_from_sdk takes the
   "hiraku:" off). The lead is the main session.
 - commands/run.md: /hiraku:run <requirements file>: start_run, then the lead's prompt.
 """
@@ -55,17 +55,18 @@ def _agent(name: str, description: str, prompt: str, tools: tuple[str, ...], eff
 
 def agent_files() -> dict[str, str]:
     """The plugin's agents are fixed files, so they cover designs with and without modules: the single designer,
-    a designer per module (designer-<module>; HK6 lets only designer.<module> propose on a design with modules), and
-    the packager with build_version and its rules for modules (they say they hold for a design with modules)."""
+    the design roles (designer-structure, -mechanism, -electric; HK6 lets a role propose only on the modules whose
+    owner it is), and the packager with build_version and its rules for modules (they say they hold for a design
+    with modules)."""
     out = {"agents/designer.md": _agent("designer", prompts.DESIGNER_DESCRIPTION, prompts.DESIGNER_PROMPT,
                                         DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False, skill_names=designer_skills()),
            "agents/packager.md": _agent("packager", prompts.cae_description("assembly", modules=True),
                                         prompts.cae_prompt("assembly", modules=True), MODULE_PACKAGER_TOOLS,
                                         CAE_EFFORT, skills=True)}
     for agent_id in contract.MODULE_DESIGNERS:
-        module, name = agent_id.split(".", 1)[1], sdk_name(agent_id)
-        out[f"agents/{name}.md"] = _agent(name, prompts.module_designer_description(module),
-                                          prompts.module_designer_prompt(module), MODULE_DESIGNER_TOOLS,
+        name = sdk_name(agent_id)
+        out[f"agents/{name}.md"] = _agent(name, prompts.designer_role_description(agent_id),
+                                          prompts.designer_role_prompt(agent_id), MODULE_DESIGNER_TOOLS,
                                           DESIGNER_EFFORT, skills=False, skill_names=module_designer_skills())
     for domain in contract.DOMAINS:
         if domain == "assembly":
@@ -82,7 +83,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 1. MCP のツール {plugin_tool("start_run")} を requirements_file="$ARGUMENTS" で 1 回呼びます (ツールの棚を確かめるので、しばらくかかります)。断られたら、その文をそのまま人に伝えて終わります。
 2. 返った task が、まとめ役の最初の仕事です。下の「まとめ役の決まり」に従って進めます。
    - HIRAKU のツールは {plugin_tool("<名前>")} です (決まりの中では <名前> だけで書いています)。
-   - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。設計がモジュールに分かれているときは、{PLUGIN_NAME}:designer の代わりに、モジュールの設計役 {PLUGIN_NAME}:designer-<モジュール> ({"・".join(m.split(".", 1)[1] for m in contract.MODULE_DESIGNERS)}) を使います。
+   - 役のサブエージェントは {PLUGIN_NAME}:designer・{PLUGIN_NAME}:packager・{PLUGIN_NAME}:cae-<分野> です。設計がモジュールに分かれているときは、{PLUGIN_NAME}:designer の代わりに、設計役 {"・".join(f"{PLUGIN_NAME}:{sdk_name(m)} ({prompts.role_ja(m)})" for m in contract.MODULE_DESIGNERS)} を使います。どの役がどのモジュールを持つかは、設計の modules の owner にあります。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
    - 役を裏で動かしたまま番を終えません (Claude Code が役を打ち切ることがあります)。役の結果を待つときは {plugin_tool("wait_for_roles")} を呼びます。
    - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
