@@ -1058,7 +1058,8 @@ html.booting .boot { position: fixed; inset: 0; z-index: 100; display: flex; fle
 .boot-pet { width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; }
 .boot-pet::before { content: ""; width: 72px; height: 72px; border-radius: 50%; background: #ddd6c8; }
 .boot-pet.has-pet::before { display: none; }
-.boot-pet .petbox { display: block; width: 120px; height: 120px; }
+.boot-pet { position: relative; }
+.boot-pet .petbox { position: relative; display: block; width: 120px; height: 120px; }
 .boot-pet .petbox canvas { width: 100%; height: 100%; display: block; }
 .boot-line { margin: 0; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; max-width: 90vw; text-align: center; }
 .boot.failed .boot-pet { opacity: 0.5; }
