@@ -320,18 +320,11 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### Claude Code のセッションを部署に分けた
 
-- Claude Code のセッションを「部署」として並べて作った。統括部・設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部と、受付部がある。部署ごとに git worktree と branch を持つ (`docs/contract.md` の冒頭と持ち場の表)。
-- 部署の branch (`git branch -a`)
-  - `claude/dept-design-90c266`、`claude/dept-analysis-cf6cf8`、`claude/dept-k2-0c4e6b`、`claude/dept-screen-812e37`、`claude/dept-qa-ba0596`、`claude/dept-promo-f2ae3c`、`claude/dept-intake-932455`
-  - この 7 つは `origin` にも push してある (`git branch -a` の `remotes/origin/...`)。
-- 部署の中の小さな branch
-  - 解析部: `claude/dept-analysis-assembly`・`-conv`・`-hotspot`・`-mesh`・`-parts`・`-plana`・`-rollbar`
-  - 設計部: `claude/dept-design-plana`
-  - 画面部: `claude/screen-a4`・`-assembly`・`-demo-runs`・`-grid`・`-n03n06`・`-n17`・`-present`・`-quality`・`-real`・`-shell`・`-story`
-  - ほか: `claude/fe-core`・`claude/fe-more`・`claude/k2-spaceframe`
-- 統括部の branch は `claude/lead-intake-contract` と `claude/lead-refactor` (`origin` にもある)。
-- 部署の中の branch は、まず部署の branch に merge した。例: 3ba64c0「Merge branch 'claude/screen-story' into claude/dept-screen-812e37」、2e0b547「Merge branch 'claude/dept-analysis-conv' into claude/dept-analysis-cf6cf8」。そのあと main に入れた。例: ab6bdd2「Merge claude/dept-screen-812e37: ...」 (`git log --merges`)。
+作者は CAE の実務者です。作者が決め、Claude Code のセッションが書きました。
 
+- Claude Code のセッションを「部署」として並べて作った。統括部 (契約を書き、成果を確かめて main に取り込む)・設計部・解析部 (中に K2 班)・画面部・品質保証部・広報部・受付部と、プラグインの道で HIRAKU を回して困った所を集める実験部 (コードは書かない)。部署ごとに git worktree と branch を持つ (`docs/contract.md` の冒頭)。
+- 始めは部署ごとの branch (`claude/dept-*`、`origin` にも push してある) で作り、部署の branch から main に入れた。
+- 2026-11-06 からは、1 つの機能を 1 本の branch (`claude/<部署>-<機能>`、main から切る) で作る。品質保証部が、通った機能の branch を 1 本ずつ main の上に重ねて試し、通れば main を進める。1 本が落ちても、ほかは待たない (`docs/contract.md`)。merge のコミットは「Merge <branch> <コミット> into the trial」の形で残る (例: bc58c4b「Merge intake-material-cards 5e0a8379 into the trial」)。
 ### 契約と持ち場
 
 - 部署どうしの決まりは `docs/contract.md`。形の正本は `hiraku/contract/hiraku.schema.json` で、食い違ったら schema が正しい (`docs/contract.md`)。
@@ -349,7 +342,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### main に入れる前に全部の試験を通す
 
-- `CLAUDE.md` に決まりがある。main に入れる前に、全部の試験を通す。契約だけの変更でも、部署の成果の取り込みでも同じ。回すのは `python -m unittest` か `python -m qa.run_tests` で、通らないものは main に入れない。台本の運転の通り道を変えたときは、`HIRAKU_SLOW_TESTS=1` を付けて 1 回回す。
+- `CLAUDE.md` に決まりがある。main に入れる前に、通常の試験と遅い試験 (`HIRAKU_SLOW_TESTS=1`) を全部通す。契約だけの変更でも、部署の成果の取り込みでも同じ。回すのは `python -m unittest` か `python -m qa.run_tests`。ブラウザの試験 (`python -m tests.web.browser`) は、その変更が触れたものを使う試験を通す。提出の前の最後の取り込みは、ブラウザの試験も全部を通す。通らないものは main に入れない。
 - `qa/run_tests.py` は、`python -m unittest` と同じ試験を、試験のクラスごとに別のプロセスで並べて回す。見つけた試験が全部、回ったか飛ばされたかを照らし合わせる。合わなければ終了コードを 1 にする (`qa/run_tests.py` の冒頭)。
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
@@ -381,6 +374,8 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 - 行数とコミットの数は、`git log` と `git ls-files` で誰でも数え直せます
 
 ## 前から持っていた知識と、外から持ってきたデータ
+
+動画の N08 で言う 3 つのこと (CAE を扱えるのは専門家だけ、ライセンスに何百万円、計算の準備に数週間) は、CAE の実務者である作者の実務の経験に基づきます。調べた数ではありません。
 
 外から持ってきた値 (規格・統計・材料・人体の寸法など) は、使った所 (データのファイルとコードの中) に出典を書いています。出典の本文をこのリポジトリで読み直していない値には "not checked" と書いています。
 
