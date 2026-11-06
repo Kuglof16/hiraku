@@ -2047,8 +2047,7 @@ function renderPlaybar(span = null) {
   // the recorded time (from the run's start) of the event on screen, small beside the bar's own
   const at = player.applied > 0 ? player.events[player.applied - 1] : null;
   $("pb-rec").textContent = player.clock === "real" || !at ? "" : `実時間 ${clockText(at.t_rec)}`;
-  $("pb-clock").textContent = player.clock === "real" ? "実時間" : player.clock === "paced" ? "間を詰めた" : "イベント";
-  $("pb-clock").dataset.clock = player.clock;
+  showClock();
   $("pb-next-verdict").disabled = !player.nextWhere(isVerdictEv);
   $("pb-next-mismatch").disabled = !player.nextWhere(isMismatchEv);
   const key = `${player.events.length}|${player.duration.toFixed(1)}|${span?.domain ?? ""}|${player.clock}`;
@@ -2573,8 +2572,14 @@ function motionEnd(from = 0) {
 }
 
 // The clock switch on the play bar (and ?pace=): the event on screen stays on screen.
+// the clock's button: its word and data-clock (also at once on a press, not only on the next frame)
+function showClock() {
+  $("pb-clock").textContent = player.clock === "real" ? "実時間" : player.clock === "paced" ? "間を詰めた" : "イベント";
+  $("pb-clock").dataset.clock = player.clock;
+}
 function setClock(clock) {
   player.setClock(clock);
+  showClock();
   motionEnd(0);
   ui.anim.local = false;
   tickKey = "";
