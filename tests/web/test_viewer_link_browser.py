@@ -110,7 +110,7 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         self.assertEqual(tab_errors, [])
 
     def test_bench_card_of_an_analysis_the_viewer_cannot_draw_says_why(self):
-        _, page, errors = self.open("tab=bench", base=self.prov_base)
+        _, page, errors = self.open("tab=bench&more=1", base=self.prov_base)
         # provisional answers, the scripted run's modal: a field with no sample here (only assembly is made)
         lc = page.evaluate("() => (window.hiraku.state().project.load_cases.find((c) => c.domain === 'nvh') || {}).load_case_id")
         self.assertTrue(lc)
@@ -125,7 +125,7 @@ class ViewerLinkBrowserTest(unittest.TestCase):
     @unittest.skipUnless(HAS_ENTRY, "needs viewer.src.build.for_analysis")
     def test_a_saved_run_with_only_events_opens_the_analysis_itself(self):
         # a saved run keeps only events.jsonl: the entry builds the records from the events, no sample
-        _, page, errors = self.open("tab=bench")
+        _, page, errors = self.open("tab=bench&more=1")
         page.click('#tests button[data-lc="H1-interference"]')
         page.wait_for_selector('#card-ana [data-role="viewer-link"] a.vbtn', timeout=30000)
         got = page.evaluate(LINKS, "#card-ana")[0]
@@ -167,8 +167,9 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def open_viewer_from_the_bench(self, run, lc, shots=None, base=None):
-        """③ on run, test lc: the card's button (one), then the tab it opens; returns (link, tab, errors)."""
-        ctx, page, errors = self.open("tab=bench", run, base)
+        """③ on run, test lc: the card's button (one), then the tab it opens; returns (link, tab, errors).
+        (more=1: ③'s cards, folded under くわしく by default, open)"""
+        ctx, page, errors = self.open("tab=bench&more=1", run, base)
         page.click(f'#tests button[data-lc="{lc}"]')
         # the card drawn for this test (not still the test shown before)
         page.wait_for_function("""(lc) => { const l = document.querySelector('#card-ana [data-role="viewer-link"] a.vbtn');
