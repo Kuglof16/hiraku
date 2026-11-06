@@ -744,7 +744,7 @@ async function dropFile(name, text) {
 function renderIntake(tab) {
   if (!intake) {
     // in a new request the bar (renderDraft) sits above the screens
-    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="tab-head" id="tab-head-intake"></div><div class="intake-host" id="intake-host"></div>`;
     intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
     renderDraft();
   }
@@ -874,7 +874,7 @@ function markTabs(s) {
 // A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
 let shelf = null;
 function renderShelf() {
-  shelf ??= mountShelf($("view-shelf"), { tools: () => player.state.tools, runId: () => player.state.runId });
+  shelf ??= mountShelf($("shelf-host"), { tools: () => player.state.tools, runId: () => player.state.runId });
   shelf.render();
 }
 
@@ -1307,6 +1307,99 @@ function renderChainHead(s, chain) {
   if (chainHeadHtml !== html) $("chain-head").innerHTML = chainHeadHtml = html;
 }
 let chainHeadHtml = "";
+
+// The other tabs' first lines, as ③'s: what is there now, the one thing that matters, what comes
+// next (one line each), and a くわしく that unfolds the rest of the tab (css: .folded hides it;
+// ?more=1 opens them all; a new request, ?new, starts open: its screens are filled in by hand).
+// Each returns [いま, 大事 (label, text, tone: "ok" | "warn" | ""), 次].
+const listJa = (xs, n = 4) => (xs.length > n ? `${xs.slice(0, n).join("・")} ほか ${xs.length - n}` : xs.join("・"));
+const TAB_HEADS = {
+  A1(s) {
+    const picks = s.intake.picked?.picks ?? [];
+    const names = picks.map((p) => p.shown_name ?? DOMAIN_JA[p.domain] ?? p.domain);
+    const seven = picks.filter((p) => DOMAINS.includes(p.domain)).length; // (組み立て is looked at apart from the 7)
+    return [
+      s.project?.want ? `作りたいもの: ${s.project.want}` : "作りたいものを待っている",
+      ["調べる分野", picks.length ? `${listJa(names)} (7 分野のうち ${seven})` : "まだ決まっていない", ""],
+      !picks.length ? "作りたいものから、調べる分野を選ぶ" : s.intake.questions.length ? "② 確認したいことで、足りない値に答える" : "③ 解析で、試験ごとに予測と解析を比べる",
+    ];
+  },
+  A2(s) {
+    // the question cards as the screen has them (the requirements' questions and the rules' hits)
+    const cards = $("intake-host")?.querySelectorAll(".in-pane.a2 .in-q") ?? [];
+    const qs = cards.length;
+    const open = [...cards].filter((c) => c.classList.contains("open")).length;
+    const byDefault = s.intake.answers.filter((a) => a.source === "default").length;
+    return [
+      qs ? `質問 ${qs} 件・答えが無いもの ${open} 件` : "聞くことはまだ無い",
+      ["標準の値", byDefault ? `${byDefault} 件は答えずに標準の値のまま (確かめていない値は報告に載る)` : "答えずに標準の値にしたものは無い", byDefault ? "warn" : ""],
+      !qs ? "足りない値があれば、ここで聞く" : open ? "質問に答える (答えなければ標準の値)" : "③ 解析へ (答えはそろった)",
+    ];
+  },
+  A5(s) {
+    const rules = Object.keys(s.intake.rules).length;
+    // each rule's newest check (the design as it is now), not the earlier versions' hits
+    const newest = new Map();
+    for (const c of Object.values(s.intake.ruleChecks)) if (!newest.has(c.rule_id) || (c.design_version ?? 0) >= (newest.get(c.rule_id).design_version ?? 0)) newest.set(c.rule_id, c);
+    const hits = [...newest.values()].flatMap((c) => (c.hits ?? []).map((h) => `${c.rule_id ?? ""} ${h.part_id ?? ""}`.trim()));
+    return [
+      rules ? `ルール ${rules} 件 (読み込んだ束 ${s.intake.docs.length})` : "ルールを待っている",
+      ["引っかかった", hits.length ? listJa(hits, 3) : "無い", hits.length ? "warn" : "ok"],
+      hits.length ? "② 確認したいことで、設計を直すかルールを外すかを決める" : "ルールのファイルを置けば足せる",
+    ];
+  },
+  A4() {
+    const host = $("shelf-host");
+    const sum = host.querySelector(".sh-sum")?.textContent.trim() ?? "";
+    const bad = host.querySelectorAll(".sh-chk.bad, .sh-chk.noval").length;
+    return [
+      sum ? `棚: ${sum}` : "棚を読んでいる",
+      ["確かめ", bad ? `通っていないツール ${bad}` : sum ? "どのツールも、答えの分かっている問題で確かめた" : "—", bad ? "warn" : sum ? "ok" : ""],
+      "ツールを選ぶと、確かめた問題と結果が右に出る",
+    ];
+  },
+  A7() {
+    const host = $("asm-host");
+    const cap = host.querySelector(".asm-caption")?.textContent.trim() ?? "";
+    const sum = host.querySelector(".asm-sum")?.textContent.trim() ?? "";
+    const ng = host.querySelectorAll(".asm-steps li.has-ng").length;
+    return [
+      cap || "組み立ての記録を待っている",
+      ["組み立て", sum || "—", ng ? "warn" : sum ? "ok" : ""],
+      ng ? `✕ のある手順 ${ng} つ: 工具・手が届くように設計を直す` : sum ? "④ 解析結果で、ほかの分野と並べて見る" : "組み立ての解析が終わるのを待つ",
+    ];
+  },
+};
+const TAB_HEAD_EL = { A1: "tab-head-intake", A2: "tab-head-intake", A5: "tab-head-intake", A4: "tab-head-A4", A7: "tab-head-A7" };
+const tabOpen = new Set(MORE_ALL || draft ? Object.keys(TAB_HEADS) : []);
+const tabHeadHtml = {};
+function renderTabHead(s, tab) {
+  const el = $(TAB_HEAD_EL[tab]);
+  if (!el) return;
+  const view = el.parentElement;
+  const open = tabOpen.has(tab);
+  view.classList.toggle("folded", !open);
+  view.dataset.tab = tab;
+  const [now, [label, text, tone], next] = TAB_HEADS[tab](s);
+  const html =
+    `<div class="ch-row clamp1" title="${esc(now)}"><small>いま</small>${esc(now)}</div>` +
+    `<div class="ch-row clamp1" data-role="key" title="${esc(text)}"><small>${esc(label)}</small><span class="th-key ${tone}">${esc(text)}</span></div>` +
+    `<div class="ch-row clamp1" title="${esc(next)}"><small>次</small>${esc(next)}</div>` +
+    `<button class="th-more" type="button" data-tab-more="${tab}" aria-expanded="${open}">${open ? "たたむ" : "くわしく"}</button>`;
+  if (tabHeadHtml[tab] !== html || el.dataset.tab !== tab) {
+    el.innerHTML = tabHeadHtml[tab] = html;
+    el.dataset.tab = tab;
+  }
+}
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest?.("[data-tab-more]");
+  if (!b) return;
+  const tab = b.dataset.tabMore;
+  if (tabOpen.has(tab)) tabOpen.delete(tab);
+  else tabOpen.add(tab);
+  drawn.rev = -2;
+  renderTabHead(player.state, tab);
+});
 
 const toolTitle = (s, tool) => s.tools[tool]?.title ?? tool;
 // short, as the log says it (state.js toolWord): labels.js's name, else the title up to its bracket, else the name
@@ -2077,8 +2170,9 @@ function draw() {
   // the pets of the list (the workbench; hidden in the present mode) or of the grid
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
-  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
+  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("asm-host"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
+  if (TAB_HEADS[tab]) renderTabHead(s, tab);
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 

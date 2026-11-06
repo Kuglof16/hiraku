@@ -713,6 +713,33 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .ch-verdict { margin-left: auto; font-size: 24px; line-height: 1; }
 .ch-verdict.ok { color: var(--green); }
 .ch-verdict.bad { color: var(--red); }
+/* the other tabs' first lines (js/app.js renderTabHead): いま / 大事 / 次 and a くわしく */
+.tab-head { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; margin: 10px 14px 0; padding: 8px 120px 8px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; font-size: 16px; line-height: 1.4; }
+.tab-head:empty { display: none; }
+.tab-head .th-key { font-weight: 600; }
+.tab-head .th-key.ok { color: var(--green); }
+.tab-head .th-key.warn { color: #b26b00; }
+.th-more { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 14px; font-size: 14px; color: var(--muted); background: var(--panel); }
+.shelf-view, .asm-wrap { display: flex; flex-direction: column; }
+.shelf-host { flex: 1 1 auto; min-height: 0; }
+.asm-wrap > .asm-view { flex: 1 1 auto; }
+.asm-wrap > .tab-head { margin: 0; }
+/* folded (the くわしく shut): the rest of each tab out of the way; opened, all of it as before */
+#view-intake.folded[data-tab="A1"] .in-side > .in-block:first-child,
+#view-intake.folded[data-tab="A1"] .in-msgs > .in-note,
+#view-intake.folded[data-tab="A2"] .in-right,
+#view-intake.folded[data-tab="A2"] .in-left > .in-foot,
+#view-intake.folded[data-tab="A5"] .in-drop,
+#view-intake.folded[data-tab="A5"] .in-bar,
+.shelf-view.folded .sh-tests,
+.shelf-view.folded .sh-k0 > .sh-f:nth-child(n + 2),
+.shelf-view.folded .sh-applies,
+.asm-wrap.folded .asm-steps li:not(.cur) > .tx,
+.asm-wrap.folded .asm-steps li > .fz,
+.asm-wrap.folded .asm-head { display: none !important; }
+/* (the tests' column folded: the formula takes its room) */
+.shelf-view.folded .sh-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 150px) max-content; }
+#view-intake.folded[data-tab="A2"] .in-pane.a2 { grid-template-columns: minmax(0, 1fr); }
 .chain-more { min-height: 0; overflow: auto; }
 .chain-more > summary { cursor: pointer; font-size: 15px; color: var(--muted); padding: 2px 4px; }
 .chain-more[open] { flex: 1 1 auto; }

@@ -104,10 +104,17 @@
     <section class="col-center intake-view" id="view-intake" hidden></section>
 
     <!-- A4 the tool shelf: js/shelf.js, mounted by js/app.js -->
-    <section class="col-center shelf-view" id="view-shelf" hidden></section>
+    <!-- (each of these tabs: its first lines on top, いま / 大事 / 次 and a くわしく, js/app.js renderTabHead) -->
+    <section class="col-center shelf-view" id="view-shelf" hidden>
+      <div class="tab-head" id="tab-head-A4"></div>
+      <div class="shelf-host" id="shelf-host"></div>
+    </section>
 
     <!-- A7 the assembly order: js/assembly.js, mounted by js/app.js -->
-    <section class="col-center asm-view" id="view-asm" hidden></section>
+    <section class="col-center asm-wrap" id="view-asm" hidden>
+      <div class="tab-head" id="tab-head-A7"></div>
+      <div class="asm-view" id="asm-host"></div>
+    </section>
 
     <section class="col-center grid-view" id="view-grid" hidden>
       <div class="grid-head" id="grid-head"></div>
