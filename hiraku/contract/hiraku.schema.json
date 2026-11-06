@@ -1307,6 +1307,16 @@
           "exclusiveMinimum": 0,
           "description": "Allowed |analyzed - predicted| / |predicted| for a match. Set by code from the catalog or tool spec, never by the model."
         },
+        "written_by": {
+          "enum": [
+            "claude"
+          ],
+          "description": "Set by write_load_case: Claude wrote this load case. Absent for one built from the catalog."
+        },
+        "basis": {
+          "type": "string",
+          "description": "write_load_case: why this load case stands for the use, its source or an assumption said as one."
+        },
         "feeds": {
           "type": "array",
           "items": {
@@ -5400,7 +5410,9 @@
                   "add_part",
                   "set_part",
                   "remove_part",
+                  "add_support",
                   "set_support",
+                  "remove_support",
                   "set_material",
                   "set_variable"
                 ]
@@ -5448,6 +5460,10 @@
               },
               "part": {
                 "type": "object"
+              },
+              "support": {
+                "type": "object",
+                "description": "add_support: the support record."
               },
               "material": {
                 "type": "object"
