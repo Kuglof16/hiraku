@@ -139,18 +139,9 @@ const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
 const tabs = mountTabs($("tabs"), { dev: DEV });
-// A static export: the run list is a tab of its own after the steps (a link to ?list=1; the steps
-// themselves are the record's, from ①)
+// A static export: the run list is 「☰ 一覧へ」 at the top left (#back-link), as on the server
 if (STATIC) {
   document.documentElement.classList.add("static-export"); // (app.css: no box to write or send in on ① / ②)
-  const list = document.createElement("a");
-  list.className = "tab tab-list";
-  list.href = DEV ? "?list=1&dev=1" : "?list=1";
-  list.title = "保存した記録の一覧 (ほかの実行を選んで見る)";
-  list.innerHTML =
-    `<svg class="tab-ic" viewBox="0 0 20 20" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 5.5H16M4 10H16M4 14.5H16"/></svg>` +
-    `<span class="tab-name">実行の一覧</span>`;
-  $("tabs").querySelector(".tabside")?.prepend(list);
 }
 const hookLine = mountHookLine($("stage"), { dev: DEV, showS: 5, avoid: () => [$("tests")] }); // the hooks' stop in one line (kept clear of ③'s board); the footer's list folded
 $("back-link").href = DEV ? "?list=1&dev=1" : "?list=1";

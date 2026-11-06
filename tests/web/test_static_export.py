@@ -316,7 +316,7 @@ class StaticBrowserTest(unittest.TestCase):
                 self.clean(page, seen)
 
     def test_first_screen_is_the_request(self):
-        """A bare page: ① of the picked run with its request; ② has its hearing; the run list is a tab;
+        """A bare page: ① of the picked run with its request; ② has its hearing; the run list is 一覧へ at the top left;
         「この記録を再生する」 goes to ③ and plays."""
         page, seen = self.open("")
         state = """() => ({
@@ -334,11 +334,11 @@ class StaticBrowserTest(unittest.TestCase):
         self.assertIn(want, got["bar"])
         self.assertIn("この記録を再生する", got["bar"])
         self.assertIn(want, page.inner_text("#intake-host"))
-        # the steps in order, then the run list's tab (a link) after them
+        # the steps in order; the run list is 「☰ 一覧へ」 at the top left, not a tab
         order = page.evaluate("[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.tab ?? t.getAttribute('href'))")
         self.assertEqual(order[:3], ["A1", "A2", "bench"])
-        self.assertIn("?list=1", order)
-        self.assertGreater(order.index("?list=1"), order.index("A7"))
+        self.assertNotIn("?list=1", order)
+        self.assertEqual(page.get_attribute("#back-link", "href"), "?list=1")
         # ②: the hearing of the record
         page.click('.tab[data-tab="A2"]')
         page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A2'")
@@ -352,8 +352,9 @@ class StaticBrowserTest(unittest.TestCase):
         first_design = page.evaluate("window.hiraku.player.events.find((e) => e.kind === 'design.created').t")
         self.assertGreaterEqual(got["playhead"], first_design)
         self.assertLess(got["playhead"], page.evaluate("window.hiraku.player.duration") / 2)
-        # the run list's tab opens the list
-        page.click("#tabs a.tab-list")
+        # 「☰ 一覧へ」 at the top left opens the list (no tab of its own beside the domain chips)
+        self.assertIsNone(page.query_selector("#tabs a.tab-list"))
+        page.click("#back-link")
         page.wait_for_selector("#runlist .local-run a", timeout=20000)
         self.clean(page, seen)
 
