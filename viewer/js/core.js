@@ -307,7 +307,8 @@ window.HV = window.HV || {};
   // calculation, mass, the nodes it sits on (kg each) and the deciding function; the mass table against the
   // record's stated mass. Shared by every field: colours the part boxes, the legend, the table, the click text.
   HV.LEDGER_COL = { frame_nodes: [0.16, 0.42, 0.85], unsprung: [0.95, 0.55, 0.08], stiffness: [0.15, 0.65, 0.3],
-                    mass_only: [0.6, 0.35, 0.78], body: [0.4, 0.62, 0.72], not_in: [0.86, 0.86, 0.86] };
+                    mass_only: [0.6, 0.35, 0.78], body: [0.4, 0.62, 0.72], not_in: [0.86, 0.86, 0.86],
+                    sprung: [0.25, 0.5, 0.8], half: [0.85, 0.75, 0.2] };   // K2: the rigid body, half with the wheel
   HV.GREY = [0.8, 0.8, 0.82];
   const rgb = c => `rgb(${c.map(v => Math.round(255 * v)).join(',')})`;
   const kg = v => (v === null || v === undefined) ? '-' : `${(+v).toFixed(1)} kg`;

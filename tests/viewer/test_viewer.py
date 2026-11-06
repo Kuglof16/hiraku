@@ -196,7 +196,7 @@ class FieldDataTest(unittest.TestCase):
         self.assertTrue(any("a(t)/a_max" in t for t in o["notes"]))
         self.assertEqual(o["wall_x_mm"], o["scene"][0]["c"][0] - o["scene"][0]["s"][0] / 2)
         labels = {r["label"] for r in o["inputs"]}
-        self.assertTrue({"speed", "wall", "mass"} <= labels, labels)
+        self.assertTrue({"速さ", "壁", "質量"} <= labels, labels)
         # the page never moves the A vehicle: no crush(t) translation in its code path
         js = (VIEWER / "js" / "crash.js").read_text(encoding="utf-8")
         a_part = js[js.index("HV.crashA"):js.index("HV.crashB = ")]
@@ -239,7 +239,7 @@ class FieldDataTest(unittest.TestCase):
         self.assertEqual(len(b["parts"]), nF)
         self.assertTrue(any("壁面" in t for t in o["notes"]))
         self.assertTrue(any("変形 ×1" in t for t in o["notes"]))
-        self.assertTrue({"speed", "wall", "wall friction", "beam break", "mass", "mesh"} <= {r["label"] for r in o["inputs"]})
+        self.assertTrue({"速さ", "壁", "壁の摩擦", "梁が折れる角度", "質量", "梁の分割"} <= {r["label"] for r in o["inputs"]})
         for k in ("t", "decel", "crush"):
             self.assertEqual(len(common.unpack_f32(o["series"][k])), len(common.series(rec, "deceleration")["t_s"]))
         # --tool picks the kind; a run with only A falls back to A

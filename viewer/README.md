@@ -10,6 +10,9 @@ From the repository root:
 python -m viewer.src.nvh      <run dir>   # modal record      -> viewer/data/nvh.js
 python -m viewer.src.crash    <run dir>   # crash record      -> viewer/data/crash.js
 python -m viewer.src.assembly <run dir>   # assembly record   -> viewer/data/assembly.js
+python -m viewer.src.handling <run dir> --also <run dir> ...     # tilt / braking / lane_change / offroad_roll
+python -m viewer.src.powertrain <run dir> --also <run dir> ...   # launch / step_climb_dynamic / drive_energy
+python -m viewer.src.aero <run dir>                              # crosswind
 ```
 
 `<run dir>` is a run folder (`runs/<id>`, with `v001/`, ...) or one version folder. By default each script takes the newest version that has the tool's record. `--version v003` or `--analysis ana-0038` picks another one, and `--out` sets the output folder. Then open `viewer/index.html` in a browser; `index.html#crash` opens one field. `viewer/data/` is not committed.
@@ -21,6 +24,8 @@ python -m viewer.src.assembly <run dir>   # assembly record   -> viewer/data/ass
   - **B** (`crash_beam`, K2's co-rotational beams with plastic hinges): the run's own `node_motion` positions over time, real size. Colour, from the record (K2 182f148f on): the member's axial stress = its axial force (series `member_axial_force.<m>`) / the section's area from the design, or the larger of its end plastic hinge rotations (`member_hinge.<m>.<end>`); or, from the positions, the fold angle at the element ends. Broken members light grey. Part boxes move by the mean motion of their carried_by nodes and are cut at the wall face (they have no contact with the wall). The header gives the stop (the run stops when a piece of 3 % or more of the mass breaks off the seats' side: the time, the member that broke, the piece's share), the peak and mean deceleration and the crush up to the stop; the inputs pane adds the least room to the occupant boxes (the hot spots, OK / NG). Plots: deceleration, crush, and the axial force of the member clicked (at first the one whose break stopped the run). Playback runs at a chosen fraction of real time (0.005 to 1 times, default 0.01: the 66 ms run plays in about 7 s).
   - **A** (`crash`, 1-D mass and spring): "A is a 1-D model: no deformed shape is drawn". The vehicle stands still (never moved into the wall); colour = the stored peak stress × a(t)/a_max; the elastic deflection solved at the peak is off by default (scale 0). Plots: deceleration, crush and wall force over t.
 - **Assembly** (`assembly`, H1/H3; `entry_opening` H7 and `spray_reach` H6 as numbers): part boxes coloured by step order, by status, or by interference depth. The parts move along `path_mm` in step order. A plot shows the tool gap per step.
+
+- **Handling** (`tilt` S1, `braking` S4, `lane_change` S3, `offroad_roll` S5), **powertrain** (`launch` P3, `step_climb_dynamic` P1, `drive_energy` P4) and **aero** (`crosswind` F1): `python -m viewer.src.<field> <run> --also <run> ...`, one case per run folder (its newest record of the field's tools), a case switch on the page. The K2 replays (`src/common.py` `k2_motion`, `js/vehicle.js`) pose the vehicle from the record's own series at their times: the design origin carried by the body (`body_x/y/z`) and R = Rz(yaw) Ry(pitch) Rx(roll); the frame and the sprung part boxes move as the one rigid body (K2 has no frame flexing), wheel-kind parts with their wheel centre, suspension kinds halfway (K2's `model._unsprung` rule); tyres turn by steer and spin and are coloured by wheel load, friction use or (powertrain) slip; green / red arrows are each contact's normal and friction force. The tilt table and the slope are the road frame: the whole road is turned by the record's angle channel about its low edge over a fixed level floor. Gates, cones, the road profile (two wheel tracks) and the step come from the record's scene. Powertrain: per-wheel torque = the record's driven-wheel total shared equally; slip = (ωr − v)/max(|v|, 0.5 m/s), ω from the record's `wheel_spin`. drive_energy has no geometry: the parts stand still and the battery box is coloured by the capacity used up to t. Aero: the side force is drawn at K2's side centre of pressure (`CrosswindTool.aero`) as the record's full-gust `side_force` × (wind_speed(t)/gust)². Playback defaults to real time (×50 for drive_energy).
 
 Every field lists its inputs (and where each one comes from).
 
@@ -51,4 +56,6 @@ Categories (legend, click info): mass on frame nodes / unsprung / modelled with 
 - `js/main.js`: the page: switch, time and scale, layers, inputs, and the info shown on a click.
 - `js/<field>.js`: one file per field.
 
-Tests: `python -m unittest tests.viewer.test_viewer`. The browser test needs Playwright for the system Python (`py`) and is skipped without it.
+- K2 tools (`k2_vehicle.model.build_vehicle` on the loading's parts): ばね上 (the rigid body), ばね下 (wheel kinds at the nearest corner with travel), 半分 (suspension kinds); members as rods' mass in the body, no stiffness. drive_energy (K3): every part on board in one mass, compared with the record's `vehicle_mass`.
+
+Tests: `python -m unittest tests.viewer.test_viewer tests.viewer.test_vehicle_fields`. The browser test needs Playwright for the system Python (`py`) and is skipped without it.
