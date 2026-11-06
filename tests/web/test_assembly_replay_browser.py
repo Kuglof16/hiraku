@@ -21,7 +21,7 @@ from tests.web.test_assembly_browser import ENABLED, assembly_events, write_run
 from tests.web.test_layout_lint_browser import ASSEMBLY, WIDTHS, Screen, describe, lint, start_servers
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 

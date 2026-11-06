@@ -24,7 +24,7 @@ from tests.web.modules_fixture import module_events
 from tests.web.three_designers_fixture import ROLE_OF_MODULE, ROLES, RUN_ID, three_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
