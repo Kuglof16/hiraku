@@ -216,7 +216,7 @@ class Hooks:
                 return None
             return (f"提案 {mine[-1]['change_id']} を記録しました (版はまだ作っていません)。パッケージ役が build_version で、"
                     f"その回の提案をまとめて版 {v + 1} を作ります")
-        if short in ("revise_design", "build_version") and v > 1 and s.design(v).get("parent_version") == v - 1:
+        if short in ("revise_design", "build_version", "write_design") and v > 1 and s.design(v).get("parent_version") == v - 1:
             return (f"設計の版 {v} ができました。判定は版ごとなので、まとめ役は全部の荷重条件を版 {v} で"
                     f"やり直すよう各役に頼んでください")
         return None
