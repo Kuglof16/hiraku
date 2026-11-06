@@ -166,8 +166,9 @@ class MassTest(unittest.TestCase):
                                     "tie_rod_FL", "tie_rod_FR"), BEFORE["steering"], places=9)
         for pid in ladder_4w.PLATE_T_MM:  # the plates weigh their own sheet (the pedals and master on top)
             self.assertAlmostEqual(mass(d, pid), panel_kg(d, pid), places=9)
-        for s in ("R", "L"):
-            self.assertAlmostEqual(mass(d, f"seat_{s}", f"seat_belt_{s}"), BEFORE["seat"], places=9)
+        for s in ("R", "L"):  # the seat box less its belt, its back and its head restraint (ladder_4w._seat_back_parts)
+            self.assertAlmostEqual(mass(d, f"seat_{s}", f"seat_belt_{s}", *ladder_4w.seat_back_ids(f"seat_{s}")),
+                                   BEFORE["seat"], places=9)
         from hiraku.designgen.kit.arms import part_ids
 
         for sid in ("FL", "FR", "RL", "RR"):  # the suspension box is now the arms, damper and ball joints (kit/arms)
