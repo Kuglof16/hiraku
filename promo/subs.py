@@ -377,10 +377,28 @@ def late_cuts(placed: list[dict], origin: float = 0.0) -> list[tuple[str, float]
     return [(cut, round(over, 2)) for cut, over in ends.items() if over > 0]
 
 
+def band_spans(ass_text: str, gap: float = 1.0, pad: float = 0.15) -> list[tuple[float, float]]:
+    """When the ink band is up: each subtitle line's time, widened by pad, joined across gaps under gap s."""
+    spans = []
+    for m in re.finditer(r"^Dialogue: [^,]*,(\d+):(\d\d):(\d\d(?:\.\d+)?),(\d+):(\d\d):(\d\d(?:\.\d+)?),", ass_text, re.M):
+        h0, m0, s0, h1, m1, s1 = m.groups()
+        spans.append((max(0.0, int(h0) * 3600 + int(m0) * 60 + float(s0) - pad), int(h1) * 3600 + int(m1) * 60 + float(s1) + pad))
+    spans.sort()
+    out: list[list[float]] = []
+    for a, b in spans:
+        if out and a - out[-1][1] < gap:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(round(a, 3), round(b, 3)) for a, b in out]
+
+
 def burn_command(video: Path, ass: Path, out: Path, audio: Path | None, ffmpeg: str = "ffmpeg",
-                 crf: int = 16) -> list[str]:
+                 crf: int = 16, spans: list[tuple[float, float]] | None = None) -> list[str]:
+    # spans: when the band is drawn (band_spans); None draws it the whole time
+    when = (":enable='" + "+".join(f"between(t,{a},{b})" for a, b in spans) + "'") if spans else ""
     band = (f"drawbox=x=0:y=ih*{BAND_TOP}/1080:w=iw:h=ih*{BAND_H}/1080"
-            f":color=0x1B1A17@1:t=fill")
+            f":color=0x1B1A17@1:t=fill{when}")
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(video)]
     if audio:
         cmd += ["-i", str(audio)]
