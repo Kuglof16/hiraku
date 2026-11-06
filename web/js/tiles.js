@@ -16,6 +16,7 @@ import { builtLine } from "./proposals.js"; // modules:
 import { judgedContour } from "./judged.js";
 import { analysisEdge, edgeFlips, edgeLineHtml, edgeRaw } from "./edge_note.js";
 import { MATERIAL_JA, pictureOf } from "./tile_pictures.js";
+import { domainIconSvg } from "./domain_icons.js";
 
 const W = 300;
 const H = 150;
@@ -403,7 +404,7 @@ export class TileBoard {
       const edgeHtml = onEdge ? edgeLineHtml(onEdge.e, `${onEdge.x.test_id ?? onEdge.x.load_case_id} ${quantityName(onEdge.x.quantity)}\n${edgeRaw(onEdge.a)}`) : "";
       return (
         `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}">` +
-        `<div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
+        `<div class="th"><h3>${domainIconSvg(d)}${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
         `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"${picAttrs}></canvas></div>` +
         `<div class="side">${number}${edgeHtml}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
         // the words and the small drawings: only when the tile is opened

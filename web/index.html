@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="css/grip.css"><!-- grip: the tyre view (js/grip_panel.js) -->
 <link rel="stylesheet" href="css/energy_flow.css"><!-- the energy's flow (js/energy_flow.js) -->
 <link rel="stylesheet" href="css/node_motion.css"><!-- node_motion: -->
+<link rel="stylesheet" href="css/topbar.css"><!-- the top's back link, the domains' icons, the hooks' line (js/hookline.js) -->
 <!-- three.js r170 (0.170.0) from jsDelivr; the version is pinned here and nowhere else. -->
 <script type="importmap">
 {
@@ -25,7 +26,8 @@
 <body>
 <div id="stage" class="stage">
   <header class="topbar">
-    <div class="brand"><span class="wordmark">HIRAKU</span><span class="want" id="want"></span></div>
+    <!-- back to the list at the top left by the wordmark, on every tab (js/app.js sets the href) -->
+    <div class="brand"><span class="wordmark">HIRAKU</span><a class="back-link" id="back-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a><span class="want" id="want"></span></div>
     <div class="pills">
       <span class="pill" id="pill-version">v—</span>
       <span class="pill" id="pill-cost">費用 —</span>
