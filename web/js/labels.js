@@ -538,8 +538,8 @@ export function channelPartName(id) {
 const PLAIN_JA = {
   max_hot_spot_stress: "つなぎ目の応力",
   min_side_load: "軽い側の輪の重さ",
-  first_frame_mode: "フレームのいちばん低い揺れの速さ",
-  first_frame_involving_mode: "フレームが大きく揺れるいちばん低い速さ",
+  first_frame_mode: "フレームが揺れやすい、いちばん低い揺れの回数 (1 秒あたり)",
+  first_frame_involving_mode: "フレームが揺れやすい、いちばん低い揺れの回数 (1 秒あたり)",
   fatigue_damage: "くり返しの力による傷み",
   // the known-answer checks of the use-count fatigue tool (N13) and its results
   cycles_at_FAT: "基準の強さで壊れるまでの回数",
