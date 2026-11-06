@@ -219,7 +219,7 @@ def describe(p: dict) -> str:
 
 PLANTED = """<!doctype html><html lang="ja"><body style="font: 16px sans-serif">
 <div style="position: relative; height: 30px"><span class="wordmark" id="name">HIRAKU</span>
-  <span class="vbox" id="over" style="position: absolute; left: 10px; top: 0">版 2 赤 2</span>
+  <span class="vbox" id="over" style="position: absolute; left: 10px; top: 0">v2 赤 2</span>
   <span class="wordmark" id="clear" style="position: absolute; left: 300px; top: 0">HIRAKU</span></div>
 <div style="position: relative; height: 40px">
   <button id="b1" style="position: absolute; left: 0; top: 0; width: 120px">再生</button>

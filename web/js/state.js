@@ -19,6 +19,9 @@ import {
   opLabel,
   plainText,
   verLabel,
+  judgedWords,
+  MISMATCH_STATUS,
+  RED_STATUS,
   plainToolName,
   quantityName,
   ruleOf,
@@ -110,7 +113,10 @@ function put(s, kind, id, rec, ev) {
 }
 
 // t is display time (the replay's clock); tRec is the recorded t shown on the line.
+// Every log line and the activity line carry the record's words through judgedWords (OK / NG,
+// 判定, vN), as do what an agent said and the notes under a line.
 function log(s, ev, level, text) {
+  text = judgedWords(text);
   s.log.push({ seq: ev.seq, t: ev.t, tRec: ev.t_rec ?? ev.t, kind: ev.kind, agent: ev.agent ?? null, domain: ev.domain ?? null, level, text });
   s.touched = { idx: s.log.length - 1, seq: ev.seq };
 }
@@ -126,14 +132,14 @@ function logRecord(s, ev, id, level, text) {
     s.log[s.log.length - 1].recId = id;
     return false;
   }
-  Object.assign(s.log[i], { level, text, updatedT: ev.t_rec ?? ev.t });
+  Object.assign(s.log[i], { level, text: judgedWords(text), updatedT: ev.t_rec ?? ev.t });
   s.touched = { idx: i, seq: ev.seq };
   s.logRev += 1;
   return true;
 }
 
 function setActivity(s, ev, text) {
-  s.activity = { agent: ev.agent ?? null, domain: ev.domain ?? null, text, t: ev.t, seq: ev.seq };
+  s.activity = { agent: ev.agent ?? null, domain: ev.domain ?? null, text: judgedWords(text), t: ev.t, seq: ev.seq };
 }
 
 function focusLoadCase(s, loadCaseId, t) {
@@ -278,7 +284,7 @@ export function applyEvent(s, ev) {
       s.reports[d.design_version] = d;
       s.report = d;
       const reds = (d.domains ?? []).filter((x) => x.state === "red").length;
-      log(s, ev, "ok", `${verLabel(d.design_version)} の報告を書いた (分野 ${(d.domains ?? []).length}・赤 ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
+      log(s, ev, "ok", `${verLabel(d.design_version)} の報告を書いた (分野 ${(d.domains ?? []).length}・NG ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
       setActivity(s, ev, `報告: ${String(d.summary ?? "").split("\n")[0]}`);
       break;
     }
@@ -315,7 +321,7 @@ export function applyEvent(s, ev) {
     }
     case "agent.said":
     case "user.said": {
-      const text = plainText(ev.text);
+      const text = judgedWords(plainText(ev.text));
       s.said = { agent: ev.kind === "user.said" ? "user" : ev.agent, text, t: ev.t, seq: ev.seq };
       log(s, ev, "said", text);
       setActivity(s, ev, text.split("\n")[0]);
@@ -410,12 +416,12 @@ export function applyEvent(s, ev) {
       put(s, "comparisons", d.comparison_id, d, ev);
       const ok = d.status === "match";
       const txt = ok
-        ? `照合: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で一致`
-        : `照合: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。` +
+        ? `比べた: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で予想通り`
+        : `比べた: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で不一致。` +
           (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
       logRecord(s, ev, d.comparison_id, ok ? "ok" : "warn", `${who(ev)}: ${txt}`); // a mismatch: attention, not NG
       if (!again) {
-        if (agent) agent.status = ok ? "照合した" : "食い違い";
+        if (agent) agent.status = ok ? "予想通り" : MISMATCH_STATUS;
         setActivity(s, ev, txt);
       }
       break;
@@ -423,10 +429,10 @@ export function applyEvent(s, ev) {
     case "cause.recorded": {
       const before = s.causes[d.cause_id];
       put(s, "causes", d.cause_id, d, ev);
-      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で一致)` : ""}` : "";
+      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で予想通り)` : ""}` : "";
       const safe = d.safe_side ? ` — 安全側で見られている: ${d.safe_side_reason ?? ""}` : "";
       logRecord(s, ev, d.cause_id, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」${done}${safe}`);
-      if (!before) setActivity(s, ev, d.safe_side ? `食い違いの原因を書いた。安全側で見られている` : `食い違いの原因を書いた: ${d.cause}`);
+      if (!before) setActivity(s, ev, d.safe_side ? `不一致の原因を書いた。安全側で見られている` : `不一致の原因を書いた: ${d.cause}`);
       else if (d.resolved && !before.resolved) setActivity(s, ev, `原因 ${d.cause_id} は直った`);
       break;
     }
@@ -434,23 +440,23 @@ export function applyEvent(s, ev) {
       put(s, "verdicts", d.verdict_id, d, ev);
       const how = isSafeSide(d) ? ` (安全側で判定: ${valueFromJa(d)}の値・${d.cause_id ?? ""})` : "";
       // named by the quantity compared (frame_shell: the hot-spot stress for a max_stress criterion)
-      const txt = `判定${how}: ${quantityName(s.comparisons[d.comparison_id]?.quantity ?? d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmtMargin(d)})`;
+      const txt = `判定${how}: ${quantityName(s.comparisons[d.comparison_id]?.quantity ?? d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "OK" : "NG"} (余裕 ${fmtMargin(d)})`;
       logRecord(s, ev, d.verdict_id, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
     }
     case "judgement.updated": {
       s.judgements[`${d.design_version}|${d.domain}`] = { ...d, t: ev.t, seq: ev.seq };
-      const state = { green: "緑", red: "赤", pending: "まだ" }[d.state] ?? d.state;
+      const state = { green: "OK", red: "NG", pending: "まだ" }[d.state] ?? d.state;
       const a = s.agents[`cae.${d.domain}`];
       if (a && d.state === "green") a.status = "✓";
-      if (a && d.state === "red") a.status = "赤";
-      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: ${verLabel(d.design_version)} の判定は${state}${d.summary ? ` — ${d.summary}` : ""}`);
+      if (a && d.state === "red") a.status = RED_STATUS;
+      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: ${verLabel(d.design_version)} の判定は ${state}${d.summary ? ` — ${d.summary}` : ""}`);
       break;
     }
     case "tool.checked": {
       s.tools[d.name] = d;
-      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
+      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の判定: ${d.usable ? "使える" : "まだ使えない"}`);
       break;
     }
     case "hook.denied": {
@@ -494,7 +500,7 @@ export function applyEvent(s, ev) {
   }
   if (ev.text && s.touched?.seq === ev.seq && !["agent.said", "user.said", "hook.denied", "hook.blocked_stop", "run.finished"].includes(ev.kind)) {
     // Extra words on a record event are shown as is under its log line.
-    s.log[s.touched.idx].note = ev.text;
+    s.log[s.touched.idx].note = judgedWords(ev.text);
     if (s.touched.idx !== s.log.length - 1) s.logRev += 1;
   }
   return s;

@@ -252,8 +252,10 @@ class CutN17BrowserTest(unittest.TestCase):
         self.assertLessEqual(got["textPx"], layout["n17"]["page"]["text_px"])
         self.assertGreaterEqual(got["textPx"], layout["min_text_px"])
         # the words are the report's; a domain's line is made from its verdicts in the viewers'
-        # words (the sample's ver-0001: max_stress 123.6 MPa <= 156.67 MPa), not the report's line
-        for s in [REPORT["summary"], CHOSEN, CHOSEN_WHY]:
+        # words (the sample's ver-0001: max_stress 123.6 MPa <= 156.67 MPa), not the report's line;
+        # the report's 合格 is shown as OK (labels.js judgedWords)
+        self.assertIn("合格", REPORT["summary"])
+        for s in [REPORT["summary"].replace("合格", " OK"), CHOSEN, CHOSEN_WHY]:
             self.assertIn(s, got["text"])
         # one step only: not the weaker one, not the one without a name and a direction,
         # and no ids or paths from the report's words
@@ -268,7 +270,7 @@ class CutN17BrowserTest(unittest.TestCase):
         for word in ("bending", "torsion", "rail_R_S2B", "cmp-0001", "cause-0001"):
             self.assertNotIn(word, got["text"])
         self.assertIn("上下の曲げ", got["text"])
-        self.assertIn("途中で手計算と食い違った 1 件 (原因を書いたもの 1 件)", got["text"])
+        self.assertIn("途中で手計算と不一致だった 1 件 (原因を書いたもの 1 件)", got["text"])
         self.assertIn(REPORT["domains"][0]["assumptions"][0], got["text"])
         # each domain's line at the story's body text size (this layout has no story: its
         # min_text_px; with the promo department's story, 24 px: test_cut_story_browser)

@@ -18,6 +18,70 @@ def read(p):
     return p.read_text(encoding="utf-8")
 
 
+def keep_newlines(s):
+    return "\n" * s.count("\n")
+
+
+def strip_html_comments(src):
+    return re.sub(r"<!--.*?-->", lambda m: keep_newlines(m.group(0)), src, flags=re.S)
+
+
+def strip_js_comments(src):
+    """The source without its // and /* */ comments (newlines kept, so line numbers stay).
+    Strings, template literals (with ${} inside them, nested) and regex literals are kept
+    whole, so a // in a URL or a regex is not taken for a comment."""
+    out, i, n = [], 0, len(src)
+    stack = []  # "`" inside a template literal, "{" inside a brace of code (in a ${} or not)
+    last = ""  # the last non-space character of code, to tell a regex from a division
+    while i < n:
+        c = src[i]
+        if stack and stack[-1] == "`":
+            if c == "\\":
+                out.append(src[i : i + 2]); i += 2; continue
+            if c == "`":
+                stack.pop(); out.append(c); i += 1; last = c; continue
+            if src.startswith("${", i):
+                stack.append("${"); out.append("${"); i += 2; last = "{"; continue
+            out.append(c); i += 1; continue
+        if src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            out.append(keep_newlines(src[i:j])); i = j; continue
+        if c in "\"'":
+            j = i + 1
+            while j < n and src[j] != c and src[j] != "\n":
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i : j + 1]); i = j + 1; last = c; continue
+        if c == "/" and (last == "" or last in "(,=:[!&|?{};+-*%<>~^"):
+            j, in_class = i + 1, False
+            while j < n and src[j] != "\n":
+                if src[j] == "\\":
+                    j += 2; continue
+                if src[j] == "[":
+                    in_class = True
+                elif src[j] == "]":
+                    in_class = False
+                elif src[j] == "/" and not in_class:
+                    break
+                j += 1
+            out.append(src[i : j + 1]); i = j + 1; last = "/"; continue
+        if c == "`":
+            stack.append("`")
+        elif c == "{":
+            stack.append("{")
+        elif c == "}" and stack and stack[-1] in ("{", "${"):
+            stack.pop()
+        out.append(c)
+        if not c.isspace():
+            last = c
+        i += 1
+    return "".join(out)
+
+
 class ContractCoverageTest(unittest.TestCase):
     def test_every_event_kind_has_a_case_in_the_reducer(self):
         src = read(JS / "state.js")
@@ -109,6 +173,60 @@ class FilesTest(unittest.TestCase):
         html = read(WEB / "index.html")
         self.assertIn('<script type="module" src="js/app.js">', html)
         self.assertIn('type="importmap"', html)
+
+    # Lines the word check lets through, each with why: (file, a piece of the line).
+    SCREEN_WORDS_ALLOWED = [
+        # the words hiraku/tools/judge.py writes in a judgement's summary, matched (not shown)
+        ("js/beyond.js", "const NOT_ALL_JUDGED = ["),
+        # labels.js judgedWords: the record's words it turns into OK / NG / 判定 on the screen
+        ("js/labels.js", '.replace(/不合格|合格/g, (m) => (m === "不合格" ? "NG" : "OK"))'),
+        ("js/labels.js", '.replace(/まだ\\s*(?:合格|OK)\\s*にできない/g, "まだ判定を出せない")'),
+        ("js/labels.js", '.replace(/照合/g, "比べ")'),
+        ("js/labels.js", '.replace(/食い違った/g, "不一致だった")'),
+        ("js/labels.js", '.replace(/食い違い/g, "不一致")'),
+        ("js/labels.js", '.replace(/(?<!半透明の)([赤緑])(?![いく色字み])/g, (m, c) => (c === "赤" ? "NG" : "OK"))'),
+        # the colour of a drawing (a see-through red pose, a box red over its limit), not a verdict
+        ("js/app.js", "半透明の赤 = 限界を超えたあとの姿勢"),
+        ("js/cut.js", "半透明の赤: 限界の外の条件の動き"),
+        ("js/energy_flow.js", "上限を超えたときだけ赤"),
+    ]
+
+    def test_screen_words_use_v_and_ok_ng(self):
+        """The screen says v3 (not 版 3), OK / NG for a verdict (not 合格・不合格・基準を満たした,
+        nor 緑・赤 meaning the verdict) and 予想通り / 不一致 for a prediction against an analysis
+        (not 照合・食い違い・一致 ✓・差 OK・差 NG・NG (食い違い)). Comments are not shown, so they
+        are left out; the intake's screen (web/js/intake/) is the intake's own. Internal names
+        (green, red, mismatch, class names) are ASCII and not matched; CSS is not read."""
+        intake = JS / "intake"
+        banned = [re.compile(r"版\s*\d"), re.compile(r"\d\s*版"), re.compile(r"版\s*\$\{"), re.compile("照合"),
+                  re.compile("合格"), re.compile("基準を満たし|基準を満たさ"), re.compile("緑"), re.compile("赤"),
+                  re.compile("食い違"), re.compile(r"一致\s*✓|✓\s*一致"), re.compile(r"差\s*OK|差\s*NG"),
+                  re.compile(r"NG\s*\(食い違い\)")]
+        found = []
+        for p in self.web_files():
+            if p.suffix not in (".js", ".html") or p.is_relative_to(intake):
+                continue
+            rel = p.relative_to(WEB).as_posix()
+            text = strip_html_comments(read(p)) if p.suffix == ".html" else strip_js_comments(read(p))
+            for n, line in enumerate(text.splitlines(), 1):
+                if any(b.search(line) for b in banned) and not any(f == rel and piece in line for f, piece in self.SCREEN_WORDS_ALLOWED):
+                    found.append(f"{rel}:{n}: {line.strip()[:80]}")
+        self.assertEqual(found, [])
+
+    def test_screen_words_allowed_lines_are_there(self):
+        """Each let-through line is still in its file (an allowance not needed any more is removed)."""
+        for f, piece in self.SCREEN_WORDS_ALLOWED:
+            self.assertIn(piece, read(WEB / f), f)
+
+    def test_comment_stripper_keeps_strings(self):
+        src = 'const u = "https://x.org/a"; // 照合\nconst t = `a ${b ? `c//d` : "/*e*/"} f`; /* 版 1 */ const r = /"\\//g;\nx = "g"'
+        out = strip_js_comments(src)
+        self.assertNotIn("照合", out)
+        self.assertNotIn("版 1", out)
+        for kept in ('"https://x.org/a"', "`c//d`", '"/*e*/"', 'x = "g"'):
+            self.assertIn(kept, out)
+        self.assertEqual(out.count("\n"), src.count("\n"))  # line numbers stay
+        self.assertEqual(strip_html_comments("a<!-- 照合\n-->b"), "a\nb")
 
     def test_no_absolute_local_paths(self):
         drive_path = re.compile(r"\b[A-Za-z]:[\\/][A-Za-z]")
