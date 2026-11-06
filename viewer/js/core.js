@@ -1,0 +1,295 @@
+// Shared parts of the result viewer: data unpacking, colour map and contour bar, the 3D view
+// (renderer, camera, clipping planes, picking), beams, part boxes, scene boxes and arrows.
+// Classic script (file:// pages cannot load local ES modules); three.js is read from window.THREE,
+// which index.html sets from the pinned jsDelivr module before HV.main runs.
+window.HV = window.HV || {};
+(function (HV) {
+  'use strict';
+
+  // ---------------------------------------------------------------- data
+  // Packed array {dtype: 'f32', shape, b64}: base64 of gzip of little-endian float32.
+  HV.unpack = async function (p) {
+    const bin = atob(p.b64);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const buf = await new Response(stream).arrayBuffer();
+    return new Float32Array(buf);
+  };
+
+  HV.esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  HV.fmt = (v, d = 3) => {
+    if (v === null || v === undefined || Number.isNaN(v)) return '-';
+    const a = Math.abs(v);
+    if (a !== 0 && (a >= 1e5 || a < 1e-3)) return v.toExponential(2);
+    return (+v.toPrecision(d + 1)).toLocaleString('en-US', { maximumFractionDigits: 3 });
+  };
+
+  // ---------------------------------------------------------------- colour
+  // Turbo colour map, polynomial approximation (Mikhailov 2019, Google AI blog "Turbo").
+  HV.turbo = function (x) {
+    x = Math.min(1, Math.max(0, x));
+    const r = 0.13572138 + x * (4.61539260 + x * (-42.66032258 + x * (132.13108234 + x * (-152.94239396 + x * 59.28637943))));
+    const g = 0.09140261 + x * (2.19418839 + x * (4.84296658 + x * (-14.18503333 + x * (4.27729857 + x * 2.82956604))));
+    const b = 0.10667330 + x * (12.64194608 + x * (-60.58204836 + x * (110.36276771 + x * (-89.90310912 + x * 27.34824973))));
+    return [Math.min(1, Math.max(0, r)), Math.min(1, Math.max(0, g)), Math.min(1, Math.max(0, b))];
+  };
+  // contour spec {min, max, log, unit, title, marks: [{v, label}]} -> position 0..1
+  HV.norm = function (c, v) {
+    if (c.log) {
+      const lo = Math.log10(Math.max(c.min, 1e-30)), hi = Math.log10(Math.max(c.max, 1e-30));
+      return hi > lo ? (Math.log10(Math.max(v, c.min)) - lo) / (hi - lo) : 0;
+    }
+    return c.max > c.min ? (v - c.min) / (c.max - c.min) : 0;
+  };
+  HV.colour = (c, v) => HV.turbo(HV.norm(c, v));
+
+  HV.drawContourBar = function (cv, c) {
+    const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    if (!c) { cv.style.display = 'none'; return; }
+    cv.style.display = 'block';
+    g.fillStyle = 'rgba(255,255,255,.88)'; g.fillRect(0, 0, W, H);
+    const x0 = 10, w = 16, y0 = 30, h = H - 70;
+    g.fillStyle = '#000'; g.font = 'bold 11px system-ui, sans-serif';
+    wrap(g, c.title + (c.unit ? ` [${c.unit}]` : ''), 4, 12, W - 8, 12);
+    for (let i = 0; i < h; i++) { const k = HV.turbo(1 - i / h); g.fillStyle = `rgb(${k.map(v => Math.round(255 * v)).join(',')})`; g.fillRect(x0, y0 + i, w, 1); }
+    g.strokeStyle = '#000'; g.lineWidth = 1; g.strokeRect(x0, y0, w, h);
+    g.font = '11px system-ui, sans-serif';
+    const ticks = [];
+    if (c.log) {
+      for (let e = Math.floor(Math.log10(c.min)); e <= Math.ceil(Math.log10(c.max)); e++) { const v = Math.pow(10, e); if (v >= c.min * 0.999 && v <= c.max * 1.001) ticks.push(v); }
+      if (!ticks.length || ticks[0] > c.min * 1.001) ticks.unshift(c.min);
+      if (ticks[ticks.length - 1] < c.max * 0.999) ticks.push(c.max);
+    } else {
+      for (let i = 0; i <= 5; i++) ticks.push(c.min + (c.max - c.min) * i / 5);
+    }
+    for (const v of ticks) {
+      const y = y0 + h * (1 - HV.norm(c, v));
+      g.beginPath(); g.moveTo(x0 + w, y); g.lineTo(x0 + w + 4, y); g.stroke();
+      g.fillStyle = '#000'; g.fillText(HV.fmt(v), x0 + w + 7, y + 4);
+    }
+    for (const m of c.marks || []) {
+      if (m.v < c.min || m.v > c.max) continue;
+      const y = y0 + h * (1 - HV.norm(c, m.v));
+      g.lineWidth = 2; g.beginPath(); g.moveTo(x0 - 4, y); g.lineTo(x0 + w + 4, y); g.stroke(); g.lineWidth = 1;
+      g.font = 'bold 10px system-ui, sans-serif'; g.fillText(m.label, x0 + w + 7, y - 4); g.font = '11px system-ui, sans-serif';
+    }
+    g.fillStyle = '#444'; g.font = '10px system-ui, sans-serif';
+    wrap(g, (c.log ? 'log scale' : 'linear scale') + (c.note ? '; ' + c.note : ''), 4, y0 + h + 14, W - 8, 11);
+  };
+  function wrap(g, text, x, y, maxW, lh) {
+    let line = '';
+    for (const word of String(text).split(' ')) {
+      const t = line ? line + ' ' + word : word;
+      if (g.measureText(t).width > maxW && line) { g.fillText(line, x, y); y += lh; line = word; } else line = t;
+    }
+    if (line) g.fillText(line, x, y);
+  }
+
+  // ---------------------------------------------------------------- 3D view
+  HV.View = class {
+    constructor(el) {
+      const T = window.THREE;
+      this.el = el;
+      this.renderer = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+      this.renderer.localClippingEnabled = true;
+      this.renderer.setClearColor(0xf4f4f2);
+      el.appendChild(this.renderer.domElement);
+      this.scene = new T.Scene();
+      this.camera = new T.PerspectiveCamera(35, 1, 5, 200000);
+      this.camera.up.set(0, 0, 1);
+      this.scene.add(this.camera);
+      this.scene.add(new T.AmbientLight(0xffffff, 1.6));
+      const dl = new T.DirectionalLight(0xffffff, 1.3); dl.position.set(0.3, 0.6, 1); this.camera.add(dl);
+      this.controls = new window.OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.addEventListener('change', () => this.render());
+      this.clip = [];          // active planes; the same array is given to every material
+      this.materials = [];
+      this.planes = { x: new T.Plane(), y: new T.Plane(), z: new T.Plane() };
+      this.clipState = { x: { on: false, flip: false, v: 0 }, y: { on: false, flip: false, v: 0 }, z: { on: false, flip: false, v: 0 } };
+      this.pending = false;
+      this.afterRender = [];
+      window.addEventListener('resize', () => this.resize());
+    }
+    material(m) { m.clippingPlanes = this.clip; this.materials.push(m); return m; }
+    updateClip() {
+      const T = window.THREE;
+      this.clip.length = 0;
+      ['x', 'y', 'z'].forEach((k, a) => {
+        const c = this.clipState[k]; if (!c.on) return;
+        const n = new T.Vector3(); n.setComponent(a, c.flip ? 1 : -1);
+        this.planes[k].set(n, c.flip ? -c.v : c.v);   // not flipped: keep k <= v; flipped: keep k >= v
+        this.clip.push(this.planes[k]);
+      });
+      for (const m of this.materials) m.needsUpdate = true;
+      this.render();
+    }
+    visible(p) { for (const pl of this.clip) if (pl.distanceToPoint(p) < 0) return false; return true; }
+    resize() {
+      const w = this.el.clientWidth, h = this.el.clientHeight;
+      this.renderer.setSize(w, h); this.camera.aspect = w / Math.max(1, h); this.camera.updateProjectionMatrix(); this.render();
+    }
+    fit(lo, hi, dir = [0.9, -1.05, 0.75]) {   // default: from front-right-above
+      const c = [0, 1, 2].map(a => (lo[a] + hi[a]) / 2), r = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 100);
+      this.controls.target.set(c[0], c[1], c[2]);
+      this.camera.position.set(c[0] + dir[0] * r, c[1] + dir[1] * r, c[2] + dir[2] * r);
+      this.controls.update();
+    }
+    render() {
+      if (this.pending) return; this.pending = true;
+      requestAnimationFrame(() => { this.pending = false; this.draw(); });
+    }
+    draw() { this.renderer.render(this.scene, this.camera); for (const f of this.afterRender) f(); }
+    pick(ev, objects) {
+      const T = window.THREE, r = this.renderer.domElement.getBoundingClientRect();
+      const ray = new T.Raycaster();
+      ray.setFromCamera(new T.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1), this.camera);
+      const hits = ray.intersectObjects(objects.filter(o => o && o.visible), false);
+      return hits.find(h => this.visible(h.point)) || null;
+    }
+  };
+
+  // ---------------------------------------------------------------- beams
+  // Each member is a tube of K sides between its two (moved) end nodes; colours per vertex,
+  // so a node value shades along the member and a member value is flat.
+  const K = 8;
+  HV.Beams = class {
+    constructor(view, frame, nodes) {
+      const T = window.THREE;
+      this.view = view; this.frame = frame; this.nodes0 = nodes;
+      this.nM = frame.members.length;
+      const nV = this.nM * 2 * K;
+      this.pos = new Float32Array(nV * 3); this.col = new Float32Array(nV * 3).fill(0.6);
+      const idx = [];
+      for (let m = 0; m < this.nM; m++) {
+        const b = m * 2 * K;
+        for (let k = 0; k < K; k++) { const k1 = (k + 1) % K; idx.push(b + k, b + k1, b + K + k, b + k1, b + K + k1, b + K + k); }
+      }
+      this.geo = new T.BufferGeometry();
+      this.posAttr = new T.BufferAttribute(this.pos, 3); this.colAttr = new T.BufferAttribute(this.col, 3);
+      this.geo.setAttribute('position', this.posAttr); this.geo.setAttribute('color', this.colAttr); this.geo.setIndex(idx);
+      this.mesh = new T.Mesh(this.geo, view.material(new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide })));
+      this.mesh.userData.kind = 'beam';
+      // the undeformed frame as thin lines
+      const lp = new Float32Array(this.nM * 6);
+      frame.members.forEach(([a, b], m) => { for (let c = 0; c < 3; c++) { lp[6 * m + c] = nodes[3 * a + c]; lp[6 * m + 3 + c] = nodes[3 * b + c]; } });
+      const lg = new T.BufferGeometry(); lg.setAttribute('position', new T.BufferAttribute(lp, 3));
+      this.ghost = new T.LineSegments(lg, view.material(new T.LineBasicMaterial({ color: 0x777777, transparent: true, opacity: 0.55 })));
+      this.ghost.visible = false;
+      this.group = new T.Group(); this.group.add(this.mesh, this.ghost);
+      this.radius = frame.radius_mm.map(r => Math.max(6, r));
+      this.cur = new Float32Array(nodes);
+      this.setNodes(nodes);
+    }
+    setNodes(p) {   // p: Float32Array n x 3, positions now
+      this.cur = p;
+      const T = window.THREE, A = new T.Vector3(), B = new T.Vector3(), d = new T.Vector3(), u = new T.Vector3(), v = new T.Vector3(), ref = new T.Vector3();
+      this.frame.members.forEach(([a, b], m) => {
+        A.set(p[3 * a], p[3 * a + 1], p[3 * a + 2]); B.set(p[3 * b], p[3 * b + 1], p[3 * b + 2]);
+        d.subVectors(B, A); if (d.lengthSq() < 1e-9) d.set(1, 0, 0); d.normalize();
+        ref.set(0, 0, 1); if (Math.abs(d.z) > 0.9) ref.set(1, 0, 0);
+        u.crossVectors(d, ref).normalize(); v.crossVectors(d, u);
+        const r = this.radius[m], base = m * 2 * K;
+        for (let k = 0; k < K; k++) {
+          const th = 2 * Math.PI * k / K, cx = Math.cos(th) * r, sy = Math.sin(th) * r;
+          for (let e = 0; e < 2; e++) {
+            const P = e ? B : A, j = 3 * (base + e * K + k);
+            this.pos[j] = P.x + cx * u.x + sy * v.x; this.pos[j + 1] = P.y + cx * u.y + sy * v.y; this.pos[j + 2] = P.z + cx * u.z + sy * v.z;
+          }
+        }
+      });
+      this.posAttr.needsUpdate = true; this.geo.computeVertexNormals(); this.geo.computeBoundingSphere();
+    }
+    colourNodes(fn) {   // fn(node index) -> [r, g, b]
+      this.frame.members.forEach(([a, b], m) => {
+        const ca = fn(a), cb = fn(b), base = m * 2 * K;
+        for (let k = 0; k < K; k++) { this.col.set(ca, 3 * (base + k)); this.col.set(cb, 3 * (base + K + k)); }
+      });
+      this.colAttr.needsUpdate = true;
+    }
+    colourMembers(fn) { // fn(member index) -> [r, g, b]
+      for (let m = 0; m < this.nM; m++) { const c = fn(m), base = m * 2 * K; for (let k = 0; k < 2 * K; k++) this.col.set(c, 3 * (base + k)); }
+      this.colAttr.needsUpdate = true;
+    }
+    memberOf(hit) { return Math.floor(hit.faceIndex / (2 * K)); }
+  };
+
+  // ---------------------------------------------------------------- boxes
+  // Part boxes: one instanced mesh (instance colour) plus their edges; a box is posed by its
+  // centre offset (dx) and hidden with show[i] = false.
+  HV.Boxes = class {
+    constructor(view, parts, opts = {}) {
+      const T = window.THREE;
+      this.view = view; this.parts = parts; this.n = parts.length;
+      this.mat = view.material(new T.MeshLambertMaterial({ transparent: true, opacity: opts.opacity ?? 0.5, depthWrite: false, side: T.DoubleSide }));
+      this.mesh = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), this.mat, Math.max(1, this.n));
+      this.mesh.count = this.n; this.mesh.userData.kind = 'box';
+      this.mesh.instanceColor = new T.InstancedBufferAttribute(new Float32Array(Math.max(1, this.n) * 3).fill(0.7), 3);
+      this.quat = parts.map(p => new T.Quaternion().setFromEuler(new T.Euler(p.r[0] * Math.PI / 180, p.r[1] * Math.PI / 180, p.r[2] * Math.PI / 180, 'ZYX')));
+      this.off = parts.map(() => [0, 0, 0]); this.show = parts.map(() => true);
+      this.epos = new Float32Array(this.n * 24 * 3);
+      const eg = new T.BufferGeometry(); this.eattr = new T.BufferAttribute(this.epos, 3); eg.setAttribute('position', this.eattr);
+      this.edges = new T.LineSegments(eg, view.material(new T.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.45 })));
+      this.group = new T.Group(); this.group.add(this.mesh, this.edges);
+      this.update();
+    }
+    colour(i, c) { this.mesh.instanceColor.setXYZ(i, c[0], c[1], c[2]); }
+    update() {
+      const T = window.THREE, M = new T.Matrix4(), S = new T.Vector3(), P = new T.Vector3(), v = new T.Vector3();
+      const E = [[0, 1], [1, 3], [3, 2], [2, 0], [4, 5], [5, 7], [7, 6], [6, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+      this.parts.forEach((p, i) => {
+        const on = this.show[i], o = this.off[i];
+        P.set(p.c[0] + o[0], p.c[1] + o[1], p.c[2] + o[2]);
+        S.set(on ? Math.max(p.s[0], 1) : 1e-6, on ? Math.max(p.s[1], 1) : 1e-6, on ? Math.max(p.s[2], 1) : 1e-6);
+        M.compose(P, this.quat[i], S); this.mesh.setMatrixAt(i, M);
+        const cs = [];
+        for (let k = 0; k < 8; k++) { v.set((k & 1 ? 0.5 : -0.5), (k & 2 ? 0.5 : -0.5), (k & 4 ? 0.5 : -0.5)).applyMatrix4(M); cs.push([v.x, v.y, v.z]); }
+        E.forEach(([a, b], e) => { const j = (i * 24 + 2 * e) * 3; this.epos.set(cs[a], j); this.epos.set(cs[b], j + 3); });
+      });
+      this.mesh.instanceMatrix.needsUpdate = true; this.mesh.instanceColor.needsUpdate = true; this.eattr.needsUpdate = true;
+      this.mesh.computeBoundingSphere(); this.edges.geometry.computeBoundingSphere();
+    }
+  };
+
+  // scene boxes (wall, step, table): translucent, with edges
+  HV.sceneBoxes = function (view, list) {
+    const T = window.THREE, g = new T.Group();
+    for (const s of list) {
+      const geo = new T.BoxGeometry(s.s[0], s.s[1], s.s[2]);
+      const m = new T.Mesh(geo, view.material(new T.MeshLambertMaterial({ color: 0x8c8c96, transparent: true, opacity: 0.35, depthWrite: false })));
+      const e = new T.LineSegments(new T.EdgesGeometry(geo), view.material(new T.LineBasicMaterial({ color: 0x404050 })));
+      m.position.set(...s.c); e.position.set(...s.c); m.userData = { kind: 'scene', item: s };
+      g.add(m, e);
+    }
+    return g;
+  };
+
+  // ---------------------------------------------------------------- arrows
+  HV.Arrows = class {
+    constructor(view) {
+      const T = window.THREE;
+      this.view = view; this.group = new T.Group(); this.items = [];
+      this.shaft = new T.CylinderGeometry(1, 1, 1, 10); this.shaft.translate(0, 0.5, 0);
+      this.cone = new T.ConeGeometry(1, 1, 14); this.cone.translate(0, -0.5, 0);
+    }
+    clear() { for (const a of this.items) this.group.remove(a); this.items = []; }
+    add(colour) {
+      const T = window.THREE;
+      const mat = new T.MeshBasicMaterial({ color: colour, depthTest: false, transparent: true, opacity: 0.9 });
+      const a = new T.Group(), s = new T.Mesh(this.shaft, mat), c = new T.Mesh(this.cone, mat);
+      s.renderOrder = c.renderOrder = 8; a.add(s, c); a.s = s; a.c = c;
+      this.group.add(a); this.items.push(a); return a;
+    }
+    set(a, o, f, mmPerN) {   // o: origin mm, f: force N
+      const T = window.THREE, len = Math.hypot(f[0], f[1], f[2]) * mmPerN;
+      a.visible = len > 1;
+      if (!a.visible) return;
+      const head = Math.min(60, 0.35 * len), r = 6;
+      a.position.set(o[0], o[1], o[2]);
+      a.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), new T.Vector3(f[0], f[1], f[2]).normalize());
+      a.s.scale.set(r, len - head, r); a.c.position.set(0, len, 0); a.c.scale.set(head * 0.4, head, head * 0.4);
+    }
+  };
+})(window.HV);
