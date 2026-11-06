@@ -63,7 +63,7 @@ from ..k0_handcalc.bracket_inputs import mount_points, plate_material
 BASE_TOL_MM = 1.0  # the box's base face on the wall's outer surface within this
 SPAN_TOL_MM = 1e-6  # the tied span and bracket_inputs.weld_span (the hand calculation's welded length) agree within this
 HOLE_ROOM = 1.5  # the hole block's half size a must be at least this many hole radii
-HOLE_LAYERS_RATIO = 1.3  # O-grid layers grow by this toward the block's sides
+HOLE_EXTRA_LAYERS = 3  # O-grid: m // 2 + this layers from the hole to the block's sides (log-polar radii)
 TOL = 1e-6
 
 
@@ -361,17 +361,20 @@ def plate_grid(pl: BracketPlan, ring_w: np.ndarray, size: float):
     B = P[per]
     d = B - C
     ang = np.arctan2(d[:, 1], d[:, 0])
-    circ = C + pl.r * d / np.linalg.norm(d, axis=1)[:, None]
-    L = pl.m // 2 + 1
-    q = HOLE_LAYERS_RATIO
-    f = (q ** np.arange(L + 1) - 1.0) / (q ** L - 1.0)
+    R = np.linalg.norm(d, axis=1)
+    u = d / R[:, None]
+    # log-polar layers: on each node's ray the radii grow geometrically from r to the block's side, so every
+    # layer has the same dr / r all round and blends smoothly from the circle to the square (no kink where a
+    # straight circle-to-square interpolation turns at the corner rays)
+    L = pl.m // 2 + HOLE_EXTRA_LAYERS
+    s = np.arange(L + 1) / L
     n = len(per)
     layer_ids = []
     extra = []
     base = len(P)
     for li in range(L):
-        layer_ids.append(base + len(extra) * 0 + li * n + np.arange(n))
-        extra.append(circ + f[li] * (B - circ))
+        layer_ids.append(base + li * n + np.arange(n))
+        extra.append(C + (pl.r * (R / pl.r) ** s[li])[:, None] * u)
     layer_ids.append(np.asarray(per))
     P = np.vstack([P] + extra)
     hole_q = []
