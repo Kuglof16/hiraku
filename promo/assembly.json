@@ -15,7 +15,7 @@
     "N00"
    ],
    "video": {
-    "1080": "${WORK}/clips/n00_titleup_1080p.mp4",
+    "1080": "${WORK}/clips/n00_v2_titleup_1080p.mp4",
     "2160": "${WORK}/clips/n00_2160p.mp4"
    },
    "join": {
@@ -39,7 +39,7 @@
    "cuts": [
     "N08"
    ],
-   "video": "${WORK}/clips/n08_words_1080p.mp4",
+   "video": "${WORK}/clips/n08_words2_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.25
