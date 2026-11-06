@@ -16,9 +16,11 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import tempfile
 import threading
+import urllib.request
 import unittest
 from pathlib import Path
 from urllib.parse import quote
@@ -61,6 +63,11 @@ class ViewerLinkBrowserTest(unittest.TestCase):
                                  viewer_data_dir=data)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        # the same runs with the provisional answers (viewer_build False: the field's sample)
+        cls.prov_server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, launcher=False,
+                                      viewer_data_dir=data, viewer_build=False)
+        threading.Thread(target=cls.prov_server.serve_forever, daemon=True).start()
+        cls.prov_base = f"http://127.0.0.1:{cls.prov_server.server_address[1]}"
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
         if SHOTS:
@@ -70,25 +77,26 @@ class ViewerLinkBrowserTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.browser.close()
         cls.pw.stop()
-        cls.server.shutdown()
-        cls.server.server_close()
+        for srv in (cls.server, cls.prov_server):
+            srv.shutdown()
+            srv.server_close()
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def open(self, query, run=SCRIPTED_RUN):
+    def open(self, query, run=SCRIPTED_RUN, base=None):
         ctx = self.browser.new_context(viewport={"width": 1440, "height": 900})
         self.addCleanup(ctx.close)
         page = ctx.new_page()
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run={run}&pace=0&{query}", wait_until="domcontentloaded")
+        page.goto(f"{base or self.base}/?run={run}&pace=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("async () => { await window.hiraku.seek(1e9); }")  # the run's end: every analysis in
         return ctx, page, errors
 
     def test_bench_card_button_opens_the_viewer_in_a_new_tab(self):
-        # the saved run keeps no records: the field's sample, said beside the button
-        got, tab, tab_errors = self.open_viewer_from_the_bench(SCRIPTED_RUN, "H1-interference", "sample")
+        # provisional answers: the field's sample, said beside the button
+        got, tab, tab_errors = self.open_viewer_from_the_bench(SCRIPTED_RUN, "H1-interference", "sample", base=self.prov_base)
         self.assertEqual(got["field"], "assembly")
         self.assertEqual(got["sample"], "見本 (この解析から作った絵ではない)")
         if HAS_VIEWER:
@@ -102,8 +110,8 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         self.assertEqual(tab_errors, [])
 
     def test_bench_card_of_an_analysis_the_viewer_cannot_draw_says_why(self):
-        _, page, errors = self.open("tab=bench")
-        # the scripted run's modal: a field with no sample here (only assembly is made)
+        _, page, errors = self.open("tab=bench", base=self.prov_base)
+        # provisional answers, the scripted run's modal: a field with no sample here (only assembly is made)
         lc = page.evaluate("() => (window.hiraku.state().project.load_cases.find((c) => c.domain === 'nvh') || {}).load_case_id")
         self.assertTrue(lc)
         page.click(f'#tests button[data-lc="{lc}"]')
@@ -112,6 +120,20 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         self.assertTrue(got["disabled"])
         self.assertIsNone(got["href"])
         self.assertEqual(got["why"], "ビューアの見本のデータがまだ無い")
+        self.assertEqual(errors, [])
+
+    @unittest.skipUnless(HAS_ENTRY, "needs viewer.src.build.for_analysis")
+    def test_a_saved_run_with_only_events_opens_the_analysis_itself(self):
+        # a saved run keeps only events.jsonl: the entry builds the records from the events, no sample
+        _, page, errors = self.open("tab=bench")
+        page.click('#tests button[data-lc="H1-interference"]')
+        page.wait_for_selector('#card-ana [data-role="viewer-link"] a.vbtn', timeout=30000)
+        got = page.evaluate(LINKS, "#card-ana")[0]
+        self.assertIsNone(got["sample"])
+        with urllib.request.urlopen(self.base + f"/api/runs/{SCRIPTED_RUN}/viewer/{got['ana']}", timeout=120) as r:
+            ans = json.loads(r.read())
+        self.assertEqual(ans["field"], "assembly")
+        self.assertNotEqual(ans.get("source"), viewer_link.SAMPLE_SOURCE)
         self.assertEqual(errors, [])
 
     def test_tile_details_list_each_analysis_with_its_button(self):
@@ -144,9 +166,9 @@ class ViewerLinkBrowserTest(unittest.TestCase):
             page.screenshot(path=str(SHOTS / "grid_1440.png"))
         self.assertEqual(errors, [])
 
-    def open_viewer_from_the_bench(self, run, lc, shots=None):
+    def open_viewer_from_the_bench(self, run, lc, shots=None, base=None):
         """③ on run, test lc: the card's button (one), then the tab it opens; returns (link, tab, errors)."""
-        ctx, page, errors = self.open("tab=bench", run)
+        ctx, page, errors = self.open("tab=bench", run, base)
         page.click(f'#tests button[data-lc="{lc}"]')
         # the card drawn for this test (not still the test shown before)
         page.wait_for_function("""(lc) => { const l = document.querySelector('#card-ana [data-role="viewer-link"] a.vbtn');
@@ -168,7 +190,7 @@ class ViewerLinkBrowserTest(unittest.TestCase):
         tab_errors = []
         tab.on("pageerror", lambda e: tab_errors.append(str(e)))
         tab.wait_for_load_state("domcontentloaded")
-        self.assertEqual(tab.url, self.base + viewer_href(got["ana"], got["field"], run))
+        self.assertEqual(tab.url, (base or self.base) + viewer_href(got["ana"], got["field"], run))
         self.assertEqual(errors, [])
         return got, tab, tab_errors
 
