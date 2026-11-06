@@ -270,11 +270,15 @@ def arm_material(design: dict) -> tuple[dict, str]:
     return dict(ARM_FALLBACK), "steel E 205000 MPa, nu 0.3, 7850 kg/m^3 (the design has no material for the arms)"
 
 
-def corner_parts(design: dict, sid: str, items: list, hp: dict, mat: dict):
-    """linkage.CornerParts of the support sid from its mass items (carrier support)."""
-    from hiraku.designgen.kit.arms import ARM_D_MM, ARM_T_MM, cross_ends, part_ids, tube_mass
-
+def corner_parts(design: dict, sid: str, items: list, hp: dict, mat: dict, arm_d: float | None = None,
+                 arm_t: float | None = None):
+    """linkage.CornerParts of the support sid from its mass items (carrier support). arm_d x arm_t: the arm tube
+    (mm) for an arm with no part (arm_parts.arm_section of the design, the default)."""
+    from .arm_parts import arm_section, cross_ends, part_ids, tube_mass
     from .linkage import RIGID_KINDS, CornerParts
+
+    if arm_d is None or arm_t is None:
+        arm_d, arm_t, _ = arm_section(design, sid, mat["density_kg_m3"])
 
     kind = {p["id"]: str(p.get("kind", "")).lower() for p in design.get("parts", [])}
     role_of = {v: k for k, v in part_ids(sid).items()}
@@ -310,10 +314,10 @@ def corner_parts(design: dict, sid: str, items: list, hp: dict, mat: dict):
     rho = mat["density_kg_m3"]
     for role, L in lengths.items():  # an arm with no part: its tube's own mass
         if role not in tubes:
-            tubes[role] = tube_mass(float(L), ARM_D_MM, ARM_T_MM, rho)
+            tubes[role] = tube_mass(float(L), arm_d, arm_t, rho)
             ids.setdefault(f"{role} (no part: rho A L)", [])
     if tie <= 0.0:
-        tie = tube_mass(float(np.linalg.norm(p["tie_outer"] - p["tie_inner"])), ARM_D_MM, ARM_T_MM, rho)
+        tie = tube_mass(float(np.linalg.norm(p["tie_outer"] - p["tie_inner"])), arm_d, arm_t, rho)
     return CornerParts(rigid, tubes, tie, bj_l, bj_u, damper, other, ids)
 
 
@@ -323,11 +327,10 @@ def build_linkage_modal(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, 
     tie rods' inner ends on rigid bracket nodes (RBE2 over the wall nodes of the frame nodes that hold them,
     k1_frame.analyze.mount_carriers; the wheel mount's wall nodes for a support's frame node), the vehicle on
     its four tyres only (no penalty holds)."""
-    from hiraku.designgen.kit.arms import ARM_D_MM, ARM_T_MM
-
     from ..k1_frame.analyze import mount_carriers
     from ..k2_vehicle.model import _bushings, hardpoints_of
     from . import linkage as lk
+    from .arm_parts import arm_section
 
     t0 = time.perf_counter()
     ms = mesh if mesh is not None else build_mesh(design, element_size_mm, weld_strips)
@@ -380,19 +383,22 @@ def build_linkage_modal(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, 
         hp = hardpoints_of(design, sid)
         bush = _bushings(design, susp, notes)
         bush = {"radial": bush.radial / 1000.0, "axial": bush.axial / 1000.0, "tie_rod": bush.tie_rod / 1000.0}
-        parts = corner_parts(design, sid, support_items[sid], hp, mat)
+        arm_d, arm_t, arm_from = arm_section(design, sid, mat["density_kg_m3"])
+        if (arm_d, arm_t) not in [c["arm_mm"] for c in corners.values()]:  # once per tube size (the first corner's)
+            notes.append(arm_from)
+        parts = corner_parts(design, sid, support_items[sid], hp, mat, arm_d, arm_t)
         k_w = float(susp["stiffness_N_per_mm"])
-        k_s, ratio, comp = lk.fit_spring_rate(sid, hp, float(s["radius_mm"]), parts, mat, ARM_D_MM, ARM_T_MM, bush, k_w)
+        k_s, ratio, comp = lk.fit_spring_rate(sid, hp, float(s["radius_mm"]), parts, mat, arm_d, arm_t, bush, k_w)
         held = carriers_of.get(sid, {})
 
         def carrier(mount, sid=sid, held=held, fn=s["frame_node"]):
             nodes = tuple(held.get(mount) or [fn]) if mount != "frame_node" else (fn,)
             return bracket_node(nodes)
 
-        info = lk.build_corner(asm, sid, hp, float(s["radius_mm"]), carrier, parts, mat, ARM_D_MM, ARM_T_MM, bush,
+        info = lk.build_corner(asm, sid, hp, float(s["radius_mm"]), carrier, parts, mat, arm_d, arm_t, bush,
                                tyre_k, k_s, k_w)
         info.motion_ratio = ratio
-        corners[sid] = dict(info=info, parts=parts, bushings=bush, linkage_compliance=comp,
+        corners[sid] = dict(info=info, parts=parts, bushings=bush, linkage_compliance=comp, arm_mm=(arm_d, arm_t),
                             carriers={m: list(held.get(m) or [s["frame_node"]]) for m in
                                       ("lca_front", "lca_rear", "uca_front", "uca_rear", "tie_inner", "damper_upper")})
     n_dof = model.n_dof
@@ -447,11 +453,10 @@ def build_linkage_modal(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, 
 def linkage_layout(design: dict) -> dict:
     """The linkage's drawn points at rest (mm) and its lines, as build_linkage_modal places them, without the
     shell: {"points": {name: xyz}, "lines": [[name, name, element]], "bodies": {support: {"centre", "radius"}}}."""
-    from hiraku.designgen.kit.arms import ARM_D_MM, ARM_T_MM
-
     from ..k1_frame.analyze import mount_carriers
     from ..k2_vehicle.model import hardpoints_of
     from . import linkage as lk
+    from .arm_parts import arm_section
 
     xyz_n = node_table(design)
     pts: list = []
@@ -478,7 +483,8 @@ def linkage_layout(design: dict) -> dict:
 
         parts = lk.CornerParts([(1.0, np.asarray(hp["wheel_center"], float), None)],
                                {k: 1.0 for k in ("lca_f", "lca_r", "lca_x", "uca_f", "uca_r")}, 1.0, 0.0, 0.0, 0.0)
-        lk.build_corner(asm, sid, hp, float(s["radius_mm"]), carrier, parts, mat, ARM_D_MM, ARM_T_MM,
+        arm_d, arm_t, _ = arm_section(design, sid, mat["density_kg_m3"])
+        lk.build_corner(asm, sid, hp, float(s["radius_mm"]), carrier, parts, mat, arm_d, arm_t,
                         {"radial": 1.0, "axial": 1.0, "tie_rod": 1.0}, 1.0, 1.0)
         bodies[sid] = {"centre_mm": [float(v) for v in hp["wheel_center"]], "radius_mm": float(s["radius_mm"]),
                        "width_mm": float(s.get("width_mm", 0.0))}

@@ -244,11 +244,10 @@ class ModalShell(BuiltinTool):
             for row in results:
                 row.pop("field_index", None)
         if susp == "linkage":
-            from hiraku.designgen.kit.arms import ARM_D_MM, ARM_T_MM
-
             from ..k1_shell import linkage as lk
 
             c0 = next(iter(mm.linkage["corners"].values()))
+            ARM_D_MM, ARM_T_MM = c0["arm_mm"]  # the first corner's arm tube (arm_parts.arm_section)
             t_from = next(x for x in mm.linkage["notes"] if x.startswith("tyre "))
             s_ = MASS_ASSUMPTION.split("。")  # the shell's lumped mass, the RBE3 node points, the gussets
             assumptions = ["。".join([s_[0], s_[2], s_[4], LINKAGE_ASSUMPTIONS[4]])] + [

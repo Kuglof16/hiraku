@@ -5,10 +5,11 @@ Per support with double-wishbone hard points (k2_vehicle.model.hardpoints_of: th
 suspension.hardpoints_mm, or K2's builtin layout):
 
 - the lower arm (LCA): two legs, lca_front -> lca_outer and lca_rear -> lca_outer, and the cross
-  tube between them at the side position of damper_lower (kit/arms.cross_ends), with a node at
+  tube between them at the side position of damper_lower (arm_parts.cross_ends), with a node at
   damper_lower; the upper arm (UCA): uca_front -> uca_outer and uca_rear -> uca_outer; the tie rod
   (toe link at the rear) tie_inner -> tie_outer. All are 3D Euler-Bernoulli beams of round tube
-  ARM_D_MM x ARM_T_MM (kit/arms, an assumption there, not checked), of the design's steel
+  d x t read from the design's arm parts (arm_parts.arm_section: the box across, the wall from the
+  mass; else the generator's default, an assumption, not checked), of the design's steel
   (arm_material), N_SEG elements per leg. Their mass is the design part's mass (kit/arms gives
   the tubes rho A L, the tie rod part its own box mass), lumped on the element nodes in
   proportion to length; a node's rotary inertia is (m/2) L^2 / 12 about the two bending axes
@@ -266,8 +267,8 @@ def build_corner(asm: Assembly, sid: str, hp: dict, radius: float, carrier, part
     for k in ("lca_front", "lca_rear", "lca_outer", "uca_front", "uca_rear", "uca_outer", "tie_inner", "tie_outer",
               "damper_lower"):
         n[k] = asm.node(p[k], f"{sid}.{k}")
-    # lower arm's cross tube ends on the legs at damper_lower's side position (kit/arms.cross_ends)
-    from hiraku.designgen.kit.arms import cross_ends
+    # lower arm's cross tube ends on the legs at damper_lower's side position (the generator's rule, arm_parts)
+    from .arm_parts import cross_ends
 
     cf, cr = cross_ends({k: p[k] for k in ("lca_front", "lca_rear", "lca_outer", "damper_lower")})
     n["cross_f"], n["cross_r"] = asm.node(cf, f"{sid}.lca_cross_f"), asm.node(cr, f"{sid}.lca_cross_r")
