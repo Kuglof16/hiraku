@@ -9,6 +9,9 @@
 // options: nav (false hides the tab bar), screen (the first one shown), want (a request text put in A1's
 // input box, not sent: the person reads it and presses 送る). setWant(text) does the same later; "" empties the box.
 //
+// intake.petsSlot is an empty <div class="a2-pets"> at the top of A2's left column (display: none while it is empty);
+// the host mounts anything into it (it stays there when A2 draws again).
+//
 // api (all optional except events/onEvent):
 //   events()             every event so far (the screens draw only from events)
 //   onEvent(fn)          call fn(event) for each new event; returns an unsubscribe function
@@ -44,6 +47,8 @@ export function mountIntake(host, api, options = {}) {
     onRuleFocus: typeof options.onRuleFocus === "function" ? options.onRuleFocus : null, picksFinal: !!options.picksFinal, time: null, litSeen: new Set(), error: "", sending: false,
     mode: "category", filter: "all", query: "", selected: null, collapsed: new Set(), disabled: new Set(), dropped: [],
     rerender: null,
+    petSlots: new Map(), // domain -> the place of that domain's pet on A1 (kept across redraws; the host mounts the pet into it)
+    petsSlot: h("div", { class: "a2-pets", dataset: { slot: "pets" } }), // a place on A2 the host mounts its own pets into
   };
   const nav = h("nav", { class: "in-nav", hidden: options.nav === false });
   const panes = Object.fromEntries(SCREENS.map(([id]) => [id, h("div", { class: `in-pane ${id.toLowerCase()}`, dataset: { screen: id }, hidden: true })]));
@@ -120,5 +125,5 @@ export function mountIntake(host, api, options = {}) {
   const showQuestions = () => { show("A1"); panes.A1.querySelector?.(".in-ask-top")?.scrollIntoView?.({ block: "start" }); };
 
   draw();
-  return { show, update, setWant, setTime, useDefaults, showQuestions, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
+  return { get petsSlot() { return ui.petsSlot; }, get petSlots() { return ui.petSlots; }, show, update, setWant, setTime, useDefaults, showQuestions, destroy: () => { off?.(); fill(host); }, get screen() { return ui.screen; }, get model() { return model; } };
 }
