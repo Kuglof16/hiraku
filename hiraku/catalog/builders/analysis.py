@@ -1111,7 +1111,12 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
 
 
 from hiraku.catalog.builders.load_path import BUILDERS as _LOAD_PATH_BUILDERS  # noqa: E402  (R7, R8: load_path.py)
+from hiraku.catalog.builders.load_path import PATH_PREDICTION as _PATH_PREDICTION  # noqa: E402
 from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa: E402
+
+# C1's two plans decide by the tool (tool_decides): the path check by hand comes first (judge.path_check reads it)
+for _plan in (C1_PLAN, C1_SPLIT_PLAN):
+    _plan["predictions"].insert(0, _PATH_PREDICTION)
 from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E402  (H6: spray.py)
 from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)

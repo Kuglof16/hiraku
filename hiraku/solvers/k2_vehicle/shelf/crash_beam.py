@@ -60,7 +60,10 @@ class CrashBeamTool(K2Tool):
                   "into the foot box counts)"),
              Pair("frame_split_fraction", "crash.rail_column_split", "fraction", (),
                   "the hand calculation checks each rail behind the crush zone as a straight column under the crush "
-                  "force; the beam model breaks members where the towers and the arm brackets bend the rails"))
+                  "force; the beam model breaks members where the towers and the arm brackets bend the rails"),
+             Pair("unsupported_load", "load_path.free_parts", "n", (),
+                  "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the parts the load case loads, "
+                  "followed by their contacts to the members; the tool counts the parts with mass it put on no node"))
 
     def own_checks(self) -> list[dict]:
         out = []
@@ -168,6 +171,13 @@ class CrashBeamTool(K2Tool):
                 + ", ".join(sorted({mesh.member_of[e] for e in range(mesh.ne)
                                     if all(int(n) in set(p['nodes']) for n in mesh.con[e])}) or ["no whole member"]) + ")"
                 for p in small))
+        # the contract's unsupported_load (docs/contract.md 手計算の役目): the parts with mass the mesh put on no node
+        lost = [p["id"] for p in design.get("parts", []) if float(p.get("mass_kg", 0.0)) > 0.0
+                and not mesh.node_parts.get(p["id"])]
+        res.append(_res("unsupported_load", float(len(lost)), "1", ", ".join(lost) if lost else None))
+        notes.append("unsupported_load: the parts with mass put on no mesh node (each part's mass goes on its "
+                     "carried_by nodes, or the nearest support's node; whether a part's shape touches the frame is the "
+                     "hand calculation's path check, load_path.free_parts): " + (", ".join(lost) if lost else "none"))
         # C1's second criterion: the largest share of the whole mass in a piece broken off the seats' side that can
         # come into the occupants' space (0: none); pieces that cannot (e.g. the front cross member, below the feet)
         # are crushed debris, named in a note
