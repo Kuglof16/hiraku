@@ -46,6 +46,8 @@ BENCH = """() => {
     bold: d ? d.querySelectorAll("b").length : null,
     edge: e?.textContent ?? null, edgeColor: e ? getComputedStyle(e).color : null,
     near: c.querySelector(".edge-near")?.textContent ?? null,
+    // a line cut short (an ellipsis or a hidden overflow): wider inside than its box
+    clipped: [e, c.querySelector(".edge-near")].filter(Boolean).some((x) => x.scrollWidth > x.clientWidth + 1),
   };
 }"""
 
@@ -129,6 +131,7 @@ class C1EdgeBrowserTest(unittest.TestCase):
         self.assertEqual(got["edgeColor"], ORANGE)
         self.assertNotEqual(got["edgeColor"], RED)
         self.assertEqual(got["near"], NEAR_LINE)
+        self.assertFalse(got["clipped"])
         # the fold stays open across a redraw
         page.click("#card-ana details[data-keep='ana-asm'] summary")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", edge_events())

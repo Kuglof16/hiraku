@@ -1229,6 +1229,6 @@ body.present.present-detail .chain { height: 100%; }
 /* The crash tool's note on the break angle (edge_note.js): 境目 on the verdict whose quantity turns
    inside the band, in orange (attention, not a NG: red is for NG only); 参考 for a member near it */
 .card .edge-line, .tile .edge-line { color: var(--orange, #b26b00); font-weight: 600; font-size: 14px; line-height: 1.35; margin-top: 4px; }
-.card .edge-near { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.card .edge-near { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
 .tile .edge-line { font-size: 12px; margin-top: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .tiles.dense .tile .edge-line { font-size: 11px; -webkit-line-clamp: 2; }

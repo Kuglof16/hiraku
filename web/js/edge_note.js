@@ -65,7 +65,7 @@ export function edgeLineHtml(edge, raw = "") {
 }
 export function nearLineHtml(edge, design) {
   const t = nearText(edge, design);
-  return t ? `<div class="edge-near sub" data-role="edge-near">${esc(t)}</div>` : "";
+  return t ? `<div class="edge-near" data-role="edge-near">${esc(t)}</div>` : "";
 }
 
 // One assumption in words for the screen: the note as one Japanese line (境目 when a verdict
