@@ -399,7 +399,7 @@ class AgentPetsTest(unittest.TestCase):
         base = self.serve()
         rows = """() => [...document.querySelectorAll('#agents > li')].map((li) => ({
             group: li.dataset.group ?? null, agent: li.dataset.agent ?? null, member: li.classList.contains('member'),
-            cls: ['active', 'alert', 'done'].filter((c) => li.classList.contains(c)),
+            cls: ['active', 'alert', 'heed', 'done'].filter((c) => li.classList.contains(c)),
             text: li.querySelector('.ag-toggle')?.textContent ?? null, open: li.querySelector('.ag-toggle')?.getAttribute('aria-expanded') ?? null }))"""
         for t in (0.25, 5.3, 1e6):
             page, errors = self.open(base, f"tab=bench&t={t}", bundles_open=False)
@@ -414,8 +414,10 @@ class AgentPetsTest(unittest.TestCase):
             members = [r for r in opened if r["member"]]
             self.assertEqual(sorted(r["agent"] for r in members), sorted(CAE), t)
             self.assertEqual(opened[3]["open"], "true", t)
-            # the bundle's look: an alert first, else at work when one member is
-            want = ["alert"] if any("alert" in r["cls"] for r in members) else ["active"] if any("active" in r["cls"] for r in members) \
+            # the bundle's look: an alert first (red: a NG judgement; else heed, orange: stopped by
+            # hooks or a mismatch), else at work when one member is
+            want = ["alert"] if any("alert" in r["cls"] for r in members) else ["heed"] if any("heed" in r["cls"] for r in members) \
+                else ["active"] if any("active" in r["cls"] for r in members) \
                 else ["done"] if all("done" in r["cls"] for r in members) else []
             self.assertEqual(head["cls"], want, t)
             page.click("#agents [data-agent-group='cae']")
