@@ -30,7 +30,7 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -74,7 +74,7 @@ class GridReplayBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1440, "height": 900})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run=sample&pace=0&pets=0&{query}")
+        page.goto(f"{self.base}/?run=sample&pace=0&pets=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
@@ -276,7 +276,7 @@ class RunEndBrowserTest(unittest.TestCase):
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.addCleanup(page.close)
         # paced (the default): the replay of a followed run lags its record
-        page.goto(f"{base}/?run={run_id}&pets=0")
+        page.goto(f"{base}/?run={run_id}&pets=0", wait_until="domcontentloaded")
         try:
             page.wait_for_selector("#mode .stop-btn", timeout=9000)  # started here and going: it can be stopped
         except Exception:

@@ -21,7 +21,7 @@ from hiraku.webserve.server import make_server
 from tests.web.held_fixture import HELD_LC, REFERENCE_CASES, REFERENCE_KINDS, REFERENCE_TITLES, held_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -59,7 +59,7 @@ class HeldBandBrowserTest(unittest.TestCase):
 
     def open(self, run_id, tab):
         page = self.browser.new_page(viewport={"width": 1280, "height": 720})
-        page.goto(f"{self.base}/?run={run_id}&tab={tab}&pace=0&pets=0&t=1e6")
+        page.goto(f"{self.base}/?run={run_id}&tab={tab}&pace=0&pets=0&t=1e6", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page

@@ -321,7 +321,7 @@ class CutStoryTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0{query}")
+        page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         lim = limits_of(self.layout, cut)
@@ -398,7 +398,7 @@ class CutStoryTest(unittest.TestCase):
             base = self.serve(self.tmp / "runs", layout_file)
             run = {"n02": "sample", "n07": self.runs["n07"], "n17": self.runs["n17"]}.get(cut, self.runs.get(cut, "sample"))
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0")
+            page.goto(f"{base}/cut.html?cut={cut}&run={run}&t=0", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
             err = page.evaluate("document.querySelector('.err')?.textContent ?? ''")
             self.assertIn(f"layout.json の {cut} に無い: ", err, (cut, key))
@@ -515,7 +515,7 @@ class CutStoryTest(unittest.TestCase):
         L = self.layout
         small = max(L["min_text_px"], L["n02"]["pane"]["rate"]["size_px"])
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-        page.goto(f"{self.base}/cut.html?cut=n02&run=sample&t=0")
+        page.goto(f"{self.base}/cut.html?cut=n02&run=sample&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         got = page.evaluate("""() => {
           const ul = document.querySelector(".n02-legend");
@@ -575,7 +575,7 @@ class CutStoryTest(unittest.TestCase):
         layout_file.write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
         base = self.serve(self.tmp / "runs", layout_file)
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-        page.goto(f"{base}/cut.html?cut=n06&run={self.runs['n06']}&t=0")
+        page.goto(f"{base}/cut.html?cut=n06&run={self.runs['n06']}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         got = page.evaluate(READ, self.layout["n06"]["duration_s"] - 0.1)
         self.assertEqual(got["over"], "1")
@@ -585,7 +585,7 @@ class CutStoryTest(unittest.TestCase):
         del layout["story"]["defaults"]["moving"]
         layout_file.write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-        page.goto(f"{base}/cut.html?cut=n06&run={self.runs['n06']}&t=0")
+        page.goto(f"{base}/cut.html?cut=n06&run={self.runs['n06']}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         self.assertIn("layout.json の story.defaults に無い: moving", page.evaluate("document.querySelector('.err')?.textContent ?? ''"))
         page.close()

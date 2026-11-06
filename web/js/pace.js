@@ -5,7 +5,7 @@
 // all of it still fits the stage time it was given. When even that cannot fit (the turns alone
 // need more time than there is), it plays as far as the time allows and holds there.
 //
-// pacer(plays, stageS, limitDegS) -> (share of the stage time 0..1) -> record time from t0
+// pacer(plays, stageS, limitDegS[, n, weight]) -> (share of the stage time 0..1) -> record time from t0
 // (seconds, 0..the longest motion's duration); the motions are played together from their t0.
 // A play is a motion, or { motion, view } with the Workbench3D it is drawn in: then the world's
 // turn is the view's own (worldAngle: the tilt table, or the slope the scene turns in time).
@@ -43,27 +43,32 @@ export function turnSteps(plays, span, n = STEPS) {
   return out;
 }
 
-export function pacer(plays, stageS, limitDegS, n = STEPS) {
+// weight (optional): (record time from t0, s) -> how much stage time a record second there
+// gets against the others (> 0; 1 everywhere when not given). Each step takes at least c times
+// its weight and at least its need, all together the stage time.
+export function pacer(plays, stageS, limitDegS, n = STEPS, weight = null) {
   const ms = plays.filter(Boolean).map((p) => (p.motion ? p : { motion: p, view: null })).filter((p) => p.motion);
   const span = Math.max(0, ...ms.map((p) => p.motion.duration));
   if (!(span > 0) || !(stageS > 0)) return () => 0;
   const turns = turnSteps(ms, span, n);
   const need = turns.map((d) => d / limitDegS); // the least stage time each step may take
   const total = need.reduce((a, b) => a + b, 0);
+  const w = Array.from({ length: n }, (_, k) => (weight ? Math.max(1e-9, weight(((k + 0.5) * span) / n)) : 1));
+  const wSum = w.reduce((a, b) => a + b, 0);
   let steps;
   if (total >= stageS) {
     // cannot fit: the turns at the limit, as far as the time goes
     steps = need.map((x) => Math.max(x, 1e-9));
   } else {
-    // each step at least `c`, at least its need, all together the stage time (c by bisection)
+    // each step at least `c` w, at least its need, all together the stage time (c by bisection)
     let lo = 0;
-    let hi = stageS / n;
+    let hi = stageS / wSum;
     for (let i = 0; i < 60; i += 1) {
       const c = (lo + hi) / 2;
-      if (need.reduce((a, x) => a + Math.max(c, x), 0) > stageS) hi = c;
+      if (need.reduce((a, x, k) => a + Math.max(c * w[k], x), 0) > stageS) hi = c;
       else lo = c;
     }
-    steps = need.map((x) => Math.max(lo, x));
+    steps = need.map((x, k) => Math.max(lo * w[k], x));
   }
   // cumulative stage time at each step's end
   const at = [0];

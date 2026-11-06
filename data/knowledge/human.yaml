@@ -45,3 +45,53 @@ rules:
       ISO 13854:2017 (2nd ed., a "minor revision" per its foreword, ANSI preview read 2026-11-03); its
       Table 1 was not reachable (the preview stops before clause 4), so the 2017 finger value is not
       checked
+  # needs: headrest_height_mm (new). Literal 800 = default of R2-01 (replace with req_Q<R2-01>).
+  - id: HR-01
+    text: 人が乗る座席は、頭を後ろから受け止める上端が、座席の基準点から胴の線に沿って 800 mm 以上の高さにある
+    kinds: [seat]
+    check: headrest_height_mm >= req_Q35
+    trust: 3
+    basis: >-
+      assumption: a passenger-car value borrowed for a small open off-road vehicle. UN Regulation No. 17, 08 series
+      (MLIT text, https://www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.6.2 (front seats not less than 800 mm)
+      and 6.5.4 (from the R point to the tangent at the top, along the torso reference line), read 2026-11-06,
+      for M1 and N1; 49 CFR 571.202a S4.2.1(a)(1) (800 mm, from the H-point parallel to the torso reference line,
+      S3), eCFR current text, read 2026-11-06, for US passenger cars and light vehicles. A seat with no head
+      support has no value and is reported as not given, not as passing
+  # needs: headrest_width_mm (new). Literal 170 = default of R2-02.
+  - id: HR-02
+    text: 頭を受け止める面の左右の幅は、上端から 65 mm 下で 170 mm 以上
+    kinds: [seat]
+    check: headrest_width_mm >= req_Q36
+    trust: 3
+    basis: >-
+      assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series
+      (https://www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.11 (85 mm to each side of the median plane, 170 mm
+      computed) and 6.6.1 (plane 65 mm below the top), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.2
+      (not less than 170 mm at 65 ±3 mm below the top), eCFR current text, read 2026-11-06, for US passenger cars
+      and light vehicles
+  # needs: headrest_backset_mm (new). Literal 55 = default of R2-03.
+  - id: HR-03
+    text: 座った人の頭の後ろと、頭を受け止める面との水平のすき間は 55 mm 以下
+    kinds: [seat]
+    check: headrest_backset_mm <= req_Q37
+    trust: 3
+    basis: >-
+      assumption: a US passenger-car value borrowed for a small open off-road vehicle. 49 CFR 571.202a S4.2.3
+      (front outboard backset not more than 55 mm) and S3 (backset measured from the rear of the head of a seated
+      50th percentile male, SAE J826 manikin with the head restraint measurement device), eCFR current text,
+      https://www.ecfr.gov/current/title-49/subtitle-B/chapter-V/part-571/subpart-B/section-571.202a, read
+      2026-11-06, for passenger cars and MPVs, trucks and buses of 4,536 kg GVWR or less. UN R17 08 series has no
+      backset limit (read 2026-11-06)
+  # needs: headrest_gap_mm (new). Literal 60 = default of R2-04.
+  - id: HR-04
+    text: 背もたれと頭を受け止める部分のあいだのすき間は、165 mm の球で測って 60 mm 以下
+    kinds: [seat]
+    check: headrest_gap_mm <= req_Q38
+    trust: 3
+    basis: >-
+      assumption: a passenger-car value borrowed for a small open off-road vehicle. UN R17 08 series
+      (https://www.mlit.go.jp/jidosha/un/UN_R017.pdf) para. 5.8 (not more than 60 mm for a head restraint not
+      adjustable for height) and 6.7.1 (165 mm sphere), read 2026-11-06, for M1 and N1; 49 CFR 571.202a S4.2.4.1
+      (no gap greater than 60 mm, 165 mm sphere), eCFR current text, read 2026-11-06, for US passenger cars and
+      light vehicles

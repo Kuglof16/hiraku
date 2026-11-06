@@ -16,10 +16,10 @@
 // pet3d's states and how long a reaction lasts. A pet's bubble is the agent's newest log
 // line (the same words as the log), cut short, for SAY_S seconds after its event.
 
-import { AGENT_STOP_SHORT_JA, DOMAINS, agentName, esc } from "./labels.js";
+import { AGENT_STOP_SHORT_JA, DESIGNER_ROLES_JA, DOMAINS, agentName, designerModule, designerRole, esc } from "./labels.js";
 import { PetStage, loadPets, missingPetKeys, poseTime } from "./cut_pets.js";
 import { loadLayout } from "./compose.js";
-import { moduleColor } from "./proposals.js"; // modules:
+import { designerColor } from "./proposals.js"; // modules:
 import { moduleStyle } from "./modules.js"; // modules:
 
 export const SAY_S = 5; // seconds a bubble stays (as the 3D's bubble: app.js SHOW_S)
@@ -268,7 +268,8 @@ export class AgentPets {
   }
 
   // modules: the pet3d.js role an agent is drawn as: its own id when ROLES has it (v10 has the six
-  // designer.<module>), else a module designer is the designer's pet with its module's mark.
+  // designer.<module> of older records), else a module designer (the design roles designer.structure,
+  // .mechanism, .electric: no row in pet3d.js) is the designer's pet with its colour mark (box).
   roleOf(id) {
     if (this.roles.has(id)) return id;
     return id?.startsWith("designer.") ? "designer" : id;
@@ -302,13 +303,19 @@ export class AgentPets {
       const canvas = document.createElement("canvas");
       canvas.className = "pet3d";
       el.append(canvas);
-      // modules: a module designer drawn as the designer's pet carries its module's colour mark
-      if (p.pet.role.id !== id && id.startsWith("designer.")) {
+      // modules: a module designer drawn as the designer's pet carries a colour mark: a design role
+      // (designer.structure) its own colour and the role's first letter (構・機・電), an older record's
+      // designer.<module> (when pet3d.js has no row for it) its module's colour
+      if (p.pet.role.id !== id && designerColor(id)) {
         moduleStyle();
         const mark = document.createElement("span");
         mark.className = "modmark";
-        mark.dataset.module = id.slice(9);
-        mark.style.setProperty("--mod", moduleColor(id.slice(9)));
+        const r = designerRole(id);
+        if (r) {
+          mark.dataset.designerRole = r;
+          mark.textContent = [...DESIGNER_ROLES_JA[r]][0];
+        } else mark.dataset.module = designerModule(id);
+        mark.style.setProperty("--mod", designerColor(id));
         el.append(mark);
       }
       b = p.boxes[place] = { el, canvas, ctx: canvas.getContext("2d"), last: null, state: null };

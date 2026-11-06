@@ -80,18 +80,27 @@ def check_all(
             continue
         rec = systems.check_rule(rule, design, flags) if systems.is_system_check(rule["check"]) else check_rule(rule, ts)
         rid = id_factory() if id_factory else f"rchk-{len(out) + 1:04d}"
-        out.append({"rule_check_id": rid, "design_version": design["design_version"], **rec})
+        out.append({"rule_check_id": rid, "design_version": design["design_version"], **rec,
+                    **({"level": "advice"} if rule.get("level") == "advice" else {})})
     return out
+
+
+def is_advice(check: Record) -> bool:
+    return check.get("level") == "advice"
 
 
 def summarize(checks: list[Record]) -> Record:
     """Counts for the screen and the chat reply."""
+    firm = [c for c in checks if not is_advice(c)]  # an advice rule never fails a design and its gaps are not shown
+    advice = [c for c in checks if is_advice(c)]
     return {
         "rules": len(checks),
-        "hit_rules": sum(1 for c in checks if c["hits"]),
-        "hits": sum(len(c["hits"]) for c in checks),
-        "not_evaluable_rules": sum(1 for c in checks if c["not_evaluable"]),
-        "passed_rules": sum(1 for c in checks if c["targets"] and not c["hits"] and not c["not_evaluable"]),
+        "hit_rules": sum(1 for c in firm if c["hits"]),
+        "hits": sum(len(c["hits"]) for c in firm),
+        "not_evaluable_rules": sum(1 for c in firm if c["not_evaluable"]),
+        "passed_rules": sum(1 for c in firm if c["targets"] and not c["hits"] and not c["not_evaluable"]),
+        "advice_rules": sum(1 for c in advice if c["hits"]),
+        "advice_hits": sum(len(c["hits"]) for c in advice),
     }
 
 
@@ -99,8 +108,11 @@ def summary_line(checks: list[Record], rules: list[Record]) -> str:
     s = summarize(checks)
     text = {r["rule_id"]: r["text"] for r in rules}
     hits = "、".join(f"{c['rule_id']} ({text.get(c['rule_id'], '')}): " + "・".join(h["part_id"] for h in c["hits"])
-                    for c in checks if c["hits"])
+                    for c in checks if c["hits"] and not is_advice(c))
     lines = [f"{s['rules']} 規則: 当たり {s['hit_rules']}、合格 {s['passed_rules']}、評価できない {s['not_evaluable_rules']}"]
     if hits:
         lines.append(f"当たった部品: {hits}")
+    if s["advice_hits"]:
+        lines.append(f"助言 {s['advice_hits']} 件 (合否には数えません): " + "、".join(
+            f"{c['rule_id']} ({text.get(c['rule_id'], '')}): " + "・".join(h["part_id"] for h in c["hits"]) for c in checks if is_advice(c) and c["hits"]))
     return "。".join(lines)

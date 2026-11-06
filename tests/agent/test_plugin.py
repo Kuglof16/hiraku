@@ -59,6 +59,19 @@ def load_launcher():
     return mod
 
 
+class HookImportTest(unittest.TestCase):
+    """The hook command (python -m hiraku hook <Event>, twice per tool call) imports hiraku.agent.plugin in a
+    new process each time: it must not pull in the load-case builders and their formulas (sympy, numpy) or
+    asyncio, which made one hook call about 1.3 s on a busy PC (0.5 s without them)."""
+
+    def test_the_hook_path_leaves_the_heavy_modules_out(self):
+        code = ("import sys; import hiraku.agent.plugin, hiraku.agent.hooks; "
+                "print(sorted(m for m in ('sympy', 'numpy', 'asyncio', 'hiraku.catalog.builders') if m in sys.modules))")
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                             cwd=Path(__file__).resolve().parents[2], check=True).stdout.strip()
+        self.assertEqual(out, "[]")
+
+
 class LauncherTest(unittest.TestCase):
     """plugins/hiraku/scripts/hiraku_cli.py picks the repository's interpreter, not PATH's python."""
 
