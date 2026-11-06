@@ -686,6 +686,11 @@ def _rep_tree(f: _File):
 
 def read_step(text: str) -> list[Solid]:
     """Every solid in the file, in assembly coordinates (mm)."""
+    return read_step_entities(text)[1]
+
+
+def read_step_entities(text: str) -> tuple[dict, list[Solid]]:
+    """(entities by id, solids): the parsed file too, for copying solids unchanged."""
     f = _File(text)
     reps, rep_args, same, children, child_reps, rep_pd, pd_name = _rep_tree(f)
 
@@ -759,4 +764,4 @@ def read_step(text: str) -> list[Solid]:
         walk(r, np.eye(4), pd_name.get(rep_pd.get(r), ""), 0, frozenset())
     if not solids:
         raise CadError("the file has no solids (MANIFOLD_SOLID_BREP, BREP_WITH_VOIDS or FACETED_BREP)")
-    return solids
+    return f.e, solids
