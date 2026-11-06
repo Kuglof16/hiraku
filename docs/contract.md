@@ -19,7 +19,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 |---|---|
 | 統括部 | `hiraku/contract/`、`tests/contract/`、`docs/`、`showcase/` (見本の実行)、`README.md`、`CLAUDE.md`、`LICENSE`、`requirements.txt`、`.gitignore`、`hiraku/__init__.py`、`tests/__init__.py` |
 | 設計部 | `hiraku/agent/` (ループ・hooks・役の定義)、`hiraku/tools/` (MCP のツール)、`hiraku/store/` (runs の読み書き)、`hiraku/export/` (結果の書き出し: CSV・VTK・報告)、`hiraku/catalog/`、`hiraku/__main__.py`、`data/catalog/`、`data/requirements/`、`plugins/` (skills)、`tests/agent/`・`tests/tools/`・`tests/store/` |
-| 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`tests/solvers/` |
+| 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`viewer/` (結果のビューア。分野ごとのデータのスクリプトと 1 つのページ)、`tests/solvers/`、`tests/viewer/` |
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
 | 品質保証部 | `tests/verification/`、`qa/` (Rapier の照合は `qa/rapier/`、Node はここだけ) |
 | 広報部 | `promo/` |
@@ -137,6 +137,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更 `changes`、generator の選択 `choices` (例 `part_mounts: brackets`、選べる値は `get_context` の `design_choices`)、少なくとも一方と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
 
 ## モジュールに分けた設計 (2026-11-04 の方針)
+
+設計役は 構造・機構・電気 の 3 つ (`designer.structure`・`designer.mechanism`・`designer.electric`。`contract.MODULE_DESIGNERS`、日本語の名前は `DESIGNER_ROLES_JA`、2026-11-06 から)。何を作るかによらない分け方で、モジュールは設計の型 (designgen) が決める内部の分け方。各モジュールの `owner` が 3 つのどれか (`package` はパッケージ役)。車の型では、枠・車体・乗員まわりが構造、足まわり・操作系が機構、動力が電気。モジュールに分けない型は設計役 `designer` 1 つのまま。モジュールごとの古い役 (`designer.frame` など、`LEGACY_MODULE_DESIGNERS`) は、前に記録した実行を読むためだけに残す。`revise_design` は、`design.modules` で自分が `owner` のモジュールの中だけを変える (HK6)。
 
 設計を 1 人の設計役が一度に直すのではなく、モジュールに分けて、モジュールごとの設計役が並べて直し、パッケージ役が空間を配ってまとめる。実際の車の開発と同じ分け方。版 5 で、強度のために足したガセットが電池に 34.4 mm めり込んだのに誰も気づかなかったことから。
 

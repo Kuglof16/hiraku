@@ -137,22 +137,31 @@ class SprayReach(BuiltinTool):
         cube = from_box([0, 0, 0], [1000, 1000, 1000])
         h = ray_box([-2000, 0, 0], [1, 0, 0], cube)
         out.append(check_record("1 m cube, line along x from 2 m away", "t_enter", 1500.0, None if h is None else h[0],
-                                "mm", 1e-12, "the near face is 500 mm from the centre"))
+                                "mm", 1e-12, "the near face is 500 mm from the centre",
+                                case_ja="1 m の立方体に、2 m 離れた所から x の向きに線を飛ばす",
+                                source_ja="手前の面は中心から 500 mm"))
         h = ray_box([-2000, 0, 0], [1, 0, 0], from_box([0, 0, 0], [1000, 1000, 1000], [0, 0, 45]))
         out.append(check_record("1 m cube turned 45 deg about z, line along x", "t_enter", 2000.0 - 500.0 * math.sqrt(2),
-                                None if h is None else h[0], "mm", 1e-12, "the near edge is 500 sqrt(2) mm from the centre"))
+                                None if h is None else h[0], "mm", 1e-12, "the near edge is 500 sqrt(2) mm from the centre",
+                                case_ja="z 軸のまわりに 45° 回した 1 m の立方体に、x の向きに線を飛ばす",
+                                source_ja="手前の辺は中心から 500 √2 mm"))
         h = ray_box([-2000, 600, 0], [1, 0, 0], cube)
         out.append(check_record("1 m cube, line along x 600 mm to the side", "hits", 0.0, float(h is not None), "1", 0.0,
-                                "the line passes 100 mm outside the face"))
+                                "the line passes 100 mm outside the face",
+                                case_ja="1 m の立方体の 600 mm 横を、x の向きに線を飛ばす",
+                                source_ja="線は面の 100 mm 外を通る (当たらない)"))
         # a wall of an occupant 1 m ahead of the wheel: every line of the 80 deg arc points forward and gets there
         # before the ground (the lowest, 30 deg down from 560 mm, meets the ground 970 mm ahead of its start)
         wall = ((1050.0, 0.0, 0.0), (100.0, 1000.0, 20000.0))
         s = summary(cast(_scene(wall), 30.0, 50.0, 5.0, 1, 3000.0))
         out.append(check_record("wheel and a wall of occupant 1 m ahead, no cover (arc 30 + 50 deg, 16 bins)",
                                 "spray_reaching_occupant", 16.0, float(s["reach"]), "1", 0.0,
-                                "every tangent line of the arc points forward (cos theta > 0)"))
+                                "every tangent line of the arc points forward (cos theta > 0)",
+                                case_ja="車輪と、その 1 m 前に乗員の壁、覆いなし (弧は 30° + 50°、16 区切り)",
+                                source_ja="弧のどの接線も前を向く (cos θ > 0)"))
         out.append(check_record("the same, uncovered arc", "spray_uncovered_arc", 80.0,
-                                s["per_wheel"]["W"]["uncovered_arc"], "deg", 1e-12, "the whole arc: 30 + 50 deg"))
+                                s["per_wheel"]["W"]["uncovered_arc"], "deg", 1e-12, "the whole arc: 30 + 50 deg",
+                                case_ja="同じ形で、覆われない弧", source_ja="弧ぜんぶ: 30° + 50°"))
         # a flat cover with its underside 340 mm over the wheel centre, from 1000 mm behind to 900 mm ahead: a line
         # from theta (tread point (-R sin, R cos)) going up (theta > 0) meets that plane at
         # x = -R sin(theta) + (340 - R cos(theta)) / tan(theta); covered when x <= 900
@@ -165,10 +174,15 @@ class SprayReach(BuiltinTool):
         out.append(check_record("the same with a flat cover over the wheel", "spray_reaching_occupant",
                                 float(len(open_bins)), float(s["reach"]), "1", 0.0,
                                 "lines going down or level pass under the cover; going up, they meet its plane "
-                                "before its front end unless they rise too slowly"))
+                                "before its front end unless they rise too slowly",
+                                case_ja="同じ形で、車輪の上に平らな覆い",
+                                source_ja="下向きや水平の線は覆いの下を通る。上向きの線は、上がり方がゆるすぎなければ、"
+                                          "覆いの前の端より手前でその面に当たる"))
         out.append(check_record("the same, uncovered arc", "spray_uncovered_arc", len(open_bins) * width,
                                 s["per_wheel"]["W"]["uncovered_arc"], "deg", 1e-12,
-                                "the bins whose line passes the cover, times the bin's width (5 deg)"))
+                                "the bins whose line passes the cover, times the bin's width (5 deg)",
+                                case_ja="同じ形 (覆いあり) で、覆われない弧",
+                                source_ja=f"線が覆いを通り抜ける区切りの数 × 区切りの幅 ({width:g}°)"))
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:

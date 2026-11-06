@@ -161,42 +161,63 @@ class EntryOpening(BuiltinTool):
         m = measure(_scene(), SIZES, True, None, geo.HEIGHT_CAP_MM)["seat_L"]
         out.append(check_record("one seat, nothing beside it: the opening is the person's span", "entry_opening_width",
                                 700.0, m["width"], "mm", 1e-12,
-                                "from the seat back (-1295) to the front of the person's box (-595)"))
+                                "from the seat back (-1295) to the front of the person's box (-595)",
+                                case_ja="座席が 1 つで横に何も無い: 開口は座った人の前後の範囲",
+                                source_ja="座席の背 (-1295) から、人の箱のいちばん前 (-595) まで"))
         out.append(check_record("the same, nothing in the doorway", "entry_blocked", 0.0, float(len(m["blocked"])), "1",
-                                0.0, "no body outboard of the seat"))
+                                0.0, "no body outboard of the seat",
+                                case_ja="同じ形で、開口をふさぐ物が無い", source_ja="座席より外には何も無い"))
         out.append(check_record("the same, first step", "entry_step_height", 433.0, m["step"], "mm", 1e-12,
-                                "floor top 433 mm over the ground at the tyre's bottom (300 - 300)"))
+                                "floor top 433 mm over the ground at the tyre's bottom (300 - 300)",
+                                case_ja="同じ形で、最初の足場の高さ",
+                                source_ja="床の上面は、タイヤのいちばん下の地面 (300 - 300) から 433 mm"))
         bar = ("bar", [-1400.0, 570.0, 793.0], [-500.0, 570.0, 793.0], 40.0)  # 100 mm over the seat top (693)
+        seat_top = 693.0
+        over, bar_d = bar[1][2] - seat_top, bar[3]
         m = measure(_scene(members=(bar,)), SIZES, True, None, geo.HEIGHT_CAP_MM)["seat_L"]
         out.append(check_record("a 40 mm bar along the whole span 100 mm over the seat", "entry_opening_height",
-                                80.0, m["height"], "mm", 1e-9, "the bar's underside: 100 - 40 / 2 over the seat top"))
+                                80.0, m["height"], "mm", 1e-9, "the bar's underside: 100 - 40 / 2 over the seat top",
+                                case_ja=f"太さ {bar_d:g} mm の棒が、範囲の端から端まで座面の {over:g} mm 上にある",
+                                source_ja=f"棒の下の面: 座面から {over:g} - {bar_d:g} / 2"))
         out.append(check_record("the same, fixed things in the doorway", "entry_blocked", 1.0, float(len(m["blocked"])),
-                                "1", 0.0, "the bar crosses every place of the upper box"))
+                                "1", 0.0, "the bar crosses every place of the upper box",
+                                case_ja="同じ形で、開口をふさぐ動かない物",
+                                source_ja="棒は、上の箱をどこに置いても横切る"))
         post = ("post", [-1100.0, 570.0, 300.0], [-1100.0, 570.0, 1500.0], 40.0)
+        post_x, post_d = post[1][0], post[3]
         m = measure(_scene(members=(post,)), SIZES, True, None, geo.HEIGHT_CAP_MM)["seat_L"]
         out.append(check_record("a 40 mm post at x = -1100 beside the seat", "entry_opening_width", -595.0 - (-1080.0),
-                                m["width"], "mm", 1e-9, "from the post's front face (-1100 + 20) to the span's front"))
+                                m["width"], "mm", 1e-9, "from the post's front face (-1100 + 20) to the span's front",
+                                case_ja=f"座席の横、x = {post_x:g} に太さ {post_d:g} mm の柱",
+                                source_ja=f"柱の前の面 ({post_x:g} + {post_d / 2:g}) から、範囲のいちばん前まで"))
         net = _box("net", "side_net", [-1290.0, 568.5, 700.0], [-600.0, 571.5, 1300.0], ("a", "b"))
         clip = _box("clip", "net_clip", [-1310.0, 560.0, 990.0], [-1290.0, 580.0, 1010.0], ("a", "b"))
-        for clips, opens, n, why in (((clip,), True, 0.0, "held by a clip only: it opens"),
-                                     ((clip,), False, 1.0, "openable = no: everything blocks"),
-                                     ((), True, 1.0, "no clip: the net is bolted on its nodes")):
+        for clips, opens, n, why, why_ja in (
+                ((clip,), True, 0.0, "held by a clip only: it opens", "外せる留め具だけで留まる: 開けられる"),
+                ((clip,), False, 1.0, "openable = no: everything blocks", "openable = no: どれもふさぐ"),
+                ((), True, 1.0, "no clip: the net is bolted on its nodes", "留め具が無い: 網は節にボルトで留まっている")):
             m = measure(_scene((net,) + clips), SIZES, opens, None, geo.HEIGHT_CAP_MM)["seat_L"]
             out.append(check_record(f"a net beside the seat ({why})", "entry_blocked", n, float(len(m["blocked"])), "1",
-                                    0.0, why))
+                                    0.0, why, case_ja=f"座席の横に網 ({why_ja})", source_ja=why_ja))
         door = _box("door", "door", [-1290.0, 568.5, 700.0], [-600.0, 571.5, 1300.0])
         hinge = _box("hinge", "door_hinge", [-1310.0, 560.0, 700.0], [-1290.0, 580.0, 720.0])
         latch = _box("latch", "door_latch", [-620.0, 560.0, 680.0], [-600.0, 580.0, 700.0])
-        for fits, n, why in (((hinge, latch), 0.0, "a hinge and a latch touch it: it opens"),
-                             ((hinge,), 1.0, "no latch: it is taken as fixed")):
+        for fits, n, why, why_ja in (
+                ((hinge, latch), 0.0, "a hinge and a latch touch it: it opens", "蝶番と掛け金が触れている: 開けられる"),
+                ((hinge,), 1.0, "no latch: it is taken as fixed", "掛け金が無い: 動かない物とみる")):
             m = measure(_scene((door,) + fits), SIZES, True, None, geo.HEIGHT_CAP_MM)["seat_L"]
             out.append(check_record(f"a door beside the seat ({why})", "entry_blocked", n, float(len(m["blocked"])), "1",
-                                    0.0, why))
+                                    0.0, why, case_ja=f"座席の横に扉 ({why_ja})", source_ja=why_ja))
         grips = (("g27", [-900.0, 600.0, 700.0], [-900.0, 600.0, 1300.0], 27.2),
                  ("g43", [-800.0, 600.0, 700.0], [-800.0, 600.0, 1300.0], 42.7))
-        m = measure(_scene(members=grips), SIZES, True, (16.0, 38.0, 1600.0), geo.HEIGHT_CAP_MM)["seat_L"]
+        grip = (16.0, 38.0, 1600.0)
+        d1, d2 = grips[0][3], grips[1][3]
+        m = measure(_scene(members=grips), SIZES, True, grip, geo.HEIGHT_CAP_MM)["seat_L"]
         out.append(check_record("a 27.2 and a 42.7 mm tube beside the seat, grips 16 to 38 mm", "entry_handhold", 1.0,
-                                float(len(m["hands"])), "1", 0.0, "only the 27.2 mm tube is within 16 to 38 mm"))
+                                float(len(m["hands"])), "1", 0.0, "only the 27.2 mm tube is within 16 to 38 mm",
+                                case_ja=(f"座席の横に径 {d1:g} mm と {d2:g} mm の管、握れる太さは {grip[0]:g}〜"
+                                         f"{grip[1]:g} mm"),
+                                source_ja=f"{grip[0]:g}〜{grip[1]:g} mm に入るのは {d1:g} mm の管だけ"))
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
