@@ -21,7 +21,7 @@ from tests.web.anim_loop_fixture import ANA, RISE, RUN_ID, SPEED, STEP_X, T_ARRI
 from tests.web.test_layout_lint_browser import ENABLED, READY, WIDTHS, Screen, describe, lint
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
