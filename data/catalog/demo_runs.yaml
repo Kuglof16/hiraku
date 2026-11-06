@@ -79,16 +79,21 @@ runs:
   - id: video
     title: 動画の運転 (限界の外を含む)
     shows: >-
-      デモの車の全部の試験と限界の外の 7 つ。版 1 の赤 (つなぎ目の壁・組み立て・加速) を設計役が直し、
-      版 2 で直せる赤は緑になる。限界の外は赤のまま、直しの回数を使い切って止まる
+      デモの車の全部の試験と限界の外の 7 つ。赤を設計役が 4 回直し (配置、乗り降りの網、モーター、
+      レールのつなぎ目)、v5 で直せる赤は緑になる。限界の外は、4 つ (電池の温度・330 mm の段差・
+      滑る路面の停止・横の坂) が赤のまま、250 mm の段差の強度と横風は v5 で緑、250 mm の段差の
+      前輪の力は判定なしで止まる
     file: offroad-4w-video.yaml
     modes: [scripted, claude]
-    # python -m hiraku.catalog.cost <run folder>: 299 calls (cae.* 281, packager 18) in scripted run 20261103-153914-offroad-4w-scripted
+    # scripted run 20261106-084552-offroad-4w-scripted on main 1a155201: stopped on version 5 (stop_code not_judged:
+    # P1-step250-beyond ends its case without a verdict); red on v5: T1-52C, P1-step330, S4-mu0.3, S5-slope44 (beyond)
+    # python -m hiraku.catalog.cost <run folder>: 742 calls (cae.aero 16, cae.crash 27, cae.handling 81, cae.nvh 27,
+    # cae.powertrain 134, cae.strength 150, cae.thermal 72, packager 235)
     estimates_usd:
-      default: {usd: 45.71, upper_usd: 45.71}
-      cae-sonnet: {usd: 22.86, upper_usd: 22.86}
-      cae-haiku: {usd: 1.14, upper_usd: 11.43}
-      lead-sonnet: {usd: 22.86, upper_usd: 22.86}
+      default: {usd: 113.44, upper_usd: 113.44}
+      cae-sonnet: {usd: 56.72, upper_usd: 56.72}
+      cae-haiku: {usd: 2.84, upper_usd: 28.36}
+      lead-sonnet: {usd: 56.72, upper_usd: 56.72}
     cuts: [N04, N06, N17]
   - id: demo
     title: デモの車の 11 の試験
