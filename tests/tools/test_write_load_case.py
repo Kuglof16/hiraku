@@ -186,7 +186,7 @@ class WriteLoadCaseTest(Run, unittest.TestCase):
         base = r2_args()
         for limit_from, word in (
                 ({"expr": "yield / Q61", "unit": "MPa", "refs": {"yield": "materials.steel.yield"}}, "yield"),
-                ({"expr": "yield / Q61", "unit": "kg", "refs": {"yield": "materials.steel.yield_MPa"}}, "換算できません"),
+                ({"expr": "yield / Q61", "unit": "kg", "refs": {"yield": "materials.steel.yield_MPa"}}, "'kg'"),
                 ({"expr": "yield / Q99", "unit": "MPa", "refs": {"yield": "materials.steel.yield_MPa"}}, "Q99")):
             with self.subTest(word=word):
                 with self.assertRaises(ToolError) as cm:
