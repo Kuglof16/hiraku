@@ -1861,7 +1861,9 @@ function setCompare(s, chain, ct) {
       tags.className = "cmp-tags";
       viewport.prepend(el);
       viewport.append(tags);
-      cmpView = { el, tags, bench: new Workbench3D(el, look, { quality }) };
+      // sky: as the right view's (bench, above): without it the left view's ground stops at 20 m
+      // and its clear colour shows above as a flat band, where the right view has the sky
+      cmpView = { el, tags, bench: new Workbench3D(el, look, { quality, sky: true }) };
       window.hiraku.cmpBench = cmpView.bench;
     }
     const b = cmpView.bench;
@@ -1894,7 +1896,8 @@ const LEGEND_GAP_PX = 12;
 // - the いま: line keeps left of the toggles (their row grows with the switches a design offers);
 //   with too little room there, on a row of its own under them. Where it would reach the legend
 //   it stops short of it, on one line, cut (the whole sentence is its title);
-// - the cause note goes up above the graph at the bottom left when the two would cross.
+// - the cause note keeps left of the legend and the tyre panel, and goes up above the graph at the
+//   bottom left when the two would cross (fitCauseNote).
 // Each style is written only when it changes (this runs on every frame).
 const setStyle = (el, key, v) => {
   if (el.style[key] !== v) el.style[key] = v;
@@ -1946,14 +1949,36 @@ function fitOverlays() {
     }
   }
 
+  fitCauseNote(lgIn ? lg : null);
+}
+
+// The cause note (centred at the bottom of the 3D) keeps clear of the boxes at the right of the
+// 3D (the colour legend, the tyre panel): narrower and moved left so that it ends a gap short of
+// them; and of the graph at the bottom left: lifted above it when the two would cross. It is
+// first put back where it stands by itself, then moved in the same frame (no paint between).
+const NOTE_GAP_PX = 12;
+function fitCauseNote(lg) {
   const cn = $("causenote");
+  for (const k of ["bottom", "left", "maxWidth"]) setStyle(cn, k, "");
+  if (cn.hidden || cn.parentElement !== viewport) return;
+  const shown = (e) => e && !e.hidden && e.parentElement === viewport && e.offsetWidth > 0;
+  const W = viewport.clientWidth;
+  const bottom = () => cn.offsetTop + cn.offsetHeight;
+  // the right-hand boxes that reach down beside it (it only ever moves up)
+  let right = W - 20;
+  for (const s of [lg, viewport.querySelector(".grip-panel")]) if (shown(s) && s.offsetTop < bottom()) right = Math.min(right, s.offsetLeft - NOTE_GAP_PX);
+  if (cn.offsetLeft + cn.offsetWidth / 2 > right) {
+    // (translateX(-50%): offsetLeft is its centre)
+    const max = parseFloat(getComputedStyle(cn).maxWidth) || W;
+    setStyle(cn, "maxWidth", `${Math.max(240, Math.min(max, right - 20))}px`);
+    setStyle(cn, "left", `${Math.max(20 + cn.offsetWidth / 2, Math.min(W / 2, right - cn.offsetWidth / 2))}px`);
+  }
   const gr = $("graph");
-  if (!cn.hidden && !gr.hidden && gr.parentElement === viewport) {
-    setStyle(cn, "bottom", ""); // where it stands by itself (then lifted again in the same frame: no paint between)
-    const left = cn.offsetLeft - cn.offsetWidth / 2; // (translateX(-50%))
-    const cross = left < gr.offsetLeft + gr.offsetWidth && gr.offsetLeft < left + cn.offsetWidth && cn.offsetTop + cn.offsetHeight > gr.offsetTop;
-    setStyle(cn, "bottom", cross ? `${viewport.clientHeight - gr.offsetTop + 8}px` : "");
-  } else setStyle(cn, "bottom", "");
+  if (shown(gr)) {
+    const left = cn.offsetLeft - cn.offsetWidth / 2;
+    const cross = left < gr.offsetLeft + gr.offsetWidth && gr.offsetLeft < left + cn.offsetWidth && bottom() > gr.offsetTop; // (beside it or under it: above it)
+    if (cross) setStyle(cn, "bottom", `${viewport.clientHeight - gr.offsetTop + 8}px`);
+  }
 }
 
 // A motion's wheel lift as a passed limit (not on a step, where climbing lifts a wheel).
