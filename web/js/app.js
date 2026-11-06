@@ -53,7 +53,7 @@ import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLege
 import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1 and A2
 import { reportNextHtml } from "./report_next.js";
-import { analysisEdge, assumptionText, edgeFlips, edgeLineHtml, edgeRaw, nearLineHtml } from "./edge_note.js";
+import { analysisEdge, assumptionText, edgeFlips, edgeLineHtml, edgeRaw, edgeText, nearLineHtml } from "./edge_note.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, judgedResult, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
@@ -104,7 +104,7 @@ if (STATIC) {
     `<span class="tab-name">実行の一覧</span>`;
   $("tabs").querySelector(".tabside")?.prepend(list);
 }
-const hookLine = mountHookLine($("stage"), { dev: DEV, showS: 5 }); // the hooks' stop in one line; the footer's list folded
+const hookLine = mountHookLine($("stage"), { dev: DEV, showS: 5, avoid: () => [$("tests")] }); // the hooks' stop in one line (kept clear of ③'s board); the footer's list folded
 $("back-link").href = DEV ? "?list=1&dev=1" : "?list=1";
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
@@ -957,9 +957,8 @@ function markTabs(s) {
 // A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
 let shelf = null;
 function renderShelf() {
-  // (pets: each domain's head carries its agent's pet, as ③'s board and ④'s tiles)
-  shelf ??= mountShelf($("shelf-host"), { tools: () => player.state.tools, runId: () => player.state.runId,
-    pets: () => (agentPets ? { has: (id) => agentPets.has(id), mount: (root) => agentPets.mount(root, "shelf") } : null) });
+  // (each domain's head carries the domain's icon, domain_icons.js; shelf.js draws it)
+  shelf ??= mountShelf($("shelf-host"), { tools: () => player.state.tools, runId: () => player.state.runId });
   shelf.render();
 }
 
@@ -1378,7 +1377,7 @@ function nextStep(chain) {
   return verdict.pass ? "次の試験へ" : "設計を直して次の v へ";
 }
 function renderChainHead(s, chain) {
-  const { loadCase, cmp, verdict } = chain;
+  const { loadCase, cmp, verdict, ana } = chain;
   const now = nowSentence(s, chain, (tool) => toolTitle(s, tool)) || "記録を待っている";
   let judged;
   if (verdict) {
@@ -1392,9 +1391,17 @@ function renderChainHead(s, chain) {
     const crit = loadCase?.criterion?.limit != null ? `基準: ${quantityName(loadCase.criterion.quantity)} ${opLabel(loadCase.criterion.op)} ${fmtQ(loadCase.criterion.limit)}` : "";
     judged = `<span class="ch-q">判定はまだ</span>${crit ? ` <span class="ch-v">${esc(crit)}</span>` : ""}`;
   }
+  // the 境目 line (edge_note.js) right under the verdict's row, so it shows with the tab folded too
+  // (the same test as the 4. 判定 card: the note names this verdict's quantity as changing)
+  const vAna = verdict ? s.analyses[verdict.analysis_id ?? cmp?.analysis_id] ?? ana : null;
+  const edge = vAna ? analysisEdge(vAna) : null;
+  const edgeRow = edge && (edgeFlips(edge, verdict.quantity) || edgeFlips(edge, cmp?.quantity))
+    ? `<div class="ch-row ch-edge" data-role="edge-head" title="${esc(edgeRaw(vAna))}"><small></small>${esc(edgeText(edge))}</div>`
+    : "";
   const html =
     `<div class="ch-row ch-now clamp1" title="${esc(now)}"><small>いま</small>${esc(now.replace(/^いま: /, ""))}</div>` +
     `<div class="ch-row ch-judged" data-role="verdict"><small>判定</small>${judged}</div>` +
+    edgeRow +
     `<div class="ch-row ch-next clamp1" title="${esc(nextStep(chain))}"><small>次</small>${esc(nextStep(chain))}</div>`;
   if (chainHeadHtml !== html) $("chain-head").innerHTML = chainHeadHtml = html;
 }
@@ -2265,8 +2272,7 @@ function draw() {
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
   if (agentPets && view === "bench") agentPets.tick(s, player.events, player.playhead, "board", ui.frozen ? Infinity : PET_PAINTS); // test_board.js
-  if (agentPets && tab === "A4") agentPets.tick(s, player.events, player.playhead, "shelf", ui.frozen ? Infinity : PET_PAINTS); // shelf.js heads
-  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("asm-host"))).render(s, asmClock());
+  if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("asm-host"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS);
   if (TAB_HEADS[tab]) renderTabHead(s, tab);

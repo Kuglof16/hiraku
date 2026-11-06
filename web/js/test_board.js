@@ -9,8 +9,8 @@
 // The groups wrap side by side (css/test_board.css): a group's boxes take at most MAX_COLS columns,
 // so 8 domains with a few tests each fit on one screen with the 3D (no row scrolls sideways). The
 // domains without a test in this run are one line at the end. Pressing a box picks its load case
-// (app.js: the same as the old chips, ui.pinnedLc); 自動 follows the replay again. The place for a
-// "ビューアで見る" button is kept empty at the end ([data-role="viewer"]).
+// (app.js: the same as the old chips, ui.pinnedLc); 自動 follows the replay again. 「ビューアで見る」
+// is not here: it is on the analysis card (#card-ana, viewer_link.js) of the test shown.
 //
 // Everything comes from the record at the replay's time (state.js chainFor): ?t= draws the same.
 
@@ -94,6 +94,6 @@ export function boardHtml(s, cases, { lcId = null, auto = true, pets = null, wit
     : "";
   const tail =
     `<div class="tb-tail"><button class="auto${auto ? " on" : ""}" type="button" data-lc="" title="再生に合わせて試験を選ぶ">自動</button>` +
-    `${restLine}<span class="tb-viewer" data-role="viewer"></span></div>`;
+    `${restLine}</div>`;
   return { html: html + tail, groups: groups.length };
 }

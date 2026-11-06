@@ -10,13 +10,14 @@ On the saved scripted run (showcase/20261105-150416-offroad-4w-scripted: 8 domai
   apart), and its state in a word and a class (test_board.js caseState: まだ・計算中・予想通り・不一致・
   OK・NG); red is for NG only, a mismatch is orange;
 - pressing a box picks that load case (the cards and the 3D show it, the box is ringed); 自動 gives
-  it back to the replay; the place of 「ビューアで見る」 is there and empty ([data-role="viewer"]);
+  it back to the replay; the board has no 「ビューアで見る」 place ([data-role="viewer"]): the
+  button is on the analysis card (#card-ana, viewer_link.js);
 - the whole board is on the screen with the 3D under it, nothing cut or scrolled, at 1440 x 900 and
   1920 x 1080, with video=1 too, also for 8 domains with 5 tests each; the layout lint finds nothing
   in it; the same t draws the same board.
 
-The tool shelf (A4): each domain's head carries its agent's pet, the same role as ③'s board and
-④'s tiles (data-pet-slot = data-agent of the board's group).
+The tool shelf (A4): each domain's head carries the domain's line icon from domain_icons.js (the
+one definition the top row's chips and ④'s tiles use), not a pet.
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed.
 """
@@ -171,7 +172,7 @@ class TestBoardBrowserTest(unittest.TestCase):
         self.assertTrue(any(e["kind"] == "verdict.recorded" for e in events))
         # the rest line: every domain has a test here
         self.assertIsNone(got["rest"])
-        self.assertEqual(got["viewer"], 0)  # the viewer's place, empty
+        self.assertIsNone(got["viewer"])  # no viewer place on the board (the card has the button)
 
     def test_colours_red_for_ng_only(self):
         """Over the run's time, each state's border colour: NG red, a mismatch orange, no other red."""
@@ -274,15 +275,15 @@ class TestBoardBrowserTest(unittest.TestCase):
         if moving:
             self.assertTrue(any(seen[-1][k][1] > seen[0][k][1] for k in moving), seen)
 
-    def test_shelf_heads_carry_the_domains_pets(self):
+    def test_shelf_heads_carry_the_domains_icons(self):
         page, errors = self.open("tab=A4&t=1e6", (1920, 1080))
         page.wait_for_function("document.querySelectorAll('#view-shelf .sh-node').length > 0")
         page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
         got = page.evaluate(
             """() => [...document.querySelectorAll('#view-shelf .sh-node')].map((n) => ({
-                 key: n.dataset.branch, slot: n.querySelector('.sh-head [data-pet-slot]')?.dataset.petSlot ?? null,
-                 role: n.querySelector('.sh-head .petbox')?.dataset.role ?? null,
-                 drawn: Number(n.querySelector('.sh-head .petbox')?.dataset.petDraws ?? 0) }))"""
+                 key: n.dataset.branch, icon: n.querySelector('.sh-head svg.dom-ic')?.dataset.domainIcon ?? null,
+                 pet: !!n.querySelector('.sh-head [data-pet-slot], .sh-head .petbox'),
+                 h: n.querySelector('.sh-head svg.dom-ic')?.getBoundingClientRect().height ?? 0 }))"""
         )
         # the heads only: the tools' rows (.sh-tool) are not changed here (on this run some of their
         # columns run out of their box; reported, not this test's)
@@ -293,9 +294,9 @@ class TestBoardBrowserTest(unittest.TestCase):
         domains = [g for g in got if g["key"] in DOMAINS]
         self.assertTrue(domains)
         for g in domains:
-            self.assertEqual(g["slot"], AGENT[g["key"]], g)  # the same agent as ③'s board (and ④'s tile)
-            self.assertEqual(g["role"], AGENT[g["key"]], g)
-            self.assertGreater(g["drawn"], 0, g)
+            self.assertEqual(g["icon"], g["key"], g)  # domain_icons.js domainIconSvg of that domain
+            self.assertFalse(g["pet"], g)
+            self.assertGreater(g["h"], 10, g)
         self.assertEqual(problems, [])
         self.assertTrue(all(".sh-tool" in p["sel"] or "li.sh-tool" in p["sel"] for p in tool_rows), tool_rows)
 

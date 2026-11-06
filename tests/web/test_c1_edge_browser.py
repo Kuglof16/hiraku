@@ -132,6 +132,22 @@ class C1EdgeBrowserTest(unittest.TestCase):
         self.assertNotEqual(got["edgeColor"], RED)
         self.assertEqual(got["near"], NEAR_LINE)
         self.assertFalse(got["clipped"])
+        # ③ folded (the right column's いま / 判定 / 次): 境目 still shows, right under the verdict's row
+        head = page.evaluate("""() => {
+          const j = document.querySelector('#chain-head [data-role="verdict"]');
+          const e = document.querySelector('#chain-head [data-role="edge-head"]');
+          const r = (x) => x.getBoundingClientRect();
+          return { open: document.getElementById('chain-more').open, text: e?.textContent ?? null,
+                   next: e ? e.previousElementSibling === j : null, below: e ? r(e).top >= r(j).bottom - 1 : null,
+                   seen: e ? r(e).height > 0 && getComputedStyle(e).visibility !== 'hidden' : null,
+                   color: e ? getComputedStyle(e).color : null,
+                   clipped: e ? e.scrollWidth > e.clientWidth + 1 : null };
+        }""")
+        self.assertFalse(head["open"])
+        self.assertEqual(head["text"], EDGE)
+        self.assertTrue(head["next"] and head["below"] and head["seen"], head)
+        self.assertEqual(head["color"], ORANGE)
+        self.assertFalse(head["clipped"])
         # the fold stays open across a redraw
         page.click("#card-ana details[data-keep='ana-asm'] summary")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", edge_events())
@@ -145,6 +161,7 @@ class C1EdgeBrowserTest(unittest.TestCase):
         self.assertIsNone(got["edge"])
         self.assertEqual(got["near"], NEAR_LINE)
         self.assertEqual(got["items"][1], NEAR_LINE)  # the note as its 参考 line
+        self.assertEqual(page.locator('#chain-head [data-role="edge-head"]').count(), 0)
         page.close()
 
     def test_without_assumptions_no_fold(self):

@@ -15,6 +15,7 @@
 
 import { BASE_JA, DOMAINS, DOMAIN_JA, fmt, fmtPct, quantityName, unitLabel } from "./labels.js";
 import { fill, h } from "./intake/dom.js";
+import { domainIconSvg } from "./domain_icons.js";
 import { getUrl } from "./source.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
@@ -232,11 +233,9 @@ export function mountShelf(el, api) {
     const key = `${ui.mode}:${b.key}`;
     const closed = ui.collapsed.has(key);
     const ok = b.tools.filter(allPassed).length;
-    // a domain's head: its agent's pet as its icon (the same as ③'s board and ④'s tiles: the CAE role
-    // of the domain, the packager for assembly), when the app has the pets
-    const pets = ui.mode === "domain" ? api.pets?.() : null;
-    const agent = DOMAINS.includes(b.key) ? (b.key === "assembly" ? "packager" : `cae.${b.key}`) : null;
-    const icon = agent && pets?.has(agent) ? h("span", { class: "petslot sh-pet", dataset: { petSlot: agent }, title: `${b.label}の担当` }) : null;
+    // a domain's head: the domain's icon, from the one definition (domain_icons.js; the same as the
+    // top row's chips and ④'s tiles). The svg is the module's own constant markup, not record text.
+    const icon = ui.mode === "domain" && DOMAINS.includes(b.key) ? h("span", { class: "sh-ic", innerHTML: domainIconSvg(b.key) }) : null;
     return h("li", { class: "sh-node", dataset: { branch: b.key } },
       h("button", { class: "sh-head", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); render(); } },
         h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), icon, h("b", {}, b.label),
@@ -339,7 +338,6 @@ export function mountShelf(el, api) {
       : shelf.ready ? "" : "棚を読み込んでいます… (初めの 1 回は、ツールの判定を回すので少しかかります)";
     const branches = shelfTree(tools, ui);
     fill(tree, branches.length ? branches.map(branch) : h("li", { class: "sh-dim" }, tools.length ? "条件に合うツールがありません" : shelf.ready ? "ツールがありません" : ""));
-    api.pets?.()?.mount(tree); // the heads' pets (app.js draws them)
     fill(detailBox, detail(tools.find((t) => t.name === ui.selected) ?? null));
     // ?tool=: the card scrolled to its known-answer checks (until another tool is chosen)
     const h4 = START_TOOL && ui.selected === START_TOOL ? detailBox.querySelector(".sh-detail h4") : null;

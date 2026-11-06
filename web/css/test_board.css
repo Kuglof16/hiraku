@@ -52,4 +52,3 @@
 .tests.board .auto { flex: none; white-space: nowrap; font-size: 14px; color: var(--muted); border: 1.5px dashed var(--line); border-radius: 999px; padding: 3px 12px; }
 .tests.board .auto.on { color: var(--blue); border-color: var(--blue); border-style: solid; }
 .tb-rest { font-size: 13px; color: var(--muted); white-space: nowrap; }
-.tb-viewer:empty { display: none; } /* the place of a 「ビューアで見る」 button (another branch fills it) */

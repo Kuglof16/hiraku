@@ -721,6 +721,9 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .clamp1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-judged { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
 .ch-judged small { align-self: center; }
+/* 境目 (edge_note.js) under the verdict's row: orange like the card's line, kept whole (it wraps) */
+.ch-edge { display: flex; align-items: baseline; color: var(--orange, #b26b00); font-weight: 600; font-size: 14px; line-height: 1.35; margin-top: -4px; }
+.ch-edge small { flex: none; }
 .ch-q { font-weight: 600; }
 .ch-v { font-variant-numeric: tabular-nums; }
 .ch-verdict { margin-left: auto; font-size: 24px; line-height: 1; }
