@@ -718,6 +718,13 @@ export function quantityName(q) {
   }
   return q;
 }
+// A frame member's name for people: its design name before any bracket (as the parts' names on the
+// tiles and the assembly's steps), else 部材 and its id.
+export function memberName(design, id) {
+  const m = (design?.members ?? []).find((x) => x.id === id);
+  return m?.name ? String(m.name).replace(/\s*[（(].*$/, "") || `部材 ${id}` : `部材 ${id}`;
+}
+
 // The words that tell the judged number from a value shown for reference (the present card,
 // the workbench's comparison card, the colour bar and the 3D's largest-value tag).
 export const JUDGED_JA = {

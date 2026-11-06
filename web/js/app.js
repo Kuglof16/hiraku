@@ -52,6 +52,7 @@ import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLege
 import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1 and A2
 import { reportNextHtml } from "./report_next.js";
+import { analysisEdge, assumptionText, edgeFlips, edgeLineHtml, edgeRaw, nearLineHtml } from "./edge_note.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, judgedResult, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
@@ -1219,13 +1220,19 @@ function renderChain(s, chain) {
     const rows = [...top, ...refs.filter((r) => !top.includes(r))];
     if (jr && !rows.includes(jr)) rows.push(jr);
     const res = rows.map((r) => `<tr class="${isRef(r) ? "ref" : r === jr ? "judged" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : r === jr ? `<small class="used">${esc(JUDGED_JA.number)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    const anaDesign = s.designs[ana.design_version] ?? null;
+    const anaAsm = (ana.assumptions ?? []).map((x) => `<li>${esc(assumptionText(x, anaDesign))}</li>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
       `<div class="sub" title="${esc(ana.tool)}">${esc(toolShort(s, ana.tool))}・${esc(ana.load_case_id)}${typeof ana.wall_time_s === "number" ? `・${fmt(ana.wall_time_s, 2)} 秒` : ""}</div>` +
       (ana.status === "failed" ? `<div class="err">通らなかった: ${esc(ana.error ?? "")}</div>` : `<table>${res}</table>`) +
       (ana.mesh_convergence ? `<div class="conv">${esc(convergenceLine(ana.mesh_convergence))}</div>` : "") +
-      (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "");
+      (loadCase?.domain === "strength" ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
+      // the analysis' assumptions (the record's words, English as written; the break angle's note
+      // as one line: edge_note.js), folded
+      (anaAsm ? `<details class="more" data-keep="ana-asm"><summary>くわしく (解析の前提)</summary><ul class="asm">${anaAsm}</ul></details>` : "");
+    keepOpen(a);
   } else if (running) {
     a.className = "card busy";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div title="${esc(running.tool)}">${esc(toolShort(s, running.tool))} で解析中…</div>`;
@@ -1246,12 +1253,21 @@ function renderChain(s, chain) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
       const how = safe ? `<span class="safe-mark" title="予想通りではなく、説明された安全側の不一致から">安全側で判定</span>` : "";
       const big = verdictSentence(verdict);
+      // the crash tool's note on the break angle (edge_note.js): 境目 when it names this verdict's
+      // quantity as changing inside the band; 参考 for a member a little under the break angle
+      const vAna = s.analyses[verdict.analysis_id ?? cmp.analysis_id] ?? ana;
+      const edge = analysisEdge(vAna);
+      const edgeLines = edge
+        ? (edgeFlips(edge, verdict.quantity) || edgeFlips(edge, cmp.quantity) ? edgeLineHtml(edge, edgeRaw(vAna)) : "") +
+          nearLineHtml(edge, s.designs[vAna?.design_version] ?? null)
+        : "";
       // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
         `<div class="verdict ${verdict.pass ? "ok" : "bad"}${safe ? " safe" : ""}">${how}<div class="verdict-big">${esc(big.text)}</div>` +
         // the quantity compared and judged (frame_shell: the hot-spot stress for a max_stress criterion)
         `判定 (${valueFromJa(verdict)}の値): ${esc(quantityName(cmp.quantity ?? verdict.quantity))}<div class="vline">${esc(verdictLine(verdict))}</div>` +
         `<span class="sub">余裕 ${esc(fmtMargin(verdict))}${loadCase?.title ? `・${esc(loadCase.title)}` : ""}</span>` +
+        edgeLines +
         // the criterion's basis is the record's own words (English): folded
         (loadCase?.criterion?.basis ? `<details class="more" data-keep="cmp-basis"><summary>くわしく (基準の根拠)</summary><div class="sub basis">${esc(loadCase.criterion.basis)}</div></details>` : "") +
         `</div>`;
