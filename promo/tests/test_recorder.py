@@ -239,12 +239,61 @@ class RecorderInBrowser(unittest.TestCase):
         (rate, ch, width), _ = read_wav(Path(dl.value.path()).read_bytes())
         self.assertEqual((rate, ch, width), (44100, 1, 2))
 
+    def test_refused_microphone_says_so(self):
+        # a second browser whose microphone permission is refused: Space must show why, once
+        from playwright.sync_api import sync_playwright  # noqa: F401 (the class's playwright is running)
+        browser = self.pw.chromium.launch(args=["--use-fake-device-for-media-stream", "--deny-permission-prompts"])
+        try:
+            page = browser.new_page()
+            errors = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(RECORDER.as_uri())
+            page.evaluate("async () => { localStorage.clear(); await window.hirakuRec.ready; }")
+            page.evaluate("(t) => window.hirakuRec.loadScriptText(t, 'test.tsv')", SCRIPT)
+            page.keyboard.press("Space")
+            page.keyboard.press("Space")          # a second press while waiting does nothing more
+            page.wait_for_selector("#micWait.on.bad", timeout=10000)
+            self.assertTrue(page.locator("#micWait").inner_text().strip())
+            self.assertTrue(page.locator("#micWait").is_visible())
+            self.assertFalse(page.evaluate("() => window.hirakuRec.state.recording"))
+            self.assertFalse(page.evaluate("() => window.hirakuRec.state.countingDown"))
+            self.assertEqual(errors, [])
+        finally:
+            browser.close()
+
+    def test_waiting_for_the_permission_says_so(self):
+        # the browser asks the user and getUserMedia does not settle: the page says it is waiting
+        browser = self.pw.chromium.launch(args=ARGS)
+        try:
+            page = browser.new_page()
+            page.add_init_script("navigator.mediaDevices.getUserMedia = () => new Promise(() => {});")
+            page.goto(RECORDER.as_uri())
+            page.evaluate("async () => { localStorage.clear(); await window.hirakuRec.ready; }")
+            page.evaluate("(t) => window.hirakuRec.loadScriptText(t, 'test.tsv')", SCRIPT)
+            page.keyboard.press("Space")
+            page.wait_for_selector("#micWait.on", timeout=5000)
+            self.assertIn("許可", page.locator("#micWait").inner_text())
+            self.assertNotIn("bad", page.locator("#micWait").get_attribute("class"))
+            page.keyboard.press("Space")          # pressed again while waiting: nothing starts
+            page.wait_for_timeout(300)
+            self.assertFalse(page.evaluate("() => window.hirakuRec.state.countingDown"))
+            self.assertFalse(page.evaluate("() => window.hirakuRec.state.recording"))
+        finally:
+            browser.close()
+
     def test_space_records_with_the_device_list_focused(self):
         # choosing the microphone leaves the focus on the select; Space must still start the countdown
         self.page.focus("#device")
         self.page.dispatch_event("#device", "change")
         self.page.focus("#device")      # as if the user clicked it again
         self.page.keyboard.press("Space")
+        try:
+            # the change reopens the microphone first; the countdown starts once it is open
+            self.page.wait_for_function(
+                "() => document.getElementById('countdown').classList.contains('on') || window.hirakuRec.state.recording",
+                timeout=5000)
+        except Exception:
+            pass
         try:
             on = self.page.evaluate("() => document.getElementById('countdown').classList.contains('on')")
             rec = self.page.evaluate("() => window.hirakuRec.state ? window.hirakuRec.state.recording : null")

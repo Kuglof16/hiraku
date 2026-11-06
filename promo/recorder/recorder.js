@@ -235,7 +235,48 @@ async function listDevices() {
   if ([...sel.options].some((o) => o.value === want)) sel.value = want;
 }
 
-async function openMic() {
+// The microphone: while the browser waits for the user's permission nothing else shows, so a
+// big line says so (after a short delay, so a page that already has the permission does not
+// flash it); a refusal or a missing device says why. One opening at a time.
+let micOpening = null;
+function micMessage(text, bad = false) {
+  const el = $("micWait");
+  el.textContent = text || "";
+  el.classList.toggle("on", !!text);
+  el.classList.toggle("bad", !!bad);
+}
+function micReason(err) {
+  const name = err && err.name;
+  if (name === "NotAllowedError" || name === "SecurityError")
+    return "マイクが許可されていません。アドレスバーの左の印を押し、マイクを「許可」にしてから、ページを読み込み直してください。";
+  if (name === "NotFoundError" || name === "OverconstrainedError")
+    return "マイクが見つかりません。マイクをつないで、「入力」の一覧で選び直してください。";
+  if (name === "NotReadableError")
+    return "マイクをほかのアプリが使っています。そのアプリを閉じてから、もう一度押してください。";
+  if (name === "NotSupportedError")
+    return "マイクを開けませんでした (NotSupportedError)。アドレスバーの左の印でマイクを「許可」にして、ページを読み込み直してください。";
+  return `マイクを開けませんでした (${name || "error"}: ${(err && err.message) || err})`;
+}
+function openMic() {
+  if (micOpening) return micOpening;
+  const waiting = setTimeout(() => micMessage("マイクの許可を待っています。アドレスバーの左に出ている確認で「許可」を押してください。"), 300);
+  micOpening = (async () => {
+    try {
+      await openMicNow();
+      micMessage("");
+    } catch (err) {
+      micMessage(micReason(err), true);
+      $("micBtn").textContent = "マイクが使えません";
+      throw err;
+    } finally {
+      clearTimeout(waiting);
+      micOpening = null;
+    }
+  })();
+  return micOpening;
+}
+
+async function openMicNow() {
   const c = await audio();
   if (mic.stream) mic.stream.getTracks().forEach((t) => t.stop());
   if (mic.source) mic.source.disconnect();
@@ -302,6 +343,7 @@ function onTap(e) {
 function current() { return state.lines[state.pos]; }
 
 async function toggleRecord() {
+  if (micOpening && !mic.stream) return;   // still waiting for the first microphone: a second press does nothing
   if (state.countingDown) { cancelCountdown(); return; }
   if (state.recording) { await stopRecording(); return; }
   await startRecording();
@@ -317,7 +359,10 @@ function cancelCountdown() {
 async function startRecording({ countdown } = {}) {
   if (!current()) return;
   stopPlayer();
-  if (!mic.stream) await openMic();
+  if (micOpening && mic.stream) { try { await micOpening; } catch (err) { return; } }   // a device change is reopening it
+  if (!mic.stream) {
+    try { await openMic(); } catch (err) { console.error(err); return; }   // the reason is on the screen
+  }
   const useCountdown = countdown === undefined ? $("countdownOn").checked : countdown;
   if (useCountdown) {
     state.countingDown = true;
@@ -771,8 +816,8 @@ function wire() {
     const wavs = files.filter((f) => /\.wav$/i.test(f.name));
     if (wavs.length) await loadSynthFiles(wavs);
   });
-  $("micBtn").onclick = () => openMic().catch((e) => { $("micBtn").textContent = "マイクが使えません"; console.error(e); });
-  $("device").onchange = () => { lsSet(LS.device, $("device").value); $("device").blur(); if (mic.stream) openMic(); };
+  $("micBtn").onclick = () => openMic().catch((e) => console.error(e));
+  $("device").onchange = () => { lsSet(LS.device, $("device").value); $("device").blur(); if (mic.stream) openMic().catch((e) => console.error(e)); };
   $("recBtn").onclick = toggleRecord;
   $("retakeBtn").onclick = () => { if (!state.recording) startRecording(); };
   $("prevBtn").onclick = () => go(state.pos - 1);
@@ -790,7 +835,10 @@ function wire() {
   document.querySelectorAll(".preset").forEach((b) => { b.onclick = () => applyPreset(b.dataset.preset); });
   $("abBtn").onclick = () => setBypass(!state.bypass);
   $("playLoop").onclick = () => { const t = current() && chosenTake(current().key); if (t) playTake(t, { loop: true }); };
-  $("monitorOn").onchange = async (e) => { if (e.target.checked && !mic.stream) await openMic(); setMonitor(e.target.checked); };
+  $("monitorOn").onchange = async (e) => {
+    if (e.target.checked && !mic.stream) { try { await openMic(); } catch (err) { console.error(err); return; } }
+    setMonitor(e.target.checked);
+  };
   $("saveJson").onclick = () => {
     const blob = new Blob([JSON.stringify(state.settings, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "voice-filter.json"; a.click();
