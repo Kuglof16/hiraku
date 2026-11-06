@@ -175,6 +175,19 @@ def parts_past_wall(run: CrashRun, parts: list[dict], shares: dict[str, dict[int
     return out
 
 
+def reaches_occupants(run: CrashRun, nodes: list[int], parts: list[dict]) -> bool:
+    """Whether a piece (its nodes, at the start) has a node inside some occupant part box's y-z extent and ahead of
+    the box's rear face: a piece that can come into the occupants' space."""
+    x0 = run.mesh.x0[nodes]
+    for p in parts:
+        c = np.asarray(p["box"]["center_mm"], float) / 1000.0
+        h = np.asarray(p["box"]["size_mm"], float) / 2000.0
+        inside = ((np.abs(x0[:, 1] - c[1]) <= h[1]) & (np.abs(x0[:, 2] - c[2]) <= h[2]) & (x0[:, 0] > c[0] - h[0]))
+        if inside.any():
+            return True
+    return False
+
+
 def broken_members(run: CrashRun) -> list[str]:
     """The members with a broken element, in the order they broke."""
     out = []

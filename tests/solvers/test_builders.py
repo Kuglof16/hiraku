@@ -94,7 +94,8 @@ class BuildersTest(unittest.TestCase):
         for tid in OURS:
             got = BUILDERS[tid](spec(tid), REQ, DESIGN)
             cls.cases.update({lc["load_case_id"]: lc for lc in got} if isinstance(got, list) else {tid: got})
-        cls.runs = {key: tool_for(lc["test_id"]).run(DESIGN, lc, PRED, {}) for key, lc in cls.cases.items()}
+        # each case on its plan's tool (C1 is judged by K2's crash_beam)
+        cls.runs = {key: TOOLS[plan_for(lc)["tool"]].run(DESIGN, lc, PRED, {}) for key, lc in cls.cases.items()}
 
     def test_every_test_has_a_builder(self):
         for tid in OURS:
@@ -142,7 +143,9 @@ class BuildersTest(unittest.TestCase):
         for key, lc in self.cases.items():
             tid = lc["test_id"]
             plan = plan_for(lc)
-            self.assertEqual(plan["tool"], tool_for(tid).name)
+            tool = TOOLS[plan["tool"]]
+            self.assertIn(tid, tool.tests)
+            self.assertEqual(plan["tool"], "crash_beam" if tid == "C1" else tool_for(tid).name)
             got = {r["quantity"]: r for r in self.runs[key]["results"]}
             preds = {}
             expected = plan.get("expected_mismatch", {}).get("quantity")
@@ -155,8 +158,9 @@ class BuildersTest(unittest.TestCase):
                 preds[p["quantity"]] = out
                 if (tid, p["formula_id"]) in NOT_YET_LISTED:
                     self.assertEqual(FORMULAS.get(p["formula_id"]).formula_id, p["formula_id"])
-                else:
-                    self.assertIn(p["formula_id"], tool_for(tid).formulas)
+                else:  # a shelf tool lists its formulas; a K2 tool names them from its pairs (formula_ids)
+                    listed = tool.formulas if hasattr(tool, "formulas") else tool.formula_ids()
+                    self.assertIn(p["formula_id"], listed)
                 if p["quantity"] not in got:  # an intermediate hand value, not compared
                     continue
                 ana = got[p["quantity"]]
@@ -215,7 +219,7 @@ class BuildersTest(unittest.TestCase):
             BUILDERS["R3"](CATALOG.test("R3"), req, DESIGN)
         req = copy.deepcopy(REQ)
         req["requirements"] = [r for r in req["requirements"] if r["key"] != "Q65"]
-        self.assertEqual(BUILDERS["C1"](CATALOG.test("C1"), req, DESIGN)["params"]["speed"]["value"], 40.0)  # Q50
+        self.assertEqual(BUILDERS["C1"](CATALOG.test("C1"), req, DESIGN)[0]["params"]["speed"]["value"], 40.0)  # Q50
 
     def test_t1_past_the_limit(self):
         """The ambient where the hand calculation puts the battery 5 K over its limit: the analysis is over it too."""
@@ -266,7 +270,7 @@ class BuildersTest(unittest.TestCase):
 
     def test_catalog_tolerance_wins(self):
         spec = dict(CATALOG.test("C1"), tolerance_rel=0.07)
-        self.assertEqual(BUILDERS["C1"](spec, REQ, DESIGN)["tolerance_rel"], 0.07)
+        self.assertEqual({lc["tolerance_rel"] for lc in BUILDERS["C1"](spec, REQ, DESIGN)}, {0.07})
 
 
 class RopsBuilderTest(unittest.TestCase):

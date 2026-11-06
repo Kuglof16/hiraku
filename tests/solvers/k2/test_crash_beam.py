@@ -380,9 +380,14 @@ class Tool(unittest.TestCase):
             self.assertIn("rail_L_AM", rr["frame_split_time"]["where"])
             self.assertIn("crush_at_split", rr)
         self.assertAlmostEqual(r_on["frame_split_time"]["value"], r["frame_split_time"]["value"], delta=1e-9)
-        for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
+        for name in ("mean_decel", "max_crush", "crush_margin", "occupant_space_left"):
             self.assertNotIn(name, r)
             self.assertIn(name, r_on)
+        # C1's two quantities in both: the least room (up to the split when the run stops there: an upper bound) and
+        # the broken-off piece's share
+        for rr in (r_on, r):
+            self.assertIn("occupant_space_margin", rr)
+            self.assertGreater(rr["frame_split_fraction"]["value"], 0.03)
         self.assertGreaterEqual(r_on["max_crush"]["value"], r_on["crush_at_split"]["value"])
         self.assertTrue(any("split" in n and "not computed" in n for n in stop["assumptions"]))
         self.assertTrue(any("split" in n and "goes on past the split" in n for n in on["assumptions"]))
@@ -513,8 +518,11 @@ class DemoDesign(unittest.TestCase):
         self.assertNotIn("frame_split_time", res)
         self.assertEqual(res["broken_members"]["value"], 3.0)
         self.assertIn("rail_L_FA", res["broken_members"]["where"])
-        for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
+        for name in ("mean_decel", "max_crush", "crush_margin", "occupant_space_margin", "occupant_space_left"):
             self.assertIn(name, res)
+        # C1 by this tool: no piece of 3 % breaks off, but the tower posts come into the foot boxes
+        self.assertLess(res["frame_split_fraction"]["value"], 0.03)
+        self.assertLess(res["occupant_space_margin"]["value"], 0.0)
         self.assertTrue(any(a.startswith("run: the vehicle stopped") for a in rec["assumptions"]))
         self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and "150 N/mm, the design's "
                             "tyre_stiffness" in a for a in rec["assumptions"]))

@@ -25,24 +25,63 @@ from hiraku.catalog.loading import LOADING_JA
 C1_TOL = 0.15
 
 
-def c1_crash(spec: Record, req: Record, design: Record) -> Record:
+# C1 is judged by K2's crash_beam (the frame as beams that yield, fold and break), two load cases from the same run:
+# the least room to the occupants, and no piece of the frame breaking off. The largest share of the mass a piece
+# broken off the seats' side may have: crash_beam.SPLIT_STOP_SHARE (3 %, HIRAKU's choice, no source).
+C1_SPLIT_ID = "C1-split"
+C1_SPLIT_LIMIT = 0.03
+
+
+def c1_crash(spec: Record, req: Record, design: Record) -> list[Record]:
     load, keys = loading(req, design)
     if entry(req, "Q65"):
         v, vkey = number(req, "Q65", "km/h"), "Q65"
     else:  # the crash speed is the top speed unless the requirements say otherwise
         v, vkey = number(req, "Q50", "km/h"), "Q50"
-    return {
-        "load_case_id": f"C1-{v:g}kmh",
-        "test_id": "C1",
-        "domain": spec["domain"],
-        "title": f"{v:g} km/h で壁に正面から当たる ({LOADING_JA[load]})",
-        "params": {"speed": q(v, "km/h"), "loading": load},
-        "requirement_keys": [vkey, *keys] + (["Q31"] if entry(req, "Q31") else []),
-        "criterion": {"quantity": "occupant_space_margin", "op": ">=", "limit": q(0.0, "mm"),
-                      "basis": "C1: the crush must stop short of the occupants (the front overhang ahead of them)",
-                      "requirement_keys": [vkey]},
-        "tolerance_rel": tolerance(spec, C1_TOL),
-    }
+    common = {"test_id": "C1", "domain": spec["domain"], "params": {"speed": q(v, "km/h"), "loading": load},
+              "requirement_keys": [vkey, *keys] + (["Q31"] if entry(req, "Q31") else []),
+              "tolerance_rel": tolerance(spec, C1_TOL)}
+    room = dict(copy.deepcopy(common), load_case_id=f"C1-{v:g}kmh",
+                title=f"{v:g} km/h で壁に正面から当たる ({LOADING_JA[load]})",
+                criterion={"quantity": "occupant_space_margin", "op": ">=", "limit": q(0.0, "mm"),
+                           "basis": "C1: no structure reaches into the occupants' space (the least room to their part "
+                                    "boxes over the crash)",
+                           "requirement_keys": [vkey]})
+    split = dict(copy.deepcopy(common), load_case_id=C1_SPLIT_ID,
+                 title=f"{v:g} km/h で壁に正面から当たって、骨組みがちぎれないか ({LOADING_JA[load]})",
+                 criterion={"quantity": "frame_split_fraction", "op": "<=", "limit": q(C1_SPLIT_LIMIT, "1"),
+                            "basis": f"C1: no piece with more than {C1_SPLIT_LIMIT:.0%} of the mass breaks off the frame "
+                                     "(HIRAKU's limit, no source)",
+                            "requirement_keys": [vkey]})
+    return [room, split]
+
+
+def c1_split_calc(design: Record, load_case: Record) -> Record:
+    """The rail behind the crush zone as a straight column under the crush zone's force (crash.rail_column_split):
+    one rail's force, the column's section and length, and the share of the mass ahead of the crush zone's end."""
+    import numpy as np
+
+    from hiraku.contract.loading import loading_of, on_board
+    from hiraku.solvers.k0_handcalc.library_crash import crush_zone, rail_behind, tube_area, tube_least_I
+    from hiraku.solvers.k2_vehicle.crash_beam import build_mesh
+    from hiraku.solvers.shelf.crash import occupant_space
+
+    loaded = on_board(design, loading_of(load_case))
+    cz = crush_zone(loaded)
+    member = rail_behind(loaded, cz["x_end_mm"])
+    if member is None:
+        raise BuildError("no rail runs back from the crush zone's end")
+    sec, mat = loaded["sections"][member["section"]], loaded["materials"][member["material"]]
+    if occupant_space(loaded) is None:
+        raise BuildError("no occupant on board, so nothing can come into their space")
+    nodes = {n["id"]: n["xyz_mm"] for n in loaded["nodes"]}
+    length = abs(float(nodes[member["node_a"]][0]) - float(nodes[member["node_b"]][0]))  # the rail member behind
+    mesh = build_mesh(loaded)
+    ahead = mesh.x0[:, 0] * 1000.0 > cz["x_end_mm"] + 1e-6
+    return {"F": q(max(r["force_N"] for r in cz["rails"]), "N"), "A": q(tube_area(sec), "mm^2"),
+            "f_y": q(float(mat["yield_MPa"]), "MPa"), "E": q(float(mat["E_MPa"]), "MPa"),
+            "I": q(tube_least_I(sec), "mm^4"), "L": q(max(length, 1.0), "mm"),
+            "share": q(float(mesh.mass[ahead].sum() / mesh.mass.sum()), "1")}
 
 
 def c1_calc(design: Record, load_case: Record) -> Record:
@@ -63,18 +102,44 @@ _C1_ASSUME = ["前のつぶれる所は、枠の管が畳まれてつぶれる�
               "つぶれる所が使える長さは、その長さの 70 % (仮定)", "壁は動かない"]
 _C1_IN = {"m": "load.mass", "v": "lc.speed", "F_m": "from.crush_force", "k_b": "design.var.bumper_stiffness",
           "stroke": "design.var.bumper_stroke"}
+# judged by K2's crash_beam (B); the hand calculation is the straight crush of the light crash tool (A)
 C1_PLAN = {
-    "tool": "crash",
-    "say": "前の枠の管が畳まれてつぶれる平均の力から、壁に当たったときの減速度とつぶれ、乗員の前に残る長さを先に見積もります",
+    "tool": "crash_beam",
+    "say": "前の枠の管が畳まれてつぶれる平均の力から、乗員の前に残る長さを先に見積もります (判定は梁の骨組みの衝突で)",
     "predictions": [
-        {"quantity": quantity, "formula_id": "crash.plastic_crush", "output": output, "assumptions": _C1_ASSUME,
-         "inputs": dict(_C1_IN), "inputs_from": c1_calc}
-        for quantity, output in (("peak_deceleration", "a_max"), ("max_crush", "x_max"), ("crash_energy", "E"))
-    ] + [
         {"quantity": "occupant_space_margin", "formula_id": "crash.plastic_occupant_space_margin", "output": "margin",
-         "assumptions": _C1_ASSUME + ["つぶれは車の前の端から後ろへ進む"],
+         "assumptions": _C1_ASSUME + ["つぶれは車の前の端から後ろへ進む", "塔の柱やダッシュが後ろへ曲がって足もとに入ることは見ない"],
          "inputs": dict(_C1_IN, s="from.space"), "inputs_from": c1_calc},
     ],
+    "expected_mismatch": {
+        "quantity": "occupant_space_margin",
+        "source": ("the K2 department's crash_beam runs at 40 km/h, two_cargo: demo v1 -163 mm, the scripted run 150416 "
+                   "versions 2-4 -74 to -75 mm (the frame splits at the tower posts), version 5 +57 mm, the real run 160725 "
+                   "version 7 -137 mm, against the straight crush's several hundred mm, 2026-11-06"),
+        "cause": ("手計算は、前の管がまっすぐ畳まれて平均の力でつぶれ、つぶれは前の端から後ろへ進むとみる。梁の骨組み (B) では、"
+                  "レールは塔とアームの取付の所で曲がって折れ、塔の柱とダッシュが後ろへ倒れて、足もとの箱に入る。手計算は"
+                  "この曲がりを持たないので、乗員の前の余裕をずっと大きく出す"),
+        "fix": ("骨組みが曲がって倒れる形を手で解く式は無い。手計算はまっすぐつぶれる場合の値として残し、合否は梁の骨組みの"
+                "値 (乗員の箱までのいちばん小さい余裕) で出す。直すなら、レールを厚く、塔の根元を強く、つぶれる箱を塔より前に"),
+        "tool_decides": True,
+        "tool_decides_reason": ("骨組みが曲がって倒れる形は手で解けない。手計算 (まっすぐなつぶれ) は値に届かないので、力の道を"
+                                "手計算で確かめたうえで、梁の骨組みの値で決める"),
+    },
+}
+C1_SPLIT_PLAN = {
+    "tool": "crash_beam",
+    "say": "つぶれる所の後ろのレールを、つぶれの力を受けるまっすぐな柱とみて、折れて前がちぎれるかを先に見積もります",
+    "predictions": [
+        {"quantity": "frame_split_fraction", "formula_id": "crash.rail_column_split", "output": "fraction",
+         "assumptions": ["レールはまっすぐな柱で、つぶれの力を軸の向きに受ける (両端はピン)",
+                         "塔やアームの取付がレールを曲げる力は入れない"],
+         "inputs": {k: f"from.{k}" for k in ("F", "A", "f_y", "E", "I", "L", "share")}, "inputs_from": c1_split_calc},
+    ],
+    # No expected mismatch: with the pieces touching each other and the wheels meeting the wall through their tyres
+    # (crash_beam on claude/k2-crash-contact), no piece of 3 % breaks off on demo v1, the scripted run 150416's
+    # versions 1-5 or the real run 160725's version 7 at 40 km/h (tyre 60 N/mm; demo v1 150 N/mm), as the straight
+    # column says (0). Without them (182f148f) the tower posts broke and 4-6 % came off; the hand calculation has no
+    # bending of the rails by the towers and the arm brackets, so a design that splits stops the plan at the mismatch.
 }
 
 # ---------------------------------------------------------------- N1 modal
@@ -1037,7 +1102,12 @@ def r4_rops(spec: Record, req: Record, design: Record) -> Record:
 
 
 from hiraku.catalog.builders.load_path import BUILDERS as _LOAD_PATH_BUILDERS  # noqa: E402  (R7, R8: load_path.py)
+from hiraku.catalog.builders.load_path import PATH_PREDICTION as _PATH_PREDICTION  # noqa: E402
 from hiraku.catalog.builders.load_path import PLANS as _LOAD_PATH_PLANS  # noqa: E402
+
+# C1's two plans decide by the tool (tool_decides): the path check by hand comes first (judge.path_check reads it)
+for _plan in (C1_PLAN, C1_SPLIT_PLAN):
+    _plan["predictions"].insert(0, _PATH_PREDICTION)
 from hiraku.catalog.builders.spray import BUILDERS as _SPRAY_BUILDERS  # noqa: E402  (H6: spray.py)
 from hiraku.catalog.builders.spray import PLANS as _SPRAY_PLANS  # noqa: E402
 from hiraku.catalog.builders.entry import BUILDERS as _ENTRY_BUILDERS  # noqa: E402  (H7, proposed id: entry.py)
@@ -1063,7 +1133,7 @@ BUILDERS = {
     "H5": h5_assembly,
 }
 # H1 and H5 by load case (a test's own key would serve its other cases too)
-PLANS = {"C1": C1_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
+PLANS = {"C1": C1_PLAN, C1_SPLIT_ID: C1_SPLIT_PLAN, "N1": N1_PLAN, "R3": R3_PLAN, "P4": P4_PLAN, "T1": T1_PLAN, "T2": T2_PLAN,
          "H1-interference": H1_OVERLAP_PLAN, "H1-motion": H1_MOTION_PLAN, "H1-steer": H1_PLAN,
          "H1-joints": H1_JOINT_PLAN, "H1-envelope": H1_ENVELOPE_PLAN,
          "H3": H3_PLAN, "H5-order": H5_PLAN, **_LOAD_PATH_PLANS, **_SPRAY_PLANS, **_ENTRY_PLANS,

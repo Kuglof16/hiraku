@@ -67,7 +67,17 @@ class CrashBeamTool(K2Tool):
     pairs = (Pair("peak_decel", "crash.linear_spring", "a_max", (("v", "speed"),),
                   "k from the design variable crush_stiffness (one linear spring); the beams yield and fold instead"),
              Pair("max_crush", "crash.linear_spring", "x_max", (("v", "speed"),),
-                  "the hand calculation's crush is the whole front's; the beam model's is to the seat mounts"))
+                  "the hand calculation's crush is the whole front's; the beam model's is to the seat mounts"),
+             Pair("occupant_space_margin", "crash.plastic_occupant_space_margin", "margin", (("v", "speed"),),
+                  "the hand calculation takes the front tubes crushing straight at their mean crushing force; the beam "
+                  "model's margin is the least room left to any occupant part box (a tower post or the dash bending back "
+                  "into the foot box counts)"),
+             Pair("frame_split_fraction", "crash.rail_column_split", "fraction", (),
+                  "the hand calculation checks each rail behind the crush zone as a straight column under the crush "
+                  "force; the beam model breaks members where the towers and the arm brackets bend the rails"),
+             Pair("unsupported_load", "load_path.free_parts", "n", (),
+                  "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the parts the load case loads, "
+                  "followed by their contacts to the members; the tool counts the parts with mass it put on no node"))
 
     def own_checks(self) -> list[dict]:
         out = []
@@ -220,15 +230,18 @@ class CrashBeamTool(K2Tool):
                     _res("crush_at_split", float(crush[:k_split + 1].max()) * 1000.0, "mm", where_crush)]
             said = (f"the frame split at {split['t'] * 1000:.1f} ms when {', '.join(split_members)} broke: a piece with "
                     f"{split['share'] * 100:.1f} % of the whole mass came apart from {ref_text}; a split off of a piece "
-                    f"of {SPLIT_STOP_SHARE * 100:g} % of the mass or more is NG for C1 (frame_split_time says when). ")
+                    f"of {SPLIT_STOP_SHARE * 100:g} % of the mass or more is NG for C1 (frame_split_fraction, "
+                    "frame_split_time says when). ")
             if cut:
                 notes.append(said + "The run stops there (stop_at_split): peak_decel is up to the split, crush_at_split "
-                             "is the crush then (not the final crush), and mean_decel, max_crush, occupant_space_margin "
-                             "and occupant_space_left are not computed (the vehicle had not stopped)")
+                             "is the crush then (not the final crush), occupant_space_margin is the least room up to "
+                             "then (an upper bound), and mean_decel, max_crush, crush_margin and occupant_space_left are "
+                             "not computed (the vehicle had not stopped)")
             else:
                 notes.append(said + "The pieces touch each other (element contact), so the run goes on past the split: "
-                             "peak_decel, mean_decel, max_crush and occupant_space_left are over the whole run (the "
-                             "broken-off piece pushed on by the rest), crush_at_split is the largest crush up to the split")
+                             "peak_decel, mean_decel, max_crush, occupant_space_margin and occupant_space_left are over "
+                             "the whole run (the broken-off piece pushed on by the rest), crush_at_split is the largest "
+                             "crush up to the split")
         small = [p for p in run.extra.get("pieces", []) if split is None or p["share"] < split["share"]]
         if small:
             notes.append("smaller pieces broken off the seats' side, touching the rest by the element contact: " + "; ".join(
@@ -236,6 +249,23 @@ class CrashBeamTool(K2Tool):
                 + ", ".join(sorted({mesh.member_of[e] for e in mesh.frame_elements()
                                     if all(int(n) in set(p['nodes']) for n in mesh.con[e])}) or ["no whole member"]) + ")"
                 for p in small))
+        # the contract's unsupported_load (docs/contract.md 手計算の役目): the parts with mass the mesh put on no node
+        lost = [p["id"] for p in design.get("parts", []) if float(p.get("mass_kg", 0.0)) > 0.0
+                and not mesh.node_parts.get(p["id"])]
+        res.append(_res("unsupported_load", float(len(lost)), "1", ", ".join(lost) if lost else None))
+        notes.append("unsupported_load: the parts with mass put on no mesh node (each part's mass goes on its "
+                     "carried_by nodes, or the nearest support's node; whether a part's shape touches the frame is the "
+                     "hand calculation's path check, load_path.free_parts): " + (", ".join(lost) if lost else "none"))
+        # C1's second criterion: the largest share of the whole mass in a piece broken off the seats' side that can
+        # come into the occupants' space (0: none); pieces that cannot (e.g. the front cross member, below the feet)
+        # are crushed debris, named in a note
+        reaching = [p for p in run.extra.get("pieces", []) if measure.reaches_occupants(run, p["nodes"], occ)]
+        res.append(_res("frame_split_fraction", max((p["share"] for p in reaching), default=0.0), "1"))
+        notes.append("frame_split_fraction: the largest share of the whole mass in a piece broken off the seats' side "
+                     "with a node in an occupant part box's y-z extent, ahead of its rear face, at the start (a piece that "
+                     "can come into their space); "
+                     + (f"{len(run.extra['pieces']) - len(reaching)} other piece(s) cannot and are not counted"
+                        if len(run.extra.get("pieces", [])) > len(reaching) else "every broken-off piece is counted"))
         if occ:
             # the crush the structure ahead of the occupants can take, as the hand calculation reads it: from the
             # front-most node back to the front face of the front-most occupant part box, along x
@@ -243,11 +273,17 @@ class CrashBeamTool(K2Tool):
             crumple = float(xr.max()) - measure.box_front(front_occ)
             res.append(_res("crumple_length", crumple * 1000.0, "mm", front_occ["id"]))
             if not cut:
-                res.append(_res("occupant_space_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
-                notes.append("occupant_space_margin: crumple_length (the front-most node to the front face of the "
-                             "front-most occupant part box, along x, at the start) less max_crush; the hand calculation "
-                             "crash_beam.occupant_margin reads the same")
+                res.append(_res("crush_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
+                notes.append("crush_margin: crumple_length (the front-most node to the front face of the front-most "
+                             "occupant part box, along x, at the start) less max_crush")
         room = measure.occupant_room(run, occ, mesh.node_parts)
+        if room is not None:
+            # C1's criterion: the least room to any occupant part box over the run (up to the split, when the frame
+            # split: an upper bound, the rest of the vehicle moving on after it)
+            res.append(_res("occupant_space_margin", room["room"] * 1000.0, "mm", room["part"]))
+            notes.append("occupant_space_margin: the least room over the run from the structure ahead of an occupant "
+                         "part box to the box's front face (occupant_space_left; negative: the structure is inside the box)"
+                         + ("; up to the split, so an upper bound (the vehicle moves on after it)" if cut else ""))
         # hot_spots: each frame member's least room to an occupant box, a place the hand calculation (the crush
         # from the front) does not look at (e.g. a side rail bending into the foot box); as the load case's
         # criterion quantity (occupant_space_margin), the quantity hot_spots reads at a place
