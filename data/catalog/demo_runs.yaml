@@ -8,10 +8,10 @@
 # estimates_usd: the rough cost of a real Claude run per mix, next to the file's cost_limit_usd. An estimate.
 #   Shape for the screen: {<mix name>: {usd: <number>, upper_usd: <number>}} for every mix in model_mixes.yaml,
 #   or null when there is none. hiraku.catalog.cost.estimate_mix: the record-writing calls of the scripted
-#   run, per agent, times the cost per call of the one real run measured, times the price of that agent's model
-#   relative to Opus 5.5, as a range: usd with the lowest ratio over the kinds of token, upper_usd with the
-#   highest (the measured run's token mix is not known; for Haiku 0.025 and 0.25, its cache read above 100K;
-#   equal when no role is on Haiku). The lead's own tokens are not separated, so lead-sonnet comes out as cae-sonnet.
+#   run, per agent, times the cost per call of the one long real run measured (showcase/20261105-160725-offroad-4w,
+#   25.38 USD from its transcript's tokens for 434 calls; hiraku/catalog/cost.py), times the price of that agent's
+#   model relative to Opus 5.5, as a range: usd with the lowest ratio over the kinds of token, upper_usd with the
+#   highest (for Haiku 0.025 and 0.25, its cache read above 100K; equal when no role is on Haiku). The lead's own tokens are not separated, so lead-sonnet comes out as cae-sonnet.
 # modes: how it is meant to be run. Every file here ran end to end in its scripted run before it was
 # listed, or stops where its line says (tests/tools/test_catalog.py checks the files load). Kept in
 # data/catalog/, not beside the requirements files, so nothing that runs every data/requirements/*.yaml
@@ -48,10 +48,10 @@ runs:
     modes: [scripted]
     # python -m hiraku.catalog.cost <run folder>: 7 calls (cae.handling 7) in scripted run 20261103-153411-offroad-4w-scripted
     estimates_usd:
-      default: {usd: 1.07, upper_usd: 1.07}
-      cae-sonnet: {usd: 0.54, upper_usd: 0.54}
-      cae-haiku: {usd: 0.03, upper_usd: 0.27}
-      lead-sonnet: {usd: 0.54, upper_usd: 0.54}
+      default: {usd: 0.41, upper_usd: 0.41}
+      cae-sonnet: {usd: 0.2, upper_usd: 0.2}
+      cae-haiku: {usd: 0.01, upper_usd: 0.1}
+      lead-sonnet: {usd: 0.2, upper_usd: 0.2}
     cuts: [N11, N12]
   - id: n13
     title: ロールバーのツールをその場で作る
@@ -71,10 +71,10 @@ runs:
     modes: [scripted, claude]
     # python -m hiraku.catalog.cost <run folder>: 23 calls (cae.strength 23) in scripted run 20261103-153544-offroad-4w-scripted
     estimates_usd:
-      default: {usd: 3.52, upper_usd: 3.52}
-      cae-sonnet: {usd: 1.76, upper_usd: 1.76}
-      cae-haiku: {usd: 0.09, upper_usd: 0.88}
-      lead-sonnet: {usd: 1.76, upper_usd: 1.76}
+      default: {usd: 1.35, upper_usd: 1.35}
+      cae-sonnet: {usd: 0.67, upper_usd: 0.67}
+      cae-haiku: {usd: 0.03, upper_usd: 0.34}
+      lead-sonnet: {usd: 0.67, upper_usd: 0.67}
     cuts: [N14]
   - id: video
     title: 動画の運転 (限界の外を含む)
@@ -90,10 +90,10 @@ runs:
     # python -m hiraku.catalog.cost <run folder>: 742 calls (cae.aero 16, cae.crash 27, cae.handling 81, cae.nvh 27,
     # cae.powertrain 134, cae.strength 150, cae.thermal 72, packager 235)
     estimates_usd:
-      default: {usd: 113.44, upper_usd: 113.44}
-      cae-sonnet: {usd: 56.72, upper_usd: 56.72}
-      cae-haiku: {usd: 2.84, upper_usd: 28.36}
-      lead-sonnet: {usd: 56.72, upper_usd: 56.72}
+      default: {usd: 43.39, upper_usd: 43.39}
+      cae-sonnet: {usd: 21.7, upper_usd: 21.7}
+      cae-haiku: {usd: 1.08, upper_usd: 10.85}
+      lead-sonnet: {usd: 21.7, upper_usd: 21.7}
     cuts: [N04, N06, N17]
   - id: demo
     title: デモの車の 11 の試験
@@ -106,7 +106,7 @@ runs:
     # listed, 10 judged (P1 has no criterion: compared, not judged)
     # python -m hiraku.catalog.cost <run folder>: 415 calls (cae.nvh 27, cae.powertrain 55, cae.strength 113, packager 220)
     estimates_usd:
-      default: {usd: 63.45, upper_usd: 63.45}
-      cae-sonnet: {usd: 31.72, upper_usd: 31.72}
-      cae-haiku: {usd: 1.59, upper_usd: 15.86}
-      lead-sonnet: {usd: 31.72, upper_usd: 31.72}
+      default: {usd: 24.27, upper_usd: 24.27}
+      cae-sonnet: {usd: 12.13, upper_usd: 12.13}
+      cae-haiku: {usd: 0.61, upper_usd: 6.07}
+      lead-sonnet: {usd: 12.13, upper_usd: 12.13}
