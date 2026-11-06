@@ -504,7 +504,7 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     if held:  # a result past the limit on a case no formula predicts: said, not hidden (it gets no verdict)
         cannot = no_formula_cases(ctx)
         held = {k: why + [NO_FORMULA_NOTE] if k in cannot else why for k, why in held.items()}
-    held_line = "まだ OK にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
+    held_line = "まだ判定を出せない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
         lines = ([f"NG {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
                 ([f"系の欠け {len(misses)} 件: " + "、".join(miss_line(r, c) for r, c in misses)] if misses else [])
