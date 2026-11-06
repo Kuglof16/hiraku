@@ -1,17 +1,20 @@
 """The result viewer (viewer/, the analysis department's) for one analysis of a run.
 
     GET /viewer/<path>                          a file under viewer/ (404 without it)
-    GET /api/viewer                             {"provisional": bool, "fields": {tool: field}, "missing": [field ...]}
+    GET /api/viewer[?run=<run_id>]              {"provisional": bool, "runs": {run_id: {"provisional": bool}},
+                                                 "fields": {tool: field}, "not_here": {tool: reason}, "missing": [field ...]}
     GET /api/runs/<run_id>/viewer/<analysis_id> what the viewer draws for that analysis:
         {"field", "data", "title", "source"}, or {"field": None, "reason": "<one line>"}
 
 The page opens it as viewer/index.html?data=<that url>#<field>.
 
 The analysis department's entry `viewer.src.build.for_analysis(run_dir, analysis_id)` makes the
-answer. Until it exists (ImportError), the answer is provisional: the field comes from the tool's
+answer from the analysis' record (the run's v### folders). It is used whenever it exists and the run
+keeps its records. The answer is provisional when the entry does not exist (ImportError) or the run
+keeps no records (a saved run of showcase/ keeps only events.jsonl): the field comes from the tool's
 name (TOOL_FIELD) and the data is the viewer's own sample of that field (viewer/data/<field>.js, as
 viewer/src/<field>.py wrote it), passed as it is, with SAMPLE_SOURCE saying that it is not a picture
-of this analysis. When the entry arrives, only `answer` changes (it already prefers the entry).
+of this analysis.
 """
 
 from __future__ import annotations
@@ -59,22 +62,57 @@ NO_ANALYSIS = "この解析は記録に無い"
 NOT_OK = "この解析は通らなかったので絵が無い"
 
 
-def field_of(tool: str | None) -> str | None:
-    """The viewer's field for a tool name, or None."""
+def field_of(tool: str | None, table: dict[str, str] | None = None) -> str | None:
+    """The viewer's field for a tool name (table: the tool table in use, by default TOOL_FIELD), or None."""
     if not tool:
         return None
-    if tool in TOOL_FIELD:
-        return TOOL_FIELD[tool]
+    table = table or TOOL_FIELD
+    if tool in table:
+        return table[tool]
     return "rops" if tool.startswith(ROPS_PREFIX) else None
+
+
+def tool_table() -> dict[str, str]:
+    """The tool table in use: viewer.src.build's TOOL_FIELD when it has one, else TOOL_FIELD."""
+    return entry_tables()[0] or dict(TOOL_FIELD)
+
+
+def _build_module():
+    try:
+        return importlib.import_module("viewer.src.build")
+    except ImportError:
+        return None
 
 
 def entry() -> Callable[[Path, str], dict[str, Any]] | None:
     """viewer.src.build.for_analysis, or None while it does not exist."""
+    return getattr(_build_module(), "for_analysis", None)
+
+
+def entry_tables() -> tuple[dict[str, str], dict[str, str]]:
+    """(tool -> field, tool -> why it cannot be shown) of viewer.src.build (its TOOL_FIELD and
+    NOT_HERE), or ({}, {}) without it."""
+    mod = _build_module()
+    fields = getattr(mod, "TOOL_FIELD", None)
+    not_here = getattr(mod, "NOT_HERE", None)
+    return (dict(fields) if isinstance(fields, dict) else {}), (dict(not_here) if isinstance(not_here, dict) else {})
+
+
+def keeps_records(run_dir: Path) -> bool:
+    """Whether the run folder keeps the analyses' records for the entry (v### folders, an analyses/
+    folder, or a one-record analysis.json)."""
+    run_dir = Path(run_dir)
+    if (run_dir / "analysis.json").is_file() or (run_dir / "analyses").is_dir():
+        return True
     try:
-        mod = importlib.import_module("viewer.src.build")
-    except ImportError:
-        return None
-    return getattr(mod, "for_analysis", None)
+        return any(p.is_dir() and p.name[:1] == "v" and p.name[1:].isdigit() for p in run_dir.iterdir())
+    except OSError:
+        return False
+
+
+def _resolve(build) -> Callable[[Path, str], dict[str, Any]] | None:
+    """build as answer takes it -> the entry to call, or None for the provisional answer."""
+    return None if build is False else build or entry()
 
 
 def sample_file(field: str, data_dir: Path = VIEWER_DATA_DIR) -> Path:
@@ -130,7 +168,7 @@ def provisional(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DAT
         return {"field": None, "reason": NO_ANALYSIS}
     if ana.get("status") == "failed":
         return {"field": None, "reason": NOT_OK}
-    field = field_of(ana.get("tool"))
+    field = field_of(ana.get("tool"), tool_table())
     if field is None:
         return {"field": None, "reason": NO_FIELD}
     data = read_sample(field, data_dir)
@@ -150,9 +188,10 @@ def answer(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR
            build: Callable[[Path, str], dict[str, Any]] | None = None, ana: dict[str, Any] | None = None) -> dict[str, Any]:
     """What GET /api/runs/<run_id>/viewer/<analysis_id> answers. build: the entry to use (by default
     viewer.src.build.for_analysis when it exists, else the provisional sample; False: the provisional
-    sample even when the entry exists). ana: as in provisional."""
-    build = None if build is False else build or entry()
-    if build is None:
+    sample even when the entry exists). A run that keeps no records gets the provisional sample too.
+    ana: as in provisional."""
+    build = _resolve(build)
+    if build is None or not keeps_records(Path(events_file).parent):
         return provisional(events_file, analysis_id, data_dir, ana)
     try:
         out = build(Path(events_file).parent, analysis_id)
@@ -164,14 +203,22 @@ def answer(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR
     return out
 
 
-def info(data_dir: Path = VIEWER_DATA_DIR, build: Callable[[Path, str], dict[str, Any]] | None = None) -> dict[str, Any]:
-    """GET /api/viewer: whether the answers are provisional, the tool table, and (provisional only)
-    the fields with no sample, whose buttons cannot be pressed. build as in answer."""
-    prov = build is False or (build is None and entry() is None)
-    fields = sorted(set(TOOL_FIELD.values()))
-    missing = [f for f in fields if not sample_file(f, data_dir).is_file()] if prov else []
-    return {"provisional": prov, "fields": dict(TOOL_FIELD), "rops_prefix": ROPS_PREFIX, "missing": missing,
-            "source": SAMPLE_SOURCE if prov else None}
+def info(data_dir: Path = VIEWER_DATA_DIR, build: Callable[[Path, str], dict[str, Any]] | None = None,
+         runs: dict[str, Path] | None = None) -> dict[str, Any]:
+    """GET /api/viewer: whether the answers are provisional (on the whole, and for each of runs:
+    {run_id: its folder}), the tool table in use, the tools whose records the entry cannot show
+    (not_here: {tool: reason}), and the fields with no sample (the buttons of a provisional run's
+    analyses of those fields cannot be pressed). build as in answer."""
+    use = _resolve(build)
+    prov = use is None
+    table = tool_table()
+    not_here = {} if prov else entry_tables()[1]
+    per_run = {rid: {"provisional": prov or not keeps_records(d)} for rid, d in (runs or {}).items()}
+    any_prov = prov or any(r["provisional"] for r in per_run.values()) or not per_run
+    fields = sorted(set(table.values()))
+    missing = [f for f in fields if not sample_file(f, data_dir).is_file()] if any_prov else []
+    return {"provisional": prov, "runs": per_run, "fields": table, "not_here": not_here, "rops_prefix": ROPS_PREFIX,
+            "missing": missing, "source": SAMPLE_SOURCE}
 
 
 # ---------------------------------------------------------------- the static site
@@ -213,7 +260,8 @@ def export(out_dir: Path, runs: dict[str, Path], data_dir: Path = VIEWER_DATA_DI
             if rel.parts[0] in ("src", "data") or f.suffix == ".pyc":
                 continue  # (the Python is not served; the samples go into the answers)
             put(out_dir / "viewer" / rel, f.read_bytes())
-    put(out_dir / "data" / "viewer.json", json.dumps(info(data_dir, build), ensure_ascii=False).encode("utf-8"))
+    put(out_dir / "data" / "viewer.json", json.dumps(
+        info(data_dir, build, {rid: Path(ev).parent for rid, ev in runs.items()}), ensure_ascii=False).encode("utf-8"))
     for run_id, events_file in runs.items():
         found: dict[str, dict[str, Any]] = {}  # (the last event of each id, as find_analysis)
         with open(events_file, encoding="utf-8") as f:

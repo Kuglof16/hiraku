@@ -3,10 +3,13 @@
 // GET /api/runs/<run>/viewer/<analysis> (hiraku/webserve/viewer_link.py), or in the static site from
 // data/viewer/<run>/<analysis>.json written beforehand.
 //
-// Whether the button can be pressed is decided from the tool's name (VIEWER_FIELD, the same table as
-// viewer_link.py TOOL_FIELD; a test keeps them equal) and from GET /api/viewer: while the answers are
-// provisional (the analysis department's for_analysis not there yet) they are the viewer's own sample
-// of the field, which the line under the button says, and a field with no sample cannot be opened.
+// Whether the button can be pressed is decided from the tool's name and from GET /api/viewer?run=<run>
+// (the static site: data/viewer.json): its tool table (the analysis department's viewer.src.build
+// TOOL_FIELD; before it answers, VIEWER_FIELD, the same table as viewer_link.py TOOL_FIELD, a test keeps
+// them equal), the tools whose records cannot be shown (not_here, with the reason), and whether the
+// run's answers are provisional (no for_analysis, or a run that keeps no records): then they are the
+// viewer's own sample of the field, which the line beside the button says, and a field with no sample
+// cannot be opened. A reason only the record can tell is shown by the viewer's page itself.
 
 import { esc } from "./labels.js";
 
@@ -42,7 +45,7 @@ export const VIEWER_WORDS = {
 };
 
 // what GET /api/viewer said (until it answers: provisional, every sample assumed there)
-const info = { provisional: true, missing: [], loaded: false };
+const info = { provisional: true, runs: {}, fields: null, notHere: {}, missing: [], loaded: false };
 export const viewerInfo = () => info;
 
 const isStatic = () => typeof document !== "undefined" && !!document.querySelector('meta[name="hiraku-static"]');
@@ -50,11 +53,19 @@ const isStatic = () => typeof document !== "undefined" && !!document.querySelect
 // Ask the server (or the static site's data/viewer.json) once; then() runs after (to redraw).
 export function loadViewerInfo(then) {
   if (info.loaded) return Promise.resolve(info);
-  const url = isStatic() ? "data/viewer.json" : "/api/viewer";
+  const run = viewerRunId(null);
+  const url = isStatic() ? "data/viewer.json" : `/api/viewer${run ? `?run=${encodeURIComponent(run)}` : ""}`;
   return fetch(url)
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {
-      if (j) Object.assign(info, { provisional: !!j.provisional, missing: j.missing ?? [] });
+      if (j)
+        Object.assign(info, {
+          provisional: !!j.provisional,
+          runs: j.runs ?? {},
+          fields: j.fields ?? null,
+          notHere: j.not_here ?? {},
+          missing: j.missing ?? [],
+        });
       info.loaded = true;
       if (then) then(info);
       return info;
@@ -62,19 +73,28 @@ export function loadViewerInfo(then) {
     .catch(() => info);
 }
 
+// whether the run's answers are the viewer's samples (not made from its analyses)
+export function viewerProvisional(runId) {
+  const r = runId ? info.runs[runId] : null;
+  return r ? !!r.provisional : info.provisional;
+}
+
 export function viewerFieldOf(tool) {
   if (!tool) return null;
-  if (VIEWER_FIELD[tool]) return VIEWER_FIELD[tool];
+  const table = info.fields ?? VIEWER_FIELD;
+  if (table[tool]) return table[tool];
   return tool.startsWith(ROPS_PREFIX) ? "rops" : null;
 }
 
 // {field, reason}: field null with the one line why the button cannot be pressed
-export function viewerTarget(ana) {
+export function viewerTarget(ana, runId = null) {
   if (!ana) return { field: null, reason: VIEWER_WORDS.noField };
   if (ana.status === "failed") return { field: null, reason: VIEWER_WORDS.notOk };
   const field = viewerFieldOf(ana.tool);
   if (!field) return { field: null, reason: VIEWER_WORDS.noField };
-  if (info.provisional && info.missing.includes(field)) return { field: null, reason: VIEWER_WORDS.noSample };
+  const prov = viewerProvisional(runId);
+  if (prov && info.missing.includes(field)) return { field: null, reason: VIEWER_WORDS.noSample };
+  if (!prov && info.notHere[ana.tool]) return { field: null, reason: info.notHere[ana.tool] };
   return { field, reason: null };
 }
 
@@ -94,7 +114,7 @@ export function viewerUrl(runId, analysisId, field) {
 // The button with its small notes, as HTML. A place (the workbench card, a tile's list row, the
 // overview's data-role="viewer" cell) puts it where it wants.
 export function viewerButtonHtml(runId, ana, opts = {}) {
-  const t = viewerTarget(ana);
+  const t = viewerTarget(ana, runId);
   const id = esc(ana?.analysis_id ?? "");
   const cls = `vlink${opts.compact ? " compact" : ""}`;
   if (!t.field || !runId) {
@@ -105,7 +125,7 @@ export function viewerButtonHtml(runId, ana, opts = {}) {
     `<span class="${cls}" data-role="viewer-link" data-ana="${id}" data-field="${esc(t.field)}">` +
     `<a class="vbtn" href="${esc(href)}" target="_blank" rel="noopener">${VIEWER_WORDS.button}</a>` +
     `<span class="vnote">${VIEWER_WORDS.newTab}</span>` +
-    (info.provisional ? `<span class="vsample">${VIEWER_WORDS.sample}</span>` : "") +
+    (viewerProvisional(runId) ? `<span class="vsample">${VIEWER_WORDS.sample}</span>` : "") +
     `</span>`
   );
 }

@@ -43,6 +43,16 @@ class ViewerLinkServerTest(unittest.TestCase):
             f'window.VIEW_DATA["assembly"] = {json.dumps(SAMPLE, ensure_ascii=True)};\n', encoding="ascii")
         cls.anas = analyses_of(SAVED_DIR / SCRIPTED_RUN / "events.jsonl")
         cls.calls = []
+        # a run that keeps its records (a v001 folder): the scripted run's events with an empty version folder
+        cls.kept = "20261106-000001-kept-run"
+        (cls.tmp / "runs" / cls.kept / "v001").mkdir(parents=True)
+        shutil.copy(SAVED_DIR / SCRIPTED_RUN / "events.jsonl", cls.tmp / "runs" / cls.kept / "events.jsonl")
+        # the analysis department's own fixture run (tests/viewer/fixtures/fatigue) with an empty events.jsonl
+        cls.fx = "20261106-000002-fixture-fatigue"
+        fx = REPO_DIR / "tests" / "viewer" / "fixtures" / "fatigue"
+        if fx.is_dir():
+            shutil.copytree(fx, cls.tmp / "runs" / cls.fx)
+            (cls.tmp / "runs" / cls.fx / "events.jsonl").write_text("", encoding="utf-8")
 
         def build(run_dir, analysis_id):
             cls.calls.append((Path(run_dir), analysis_id))
@@ -51,7 +61,7 @@ class ViewerLinkServerTest(unittest.TestCase):
             return {"field": "crash", "data": {"t": [0, 1]}, "title": "衝突: 本物", "source": "この解析から作った絵"}
 
         cls.servers = {}
-        for key, kw in {"sample": {"viewer_build": False}, "built": {"viewer_build": build},
+        for key, kw in {"sample": {"viewer_build": False}, "built": {"viewer_build": build}, "entry": {},
                         "noviewer": {"viewer_build": False, "viewer_dir": cls.tmp / "no-viewer"}}.items():
             kw.setdefault("viewer_data_dir", cls.data)
             srv = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, launcher=False, **kw)
@@ -108,20 +118,51 @@ class ViewerLinkServerTest(unittest.TestCase):
 
     def test_the_analysis_departments_entry_is_used_when_there(self):
         aid = self.first("crash")
-        got = self.json("built", f"/api/runs/{SCRIPTED_RUN}/viewer/{aid}")
+        got = self.json("built", f"/api/runs/{self.kept}/viewer/{aid}")
         self.assertEqual(got, {"field": "crash", "data": {"t": [0, 1]}, "title": "衝突: 本物", "source": "この解析から作った絵"})
         self.assertEqual(self.calls[-1][1], aid)
-        self.assertEqual(self.calls[-1][0].resolve(), (SAVED_DIR / SCRIPTED_RUN).resolve())
-        none = self.json("built", f"/api/runs/{SCRIPTED_RUN}/viewer/ana-none")
+        self.assertEqual(self.calls[-1][0].resolve(), (self.tmp / "runs" / self.kept).resolve())
+        none = self.json("built", f"/api/runs/{self.kept}/viewer/ana-none")
         self.assertEqual(none, {"field": None, "reason": "この解析は絵にしない"})
-        self.assertFalse(self.json("built", "/api/viewer")["provisional"])
+        got = self.json("built", f"/api/viewer?run={self.kept}")
+        self.assertFalse(got["provisional"])
+        self.assertEqual(got["runs"], {self.kept: {"provisional": False}})
+
+    def test_a_run_without_records_keeps_the_provisional_answer_with_the_entry(self):
+        # a saved run of showcase/ keeps only events.jsonl: the entry has nothing to read
+        n = len(self.calls)
+        got = self.json("built", f"/api/runs/{SCRIPTED_RUN}/viewer/{self.first('assembly')}")
+        self.assertEqual(len(self.calls), n)
+        self.assertEqual(got["data"], SAMPLE)
+        self.assertEqual(got["source"], viewer_link.SAMPLE_SOURCE)
+        info = self.json("built", f"/api/viewer?run={SCRIPTED_RUN}")
+        self.assertEqual(info["runs"], {SCRIPTED_RUN: {"provisional": True}})
+        self.assertIn("nvh", info["missing"])
+
+    @unittest.skipUnless(viewer_link.entry() is not None, "viewer.src.build is not here")
+    def test_the_real_entry_on_the_analysis_departments_fixture(self):
+        got = self.json("entry", f"/api/runs/{self.fx}/viewer/ana-0001")
+        self.assertEqual(got["field"], "fatigue")
+        self.assertTrue(got["data"])
+        self.assertNotEqual(got.get("source"), viewer_link.SAMPLE_SOURCE)
+        none = self.json("entry", f"/api/runs/{self.fx}/viewer/ana-9999")
+        self.assertIsNone(none["field"])
+        self.assertTrue(none["reason"])
+        self.assertNotIn("\n", none["reason"])
+        info = self.json("entry", f"/api/viewer?run={self.fx}")
+        self.assertFalse(info["provisional"])
+        self.assertEqual(info["runs"], {self.fx: {"provisional": False}})
+        tables = viewer_link.entry_tables()
+        self.assertEqual(info["fields"], tables[0])
+        self.assertEqual(info["not_here"], tables[1])
 
     def test_api_viewer_says_provisional_and_the_fields_without_a_sample(self):
         got = self.json("sample", "/api/viewer")
         self.assertTrue(got["provisional"])
         self.assertNotIn("assembly", got["missing"])
         self.assertIn("nvh", got["missing"])
-        self.assertEqual(got["fields"], viewer_link.TOOL_FIELD)
+        self.assertEqual(got["fields"], viewer_link.tool_table())
+        self.assertEqual(got["not_here"], {})
 
     def test_viewer_files_are_served_and_404_without_the_viewer(self):
         status, ctype, body = self.get("sample", "/viewer/index.html")

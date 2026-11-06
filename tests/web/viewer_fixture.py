@@ -16,8 +16,8 @@ from hiraku.webserve.server import SAVED_DIR
 SCRIPTED_RUN = "20261105-150416-offroad-4w-scripted"
 
 
-def run_folder(events_file: Path, out: Path, tools: tuple[str, ...] = ("assembly",)) -> Path:
-    """The records of events_file as a run folder under out (only the analyses of these tools)."""
+def run_folder(events_file: Path, out: Path, tools: tuple[str, ...] | None = ("assembly",)) -> Path:
+    """The records of events_file as a run folder under out (only the analyses of these tools; None: all)."""
     out.mkdir(parents=True, exist_ok=True)
     project = None
     with open(events_file, encoding="utf-8") as f:
@@ -35,7 +35,7 @@ def run_folder(events_file: Path, out: Path, tools: tuple[str, ...] = ("assembly
             v = out / f"v{d['design_version']:03d}"
             (v / "analyses").mkdir(parents=True, exist_ok=True)
             (v / "design.json").write_text(json.dumps(d), encoding="utf-8")
-        elif ev.get("kind") == "analysis.finished" and d.get("tool") in tools:
+        elif ev.get("kind") == "analysis.finished" and (tools is None or d.get("tool") in tools):
             v = out / f"v{d['design_version']:03d}" / "analyses"
             v.mkdir(parents=True, exist_ok=True)
             (v / f"{d['analysis_id']}.json").write_text(json.dumps(d), encoding="utf-8")
@@ -43,6 +43,16 @@ def run_folder(events_file: Path, out: Path, tools: tuple[str, ...] = ("assembly
     if saved_project.is_file():
         project = {**json.loads(saved_project.read_text(encoding="utf-8")), **({"load_cases": project["load_cases"]} if project and project.get("load_cases") else {})}
     (out / "project.json").write_text(json.dumps(project or {}), encoding="utf-8")
+    return out
+
+
+def records_run(runs_dir: Path, run_id: str) -> Path:
+    """runs_dir/run_id: the scripted run's events.jsonl with every analysis' record written back (a run
+    that keeps its records, as a run of runs/ does), for viewer.src.build.for_analysis."""
+    import shutil
+
+    out = run_folder(SAVED_DIR / SCRIPTED_RUN / "events.jsonl", Path(runs_dir) / run_id, tools=None)
+    shutil.copy(SAVED_DIR / SCRIPTED_RUN / "events.jsonl", out / "events.jsonl")
     return out
 
 

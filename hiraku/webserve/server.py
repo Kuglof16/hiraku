@@ -35,7 +35,7 @@ Standard library only. Routes:
     GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
                                         module designers (web/js/modules.js)
     GET /viewer/<path>                  the result viewer (viewer/, read only; 404 without it)
-    GET /api/viewer                     whether the viewer's answers are provisional (viewer_link.info)
+    GET /api/viewer[?run=<run_id>]      whether the viewer's answers are provisional (viewer_link.info)
     GET /api/runs/<run_id>/viewer/<analysis_id>
                                         what the viewer draws for one analysis (viewer_link.answer),
                                         opened as /viewer/index.html?data=<this url>#<field>
@@ -524,7 +524,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_tool_list(m.group(1))
             return
         if path == "/api/viewer":
-            self._send_json(viewer_link.info(self.viewer_data_dir, self.viewer_build))
+            runs = {}
+            for rid in query.get("run", [])[:1]:
+                ev = events_path(self.runs_dir, rid, self.saved_dir)
+                if ev is not None and ev.exists():
+                    runs[rid] = ev.parent
+            self._send_json(viewer_link.info(self.viewer_data_dir, self.viewer_build, runs))
             return
         m = _VIEWER_API_RE.match(path)
         if m:
