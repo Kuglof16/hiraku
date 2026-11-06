@@ -50,9 +50,10 @@ class CadToolsTest(unittest.TestCase):
     def test_export_step(self):
         out = call("export_step", self.ctx)
         self.assertEqual(out["path"], "cad/design_v1.step")
-        self.assertEqual((out["members"], out["parts"], out["solids"]), (54, 147, 54 + 147))
+        members, parts = len(self.design["members"]), len(self.design["parts"])
+        self.assertEqual((out["members"], out["parts"], out["solids"]), (members, parts, members + parts))
         solids = read_step((self.run / out["path"]).read_text(encoding="utf-8"))
-        self.assertEqual(len(solids), 201)
+        self.assertEqual(len(solids), members + parts)
         self.assertEqual(out["bytes"], (self.run / out["path"]).stat().st_size)
         named = call("export_step", self.ctx, design_version=1, path="cad/mine.stp")
         self.assertEqual(named["path"], "cad/mine.stp")
@@ -65,10 +66,11 @@ class CadToolsTest(unittest.TestCase):
         rel = call("export_step", self.ctx)["path"]
         out = call("import_step", self.ctx, path=rel, density_kg_m3=7850)
         d = out["design"]
-        self.assertEqual(out["counts"]["solids"], 201)
+        members, solids = len(self.design["members"]), len(self.design["members"]) + len(self.design["parts"])
+        self.assertEqual(out["counts"]["solids"], solids)
         self.assertEqual(sorted(m["id"] for m in d["members"]), sorted(m["id"] for m in self.design["members"]))
-        self.assertEqual(len(out["solids"]), 201)
-        self.assertEqual(sum(r["became"] == "member" for r in out["solids"]), 54)
+        self.assertEqual(len(out["solids"]), solids)
+        self.assertEqual(sum(r["became"] == "member" for r in out["solids"]), members)
         parts = {p["id"]: p for p in d["parts"]}
         for r in out["solids"]:
             if r["became"] == "part":
@@ -89,7 +91,7 @@ class CadToolsTest(unittest.TestCase):
             {"op": "delete", "name": "battery"},
             {"op": "add_box", "name": "new_box", "center_mm": [0, 0, 500], "size_mm": [100, 50, 20]}])
         self.assertEqual(out["out_path"], "cad/design_v1_edit1.step")
-        self.assertEqual(out["solids"], 201)
+        self.assertEqual(out["solids"], len(before))  # one deleted, one added
         self.assertEqual([r["op"] for r in out["log"] if "edit" in r], ["move", "delete", "add_box"])
         after = {s.name: s for s in read_step((self.run / out["out_path"]).read_text(encoding="utf-8"))}
         moved = np.array(after["rail_L_FA"].center_mm) - np.array(before["rail_L_FA"].center_mm)
