@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 from ..checks import CHECK_WIND, _check
 from ..drive import RHO_AIR, Aero, SpeedController, controls, start_rolling
 from ..model import box_design, build_vehicle
@@ -20,28 +22,41 @@ def wind_ramp(veh, aero: Aero, from_left: bool = True, dt: float = 1e-3, fast: f
 
     v_crit is the first step at which the upwind wheels have lost all load (a wheel's load
     is never negative, so there is no crossing to interpolate); it lies at most one step
-    (slow * dt) past the true crossing.
+    (slow * dt) past the true crossing. v_crit is None when the wind reaches v_max first, or when
+    the upwind load stops being a finite number ("stopped": "v_max" or "not finite", with the wind
+    speed "v_stop" there), so a caller can say why there is no value.
     """
     sim = new_sim(veh, dt=dt, settle_s=1.5)
     ctl = hold(sim)
     up = _side_ids(sim, from_left)
     n0 = sum(sim.out["ntot"][i] for i in up)
-    v, prev, crit, slide = 0.0, (0.0, n0), None, None
+    v, prev, crit, slide, stopped = 0.0, (0.0, n0), None, None, "v_max"
     while v < v_max:
         v += (fast if prev[1] > slow_below * n0 else slow) * dt
-        sim.step(ctl, aero.forces(sim, _wind_world(v, from_left)))
+        try:
+            sim.step(ctl, aero.forces(sim, _wind_world(v, from_left)))
+        except np.linalg.LinAlgError:
+            # the step's equations hold a NaN or an inf (the solve refuses them)
+            stopped = "not finite"
+            break
         nu = 0.0
         for i in up:
             nu += sim.out["ntot"][i]
+        if not math.isfinite(nu):
+            # a NaN load never compares <= 0: without this the ramp would run on to v_max
+            stopped = "not finite"
+            break
         if slide is None and any(sim.out["sliding"][i] for i in range(sim.n) if i not in up):
             slide = v
             if stop_on_slide:
+                stopped = "slide"
                 break
         if nu <= 0.0:
             crit = v
+            stopped = "tipped"
             break
         prev = (v, nu)
-    return {"v_crit": crit, "slide_speed": slide}
+    return {"v_crit": crit, "slide_speed": slide, "stopped": stopped, "v_stop": v}
 
 
 class CrosswindTool(K2Tool):
@@ -123,6 +138,12 @@ class CrosswindTool(K2Tool):
         other = wind_ramp(held, self.aero(held, lp), not from_left, dt=self.dt)
         places = [{"where": n, "quantity": "critical_wind_speed", "value": r_["v_crit"], "unit": "m/s", "judged": j}
                   for n, r_, j in ((side_name, ramp, True), (other_name, other, False)) if r_["v_crit"] is not None]
+        for n, r_ in ((side_name, ramp), (other_name, other)):
+            if r_["v_crit"] is None:
+                why = ("the upwind wheels' load stopped being a finite number" if r_["stopped"] == "not finite"
+                       else f"it did not tip up to {r_['v_stop']:g} m/s")
+                notes.append(f"no critical_wind_speed with the {n[len('wind from the '):]} wind (held vehicle): {why} "
+                             f"at a wind of {r_['v_stop']:.1f} m/s; that side has no hot_spots row")
         slide = wind_ramp(veh, aero, from_left, dt=self.dt, stop_on_slide=True)
         slide_v = slide["slide_speed"]
         if slide_v is not None:

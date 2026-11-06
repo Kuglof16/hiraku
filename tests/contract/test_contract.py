@@ -10,6 +10,7 @@ from hiraku.contract import layout
 from hiraku.contract import loading as loading_rule
 
 EXAMPLES = {
+    "material_card": "material_card.json",
     "requirements_file": "requirements_file.json",
     "design": "design.json",
     "load_case": "load_case.json",
@@ -156,6 +157,19 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"bolts": 0}}), [])
         self.assertNotEqual(contract.errors("part", {**part, "joint": {"nut": 1}}), [])
 
+    def test_material_card_says_where_each_value_comes_from(self):
+        card = load("material_card.json")
+        y = card["properties"]["yield_MPa"]
+        with_prop = lambda p: {**card, "properties": {"yield_MPa": p}}
+        self.assertNotEqual(contract.errors("material_card", with_prop({k: v for k, v in y.items() if k != "source"})), [])
+        self.assertNotEqual(contract.errors("material_card", with_prop({**y, "source": ""})), [])
+        self.assertNotEqual(contract.errors("material_card", with_prop({**y, "kind": "guess"})), [])
+        self.assertNotEqual(contract.errors("material_card", with_prop({**y, "checked": True})), [])  # needs checked_on
+        self.assertEqual(contract.errors("material_card", with_prop({**y, "checked": True, "checked_on": "2026-11-06"})), [])
+        self.assertNotEqual(contract.errors("material_card", {**card, "properties": {"yield_kPa": y}}), [])
+        self.assertNotEqual(contract.errors("material_card", {**card, "properties": {}}), [])
+        self.assertNotEqual(contract.errors("material_card", {**card, "id": "STKR 400"}), [])
+
     def test_declared_sizes_for_the_rules(self):
         from hiraku.intake.facts import FACTS
 
@@ -289,10 +303,30 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("series", base), [])
         self.assertNotEqual(contract.errors("series", {**base, "t_s": [0.0, 1.0], "x": x}), [])
 
+    def test_series_of_one_part(self):
+        s = {"channel": "loss.motor", "unit": "W", "t_s": [0.0, 1.0], "values": [560.0, 570.0]}
+        self.assertEqual(contract.errors("series", {**s, "part_id": "motor_RL"}), [])
+        self.assertNotEqual(contract.errors("series", {**s, "part_id": 3}), [])
+
+    def test_result_names_the_field_it_was_read_from(self):
+        r = {"quantity": "first_frame_mode", "value": 8.5, "unit": "Hz"}
+        self.assertEqual(contract.errors("result", {**r, "field_index": 0}), [])
+        self.assertEqual(contract.errors("result", {**r, "field_index": 4}), [])
+        self.assertNotEqual(contract.errors("result", {**r, "field_index": -1}), [])
+        self.assertNotEqual(contract.errors("result", {**r, "field_index": 1.5}), [])
+
     def test_analysis_needs_a_prediction(self):
         a = load("analysis.json")
         a["prediction_ids"] = []
         self.assertNotEqual(contract.errors("analysis", a), [])
+
+    def test_design_variable_may_name_its_basis(self):
+        d = load("design.json")
+        d["variables"]["tire_vertical_stiffness"] = {"value": 150.0, "unit": "N/mm", "basis": "assumption"}
+        self.assertEqual(contract.errors("design", d), [])
+        d["variables"]["tire_vertical_stiffness"]["basis"] = ""
+        self.assertNotEqual(contract.errors("design", d), [])
+        self.assertNotEqual(contract.errors("quantity", {"value": 1.0, "unit": "mm", "basis": "assumption"}), [])
 
     def test_quantity_needs_a_known_unit(self):
         self.assertEqual(contract.errors("quantity", {"value": 1.0, "unit": "mm"}), [])
@@ -429,6 +463,23 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("requirements_file", {**req, "hearing": "person"}), [])
         ev = next(e for e in events() if e["kind"] == "run.started")
         self.assertEqual(contract.errors("project", {**ev["data"], "hearing": "claude"}), [])
+
+    def test_tradeoff_question_in_the_hearing(self):
+        side = {"name": "応力の使用率", "unit": "1", "now": 1.2, "after": 0.9, "record_id": "ana-0007"}
+        q = {"tradeoff_id": "t-0001", "variable": "tower_t", "step_pct": 10.0, "text": "どちらを優先しますか。", "a": side,
+             "b": {**side, "name": "質量", "unit": "kg", "now": 480.0, "after": 486.0}}
+        self.assertEqual(contract.errors("hearing_asked", {"tradeoff_questions": [q]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{**q, "a": {**side, "unit": "furlong"}}]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{k: v for k, v in q.items() if k != "b"}]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{**q, "choices": ["both"]}]}), [])
+        no_record = {k: v for k, v in side.items() if k != "record_id"}
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{**q, "a": no_record}]}), [])
+        answer = {"answers": [], "tradeoff_answers": [{"tradeoff_id": "t-0001", "choice": "favor_a", "note": "安全を優先"}]}
+        self.assertEqual(contract.errors("hearing_answered", answer), [])
+        self.assertNotEqual(contract.errors("hearing_answered", {"answers": [], "tradeoff_answers": [{"tradeoff_id": "t-0001", "choice": "x"}]}), [])
+        self.assertEqual(contract.errors("tool_input.ask_user", {"tradeoff_ids": ["t-0001"]}), [])
+        self.assertEqual(contract.errors("tool_input.find_tradeoffs", {"design_version": 2, "variables": ["tower_t"]}), [])
+        self.assertIn("find_tradeoffs", contract.MCP_TOOLS_LATER)
 
     def test_rule_questions_in_the_hearing(self):
         q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}

@@ -6,6 +6,13 @@ battery current from its equivalent circuit (open-circuit voltage and series
 resistance) and the heat in the battery, motor and controller. The heat is
 then put on the thermal network on an even time grid (energy kept exactly)
 and solved with the matrix exponential.
+
+The power at each stage of the chain and the reducer loss are kept per step
+(DriveResult.flow, gear_loss). Driving, battery terminal power = aux + losses of
+the controller, motor and reducer + wheel power, exactly. Regenerating, the
+battery gets regen_efficiency of the wheel power while the part losses follow
+the chain efficiencies, so (eta_drive eta_motor eta_ctrl - eta_regen) |wheel
+power| is lost without being given to a part.
 """
 
 from __future__ import annotations
@@ -34,6 +41,32 @@ class DriveResult:
     soc: np.ndarray  # 0..1 at the step ends
     heat: dict[str, np.ndarray]  # W per step for battery, motor, controller
     energy: dict[str, float]  # Wh: rolling, grade_up, grade_down, aero, inertia, braking, losses, aux, battery
+    # W per step along the chain (CHAIN_STAGES), positive from the battery to the wheels. "wheel": the wheel power the
+    # chain carries (friction braking beyond the regeneration limit left out); "reducer": at the motor shaft
+    # (wheel / eta_drive driving, wheel * eta_drive regenerating); "motor": the motor's electric side; "controller":
+    # its battery side, the battery's terminal power less the auxiliary load (in regeneration the model's
+    # regen_efficiency share, not the product of the chain efficiencies).
+    flow: dict[str, np.ndarray] = None
+    # W per step lost in the reducer and driveline: wheel (1 - eta_drive) / eta_drive driving, |wheel| (1 - eta_drive)
+    # regenerating (the same share the motor's regeneration heat in Powertrain.battery_power assumes)
+    gear_loss: np.ndarray = None
+
+
+CHAIN_STAGES = ("controller", "motor", "reducer", "wheel")
+
+
+def chain_flow(pt: Powertrain, P_wheel: float, P_batt: float) -> tuple[dict[str, float], float]:
+    """Power at each stage of the chain (CHAIN_STAGES) and the reducer loss for a wheel power the chain carries
+    and the battery terminal power the model gave for it (Powertrain.battery_power)."""
+    if P_wheel >= 0:
+        P_shaft = P_wheel / pt.eta_drive
+        P_elec = P_shaft / pt.eta_motor
+        loss_r = P_shaft - P_wheel
+    else:
+        P_shaft = P_wheel * pt.eta_drive
+        P_elec = P_shaft * pt.eta_motor
+        loss_r = -P_wheel * (1.0 - pt.eta_drive)
+    return {"controller": P_batt - pt.P_aux, "motor": P_elec, "reducer": P_shaft, "wheel": P_wheel}, loss_r
 
 
 def drive(segments: list[Segment], pt: Powertrain, soc0: float = 1.0) -> DriveResult:
@@ -49,6 +82,8 @@ def drive(segments: list[Segment], pt: Powertrain, soc0: float = 1.0) -> DriveRe
     P_batt = np.empty(n)
     I = np.empty(n)
     heat = {k: np.empty(n) for k in THERMAL_PARTS}
+    flow = {k: np.empty(n) for k in CHAIN_STAGES}
+    gear_loss = np.empty(n)
     e = dict.fromkeys(("rolling", "grade_up", "grade_down", "aero", "inertia", "braking", "losses", "aux", "battery"), 0.0)
     regen_cap = -pt.P_max * pt.eta_drive  # the motor cannot take back more than its power
     for k in range(n):
@@ -61,6 +96,9 @@ def drive(segments: list[Segment], pt: Powertrain, soc0: float = 1.0) -> DriveRe
         loss_b = Ik * Ik * pt.R_batt
         P_batt[k], I[k] = Pb, Ik
         heat["battery"][k], heat["motor"][k], heat["controller"][k] = loss_b, loss_m, loss_c
+        fk, gear_loss[k] = chain_flow(pt, P_motor_side, Pb)
+        for s in CHAIN_STAGES:
+            flow[s][k] = fk[s]
         w = dt[k] / 3600.0
         e["rolling"] += roll * vm[k] * w
         e["grade_up" if gr > 0 else "grade_down"] += gr * vm[k] * w
@@ -73,7 +111,7 @@ def drive(segments: list[Segment], pt: Powertrain, soc0: float = 1.0) -> DriveRe
     t = np.concatenate([[0.0], np.cumsum(dt)])
     Q = pt.Q_batt * 3600.0
     soc = soc0 - np.concatenate([[0.0], np.cumsum(I * dt)]) / Q
-    return DriveResult(t, x, v, grade, P_batt, I, soc, heat, e)
+    return DriveResult(t, x, v, grade, P_batt, I, soc, heat, e, flow, gear_loss)
 
 
 def even_grid(t_steps: np.ndarray, power_steps: np.ndarray, dt: float) -> tuple[np.ndarray, np.ndarray]:

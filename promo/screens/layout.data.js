@@ -728,6 +728,13 @@ window.PROMO_LAYOUT = {
       "verdict": {
         "of_label": 2,
         "_note": "問題なし / 直しが要る: at most this many times the pane name's size, and no wider than the pane"
+      },
+      "pet": {
+        "w": 96,
+        "h": 96,
+        "right": 12,
+        "bottom": 12,
+        "_note": "added by the screens department (2026-11-06): the box at the pane's bottom right where the 3D pet of the agent that ran the pane's test stands (promo/pets/pet3d.js). It works while its pane plays, then reacts to the verdict. Posed from the cut time t only; not counted as moving (as n04's)"
       }
     },
     "times": {
