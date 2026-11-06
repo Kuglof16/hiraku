@@ -58,6 +58,15 @@ class FindTradeoffsToolTest(ToolsTestCase):
         self.assertEqual((q["b"]["name"], q["b"]["now"], q["b"]["after"], q["b"]["unit"]), ("質量", 400.0, 432.0, "kg"))
         self.assertIn("どちらを優先しますか", q["text"])
 
+    def test_the_collectors_variable_labels_name_the_moved_number(self):
+        def collector(ctx, paths, only):
+            return dict(fake_collector(ctx, paths, only), variable_labels={"tower_t": "塔の板厚"})
+
+        with mock.patch.object(tradeoff, "collector", collector):
+            q = call("find_tradeoffs", make_ctx(self.root), variables=["tower_t"])["tradeoffs"][0]
+        self.assertTrue(q["text"].startswith("塔の板厚 (いま 3 mm) を"), q["text"])
+        self.assertEqual(q["variable"], "variables.tower_t")  # the id and the path stay
+
     def test_a_quantity_can_be_left_out(self):
         got = self.run_tool(make_ctx(self.root), variables=["tower_t"], quantities=["mass_kg"])
         self.assertEqual(got["tradeoffs"], [])

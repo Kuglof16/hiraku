@@ -63,11 +63,14 @@ def _worse_when_up(elasticity: float, meta: Record) -> bool:
 
 
 def find(sensitivities: dict[str, list[Record]], quantities: dict[str, Record] | None = None,
-         bases: dict[str, Record] | None = None, *, min_elasticity: float = MIN_ELASTICITY) -> list[Record]:
+         bases: dict[str, Record] | None = None, *, min_elasticity: float = MIN_ELASTICITY,
+         labels: dict[str, str] | None = None) -> list[Record]:
     """The trade-offs in `sensitivities` ({quantity: [term, ...]}), the strongest first.
 
     quantities: {quantity: {label, unit, lower_is_better}} (label is what the person reads; default lower is better).
     bases: {quantity: {value, record_id}} the result now (for the 'now' and 'after' numbers; optional).
+    labels: {path or variable name: the name a person reads} for the number that is moved (without one, the variable's
+    own name is shown, not the path).
     Each pair: {tradeoff_id, variable, variable_value, variable_unit, a, b, step_pct, text, choices}; `a` is the side that
     gets better when the number goes up, `b` the side that gets worse.
     """
@@ -103,8 +106,9 @@ def find(sensitivities: dict[str, list[Record]], quantities: dict[str, Record] |
                     "choices": list(CHOICES),
                 }
                 unit = ta.get("unit")
-                if unit:
+                if unit and unit != "1":  # a number without a unit (a ratio) is written without one
                     pair["variable_unit"] = unit
+                pair["variable_label"] = _label(path, labels or {})
                 pair["text"] = text(pair)
                 pair["strength"] = round(min(abs(ea), abs(eb)), 3)
                 out.append(pair)
@@ -126,11 +130,17 @@ def _side_text(side: Record, better: bool) -> str:
     return base
 
 
+def _label(path: str, labels: dict[str, str]) -> str:
+    """What the person reads for the moved number: the given name, else the variable's own name (not the path)."""
+    short = path.split(".", 1)[1] if path.startswith("variables.") else path
+    return labels.get(path) or labels.get(short) or short
+
+
 def text(pair: Record) -> str:
     """The question in the person's words, with the numbers of the pair."""
     unit = f" {pair['variable_unit']}" if pair.get("variable_unit") else ""
     now = f" (いま {_fmt(pair['variable_value'])}{unit})" if _num(pair.get("variable_value")) else ""
-    return (f"{pair['variable']}{now} を {_fmt(pair['step_pct'])} % 上げると、{_side_text(pair['a'], True)}、"
+    return (f"{pair.get('variable_label') or pair['variable']}{now} を {_fmt(pair['step_pct'])} % 上げると、{_side_text(pair['a'], True)}、"
             f"{_side_text(pair['b'], False)}。この 2 つは両立しにくいので、どちらを優先しますか。")
 
 

@@ -310,7 +310,8 @@ def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         raise ToolError("動かす設計の数がありません。variables に設計の変数の名前 (または variables.<名前> などの道) を渡してください")
     got = tradeoff.collector(ctx, paths, set(args.get("quantities") or []))
     sens, meta, bases = got["sens"], got["meta"], got["bases"]
-    pairs = [p for p in tradeoff.find(sens, meta, bases) if all(k in p[s] for s in "ab" for k in ("now", "after"))]
+    labels = {**(design.get("variable_names") or {}), **(got.get("variable_labels") or {})}
+    pairs = [p for p in tradeoff.find(sens, meta, bases, labels=labels) if all(k in p[s] for s in "ab" for k in ("now", "after"))]
     questions = [tradeoff.to_question(p) for p in pairs]
     store = _tradeoffs.setdefault(_store(ctx), {})
     for q in questions:
