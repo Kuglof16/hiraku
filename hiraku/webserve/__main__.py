@@ -38,6 +38,11 @@ def main(argv: list[str] | None = None) -> int:
               f"Another HIRAKU screen may still be open: close its window, or start with --port <another number>.",
               file=sys.stderr, flush=True)
         return 1
+    # the tool shelf (A4) runs every builtin tool's known-answer checks (tens of seconds): started
+    # now, in the background, so a page that opens A4 later finds it built
+    shelf = getattr(server.RequestHandlerClass, "shelf", None)
+    if shelf is not None:
+        shelf.get()
     host, port = server.server_address[:2]
     print(f"HIRAKU screen: http://{host}:{port}/  (runs: {Path(args.runs).resolve()})", flush=True)
     default = next((r["run_id"] for r in list_runs(Path(args.runs), Path(args.saved), args.default_run) if r["default"]), None)
