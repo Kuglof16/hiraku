@@ -227,7 +227,8 @@ class TestBoardBrowserTest(unittest.TestCase):
     def test_one_screen_at_two_sizes_and_video(self):
         for run in (RUN, MANY):
             for size in ((1440, 900), (1920, 1080)):
-                for video in ("", "&video=1"):
+                # (video=1 alone shows the row of chips: test_film_compat_browser; board=1 the board)
+                for video in ("", "&video=1&board=1"):
                     what = f"{run} {size} {video}"
                     page, errors = self.open(f"tab=bench&t=1e6{video}", size, run)
                     got = page.evaluate(BOARD)
