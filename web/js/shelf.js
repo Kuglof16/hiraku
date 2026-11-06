@@ -232,9 +232,14 @@ export function mountShelf(el, api) {
     const key = `${ui.mode}:${b.key}`;
     const closed = ui.collapsed.has(key);
     const ok = b.tools.filter(allPassed).length;
+    // a domain's head: its agent's pet as its icon (the same as ③'s board and ④'s tiles: the CAE role
+    // of the domain, the packager for assembly), when the app has the pets
+    const pets = ui.mode === "domain" ? api.pets?.() : null;
+    const agent = DOMAINS.includes(b.key) ? (b.key === "assembly" ? "packager" : `cae.${b.key}`) : null;
+    const icon = agent && pets?.has(agent) ? h("span", { class: "petslot sh-pet", dataset: { petSlot: agent }, title: `${b.label}の担当` }) : null;
     return h("li", { class: "sh-node", dataset: { branch: b.key } },
       h("button", { class: "sh-head", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); render(); } },
-        h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), h("b", {}, b.label),
+        h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), icon, h("b", {}, b.label),
         // (the counts only once the shelf is built: before, only this run's tools are known)
         shelf.ready ? h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`) : null,
         shelf.ready ? h("span", { class: "sh-nok", title: "確かめを全部通ったツールの数" }, `確かめた ${ok}`) : null),
@@ -334,6 +339,7 @@ export function mountShelf(el, api) {
       : shelf.ready ? "" : "棚を読み込んでいます… (初めの 1 回は、ツールの判定を回すので少しかかります)";
     const branches = shelfTree(tools, ui);
     fill(tree, branches.length ? branches.map(branch) : h("li", { class: "sh-dim" }, tools.length ? "条件に合うツールがありません" : shelf.ready ? "ツールがありません" : ""));
+    api.pets?.()?.mount(tree); // the heads' pets (app.js draws them)
     fill(detailBox, detail(tools.find((t) => t.name === ui.selected) ?? null));
     // ?tool=: the card scrolled to its known-answer checks (until another tool is chosen)
     const h4 = START_TOOL && ui.selected === START_TOOL ? detailBox.querySelector(".sh-detail h4") : null;

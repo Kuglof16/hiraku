@@ -29,7 +29,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -70,6 +70,7 @@ import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one an
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 import { domainIconSvg } from "./domain_icons.js";
 import { footerActivity, mountHookLine, withoutRuleIds } from "./hookline.js";
+import { boardHtml } from "./test_board.js"; // ③'s tests at a glance
 
 const $ = (id) => document.getElementById(id);
 // A static export opened with no parameters starts at ① of the run its export picked (data/static.json
@@ -901,7 +902,9 @@ function markTabs(s) {
 // A4: mounted on first show; it asks the server for the shelf and lays the run's tool.checked over it.
 let shelf = null;
 function renderShelf() {
-  shelf ??= mountShelf($("view-shelf"), { tools: () => player.state.tools, runId: () => player.state.runId });
+  // (pets: each domain's head carries its agent's pet, as ③'s board and ④'s tiles)
+  shelf ??= mountShelf($("view-shelf"), { tools: () => player.state.tools, runId: () => player.state.runId,
+    pets: () => (agentPets ? { has: (id) => agentPets.has(id), mount: (root) => agentPets.mount(root, "shelf") } : null) });
   shelf.render();
 }
 
@@ -1107,32 +1110,20 @@ function renderLog(s, resolved) {
   drawn.resolved = resolvedKey;
 }
 
-// Many load cases: the chips show the id (and, for an id shared by several, a short name from the
-// title) and the row scrolls sideways, the chosen one kept in sight; the whole title is the tooltip.
-const MANY_TESTS = 12;
+// The tests over the 3D: per domain its pet and its tests' boxes, each with its state (test_board.js).
 // span: ④'s open domain (its tests only, its own 自動 / pick: ui.gridLc, not ③'s ui.pinnedLc)
 function renderTests(s, lcId, span = null) {
   const all = s.project?.load_cases ?? [];
   const cases = span ? all.filter((c) => c.domain === span.domain) : all;
-  const shorts = caseShortNames(cases);
-  const auto = `<button class="auto ${(span ? ui.gridLc : ui.pinnedLc) ? "" : "on"}" data-lc="">自動</button>`;
-  const el = $("tests");
-  const html =
-    auto +
-    cases
-      .map((c) => {
-        const short = shorts.get(c.load_case_id);
-        return `<button class="test ${c.load_case_id === lcId ? "on" : ""}" data-lc="${esc(c.load_case_id)}" title="${esc(c.load_case_id)}: ${esc(c.title)}"><span class="tid">${esc(c.test_id)}${short ? `<small>${esc(short)}</small>` : ""}</span><span class="ttl">${esc(c.title)}</span></button>`;
-      })
-      .join("");
+  // the board of every test at a glance (js/test_board.js)
+  const pets = agentPets ? { has: (id) => agentPets.has(id) } : null;
+  const { html } = boardHtml(s, cases, { lcId, auto: !(span ? ui.gridLc : ui.pinnedLc), pets, withRest: !span });
   if (html === drawn.tests) return;
   drawn.tests = html;
-  el.classList.toggle("many", cases.length > MANY_TESTS);
-  // (a row that scrolls sideways on purpose: not a text running out of its box)
-  if (cases.length > MANY_TESTS) el.dataset.lint = "overflow";
-  else delete el.dataset.lint;
+  const el = $("tests");
+  el.classList.add("board");
   el.innerHTML = html;
-  el.querySelector(".test.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  agentPets?.mount(el, "board");
 }
 
 // The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
@@ -2014,6 +2005,8 @@ function draw() {
   // the pets of the list (the workbench; hidden in the present mode) or of the grid
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
+  if (agentPets && view === "bench") agentPets.tick(s, player.events, player.playhead, "board", ui.frozen ? Infinity : PET_PAINTS); // test_board.js
+  if (agentPets && tab === "A4") agentPets.tick(s, player.events, player.playhead, "shelf", ui.frozen ? Infinity : PET_PAINTS); // shelf.js heads
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS);
