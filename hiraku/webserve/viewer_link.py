@@ -99,10 +99,11 @@ def entry_tables() -> tuple[dict[str, str], dict[str, str]]:
 
 
 def keeps_records(run_dir: Path) -> bool:
-    """Whether the run folder keeps the analyses' records for the entry (v### folders, an analyses/
-    folder, or a one-record analysis.json)."""
+    """Whether the entry has something to read in the run folder: v### folders, an analyses/ folder,
+    a one-record analysis.json, or the run's events.jsonl (the entry builds the records from the
+    events, as for a saved run of showcase/ that keeps only events.jsonl)."""
     run_dir = Path(run_dir)
-    if (run_dir / "analysis.json").is_file() or (run_dir / "analyses").is_dir():
+    if (run_dir / "analysis.json").is_file() or (run_dir / "analyses").is_dir() or (run_dir / "events.jsonl").is_file():
         return True
     try:
         return any(p.is_dir() and p.name[:1] == "v" and p.name[1:].isdigit() for p in run_dir.iterdir())
@@ -188,7 +189,7 @@ def answer(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR
            build: Callable[[Path, str], dict[str, Any]] | None = None, ana: dict[str, Any] | None = None) -> dict[str, Any]:
     """What GET /api/runs/<run_id>/viewer/<analysis_id> answers. build: the entry to use (by default
     viewer.src.build.for_analysis when it exists, else the provisional sample; False: the provisional
-    sample even when the entry exists). A run that keeps no records gets the provisional sample too.
+    sample even when the entry exists). A run with nothing for the entry to read gets the provisional sample too.
     ana: as in provisional."""
     build = _resolve(build)
     if build is None or not keeps_records(Path(events_file).parent):

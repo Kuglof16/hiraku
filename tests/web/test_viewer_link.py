@@ -128,16 +128,16 @@ class ViewerLinkServerTest(unittest.TestCase):
         self.assertFalse(got["provisional"])
         self.assertEqual(got["runs"], {self.kept: {"provisional": False}})
 
-    def test_a_run_without_records_keeps_the_provisional_answer_with_the_entry(self):
-        # a saved run of showcase/ keeps only events.jsonl: the entry has nothing to read
+    def test_a_run_with_only_events_goes_to_the_entry(self):
+        # a saved run of showcase/ keeps only events.jsonl: the entry builds its records from the events
         n = len(self.calls)
-        got = self.json("built", f"/api/runs/{SCRIPTED_RUN}/viewer/{self.first('assembly')}")
-        self.assertEqual(len(self.calls), n)
-        self.assertEqual(got["data"], SAMPLE)
-        self.assertEqual(got["source"], viewer_link.SAMPLE_SOURCE)
+        aid = self.first("crash")
+        got = self.json("built", f"/api/runs/{SCRIPTED_RUN}/viewer/{aid}")
+        self.assertEqual(len(self.calls), n + 1)
+        self.assertEqual(self.calls[-1][1], aid)
+        self.assertNotEqual(got.get("source"), viewer_link.SAMPLE_SOURCE)
         info = self.json("built", f"/api/viewer?run={SCRIPTED_RUN}")
-        self.assertEqual(info["runs"], {SCRIPTED_RUN: {"provisional": True}})
-        self.assertIn("nvh", info["missing"])
+        self.assertEqual(info["runs"], {SCRIPTED_RUN: {"provisional": False}})
 
     @unittest.skipUnless(viewer_link.entry() is not None, "viewer.src.build is not here")
     def test_the_real_entry_on_the_analysis_departments_fixture(self):
