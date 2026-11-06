@@ -9,8 +9,9 @@ import numpy as np
 from ..checks import _check
 from ..crash_beam import known, measure
 from ..crash_beam.mesh import MIN_ELEMENT_RADII, N_SUB, build_mesh
-from ..crash_beam.sim import (COURANT, MAX_FIELD_NODES, PENALTY, REC_DT, SPLIT_STOP_SHARE, WINDOW, contract_has_node_motion,
-                              default_picks, member_end_hinges, member_forces, node_motion, run_crash)
+from ..crash_beam.sim import (CONTACT_PENALTY, CONTACT_SKIN, COURANT, MAX_FIELD_NODES, PENALTY, REC_DT, SPLIT_STOP_SHARE,
+                              STOP_SHARE, TYRE_PENALTY_MAX, WINDOW, contract_has_node_motion, default_picks, member_end_hinges, member_forces, node_motion,
+                              run_crash)
 from ..model import DesignError
 from ..units import G0
 from .base import K2Tool, P, Pair, _box, _res
@@ -19,6 +20,17 @@ from .base import K2Tool, P, Pair, _box, _res
 HINGE_BREAK_DEG = 60.0  # a beam breaks when the plastic hinge rotation at one of its ends passes this
 WALL_MU = 0.3           # Coulomb friction between the frame's nodes and the wall
 SERIES_DT = 1e-3        # s, the series are thinned to the record row nearest each multiple of this
+
+
+def _lone_nodes(mesh, alive) -> list[int]:
+    """The frame nodes with elements none of which is alive."""
+    has, any_ = np.zeros(mesh.n, bool), np.zeros(mesh.n, bool)
+    for e in range(mesh.ne):
+        for k in mesh.con[e]:
+            any_[k] = True
+            if alive[e]:
+                has[k] = True
+    return [k for k in range(mesh.n_frame) if any_[k] and not has[k]]
 
 
 class CrashBeamTool(K2Tool):
@@ -49,11 +61,23 @@ class CrashBeamTool(K2Tool):
                 "no source, not checked)"),
               P("hinge_break_angle", "deg", HINGE_BREAK_DEG, f"a beam breaks when a plastic hinge at its end turns "
                 f"past this ({HINGE_BREAK_DEG:g} deg when not given; no source, not checked)"),
-              P("time_limit", "s", 0.2, "the run stops here if the vehicle has not stopped", run_option=True))
+              P("time_limit", "s", 0.2, "the run stops here if the vehicle has not stopped", run_option=True),
+              P("stop_at_split", None, False, "the run stops when a piece of 3 % of the mass or more breaks off the "
+                "seats' side (false when not given: the pieces touch each other, so the run goes on)", run_option=True))
     pairs = (Pair("peak_decel", "crash.linear_spring", "a_max", (("v", "speed"),),
                   "k from the design variable crush_stiffness (one linear spring); the beams yield and fold instead"),
              Pair("max_crush", "crash.linear_spring", "x_max", (("v", "speed"),),
-                  "the hand calculation's crush is the whole front's; the beam model's is to the seat mounts"))
+                  "the hand calculation's crush is the whole front's; the beam model's is to the seat mounts"),
+             Pair("occupant_space_margin", "crash.plastic_occupant_space_margin", "margin", (("v", "speed"),),
+                  "the hand calculation takes the front tubes crushing straight at their mean crushing force; the beam "
+                  "model's margin is the least room left to any occupant part box (a tower post or the dash bending back "
+                  "into the foot box counts)"),
+             Pair("frame_split_fraction", "crash.rail_column_split", "fraction", (),
+                  "the hand calculation checks each rail behind the crush zone as a straight column under the crush "
+                  "force; the beam model breaks members where the towers and the arm brackets bend the rails"),
+             Pair("unsupported_load", "load_path.free_parts", "n", (),
+                  "the path check (hiraku.catalog.builders.load_path.PATH_PREDICTION): the parts the load case loads, "
+                  "followed by their contacts to the members; the tool counts the parts with mass it put on no node"))
 
     def own_checks(self) -> list[dict]:
         out = []
@@ -89,6 +113,63 @@ class CrashBeamTool(K2Tool):
                           "m/s", 1e-9, "Newton's second law over the run: the beams' internal forces cancel",
                           case_ja=case_ja + ": 全体の運動量の変わり (全体の重さで割って速さの変わりにした) が、壁から受けた力積と同じか",
                           source_ja="運動の法則: 梁の中の力は打ち消し合うので、運動量を変えるのは壁の力だけ"))
+        h = known.tubes_head_on()
+        case = ("two elastic 40x40x2.3 tubes 0.5 m long, not joined, on one axis: 2000 kg behind the moving one (1 m/s), "
+                "1000 kg behind the other at rest; no wall (springs in "
+                f"series: each tube's E A / L and the contact's penalty spring, {h['k'] / 1e6:.1f} kN/mm)")
+        case_ja = ("つながっていない弾性の角パイプ (40×40×2.3、長さ 0.5 m) 2 本を同じ軸に並べ、後ろに 2000 kg を載せた片方を 1 m/s で"
+                   f"止まっているもう片方 (後ろに 1000 kg) に当てる (壁なし。ばね = 2 本の E A / L と接触の押し返しのばねの直列、"
+                   f"{h['k'] / 1e6:.1f} kN/mm)")
+        out.append(_check(case + ": peak contact force", "peak_force", h["expected_force"], h["peak_force"], "N", 3e-2,
+                          "undamped impact of two masses through a spring: F = v sqrt(k mu), mu the reduced mass (each "
+                          "with a third of its tube)",
+                          case_ja=case_ja + ": 接触の力のいちばん大きい値",
+                          source_ja="減衰のない 2 つの質量のばねを介した衝突: F = v √(k μ) (μ は換算質量)"))
+        out.append(_check(case + ": contact time", "contact_time", h["expected_time"], h["contact_time"], "s", 3e-2,
+                          "half a period: pi sqrt(mu / k)", case_ja=case_ja + ": 触れている時間",
+                          source_ja="半周期 π √(μ / k)"))
+        out.append(_check(case + ": speed of the struck tube after", "rebound_speed", h["expected_v2"], h["v2"], "m/s",
+                          1e-2, "elastic impact (momentum and energy kept): v2' = 2 M1 / (M1 + M2) v",
+                          case_ja=case_ja + ": 当てられた側の、離れたあとの速さ",
+                          source_ja="弾性衝突 (運動量とエネルギーが保たれる): v2' = 2 M1 / (M1 + M2) v"))
+        out.append(_check(case + ": the total momentum after / before", "momentum_ratio", 1.0,
+                          h["momentum_after"][0] / h["momentum_before"][0], "1", 1e-9,
+                          "the contact forces are equal and opposite: the momentum is kept",
+                          case_ja=case_ja + ": 全体の運動量の、後と前の比",
+                          source_ja="接触の力は向きが反対で大きさが同じなので、運動量は保たれる"))
+        c = known.tube_crosswise()
+        cd = c["contact_distance"]
+        out.append(_check(f"a 40x40x2.3 tube 0.6 m long moving at {c['speed']:g} m/s crosswise onto another at rest "
+                          f"(no gravity): the least distance between the axes (the contact radii sum to {cd * 1000:.0f} mm; "
+                          f"the penetration bound {c['bound'] * 1000:.2f} mm)", "least_axis_distance", cd, c["least"], "m",
+                          c["bound"] / cd, "all the relative kinetic energy in the contact spring at most: "
+                          "penetration <= v sqrt(mu / k), k the contact's penalty spring at the middles",
+                          case_ja=f"角パイプ (40×40×2.3、長さ 0.6 m) を、止まっているもう 1 本の上に {c['speed']:g} m/s で"
+                                  "十字に落とす (重力なし): 2 本の軸のいちばん近い距離 (接触の半径の和からのめり込みが"
+                                  f"上限 {c['bound'] * 1000:.2f} mm 以内か)",
+                          source_ja="相対の運動エネルギーが全部接触のばねに入っても、めり込みは v √(μ / k) まで"))
+        w = known.wheel_into_wall()
+        m, k, v = w["mass"], w["k_t"], w["speed"]
+        case = (f"a wheel node ({m:g} kg, radius {w['radius']:g} m, tyre {k / 1000:g} N/mm, section height "
+                f"{w['section'] * 1000:.0f} mm) moving at {v:g} m/s into the wall (the rim does not reach it)")
+        case_ja = (f"車輪の点 ({m:g} kg、半径 {w['radius']:g} m、タイヤのばね {k / 1000:g} N/mm、タイヤの断面の高さ "
+                   f"{w['section'] * 1000:.0f} mm) を {v:g} m/s で壁に当てる (リムは壁に届かない)")
+        out.append(_check(case + ": peak wall force", "peak_force", v * math.sqrt(k * m), w["peak_force"], "N", 1e-3,
+                          "undamped mass-spring impact: F = v sqrt(k_t m)", case_ja=case_ja + ": 壁の力のいちばん大きい値",
+                          source_ja="減衰のない質量とばねの衝突: F = v √(k_t m)"))
+        out.append(_check(case + ": contact time", "contact_time", math.pi * math.sqrt(m / k), w["contact_time"], "s",
+                          1e-3, "half a period of the mass on the tyre's spring: pi sqrt(m / k_t)",
+                          case_ja=case_ja + ": 壁に触れている時間", source_ja="質量とばねの揺れの半周期 π √(m / k_t)"))
+        r = known.wheel_into_wall(speed=40.0 / 3.6)
+        rim = r["wall"] - (r["radius"] - r["section"])
+        out.append(_check(f"the same wheel node at 40 km/h (the free tyre would deflect "
+                          f"{r['speed'] * math.sqrt(m / k) * 1000:.0f} mm, more than its section height): the deepest x "
+                          "of the node", "deepest_x", rim, r["deepest"], "m", 1e-9,
+                          "the rim (radius r - section height) reaches the wall and stops there, perfectly plastic: "
+                          "x = wall - (r - h)",
+                          case_ja="同じ車輪の点を 40 km/h で当てる (タイヤのたわみが断面の高さを超える): 点がいちばん進んだ x",
+                          source_ja="リム (半径 = r - タイヤの断面の高さ) が壁に届いたらそこで止まる (跳ね返らない): "
+                                    "x = 壁 - (r - h)"))
         return out
 
     def run(self, design: dict, load_case: dict, predictions: list[dict], params: dict | None = None) -> dict:
@@ -112,10 +193,11 @@ class CrashBeamTool(K2Tool):
         if not self.given(lp, "hinge_break_angle"):
             notes.append(f"a beam element breaks (is removed) when the plastic hinge rotation at one of its ends passes "
                          f"{math.degrees(lim):g} deg (assumed; no source in the repository, 確かめていない)")
+        stop_split = self.flag(lp, "stop_at_split")
         mesh = build_mesh(design)
         occ = [p for p in design.get("parts", []) if p.get("kind") == "occupant"]
         seat = sorted({k for p in occ for k in mesh.node_parts.get(p["id"], {})})
-        xr = mesh.x0[:, 0]
+        xr = mesh.x0[:mesh.n_frame, 0]
         if seat:
             ref, ref_text = seat, "the occupants' seat mount nodes (" + ", ".join(mesh.node_ids[k] for k in seat) + ")"
         else:
@@ -126,52 +208,82 @@ class CrashBeamTool(K2Tool):
         carried = [p for p in design.get("parts", []) if p.get("box") and mesh.node_parts.get(p["id"])]
         box_x = max((measure.box_front(p) for p in carried), default=-math.inf)
         wall = max(float(xr.max()), box_x)
-        run = run_crash(mesh, speed, t_lim, mu=mu, hinge_lim=lim, wall=wall, keep=ref)
+        run = run_crash(mesh, speed, t_lim, mu=mu, hinge_lim=lim, wall=wall, keep=ref, stop_at_split=stop_split)
         split = run.extra.get("split")
+        cut = split is not None and stop_split  # the run stopped at the split
         M = run.total_mass
         dec = run.decel() / G0
         tt = run.t_all
         v_end = float(run.momentum[-1][0]) / M
         t_end = float(tt[-1])
         mean = (speed - max(v_end, 0.0)) / t_end / G0 if t_end > 0 else 0.0
-        crush = measure.shortening(run, ref)
+        crush = measure.crush(run, ref)
         k_crush = int(np.argmax(crush))
         res = [_res("peak_decel", float(dec.max()), "g")]
-        if split is None:
-            res += [_res("mean_decel", mean, "g"),
-                    _res("max_crush", float(crush.max()) * 1000.0, "mm",
-                         "front-most nodes to " + ("seat mounts" if seat else "rear-most nodes"))]
-        else:
+        where_crush = "front-most nodes to " + ("seat mounts" if seat else "rear-most nodes")
+        if not cut:
+            res += [_res("mean_decel", mean, "g"), _res("max_crush", float(crush.max()) * 1000.0, "mm", where_crush)]
+        if split is not None:
             split_members = sorted({mesh.member_of[e] for e in split["elements"]})
+            k_split = int(np.searchsorted(tt, split["t"] - 1e-12))
             res += [_res("frame_split_time", split["t"], "s", ", ".join(split_members)),
-                    _res("crush_at_split", float(crush.max()) * 1000.0, "mm",
-                         "front-most nodes to " + ("seat mounts" if seat else "rear-most nodes"))]
-            notes.append(
-                f"the frame split at {split['t'] * 1000:.1f} ms when {', '.join(split_members)} broke: a piece with "
-                f"{split['share'] * 100:.1f} % of the whole mass came apart from {ref_text} (the run stops at a piece of "
-                f"{SPLIT_STOP_SHARE * 100:g} % or more, HIRAKU's choice, no source). K2 has no contact between the "
-                "pieces (the rest would pass through it), so the run stops there: peak_decel is up to the split, "
-                "crush_at_split is the crush then (not the final crush), and mean_decel, max_crush, "
-                "occupant_space_margin and occupant_space_left are not computed (the vehicle had not stopped)")
+                    _res("crush_at_split", float(crush[:k_split + 1].max()) * 1000.0, "mm", where_crush)]
+            said = (f"the frame split at {split['t'] * 1000:.1f} ms when {', '.join(split_members)} broke: a piece with "
+                    f"{split['share'] * 100:.1f} % of the whole mass came apart from {ref_text}; a split off of a piece "
+                    f"of {SPLIT_STOP_SHARE * 100:g} % of the mass or more is NG for C1 (frame_split_fraction, "
+                    "frame_split_time says when). ")
+            if cut:
+                notes.append(said + "The run stops there (stop_at_split): peak_decel is up to the split, crush_at_split "
+                             "is the crush then (not the final crush), occupant_space_margin is the least room up to "
+                             "then (an upper bound), and mean_decel, max_crush, crush_margin and occupant_space_left are "
+                             "not computed (the vehicle had not stopped)")
+            else:
+                notes.append(said + "The pieces touch each other (element contact), so the run goes on past the split: "
+                             "peak_decel, mean_decel, max_crush, occupant_space_margin and occupant_space_left are over "
+                             "the whole run (the broken-off piece pushed on by the rest), crush_at_split is the largest "
+                             "crush up to the split")
         small = [p for p in run.extra.get("pieces", []) if split is None or p["share"] < split["share"]]
         if small:
-            notes.append("smaller pieces broken off the seats' side, run on without contact with the rest: " + "; ".join(
+            notes.append("smaller pieces broken off the seats' side, touching the rest by the element contact: " + "; ".join(
                 f"at {p['t'] * 1000:.1f} ms, {len(p['nodes'])} nodes ({p['share'] * 100:.1f} % of the mass: "
-                + ", ".join(sorted({mesh.member_of[e] for e in range(mesh.ne)
+                + ", ".join(sorted({mesh.member_of[e] for e in mesh.frame_elements()
                                     if all(int(n) in set(p['nodes']) for n in mesh.con[e])}) or ["no whole member"]) + ")"
                 for p in small))
+        # the contract's unsupported_load (docs/contract.md 手計算の役目): the parts with mass the mesh put on no node
+        lost = [p["id"] for p in design.get("parts", []) if float(p.get("mass_kg", 0.0)) > 0.0
+                and not mesh.node_parts.get(p["id"])]
+        res.append(_res("unsupported_load", float(len(lost)), "1", ", ".join(lost) if lost else None))
+        notes.append("unsupported_load: the parts with mass put on no mesh node (each part's mass goes on its "
+                     "carried_by nodes, or the nearest support's node; whether a part's shape touches the frame is the "
+                     "hand calculation's path check, load_path.free_parts): " + (", ".join(lost) if lost else "none"))
+        # C1's second criterion: the largest share of the whole mass in a piece broken off the seats' side that can
+        # come into the occupants' space (0: none); pieces that cannot (e.g. the front cross member, below the feet)
+        # are crushed debris, named in a note
+        reaching = [p for p in run.extra.get("pieces", []) if measure.reaches_occupants(run, p["nodes"], occ)]
+        res.append(_res("frame_split_fraction", max((p["share"] for p in reaching), default=0.0), "1"))
+        notes.append("frame_split_fraction: the largest share of the whole mass in a piece broken off the seats' side "
+                     "with a node in an occupant part box's y-z extent, ahead of its rear face, at the start (a piece that "
+                     "can come into their space); "
+                     + (f"{len(run.extra['pieces']) - len(reaching)} other piece(s) cannot and are not counted"
+                        if len(run.extra.get("pieces", [])) > len(reaching) else "every broken-off piece is counted"))
         if occ:
             # the crush the structure ahead of the occupants can take, as the hand calculation reads it: from the
             # front-most node back to the front face of the front-most occupant part box, along x
             front_occ = max(occ, key=measure.box_front)
             crumple = float(xr.max()) - measure.box_front(front_occ)
             res.append(_res("crumple_length", crumple * 1000.0, "mm", front_occ["id"]))
-            if split is None:
-                res.append(_res("occupant_space_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
-                notes.append("occupant_space_margin: crumple_length (the front-most node to the front face of the "
-                             "front-most occupant part box, along x, at the start) less max_crush; the hand calculation "
-                             "crash_beam.occupant_margin reads the same")
+            if not cut:
+                res.append(_res("crush_margin", (crumple - float(crush.max())) * 1000.0, "mm", front_occ["id"]))
+                notes.append("crush_margin: crumple_length (the front-most node to the front face of the front-most "
+                             "occupant part box, along x, at the start) less max_crush")
         room = measure.occupant_room(run, occ, mesh.node_parts)
+        if room is not None:
+            # C1's criterion: the least room to any occupant part box over the run (up to the split, when the frame
+            # split: an upper bound, the rest of the vehicle moving on after it)
+            res.append(_res("occupant_space_margin", room["room"] * 1000.0, "mm", room["part"]))
+            notes.append("occupant_space_margin: the least room over the run from the structure ahead of an occupant "
+                         "part box to the box's front face (occupant_space_left; negative: the structure is inside the box)"
+                         + ("; up to the split, so an upper bound (the vehicle moves on after it)" if cut else ""))
         # hot_spots: each frame member's least room to an occupant box, a place the hand calculation (the crush
         # from the front) does not look at (e.g. a side rail bending into the foot box); as the load case's
         # criterion quantity (occupant_space_margin), the quantity hot_spots reads at a place
@@ -179,9 +291,9 @@ class CrashBeamTool(K2Tool):
                          "judged": False}
                         for mid, r_ in sorted(measure.occupant_room_by_member(run, occ, mesh.node_parts).items())]
         if self._places:
-            notes.append("hot_spots: each frame member's least room (over the run" + (", up to the split" if split else "")
+            notes.append("hot_spots: each frame member's least room (over the run" + (", up to the split" if cut else "")
                          + ") to an occupant part box, read as occupant_space_left (the place's occupant_space_margin)")
-        if room is not None and split is None:
+        if room is not None and not cut:
             res.append(_res("occupant_space_left", room["room"] * 1000.0, "mm", room["part"]))
         elif occ and room is None:
             notes.append("no structure is ahead of the occupants' part boxes (in their y-z extent): occupant_space_left "
@@ -216,7 +328,7 @@ class CrashBeamTool(K2Tool):
         t_p = [round(float(tt[k]), 6) for k in picks]
         forces = [member_forces(run, k) for k in picks]
         hinges_t = [member_end_hinges(run, k) for k in picks]
-        for m in sorted(set(mesh.member_of)):
+        for m in sorted(mesh.members()):
             series.append({"channel": f"member_axial_force.{m}", "unit": "N", "t_s": t_p,
                            "values": [float(f.get(m, 0.0)) for f in forces]})
         for (m, end) in sorted(hinges_t[-1]):
@@ -237,8 +349,14 @@ class CrashBeamTool(K2Tool):
                 notes.append(f"no node_motion field: the mesh has {mesh.n} nodes, more than the contract's "
                              f"{MAX_FIELD_NODES}")
         frame_kg = mesh.frame_mass
+        cst = run.extra["contact"]
+        n_beams = len(mesh.frame_elements())
+        lone = _lone_nodes(mesh, run.final.alive)
+        if lone:
+            notes.append(f"{len(lone)} nodes ({float(mesh.mass[lone].sum()):.1f} kg) lost all their elements by the end; "
+                         "such a node touches only the wall, not the elements: " + ", ".join(mesh.node_ids[k] for k in lone))
         notes += [
-            f"the frame as {mesh.ne} co-rotational 3-D beam elements on {mesh.n} nodes (each member in up to {N_SUB} "
+            f"the frame as {n_beams} co-rotational 3-D beam elements on {mesh.n_frame} nodes (each member in up to {N_SUB} "
             f"elements, none shorter than {MIN_ELEMENT_RADII:g} radii of gyration of its section), explicit central "
             f"differences, time step {run.dt * 1e6:.2f} us = {COURANT:g} (Courant factor) x the elements' stable step "
             "2 / omega_max; the rotational inertia of the nodes scaled up to at least (element mass / 2) x length^2 / 12 "
@@ -251,19 +369,54 @@ class CrashBeamTool(K2Tool):
             + "; ".join(mesh.notes),
             f"the wall: a rigid plane x = {run.wall_x * 1000:.0f} mm, at the front-most of the frame's nodes "
             f"({', '.join(mesh.node_ids[k] for k in front)}, x = {xr.max() * 1000:.0f} mm) and the part boxes they carry; "
-            f"contact of the nodes only, by a penalty "
-            f"spring {PENALTY:g} x the node's mass / dt^2; the part boxes, the wheels and the bumper do not touch the "
-            "wall, and the frame's pieces do not touch each other (a broken-off piece does not push on the rest)",
+            f"it touches the frame's nodes by a penalty spring {PENALTY:g} x the node's mass / dt^2, and the wheel nodes "
+            "through the tyre: when a wheel centre's x + its radius passes the wall, a spring of the tyre's radial "
+            "stiffness on the deflection (compressive only, no damping: the tyre gives back what it holds); when the "
+            "deflection reaches the tyre's section height the rim is at the wall and stops there, perfectly plastic "
+            "(no spring-back from the rim; HIRAKU's choice, the rim's own crushing is not modelled). "
+            + "; ".join(f"{wid}: {w['k_t'] / 1000:g} N/mm, section height {w['section'] * 1000:.0f} mm, rim radius "
+                        f"{(w['radius'] - w['section']) * 1000:.0f} mm" for wid, w in mesh.wheels.items())
+            + (f"; the tyre spring on the wheel node's mass (omega dt)^2 = k_t dt^2 / m = {run.extra['tyre_omega_dt2']:.2g} "
+               f"at most (the kernel allows {TYRE_PENALTY_MAX:g})" if mesh.wheels else "")
+            + "; the part boxes and the bumper do not touch the wall",
+            *mesh.tyre_notes,
+            f"contact between the frame's elements that share no node (pieces broken apart, a member folding onto "
+            f"another), frictionless: each element a capsule of radius half its section's larger outer dimension "
+            f"(pairs closer than that at the start, near the joints: from their starting distance); a penalty spring "
+            f"{CONTACT_PENALTY:g} x the contact point's mass / dt^2 between the closest points of the two axes, the force "
+            f"shared to the four nodes (momentum kept); the pairs looked at are listed again whenever a node has moved "
+            f"{CONTACT_SKIN * 500:g} mm relative to the rest (the list keeps the pairs within {CONTACT_SKIN * 1000:g} mm "
+            f"of touching). In this run: {cst['pairs_possible']} pairs can touch, the list made {cst['lists']} times, at "
+            f"most {cst['longest']} pairs on it, {cst['pair_steps']} pair-steps in contact. The wheels and the part boxes "
+            "do not touch the elements",
             "no gravity and no ground (the crash forces are many times the weight over the run)",
-            f"peak_decel and the deceleration series: the wall's impulse over each {WINDOW * 1000:g} ms / (the total mass x "
-            f"{WINDOW * 1000:g} ms), recorded every {REC_DT * 1000:g} ms; mean_decel: the speed lost / the time to the "
-            "stop",
-            f"max_crush: the shortening of the x distance from the front-most nodes back to {ref_text}",
+            # what this C1 model leaves out (the user's decision: C1 judged on this model to the submission)
+            "not in this model: the floor and deck plates as plates (their mass is on the frame's nodes, but they "
+            "do not brace the frame) and the rims' crushing (a wheel's rim stops at the wall once its tyre is "
+            "through). Either can move the result a lot (not checked): on demo v1 with tyre_stiffness 60 N/mm, the "
+            "least room was -12 mm with the floor as a rigid box and -497 mm with a split without it, against -196 mm "
+            "here (-191 mm with v1's own tyre_stiffness, 150 N/mm) (K2's runs, 2026-11-06). "
+            "床の板が骨組みを支える力と、車輪のリムがつぶれることは、このモデルに入っていない (結果を大きく動かすことがある)",
+            f"peak_decel and the deceleration series: the whole mass's deceleration, the wall's impulse over each "
+            f"{WINDOW * 1000:g} ms / (the total mass x {WINDOW * 1000:g} ms), recorded every {REC_DT * 1000:g} ms; "
+            "peak_decel is the input to the occupants (the deceleration of the whole vehicle they ride in, not of the "
+            "seat mounts on their own); mean_decel: the speed lost / the time to the stop",
+            f"max_crush and the crush series: how far {ref_text} moved toward the wall after the frame's front-most "
+            "node reached it (the shortening of the structure ahead of them while the front is held at the wall; a "
+            "broken-off front piece moving back from the wall is not counted)",
             "occupant_space_left: the occupant part boxes move with their carried_by nodes; the least x "
             "distance over the run from the structure ahead of a box (mesh nodes and element middles inside the box's "
             "y-z extent, ahead of its rear face) back to the box's front face; negative: the structure is inside the box",
             f"run: {run.stopped} at {t_end * 1000:.1f} ms ({run.steps} steps); speed at the end {v_end:.2f} m/s",
         ]
+        if v_end > STOP_SHARE * speed:
+            pushed = np.nonzero(run.impulse[:, 0] != 0.0)[0]
+            t_wall = float(tt[pushed[-1] + 1]) if len(pushed) else 0.0
+            notes.append(f"the vehicle had not stopped at the time limit ({v_end:.2f} m/s toward the wall, more than "
+                         f"{STOP_SHARE * 100:g} % of the start): max_crush, mean_decel and the rooms are up to "
+                         f"{t_end * 1000:.0f} ms and would change in a longer run"
+                         + (f"; nothing touched the wall after {t_wall * 1000:.1f} ms (the frame, or the seats' piece of "
+                            "it, moving on with nothing ahead of it that K2 makes touch)" if t_end - t_wall > 0.01 else ""))
         if room is not None:
             notes.append(f"occupant_space_left at the start: {room['start'] * 1000:.0f} mm "
                          f"(the least over the run at {tt[room['row']] * 1000:.1f} ms)")
