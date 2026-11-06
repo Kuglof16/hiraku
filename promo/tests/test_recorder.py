@@ -261,6 +261,23 @@ class RecorderInBrowser(unittest.TestCase):
         finally:
             browser.close()
 
+    def test_the_newest_take_is_used(self):
+        # record the same sentence twice: the second take is the chosen one
+        self.page.evaluate("() => window.hirakuRec.go(2)")
+        key = self.page.evaluate("() => window.hirakuRec.state.lines[2].key")
+        ids = []
+        for _ in range(2):
+            self.page.evaluate("() => window.hirakuRec.startRecording({countdown: false})")
+            self.page.wait_for_timeout(600)
+            ids.append(self.page.evaluate("async () => (await window.hirakuRec.stopRecording()).id"))
+        self.assertEqual(self.page.evaluate("(k) => window.hirakuRec.state.chosen[k]", key), ids[1])
+        # a star on the first take, then the rescue picks the newest take again
+        self.page.evaluate("([k, id]) => { window.hirakuRec.state.chosen[k] = id; }", [key, ids[0]])
+        changed = self.page.evaluate("async () => await window.hirakuRec.useLatestTakes(0)")
+        self.assertIn(key, changed)
+        self.assertEqual(self.page.evaluate("(k) => window.hirakuRec.chosenTake(k).id", key), ids[1])
+        self.page.evaluate("() => window.hirakuRec.go(0)")
+
     def test_waiting_for_the_permission_says_so(self):
         # the browser asks the user and getUserMedia does not settle: the page says it is waiting
         browser = self.pw.chromium.launch(args=ARGS)
