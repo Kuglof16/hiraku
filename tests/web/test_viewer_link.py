@@ -105,8 +105,11 @@ class ViewerLinkServerTest(unittest.TestCase):
         self.assertTrue(got["provisional"])
 
     def test_a_tool_without_a_field_a_missing_sample_and_an_unknown_analysis_give_a_reason(self):
+        # every tool of the scripted run may have a field now (load_path on strength, with no sample here)
+        self.assertIsNone(viewer_link.field_of("no_such_tool", viewer_link.tool_table()))
         no_field = self.json("sample", f"/api/runs/{SCRIPTED_RUN}/viewer/{self.first('load_path')}")
-        self.assertEqual(no_field, {"field": None, "reason": viewer_link.NO_FIELD})
+        want = viewer_link.NO_FIELD if viewer_link.field_of("load_path", viewer_link.tool_table()) is None else viewer_link.NO_SAMPLE
+        self.assertEqual(no_field, {"field": None, "reason": want})
         no_sample = self.json("sample", f"/api/runs/{SCRIPTED_RUN}/viewer/{self.first('modal')}")
         self.assertEqual(no_sample, {"field": None, "reason": viewer_link.NO_SAMPLE})
         unknown = self.json("sample", f"/api/runs/{SCRIPTED_RUN}/viewer/ana-9999999")
