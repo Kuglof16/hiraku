@@ -337,10 +337,10 @@
         sub: ["1 台の車を、", "分野をまたいでまとめて判断"] },
       { key: "tools", lab: "解析のツール", v: P.tools, unit: "本",
         sub: [`答えの分かっている例 ${fmt(P.known_cases)} 件で`, "どれも確かめてから使う"] },
-      { key: "comparisons", lab: "手計算と解析の照合", v: P.comparisons, unit: "回",
-        sub: ["先に手計算で予測、解析と比べる",`食い違い ${P.mismatches} 件は原因を特定`] },
-      { key: "passed", lab: "直して、合格", v: P.passed, unit: `/ ${P.areas}`,
-        sub: [`設計を直した ${P.versions} 版目で`, P.assembly ? "全分野と組み立てが合格" : "全分野が合格"] },
+      { key: "comparisons", lab: "手計算と解析の判定", v: P.comparisons, unit: "回",
+        sub: ["先に手計算で予測、解析と比べる",`不一致 ${P.mismatches} 件は原因を特定`] },
+      { key: "passed", lab: "直して、OK", v: P.passed, unit: `/ ${P.areas}`,
+        sub: [`設計を直した v${P.versions} で`, P.assembly ? "全分野と組み立てが OK" : "全分野が OK"] },
     ];
     document.querySelector(".depth").innerHTML = cards.map((c, i) => {
       const at = T.cards_s + i * T.card_step_s;
