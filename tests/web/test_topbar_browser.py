@@ -38,7 +38,10 @@ ICONS = """async () => {
   const want = (d) => { const t = document.createElement("div"); t.innerHTML = m.domainIconSvg(d, "x"); return t.firstElementChild.innerHTML; };
   const chips = [...document.querySelectorAll("#chips .chip")].map((c) => { const ic = c.querySelector("svg.chip-ic");
     return { d: ic?.dataset.domainIcon ?? null, same: ic ? ic.innerHTML === want(ic.dataset.domainIcon) : false, text: c.textContent,
-             h: ic ? ic.getBoundingClientRect().height : 0, color: ic ? getComputedStyle(ic).color === getComputedStyle(c).color : false }; });
+             h: ic ? ic.getBoundingClientRect().height : 0, dot: getComputedStyle(c, "::before").display,
+             // the icon takes the state dot's place and colour: an OK / NG chip's icon in its border's colour
+             color: ic && (c.classList.contains("green") || c.classList.contains("red")) && !c.classList.contains("focus")
+               ? getComputedStyle(ic).color === getComputedStyle(c).borderTopColor : true }; });
   return { chips, all: m.ALL_DOMAINS_HAVE_ICONS, keys: Object.keys(m.DOMAIN_ICON) };
 }"""
 
@@ -123,7 +126,8 @@ class TopbarBrowserTest(unittest.TestCase):
         self.assertEqual([c["d"] for c in got["chips"]], DOMAIN_KEYS)
         for c in got["chips"]:
             self.assertTrue(c["same"], c)  # drawn from domain_icons.js
-            self.assertTrue(c["color"], c)  # in the chip's own colour
+            self.assertTrue(c["color"], c)  # in the state's colour
+            self.assertEqual(c["dot"], "none", c)  # in place of the dot
             self.assertGreater(c["h"], 10, c)
         self.assertEqual(len(tiles), 8)
         for t in tiles:

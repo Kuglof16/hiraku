@@ -16,9 +16,19 @@
 .back-link:hover { background: var(--panel); }
 body.video .back-link { display: none; }
 
-/* the domains' icons: as high as the letters, in the chip's own colour */
-.chip { padding: 3px 11px; gap: 5px; }
+/* the domains' icons, as high as the letters. On a chip the icon takes the state dot's place
+   and its colour (app.css .chip::before: OK green, NG red, focus blue, held orange) */
+.chip { padding: 3px 12px 3px 10px; gap: 5px; }
+.chip:has(> .chip-ic)::before { display: none; }
 .chip .chip-ic, .tile .th h3 .dom-ic { flex: none; width: 1.05em; height: 1.05em; }
+.chip .chip-ic { color: var(--muted); }
+.chip.green .chip-ic { color: var(--green); }
+.chip.red .chip-ic { color: var(--red); }
+.chip.pending .chip-ic { color: var(--ink); }
+.chip.off .chip-ic { color: var(--rule); }
+.chip.focus .chip-ic { color: var(--blue); }
+.chip.focus.green .chip-ic { color: var(--green); }
+.chip.held .chip-ic { color: #d98a1c; }
 .tile .th h3 { display: inline-flex; align-items: center; gap: 6px; }
 
 /* the hooks' stop: attention (orange), not a NG judgement (red is for those only) */
