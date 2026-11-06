@@ -20,7 +20,8 @@ def build_tests(catalog: Catalog, req: Record, design: Record) -> tuple[list[Rec
         test_ids = req["tests"]
     else:
         test_ids, skipped = catalog.select_tests(req["flags"], req.get("speed_class")), []
-    load_cases = build_load_cases(catalog, req, design, test_ids, skipped, beyond=req.get("beyond", []))
+    load_cases = build_load_cases(catalog, req, design, test_ids, skipped, beyond=req.get("beyond", []),
+                                  drive=req.get("drive", []))
     if not load_cases:
         raise CatalogError("no test could be built for this product: "
                            + "; ".join(f"{t}: {why}" for t, why in skipped or []))
@@ -119,6 +120,8 @@ def project_fields(catalog: Catalog, req: Record, load_cases: list[Record]) -> R
         fields["speed_class"] = req["speed_class"]
     if req.get("beyond"):
         fields["beyond"] = list(req["beyond"])
+    if req.get("drive"):
+        fields["drive"] = list(req["drive"])
     if req.get("hearing"):  # docs/contract.md: who settles the missing items (code | claude)
         fields["hearing"] = req["hearing"]
     if req.get("stop_after"):  # docs/contract.md 早めに終わる運転: processes that reopen the run read it here

@@ -130,6 +130,22 @@ class BeyondBuildTest(unittest.TestCase):
         with builders(named_badly), self.assertRaisesRegex(CatalogError, "id ending -beyond"):
             build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], beyond=["H1"])
 
+    def test_the_drive_record_feeds_nothing(self):
+        """requirements `drive`: P1's record of the run at speed (record_run speed), no criterion, feeding nothing,
+        so R1 keeps reading the push's forces."""
+        out = build_load_cases(self.catalog, self.req, fakes.loaded_design(), ["P1", "R1"], drive=["P1"])
+        by_id = {lc["load_case_id"]: lc for lc in out}
+        self.assertEqual(list(by_id), ["P1-step100", "R1-step100", "P1-step100-drive"])
+        drive = by_id["P1-step100-drive"]
+        self.assertEqual(drive["params"]["record_run"], "speed")
+        self.assertEqual(drive["params"]["step_height"], by_id["P1-step100"]["params"]["step_height"])
+        self.assertNotIn("criterion", drive)
+        self.assertNotIn("feeds", drive)
+        self.assertEqual(by_id["P1-step100"]["feeds"], ["R1-step100"])
+        self.assertEqual(contract.errors("load_case", drive), [])
+        with self.assertRaisesRegex(CatalogError, "no drive record"):
+            build_load_cases(self.catalog, self.req, fakes.loaded_design(), [], drive=["H1"])
+
 
 class SystemCheckTest(BuildersCase, unittest.TestCase):
     """A system rule (category system) that hits a part turns the assembly tile red."""

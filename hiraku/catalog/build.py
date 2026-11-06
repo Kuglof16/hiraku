@@ -7,6 +7,7 @@ sets a limit or a tolerance.
 
 from __future__ import annotations
 
+import copy
 import importlib
 import math
 import sys
@@ -385,15 +386,46 @@ def _build_one(catalog: Catalog, req: Record, design: Record, tid: str, beyond: 
 
 def _feeds(up: Record, down: Record) -> bool:
     """Feeds join load cases of the same kind: past the limit to past the limit, and of the same
-    step height when both have one."""
+    step height when both have one. A case that records the drive at speed (record_run = speed: its record's
+    forces are the drive's, not the push's) feeds nothing."""
+    if up.get("params", {}).get("record_run") == "speed":
+        return False
     a, b = up.get("params", {}).get("step_height"), down.get("params", {}).get("step_height")
     return is_beyond(up) == is_beyond(down) and (a is None or b is None or a == b)
 
 
+DRIVE_SUFFIX = "-drive"
+DRIVE_TITLE = "走って向かう記録 (判定なし)"
+
+
+def _p1_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
+    """P1's drive record: the same step and speed, step_climb_dynamic's record of the run at speed
+    (record_run = speed), no criterion and feeding nothing (for the screen and the video to show the
+    vehicle driving over the step at 1x)."""
+    cases = _build_one(catalog, req, design, "P1", False)
+    out = []
+    for lc in cases:
+        if is_beyond(lc):
+            continue
+        d = copy.deepcopy(lc)
+        d["load_case_id"] = lc["load_case_id"] + DRIVE_SUFFIX
+        d["title"] = f"{DRIVE_TITLE}: {lc['title']}"
+        d["params"] = dict(d["params"], record_run="speed")
+        d.pop("criterion", None)
+        d.pop("feeds", None)
+        out.append(d)
+    return out
+
+
+DRIVE_BUILDERS = {"P1": _p1_drive}
+
+
 def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],
-                     skipped: list[tuple[str, str]] | None = None, beyond: list[str] = ()) -> list[Record]:
+                     skipped: list[tuple[str, str]] | None = None, beyond: list[str] = (),
+                     drive: list[str] = ()) -> list[Record]:
     """One load case per test, then the ones past the limit for each test in `beyond` (the
-    catalog spec with variant "beyond"; P1 gives two). A test without a builder, or whose
+    catalog spec with variant "beyond"; P1 gives two), then the drive records of each test in `drive`
+    (DRIVE_BUILDERS: id ending -drive, no criterion, feeding nothing). A test without a builder, or whose
     builder cannot build from these requirements and this design (CatalogError, or the
     builders' BuildError: both ValueError), raises; with `skipped` given it is
     left out and (test id, reason) is appended there. Two load cases with one id
@@ -408,6 +440,19 @@ def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: li
             if skipped is None:
                 raise
             skipped.append((tid, f"{BEYOND_TITLE}: {e}" if past else str(e)))
+    for tid in drive:
+        if tid not in DRIVE_BUILDERS:
+            msg = f"test {tid} has no drive record (only " + ", ".join(DRIVE_BUILDERS) + ")"
+            if skipped is None:
+                raise CatalogError(msg)
+            skipped.append((tid, msg))
+            continue
+        try:
+            out.extend(DRIVE_BUILDERS[tid](catalog, req, design))
+        except ValueError as e:
+            if skipped is None:
+                raise
+            skipped.append((tid, f"{DRIVE_TITLE}: {e}"))
     seen: dict[str, str] = {}
     for lc in out:
         if lc["load_case_id"] in seen:
