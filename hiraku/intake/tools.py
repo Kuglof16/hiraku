@@ -23,7 +23,7 @@ from hiraku.contract import layout
 from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck, tradeoff
-from hiraku.intake.domains import IntakeError, add_tests, pick_domains, reasons_missing
+from hiraku.intake.domains import IntakeError, add_tests, ids_in as domains_ids_in, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
 from hiraku.intake.products import ANSWERS_SUFFIX, PRODUCTS_DIR, load_product, product_files
 
@@ -178,6 +178,9 @@ def _rule_questions(ctx: Any, raw: Any) -> list[Record]:
         problems = contract.errors("rule_question", q)
         if problems:
             raise IntakeError("rule_hits の 1 件が契約の形ではありません: " + "; ".join(str(p) for p in problems[:2]))
+        if (bad := domains_ids_in(q["text"], [q["rule_id"], *q["parts"]])):
+            raise IntakeError(f"rule_hits の text に番号や部品の ID ({'・'.join(bad)}) が入っています。text は人の言葉で、規則の中身と、"
+                              "当たった部品を「電池」のように名前で書いてください (規則の番号・Q の番号・部品の ID は書かない。番号は rule_id と parts に入れる)")
         if q["rule_id"] not in known:
             raise IntakeError(f"規則 {q['rule_id']} はこの実行にありません。ある規則: {', '.join(sorted(known))}")
         if q["rule_id"] in advice_ids:
@@ -585,7 +588,8 @@ TOOLS: dict[str, Record] = {
             "answers_file は data/requirements/products/ の答えのファイル (パス data/requirements/products/<名前>.answers.yaml か、名前だけ)。"
             "Q30 の答えは見る組み合わせ (empty・driver・two・two_cargo か、空車・運転者だけ・2 人・2 人 + 荷)。質問を製品に合わせて言い換えたいときは wording "
             "({番号: 文})、選択肢を変えたいときは choices。画面の人の答えを待ちたいときは wait_seconds (質問を画面に出し、"
-            "答えが来るか時間が切れるまで待つ)。"
+            "答えが来るか時間が切れるまで待つ)。規則に当たったことを聞く rule_hits の text は、人の言葉で書く: 規則の中身と、当たった部品を"
+            "「電池」のように名前で書き、規則の番号・Q の番号・部品の ID は書かない (番号は rule_id と parts に入れる。書くと断られる)。"
         ),
         "input_schema": contract_input("ask_user"),
         "function": ask_user_tool,
