@@ -129,6 +129,29 @@ export function buildModel(events, options = {}) {
 // ----------------------------------------------------------------------------- A1
 
 /** One card per analysis domain, in the contract's order: lit (picked), off, or not yet decided. */
+/** The domain in everyday words (what it keeps from going wrong), shown under its name. */
+export const DOMAIN_PLAIN = {
+  handling: "倒れない・よけられる", powertrain: "走る力", aero: "風", crash: "ぶつかったとき",
+  strength: "壊れない", nvh: "揺れ・音", thermal: "熱くなりすぎない",
+};
+
+const TEST_ID = /(^|[^A-Za-z0-9])[A-Z][0-9]{1,2}([^A-Za-z0-9]|$)/;
+
+/** What a domain's pet says. Only words of the record: the reason of domains.picked when it is not the code's own
+ *  sentence (that one lists test ids), else the domain's plain words; a domain left off says so and gives the record's
+ *  reason up to its colon (the rest names tests; a sentence that still names tests is left to the details). `full` is the whole reason, for the details. */
+export function saidOf(c) {
+  const reason = (c.reason || "").trim();
+  const code = TEST_ID.test(reason);
+  if (c.state === "wait") return { text: "…考えています", full: "" };
+  if (c.state === "off") {
+    const head = reason.includes(":") ? reason.split(":")[0].trim() : reason;
+    return { text: head && !TEST_ID.test(head) ? `今回は見ません。${head}` : "今回は見ません", full: reason }; // a sentence naming tests stays in the details
+  }
+  if (!reason || code) return { text: DOMAIN_PLAIN[c.domain] ? `「${DOMAIN_PLAIN[c.domain]}」を調べます` : "", full: reason, code };
+  return { text: reason, full: reason, code };
+}
+
 export function domainCards(m) {
   const picks = new Map((m.domains?.picks || []).map((p) => [p.domain, p]));
   const off = new Map((m.domains?.off || []).map((o) => [o.domain, o]));
