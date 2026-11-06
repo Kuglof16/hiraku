@@ -393,8 +393,9 @@ class CrashBeamTool(K2Tool):
             # what this C1 model leaves out (the user's decision: C1 judged on this model to the submission)
             "not in this model: the floor and deck plates as plates (their mass is on the frame's nodes, but they "
             "do not brace the frame) and the rims' crushing (a wheel's rim stops at the wall once its tyre is "
-            "through). Either can move the result a lot (not checked): with the floor as a rigid box the least room "
-            "on demo v1 was -12 mm, without it -497 mm with a split, against -196 mm here (K2's runs, 2026-11-06). "
+            "through). Either can move the result a lot (not checked): on demo v1 with tyre_stiffness 60 N/mm, the "
+            "least room was -12 mm with the floor as a rigid box and -497 mm with a split without it, against -196 mm "
+            "here (-191 mm with v1's own tyre_stiffness, 150 N/mm) (K2's runs, 2026-11-06). "
             "床の板が骨組みを支える力と、車輪のリムがつぶれることは、このモデルに入っていない (結果を大きく動かすことがある)",
             f"peak_decel and the deceleration series: the whole mass's deceleration, the wall's impulse over each "
             f"{WINDOW * 1000:g} ms / (the total mass x {WINDOW * 1000:g} ms), recorded every {REC_DT * 1000:g} ms; "
