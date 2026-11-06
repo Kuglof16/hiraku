@@ -62,8 +62,9 @@ UPPER_PIVOT_DROP_MM = 15.0  # K2: the upper arm's inner pivots 15 mm below its b
 BRACKET_T_MM = 3.2  # plate thickness, two plates per bracket
 BRACKET_HALF_X_MM = 25.0  # the bracket's half length along x around its point
 BRACKET_PAD_MM = 15.0  # the bracket's box this far beyond its point
-SINGLE_POST_LEAN_MM = 20.0  # a tower of one post leans out this much at its top (assumption: not square to the rail)
-SINGLE_POST_LEAN_X_MM = 2.0  # and back this much (any lean will do; more brings it to the upper arm's legs)
+SINGLE_POST_LEAN_X_MM = 2.0  # a tower of one post leans back this much at its top (assumption: not square to the rail;
+# any lean will do; more brings it to the upper arm's legs). It does not lean across the rail: its foot is the station
+# node on the rail's centre line, so a lean across would move its footprint on the rail's top face off centre
 RACK_RADIUS_MM = 25.0  # the rack housing (kit/steering.RACK_RADIUS_MM): the clamp reaches over it
 # the suspension brackets' joint (part.joint; R9): defaults of the design variables mount_plate_t (BRACKET_T_MM),
 # mount_bolt_d and mount_weld_leg (ladder_4w.VARIABLES)
@@ -323,11 +324,12 @@ def place(frame, lay: Layout, supports: list[Record], sections: Record, rho: flo
         over = frame.node(f"{tag}m", [float(du[0]), ry, z_top])
         tip = frame.node(f"{tag}d", du.tolist())
         if posts[1] is None and posts[2] is None:  # the rails either side kept whole: one post on the station node,
-            # leaning out and back (so that the station's T joint, where gussets go, stays the cross member's alone,
-            # and the hand calculations, which take a member at the node along x as the rail and across y as the
-            # cross member, see neither in it)
+            # leaning back (so that the station's T joint, where gussets go, stays the cross member's alone, and the
+            # hand calculations, which take a member at the node along x as the rail and across y as the cross
+            # member, see neither in it). Its top stays over the rail's centre line (no lean across y): its section
+            # is then square to y (K1's axes) and its footprint on the rail's top face centred on the rail
             frame.nodes.pop(over)
-            over = frame.node(f"{tag}m", [float(du[0]) - SINGLE_POST_LEAN_X_MM, ry + sy * SINGLE_POST_LEAN_MM, z_top])
+            over = frame.node(f"{tag}m", [float(du[0]) - SINGLE_POST_LEAN_X_MM, ry, z_top])
             out["members"].append(frame.member(f"tower_post_{tag}", s["frame_node"], over, sections["tower"]))
         for i, dx in dxs.items():
             if posts[i] is None:
