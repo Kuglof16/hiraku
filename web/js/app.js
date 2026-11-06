@@ -54,6 +54,7 @@ import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
+import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -127,6 +128,10 @@ for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui
 if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
 // heat: ?on=heat shows the energy's flow with any analysis picked (the newest thermal one of the design shown)
 const HEAT_FORCED = (params.get("on") ?? "").split(",").includes("heat");
+// ?play=loop&analysis=<id>: the playhead held where it arrived, its motion looped at 1x (anim_loop.js)
+const animLoop = loopFromParams(params);
+if (animLoop && !ui.pinnedTab && !ui.tabPlan.length) ui.pinnedTab = "bench";
+if (animLoop) $("ab-play").style.display = "none"; // (the loop's clock moves the motion, not ▶)
 
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
@@ -1465,6 +1470,7 @@ const animRate = (motion) => Math.max(1, motion.duration / ANIM_MAX_S);
 // analysis arrived in the replay and runs at animRate, so a frozen ?t= frame
 // always shows the same pose.
 function animTau(s, ana, motion) {
+  if (animLoop?.covers(ana)) return animLoop.tau(motion);
   if (ui.anim.local && ui.anim.key === ana.analysis_id) return ui.anim.tau;
   const tf = s.tOf[ana.analysis_id] ?? 0;
   return motion.t0 + Math.max(0, Math.min(motion.duration, (player.playhead - tf) * animRate(motion)));
@@ -1736,9 +1742,10 @@ function draw() {
   // picked there), apart from ③'s own pick
   const span = openSpan(tab);
   const view = viewOf(tab, span);
-  const lcId = span ? ui.gridLc ?? domainLcAt(span, player.playhead) : selectedLc(s);
+  const loopChain = animLoop?.chain(s, chainFor) ?? null; // play=loop: that analysis' load case and version
+  const lcId = loopChain ? loopChain.shown.load_case_id : span ? ui.gridLc ?? domainLcAt(span, player.playhead) : selectedLc(s);
   const togglesKey = JSON.stringify(ui.toggles);
-  const chain = chainFor(s, lcId, s.currentVersion);
+  const chain = loopChain ?? chainFor(s, lcId, s.currentVersion);
   const motion = motionFor(chain.shown);
   if (resolvedMemo.rev !== s.rev || resolvedMemo.s !== s) resolvedMemo = { rev: s.rev, s, set: resolvedHooks(s) };
   const resolved = resolvedMemo.set;
@@ -1827,6 +1834,7 @@ function draw() {
   renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
   if (view === "bench") {
+    animLoop?.aim(bench); // play=loop: ?cam=side stands still beside the step
     bench.render();
     if (cmpView && !cmpView.el.hidden) {
       cmpView.bench.animate(player.playhead, false);
@@ -1860,6 +1868,7 @@ function loop(ts) {
   // Moving the replay hands the test's motion back to the replay clock.
   if (lastPlayhead !== null && player.playhead !== lastPlayhead) ui.anim.local = false;
   lastPlayhead = player.playhead;
+  animLoop?.tick(dt); // (runs only without a fixed clock: ?loop_t=, ?t= or a seek fix it)
   if (ui.anim.local && ui.anim.playing && shownMotion) {
     const { motion } = shownMotion;
     ui.anim.tau = Math.min(motion.t1, ui.anim.tau + dt * animRate(motion));
@@ -1876,6 +1885,11 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 const END_SNAP_S = 0.05;
 
 async function seekAndDraw(t) {
+  // play=loop: t is the loop's clock, the playhead stays where the analysis arrived (null: clock kept)
+  if (animLoop?.at != null) {
+    animLoop.seekClock(t);
+    t = animLoop.at;
+  }
   ui.frozen = true;
   player.pause();
   player.seek(t >= player.duration - END_SNAP_S ? player.duration : t);
@@ -1897,6 +1911,7 @@ window.hiraku = {
   seek: seekAndDraw,
   state: () => player.state,
   bench,
+  animLoop, // play=loop (anim_loop.js), else null
   modules: modLayer, // modules: what the module layer draws (for the tests)
   heat, // heat: what the energy's flow draws (heat.last, for the tests)
   nodeMotion: nodeView, // node_motion: what the nodes' motion draws (for the tests)
@@ -1906,6 +1921,7 @@ window.hiraku = {
     feed?.stop();
     resetPlayer();
     addEvents(events);
+    animLoop?.findArrival(player.events);
     return seekAndDraw(t);
   },
 };
@@ -2067,6 +2083,10 @@ function startPlayback() {
   Promise.all([petsReady, loadModuleNames()]).then(play); // modules: the module names before the first frame
 }
 function play() {
+  if (animLoop?.findArrival(player.events) != null) {
+    seekAndDraw(params.has("t") ? Number(params.get("t")) || 0 : null).then(() => readyResolve(player.playhead));
+    return;
+  }
   if (params.has("t")) {
     seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
     return;
