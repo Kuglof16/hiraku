@@ -300,7 +300,7 @@ _MAX_VARIABLES = 8  # K5 runs the tool twice for each number and each load case
 
 def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if args.get("design_version") not in (None, ctx.version):
-        raise ToolError(f"感度は今の版 {ctx.version} でだけ出せます (版 {args['design_version']} は指定できません)")
+        raise ToolError(f"感度は今の v{ctx.version} でだけ出せます (v{args['design_version']} は指定できません)")
     if tradeoff.collector is None:
         raise ToolError("この実行には、感度を集めるしくみ (hiraku.tools 側の collector) がまだ登録されていません")
     design = _store(ctx).design()
@@ -315,7 +315,8 @@ def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         raise ToolError("動かす設計の数がありません。variables に設計の変数の名前 (または variables.<名前> などの道) を渡してください")
     got = tradeoff.collector(ctx, paths, set(args.get("quantities") or []))
     sens, meta, bases = got["sens"], got["meta"], got["bases"]
-    pairs = [p for p in tradeoff.find(sens, meta, bases) if all(k in p[s] for s in "ab" for k in ("now", "after"))]
+    labels = {**(design.get("variable_names") or {}), **(got.get("variable_labels") or {})}
+    pairs = [p for p in tradeoff.find(sens, meta, bases, labels=labels) if all(k in p[s] for s in "ab" for k in ("now", "after"))]
     questions = [tradeoff.to_question(p) for p in pairs]
     store = _tradeoffs.setdefault(_store(ctx), {})
     for q in questions:
