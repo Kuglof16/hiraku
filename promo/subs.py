@@ -26,6 +26,7 @@ import array
 import itertools
 import json
 import math
+import re
 import subprocess
 import sys
 import wave
@@ -187,6 +188,12 @@ def place_sentences(lines: list[dict], lead: float = LEAD_S, gap: float = GAP_S,
     return placed
 
 
+def shown_ja(text: str) -> str:
+    """The Japanese line as shown: no 「。」 (the maker's choice, 2026-11-06). One at the end goes; one inside
+    the line becomes a full-width space. The script and the voice keep it."""
+    return re.sub(r"。+(?=.)", "　", text).rstrip("。")
+
+
 def build_cues(placed: list[dict], chunk_starts: list[list[float]]) -> list[Cue]:
     cues = []
     for ln, starts in zip(placed, chunk_starts):
@@ -195,7 +202,7 @@ def build_cues(placed: list[dict], chunk_starts: list[list[float]]) -> list[Cue]
         for k, ch in enumerate(chunks):
             a = ln["at"] + starts[k]
             b = ln["at"] + starts[k + 1] if k + 1 < len(chunks) else end
-            cues.append(Cue(a, b, ch, ln["en"]))
+            cues.append(Cue(a, b, shown_ja(ch), ln["en"]))
     return cues
 
 

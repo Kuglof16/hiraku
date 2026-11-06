@@ -203,7 +203,7 @@ class Capture:
     """One headless Chromium page showing one screen."""
 
     def __init__(self, screen: str | Path, scale: float = 2.0, size: tuple[int, int] = (DESIGN_W, DESIGN_H),
-                 layer: str | None = None, guides: bool = False, gpu: bool = False):
+                 layer: str | None = None, guides: bool = False, gpu: bool = False, inject: Path | None = None):
         from playwright.sync_api import sync_playwright  # only needed here
 
         self._pw = sync_playwright().start()
@@ -221,9 +221,15 @@ class Capture:
         self.page.evaluate(ADAPTER)
         self.page.evaluate("window.__export.ready()")
         self.duration = float(self.page.evaluate("window.__export.duration()"))
+        # filming-side changes (CSS/JS); window.__inject(t) runs after every seek
+        self.inject = bool(inject)
+        if inject:
+            self.page.evaluate(Path(inject).read_text(encoding="utf-8"))
 
     def shoot(self, t: float, path: Path) -> None:
         self.page.evaluate("t => window.__export.seek(t)", t)
+        if self.inject:
+            self.page.evaluate("t => window.__inject && window.__inject(t)", t)
         self.page.screenshot(path=str(path), type="png", omit_background=self.transparent)
         if self.errors:
             raise RuntimeError(f"page error at t={t:.3f}: {self.errors[0]}")
@@ -234,11 +240,12 @@ class Capture:
 
 
 def export_frames(screen: str | Path, out_dir: Path, fps: int, scale: float, start: float,
-                  end: float | None, layer: str | None, size: tuple[int, int], gpu: bool = False) -> int:
+                  end: float | None, layer: str | None, size: tuple[int, int], gpu: bool = False,
+                  inject: Path | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     for old in out_dir.glob("*.png"):
         old.unlink()
-    cap = Capture(screen, scale=scale, size=size, layer=layer, gpu=gpu)
+    cap = Capture(screen, scale=scale, size=size, layer=layer, gpu=gpu, inject=inject)
     try:
         stop = cap.duration if end is None else end
         times = frame_times(start, stop, fps)
@@ -315,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--start", type=float, default=0.0)
     p.add_argument("--end", type=float, default=None)
     p.add_argument("--layer", choices=["fg"], default=None, help="fg: transparent ground")
+    p.add_argument("--inject", type=Path, default=None, help="JS run after load; window.__inject(t) after each seek")
     capture_args(p)
 
     p = sub.add_parser("encode", help="join frames into an mp4")
@@ -340,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
         for path in export_stills(a.screen, a.out_dir, a.at, a.scale, a.guides, a.size, a.gpu):
             print(path)
     elif a.cmd == "frames":
-        export_frames(a.screen, a.out_dir, a.fps, a.scale, a.start, a.end, a.layer, a.size, a.gpu)
+        export_frames(a.screen, a.out_dir, a.fps, a.scale, a.start, a.end, a.layer, a.size, a.gpu, a.inject)
     elif a.cmd == "encode":
         encode(a.frames_dir, a.out, a.fps, a.height, a.crf, a.encoder)
     elif a.cmd == "clip":
