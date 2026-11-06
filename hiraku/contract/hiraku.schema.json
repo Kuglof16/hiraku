@@ -298,6 +298,13 @@
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
         },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a record-only load case (id ending -drive, no criterion, feeding nothing) for the screen and the video: P1 step_climb_dynamic with record_run speed (driving over the step at 1x); S3 the lane change at 1.25 times its speed (near the tyres' limit); S1 rollover_tilt, the tilt table 1 deg past its limit (a computed rollover)."
+        },
         "stop_after": {
           "enum": [
             "picks"
@@ -3970,6 +3977,13 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a record-only load case (id ending -drive, no criterion, feeding nothing) for the screen and the video: P1 step_climb_dynamic with record_run speed (driving over the step at 1x); S3 the lane change at 1.25 times its speed (near the tyres' limit); S1 rollover_tilt, the tilt table 1 deg past its limit (a computed rollover)."
         },
         "stop_after": {
           "enum": [

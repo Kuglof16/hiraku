@@ -1378,7 +1378,7 @@ def first_version(ctx: RunContext, design: Record, req: Record, agent: str) -> l
             no_builder = [t for t in wanted if not _has_builder(catalog, t)]
             skipped = []
             load_cases = build_load_cases(catalog, req, design, [t for t in wanted if t not in no_builder], skipped,
-                                          beyond=req.get("beyond", []))
+                                          beyond=req.get("beyond", []), drive=req.get("drive", []))
             if not load_cases:
                 raise ValueError("no test Claude picked could be built: "
                                  + "; ".join(f"{t}: {why}" for t, why in skipped) if skipped else
@@ -1422,11 +1422,13 @@ def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
     before = ctx.store.version_load_cases(v - 1)
     written = written_inputs(before)  # load cases Claude wrote (write_load_case): made again from their input below
     tests = list(dict.fromkeys(lc["test_id"] for lc in before
-                               if not lc["load_case_id"].endswith("-beyond") and lc["load_case_id"] not in written))
+                               if not lc["load_case_id"].endswith(("-beyond", "-drive"))
+                               and lc["load_case_id"] not in written))
     req = requirements_now(ctx)
     skipped: list = []
     try:
-        built = build_load_cases(load_catalog(), req, design, tests, skipped, beyond=req.get("beyond", []))
+        built = build_load_cases(load_catalog(), req, design, tests, skipped, beyond=req.get("beyond", []),
+                                 drive=req.get("drive", []))
     except ValueError as e:
         built, skipped = [], [("*", str(e))]
     by_id = {lc["load_case_id"]: lc for lc in built}

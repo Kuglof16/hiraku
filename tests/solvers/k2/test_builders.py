@@ -13,7 +13,7 @@ from hiraku import contract, solvers
 from hiraku.catalog import REPO_ROOT, load_requirements
 from hiraku.catalog.builders import BUILDERS as ALL_BUILDERS
 from hiraku.catalog.builders.common import BuildError
-from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND,
+from hiraku.catalog.builders.k2_tests import (BEYOND, BEYOND_FACTOR, BUILDERS, PLANS, PLANS_BEYOND, PLANS_DRIVE,
                                               PREDICTION_ONLY_PARAMS)
 from hiraku.solvers.k2_vehicle.shelf import TOOLS
 from hiraku.solvers.k2_vehicle.units import SI_OF
@@ -58,7 +58,7 @@ class Builders(unittest.TestCase):
 
     def test_the_nine_tests(self):
         self.assertEqual(sorted(BUILDERS), sorted(TOOL_OF))
-        self.assertEqual(set(PLANS), set(BUILDERS))
+        self.assertEqual(set(PLANS), set(BUILDERS) | set(PLANS_DRIVE))  # the drive records' steps by load case id
         for tid, fn in BUILDERS.items():  # the package collects this module (a product's builder may wrap it)
             got = ALL_BUILDERS[tid]
             self.assertIs(getattr(got, "general", got), fn)
@@ -179,8 +179,44 @@ class Plans(unittest.TestCase):
 
     def steps(self):
         """(test id, catalog spec, step) of every plan, the cases past the limit included."""
-        out = [(tid, {"id": tid}, step) for tid, step in PLANS.items()]
+        out = [(tid, {"id": tid}, step) for tid, step in PLANS.items() if tid not in PLANS_DRIVE]
         return out + [(tid, {"id": tid, "variant": "beyond"}, PLANS_BEYOND.get(tid, PLANS[tid])) for tid in BEYOND]
+
+    def drive_case(self):
+        """S1's drive record built from the demo requirements (hiraku.catalog.build DRIVE_BUILDERS)."""
+        from hiraku.catalog import load_catalog
+        from hiraku.catalog.build import DRIVE_BUILDERS
+        (lc,) = DRIVE_BUILDERS["S1"](load_catalog(), self.req, self.design)
+        return lc
+
+    def test_the_drive_record_has_its_own_step_with_the_tools_pair(self):
+        lc = self.drive_case()
+        self.assertEqual(lc["load_case_id"], f"S1-tilt-{lc['params']['loading']}-rollover-drive")
+        self.assertIn(lc["load_case_id"], PLANS_DRIVE)
+        from hiraku.catalog.build import recipe_for
+        step = recipe_for(PLANS, lc)
+        self.assertIs(step, PLANS_DRIVE[lc["load_case_id"]])  # its own step, not S1's
+        self.assertEqual(step["tool"], "rollover_tilt")
+        tool = TOOLS["rollover_tilt"]
+        pairs = {(p["quantity"], p["formula_id"], p["output"]) for p in tool.describe()["predicts"]}
+        self.assertTrue(step["say"])
+        self.assertTrue(step["predictions"])
+        for p in step["predictions"]:
+            self.assertIn((p["quantity"], p["formula_id"], p["output"]), pairs)
+            self.assertEqual(set(p["inputs"]), set(self.formulas[p["formula_id"]]["inputs"]))
+            self.assertTrue(p["assumptions"])
+            # the refs resolve on the drive case and the formula evaluates, as S1's own prediction does
+            frm = p["inputs_from"](self.design, lc)
+            inputs = {k: self.resolve(ref, lc, {}, frm) for k, ref in p["inputs"].items()}
+            out = self.registry.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
+            s1 = BUILDERS["S1"]({"id": "S1"}, self.req, self.design)
+            s1_inputs = {k: self.resolve(ref, s1, {}, p["inputs_from"](self.design, s1)) for k, ref in p["inputs"].items()}
+            self.assertEqual(out, self.registry.evaluate(p["formula_id"], s1_inputs)["outputs"][p["output"]])
+        # the drive case reads only what the tool declares (and the prediction's cargo height)
+        declared = {q["name"] for q in tool.describe()["params"]}
+        self.assertEqual(set(lc["params"]) - declared - set(PREDICTION_ONLY_PARAMS), set())
+        self.assertEqual(lc["params"]["hold_past"], {"value": 1.0, "unit": "deg"})
+        self.assertEqual(lc["tolerance_rel"], BUILDERS["S1"]({"id": "S1"}, self.req, self.design)["tolerance_rel"])
 
     def test_steps_predict_with_paired_formulas(self):
         for tid, _, step in self.steps():
