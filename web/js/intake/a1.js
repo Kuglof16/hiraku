@@ -135,8 +135,8 @@ export function renderA1(el, m, api, ui) {
   const waitN = cards.filter((c) => c.state === "wait").length;
   const decided = !!m.domains && !m.domainsFromProject;
   const headline = draftN ? { title: "HIRAKU が、何を調べるか考えています", note: `候補 ${draftN} / 7 (製品の性質から。選ぶのはこれから)` }
-    : decided && !waitN ? { title: "HIRAKU が調べることを選びました", note: `${lit} 個を調べ${offN ? `、${offN} 個は今回は見ません` : ""}` }
-    : m.domains && !waitN ? { title: "調べることは、決まっている内容からです", note: `7 つのうち ${lit} 個` }
+    : decided && !waitN ? { title: "HIRAKU が調べることを選びました", note: offN ? `${lit} 個を調べ、${offN} 個は今回は見ません` : `${lit} 個を調べます` }
+    : m.domains && !waitN ? { title: "この記録で調べる分野", note: `7 つのうち ${lit} 個` }
     : { title: "HIRAKU が、何を調べるか考えています", note: lit ? `${lit} / 7` : "" };
   const review = reviewLine(m);
   const ask = askingPanel(m, api, ui);
