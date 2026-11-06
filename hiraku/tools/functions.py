@@ -379,13 +379,13 @@ MODULES_HOW = ("モジュールの設計役は revise_design に module を付�
 
 
 def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
-    """For a design with modules: the caller's module (designer.<module>) or every module (others), each with
-    its variables (current values), choices (the values the generator offers), envelope and interfaces, and the
-    round's pending proposals. None for a design without modules."""
+    """For a design with modules: the caller's modules (those whose owner it is: a design role may own several) or
+    every module (others), each with its variables (current values), choices (the values the generator offers),
+    envelope and interfaces, and the round's pending proposals. None for a design without modules."""
     mods = rules.design_modules(ctx)
     if mods is None:
         return None
-    mine = agent.split(".", 1)[1] if agent and agent.startswith("designer.") else None
+    mine = rules.owned_modules(mods, agent)
     values = {x["name"]: x["value"] for x in design_variables(ctx) or []}
     offered = (design_choices(ctx) or {}).get("choices") or {}
 
@@ -399,8 +399,8 @@ def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
             out["interfaces"] = _interface_groups(m["interfaces"])
         return out
 
-    whole = mine in mods
-    shown = [mods[mine]] if whole else list(mods.values())
+    whole = bool(mine)
+    shown = [mods[m] for m in mine] if whole else list(mods.values())
     out = {"design_version": ctx.version, "how": MODULES_HOW, "modules": [one(m, whole) for m in shown],
            "pending": [_proposal_line(c) for c in ctx.store.pending_proposals()]}
     if not whole:
@@ -1445,7 +1445,7 @@ def _who_changes(design: Record, said: str, tool: str) -> str:
         if mid == "package":
             steps.append(f"{'・'.join(keys)} はレイアウトの変数: パッケージ役が build_version の changes で変える")
         else:
-            steps.append(f"{'・'.join(keys)} は{contract.MODULE_NAMES_JA.get(mid, mid)}の変数: designer.{mid} が "
+            steps.append(f"{'・'.join(keys)} は{contract.MODULE_NAMES_JA.get(mid, mid)}の変数: {rules.module_owner(mods, mid)} が "
                          f"revise_design (module={mid}) で出し直す (前の提案は置き換わる。パッケージ役はまとめ役に返す)")
     return "次にすること: " + "。".join(steps) + f"。そのあと {tool} を呼び直す"
 
@@ -1574,10 +1574,11 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     The scripted run's `fit: driver` (scripted.fit_driver) runs before this call and puts the fitted values
     into `changes`, so a fit that moves a variable outside the module is refused here like any other."""
     module = args.get("module")
-    agent = agent or (f"designer.{module}" if module else None)
+    owner = rules.module_owner(rules.design_modules(ctx), module) if module else None
+    agent = agent or owner
     v = ctx.version
     _gate(ctx, "revise_design", args, agent)
-    if not module or agent != f"designer.{module}":  # _gate's HK6 denies these; kept so a skipped check cannot pass
+    if not module or agent != owner:  # _gate's HK6 denies these; kept so a skipped check cannot pass
         raise ToolError("この設計はモジュールに分かれているので、revise_design は module を付けて、そのモジュールの設計役が呼びます")
     reason = args["reason"].strip()
     if not reason:

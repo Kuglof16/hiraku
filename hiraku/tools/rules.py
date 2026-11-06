@@ -233,6 +233,20 @@ def design_modules(ctx: RunContext) -> dict[str, Record] | None:
     return {m["module_id"]: m for m in mods} if mods else None
 
 
+def module_owner(mods: dict[str, Record] | list[Record] | None, module: str) -> str:
+    """The role that answers for a module: its owner in the design (design.modules, set by the design's generator:
+    one designer role may own several modules), else designer.<module> (package: the packager)."""
+    if isinstance(mods, list):
+        mods = {m["module_id"]: m for m in mods}
+    owner = ((mods or {}).get(module) or {}).get("owner")
+    return owner or ("packager" if module == "package" else f"designer.{module}")
+
+
+def owned_modules(mods: dict[str, Record] | None, agent: str | None) -> list[str]:
+    """The modules of the design whose owner is this agent, in the design's order."""
+    return [mid for mid in (mods or {}) if mid != "package" and module_owner(mods, mid) == agent]
+
+
 def _module_ja(m: str) -> str:
     return f"{contract.MODULE_NAMES_JA.get(m, m)} ({m})"
 
@@ -276,9 +290,10 @@ def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | Non
                                 "パッケージ役に、何をなぜ変えたいかを伝えてください"))
         if module not in mods:
             return Denial(HK6, f"モジュール {module} はこの設計にありません。あるのは {', '.join(mods)} です")
-        if agent is not None and agent != f"designer.{module}":
-            return Denial(HK6, (f"{_module_ja(module)}の提案を出せるのは、そのモジュールの設計役 (designer.{module}) だけです "
-                                f"(呼んだのは {agent})。そのモジュールを変えたいときは、まとめ役から designer.{module} に頼んでください"))
+        owner = module_owner(mods, module)
+        if agent is not None and agent != owner:
+            return Denial(HK6, (f"{_module_ja(module)}の提案を出せるのは、そのモジュールの持ち主の設計役 ({owner}) だけです "
+                                f"(呼んだのは {agent})。そのモジュールを変えたいときは、まとめ役から {owner} に頼んでください"))
         bad = outside_module(mods, module, args)
         if bad:
             return Denial(HK6, "自分のモジュールの外は変えられません: " + "; ".join(bad)

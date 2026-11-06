@@ -234,7 +234,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(got["causeId"], "cause-0001")
         self.assertEqual(got["cmpOrder"], ["cmp-0001"])
-        self.assertIn("bad", got["cmpCard"])
+        self.assertIn("warn", got["cmpCard"])  # a mismatch: attention (orange), not red
         self.assertIn("unit mix-up", got["causeBox"])
         self.assertEqual(got["hookLines"], 2)
         # the comparison sent again with its cause_id rewrites its own line
@@ -266,7 +266,7 @@ class BrowserReplayTest(unittest.TestCase):
         # two predictions went into the analysis; the card follows the one that was compared
         self.assertIn("最大応力", first["pred"])
         self.assertNotIn("最大変位", first["pred"])
-        self.assertIn("bad", first["cmpCard"])
+        self.assertIn("warn", first["cmpCard"])
         self.assertIn("90", first["cmp"])
         end = page.evaluate(
             """async () => {
@@ -283,7 +283,7 @@ class BrowserReplayTest(unittest.TestCase):
               };
             }"""
         )
-        self.assertIn("bad", end["cmpCard"])  # the comparison stays a mismatch
+        self.assertIn("warn", end["cmpCard"])  # the comparison stays a mismatch
         self.assertIn("食い違い", end["badge"])
         self.assertEqual(end["mark"], "安全側で判定")
         self.assertIn("one rail, so it stays above", end["why"])

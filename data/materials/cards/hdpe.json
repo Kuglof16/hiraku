@@ -12,10 +12,11 @@
       "checked": false
     },
     "nu": {
-      "value": 0.4,
-      "kind": "assumption",
-      "source": "hiraku/designgen/ladder_4w.py (HDPE): a round value; not read in a source (Goodfellow's generic HDPE page lists 0.46, see .notes/M1-differences.md)",
-      "checked": false
+      "value": 0.46,
+      "kind": "typical",
+      "source": "secondary: Goodfellow product page 'HDPE Granules' (code ET32-GL-000110), property list, Poisson's ratio 0.46 for generic HDPE; the same as hiraku/designgen/ladder_4w.py (HDPE) since the analysis department's change",
+      "checked": true,
+      "checked_on": "2026-11-06"
     },
     "density_kg_m3": {
       "value": 950.0,

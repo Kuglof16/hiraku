@@ -1511,7 +1511,13 @@ def load_path_known_answers() -> list[Record]:
                             "box_deflection", v + th * e + P / k.k_t + P * e * e / k.k_r, got, "mm", tol,
                             "cantilever with a force P and a moment P e at the contact (a from the root): "
                             "v = P a^3/(3EI) + M a^2/(2EI), theta = P a^2/(2EI) + M a/(EI); the box adds theta e and the "
-                            "contact spring P/k_t + P e^2/k_r"))
+                            "contact spring P/k_t + P e^2/k_r",
+                            case_ja=(f"片持ちの角パイプ {rect['dims_mm']['b']:g}x{rect['dims_mm']['h']:g}x"
+                                     f"{rect['dims_mm']['t']:g}、長さ {L / 1e3:g} m。先に載せた変形しない箱を、箱の中心で "
+                                     f"{P / 1e3:g} kN 下へ押す"),
+                            source_ja=("片持ち梁の接点 (根元から a) に力 P と回す力 P e: v = P a^3/(3EI) + M a^2/(2EI)、"
+                                       "theta = P a^2/(2EI) + M a/(EI)。箱の分 theta e と、接点のばねの分 P/k_t + P e^2/k_r "
+                                       "を足す")))
 
     # 2. a chain of three boxes stacked on the middle of a beam clamped at both ends, pushed down through the chain
     L = 1000.0
@@ -1530,7 +1536,11 @@ def load_path_known_answers() -> list[Record]:
     out.append(check_record("three boxes stacked on the middle of a 1 m beam clamped at both ends, 1 kN down the chain",
                             "top_deflection", P * L ** 3 / (192 * E * sec["Iz"]) + springs, got, "mm", tol,
                             f"springs in series and the beam: P L^3/(192 E I) + sum P/k_t over the {len(cs)} contacts "
-                            "(the load passes through every contact point: no moment)"))
+                            "(the load passes through every contact point: no moment)",
+                            case_ja=(f"両端を固定した長さ {L / 1e3:g} m の梁の真ん中に箱を {len(boxes)} つ積み、その列を通して "
+                                     f"{P / 1e3:g} kN を下へ"),
+                            source_ja=(f"直列につないだばねと梁: P L^3/(192 E I) + {len(cs)} か所の接点の P/k_t の和 "
+                                       "(荷重はどの接点も通るので、回す力は無い)")))
 
     # 3. floating bodies are found: one box alone, and two boxes touching each other but nothing else
     d = _bare({"A": (0.0, 0.0, 0.0), "B": (L, 0.0, 0.0)}, [("m", "A", "B")],
@@ -1539,11 +1549,16 @@ def load_path_known_answers() -> list[Record]:
                _box("pair2", (250.0, 300.0, 300.0), (50.0, 50.0, 50.0))], rect)
     lp = build(d, find_contacts(d), holds={"A": "all"})
     free = free_parts(lp)
+    free_ja = "梁に載った箱、どこにも触れない箱、互いにだけ触れる箱 2 つ"
     out.append(check_record("a box on a beam, a box alone and two boxes touching only each other", "free_parts",
                             3.0, float(len(free)), "1", 0.0, "the box alone and the touching pair are free rigid bodies "
-                            "(fe.precheck.rigid_body_check); the box on the beam is held"))
+                            "(fe.precheck.rigid_body_check); the box on the beam is held",
+                            case_ja=free_ja,
+                            source_ja=("どこにも触れない箱と、触れ合う 2 つの箱は、支えの無い剛体 (fe.precheck.rigid_body_check)。"
+                                       "梁に載った箱は支えられている")))
     out.append(check_record("a box on a beam, a box alone and two boxes touching only each other", "held_box_free",
-                            0.0, float("held" in free), "1", 0.0, "the box on the beam is not free"))
+                            0.0, float("held" in free), "1", 0.0, "the box on the beam is not free",
+                            case_ja=free_ja, source_ja="梁に載った箱は浮いていない"))
 
     # 4. a rigid box on two posts: the weight splits by the lever rule
     H, span, xc, m = 500.0, 2000.0, 600.0, 50.0
@@ -1558,6 +1573,11 @@ def load_path_known_answers() -> list[Record]:
     dofs = lay.element_dofs(lp.beams.conn, 6)
     N_ax = lp.beams.axial_force(lp.model.nodes, lay.from_node_array(U)[dofs])
     W = m * STANDARD_GRAVITY
+    sq_sec = sections.properties(sq)
+    r_g = math.sqrt(sq_sec["Iz"] / sq_sec["A"])  # the tube's radius of gyration
+    tilt_ja = (f"てこの法則: post1 が W (span - x)/span、post2 が W x/span を受ける。柱の縮み方の違いで板が傾き、柱を曲げる。"
+               f"その分は、柱の端の回る硬さと、軸の硬さ × span^2 の比ほどで、4 r^2/span^2 = "
+               f"{100.0 * 4.0 * r_g ** 2 / span ** 2:.2f} % (r は管の断面二次半径 {r_g:.1f} mm)")
     for post, share in (("post1", (span - xc) / span), ("post2", xc / span)):
         e = min(i for i, mid in enumerate(lp.elem_member) if mid == post)  # the bottom element (the posts weigh 0)
         out.append(check_record(f"a rigid 50 kg slab on two posts {span:g} mm apart, its centre {xc:g} mm from post1",
@@ -1565,7 +1585,10 @@ def load_path_known_answers() -> list[Record]:
                                 "lever rule: post1 carries W (span - x)/span, post2 W x/span. The slab tilts by the "
                                 "posts' different shortening and bends them; that share is about the ratio of a post's "
                                 "end rotation stiffness to its axial stiffness times span^2, 4 r^2/span^2 = 0.02 % "
-                                "(r the tube's radius of gyration, 15.5 mm)"))
+                                "(r the tube's radius of gyration, 15.5 mm)",
+                                case_ja=(f"{m:g} kg の変形しない板が、{span:g} mm 離れた 2 本の柱に載る。板の中心は post1 から "
+                                         f"{xc:g} mm"),
+                                source_ja=tilt_ja))
 
     out.append(plate_strip_known_answer())
     out += cable_known_answers()
@@ -1595,12 +1618,21 @@ def utilisation_known_answers() -> list[Record]:
             f"{P:g} N at the tip, safety factor {sf:g}")
     src = ("utilisation = M / Z / (yield / sf) at each member's root (M = P x from the tip); the root has twice the "
            "stress, the tip a quarter of the yield")
-    return [check_record(case, "max_stress", s_root, r["max_stress"]["value"], "MPa", 1e-6, "sigma = P L / Z at the root"),
-            check_record(case, "max_utilisation", s_tip * sf / y_tip, r["max_utilisation"]["value"], "1", 1e-6, src),
+    dims = sq["dims_mm"]
+    case_ja = (f"長さ {L / 1e3:g} m の片持ちの角パイプ {dims['b']:g}x{dims['h']:g}x{dims['t']:g}。根元の半分は降伏 "
+               f"{y_root:g} MPa、先の半分は {y_tip:g} MPa、先に {P:g} N、安全率 {sf:g}")
+    src_ja = ("使用率 = M / Z / (降伏 / 安全率) を部材ごとの根元で (M = P × 先からの距離)。根元は応力が 2 倍、先は降伏が "
+              "4 分の 1")
+    return [check_record(case, "max_stress", s_root, r["max_stress"]["value"], "MPa", 1e-6, "sigma = P L / Z at the root",
+                         case_ja=case_ja, source_ja="根元で sigma = P L / Z"),
+            check_record(case, "max_utilisation", s_tip * sf / y_tip, r["max_utilisation"]["value"], "1", 1e-6, src,
+                         case_ja=case_ja, source_ja=src_ja),
             check_record(case, "max_utilisation_is_the_tip", 1.0, float(r["max_utilisation"]["where"] == "tip"), "1",
-                         0.0, "the tip member, not the root (where the stress is largest), governs"),
+                         0.0, "the tip member, not the root (where the stress is largest), governs",
+                         case_ja=case_ja, source_ja="決めるのは先の部材で、(応力がいちばん大きい) 根元ではない"),
             check_record(case, "allowable_stress", y_tip / sf, r["allowable_stress"]["value"], "MPa", 1e-9,
-                         "the tip's own yield / sf")]
+                         "the tip's own yield / sf",
+                         case_ja=case_ja, source_ja="先の部材の降伏 / 安全率")]
 
 
 def taut_cable_deflection(P: float, L: float, EA: float, T0: float) -> float:
@@ -1639,11 +1671,18 @@ def cable_known_answers() -> list[Record]:
     U, _ = newton_solve(model, cab, F)
     case = (f"a steel wire {d:g} mm, {L:g} mm between fixed ends, pretension {sigma0:g} MPa ({T0:.1f} N), {P:g} N across "
             f"at its middle ({n} cables)")
+    case_ja = (f"径 {d:g} mm の鋼の線、両端を止めた間が {L:g} mm、初めの引張り {sigma0:g} MPa ({T0:.1f} N)、真ん中に横から "
+               f"{P:g} N ({n} 本のケーブル要素)")
     return [check_record(case, "linear_deflection", P * L / (4.0 * T0), float(lin), "mm", 1e-9,
-                         "the first Newton step (the pretension's geometric stiffness alone): w = P L / (4 T0)"),
+                         "the first Newton step (the pretension's geometric stiffness alone): w = P L / (4 T0)",
+                         case_ja=case_ja,
+                         source_ja="ニュートン法の 1 歩目 (初めの引張りによる形の硬さだけ): w = P L / (4 T0)"),
             check_record(case, "sag", taut_cable_deflection(P, L, E * A, T0), float(U[n // 2, 1]), "mm", 1e-6,
                          "the taut string with stretch: P = 2 T w / sqrt(a^2 + w^2), T = T0 + EA (sqrt(a^2 + w^2) - a) / a, "
-                         "a = L / 2 (statics of the two halves; solved by bisection)")]
+                         "a = L / 2 (statics of the two halves; solved by bisection)",
+                         case_ja=case_ja,
+                         source_ja=("伸びる張った糸: P = 2 T w / sqrt(a^2 + w^2)、T = T0 + EA (sqrt(a^2 + w^2) - a) / a、"
+                                    "a = L / 2 (半分ずつの力のつり合い。二分法で解く)"))]
 
 
 def plate_strip_known_answer() -> Record:
@@ -1676,7 +1715,13 @@ def plate_strip_known_answer() -> Record:
                         "the strip is a beam of I = b t^3/12 between the contacts, with end moments M from "
                         "compatibility (P L^2/(16EI) - M L/(2EI) = M (1/k_r + Lr/(4GJ))): "
                         "P L^3/(48EI) - M L^2/(8EI); plus the contact springs P/(2 k_t) and each rail clamped at both "
-                        "ends under P/2 at its middle, (P/2) Lr^3/(192 E I_rail)")
+                        "ends under P/2 at its middle, (P/2) Lr^3/(192 E I_rail)",
+                        case_ja=(f"幅 {b:g} x 厚さ {t:g} mm の鋼の板の帯を、{L:g} mm 離れた 2 本のレール (どちらも長さ "
+                                 f"{Lr:g} mm で両端を固定) に渡し、真ん中に {P:g} N を下へ"),
+                        source_ja=("帯は接点の間の I = b t^3/12 の梁で、両端の回す力 M はたわみ角が合う条件 "
+                                   "(P L^2/(16EI) - M L/(2EI) = M (1/k_r + Lr/(4GJ))) から: P L^3/(48EI) - M L^2/(8EI)。"
+                                   "これに接点のばね P/(2 k_t) と、両端を固定したレールの真ん中に P/2 がかかる分 "
+                                   "(P/2) Lr^3/(192 E I_rail) を足す"))
 
 
 # ------------------------------------------------------------------ the tool

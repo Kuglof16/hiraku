@@ -115,15 +115,20 @@ def split_by_module(design: Record, changes: Record, choices: Record) -> tuple[d
     return {m: by[m] for m in order}, package, stray
 
 
-def revision_hits(design: Record, routed: dict[str, list[str]], rev: Record) -> bool:
+def revision_hits(design: Record, routed: dict[str, list[str]], rev: Record, red_mods: dict | None = None) -> bool:
     """Whether a plan entry answers a red of the version on a design with modules: one of the entry's modules (or
-    the packager, for package variables) is where the reds go (routed: roles.route_reds). No routed red (a rule's
-    red tile), names no module owns (revise_modules says so) and a driver fit with no changes of its own count as
-    hits, as before this check."""
+    the packager, for package variables) is where the reds go (routed: roles.route_reds; red_mods, when given:
+    roles.red_modules, the modules themselves, so that a role owning several modules does not take in a module no
+    red is for). No routed red (a rule's red tile), names no module owns (revise_modules says so) and a driver fit
+    with no changes of its own count as hits, as before this check."""
+    from hiraku.agent.roles import module_agent
+
     by, package, stray = split_by_module(design, dict(rev.get("changes") or {}), dict(rev.get("choices") or {}))
     if stray or not routed or (not by and not package and rev.get("fit") == "driver"):
         return True
-    return any(f"designer.{m}" in routed for m in by) or bool(package and "packager" in routed)
+    if red_mods is not None:
+        return any(m in red_mods for m in by) or bool(package and "packager" in routed)
+    return any(module_agent(m, design) in routed for m in by) or bool(package and "packager" in routed)
 
 
 def room_for(previous: Record, merged: Record) -> dict[str, list[Record]]:
@@ -222,14 +227,17 @@ def _say(ctx: RunContext, agent: str, lc: Record, text: str) -> None:
 
 
 def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pred_ids: list[str],
-                         expected: Record | None = None) -> Record | None:
-    """Analyze, then compare every prediction the analysis has a result for.
+                         expected: Record | None = None, params: Record | None = None) -> Record | None:
+    """Analyze, then compare every prediction the analysis has a result for. params: the plan step's own
+    (analyze's params, e.g. step_climb_dynamic's record_run: speed for a record of the drive over the step).
 
     Returns the comparison of the expected mismatch when it happened (later
     compares in the domain are then denied by HK3, and recorded as such), else None.
     Raises Stop on anything the plan did not expect.
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
+    if params:
+        args["params"] = dict(params)
     _check_stop(ctx)
     denial = _deny(ctx, agent, "analyze", args)  # the rules once (analyze checks them again inside: _gate)
     if denial is not None:
@@ -292,7 +300,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if not pred_ids:  # every formula of the step was skipped: no prediction, so no analysis (HK1)
         _say(ctx, agent, lc, f"{lc['load_case_id']} は、この設計で使える予測の式が無いので、解析しません")
         return
-    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected)
+    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected, step.get("params"))
     if hit is None:
         return  # matched; the plan's retry is not needed
     expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)
@@ -492,10 +500,11 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             started.append(agent)
 
     def hits_reds(rev: Record) -> bool:
-        from hiraku.agent.roles import route_reds
+        from hiraku.agent.roles import red_modules, route_reds
 
         design = ctx.store.design()
-        return not design.get("modules") or revision_hits(design, route_reds(ctx, ctx.version), rev)
+        return not design.get("modules") or revision_hits(design, route_reds(ctx, ctx.version), rev,
+                                                          red_modules(ctx, ctx.version))
 
     def next_revision(ended: set[str] | None = None) -> int | None:
         """The index of the plan's next revision: for the version's reds (ended None) the first entry not used
@@ -549,7 +558,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         """One round on a design with modules (HK6): each module designer proposes its own variables and choices
         (revise_design with module), then the packager builds the version (build_version) with the package
         variables, giving room to a module whose parts would leave its space."""
-        from hiraku.agent.roles import route_reds
+        from hiraku.agent.roles import module_agent, red_modules, route_reds
 
         design = ctx.store.design()
         by, package, stray = split_by_module(design, changes, choices)
@@ -557,15 +566,17 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             raise Stop(f"the plan changes {', '.join(stray)}, which no module of the design owns")
         reasons = rev.get("reasons") or {}  # module (or packager) -> the plan's own words for that part
         routed = route_reds(ctx, ctx.version)
+        mods_red = red_modules(ctx, ctx.version)  # module -> its reds (a role may own several modules)
         if rev.get("answers_ended"):
             # no red: the entry answers load cases that ended without a verdict (their cause's fix names a change of
             # these modules), so it goes to the designers of its own modules; load_case_ids are for reds only, the
             # ended cases are in the reason
-            routed = {**{f"designer.{m}": [] for m in by}, **({"packager": []} if package else {})}
-        # only the parts of the plan's revision whose module the version's reds go to (HK6: a red goes to the
-        # designers of the modules its load case names); the rest of the entry answers no red of this version
-        skipped = [m for m in by if f"designer.{m}" not in routed] + (["package"] if package and "packager" not in routed else [])
-        by = {m: part for m, part in by.items() if f"designer.{m}" in routed}
+            routed = {**{module_agent(m, design): [] for m in by}, **({"packager": []} if package else {})}
+            mods_red = {m: [] for m in by}
+        # only the parts of the plan's revision whose module the version's reds are for (HK6: a red goes to the
+        # owners of the modules its load case names); the rest of the entry answers no red of this version
+        skipped = [m for m in by if m not in mods_red] + (["package"] if package and "packager" not in routed else [])
+        by = {m: part for m, part in by.items() if m in mods_red}
         package = package if "packager" in routed else {}
         reds = sorted({lc for ids_ in routed.values() for lc in ids_})
         if not by and not package:
@@ -585,9 +596,9 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                + "、".join(f"{contract.MODULE_NAMES_JA.get(m, m)}" for m in by)
                + ("、パッケージ役" if package else "") + "。版はパッケージ役がまとめます")
         for m, part in by.items():
-            agent = f"designer.{m}"
+            agent = module_agent(m, design)
             start(agent)
-            args = {"module": m, **part, "reason": reasons.get(m) or reason, "load_case_ids": routed[agent]}
+            args = {"module": m, **part, "reason": reasons.get(m) or reason, "load_case_ids": mods_red[m]}
             try:
                 ids.append(revise_design(ctx, args, agent)["change_id"])
             except ToolError as e:

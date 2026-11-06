@@ -59,7 +59,8 @@ their basis. What it looks at:
   criterion has a verdict in the last version (a red tile alone does not end a
   domain), and no tile is left pending
 - HK6 (contract d9631a5, designs with modules only): each design.change_proposed comes from
-  designer.<its module> (data.agent_id the same, design_version when given the latest version), not
+  its module's owner in design.modules (one of the three design roles from 2026-11-06; designer.<its
+  module> when the module names none) (data.agent_id the same, design_version when given the latest version), not
   for package, and names only that module's
   variables and choices of the version it was made on; its module is named in the modules of a red
   load case of that version (and of each load case it says it answers); from version 2 a version is
@@ -1931,10 +1932,11 @@ class RunChecker:
                 self.error(rule, w, f"{cid}: the package is the packager's (build_version input), not a proposal")
             elif m not in mods:
                 self.error(rule, w, f"{cid}: v{v} has no module {m}")
-            if agent != f"designer.{m}" or p.get("agent_id") != agent:
-                self.error(rule, w, f"{cid} for {m} from {agent} (agent_id {p.get('agent_id')}); "
-                                    f"only designer.{m} proposes for it")
             mod = mods.get(m) or {}
+            owner = mod.get("owner") or f"designer.{m}"  # the module's owner in the design (contract 2026-11-06)
+            if agent != owner or p.get("agent_id") != agent:
+                self.error(rule, w, f"{cid} for {m} from {agent} (agent_id {p.get('agent_id')}); "
+                                    f"only its owner {owner} proposes for it")
             for what, allowed in (("changes", "variables"), ("choices", "choices")):
                 out = sorted(set(p.get(what) or {}) - set(mod.get(allowed) or []))
                 if out:
