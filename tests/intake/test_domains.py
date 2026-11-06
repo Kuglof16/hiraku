@@ -253,8 +253,10 @@ class PickDomainsTest(unittest.TestCase):
 
     def test_summary_line(self):
         rec = pick("electric-guitar")  # the counts follow the catalog and the builders: not written here
-        parts = [f"{p['shown_name']} ({len(p['test_ids'])})" for p in rec["picks"]]
-        self.assertEqual(summary_line(rec), f"{len(rec['picks'])} 分野: " + "・".join(parts))
+        tests = {t for p in rec["picks"] for t in p["test_ids"]} | set(rec["assembly_test_ids"])
+        self.assertEqual(summary_line(rec), f"確かめる分野を {len(rec['picks'])} つ、試験を {len(tests)} 個選びました")
+        added = dict(rec, added_tests=[{"test_id": "N1", "reason": "x"}])
+        self.assertTrue(summary_line(added).endswith("(Claude が足した 1 個を含む)"))
         self.assertEqual([p["domain"] for p in rec["picks"]], ["strength", "nvh"])
 
 
