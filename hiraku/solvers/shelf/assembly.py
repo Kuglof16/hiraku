@@ -65,7 +65,8 @@ class Assembly(BuiltinTool):
                  "n_rest, n_slide from hiraku.solvers.k0_handcalc.assembly_inputs.overlap_inputs (axis-aligned boxes, "
                  "turned parts and slanted members left out, this tool's allowance)"),
         Predicts("motion_interference_count", "assembly.motion_count", "n",
-                 "n_wheel, n_rod from assembly_inputs.motion_inputs (the wheels' boxes and the tie rods swept)"),
+                 "n_wheel, n_rod from assembly_inputs.motion_inputs (each corner's moving parts swept "
+                 "on this tool's grid: boxes, and capsules as rods)"),
         Predicts("blocked_parts", "assembly.blocked_count", "n",
                  "n_blocked from assembly_inputs.blocked_inputs (each part pushed along +-x, +-y, +-z against the frame)"),
         Predicts("joint_gap_count", "assembly.joint_count", "n",
