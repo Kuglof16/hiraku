@@ -626,7 +626,7 @@ def _reference_dict(r: Reference) -> dict[str, Any]:
 
 
 LEVEL_KEYS = ("cells", "cd", "u_lattice", "smagorinsky", "tau0", "t_star", "average_last", "grid", "steps", "spread_pct", "cd_quarters", "cy", "cz", "cd_by_group",
-              "max_mach", "last_stats", "geometry", "memory_mib", "wall_s", "mlups", "code", "faulted")
+              "max_mach", "last_stats", "geometry", "memory_mib", "wall_s", "mlups", "code", "code_note", "faulted")
 
 
 def summarize_body(body: str, re: float, levels: Sequence[dict[str, Any]], sensitivity: Sequence[dict[str, Any]] = (), note: str = "") -> dict[str, Any]:

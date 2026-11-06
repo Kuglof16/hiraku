@@ -372,6 +372,14 @@ class SphereLinks(unittest.TestCase):
             real = disc >= 0.0
             t = np.where(real, (-b - np.sqrt(np.maximum(disc, 0.0))) / a, np.inf)
             cut = fluid & real & (t > 0.0) & (t < 1.0)
+            if abs(int(C[q, 0])) + abs(int(C[q, 1])) + abs(int(C[q, 2])) == 2:
+                # a diagonal link that only clips a corner: both ends fluid, a corner of its lattice square inside the sphere
+                far = p + d
+                far_fluid = ((far - self.center) ** 2).sum(axis=1) > self.radius ** 2
+                for axis in np.flatnonzero(C[q]):
+                    corner = p.copy()
+                    corner[:, axis] -= float(C[q, axis]) * self.dx
+                    cut &= ~(far_fluid & (((corner - self.center) ** 2).sum(axis=1) <= self.radius ** 2))
             for n, tt in zip(nodes[cut], t[cut]):
                 out[(int(n), q)] = float(tt)
         return out
@@ -433,10 +441,100 @@ class Ground(unittest.TestCase):
         self.assertEqual(float(self.grid.position(np.array([self.grid.node_index(0, 0, 0)]))[0, 2]), 0.5)
 
 
+class CornerClips(unittest.TestCase):
+    """Links between two fluid nodes: a thin part needs them, a solid body's corner must not get them."""
+
+    def setUp(self) -> None:
+        self.grid = Grid(24, 24, 24, 1.0, np.array([-12.0, -12.0, -12.0]))
+        self.stride = C @ np.array(self.grid.strides, dtype=np.int64)
+
+    def both_ends_fluid(self, vox) -> np.ndarray:
+        return vox.mask[vox.node - self.stride[vox.dir]] == 0
+
+    def test_a_solid_box_has_none(self):
+        for shift in (0.0, 0.1, 0.25, 0.45, 0.6, 0.75):
+            with self.subTest(shift=shift):
+                vox = voxelize([box((shift, 0.13, 0.26), (12.0, 12.0, 12.0))], self.grid)
+                self.assertEqual(int(self.both_ends_fluid(vox).sum()), 0)
+
+    def test_the_link_count_does_not_jump_with_the_position(self):
+        # the old count at the upstream edge flipped from 8 to 100 across a shift of a millionth of a cell
+        below = voxelize([box((0.5 - 1e-6, 0.13, 0.26), (12.0, 12.0, 12.0))], self.grid)
+        above = voxelize([box((0.5 + 1e-6, 0.13, 0.26), (12.0, 12.0, 12.0))], self.grid)
+        self.assertEqual(below.n_links, above.n_links)
+
+    def test_a_thin_plate_keeps_all_of_them(self):
+        vox = voxelize([box((0.0, 0.13, 0.26), (0.24, 12.0, 12.0))], self.grid)
+        self.assertEqual(int((vox.mask == 1).sum()), 0)
+        self.assertGreater(vox.n_links, 0)
+        self.assertTrue(self.both_ends_fluid(vox).all())
+        diagonal = np.abs(C[vox.dir]).sum(axis=1) == 2
+        self.assertGreater(int(diagonal.sum()), 0)
+
+    def test_a_thin_part_keeps_them_where_it_touches_a_solid_part(self):
+        # A plate at x = 0 with a block on its +x side only, the block's edge at y = 0. The diagonal from node (0.5, 0.5)
+        # back to (-0.5, -0.5) crosses the plate, both its ends are fluid, and the corner (0.5, -0.5) of its lattice
+        # square is solid, but in the block, not in the plate: it is the plate's link, and air must not leak through.
+        plate = box((0.0, 0.0, 0.26), (0.24, 12.0, 12.0), name="plate", group="plate")
+        block = box((1.6, -1.5, 0.26), (2.8, 3.0, 6.0), name="block", group="block")
+        vox = voxelize([plate, block], self.grid)
+        g = self.grid
+        node = g.node_index(12, 12, 12)  # (0.5, 0.5, 0.5)
+        q = 7  # c = (1, 1, 0)
+        self.assertEqual(tuple(C[q]), (1, 1, 0))
+        self.assertEqual(int(vox.mask[node]), 0)
+        self.assertEqual(int(vox.mask[g.node_index(11, 11, 12)]), 0, "the far end is fluid")
+        self.assertEqual(int(vox.mask[g.node_index(12, 11, 12)]), 1, "the corner is solid, in the block")
+        found = np.flatnonzero((vox.node == node) & (vox.dir == q))
+        self.assertEqual(len(found), 1, "the plate's link must stay")
+        self.assertEqual(int(vox.shape[found[0]]), 0, "and it is the plate's")
+
+
+class FaceOnNodePlane(unittest.TestCase):
+    """A face exactly on a plane of nodes: the node on it is solid, and the neighbour's wall is one whole link away."""
+
+    def check_links_at_one(self, shapes, grid, expect_some: bool) -> None:
+        vox = voxelize(shapes, grid)
+        stride = C @ np.array(grid.strides, dtype=np.int64)
+        at_one = np.abs(vox.q - 1.0) < 1e-9
+        if expect_some:
+            self.assertGreater(int(at_one.sum()), 0, "the case must really put links at q = 1")
+        self.assertTrue((vox.mask[vox.node[at_one] - stride[vox.dir[at_one]]] == 1).all(), "a link at q = 1 ends on a solid node")
+
+    def test_every_link_at_q_one_ends_on_a_solid_node(self):
+        # When a face lies on a node plane and rounding leaves the node on it just outside, that node is fluid. A link at
+        # q = 1 from its neighbour would only touch the shape, and be one-way: a cube at 12 cells read Cd 1.43, not 0.99.
+        for shift in (0.5, 0.5 + 1e-13, 0.5 - 1e-13, 1.5):
+            with self.subTest(cube_shift=shift):
+                # the shift over 12 cells, as a benchmark places it: the sum rounds either way
+                c = np.array((shift / 12.0, 0.13 / 12.0, 0.26 / 12.0))
+                self.check_links_at_one([box(c, (1.0, 1.0, 1.0))], Grid(144, 96, 96, 1.0 / 12.0, np.array([-4.0, -4.0, -4.0])), False)
+        # a node exactly on a sphere's surface, the way 0.7^2 + 0.4^2 + 3.2^2 = 3.3^2 falls on this grid
+        self.check_links_at_one([Sphere((0.2, 0.1, -0.3), 3.3)], Grid(16, 16, 16, 1.0, np.array([-8.0, -8.0, -8.0])), True)
+        # and a box with every face on a node plane, where all the q = 1 links are the good kind
+        self.check_links_at_one([box((0.5, 0.5, 0.5), (8.0, 8.0, 8.0))], Grid(16, 16, 16, 1.0, np.array([-8.0, -8.0, -8.0])), True)
+
+    def test_a_tiny_shift_across_the_plane_keeps_the_link_count(self):
+        grid = Grid(144, 96, 96, 1.0 / 12.0, np.array([-4.0, -4.0, -4.0]))
+        counts = {voxelize([box(((0.5 + d) / 12.0, 0.13 / 12.0, 0.26 / 12.0), (1.0, 1.0, 1.0))], grid).n_links for d in (-1e-6, 0.0, 1e-6)}
+        self.assertEqual(len(counts), 1, "exact alignment must not add or lose links against a shift of a millionth of a cell")
+
+    def test_the_wall_is_where_the_face_is(self):
+        grid = Grid(16, 16, 16, 1.0, np.array([-8.0, -8.0, -8.0]))
+        # nodes stand at half-integers here, so a box from -3.5 to 4.5 has its faces on node planes
+        vox = voxelize([box((0.5, 0.5, 0.5), (8.0, 8.0, 8.0))], grid)
+        self.assertGreater(vox.n_links, 0)
+        self.assertTrue(np.allclose(vox.q, 1.0, atol=1e-9))
+        hit = grid.position(vox.node) - (vox.q[:, None] * C[vox.dir])
+        on_a_face = np.isclose(np.abs(hit - 0.5), 4.0, atol=1e-9).any(axis=1)
+        self.assertTrue(on_a_face.all())
+
+
 class LinkArrays(unittest.TestCase):
     def setUp(self) -> None:
         self.grid = Grid(16, 16, 16, 1.0, np.array([-8.0, -8.0, -8.0]))
-        self.vox = voxelize([Sphere((0.2, 0.1, -0.3), 3.3)], self.grid)
+        # 3.31, not 3.3: at 3.3 a node lands exactly on the surface, which is its own case (FaceOnNodePlane and the report)
+        self.vox = voxelize([Sphere((0.2, 0.1, -0.3), 3.31)], self.grid)
         self.N = self.grid.n_total
         self.stride = C @ np.array(self.grid.strides, dtype=np.int64)
 
