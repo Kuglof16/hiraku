@@ -751,9 +751,22 @@ _OPTION_VARS.update({
                           "1.6 mm"),
     "rollbar_stays": Var("1", 0.0, 0.0, 1.0, "1: a rear stay each side from the roll bar's top corner back and down to "
                          "the rail at the frame's rear end E (members rops_stay_L/R, round tube rollbar_stay_d x "
-                         "rollbar_stay_t of the roll bar's material); needs rollbar = 1; 0: none"),
+                         "rollbar_stay_t of the roll bar's material); needs rollbar = 1; 0: none. They hold the roll "
+                         "bar against folding back in a rollover (R4) and lift the roll bar's own mode: with the "
+                         "user's set REC and stays 42.7 x 2.3 at rollbar_stay_at 0.35, the first mode with the frame "
+                         "is 13.2 Hz (above the hop, 10.1 Hz; the roll bar's 7.2 Hz mode goes) and the rear end's "
+                         "hot spots LE / RE 92 / 91 MPa (the analysis department's runs, set RECS35, tyre 60 N/mm, "
+                         "2026-11-06; tool results, not checked against a physical test)"),
     "rollbar_stay_d": Var("mm", 42.7, 25.0, 60.5, "rear stay round tube outside diameter"),
     "rollbar_stay_t": Var("mm", 2.3, 1.6, 4.5, "rear stay tube wall"),
+    "rollbar_stay_at": Var("1", 1.0, 0.0, 1.0, "where the rear stay's foot lands on the rail: the fraction of the way "
+                           "from the roll bar's foot station H back to the frame's rear end E (1: on the rail's end "
+                           "node E; below 1: on a rail node of its own, <side>HS, the rail split there, clear of the "
+                           "corner gusset at E, of the members standing on the rail and of the deck and the load: "
+                           "build_rops_extra checks it). With the corner gussets at E (gusset_ends 1) the foot must "
+                           "come off the end: on the set REC it fits at 0.10 to 0.40 and 0.80 to 0.85 (0.35 for a "
+                           "48.6 mm stay; 0.45 to 0.75 meets the rear upper arm, its bracket or cross_B, 0.90 and "
+                           "more the gusset at E, 0.05 the roll bar's foot)"),
     "rollbar_front_posts": Var("1", 0.0, 0.0, 1.0, "1: four posts: front posts on outriggers at the seat front cross "
                                "member S1 up to the roll bar's top height, a top rail each side back to the roll bar's "
                                "corners and a front top beam (members rops_*; the roll bar's tube); needs rollbar = 1; "
@@ -783,7 +796,7 @@ OPTIONAL.update({
     "side_bars": ("side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t", "side_net",
                   "side_net_wire_d", "side_net_pitch"),
     "rollbar_foot": ("rollbar_foot_b", "rollbar_foot_h", "rollbar_foot_t"),
-    "rollbar_stays": ("rollbar_stays", "rollbar_stay_d", "rollbar_stay_t"),
+    "rollbar_stays": ("rollbar_stays", "rollbar_stay_d", "rollbar_stay_t", "rollbar_stay_at"),
     "rollbar_front_posts": ("rollbar_front_posts",),
     "fenders": ("fenders", "fender_front_deg", "fender_rear_deg", "fender_width", "fender_gap"),
 })
@@ -1917,6 +1930,79 @@ def _column(frame: Frame, name: str, node_prefix: str, foot: str, x: float, y: f
     return out
 
 
+STAY_FOOT_SPARE_MM = POST_FOOTPRINT_SPARE_MM  # the stay's footprint this far clear of its neighbours on the rail
+STAY_FOOT_NODE = "S"  # the stay's own rail node <side><ROLLBAR_STATION>S (LHS, RHS), rollbar_stay_at < 1
+
+
+def _stay_foot(frame: Frame, lay: Layout, v: dict[str, float], side: str, sy: float, top: str) -> str:
+    """The rail node of the rear stay's foot at rollbar_stay_at < 1 (build_rops_extra): x = H + rollbar_stay_at x (E -
+    H), on the rail's centre line (the rail split there, mounts.split_rail). The stay's axis meets the rail's top face
+    at c; its footprint there runs r / |e_z| along x each side of c (r the tube's radius, e the stay's direction).
+    Checked, else DesignGenError: c lies on the rail's top face (|c_y - rail centre| < rail_b / 2); the footprint
+    clears by STAY_FOOT_SPARE_MM, along x, every member that ends at a node of this rail (cross members, posts,
+    outriggers, braces: their cut along the rail, the largest section size / 2 over sqrt(e_y^2 + e_z^2)) and the
+    corner gussets at E (gusset_ends = 1: E is the joint LE / RE whose weld is read, so the stay keeps off its
+    gussets' length along the rail; the T joints' gussets lie beside the rail below its top face and are left to
+    the next check); the stay's tube above the top face (its box from the corner to c, k4_geometry.obb) does not
+    overlap any part but the frame's and the roll bar's (the deck, the load, brackets, gussets, seats, occupants). The tube may be wider than the rail's top face (a
+    round tube on a narrower rail): that is not checked here."""
+    from hiraku.solvers.k4_geometry.model import TOUCH_MM
+    from hiraku.solvers.k4_geometry.obb import from_box, from_member, overlap
+
+    h, e_x = float(frame.nodes[f"{side}{ROLLBAR_STATION}"][0]), float(frame.nodes[f"{side}E"][0])
+    x = h + v["rollbar_stay_at"] * (e_x - h)
+    rail_y, rail_z = sy * v["rail_spacing"] / 2.0, v["rail_height"]
+    rail_id = mounts.member_through(frame, [x, rail_y, rail_z])
+    if rail_id is None or not rail_id.startswith("rail_"):
+        raise DesignGenError(f"rollbar_stay_at {v['rollbar_stay_at']:g}: no rail piece passes through x = {x:.0f} mm "
+                             f"strictly between its nodes (the foot would land on a node there); change rollbar_stay_at")
+    rail_sec = frame.sections[next(m for m in frame.members if m["id"] == rail_id)["section"]]["dims_mm"]
+    stations = {f"{side}{st}" for st in lay.stations()}
+    foot = mounts.split_rail(frame, [x, rail_y, rail_z], f"{side}{ROLLBAR_STATION}{STAY_FOOT_NODE}", stations, "")
+    p_top, p_foot = (np.asarray(frame.nodes[n], float) for n in (top, foot))
+    e = (p_top - p_foot) / float(np.linalg.norm(p_top - p_foot))
+    r = v["rollbar_stay_d"] / 2.0
+    z_face = rail_z + float(rail_sec["h"]) / 2.0
+    c = p_foot + (z_face - rail_z) / float(e[2]) * e
+    where = f"rollbar_stay_at {v['rollbar_stay_at']:g} (foot {foot} at x = {x:.0f} mm)"
+    if abs(c[1] - rail_y) >= float(rail_sec["b"]) / 2.0:
+        raise DesignGenError(f"{where}: the stay's axis meets the rail's top plane off the rail ({c[1]:.1f} mm, rail "
+                             f"{rail_y:g} +- {float(rail_sec['b']) / 2.0:g} mm)")
+    half = r / abs(float(e[2]))
+    lo, hi = float(c[0]) - half - STAY_FOOT_SPARE_MM, float(c[0]) + half + STAY_FOOT_SPARE_MM
+    rail_nodes = {n for m in frame.members if m["id"].startswith(f"rail_{side}_") for n in (m["node_a"], m["node_b"])}
+    for m in frame.members:
+        if m["id"].startswith("rail_") or m["id"] == f"rops_stay_{side}":
+            continue
+        for k in ("node_a", "node_b"):
+            if m[k] not in rail_nodes or m[k] == foot:
+                continue
+            a = np.asarray(frame.nodes[m[k]], float)
+            d = np.asarray(frame.nodes[m["node_b" if k == "node_a" else "node_a"]], float) - a
+            d /= float(np.linalg.norm(d))
+            dims = frame.sections[m["section"]]["dims_mm"]
+            size = max(float(dims[q]) for q in ("b", "h", "d") if q in dims)
+            cut = size / 2.0 / max(math.hypot(float(d[1]), float(d[2])), 1e-9)
+            if a[0] - cut < hi and a[0] + cut > lo:
+                raise DesignGenError(f"{where}: the stay's footprint ({lo:.0f} .. {hi:.0f} mm with the spare) meets "
+                                     f"{m['id']} at {m[k]} ({a[0] - cut:.0f} .. {a[0] + cut:.0f} mm); change "
+                                     f"rollbar_stay_at")
+    for p in lay.parts:
+        if p["kind"] == "gusset" and f"{side}E" in (p.get("carried_by") or []):
+            cx, sx = float(p["box"]["center_mm"][0]), float(p["box"]["size_mm"][0])
+            if cx - sx / 2.0 < hi and cx + sx / 2.0 > lo:
+                raise DesignGenError(f"{where}: the stay's footprint ({lo:.0f} .. {hi:.0f} mm) meets the gusset "
+                                     f"{p['id']}; change rollbar_stay_at (or gusset_leg)")
+    tube = from_member(c, p_top, 2.0 * r, 2.0 * r, f"rops_stay_{side}")
+    for p in lay.parts:
+        if p["kind"] in ("frame", "rollbar") or "box" not in p:
+            continue
+        b = from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"), p["id"])
+        if overlap(tube, b) > TOUCH_MM:
+            raise DesignGenError(f"{where}: the stay runs into {p['id']}; change rollbar_stay_at")
+    return foot
+
+
 def build_rops_extra(frame: Frame, lay: Layout, v: dict[str, float], foot_section: str) -> dict:
     """The roll bar's rear stays and front posts (rollbar_stays, rollbar_front_posts), on the roll bar build_rollbar
     placed. Stays: rops_stay_<L|R> from the corner <side>HT to the rail node <side>E at the frame's rear end. Front
@@ -1936,8 +2022,12 @@ def build_rops_extra(frame: Frame, lay: Layout, v: dict[str, float], foot_sectio
         stay = frame.section(*round_tube(v["rollbar_stay_d"], v["rollbar_stay_t"]))
         if 2.0 * v["rollbar_stay_t"] >= v["rollbar_stay_d"]:
             raise DesignGenError("rollbar_stay_t must be less than half of rollbar_stay_d")
-        for side in "LR":
-            frame.member(f"rops_stay_{side}", f"{side}{h}T", f"{side}E", stay, mat)
+        at = v["rollbar_stay_at"]
+        for side, sy in (("L", 1.0), ("R", -1.0)):
+            foot = f"{side}E"
+            if at < 1.0:
+                foot = _stay_foot(frame, lay, v, side, sy, f"{side}{h}T")
+            frame.member(f"rops_stay_{side}", f"{side}{h}T", foot, stay, mat)
     if v["rollbar_front_posts"] == 1:
         tops = {}
         for side, sy in (("L", 1.0), ("R", -1.0)):
