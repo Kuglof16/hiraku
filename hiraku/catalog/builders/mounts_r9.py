@@ -164,13 +164,22 @@ _SHELL_MISMATCH = {
 }
 
 
+def _path_prediction() -> Record:
+    """load_path.PATH_PREDICTION (unsupported_load by load_path.free_parts), imported late (load_path imports the
+    builders' common module too)."""
+    from hiraku.catalog.builders.load_path import PATH_PREDICTION
+
+    return dict(PATH_PREDICTION)
+
+
 def _plan(kind: str, sids) -> Record:
     qty, tool = KINDS[kind]
     places = [f"{s}.{m}" for s in sids for m in MOUNTS]
     plan = {"tool": tool,
             "say": (f"サスペンションの取付点ごとに、K2 の力の最大で、{_WHAT[kind]}の利用率を先に出します "
                     f"(手計算。{tool} の値で判定)"),
-            "predictions": [_prediction(qty, p) for p in (None, *places)]}
+            # the path check first (as C1 and the other strength plans): the load reaches the frame
+            "predictions": [_path_prediction()] + [_prediction(qty, p) for p in (None, *places)]}
     if tool == "frame_shell":  # one entry per compared quantity (the group's worst and each place)
         plan["expected_mismatch"] = [dict(_SHELL_MISMATCH, quantity=f"{qty}.{p}" if p else qty)
                                      for p in (None, *places)]

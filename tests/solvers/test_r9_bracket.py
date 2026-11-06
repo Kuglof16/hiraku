@@ -198,8 +198,9 @@ class DemoTest(unittest.TestCase):
             plan = recipe_for(PLANS, c)
             self.assertEqual(plan["tool"], tool)
             qs = [p["quantity"] for p in plan["predictions"]]
-            self.assertEqual(qs[0], qty)  # the group's worst place
-            self.assertEqual(len(qs), 1 + 2 * 6)  # and each side's six mounts
+            self.assertEqual(qs[0], "unsupported_load")  # the path check first (load_path.PATH_PREDICTION)
+            self.assertEqual(qs[1], qty)  # the group's worst place
+            self.assertEqual(len(qs), 1 + 1 + 2 * 6)  # and each side's six mounts
             self.assertIn(f"{qty}.{sids[:2]}.uca_front", qs)
         for t in ("S1", "S3", "S4", "S5", "P1", "P3"):
             self.assertIn("R9", FEEDS[t])

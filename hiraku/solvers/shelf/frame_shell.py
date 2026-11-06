@@ -585,6 +585,9 @@ def r9_outputs(design: Record, load_case: Record, upstream: dict | None, size: f
     effects.append({"name": (f"shell model: {ms.n_nodes} nodes, {ms.n_elements} elements (edge {ms.element_size_mm:g} mm), "
                              f"{len(ms.brackets)} mount brackets meshed as two plates each; solved at {got['solves']} "
                              f"instants of {', '.join(got['used'])}"), "value": float(ms.n_elements), "unit": "1"})
+    lost, said = lost_load_outputs()  # the path check reads unsupported_load on the analysis that decides
+    results.append(lost)
+    effects.append(said)
     out = {"results": results, "fields": [], "effects": effects, "assumptions": assumptions,
            "timings_s": {"total": time.perf_counter() - t0}}
     hot = r9_hot_spots(load_case, got)

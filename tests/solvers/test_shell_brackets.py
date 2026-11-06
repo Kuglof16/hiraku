@@ -161,7 +161,9 @@ class R9RoleTest(unittest.TestCase):
         for lc_id, plan in R9_PLANS.items():
             kind = lc_id.split("-")[1]
             self.assertEqual(plan["tool"], KINDS[kind][1])
-            self.assertEqual({p["formula_id"] for p in plan["predictions"]}, {lb.FORMULA_OF[KINDS[kind][0]]})
+            # the path check (load_path.free_parts on unsupported_load) and the kind's own formula
+            self.assertEqual({p["formula_id"] for p in plan["predictions"]},
+                             {"load_path.free_parts", lb.FORMULA_OF[KINDS[kind][0]]})
         self.assertNotIn(lb.FORMULA_OF["bolt_utilisation"], FrameShell.formulas)  # the pin is not in the shell
 
     def test_hand_and_shell_welded_lengths(self):
