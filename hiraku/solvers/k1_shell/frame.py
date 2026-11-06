@@ -347,15 +347,32 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
                   step_supports: list[str] | None = None, ground_forces: dict | None = None,
                   inertia_N: np.ndarray | None = None, frame: ShellFrame | None = None,
                   element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True,
-                  mount_loads: dict | None = None, gravity_mps2=None, mount_path: str = "brackets") -> dict:
+                  mount_loads: dict | None = None, gravity_mps2=None, mount_path: str = "brackets",
+                  model: str = "frame", adds=None) -> dict:
     """Solve the shell frame (see the module notes). Arguments as k1_frame.analyze; `frame`
     reuses a built and factorised ShellFrame of the same design; weld_strips as mesh.build_mesh.
 
     mount_loads {support: {"vectors": [(mount, point mm, force N)], "moment_Nmm": (3,)}}: the forces
     the body receives at its suspension mounts (named as in hardpoints_mm, carried in by mount_carriers),
     in place of the ground forces (the unsprung parts are then left out, sprung_items); inertia_N, if given, is the d'Alembert force they come with. gravity_mps2: gravity
-    in the body's axes (default straight down, times g_factor). Both in the design's axes."""
+    in the body's axes (default straight down, times g_factor). Both in the design's axes.
+
+    model "whole" with adds (k1_shell.whole.ADDS): the whole-vehicle model of k1_shell.whole (`frame` then a
+    whole.WholeFrame built with the same adds, or None to build one); no adds: this frame solve, unchanged."""
     t0 = time.perf_counter()
+    if model not in ("frame", "whole"):
+        raise ValueError(f"model must be frame or whole, got {model!r}")
+    adds = tuple(adds or ()) if model == "whole" else ()
+    arms = "arms" in adds
+    if adds:
+        from .whole import ADDS, build_whole
+        want = tuple(a for a in ADDS if a in set(adds))
+        if frame is None:
+            frame = build_whole(design, adds, element_size_mm, weld_strips)
+        elif tuple(getattr(frame, "adds", ())) != want:
+            raise ValueError(f"the given frame was built with adds {getattr(frame, 'adds', ())}, not {want}")
+        if arms and mount_loads is None:
+            raise DesignError("the whole model with arms is loaded by K2's mount forces (mount_loads); none given")
     summ = mass_summary(design)
     items = summ["items"]
     reused = frame is None
@@ -370,14 +387,15 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         off = check_balance(design, summ, ground, g_factor, inertia_N, gravity_mps2)
 
     # ---- masses: shell nodes (point masses) and parts (gussets and through parts are shell elements already)
-    in_shell = shell_parts(design, ms)
+    in_shell = shell_parts(design, ms) | set(getattr(fr, "extra_shell_parts", ()))
     if mount_loads is not None:
         items = sprung_items(design, items)
     parts = [it for it in items if it.carrier != "member" and it.id.removeprefix("part:") not in in_shell]
+    XN = model.nodes  # the mesh nodes (and, in the whole model, its added nodes: massless but the panels')
     m_shell = float(fr.masses_kg.sum())
     m_tot = m_shell + sum(it.mass_kg for it in parts)
-    cg = (fr.masses_kg @ ms.nodes + sum(it.mass_kg * it.cg_mm for it in parts)) / m_tot
-    d = ms.nodes - cg
+    cg = (fr.masses_kg @ XN + sum(it.mass_kg * it.cg_mm for it in parts)) / m_tot
+    d = XN - cg
     J = (np.sum(fr.masses_kg * np.einsum("ij,ij->i", d, d)) * np.eye(3)
          - np.einsum("i,ij,ik->jk", fr.masses_kg, d, d))
     for it in parts:
@@ -393,7 +411,7 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     pairs += [(it.cg_mm, it.mass_kg * gvec) for it in parts]
     F, M = resultant(pairs)
     F = F + m_shell * gvec
-    M = M + np.cross(fr.masses_kg @ ms.nodes, gvec) + sum((g.get("moment_Nmm", 0.0) for g in ground.values()),
+    M = M + np.cross(fr.masses_kg @ XN, gvec) + sum((g.get("moment_Nmm", 0.0) for g in ground.values()),
                                                           np.zeros(3))
     if mount_loads is not None:
         off = mount_balance(F, m_tot, gvec, inertia_N)
@@ -406,10 +424,10 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
 
     n_dof = model.n_dof
     Fv = np.zeros(n_dof)
-    bf = fr.masses_kg[:, None] * body(ms.nodes)
+    bf = fr.masses_kg[:, None] * body(XN)
     for k in range(3):
         Fv[k::6] += bf[:, k]
-    X = ms.nodes
+    X = XN
     joint_loads: dict[str, list[np.ndarray]] = {}  # design node -> [force N, moment N*mm about the node]
 
     def put(node: str, force, moment, about, at=None) -> None:
@@ -431,9 +449,20 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         paths.append({"support": sid, "mount": kind, "point_mm": np.asarray(p, float), "force_N": np.asarray(f, float),
                       "how": how, "nodes": nz, "nodal_N": dF.reshape(-1, 6)[nz, :3].copy()})
 
+    attach = getattr(fr, "attach", {}) if mount_loads is not None else {}
     for sid, g in ground.items():
         fn = fr.support_node[sid]
         for kind, p, f in g["vectors"]:
+            if arms:  # the whole model's linkage carries the corner's load (whole.corner_forces)
+                continue
+            aw = attach.get((sid, kind))
+            if aw is not None and aw.kind == "rbe2":  # the whole model's rigid mount: on its node at the hard point
+                dF = np.zeros(n_dof)
+                dF[6 * aw.node:6 * aw.node + 3] = f
+                dF[6 * aw.node + 3:6 * aw.node + 6] = np.cross(np.asarray(p, float) - X[aw.node], f)
+                Fv += dF
+                record(sid, kind, p, f, f"rigid on {aw.where}", dF)
+                continue
             bk = ms.bracket_of(sid, kind) if mount_loads is not None and mount_path != "joint" else None
             if bk is not None:  # a meshed bracket: on its pin holes' edges
                 dF = pin_load(X, bk, f, n_dof)
@@ -466,9 +495,18 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
                        Fv - before)
         if np.any(g.get("moment_Nmm", 0.0)):
             put(fn, np.zeros(3), g["moment_Nmm"], fr.node_xyz[fn], fr.mount_nodes(fn))
+    if arms:
+        from .whole import corner_forces
+        Fv += corner_forces(fr, mount_loads, n_dof)
+    part_master = getattr(fr, "part_master", {})
     for it in parts:
         f = it.mass_kg * body(it.cg_mm)
         m_own = -(it.inertia_kg_mm2 @ alpha) * 1e-3 if it.inertia_kg_mm2 is not None else np.zeros(3)  # N*mm
+        pm = part_master.get(it.id.removeprefix("part:"))
+        if pm is not None:  # the whole model's rigid seat / battery: on its node
+            Fv[6 * pm:6 * pm + 3] += f
+            Fv[6 * pm + 3:6 * pm + 6] += np.cross(it.cg_mm - X[pm], f) + m_own
+            continue
         if it.carrier == "support":
             fn = fr.support_node[it.carried_by[0]]
             put(fn, f, m_own, it.cg_mm, fr.mount_nodes(fn))
@@ -519,14 +557,19 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
     bvals = bracket_values(model, ms, U, vm["max"]) if ms.brackets else {}
     hs_max = max(hs, key=lambda h: abs(h["value"])) if hs else None
 
-    u = U.reshape(-1, 6)[:, :3]
+    nm = ms.n_nodes  # the displacements of the mesh's nodes (the whole model's added nodes are not given)
+    u = U.reshape(-1, 6)[:nm, :3]
     pts, disps = [], []
     for sid in fr.support_node:
         j = ms.joints[fr.support_node[sid]]
         pts.append(X[j].mean(axis=0))
         disps.append(u[j].mean(axis=0))
     t, theta = rigid_fit(pts, disps)
-    disp = u - (t[None, :] + np.cross(theta[None, :], X))
+    disp = u - (t[None, :] + np.cross(theta[None, :], X[:nm]))
+    whole_out = {}
+    if adds:
+        from .whole import linkage_mounts
+        whole_out = {"linkage_mounts": linkage_mounts(fr, U) if arms else None, "whole_notes": list(fr.notes)}
     worst_node = int(np.argmax(np.linalg.norm(disp, axis=1)))
     node_member = {}
     for e, el in enumerate(ms.elements):
@@ -573,6 +616,9 @@ def analyze_shell(design: dict, g_factor: float = 1.0, step_mm: float | None = N
         "worst_node_member": node_member.get(worst_node, worst),
         "timings": timings,
         "linear_solver": getattr(fr.solver(), "solver_name", type(fr.solver()).__name__),
+        "model": "whole" if adds else "frame",
+        "adds": list(adds),
+        **whole_out,
     }
 
 

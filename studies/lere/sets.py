@@ -31,6 +31,15 @@ pairs are here, and the cross_h one with each brace):
   D33h60  B33 + Ch60f
   DU      upper bound for N1: B50 + C45 + S2g0 + P2 (the strongest reasonable combination; corner gussets off
           because the rear stays run into gusset_LE_front_upper with them on)
+Whole-vehicle step hit (the base design; k1_shell.whole; step hit only, no modal), cumulative:
+  W0     today's solve through model "whole" with no additions
+  W1     + arms (the linkage, loaded by K2's knuckle load at each corner)
+  W2     + damper mounts rigid
+  W3     + bracket mounts rigid
+  W4     + seats (with occupants) and battery rigid
+  W5     + floor / deck / bulkhead panels as plates
+  W6     the W5 model (addition 6, the tyre spring at 60 N/mm, is in W1 already)
+  W1t45, W1t90   W1 at tyre 45 / 90 N/mm
 """
 
 BR = {"tower_brace_b": 35, "tower_brace_t": 4.5}  # the tower's section
@@ -43,8 +52,25 @@ S2 = {"rollbar_stays": 1, "rollbar_stay_d": 48.6, "rollbar_stay_t": 3.2}
 P2 = {"rollbar_d": 48.6, "rollbar_t": 3.2}
 
 
-def _s(extra, doc, tyre=60.0):
-    return {"extra": dict(extra), "tyre": float(tyre), "doc": doc}
+def _s(extra, doc, tyre=60.0, adds=None):
+    """adds: None for the frame study's sets (modal + step hit on the frame shell); a list for the whole-vehicle
+    step-hit sets (k1_shell.whole: analyze_shell(model="whole", adds=...), step hit only, no modal)."""
+    out = {"extra": dict(extra), "tyre": float(tyre), "doc": doc}
+    if adds is not None:
+        out["adds"] = list(adds)
+    return out
+
+
+# Whole-vehicle step hit (k1_shell.whole), the additions in the practitioner's order, cumulative.
+W_ADDS = [[], ["arms"], ["arms", "damper_mounts"], ["arms", "damper_mounts", "brackets"],
+          ["arms", "damper_mounts", "brackets", "seats"], ["arms", "damper_mounts", "brackets", "seats", "panels"]]
+W_DOC = ["today's step-hit solve (frame shell, K2's mount forces at the mount footprints), through model whole",
+         "+ arms: linkage (beams on K2's bushings, knuckle + wheel rigid, coil spring, tyre spring), K2's knuckle "
+         "load at each corner",
+         "+ damper mounts rigid (RBE2 on the damper bracket's footprint: upper bound)",
+         "+ bracket mounts rigid (pin through the meshed brackets' holes, RBE2 footprints elsewhere)",
+         "+ seats (with occupants) and battery rigid on their mount joints (upper bound)",
+         "+ floor / deck / bulkhead panels as shell plates tied to the frame"]
 
 
 SETS = {
@@ -72,6 +98,11 @@ SETS = {
     "D33h60": _s({**B33, **CH60F}, "B33 + Ch60f"),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
              "N1 upper bound: B50 + C45 + S2g0 (stays 48.6 x 3.2, gussets off) + roll bar 48.6 x 3.2"),
+    **{f"W{i}": _s({}, W_DOC[i], adds=W_ADDS[i]) for i in range(6)},
+    "W6": _s({}, "W5 again: addition 6 (the tyre spring, 60 N/mm) is in W1 already, so W6 is the W5 model",
+             adds=W_ADDS[5]),
+    "W1t45": _s({}, "W1 at tyre 45 N/mm (K2 and the tyre spring)", 45, adds=W_ADDS[1]),
+    "W1t90": _s({}, "W1 at tyre 90 N/mm (K2 and the tyre spring)", 90, adds=W_ADDS[1]),
 }
 
 

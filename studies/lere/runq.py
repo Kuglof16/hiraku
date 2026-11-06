@@ -25,6 +25,8 @@ def _done(outdir, name):
             s = json.load(f)
     except (OSError, ValueError):
         return False
+    if s.get("adds") is not None:  # a whole-vehicle set: step hit only
+        return "best" in s
     return "best" in s and "modal" in s
 
 
@@ -47,7 +49,8 @@ def main():
     from .sets import SETS
     if a.list:
         for n, s in SETS.items():
-            print(f"{n:8s} tyre {s['tyre']:g}  {s['doc']}  {json.dumps(s['extra'])}")
+            w = f"  adds {s['adds']}" if "adds" in s else ""
+            print(f"{n:8s} tyre {s['tyre']:g}  {s['doc']}  {json.dumps(s['extra'])}{w}")
         return
     if not a.out:
         ap.error("--out is required")

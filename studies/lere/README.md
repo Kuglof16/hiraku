@@ -59,6 +59,36 @@ sets run and the images are skipped.
 
 The exact variables are in `sets.py` (`runq --list` prints them).
 
+## Whole-vehicle step hit (W sets: the base design, step hit only, no modal)
+
+`analyze_shell(..., model="whole", adds=[...])` (`hiraku/solvers/k1_shell/whole.py`; no adds = today's solve). The
+additions, cumulative in the practitioner's order:
+
+| set | adds | what is new in the model |
+|---|---|---|
+| W0 | - | today's solve (frame shell, K2's mount forces at the footprints), through model "whole" |
+| W1 | arms | the linkage of k1_shell.linkage (arms and tie rod as beams on K2's bushings, knuckle + wheel rigid, coil spring along the damper axis fitted to K2's wheel rate, tyre spring to a ground node). Each frame-side mount is a node at the hard point tied (RBE3 type, no stiffness) to the nodes today's solve loads. Load: K2's knuckle load of each corner (the resultant of its mount forces: road force + m_u (g - a_u), moment about the wheel centre), its vertical part through the tyre spring at the contact point. Held as now: inertia relief, 3-2-1. |
+| W2 | + damper_mounts | the damper's upper mount rigid (RBE2) on its footprint: the damper bracket is not meshed in v005 (its base face is not on a tube wall along the pin), so this is its stiffness as rigid, an upper bound |
+| W3 | + brackets | the arm / tie rod mounts rigid: a pin through both cheeks of the meshed rear lca brackets (their plates are in the shell already in W0), rigid footprints for the brackets not meshed, rigid joint nodes for the front lca mounts |
+| W4 | + seats | the seats (with their occupants) and the battery as rigid bodies on the top walls of their carried_by joints (the frame between them rigid: an upper bound) |
+| W5 | + panels | floor_front, deck (at their fit_* fixings, as rigid spacers), floor and bulkhead (no fixings: bonded where they touch the frame, an upper bound) as shell plates, their mass kept |
+| W6 | as W5 | addition 6, the tyre spring (60 N/mm), is in W1 already |
+| W1t45, W1t90 | arms | W1 at tyre 45 / 90 N/mm (K2 re-run; in the shell the tyre spring is in series with the load and changes no stress) |
+
+```sh
+python -m studies.lere.runq --out runs/whole --jobs 6 W0 W1 W2 W3 W4 W5 W1t45 W1t90
+python -m studies.lere.table runs/whole
+python -m studies.lere.run_set W1 --out runs/whole_check --h 20 --no-plot   # a quicker look at 20 mm elements
+```
+
+result.json carries the same fields plus `adds`, `model_mass_kg` (the sprung mass of the shell solve),
+`element_size_mm`, `whole_notes`, `corners` (motion ratio, spring rate, wheel rate, tyre per corner), `mount_ties`,
+`best["post <member>"]` (the post bases: the largest element von Mises within 70 mm of the foot of tower_post_LB /
+RB and rollbar_foot_L / R; their joints are tied, without weld strips, so they have no IIW hot spot), and with arms
+`linkage_check`: per mount K2's force and the linkage's at the instants of the largest LE / RE / any hot spot and
+of the largest K2 mount force. The record's tyre force series (25 Hz) are not on K2's mount instants, so the
+corners are loaded by the knuckle load, not by the record's tyre forces.
+
 ## Outputs (DIR/NAME/)
 
 - `result.json`: name, variables, extra, tyre_stiffness, mass_kg (parts + members), post_spare_mm (the rail top
@@ -80,4 +110,5 @@ pause rather than swap, but it does not reserve memory: the stagger keeps the se
 ## Tests
 
 This folder has no tests of its own: the study uses the tools' own tests (`tests/solvers/test_k1_shell.py`,
-`tests/solvers/test_designgen_gusset_mesh.py` and the rest of `tests/`).
+`tests/solvers/test_designgen_gusset_mesh.py`, the whole model's `tests/solvers/test_k1_shell_whole.py` and the rest
+of `tests/`).

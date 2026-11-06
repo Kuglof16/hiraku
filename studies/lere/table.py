@@ -13,7 +13,8 @@ HEAD = ("Step hit (K2 step_climb_dynamic 100 mm 10 km/h, mount_path footprint; c
         "Base = v005 + tower_b 35, tower_t 4.5, rail_b 40, gusset_ends 1, gusset_leg 120, gusset_thickness 4.5, "
         "mount_plate_t 9, mount_weld_leg 6.3, HIRAKU_LCA_FULL_WALL=1. Values: largest over the instants (t s). "
         "Mass = parts + members.\n\n")
-COLS = ["set", "extra", "mass kg", "LB / RB MPa (t s)", "LE / RE MPa (t s)", "largest hot spot", "beam MPa (where)",
+COLS = ["set", "extra", "mass kg", "LB / RB MPa (t s)", "LE / RE MPa (t s)", "largest hot spot",
+        "post base vM MPa (t s)", "beam MPa (where)",
         "R9 plate / weld worst", "post spare mm", "modes 1-8 Hz (kind)", "first frame Hz"]
 
 
@@ -27,10 +28,19 @@ def row(s):
     ex = ", ".join(f"{k} {v:g}" for k, v in s.get("extra", {}).items()) or "-"
     tyre = s.get("tyre_stiffness", 60)
     ex += f"; tyre {tyre:g}"
-    raw = {"mass_kg": s.get("mass_kg"), "tyre": tyre}
+    if s.get("adds") is not None:
+        ex += "; whole " + ("+".join(s["adds"]) or "(none)")
+    raw = {"mass_kg": s.get("mass_kg"), "tyre": tyre, "adds": s.get("adds"), "model_mass_kg": s.get("model_mass_kg")}
     B = s.get("best")
     if B:
         f = lambda k: f"{B[k][0]:.1f} ({B[k][1]:.2f})" if k in B else "-"  # noqa: E731
+        posts = [(k[5:], v) for k, v in B.items() if k.startswith("post ")]
+        if posts:
+            pk, pv = max(posts, key=lambda kv: kv[1][0])
+            raw["post_base_MPa"] = pv[0]
+            hm_post = f"{pv[0]:.1f} ({pk} t {pv[1]:.2f})"
+        else:
+            hm_post = "-"
         lbrb, lere = f"{f('hot LB')} / {f('hot RB')}", f"{f('hot LE')} / {f('hot RE')}"
         hm = f"{B['hot max'][0]:.1f} {B['hot max'][2]} t {B['hot max'][1]:.2f}" if "hot max" in B else "-"
         bm = s.get("beam_max_stress_over_time") or []
@@ -48,7 +58,7 @@ def row(s):
             raw[k.replace(" ", "_")] = B[k][0] if k in B else None
         raw["beam_MPa"] = bm[0]["value"] if bm else None
     else:
-        lbrb = lere = hm = beam = r9 = "not run"
+        lbrb = lere = hm = beam = r9 = hm_post = "not run"
     m = s.get("modal")
     if m:
         k1 = {"body": "b", "frame": "F", "roll bar": "r"}
@@ -59,7 +69,7 @@ def row(s):
         modes = ff = "not run"
     sp = s.get("post_spare_mm", {})
     raw["post_spare_mm"] = min(sp.values()) if sp else None
-    vals = [s.get("name", "?"), ex, f"{s['mass_kg']:.1f}", lbrb, lere, hm, beam, r9,
+    vals = [s.get("name", "?"), ex, f"{s['mass_kg']:.1f}", lbrb, lere, hm, hm_post, beam, r9,
             f"{min(sp.values())}" if sp else "-", modes, ff]
     return {**dict(zip(COLS, vals)), "_": raw}
 
