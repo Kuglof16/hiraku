@@ -120,10 +120,16 @@ export function cutLookOf(layout, name, params = null) {
 }
 
 // Every look's assets loaded (the cut pages wait for this before they say they are ready,
-// so a frame at ?t= is the same every time).
+// so a frame at ?t= is the same every time). True when it had to wait (a frame drawn before
+// is to be drawn again).
 const PENDING = new Set();
 export async function looksReady() {
-  while (PENDING.size) await Promise.all([...PENDING]);
+  let waited = false;
+  while (PENDING.size) {
+    waited = true;
+    await Promise.all([...PENDING]);
+  }
+  return waited;
 }
 
 // ---- canvas textures ---------------------------------------------------------

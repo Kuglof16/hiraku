@@ -40,7 +40,7 @@ import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.
 import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
 import { REPLY_STEP_S } from "./intake/a1.js";
-import { lookFromParams, qualityFromParams } from "./look.js";
+import { lookFromParams, looksReady, qualityFromParams } from "./look.js";
 import { DUMMY_NOTE_JA } from "./hybrid3.js"; // the workbench's くわしく under a dummy
 import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
@@ -2608,6 +2608,12 @@ async function seekAndDraw(t) {
     board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale);
   }
   await nextFrame();
+  // the real look's Poly Haven files (sky, ground, wall) still loading: the frame at t once they
+  // are in, so a page at ?t= draws the same picture every time (as cut.js waits for them)
+  if (await looksReady()) {
+    draw();
+    await nextFrame();
+  }
   document.documentElement.dataset.t = String(player.playhead);
   return player.playhead;
 }
