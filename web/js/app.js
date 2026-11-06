@@ -1133,7 +1133,8 @@ document.addEventListener(
 function keepOpen(el) {
   for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep) || (MORE_ALL && !shutMore.has(d.dataset.keep));
 }
-if (MORE_ALL) $("chain-more").open = true;
+// (?zoom= on a card folded under the chain's くわしく, e.g. cmp: that くわしく open, so the card is there to move in on)
+if (MORE_ALL || (ZOOM && $("chain-more").querySelector(ZOOM.selector))) $("chain-more").open = true;
 
 function renderChain(s, chain) {
   const { loadCase, pred, ana, running, cmp, verdict, cause } = chain;
