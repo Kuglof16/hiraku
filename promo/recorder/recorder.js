@@ -397,12 +397,35 @@ async function stopRecording() {
   take.peak = Math.max(take.peak, r.peak);
   take.clipped = take.peak >= 0.989;
   (state.takes[r.key] = state.takes[r.key] || []).push(take);
-  if (!state.chosen[r.key]) state.chosen[r.key] = take.id;
+  // the newest take is the one used (a ★ chosen by hand holds until the next take of that sentence)
+  state.chosen[r.key] = take.id;
   saveChosen();
   store.put(r.key, take);
   renderList(); renderPrompter();
-  if (state.chosen[r.key] === take.id) maybeAutoSave(r.key);
+  maybeAutoSave(r.key);
   return take;
+}
+
+// When a take was made (its id starts with Date.now() in base 36).
+function takeTime(t) { return parseInt(String(t.id).split("-")[0], 36) || 0; }
+
+// For every sentence of the script, use its newest take made since `sinceMs` with the same text, and save
+// them again (the earlier page kept the first take of a sentence). Returns the keys it changed.
+async function useLatestTakes(sinceMs) {
+  const changed = [];
+  for (const ln of state.lines) {
+    const list = (state.takes[ln.key] || []).filter((t) => takeTime(t) >= sinceMs && t.ja === ln.ja);
+    if (!list.length) continue;
+    const last = list.reduce((a, b) => (takeTime(b) >= takeTime(a) ? b : a));
+    if (state.chosen[ln.key] !== last.id) { state.chosen[ln.key] = last.id; changed.push(ln.key); }
+  }
+  saveChosen();
+  renderList(); renderPrompter();
+  if (state.server) {
+    for (const k of state.lines.map((l) => l.key).filter((k) => chosenTake(k) && takeTime(chosenTake(k)) >= sinceMs)) await saveKey(k);
+  }
+  $("exportInfo").textContent = `最後の録音に選び直した文: ${changed.length} 文 (${changed.join("・") || "なし"})${state.server ? "。保存し直しました" : ""}`;
+  return changed;
 }
 
 let takeSeq = 0;
@@ -828,6 +851,8 @@ function wire() {
   $("synthPlay").onclick = () => { const ln = current(); if (ln) playSynth(ln.key); };
   $("exportOne").onclick = exportOne;
   $("exportAll").onclick = () => exportAll(null);
+  // takes of this round only (script v10, recorded from 2026-11-06 10:30 JST)
+  $("useLatest").onclick = () => useLatestTakes(Date.UTC(2026, 10, 6, 1, 30)).catch((e) => { $("exportInfo").textContent = e.message; });
   $("exportDir").onclick = exportToDir;
   $("exportDir").hidden = !window.showDirectoryPicker;
   $("autoSave").checked = lsGet(LS.autoSave) !== "0";
@@ -884,7 +909,7 @@ async function init() {
 
 // Hooks for the browser test (promo/tests/test_recorder.py).
 window.hirakuRec = {
-  state, loadScriptText, startRecording, stopRecording, go, applyPreset, setBypass, openMic, saveKey,
+  state, loadScriptText, startRecording, stopRecording, go, applyPreset, setBypass, openMic, saveKey, useLatestTakes, chosenTake,
   idle: () => saveChain,
   async exportBase64(key, opts) {
     const r = await renderExport(key, opts);
