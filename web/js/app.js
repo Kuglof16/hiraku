@@ -59,6 +59,8 @@ import { designerColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
+import { domainIconSvg } from "./domain_icons.js";
+import { footerActivity, mountHookLine, withoutRuleIds } from "./hookline.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -66,6 +68,8 @@ const params = new URLSearchParams(location.search);
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
 const tabs = mountTabs($("tabs"), { dev: DEV });
+const hookLine = mountHookLine($("stage"), { dev: DEV, showS: 5 }); // the hooks' stop in one line; the footer's list folded
+$("back-link").href = DEV ? "?list=1&dev=1" : "?list=1";
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
@@ -844,14 +848,14 @@ function renderTop(s) {
   $("mode").innerHTML =
     // (the run list's words: 決まった手順, DRIVEN_JA / labels.js runSummaryJa)
     `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
-    // the run's id only under ?dev=1 (people go back to the list by 「☰ 一覧へ」)
+    // the run's id only under ?dev=1 (people go back to the list by 「☰ 一覧へ」 at the top left, #back-link)
     (DEV ? `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` : "") +
     // a run this screen started can be stopped while it goes
     (ownRunGoing()
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
       : DEV
         ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
-        : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
+        : "");
 }
 
 // lcId: the load case shown on the 3D (null on the screens without it: no chip ringed); openDomain:
@@ -862,7 +866,7 @@ function renderChips(s, lcId, openDomain = null) {
     const j = judgementState(s, d);
     const title = j.judgement?.summary != null ? judgedWords(j.judgement.summary) : (j.picked ? "まだ判定が無い" : onlyTestsLine(s) ?? "この実行では選んでいない");
     const held = heldCases(s, d, s.currentVersion).length ? " held" : ""; // held: a count not judged (held.js)
-    return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
+    return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${domainIconSvg(d, "chip-ic")}${esc(DOMAIN_JA[d])}</span>`;
   }).join("");
   // held: the workbench's 保留 band above the 3D (every domain's load cases without a criterion whose count is not 0)
   let band = $("heldband");
@@ -1654,7 +1658,7 @@ function renderGrid(s) {
 
 function renderStatus(s) {
   const act = s.activity;
-  $("activity").innerHTML = act ? `<span class="dot"></span>${esc(agentLongName(act.agent) || "HIRAKU")}: ${esc(act.text)}` : "";
+  $("activity").innerHTML = act ? `<span class="dot"></span>${esc(footerActivity(s, { dev: DEV }))}` : ""; // short (hookline.js)
 }
 
 // A rule whose stops were all done later says 解決済み (resolvedHooks), apart from one still open.
@@ -1687,17 +1691,8 @@ function renderTransient(s, playhead, chain, resolved) {
     b.dataset.seq = String(said.seq);
     b.innerHTML = `<div class="who"><span class="pet" style="--pet:${petColor(said.agent)}"></span>${esc(agentLongName(said.agent))}</div><div class="tx">${esc(said.text)}</div>`;
   }
-  const den = s.denied;
-  const h = $("hookflash");
-  h.style.opacity = den ? fade(playhead - den.t) : 0;
-  // what happened and what comes next, in short words (the recorded words are in the log)
-  const done = den ? resolved.has(den.seq) : false;
-  if (den && (h.dataset.seq !== String(den.seq) || h.dataset.done !== String(done))) {
-    h.dataset.seq = String(den.seq);
-    h.dataset.done = String(done);
-    const w = hookWords(den.rule);
-    h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
-  }
+  // the hooks' stop: one line near the middle of the screen on every tab (hookline.js; the recorded words are in the log)
+  hookLine.render(s, playhead);
   // the cause of a mismatch Claude wrote, until a verdict of its load case is OK (present.js openCause)
   const cause = openCause(s);
   const cn = $("causenote");
@@ -1870,7 +1865,7 @@ function draw() {
     renderModuleLegend(viewport, bench.design, { colors: ui.toggles.modules, spaces: ui.toggles.spaces }, modLayer);
     renderJointLegend(viewport, bench.joints, !!ui.toggles.joints && view === "bench"); // joints:
     // what is going on, in one sentence; and the present mode's card for this scene
-    const now = nowSentence(s, chain, (tool) => toolTitle(s, tool));
+    const now = withoutRuleIds(nowSentence(s, chain, (tool) => toolTitle(s, tool)), { dev: DEV });
     $("now").textContent = now;
     $("now").title = now;
     $("now").hidden = !now;

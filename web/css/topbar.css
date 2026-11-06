@@ -1,0 +1,75 @@
+/* The top's back link by the wordmark (every tab), the domains' icons on the chips and the
+   tiles (js/domain_icons.js), the hooks' one line and the footer's folded list (js/hookline.js). */
+
+.brand { align-items: center; }
+.back-link {
+  flex: none;
+  font-size: 15px;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 1px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+  margin-left: -8px;
+}
+.back-link:hover { background: var(--panel); }
+body.video .back-link { display: none; }
+
+/* the domains' icons: as high as the letters, in the chip's own colour */
+.chip { padding: 3px 11px; gap: 5px; }
+.chip .chip-ic, .tile .th h3 .dom-ic { flex: none; width: 1.05em; height: 1.05em; }
+.tile .th h3 { display: inline-flex; align-items: center; gap: 6px; }
+
+/* the hooks' stop: attention (orange), not a NG judgement (red is for those only) */
+.hookline {
+  position: absolute;
+  left: 50%;
+  top: 150px;
+  transform: translateX(-50%);
+  z-index: 25;
+  max-width: 1100px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--orange-pale);
+  border: 2px solid var(--orange);
+  color: var(--orange);
+  border-radius: 12px;
+  padding: 8px 20px;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+.hookline[hidden] { display: none; }
+.hookline .hl-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--orange);
+  color: var(--panel);
+  font-size: 17px;
+}
+/* the old three-line notice in the 3D stays empty (the line above says it) */
+.hookflash { display: none; }
+
+/* the footer: the rules' list behind 「くわしく」 */
+.hooks-more {
+  flex: none;
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--muted);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 12px;
+  white-space: nowrap;
+}
+.hooks-more:hover { color: var(--ink); border-color: var(--ink); }
+.statusrow .hooks[hidden] { display: none; }
+.statusrow.hooks-open .activity { flex: 1 1 0; }

@@ -229,7 +229,7 @@ class PresentBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=2.5")
         early = page.evaluate(
             """() => ({ line: document.querySelector('#log li.hook').textContent, done: document.querySelector('#log li.hook').classList.contains('done'),
-                        flash: document.getElementById('hookflash').textContent, row: document.getElementById('hooks').textContent,
+                        flash: document.getElementById('hookline').textContent, row: document.getElementById('hooks').textContent,
                         now: document.getElementById('now').textContent })"""
         )
         self.assertIn("止めました", early["line"])
@@ -237,9 +237,11 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertIn("詳しい記録", early["line"])
         self.assertNotIn("解決済み", early["line"])
         self.assertFalse(early["done"])
-        self.assertIn("次に:", early["flash"])
+        # the stop in one line (what was stopped, what the agent is made to do), without the rule's id
+        self.assertEqual(early["flash"], "!予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertNotIn("解決済み", early["row"])
         self.assertIn("hooks が止めた", early["now"])
+        self.assertNotIn("HK1", early["now"])
         late = page.evaluate(
             """async () => { await window.hiraku.seek(9); return { line: document.querySelector('#log li.hook').textContent,
                   done: document.querySelector('#log li.hook').classList.contains('done'), row: document.getElementById('hooks').textContent,
