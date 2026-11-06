@@ -14,6 +14,7 @@ import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
 import { heldBandHtml, heldCases, referenceCases, referenceRowsHtml } from "./held.js";
 import { builtLine } from "./proposals.js"; // modules:
 import { judgedContour } from "./judged.js";
+import { analysisEdge, edgeFlips, edgeLineHtml, edgeRaw } from "./edge_note.js";
 import { MATERIAL_JA, pictureOf } from "./tile_pictures.js";
 
 const W = 300;
@@ -391,11 +392,20 @@ export class TileBoard {
         ? `<div class="num" data-role="number"><span class="nq">${esc(`${big.test_id ?? big.load_case_id ?? ""} ${quantityName(s.comparisons[big.comparison_id]?.quantity ?? big.quantity)}`.trim())}</span>` +
           `<b class="nv${big.pass === false ? " ng" : ""}">${esc(fmtQ(big.value, 3))}</b><span class="nl">${esc(`${opLabel(big.op)} ${fmtQ(big.limit, 3)}`)}</span></div>`
         : `<div class="num none" data-role="number"><span class="nq">${esc(why)}</span></div>`;
+      // 境目 under the number when the crash tool's note on the break angle names a verdict's
+      // quantity as changing inside the band (edge_note.js; the record's note and the verdict as the tooltip)
+      const edgeOf = (x) => {
+        const a = s.analyses[x.analysis_id ?? s.comparisons[x.comparison_id]?.analysis_id];
+        const e = analysisEdge(a);
+        return e && (edgeFlips(e, x.quantity) || edgeFlips(e, s.comparisons[x.comparison_id]?.quantity)) ? { e, a, x } : null;
+      };
+      const onEdge = verdicts.map(edgeOf).find(Boolean);
+      const edgeHtml = onEdge ? edgeLineHtml(onEdge.e, `${onEdge.x.test_id ?? onEdge.x.load_case_id} ${quantityName(onEdge.x.quantity)}\n${edgeRaw(onEdge.a)}`) : "";
       return (
         `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}">` +
         `<div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
         `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"${picAttrs}></canvas></div>` +
-        `<div class="side">${number}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
+        `<div class="side">${number}${edgeHtml}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
         // the words and the small drawings: only when the tile is opened
         `<details class="more"><summary>くわしく</summary>` +
         `<div class="state"${wordTitle}>${esc(word)}</div>` +
