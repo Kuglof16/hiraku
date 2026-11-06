@@ -84,25 +84,43 @@ def use_fatigue_known_answers() -> list[Record]:
     fat, m, nk = 71.0, 3.0, 1e7
     knee = fat * (2e6 / nk) ** (1.0 / m)
     src_sn = "IIW-type S-N curve N = 2e6 (FAT / range)^m above the knee and Miner's rule D = n / N"
-    d = weld_damage({"frame": 0.0, "lug_back": 100.0, "lug_knee": 0.0}, {"n_raise": 1000.0}, fat, m, nk)
+    src_sn_ja = "IIW 形の S-N 曲線: 曲がり点より上は N = 2e6 (FAT / 応力の幅)^m。マイナー則 D = n / N"
+    n_up, s_up = 1000.0, 100.0
+    d = weld_damage({"frame": 0.0, "lug_back": s_up, "lug_knee": 0.0}, {"n_raise": n_up}, fat, m, nk)
     out.append(check_record("1000 raises at 100 MPa at the back lug, FAT 71, m 3", "damage_lug_back",
-                            1000.0 / (2e6 * (fat / 100.0) ** m), d["lug_back"], "1", 1e-12, src_sn))
-    d = weld_damage({"frame": knee / 2.0, "lug_back": 0.0, "lug_knee": 0.0}, {"n_seat": 6000.0, "n_lift": 4000.0},
+                            1000.0 / (2e6 * (fat / 100.0) ** m), d["lug_back"], "1", 1e-12, src_sn,
+                            case_ja=f"背の金具の耳に {s_up:g} MPa の幅で {n_up:g} 回の上げ、FAT {fat:g}、m {m:g}",
+                            source_ja=src_sn_ja))
+    n_seat, n_lift = 6000.0, 4000.0
+    d = weld_damage({"frame": knee / 2.0, "lug_back": 0.0, "lug_knee": 0.0}, {"n_seat": n_seat, "n_lift": n_lift},
                     fat, m, nk)
+    m2 = 2 * m - 1
     out.append(check_record("10000 cycles (6000 seat, 4000 lift) at half the knee range at the frame", "damage_frame",
                             1e4 / (nk * 2.0 ** (2 * m - 1)), d["frame"], "1", 1e-9,
                             "below the knee the spectrum's slope 2 m - 1 = 5 (IIW-1823-07 (2008) sec. 4.3.1, p.110): "
-                            "half the knee range lasts 2^5 times the knee cycles; the seat's and the lift's counts add"))
+                            "half the knee range lasts 2^5 times the knee cycles; the seat's and the lift's counts add",
+                            case_ja=(f"床の枠で、曲がり点の幅の半分の繰り返しを {n_seat + n_lift:g} 回 (着座 {n_seat:g} 回、"
+                                     f"昇降 {n_lift:g} 回)"),
+                            source_ja=(f"曲がり点より下では、スペクトルの傾きは 2 m - 1 = {m2:g} (IIW-1823-07 (2008) 4.3.1 節、"
+                                       f"p.110)。曲がり点の幅の半分なら、曲がり点の回数の 2^{m2:g} 倍もつ。着座と昇降の回数は"
+                                       "足す")))
     ranges = {"frame": 30.0, "lug_back": 65.0, "lug_knee": 45.0}
     counts = {"n_seat": 1e4, "n_raise": 1e3}
     d = weld_damage(ranges, counts, fat, m, nk)
     expect = {"frame": 1e4 / (nk * (knee / 30.0) ** 5), "lug_back": 1e3 / (2e6 * (fat / 65.0) ** 3),
               "lug_knee": 1e3 / (2e6 * (fat / 45.0) ** 3)}
     out.append(check_record("three welds, the worst one", "damage_worst", max(expect.values()), max(d.values()), "1",
-                            1e-9, "closed form of each weld; the worst is the back lug (65 MPa above the knee)"))
+                            1e-9, "closed form of each weld; the worst is the back lug (65 MPa above the knee)",
+                            case_ja=f"{len(ranges)} か所の溶接のうち、いちばん悪いもの",
+                            source_ja=(f"溶接ごとに式で出す。いちばん悪いのは背の金具の耳 ({ranges['lug_back']:g} MPa、"
+                                       "曲がり点より上)")))
+    lug_F, lug_h, lug_w, lug_t = 2000.0, 100.0, 40.0, 6.0
     out.append(check_record("clevis lugs, 2 kN, pin 100 mm below the root, 40 x 6 mm", "lug_root_stress",
-                            1000.0 * 100.0 / (6.0 * 40.0**2 / 6.0), lug_root_stress(2000.0, 100.0, 40.0, 6.0), "MPa",
-                            1e-12, "each lug a cantilever: (F / 2) h_p / (t w^2 / 6)"))
+                            1000.0 * 100.0 / (6.0 * 40.0**2 / 6.0), lug_root_stress(lug_F, lug_h, lug_w, lug_t), "MPa",
+                            1e-12, "each lug a cantilever: (F / 2) h_p / (t w^2 / 6)",
+                            case_ja=(f"二又の金具の耳、{lug_F / 1e3:g} kN、ピンは根元から {lug_h:g} mm 下、耳は "
+                                     f"{lug_w:g} x {lug_t:g} mm"),
+                            source_ja="耳 1 枚ずつを片持ち梁とみる: (F / 2) h_p / (t w^2 / 6)"))
     # the occupant-only frame: a 100 kg person at a quarter of AB on the weightless triangle (lever rule)
     tri = _table_design()
     tri["parts"] = [{"id": "occupant.body", "name": "person", "kind": "occupant", "mass_kg": 100.0,
@@ -112,9 +130,13 @@ def use_fatigue_known_answers() -> list[Record]:
     res = solve_at_rest(occupant_only(tri))
     g = {k: float(v["force_N"][2]) for k, v in res["ground"].items()}
     W = 100.0 * STANDARD_GRAVITY
+    person, box = (p["mass_kg"] for p in tri["parts"])
+    only_ja = f"人の重さだけを載せる: {person:g} kg の人は AB の 4 分の 1 の所、C の {box:g} kg の箱は重さを入れない"
     out.append(check_record("only the occupant weighs: 100 kg at a quarter of AB, a 50 kg box at C left out",
-                            "support_load_A", 0.75 * W, g["SA"], "N", 1e-6, "lever rule R_A = 3/4 W; the box adds nothing"))
-    out.append(check_record("the same", "support_load_C", 0.0, g["SC"], "N", 1e-6, "the box at C weighs nothing here"))
+                            "support_load_A", 0.75 * W, g["SA"], "N", 1e-6, "lever rule R_A = 3/4 W; the box adds nothing",
+                            case_ja=only_ja, source_ja="てこの法則 R_A = 3/4 W。箱は何も足さない"))
+    out.append(check_record("the same", "support_load_C", 0.0, g["SC"], "N", 1e-6, "the box at C weighs nothing here",
+                            case_ja=only_ja, source_ja="ここでは C の箱の重さは 0"))
     return out
 
 
@@ -238,16 +260,25 @@ def upstream_stroke(upstream: dict | None, at: str) -> tuple[str, float] | None:
 def actuator_duty_known_answers() -> list[Record]:
     out = []
     r, ax = 100.0, 400.0
-    res = linkage_force((0.0, 0.0), (-ax, -r), r, [], 45.0, 1.0, steps=2)
-    th = math.radians(45.0)
+    ang = 45.0
+    res = linkage_force((0.0, 0.0), (-ax, -r), r, [], ang, 1.0, steps=2)
+    th = math.radians(ang)
     e = math.hypot(r * math.sin(th) + ax, r - r * math.cos(th))
     out.append(check_record("lever 100 mm, anchor 400 mm away level with the tip, raised 45 deg", "lever_stroke", e - ax,
                             res["stroke"], "mm", 1e-9, "stroke = |tip(45 deg) - anchor| - a (the lever's, not the "
-                                                      "actuator's whole stroke)"))
-    got = duty(120.0, 0.006, 6.0, 2.0)
-    out.append(check_record("120 mm at 6 mm/s", "run_time", 20.0, got["run_time"], "s", 1e-12, "t = s / v"))
+                                                      "actuator's whole stroke)",
+                            case_ja=f"長さ {r:g} mm のてこ、先と同じ高さで {ax:g} mm 離れた留め点、{ang:g}° 起こす",
+                            source_ja=(f"ストローク = |先 ({ang:g}°) - 留め点| - a (てこのストロークで、アクチュエーターの"
+                                       "全ストロークではない)")))
+    s_mm, v_m_s, uses, k = 120.0, 0.006, 6.0, 2.0
+    got = duty(s_mm, v_m_s, uses, k)
+    run_ja = f"{s_mm:g} mm を {v_m_s * 1e3:g} mm/s で"
+    out.append(check_record("120 mm at 6 mm/s", "run_time", 20.0, got["run_time"], "s", 1e-12, "t = s / v",
+                            case_ja=run_ja, source_ja="動く時間 t = s / v"))
     out.append(check_record("6 uses, 2 strokes each, 120 mm at 6 mm/s", "duty", 100.0 * 6 * 2 * 20.0 / 3600.0,
-                            got["duty"], "%", 1e-12, "duty = n k s / v / 3600 s"))
+                            got["duty"], "%", 1e-12, "duty = n k s / v / 3600 s",
+                            case_ja=f"{uses:g} 回使い、1 回に {k:g} ストローク、{run_ja}",
+                            source_ja=f"使う割合 = n k s / v / {SECONDS_PER_HOUR:g} s"))
     return out
 
 

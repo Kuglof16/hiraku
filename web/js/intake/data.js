@@ -214,6 +214,10 @@ export const ITEM_HELP = {
     "why": "壊れるまでに何回使われるかで、くり返しの力 (疲れ) の確かめ方を決めるためです。",
     "example": "週末ごとに 5 年"
   },
+  "Q04": {
+    "why": "走ったまま段差に当たると、止まった所から押し上げるときの何倍かの力が車輪とフレームにかかるためです。",
+    "example": "10 km/h"
+  },
   "Q11": {
     "why": "滑りやすさで、止まれるか・転ばないかの確かめ方が変わるためです。",
     "example": "砂利 / 舗装路"
@@ -234,6 +238,42 @@ export const ITEM_HELP = {
     "why": "雨や泥で電気の部品が壊れないかの確かめに使います。",
     "example": "水の飛まつ"
   },
+  "Q21": {
+    "why": "帯や鎖が強くても、荷台の側の固定点が先に壊れれば荷は止まらないためです。",
+    "example": "8000 N"
+  },
+  "Q22": {
+    "why": "電線が流してよい電流は周りが熱いほど小さくなるので、どの温度で確かめるかを先に決めるためです。",
+    "example": "40 degC (モーターや制御器のそばはもっと高いことがあります)"
+  },
+  "Q23": {
+    "why": "電線を束ねると熱が逃げにくくなり、1 本のときより少ない電流しか流せないためです。",
+    "example": "0.5 (8 本までの束)"
+  },
+  "Q24": {
+    "why": "ショートや流れ過ぎのときに、電線が熱くなって燃える前に回路を切るためです。",
+    "example": "1.0 (電線の許容電流を超えない)"
+  },
+  "Q25": {
+    "why": "きつく曲げると被覆や導体が傷み、振動でそこから切れるためです。",
+    "example": "3 (外径 9.4 mm の電線なら 28.2 mm 以上)"
+  },
+  "Q26": {
+    "why": "束を曲げると外側の電線が引っ張られ、内側の電線が押しつぶされるためです。",
+    "example": "10"
+  },
+  "Q27": {
+    "why": "支えの間が長いと、悪路の揺れで電線がたわんで振られ、こすれたり留め具の所で切れたりするためです。",
+    "example": "609.6 mm"
+  },
+  "Q28": {
+    "why": "揺れで電線が板の縁にこすれ、被覆がすり切れてショートするのを防ぐためです。",
+    "example": "9.525 mm"
+  },
+  "Q29": {
+    "why": "ハンドルなど動く所に電線が当たると、こすれて切れたり、操作のじゃまになったりするためです。",
+    "example": "12.7 mm"
+  },
   "Q30": {
     "why": "人数と荷の組み合わせで、重さのかかり方が変わるためです。",
     "example": "2 人 + 荷"
@@ -241,6 +281,26 @@ export const ITEM_HELP = {
   "Q34": {
     "why": "いる場合は、はさまれや倒れかかりをより厳しく見るためです。",
     "example": "いない / 子ども"
+  },
+  "Q35": {
+    "why": "後ろからぶつけられたとき、首が後ろへ折れないように、頭の後ろに受け止めるものが届く高さかを確かめるためです。",
+    "example": "800 mm"
+  },
+  "Q36": {
+    "why": "頭が横にずれても、後ろで受け止められる幅があるかを確かめるためです。",
+    "example": "170 mm"
+  },
+  "Q37": {
+    "why": "受け止める面が頭から遠いと、ぶつけられたときに頭が大きく後ろへ振られてから止まるためです。",
+    "example": "55 mm"
+  },
+  "Q38": {
+    "why": "背もたれと頭を受け止める部分のあいだに、頭や首が入り込む大きな穴が残っていないかを確かめるためです。",
+    "example": "60 mm"
+  },
+  "Q39": {
+    "why": "電池と守りの器具の間の電線は守られていないので、そこでショートすると大きな電流が止まらないためです。",
+    "example": "1828.8 mm"
   },
   "Q40": {
     "why": "荷の重さで、骨組みにかかる力が決まるためです。",
@@ -290,6 +350,14 @@ export const ITEM_HELP = {
     "why": "動く部分が当たらない広さを確かめるためです。",
     "example": "0 度から 60 度まで"
   },
+  "Q58": {
+    "why": "狭い道や曲がり角で、向きを変えられるかを確かめるためです。",
+    "example": "12 m"
+  },
+  "Q59": {
+    "why": "床と荷の材料で滑りやすさが変わり、固定に要る力が変わるためです。",
+    "example": "0.3 (分からないとき) / ゴムのマット 0.6"
+  },
   "Q61": {
     "why": "設計の余裕の大きさです。大きいほど安全で、重くなります。",
     "example": "1.5"
@@ -309,6 +377,14 @@ export const ITEM_HELP = {
   "Q80": {
     "why": "溶接や締め付けの決まりのどれを使うかを選ぶためです。",
     "example": "鋼の溶接"
+  },
+  "Q83": {
+    "why": "折れ角が大きすぎると、ハンドルが重い所と軽い所ができたり、引っかかって回らなくなったりするためです。",
+    "example": "35°"
+  },
+  "Q84": {
+    "why": "折れた軸を通すと、ハンドルを一定に回しても先の回転が速くなったり遅くなったりし、手に感じる重さが 1 回転の中で変わるためです。",
+    "example": "10 %"
   },
   "Q89": {
     "why": "太すぎて手が回らないことがないか確かめるためです。",
@@ -387,6 +463,14 @@ export const ITEM_CHOICES = {
     "高齢者": "高齢者",
     "子ども": "子ども",
     "高齢者と子ども": "高齢者と子ども"
+  },
+  "Q59": {
+    "0.3": "分からない (0.3)",
+    "0.6": "ゴムのマットを敷く (0.6)",
+    "0.45": "木の荷と合板の床 (0.45)",
+    "0.15": "樹脂のパレットとステンレス板・溝付きアルミの床 (0.15)",
+    "0.2": "雪・氷・霜がつく (0.2)",
+    "0.1": "油や脂がつく (0.1)"
   },
   "Q64": {
     "あり": "つける",
@@ -492,6 +576,21 @@ export const FACTS = {
   },
   "section_ratio_round_max": {
     "label": "円形鋼管の外径 / 肉厚 (部材ごとに出して最大。円形鋼管でなければ 0)",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "butt_end_count": {
+    "label": "角形鋼管の端のうち、別の部材の側面や角に突き当たる T・L の継ぎ手の数 (部材ごと。続きの部材が反対側にある端は数えない)",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "butt_end_ungusseted": {
+    "label": "その T・L の継ぎ手のうち、節点にガセット (kind が gusset の部品) が付いていないものの数",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "butt_end_partial_weld": {
+    "label": "その T・L の継ぎ手のうち、溶接が全周でないものの数 (節点の weld_extent が all_round でない。節点に weld_extent が無ければ、この名前は出さない)",
     "unit": "1",
     "inDesigns": true
   },
@@ -607,6 +706,161 @@ export const FACTS = {
   },
   "closing_gap_mm": {
     "label": "閉じる隙間",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "uj_count": {
+    "label": "操舵の軸の折れる所 (自在継手) の数",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "uj_angle_max_deg": {
+    "label": "操舵の軸の折れ角 (折れる所のうち最大)",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "uj_angle_diff_deg": {
+    "label": "2 か所の折れ角の差",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "uj_phase_error_deg": {
+    "label": "2 か所の継手の向き合わせ (位相) の、正しい向きからのずれ",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "steer_speed_variation_pct": {
+    "label": "ハンドルを一定に回したときの、車輪の側の回転のむら (折れる所が 1 か所のとき、折れ角から計算)",
+    "unit": "%",
+    "inDesigns": true
+  },
+  "headrest_height_mm": {
+    "label": "頭を受け止める上端の高さ (座席の基準点から胴の線に沿って)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "headrest_width_mm": {
+    "label": "頭を受け止める面の左右の幅 (上端から 65 mm 下)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "headrest_backset_mm": {
+    "label": "頭の後ろと受け止める面との水平のすき間",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "headrest_gap_mm": {
+    "label": "背もたれと頭を受け止める部分のあいだのすき間",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "lashing_count": {
+    "label": "荷を止める固定 (帯・鎖) の本数",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "topover_count": {
+    "label": "荷の上を越えて上から押さえる固定の本数",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "lashing_pretension_N": {
+    "label": "上から押さえる固定 1 本の張り (小さい方)",
+    "unit": "N",
+    "inDesigns": false
+  },
+  "lashing_angle_deg": {
+    "label": "上から押さえる固定と荷台の床の角度 (最小)",
+    "unit": "deg",
+    "inDesigns": false
+  },
+  "lashing_angle_sin": {
+    "label": "上から押さえる固定の角度の sin",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "cargo_blocked_forward": {
+    "label": "荷が荷台の前の壁に当てて止めてあるか (1 = 止めてある、0 = ない)",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "lashing_wll_min_N": {
+    "label": "荷につながる帯・金具・固定点のうち、使ってよい力の最小",
+    "unit": "N",
+    "inDesigns": true
+  },
+  "lashing_wll_sum_N": {
+    "label": "荷につながる帯 (kind が strap) の使ってよい力の合計 (1 本ずつ 1 回数える)",
+    "unit": "N",
+    "inDesigns": true
+  },
+  "anchor_strength_min_N": {
+    "label": "荷につながる固定点 (kind が anchor) が受けられる力の最小",
+    "unit": "N",
+    "inDesigns": true
+  },
+  "wire_current_A": {
+    "label": "電線に続けて流れる電流",
+    "unit": "A",
+    "inDesigns": false
+  },
+  "wire_rated_current_A": {
+    "label": "電線 1 本が流してよい電流 (表の値、周りの温度と被覆の温度クラスのとき)",
+    "unit": "A",
+    "inDesigns": false
+  },
+  "wire_bundle_count": {
+    "label": "同じ束に触れ合って入っている電線の数 (1 本だけなら 1)",
+    "unit": "1",
+    "inDesigns": false
+  },
+  "wire_fuse_rating_A": {
+    "label": "その電線を守るヒューズ・ブレーカの定格電流",
+    "unit": "A",
+    "inDesigns": false
+  },
+  "wire_insulation_max_degC": {
+    "label": "電線の被覆が使える温度の上限",
+    "unit": "degC",
+    "inDesigns": false
+  },
+  "wire_place_max_degC": {
+    "label": "電線が通る場所のいちばん高い周りの温度",
+    "unit": "degC",
+    "inDesigns": false
+  },
+  "wire_voltage_rating_V": {
+    "label": "電線の定格の電圧",
+    "unit": "V",
+    "inDesigns": false
+  },
+  "wire_bend_radius_mm": {
+    "label": "電線を曲げる所の内側の半径 (最小)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "wire_outer_diameter_mm": {
+    "label": "電線の外径 (束なら束の中でいちばん太いもの)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "wire_support_spacing_mm": {
+    "label": "配線を支える点どうしの間隔 (最大)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "wire_penetration_clearance_mm": {
+    "label": "板や縁を通り抜ける所で、留めていない配線と縁との隙間 (最小)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "wire_control_clearance_mm": {
+    "label": "配線と、動かして操作する仕組みとの隙間 (最小)",
+    "unit": "mm",
+    "inDesigns": false
+  },
+  "battery_fuse_length_mm": {
+    "label": "電池の端子から最初に回路を守る器具までの電線の長さ",
     "unit": "mm",
     "inDesigns": false
   }

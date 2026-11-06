@@ -1,0 +1,49 @@
+{
+  "id": "stkm13a",
+  "name": "JIS G 3445 STKM13A (carbon steel tube for machine structural purposes)",
+  "name_ja": "機械構造用炭素鋼鋼管 STKM13A",
+  "category": "steel",
+  "standard": "JIS G 3445",
+  "condition": "STKM13A as delivered, room temperature; elongation for No. 11 or No. 12 test piece, longitudinal; no thickness condition shown in the source; E, nu and density are common carbon-steel design values not read in a source",
+  "properties": {
+    "E_MPa": {
+      "value": 205000.0,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "nu": {
+      "value": 0.3,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "density_kg_m3": {
+      "value": 7850.0,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "yield_MPa": {
+      "value": 215.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Mory Industries web page 'kikai kozo-yo tanso kokokan' (machine structural carbon steel tube, no date), table of chemical composition and mechanical properties per JIS G 3445: STKM13A yield point or proof stress min 215 N/mm2",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "tensile_MPa": {
+      "value": 370.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Mory Industries web page 'kikai kozo-yo tanso kokokan' (no date), same table: STKM13A tensile strength min 370 N/mm2",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "elongation_pct": {
+      "value": 30.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Mory Industries web page 'kikai kozo-yo tanso kokokan' (no date), same table: STKM13A elongation min 30 %, No. 11 or No. 12 test piece, longitudinal",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

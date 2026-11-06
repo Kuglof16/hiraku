@@ -71,7 +71,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -134,7 +134,7 @@ class Declarations(unittest.TestCase):
     def test_stages_for_light_first(self):
         # contract tool_spec.stage (HK5): the K&C bench is a static one-corner model (1), the others
         # integrate the vehicle in time (2)
-        want = {"kc_bench": 1}
+        want = {"kc_bench": 1, "crash_beam": 3}
         for name, tool in TOOLS.items():
             self.assertEqual(tool.describe()["stage"], want.get(name, 2), name)
 
@@ -380,7 +380,8 @@ class Runs(unittest.TestCase):
         self.assertEqual(res["tip_slope_angle"]["unit"], "deg")
         self.assertLess(res["tip_slope_angle"]["value"], 55.0)
         series = {s["channel"]: s for s in rec["series"]}
-        self.assertEqual(len({len(s["values"]) for s in rec["series"]}), 1)
+        # the series against time share one time base (the tyre curves are against slip: their own x)
+        self.assertEqual(len({len(s["values"]) for s in rec["series"] if "t_s" in s}), 1)
         self.assertEqual(series["slope_angle"]["values"][0] < 5.0, True)  # the record starts level
         self.assertLess(max(abs(v) for v in series["roll"]["values"]), 61.0)  # and stops once tipped
         self.assertEqual(rec["scene"][1]["angle_channel"], "slope_angle")
@@ -478,6 +479,72 @@ class BrakingScene(unittest.TestCase):
         got = tool._stop_scene(veh, r, 0.1)
         self.assertEqual([o["kind"] for o in got], ["slope"])
         self.assertIn("μ 0.6", got[0]["label"])
+
+
+class StepRecordRun(unittest.TestCase):
+    """step_climb_dynamic's run option record_run = speed: the record shows run 2 (driving at the step)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = box_design(susp="kc_table", wheel_mass=15.0)
+        lc = {"load_case_id": "p1", "params": {"step_height": {"value": 100.0, "unit": "mm"},
+                                                "speed": {"value": 10.0, "unit": "km/h"}}}
+        tool = TOOLS["step_climb_dynamic"]
+        cls.push = tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {})
+        cls.speed = tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {"record_run": "speed"})
+        cls.m = build_vehicle(cls.d).m_total
+
+    def test_the_record_is_run_2_with_the_same_results(self):
+        rec = self.speed
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        self.assertNotIn("effects", rec)  # record_run is read
+        res = {r["quantity"]: r["value"] for r in rec["results"]}
+        base = {r["quantity"]: r["value"] for r in self.push["results"]}
+        for q in ("climbed", "climbable", "peak_wheel_force", "climb_time", "front_wheel_force"):
+            self.assertEqual(res[q], base[q], q)
+        self.assertEqual(res["climbed"], 1.0)
+        # run 2's step stands step_push's run_up (2 m) further than run 1's
+        self.assertAlmostEqual(rec["scene"][0]["position_mm"][0] - self.push["scene"][0]["position_mm"][0], 2000.0,
+                               delta=0.2)
+        self.assertIn("10 km/h", rec["scene"][0]["label"])
+        # the series run from the start of the roll until after the climb
+        t = rec["series"][0]["t_s"]
+        self.assertLess(t[0], 0.05)
+        self.assertGreater(t[-1], res["climb_time"])
+        self.assertTrue(any("record_run = speed" in a for a in rec["assumptions"]))
+        note = next(a for a in rec["assumptions"] if "tyre's vertical stiffness" in a)
+        # box_design gives neither variable: both are K2's defaults
+        self.assertIn("tyre_stiffness K2's default", note)
+        self.assertIn("bump_stop_factor K2's default", note)
+
+    def test_the_stiffness_note_gives_each_variable_its_basis(self):
+        from hiraku.solvers.k2_vehicle.shelf.step import stiffness_sources
+        d = box_design(variables={"tyre_stiffness": {"value": 80.0, "unit": "N/mm", "basis": "a shop page (not checked)"},
+                                  "bump_stop_factor": {"value": 10.0, "unit": "1"}})
+        got = stiffness_sources(d)
+        self.assertIn("tyre_stiffness a shop page (not checked)", got)
+        self.assertIn("bump_stop_factor from the design without a source (no basis)", got)
+        self.assertEqual(contract.errors("design", d), [])
+
+    def test_the_vectors_at_the_peak_balance_the_weight_and_carry_the_mount_loads(self):
+        from hiraku.solvers.k2_vehicle.units import G0
+        vec = self.speed["vectors"]
+        road = [v for v in vec if v["kind"] in ("reaction", "grip", "inertia")]
+        self.assertEqual(sum(v["kind"] == "inertia" for v in road), 1)
+        tot = [sum(v["vector_N"][k] for v in road) for k in range(3)]
+        tol = 1e-4 * self.m * G0  # the recorder rounds the wheel vectors
+        self.assertAlmostEqual(tot[0], 0.0, delta=tol)
+        self.assertAlmostEqual(tot[1], 0.0, delta=tol)
+        self.assertAlmostEqual(tot[2], self.m * G0, delta=tol)
+        # the largest wheel force of the snapshot is peak_wheel_force
+        peak = max(sum(a * a for a in [x + y for x, y in zip(r["vector_N"], g["vector_N"])]) ** 0.5
+                   for r in vec if r["kind"] == "reaction" for g in vec if g["kind"] == "grip" and g["at"] == r["at"])
+        res = {r["quantity"]: r["value"] for r in self.speed["results"]}
+        self.assertAlmostEqual(peak, res["peak_wheel_force"], delta=1e-3 * res["peak_wheel_force"])
+        self.assertTrue(any(v["kind"] == "joint" for v in vec))
+        self.assertTrue(any(s["channel"].startswith("mount_") for s in self.speed["series"]))
+        self.assertIn("mount_force_peak", res)
 
 
 if __name__ == "__main__":
