@@ -284,7 +284,7 @@ def export(out_dir: Path, runs: dict[str, Path], data_dir: Path = VIEWER_DATA_DI
 
 def main(argv: list[str] | None = None) -> int:
     """python -m hiraku.webserve.viewer_link --out <folder> [--saved showcase]: the viewer part of the
-    static site alone (until export_static.py calls export)."""
+    static site alone (export_static.py calls export for the whole site)."""
     import argparse
 
     from hiraku.contract.layout import EVENTS_FILE

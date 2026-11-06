@@ -282,7 +282,8 @@ class StaticBrowserTest(unittest.TestCase):
         page.wait_for_function("!document.getElementById('domain-head').hidden")
         page.evaluate("window.hiraku.seek(1e6)")
         title = self.formulas["frame_static.rail_bending"]
-        page.wait_for_function("(t) => document.getElementById('card-pred').innerText.includes(t)", arg=title, timeout=10000)
+        # (textContent: the card is folded under ③'s くわしく)
+        page.wait_for_function("(t) => document.getElementById('card-pred').textContent.includes(t)", arg=title, timeout=10000)
         # A4: the shelf from data/shelf.json, the run's tool code from data/runs/<id>/tools/
         page.click('.tab[data-tab="A4"]')
         page.wait_for_function(f"document.querySelectorAll('#view-shelf .sh-tool').length >= {len(SHELF_TOOLS)}", timeout=10000)

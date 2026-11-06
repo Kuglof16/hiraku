@@ -22,6 +22,8 @@ from hiraku.webserve, written beforehand by the server's own functions so the an
                                          run a bare page opens on ① (first: first_run)
     layout.json, pets/pet3d.js           GET /layout.json, GET /pets/pet3d.js (promo's, as they are)
     n10/                                 the saved N10 answers (showcase/n10) and a page that shows them
+    viewer/, data/viewer.json,           「ビューアで見る」: the result viewer and its answers
+    data/viewer/<id>/<analysis>.json     (hiraku.webserve.viewer_link.export)
 
 Every path in the pages is relative, so the folder works under any path of a host (/hiraku/...).
 
@@ -197,9 +199,11 @@ def export(
     shelf: Shelf | None = None,
     assets: bool = True,
     sample: bool = True,
+    viewer: bool = True,
 ) -> dict[str, Any]:
     """Write the static site to `out` (see the module's doc). run_ids: the saved runs to take
-    (None: all). Returns {"out", "runs", "files": {relative path: bytes}}."""
+    (None: all); viewer: the result viewer's part (viewer_link.export). Returns {"out", "runs",
+    "files": {relative path: bytes}}."""
     out, saved_dir, web_dir = Path(out), Path(saved_dir), Path(web_dir)
     _prepare_out(out)
     # the screen's files, its pages marked
@@ -256,6 +260,12 @@ def export(
                 _write(out / N10_DIR / f.name, f.read_bytes())
         _write(out / N10_DIR / "index.html", _n10_page(n10).encode("utf-8"))
         extras.append({"href": f"{N10_DIR}/index.html", "title": "N10: ツールなしの Claude に同じ問いを聞いた答え"})
+    # 「ビューアで見る」: viewer/, data/viewer.json and each analysis' answer (viewer_link.export)
+    if viewer:
+        from hiraku.webserve import viewer_link
+
+        viewer_link.export(out, {r["run_id"]: (SAMPLE_EVENTS if r["run_id"] == SAMPLE_ID else saved_dir / r["run_id"] / EVENTS_FILE)
+                                 for r in runs})
     first = first_run(runs, saved_dir)
     _write(data / "static.json", _json_bytes({"extras": extras, "first": first}))
     files = {p.relative_to(out).as_posix(): p.stat().st_size for p in sorted(out.rglob("*")) if p.is_file()}
