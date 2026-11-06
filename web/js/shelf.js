@@ -15,6 +15,7 @@
 
 import { BASE_JA, DOMAINS, DOMAIN_JA, fmt, fmtPct, quantityName, unitLabel } from "./labels.js";
 import { fill, h } from "./intake/dom.js";
+import { getUrl } from "./source.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
 const MODES = [["domain", "分野から"], ["base", "土台から"]];
@@ -157,7 +158,7 @@ export function mountShelf(el, api) {
   const titles = new Map();
   async function askTitles() {
     try {
-      const got = await (await fetch("/api/formulas", { cache: "no-store" })).json();
+      const got = await (await fetch(getUrl("/api/formulas"), { cache: "no-store" })).json();
       for (const f of got.formulas ?? []) if (typeof f.title === "string" && f.title) titles.set(f.formula_id, f.title);
     } catch {
       return;
@@ -170,7 +171,7 @@ export function mountShelf(el, api) {
     shelf.asked = true;
     clearTimeout(timer);
     try {
-      const got = await (await fetch("/api/shelf", { cache: "no-store" })).json();
+      const got = await (await fetch(getUrl("/api/shelf"), { cache: "no-store" })).json();
       if (got.ready) {
         Object.assign(shelf, { ready: true, tools: got.tools ?? [], formulas: got.formulas ?? [], archetypes: got.archetypes ?? {},
           error: got.error ?? null, failed: null });
@@ -250,13 +251,13 @@ export function mountShelf(el, api) {
       // no guessing <name>-<n+1>.py and a 404 for it in the console
       codeDone.set(key, (async () => {
         try {
-          const lr = await fetch(`/api/runs/${encodeURIComponent(runId)}/tools`, { cache: "no-store" });
+          const lr = await fetch(getUrl(`/api/runs/${encodeURIComponent(runId)}/tools`), { cache: "no-store" });
           if (!lr.ok) throw new Error(`${lr.status}`);
           const versions = (await lr.json()).tools?.[t.name] ?? [];
           const n = versions.length ? versions[versions.length - 1] : null;
           let last = null;
           if (n !== null) {
-            const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/tools/${t.name}-${n}.py`, { cache: "no-store" });
+            const res = await fetch(getUrl(`/api/runs/${encodeURIComponent(runId)}/tools/${t.name}-${n}.py`), { cache: "no-store" });
             if (!res.ok) throw new Error(`${res.status}`);
             last = { n, text: await res.text() };
           }

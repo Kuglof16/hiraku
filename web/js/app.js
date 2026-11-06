@@ -38,6 +38,7 @@ import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, f
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
+import { REPLY_STEP_S } from "./intake/a1.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { DUMMY_NOTE_JA } from "./hybrid3.js"; // the workbench's くわしく under a dummy
 import { mountShelf } from "./shelf.js";
@@ -50,6 +51,7 @@ import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1 and A2
 import { reportNextHtml } from "./report_next.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, judgedResult, referenceResults } from "./judged.js";
@@ -58,15 +60,45 @@ import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load case
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
 import { designerColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
+import { GripView } from "./grip_panel.js"; // grip: the tyres of a driving record (toggle タイヤ, ?on=grip)
+import { hasGrip } from "./grip_view.js"; // grip:
+import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
+import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
+import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 
 const $ = (id) => document.getElementById(id);
-const params = new URLSearchParams(location.search);
+// A static export opened with no parameters starts at ① of the run its export picked (data/static.json
+// first: a saved run whose record has the request, the picked domains and the hearing), stopped at the
+// record's end so ① and ② show all of it; 「この記録を再生する」 plays it (STATIC_REPLAY). Without such a
+// run: the run list, as before.
+async function staticFirst() {
+  try {
+    return (await (await fetch("data/static.json")).json()).first ?? null;
+  } catch {
+    return null;
+  }
+}
+const FIRST = STATIC && !location.search ? await staticFirst() : null;
+const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}&tab=A1&t=1e6` : location.search);
 // ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
 const tabs = mountTabs($("tabs"), { dev: DEV });
+// A static export: the run list is a tab of its own after the steps (a link to ?list=1; the steps
+// themselves are the record's, from ①)
+if (STATIC) {
+  document.documentElement.classList.add("static-export"); // (app.css: no box to write or send in on ① / ②)
+  const list = document.createElement("a");
+  list.className = "tab tab-list";
+  list.href = DEV ? "?list=1&dev=1" : "?list=1";
+  list.title = "保存した記録の一覧 (ほかの実行を選んで見る)";
+  list.innerHTML =
+    `<svg class="tab-ic" viewBox="0 0 20 20" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 5.5H16M4 10H16M4 14.5H16"/></svg>` +
+    `<span class="tab-name">実行の一覧</span>`;
+  $("tabs").querySelector(".tabside")?.prepend(list);
+}
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
@@ -105,7 +137,7 @@ const ui = {
   gridBack: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true, grip: false }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis; grip: タイヤ (grip_panel.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -129,11 +161,17 @@ const ui = {
 
 // ?off=contour,arrows,cg,graph turns those overlays off at load (e.g. the bare vehicle for a title shot).
 for (const key of (params.get("off") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = false;
+// ?off=cause: the card of a mismatch's cause is not shown (it has no button of its own)
+const CAUSE_OFF = (params.get("off") ?? "").split(",").includes("cause");
 // modules: ?on=modules,spaces turns those on at load (?on=joints is still read, joints being on at first) (modules and spaces take the contour's place)
 for (const key of (params.get("on") ?? "").split(",")) if (key in ui.toggles) ui.toggles[key] = true;
 if (ui.toggles.modules || ui.toggles.spaces) ui.toggles.contour = false;
 // heat: ?on=heat shows the energy's flow with any analysis picked (the newest thermal one of the design shown)
 const HEAT_FORCED = (params.get("on") ?? "").split(",").includes("heat");
+// ?play=loop&analysis=<id>: the playhead held where it arrived, its motion looped at 1x (anim_loop.js)
+const animLoop = loopFromParams(params);
+if (animLoop && !ui.pinnedTab && !ui.tabPlan.length) ui.pinnedTab = "bench";
+if (animLoop) $("ab-play").style.display = "none"; // (the loop's clock moves the motion, not ▶)
 
 if (params.get("video") === "1") document.body.classList.add("video");
 if (params.get("status") === "0") document.body.classList.add("no-status");
@@ -171,6 +209,7 @@ const quality = qualityFromParams(params, softwareGL()); // ?quality=high / medi
 // sky: the real look shows the sky with its horizon behind the vehicle (look.js Look.sky)
 const bench = new Workbench3D(viewport, look, { quality, sky: true });
 const modLayer = new ModuleLayer(bench); // modules:
+const grip = new GripView(bench, viewport); // grip:
 const heat = new EnergyFlow(bench, viewport, { dev: DEV }); // heat: ids in its legend only with ?dev=1
 const nodeView = new NodeMotionView(bench, viewport); // node_motion: the nodes' motion (js/node_motion.js)
 function resize3d() {
@@ -179,6 +218,7 @@ function resize3d() {
   const h = viewport.clientHeight;
   if (w > 0 && h > 0) {
     bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    grip.resize(w, h); // grip:
     if (half && cmpView) cmpView.bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
   }
 }
@@ -188,6 +228,7 @@ window.addEventListener("resize", fitStage);
 // ---- the agents' pets (js/agent_pets.js) ------------------------------------
 // promo/pets/pet3d.js and layout.json's n00 camera; ?pets=0, or either missing: circles and names.
 let agentPets = null;
+let intakePets = null; // js/intake_pets.js, made on the first intake frame once the pets are loaded
 const petsReady = (params.get("pets") === "0" ? Promise.resolve(null) : AgentPets.load().catch(() => null)).then((p) => {
   agentPets = p;
   document.documentElement.dataset.agentPets = p ? "on" : "none";
@@ -395,7 +436,8 @@ const intakeApi = {
 // draft, sent back with the next change. A1 and A2 draw the draft's intake events (with the
 // request as the person's words, and the server's warnings as the lead's). When the hearing is
 // settled the request's files are saved and 始める starts a run on them (--intake-events).
-const draft = params.has("new")
+// (a static export has no server to send a request to: ?new=1 opens the run list there)
+const draft = params.has("new") && !STATIC
   ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false, prefill: "", demoTitle: "" }
   : null;
 
@@ -688,14 +730,47 @@ async function dropFile(name, text) {
   }
 }
 
+// A static export (STATIC) on ① / ②: the record's request and one button, 「この記録を再生する」, which
+// plays the run on ③ from its first design (the request itself cannot be sent there: no server).
+function renderReplayBar() {
+  const bar = $("replaybar");
+  if (!bar) return;
+  const want = player.state.project?.want ?? "";
+  const html =
+    `<span class="rb-want"><b>この記録の依頼</b> ${want ? esc(want) : "—"}</span>` +
+    `<button class="go" type="button" data-static-replay="1">この記録を再生する</button>`;
+  if (bar.dataset.html !== html) {
+    bar.innerHTML = html;
+    bar.dataset.html = html;
+  }
+}
+
+function staticReplay() {
+  const t0 = player.events.find((e) => e.kind === "design.created")?.t ?? 0;
+  if (ui.gridDomain) closeDomain();
+  ui.pinnedTab = "bench";
+  ui.tabPlan = [];
+  ui.frozen = false;
+  player.seek(t0);
+  player.play();
+  drawn.rev = -1;
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-static-replay]")) staticReplay();
+});
+
 function renderIntake(tab) {
   if (!intake) {
     // in a new request the bar (renderDraft) sits above the screens
-    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    $("view-intake").innerHTML =
+      `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}${STATIC ? `<div class="draftbar replaybar" id="replaybar"></div>` : ""}` +
+      `<div class="intake-host" id="intake-host"></div>`;
     intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  renderReplayBar();
   syncDraftAsk();
   syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
@@ -726,7 +801,7 @@ function intakeGlowPlace(t) {
   let ahead = 0;
   for (const at of intake?.model?.litAt?.values?.() ?? []) {
     if (t < at) ahead += 1;
-    else if (t - at <= INTAKE_GLOW_NEAR) return "n";
+    else if (t - at <= INTAKE_GLOW_NEAR + REPLY_STEP_S * DOMAINS.length) return "n"; // (A1's cards answer REPLY_STEP_S apart from it)
   }
   return ahead;
 }
@@ -844,15 +919,18 @@ function renderTop(s) {
   const status = s.status === "running" && runOver() ? "実行は終わった" : ({ running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status);
   $("mode").innerHTML =
     // (the run list's words: 決まった手順, DRIVEN_JA / labels.js runSummaryJa)
-    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
+    // (data-driver: a scripted run's replay and a Claude run's replay look apart; large with ?video=1)
+    `<span class="badge ${live ? "live" : ""}" data-driver="${live ? "" : scripted ? "scripted" : s.project?.driver ? "claude" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : s.project?.driver ? "Claude の実行の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
     // the run's id only under ?dev=1 (people go back to the list by 「☰ 一覧へ」)
     (DEV ? `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` : "") +
     // a run this screen started can be stopped while it goes
     (ownRunGoing()
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
-      : DEV
-        ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
-        : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
+      : STATIC
+        ? `<a class="launch-link" href="${withDev("?list=1")}" title="ほかの記録を見る">☰ 一覧へ</a>`
+        : DEV
+          ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
+          : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
 }
 
 // lcId: the load case shown on the 3D (null on the screens without it: no chip ringed); openDomain:
@@ -1055,7 +1133,7 @@ function renderTests(s, lcId, span = null) {
 // The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
 // a prediction shows its formula as written.
 const formulaTitles = new Map();
-fetch("/api/formulas", { cache: "no-store" })
+fetch(getUrl("/api/formulas"), { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : { formulas: [] }))
   .then((got) => {
     for (const f of got.formulas ?? []) if (f.title) formulaTitles.set(f.formula_id, f.title);
@@ -1468,7 +1546,7 @@ function setCompare(s, chain, ct) {
   // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
   // left view looks through the same camera, so its vehicle sits the same way in its half.
   const lg = $("legend");
-  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0; // (in the present mode the legend is beside the view)
+  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : c ? 0 : grip.reserved; // (in the present mode the legend is beside the view; grip: the tyre panel's strip)
   if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
     if (was !== !!c) resize3d();
     bench.setReserve(room);
@@ -1496,6 +1574,7 @@ function renderToggles(motion, lc, graphs = false, design = null, heatAvail = fa
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
     btn("joints", "接合", t.joints) + // joints:
+    (hasGrip(motion) ? btn("grip", "タイヤ", t.grip) : "") + // grip:
     (heatAvail ? btn("heat", "熱の流れ", t.heat) : "") + // heat:
     (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion || graphs ? btn("graph", "グラフ", t.graph) : "");
@@ -1514,6 +1593,7 @@ const animRate = (motion) => Math.max(1, motion.duration / ANIM_MAX_S);
 // analysis arrived in the replay and runs at animRate, so a frozen ?t= frame
 // always shows the same pose.
 function animTau(s, ana, motion) {
+  if (animLoop?.covers(ana)) return animLoop.tau(motion);
   if (ui.anim.local && ui.anim.key === ana.analysis_id) return ui.anim.tau;
   const tf = s.tOf[ana.analysis_id] ?? 0;
   return motion.t0 + Math.max(0, Math.min(motion.duration, (player.playhead - tf) * animRate(motion)));
@@ -1536,6 +1616,7 @@ function renderMotion(s, chain, motion) {
   const bar = $("animbar");
   viewport.classList.toggle("has-anim", !!motion);
   if (!motion) {
+    grip.hide(); // grip:
     bar.hidden = true;
     $("limitnote").hidden = true;
     shownMotion = null;
@@ -1549,6 +1630,7 @@ function renderMotion(s, chain, motion) {
   const ana = chain.shown;
   const tau = animTau(s, ana, motion);
   if (bench.frame?.t !== tau) bench.setFrame(motion.frame(tau));
+  grip.update(!!ui.toggles.grip && !ui.present, ana, motion, kcFor(s, ana), tau); // grip: the same clock as the motion
   shownMotion = { motion, ana, tau };
 
   bar.hidden = false;
@@ -1700,7 +1782,8 @@ function renderTransient(s, playhead, chain, resolved) {
     h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
   // the cause of a mismatch Claude wrote, until a verdict of its load case is OK (present.js openCause)
-  const cause = openCause(s);
+  // (?off=cause: not shown, e.g. a shot where the card would cover the vehicle)
+  const cause = CAUSE_OFF ? null : openCause(s);
   const cn = $("causenote");
   cn.hidden = !cause;
   if (cause && cn.dataset.key !== cause.key) {
@@ -1811,9 +1894,10 @@ function draw() {
   // picked there), apart from ③'s own pick
   const span = openSpan(tab);
   const view = viewOf(tab, span);
-  const lcId = span ? ui.gridLc ?? domainLcAt(span, player.playhead) : selectedLc(s);
+  const loopChain = animLoop?.chain(s, chainFor) ?? null; // play=loop: that analysis' load case and version
+  const lcId = loopChain ? loopChain.shown.load_case_id : span ? ui.gridLc ?? domainLcAt(span, player.playhead) : selectedLc(s);
   const togglesKey = JSON.stringify(ui.toggles);
-  const chain = chainFor(s, lcId, s.currentVersion);
+  const chain = loopChain ?? chainFor(s, lcId, s.currentVersion);
   const motion = motionFor(chain.shown);
   if (resolvedMemo.rev !== s.rev || resolvedMemo.s !== s) resolvedMemo = { rev: s.rev, s, set: resolvedHooks(s) };
   const resolved = resolvedMemo.set;
@@ -1836,6 +1920,7 @@ function draw() {
     $("view-bench").hidden = view !== "bench";
     $("view-grid").hidden = view !== "grid";
     $("view-intake").hidden = !intakeTab;
+    document.body.dataset.intakeTab = intakeTab ? tab : ""; // css: no present card over A1 / A2 in the video
     $("view-shelf").hidden = tab !== "A4";
     $("view-asm").hidden = tab !== "A7";
     $("main").classList.toggle("wide", view === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
@@ -1906,6 +1991,7 @@ function draw() {
   renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
   if (view === "bench") {
+    animLoop?.aim(bench); // play=loop: ?cam=side stands still beside the step
     bench.render();
     if (cmpView && !cmpView.el.hidden) {
       cmpView.bench.animate(player.playhead, false);
@@ -1919,6 +2005,7 @@ function draw() {
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
+  if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS);
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 
@@ -1939,6 +2026,7 @@ function loop(ts) {
   // Moving the replay hands the test's motion back to the replay clock.
   if (lastPlayhead !== null && player.playhead !== lastPlayhead) ui.anim.local = false;
   lastPlayhead = player.playhead;
+  animLoop?.tick(dt); // (runs only without a fixed clock: ?loop_t=, ?t= or a seek fix it)
   if (ui.anim.local && ui.anim.playing && shownMotion) {
     const { motion } = shownMotion;
     ui.anim.tau = Math.min(motion.t1, ui.anim.tau + dt * animRate(motion));
@@ -1955,6 +2043,11 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 const END_SNAP_S = 0.05;
 
 async function seekAndDraw(t) {
+  // play=loop: t is the loop's clock, the playhead stays where the analysis arrived (null: clock kept)
+  if (animLoop?.at != null) {
+    animLoop.seekClock(t);
+    t = animLoop.at;
+  }
   ui.frozen = true;
   player.pause();
   player.seek(t >= player.duration - END_SNAP_S ? player.duration : t);
@@ -1973,9 +2066,11 @@ window.hiraku = {
   request: draft ? { send: (t) => draftSend(t), answer: (a) => draftAnswer(a), start: (m) => draftStart(m), get state() { return draft; } } : null,
   player,
   ready,
+  grip, // grip: the tyre view (its frame: grip.frame), for the tests
   seek: seekAndDraw,
   state: () => player.state,
   bench,
+  animLoop, // play=loop (anim_loop.js), else null
   modules: modLayer, // modules: what the module layer draws (for the tests)
   heat, // heat: what the energy's flow draws (heat.last, for the tests)
   nodeMotion: nodeView, // node_motion: what the nodes' motion draws (for the tests)
@@ -1985,6 +2080,7 @@ window.hiraku = {
     feed?.stop();
     resetPlayer();
     addEvents(events);
+    animLoop?.findArrival(player.events);
     return seekAndDraw(t);
   },
 };
@@ -2146,6 +2242,10 @@ function startPlayback() {
   Promise.all([petsReady, loadModuleNames()]).then(play); // modules: the module names before the first frame
 }
 function play() {
+  if (animLoop?.findArrival(player.events) != null) {
+    seekAndDraw(params.has("t") ? Number(params.get("t")) || 0 : null).then(() => readyResolve(player.playhead));
+    return;
+  }
   if (params.has("t")) {
     // (A4 shown: ready once the shelf no longer changes by itself, so the frame is the same each time)
     seekAndDraw(Number(params.get("t")) || 0).then(() => (shelf && !$("view-shelf").hidden ? shelf.settled() : null))
@@ -2207,6 +2307,7 @@ function loadFailedWhy(e) {
   if (e?.status === 404) return "この記録は見つかりませんでした。消されたか、名前が違います。";
   if (e?.status) return `サーバーが記録を返せませんでした (${e.status})。`;
   if (e instanceof SyntaxError) return "サーバーの返事が読めませんでした。";
+  if (STATIC) return "記録のファイルを読めませんでした。新しいブラウザで開き直してください。";
   return "サーバーにつながりませんでした。HIRAKU が動いているか確かめてください。";
 }
 
@@ -2236,7 +2337,8 @@ async function openRun(runId) {
   }
   feed.loaded = true;
   loadingNote(null);
-  const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
+  // (a static export holds finished records only: nothing to follow)
+  const follow = !STATIC && !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
   ui.followed = follow;
   ui.childGone = false;
@@ -2262,7 +2364,7 @@ async function openRun(runId) {
 const prose = (s) => esc(s).replace(/\(([^()]{1,40})\)/g, '<span class="nw">($1)</span>');
 
 async function fetchRuns() {
-  return (await fetch("/api/runs", { cache: "no-store" })).json();
+  return (await fetch(getUrl("/api/runs"), { cache: "no-store" })).json();
 }
 
 // The list for people on a narrow window (a phone): out of the 1920 x 1080 stage, which would scale it
@@ -2355,9 +2457,14 @@ async function renderLaunch(message = "") {
   if (!box) return;
   let info;
   try {
-    info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    info = await (await fetch(getUrl("/api/launch"), { cache: "no-store" })).json();
   } catch (e) {
     info = { available: false };
+  }
+  if (STATIC) {
+    // replays only: the recommendation (people's list), then one line to the README for the rest
+    box.innerHTML = (DEV ? "" : pickHtml(info, false)) + LOCAL_RUN_HTML + (await staticExtrasHtml());
+    return;
   }
   if (!DEV) {
     box.innerHTML = plainLaunch(info, message);
@@ -2468,6 +2575,20 @@ function demoSection(info, busy) {
 // row's くわしく, or under ?dev=1; without the key, one short word beside the 実行する that cannot be pressed.
 const README_RUN = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"; // README の「動かし方」 (A1's くわしく)
 const NEEDS_KEY_JA = "Claude のキーが要ります";
+// A static export (source.js STATIC) only replays: in place of the buttons that start, stop or send
+// something, one line to the README's section on running HIRAKU (heading 「動かし方」, README_RUN).
+const LOCAL_RUN_HTML =
+  `<p class="local-run">手元で動かすには (再現する・実行する・新しく依頼する): <a class="readme" href="${README_RUN}" target="_blank" rel="noopener">README の「動かし方」</a></p>`;
+// The export's other pages (data/static.json extras: [{href, title}], e.g. N10's answers), one line each.
+async function staticExtrasHtml() {
+  try {
+    const got = await (await fetch("data/static.json")).json();
+    const rows = (got.extras ?? []).map((x) => `<p class="extra"><a href="${esc(x.href)}">${esc(x.title)}</a></p>`);
+    return rows.join("");
+  } catch {
+    return "";
+  }
+}
 
 // おすすめ: the server's default saved run (else the newest saved one) as a replay; with no saved run,
 // the scripted run of the demo row PICK_DEMO_ID. Nothing when neither is there.

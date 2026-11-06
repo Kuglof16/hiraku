@@ -43,7 +43,8 @@ CHANGE_REASON = (
 LONG_RESULT = {"quantity": "pushover_gap_to_the_occupant_envelope.side_mirror", "value": 4.143, "unit": "mm", "where": "rollbar_post_R"}
 SAID = [
     ("cae.powertrain", "予測を記録した: 前輪の荷重 = 1,231 N (mass_props.front_wheel_load)。台本に書いてある原因を記録します (形の見本)"),
-    ("lead", "要件のファイルのまま進みます (既定値で足した 4 件: Q57・Q63・Q93・Q94)。この実行の試験 (P1・R1・R1s・R3・S1・F1・S3・S4・S5・P2・P3・P4・T1・T2・C1・N1・R8)"),
+    # the intake's plain answered line (hiraku/intake/hearing.py hearing_text, nothing asked), then the run's tests in brackets
+    ("lead", "聞くことはありませんでした。分からない所は標準の値で進めました。この実行の試験 (P1・R1・R1s・R3・S1・F1・S3・S4・S5・P2・P3・P4・T1・T2・C1・N1・R8)"),
     ("cae.strength", "ツール「荷重の通り道 (部品を剛体か板の帯に、触れている所をばねに)」の照合: 使える。record_prediction(load_case_id=\"H1-interference\", ...) で記録"),
 ]
 

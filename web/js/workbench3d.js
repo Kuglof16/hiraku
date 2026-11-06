@@ -1779,7 +1779,7 @@ export class Workbench3D {
   placeMotionArrows(frame) {
     const objs = this.motionArrowObjs ?? {};
     const fref = Math.max(1e-9, this.motion?.fref ?? 0);
-    const show = !!frame && !!this.toggles.arrows;
+    const show = !!frame && !!this.toggles.arrows && !this.toggles.grip; // grip: the tyre view draws the tyres' forces instead
     this.motionArrows.visible = show;
     if (!show) return;
     for (const w of frame.wheels) {

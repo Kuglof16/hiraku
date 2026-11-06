@@ -158,13 +158,14 @@ class RuleFocusBrowserTest(unittest.TestCase):
         lines = page.evaluate("() => window.hiraku.state().log.filter((l) => l.kind.startsWith('hearing.')).map((l) => l.text)")
         self.assertEqual(errors, [])
         self.assertEqual(len(lines), 4, lines)
-        self.assertIn("足りない要件を 1 個 (値がまだ無い 0・既定値を確かめる 1)・規則の当たりを 2 個聞いた", lines[0])
-        self.assertIn("答えがそろった: 1 個 (既定値のまま 1)・規則の当たりの答え: 設計を直す 1・規則を外す 1", lines[1])
-        # without questions / answers: only the rule hits, and nothing breaks
-        self.assertIn("規則の当たりを 1 個聞いた (設計を直すか、規則を外すか)", lines[2])
-        self.assertNotIn("足りない要件", lines[2])
-        self.assertIn("規則の当たりの答え: 設計を直す 0・規則を外す 1", lines[3])
-        self.assertNotIn("答えがそろった", lines[3])
+        # the intake's plain lines (hiraku/intake/events.py asked_event, hearing.py hearing_text)
+        self.assertIn("決まっていないことを 1 つ聞きます。規則に当たったことを 2 つ、このままでいいか聞きます", lines[0])
+        self.assertIn("答えはなかったので、標準の値で進めました。規則に当たったことへの答えもあります。設計を始めます", lines[1])
+        # without questions / answers: only the rule hit, in its own sentence, and nothing breaks
+        self.assertIn("電池が横の部材に近すぎる (形の見本)", lines[2])
+        self.assertNotIn("決まっていないこと", lines[2])
+        self.assertIn("規則に当たったことへの答えをもらいました。1 つの規則は、この実行では外します", lines[3])
+        self.assertNotIn("答えてもらいました", lines[3])
         page.close()
 
     def check_light(self, look):
