@@ -123,19 +123,19 @@
    "cuts": [
     "N13a"
    ],
-   "video": "${WORK}/clips/n13a_160725_1080p.mp4"
+   "video": "${WORK}/clips/n13a_real3d_1080p.mp4"
   },
   {
    "cuts": [
     "N13b"
    ],
-   "video": "${WORK}/clips/n13b_160725_1080p.mp4"
+   "video": "${WORK}/clips/n13b_real_1080p.mp4"
   },
   {
    "cuts": [
     "N13c"
    ],
-   "video": "${WORK}/clips/n13c_real_1080p.mp4"
+   "video": "${WORK}/clips/n13c_real3d_1080p.mp4"
   },
   {
    "cuts": [
