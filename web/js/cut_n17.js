@@ -255,7 +255,7 @@ export class CutN17 {
     // mismatches on the way: how many, and how many have their cause recorded (no ids)
     const ds = d.differences ?? [];
     const withCause = ds.filter((x) => x.cause_id).length;
-    const diffs = ds.length ? `途中で手計算と食い違った ${ds.length} 件 (原因を書いたもの ${withCause} 件)` : "";
+    const diffs = ds.length ? `途中で手計算と不一致だった ${ds.length} 件 (原因を書いたもの ${withCause} 件)` : "";
     const assumptions = (d.assumptions ?? []).filter((a) => JAPANESE.test(a));
     return (
       `<section class="n17-domain" data-box="${key}" data-domain="${esc(d.domain)}">` +

@@ -1,11 +1,14 @@
 // Names shown on the screen and number formatting. Formatting only rounds
 // recorded values for display; it never makes a new number.
 
-// The cuts' words for a pass and a fail (one wording on every cut).
+// The cuts' words for a verdict's pass and fail (one wording on every cut). OK / NG are for a
+// criterion's verdict only; a prediction against an analysis is 予想通り / 不一致.
 export const OK_WORD = "✓ OK";
 export const NG_WORD = "✕ NG";
+export const MATCH_WORD = "✓ 予想通り";
+export const MISMATCH_WORD = "! 不一致";
 // An agent's status word after a mismatch and after a red judgement (app.js marks both as alerts).
-export const MISMATCH_STATUS = "NG (食い違い)";
+export const MISMATCH_STATUS = "不一致";
 export const RED_STATUS = "NG";
 
 export const DOMAINS = ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"];
@@ -147,8 +150,8 @@ export function agentStopWhy(d) {
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
-  { id: "HK2", key: "HK2_tool_usable", ja: "OK のツールだけ" },
-  { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
+  { id: "HK2", key: "HK2_tool_usable", ja: "使えるツールだけ" },
+  { id: "HK3", key: "HK3_cause_before_continue", ja: "不一致は原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
   { id: "HK6", key: "HK6_module_scope", ja: "持ち場" }, // modules: contract d9631a5
@@ -900,7 +903,7 @@ export const DEMO_LINE_JA = {
   "n09-electric-guitar": "ギターを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
   "n09-care-bed": "介護ベッドを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
   "n09-serving-robot": "料理を運ぶロボットを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
-  "n11-n12": "要件の書き間違いを見つける — 手計算と解析の食い違いから、cm と mm の取り違えを見つけて直します",
+  "n11-n12": "要件の書き間違いを見つける — 手計算と解析の不一致から、cm と mm の取り違えを見つけて直します",
   n13: "手元に無い計算を作る — 横転したときの計算のツールを Claude がその場で書き、確かめてから使います",
   n14: "メモを渡して決まりにする — 途中で渡した設計のメモが決まりになり、当てはまる部品について聞き返します",
   video: "小さなオフロード車を試験して直す — NG の所を直してもう一度確かめます。限界を超える試験も入っています",
@@ -958,14 +961,21 @@ export function keepAsides(s, max = 40) {
 
 // Words from the record (a judgement's summary written by hiraku/tools/judge.py, what an agent
 // or the scripted driver said, a proposal's reason) in the screen's words: OK / NG for 合格 /
-// 不合格 and for 緑 / 赤 meaning a verdict, 判定 for 照合 and 合否, vN for 版 N. The record keeps
-// its own words (beyond.js reads them as written); only what is shown changes. 赤 / 緑 as a
-// colour (赤い, 赤色, 半透明の赤 ...) are kept.
+// 不合格 and for 緑 / 赤 meaning a verdict, 判定 for 合否, 比べ for 照合 (a prediction against an
+// analysis) and 不一致 for 食い違い, vN for 版 N. The record keeps its own words (beyond.js reads
+// them as written); only what is shown changes. 赤 / 緑 as a colour (赤い, 赤色, 半透明の赤 ...)
+// are kept.
 const NOT_ASCII = "[^\\s\\x00-\\x7f]";
 export function judgedWords(text) {
   return String(text ?? "")
+    // judge.py's 「まだ OK にできない試験」 (before: まだ合格にできない) names a test still held
+    // back, often beside its NG value: no OK beside it on the screen
+    .replace(/まだ\s*(?:合格|OK)\s*にできない/g, "まだ判定を出せない")
     .replace(/不合格|合格/g, (m) => (m === "不合格" ? "NG" : "OK"))
-    .replace(/照合|合否/g, "判定")
+    .replace(/合否/g, "判定")
+    .replace(/照合/g, "比べ")
+    .replace(/食い違った/g, "不一致だった")
+    .replace(/食い違い/g, "不一致")
     .replace(/(?<!半透明の)([赤緑])(?![いく色字み])/g, (m, c) => (c === "赤" ? "NG" : "OK"))
     .replace(/版\s*(\d+)/g, "v$1")
     .replace(new RegExp(`(${NOT_ASCII})(OK|NG|v\\d)`, "g"), "$1 $2")

@@ -289,7 +289,7 @@ export class TileBoard {
       if (design && (j.state !== "off" || info.ana)) {
         const { body, ct } = tileSvg(s, d, design, info);
         drawing = body;
-        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.reference ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
+        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.role !== "judged" ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
         for (const x of info.ana?.interferences ?? []) {
           caption += `${caption ? "・" : ""}${thingName(design, x.a)} × ${thingName(design, x.b)} ${fmt(x.depth_mm, 3)} mm 干渉${x.state === "motion" ? ` (${x.condition ?? "動いたとき"})` : ""}`;
         }
@@ -314,7 +314,7 @@ export class TileBoard {
       const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
       const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
-      const safe = ns ? `<span class="tb safe" title="差 OK ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
+      const safe = ns ? `<span class="tb safe" title="予想通りではなく、説明された安全側の不一致から判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
       // a load case without a criterion whose count is not 0: a 保留 band over the tile's colour (held.js)
       const held = heldCases(s, d, v);
       // the other quantities without a criterion (渡すだけ・比べるだけ・参考): rows not coloured (held.js)

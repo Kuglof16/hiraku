@@ -4,7 +4,7 @@
 // records' load_cases give it (run.started, project.updated, load_cases.created); a comparison
 // (no load_case_id in it) is its analysis' or prediction's load case. Within the
 // span the load case shown is the domain's one last touched at the playhead (prediction,
-// analysis, comparison or verdict), so the 3D and the 予測 → 解析 → 判定 cards follow it.
+// analysis, comparison or verdict), so the 3D and the 予測 → 解析 → 比べる → 判定 cards follow it.
 
 const KINDS = new Set(["prediction.recorded", "analysis.started", "analysis.finished", "comparison.recorded", "verdict.recorded"]);
 

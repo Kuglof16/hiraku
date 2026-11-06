@@ -180,7 +180,10 @@ class FilesTest(unittest.TestCase):
         ("js/beyond.js", "const NOT_ALL_JUDGED = ["),
         # labels.js judgedWords: the record's words it turns into OK / NG / 判定 on the screen
         ("js/labels.js", '.replace(/不合格|合格/g, (m) => (m === "不合格" ? "NG" : "OK"))'),
-        ("js/labels.js", '.replace(/照合|合否/g, "判定")'),
+        ("js/labels.js", '.replace(/まだ\\s*(?:合格|OK)\\s*にできない/g, "まだ判定を出せない")'),
+        ("js/labels.js", '.replace(/照合/g, "比べ")'),
+        ("js/labels.js", '.replace(/食い違った/g, "不一致だった")'),
+        ("js/labels.js", '.replace(/食い違い/g, "不一致")'),
         ("js/labels.js", '.replace(/(?<!半透明の)([赤緑])(?![いく色字み])/g, (m, c) => (c === "赤" ? "NG" : "OK"))'),
         # the colour of a drawing (a see-through red pose, a box red over its limit), not a verdict
         ("js/app.js", "半透明の赤 = 限界を超えたあとの姿勢"),
@@ -189,13 +192,16 @@ class FilesTest(unittest.TestCase):
     ]
 
     def test_screen_words_use_v_and_ok_ng(self):
-        """The screen says v3 (not 版 3), 判定 (not 照合) and OK / NG for a verdict (not 合格・
-        不合格・基準を満たした, nor 緑・赤 meaning the verdict). Comments are not shown, so they are
-        left out; the intake's screen (web/js/intake/) is the intake's own. Internal names (green,
-        red, class names) are ASCII and not matched; CSS is not read."""
+        """The screen says v3 (not 版 3), OK / NG for a verdict (not 合格・不合格・基準を満たした,
+        nor 緑・赤 meaning the verdict) and 予想通り / 不一致 for a prediction against an analysis
+        (not 照合・食い違い・一致 ✓・差 OK・差 NG・NG (食い違い)). Comments are not shown, so they
+        are left out; the intake's screen (web/js/intake/) is the intake's own. Internal names
+        (green, red, mismatch, class names) are ASCII and not matched; CSS is not read."""
         intake = JS / "intake"
         banned = [re.compile(r"版\s*\d"), re.compile(r"\d\s*版"), re.compile(r"版\s*\$\{"), re.compile("照合"),
-                  re.compile("合格"), re.compile("基準を満たし|基準を満たさ"), re.compile("緑"), re.compile("赤")]
+                  re.compile("合格"), re.compile("基準を満たし|基準を満たさ"), re.compile("緑"), re.compile("赤"),
+                  re.compile("食い違"), re.compile(r"一致\s*✓|✓\s*一致"), re.compile(r"差\s*OK|差\s*NG"),
+                  re.compile(r"NG\s*\(食い違い\)")]
         found = []
         for p in self.web_files():
             if p.suffix not in (".js", ".html") or p.is_relative_to(intake):

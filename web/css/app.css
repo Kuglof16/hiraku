@@ -688,6 +688,8 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 }
 #card-pred { flex: 0 1 auto; }
 #card-ana, #card-cmp { flex: 0 0 auto; }
+/* 4. 判定: the verdict's own step under 3. 比べる, in the same card */
+#card-cmp .step4 { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
 .chain .foot { margin-top: auto; font-size: 16px; color: var(--muted); padding: 0 4px; }
 .card h3 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
 .card h3 small { font-weight: 400; color: var(--muted); font-size: 16px; margin-left: 6px; }

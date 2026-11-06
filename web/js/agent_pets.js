@@ -45,7 +45,7 @@ export const MOTIONS = {
   waiting: { ja: "待ち", pet: "waiting", still: false, react: null },
   idle: { ja: "終わり", pet: "idle", still: true, react: null },
   pass: { ja: "OK", pet: "pass", still: false, react: (hop) => PASS_HOPS * hop },
-  mismatch: { ja: "NG (食い違い)", pet: "mismatch", still: false, react: () => 3 },
+  mismatch: { ja: "不一致", pet: "mismatch", still: false, react: () => 3 },
   blocked: { ja: "止められた", pet: "blocked", still: false, react: () => 3, settle: BLOCK_SETTLE_S },
   report: { ja: "報告", pet: "report", still: false, react: () => SAY_S },
 };
@@ -78,7 +78,7 @@ export const PET_EVENTS = [
   { kind: "run.finished", who: "all", base: true, motion: "idle", when: "実行が終わった" },
   { kind: "verdict.recorded", who: "agent", base: false, motion: "pass", when: "判定が OK になった (同じ verdict_id で前は NG・無し)" },
   { kind: "judgement.updated", who: "domain", base: false, motion: "pass", when: "分野の判定が OK になった (その分野の前の判定が OK でない)" },
-  { kind: "comparison.recorded", who: "agent", base: false, motion: "mismatch", when: "判定が NG (食い違い) になった (同じ comparison_id で前は OK・無し)" },
+  { kind: "comparison.recorded", who: "agent", base: false, motion: "mismatch", when: "予測と解析の比べが不一致になった (同じ comparison_id で前は予想通り・無し)" },
   { kind: "hook.denied", who: "agent", base: false, motion: "blocked", when: "hooks に止められた" },
   { kind: "hook.blocked_stop", who: "agent", base: false, motion: "blocked", when: "hooks が終わるのを止めた" },
   { kind: "agent.said", who: "agent", base: false, motion: "report", when: "話した (吹き出しと同じ間)" },

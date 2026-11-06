@@ -224,7 +224,7 @@ class BrowserReplayTest(unittest.TestCase):
                 cmpCard: document.getElementById("card-cmp").className,
                 causeBox: document.querySelector("#card-cmp .cause")?.textContent ?? "",
                 hookLines: document.querySelectorAll("#log li.hook").length,
-                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("判定: 差")).map((li) => li.textContent),
+                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("比べた: 差")).map((li) => li.textContent),
                 logLen: s.log.length,
                 status: s.status,
                 stopReason: s.stopReason,
@@ -246,7 +246,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
-        self.assertIn("HK3 食い違いは原因が先", got["hooksRow"])
+        self.assertIn("HK3 不一致は原因が先", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
         page.close()
 
@@ -286,7 +286,7 @@ class BrowserReplayTest(unittest.TestCase):
             }"""
         )
         self.assertIn("warn", end["cmpCard"])  # the comparison stays a mismatch
-        self.assertIn("食い違い", end["badge"])
+        self.assertEqual(end["badge"], "不一致 !")
         self.assertEqual(end["mark"], "安全側で判定")
         self.assertIn("one rail, so it stays above", end["why"])
         self.assertIn("予測", end["used"][0])

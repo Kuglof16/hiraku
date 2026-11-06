@@ -12,7 +12,7 @@
 //   ?off=joints     turn overlays off at load (joints: the joint marks, on by default; A7 follows it too)
 //   ?tab=grid       open on ④ 解析結果 (the domains' grid) instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 //   ?tab=grid&domain=strength
-//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 判定 cards,
+//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 比べる → 判定 cards,
 //                   the play bar from its first prediction to its last comparison); a tile pressed does
 //                   the same and sets it, 「格子に戻る」 drops it. With ?t= that frame (t as the whole replay's)
 //   ?tabs=A1:0,A2:44.5,bench:80
@@ -50,7 +50,7 @@ import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLege
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
-import { judgedContour, referenceResults } from "./judged.js";
+import { judgedContour, judgedResult, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
@@ -330,7 +330,7 @@ function renderDomainHead(span) {
   if (!span) return;
   const html =
     `<span class="dh-tab">${esc(TAB_JA.grid.no)} ${esc(TAB_JA.grid.name)}</span><span class="dh-sep">›</span>` +
-    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 判定)</span>` +
+    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 比べる → 判定)</span>` +
     `<button class="dh-close" type="button" data-act="close-domain">× 格子に戻る</button>`;
   if (el.dataset.html !== html) {
     el.dataset.html = html;
@@ -1123,7 +1123,11 @@ function renderChain(s, chain) {
     const refs = referenceResults(ana, loadCase?.criterion);
     const top = (ana.results ?? []).slice(0, 3);
     const isRef = (r) => refs.includes(r);
-    const res = [...top, ...refs.filter((r) => !top.includes(r))].map((r) => `<tr class="${isRef(r) ? "ref" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    // the row of the quantity the criterion is held to says so; the others carry no mark (no OK / NG here)
+    const jr = judgedResult(ana, loadCase?.criterion);
+    const rows = [...top, ...refs.filter((r) => !top.includes(r))];
+    if (jr && !rows.includes(jr)) rows.push(jr);
+    const res = rows.map((r) => `<tr class="${isRef(r) ? "ref" : r === jr ? "judged" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : r === jr ? `<small class="used">${esc(JUDGED_JA.number)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
@@ -1138,8 +1142,10 @@ function renderChain(s, chain) {
     a.className = "card wait";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${pred ? "予測を受けて解析を待っている" : "予測のあとに走る"}</div>`;
   }
-  // 3. comparison (+ verdict)
+  // 3. comparison (the prediction against the analysis: 予想通り / 不一致) and 4. verdict (the
+  // criterion's OK / NG), one card: the verdict is its own step under the comparison
   const c = $("card-cmp");
+  const step4 = (body) => `<div class="step4" data-step="verdict"><h3>4. 判定</h3>${body}</div>`;
   if (cmp) {
     const ok = cmp.status === "match";
     const safe = isSafeSide(verdict);
@@ -1147,7 +1153,7 @@ function renderChain(s, chain) {
     let v = "";
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
-      const how = safe ? `<span class="safe-mark" title="差 OK ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      const how = safe ? `<span class="safe-mark" title="予想通りではなく、説明された安全側の不一致から">安全側で判定</span>` : "";
       const big = verdictSentence(verdict);
       // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
@@ -1158,13 +1164,15 @@ function renderChain(s, chain) {
         // the criterion's basis is the record's own words (English): folded
         (loadCase?.criterion?.basis ? `<details class="more" data-keep="cmp-basis"><summary>くわしく (基準の根拠)</summary><div class="sub basis">${esc(loadCase.criterion.basis)}</div></details>` : "") +
         `</div>`;
-    } else if (ok && loadCase?.criterion) {
+    } else if (loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(quantityName(loadCase.criterion.quantity))} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
+    } else {
+      v = `<div class="sub">この試験には基準が無い (判定しない)</div>`;
     }
     // Long words are cut to a few lines here; the log keeps them whole.
-    const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(cause.safe_side_reason ?? "")}"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
+    const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(judgedWords(cause.safe_side_reason ?? ""))}"><b>安全側で見られている:</b> ${esc(judgedWords(cause.safe_side_reason ?? ""))}</div>` : "";
     const cz = cause
-      ? `<div class="cause"><div class="clamp" title="${esc(cause.cause)}">原因: ${esc(cause.cause)}</div><div class="clamp c2" title="${esc(cause.fix)}">直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
+      ? `<div class="cause"><div class="clamp" title="${esc(judgedWords(cause.cause))}">原因: ${esc(judgedWords(cause.cause))}</div><div class="clamp c2" title="${esc(judgedWords(cause.fix))}">直し方: ${esc(judgedWords(cause.fix))}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
       : ok
         ? ""
         : `<div class="cause">原因が書かれるまで、この分野は先に進めない (HK3)</div>`;
@@ -1172,18 +1180,19 @@ function renderChain(s, chain) {
     const used = verdict ? (valueFromJa(verdict) === "予測" ? "pred" : "ana") : null;
     const tag = `<small class="used">判定の値</small>`;
     c.innerHTML =
-      `<h3>3. 判定</h3>` +
+      `<h3>3. 比べる<small>予測と解析</small></h3>` +
       `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
       `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
-      `<span class="badge ${ok ? "ok" : "warn"}">${ok ? "差 OK ✓" : "差 NG (食い違い) !"}</span>` +
+      `<span class="badge ${ok ? "ok" : "warn"}">${ok ? "予想通り ✓" : "不一致 !"}</span>` +
       cz +
-      v;
+      step4(v);
     keepOpen(c);
   } else {
     c.className = "card wait";
     const tol = loadCase ? `許す幅 ${fmtPct(loadCase.tolerance_rel, 0)} (荷重条件で決まっている)` : "";
-    c.innerHTML = `<h3>3. 判定</h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>`;
+    c.innerHTML = `<h3>3. 比べる<small>予測と解析</small></h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>` +
+      step4(`<div class="sub">比べたあと、基準で OK / NG を決める</div>`);
   }
 }
 
@@ -1586,7 +1595,7 @@ function renderGrid(s) {
     const ok = !!sp && sp.t0 <= player.playhead + 1e-6;
     el.classList.toggle("can-replay", ok);
     if (ok) {
-      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 判定) をここで再生します`;
+      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 比べる → 判定) をここで再生します`;
       el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
     }
   }

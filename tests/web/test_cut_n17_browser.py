@@ -270,7 +270,7 @@ class CutN17BrowserTest(unittest.TestCase):
         for word in ("bending", "torsion", "rail_R_S2B", "cmp-0001", "cause-0001"):
             self.assertNotIn(word, got["text"])
         self.assertIn("上下の曲げ", got["text"])
-        self.assertIn("途中で手計算と食い違った 1 件 (原因を書いたもの 1 件)", got["text"])
+        self.assertIn("途中で手計算と不一致だった 1 件 (原因を書いたもの 1 件)", got["text"])
         self.assertIn(REPORT["domains"][0]["assumptions"][0], got["text"])
         # each domain's line at the story's body text size (this layout has no story: its
         # min_text_px; with the promo department's story, 24 px: test_cut_story_browser)

@@ -416,12 +416,12 @@ export function applyEvent(s, ev) {
       put(s, "comparisons", d.comparison_id, d, ev);
       const ok = d.status === "match";
       const txt = ok
-        ? `判定: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) OK`
-        : `判定: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) NG (食い違い)。` +
+        ? `比べた: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で予想通り`
+        : `比べた: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で不一致。` +
           (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
       logRecord(s, ev, d.comparison_id, ok ? "ok" : "warn", `${who(ev)}: ${txt}`); // a mismatch: attention, not NG
       if (!again) {
-        if (agent) agent.status = ok ? "判定した" : MISMATCH_STATUS;
+        if (agent) agent.status = ok ? "予想通り" : MISMATCH_STATUS;
         setActivity(s, ev, txt);
       }
       break;
@@ -429,10 +429,10 @@ export function applyEvent(s, ev) {
     case "cause.recorded": {
       const before = s.causes[d.cause_id];
       put(s, "causes", d.cause_id, d, ev);
-      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で OK)` : ""}` : "";
+      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で予想通り)` : ""}` : "";
       const safe = d.safe_side ? ` — 安全側で見られている: ${d.safe_side_reason ?? ""}` : "";
       logRecord(s, ev, d.cause_id, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」${done}${safe}`);
-      if (!before) setActivity(s, ev, d.safe_side ? `食い違いの原因を書いた。安全側で見られている` : `食い違いの原因を書いた: ${d.cause}`);
+      if (!before) setActivity(s, ev, d.safe_side ? `不一致の原因を書いた。安全側で見られている` : `不一致の原因を書いた: ${d.cause}`);
       else if (d.resolved && !before.resolved) setActivity(s, ev, `原因 ${d.cause_id} は直った`);
       break;
     }
