@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 
 from hiraku import contract
+from hiraku.intake import domains as domains_module
 from hiraku.intake import (IntakeError, describe_condition, flags_text, load_product, pick_domains, product_files,
                            project_picks, reasons_missing, summary_line)
 from hiraku.intake.products import answers_file
@@ -107,6 +108,48 @@ class NoBuilderTest(unittest.TestCase):
                 for tid in p["test_ids"]:
                     with self.subTest(slug=slug, test=tid):
                         self.assertIsNotNone(builder_for(catalog, tid))
+
+
+class WrittenLoadCaseTest(unittest.TestCase):
+    """When a run can have Claude write a load case (a writer is registered), the tests no builder makes are picked too."""
+
+    def ids(self, rec):
+        return {p["domain"]: p["test_ids"] for p in rec["picks"]}
+
+    def test_nothing_registered_the_picks_are_as_before(self):
+        self.assertFalse(domains_module.can_write_load_cases())
+        rec = pick("serving-robot", product="serving-robot")
+        self.assertNotIn("F3", sum(self.ids(rec).values(), []))  # no builder for it: left out
+        self.assertNotIn("Claude が荷重条件を書く", " ".join(p["reason"] for p in rec["picks"]))
+
+    def test_with_a_writer_the_tests_without_a_builder_are_in_and_the_card_says_who_writes_them(self):
+        with mock.patch.object(domains_module, "load_case_writer", lambda *a: None):
+            self.assertTrue(domains_module.can_write_load_cases())
+            rec = pick("serving-robot", product="serving-robot")
+            bare = pick("serving-robot")
+        every = sum(self.ids(rec).values(), [])
+        for tid in ("R1", "N1", "S1", "F3", "C2", "S2", "R2", "R6"):  # with a builder, and the ones Claude writes
+            self.assertIn(tid, every)
+        self.assertTrue({"H1", "H5", "H2", "H4", "G2"} <= set(rec["assembly_test_ids"]))
+        reasons = {p["domain"]: p["reason"] for p in rec["picks"]}
+        self.assertIn("F3", reasons["aero"])
+        self.assertIn("Claude が荷重条件を書く", reasons["aero"])
+        self.assertNotIn("Claude が荷重条件を書く", reasons["nvh"])  # N1 has a builder
+        self.assertEqual(contract.errors("domains_picked", rec), [])
+        self.assertEqual(self.ids(bare)["aero"], ["F3"])  # no product named: the general builders only, the rest is Claude's to write
+
+    def test_a_test_with_a_builder_is_not_said_to_be_written(self):
+        with mock.patch.object(domains_module, "load_case_writer", lambda *a: None):
+            rec = pick("serving-robot", product="serving-robot")
+        power = {p["domain"]: p["reason"] for p in rec["picks"]}["powertrain"]
+        self.assertNotIn("Claude が荷重条件を書く", power)
+
+    def test_a_reason_given_by_claude_gets_the_note(self):
+        with mock.patch.object(domains_module, "load_case_writer", lambda *a: None):
+            rec = pick("serving-robot", product="serving-robot", reasons={"aero": "こぼれるかを見る"})
+        reason = {p["domain"]: p["reason"] for p in rec["picks"]}["aero"]
+        self.assertTrue(reason.startswith("こぼれるかを見る。"))
+        self.assertIn("Claude が荷重条件を書く", reason)
 
 
 class PickDomainsTest(unittest.TestCase):

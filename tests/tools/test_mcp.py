@@ -22,8 +22,9 @@ class SchemaTest(unittest.TestCase):
         # the CAD tools (hiraku/tools/cad_tools.py) are registered but not yet in a run (MCP_TOOLS_LATER)
         run = set(INPUT_SCHEMAS) - {"export_step", "import_step", "edit_step"}
         self.assertEqual(run, {*contract.MCP_TOOLS_MVP, "revise_design", "build_version", "propose_design",
-                               "make_tool", "check_tool", "get_tool_template", "write_report",
-                               "pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs"})
+                               "write_design", "edit_design", "check_design", "make_tool", "check_tool", "get_tool_template", "write_report",
+                               "pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs",
+                               "add_tests", "write_load_case"})
         self.assertEqual(run, set(RUN_TOOLS))
         for name, schema in INPUT_SCHEMAS.items():
             with self.subTest(name=name):
