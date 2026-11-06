@@ -105,7 +105,15 @@ class HeldBandBrowserTest(unittest.TestCase):
                 self.assertIn(REFERENCE_TITLES[lc_id], row.inner_text())  # the load case's title, not its id
                 self.assertIn("参考 (判定しない)", tile.locator(".refrows").inner_text())
                 # not coloured: no orange, green or red background
-                bg = row.evaluate("e => getComputedStyle(e.closest('.refrows')).backgroundColor")
+                # (the grid draws again as the replay moves: a row read through a locator can be the one
+                # just taken out, whose computed style is ''. Look it up and read it in one step, and
+                # wait until a drawn one answers.)
+                sel = f'.tile[data-domain="{domain}"] .refrows li[data-ref="{lc_id}"]'
+                bg = page.wait_for_function(
+                    """(sel) => { const e = document.querySelector(sel); if (!e || !e.isConnected) return null;
+                       const c = getComputedStyle(e.closest('.refrows')).backgroundColor; return c || null; }""",
+                    arg=sel,
+                ).json_value()
                 self.assertIn(bg, ("rgba(0, 0, 0, 0)", "transparent"))
             # handling stays green, powertrain keeps its own state (the record's)
             self.assertIn("green", page.locator('.tile[data-domain="handling"]').get_attribute("class"))
