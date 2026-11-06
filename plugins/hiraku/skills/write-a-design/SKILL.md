@@ -92,6 +92,7 @@ description: 合う設計の型が無い製品で、設計役 (designer) が設�
 | `assign_section` | `members`・`section` (断面のキー) | 部材に断面を当てる (一部の部材だけ太くする) |
 | `add_part` / `remove_part` | `part` / `id` | 部品を足す / 外す (部材の `part` や `connects_to` が使っていれば断る) |
 | `set_part` / `set_support` | `id`・`fields` | 欄を変える。値を `null` にするとその欄を外す。`id` は変えない |
+| `add_support` / `remove_support` | `support` / `id` | 支えを足す / 外す (部品の `connects_to` が支えやその取り付け点を使っていれば断る) |
 | `set_material` | `key`・`material` | 材料を置き換えるか足す |
 | `set_variable` | `name`・`value`・(`basis`) | 変数を置き換えるか足す |
 

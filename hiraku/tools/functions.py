@@ -1947,7 +1947,9 @@ EDIT_OPS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "add_part": (("part",), ()),
     "set_part": (("id", "fields"), ()),
     "remove_part": (("id",), ()),
+    "add_support": (("support",), ()),
     "set_support": (("id", "fields"), ()),
+    "remove_support": (("id",), ()),
     "set_material": (("key", "material"), ()),
     "set_variable": (("name", "value"), ("basis",)),
 }
@@ -2169,6 +2171,27 @@ def _apply_edit(design: Record, i: int, e: Record) -> str:
                "置いてください")
         parts.remove(p)
         return f"remove_part {e['id']}"
+    if op == "add_support":
+        s = copy.deepcopy(e["support"])
+        fits("support", s)
+        if _by_id(design, "supports", s["id"]):
+            no(f"支え {s['id']} はもうあります (変えるときは set_support)")
+        refs("support", s)
+        design.setdefault("supports", []).append(s)
+        return f"add_support {s['id']}" + (f" (節点 {s['frame_node']})" if s.get("frame_node") is not None else "")
+    if op == "remove_support":
+        s = _by_id(design, "supports", e["id"])
+        if s is None:
+            no(f"支え {e['id']} はありません")
+        users = _connects_to_users(design, e["id"])
+        users += [f"部品 {p.get('id')} の connects_to" for p in parts
+                  if any(isinstance(c, dict) and isinstance(c.get("to"), str) and c["to"].startswith(f"{e['id']}.")
+                         for c in p.get("connects_to") or [])]
+        if users:
+            no(f"支え {e['id']} は {_listed(users)} が使っているので、消すと参照が切れます。先にその connects_to を変える "
+               "edit (set_part) を前に置いてください")
+        design["supports"].remove(s)
+        return f"remove_support {e['id']}"
     if op == "set_material":
         fits("material", e["material"])
         how = "置き換え" if e["key"] in materials else "追加"

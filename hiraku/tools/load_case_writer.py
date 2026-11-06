@@ -367,6 +367,8 @@ def _make(ctx: RunContext, args: Record, design: Record, lc_id: str, tolerance: 
         lc["requirement_keys"] = keys
     lc["criterion"] = criterion
     lc["tolerance_rel"] = float(tolerance)
+    lc["written_by"] = "claude"
+    lc["basis"] = args["basis"].strip()
     if design.get("modules"):  # as the catalog's builders set it on a design with modules
         from hiraku.catalog.build import _builders_modules
 

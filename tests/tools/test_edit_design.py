@@ -140,6 +140,27 @@ class EditDesignTest(EditCase, unittest.TestCase):
                          {"op": "split_member", "id": "low_FL_FR", "at_node": "p"}])
         self.assertIn("50 mm 離れて", out["edits_applied"][1])
 
+    def test_a_support_is_added_and_removed(self):
+        caster = {"id": "C", "kind": "wheel", "position_mm": [-250.0, 0.0, 40.0], "radius_mm": 40.0, "width_mm": 25.0,
+                  "suspension": {"type": "rigid"}, "actuation": {"drive": False, "brake": False, "steer": False},
+                  "frame_node": "foot_RL"}
+        out = self.edit([{"op": "add_support", "support": caster}])
+        self.assertEqual(out["edits_applied"], ["add_support C (節点 foot_RL)"])
+        self.assertEqual(self.by_id(self.ctx.store.design(), "supports", "C"), caster)
+        self.refused([{"op": "add_support", "support": {**caster, "id": "FL"}}], "1 番目", "支え FL はもうあります")
+        self.refused([{"op": "add_support", "support": {**caster, "id": "D", "frame_node": "nowhere"}}],
+                     "1 番目", "frame_node 'nowhere' は節点")
+        out = self.edit([{"op": "remove_support", "id": "C"}])
+        self.assertIsNone(self.by_id(self.ctx.store.design(), "supports", "C"))
+        self.assertEqual(out["check"]["counts"]["supports"], 4)
+
+    def test_removing_a_support_in_use_is_refused(self):
+        self.refused([{"op": "set_part", "id": "battery",
+                       "fields": {"connects_to": [{"to": "FL", "via": "bolt", "carries": "load"}]}},
+                      {"op": "remove_support", "id": "FL"}],
+                     "2 番目の edit (remove_support FL)", "部品 battery の connects_to")
+        self.refused([{"op": "remove_support", "id": "XX"}], "1 番目", "支え XX はありません")
+
     def test_written_by_and_based_on_are_kept(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

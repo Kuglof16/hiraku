@@ -216,7 +216,7 @@ DESCRIPTIONS = {
         "設計役だけが使う。Claude が書いた設計 (write_design の版) の次の版を、全体を書き直さずに edits (変える所だけ) で"
         "作る。edits は今の版に上から順に当てる: add_node・move_node・remove_node・add_member・remove_member・"
         "split_member (at_node で 2 本に。無い節点なら中点に作る。新しい部材は <id>_a と <id>_b)・set_section・"
-        "assign_section・add_part・set_part・remove_part・set_support (fields の null はその欄を外す)・set_material・"
+        "assign_section・add_part・set_part・remove_part・add_support・set_support (fields の null はその欄を外す)・remove_support・set_material・"
         "set_variable。無い id や、参照を切る edit は、何番目かを言って断る (何も当てない)。当てたあとは write_design と同じに "
         "check_design で確かめて次の版にする (回数は round_limit まで、全部の荷重条件をやり直す)。型の設計は revise_design"
     ),
