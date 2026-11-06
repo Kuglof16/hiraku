@@ -56,6 +56,9 @@ import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load case
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
 import { designerColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
+import { GripView } from "./grip_panel.js"; // grip: the tyres of a driving record (toggle タイヤ, ?on=grip)
+import { hasGrip } from "./grip_view.js"; // grip:
+import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 
@@ -103,7 +106,7 @@ const ui = {
   gridBack: null,
   pinnedTab: TABS.includes(params.get("tab")) ? params.get("tab") : null,
   tabPlan: parseTabPlan(params.get("tabs")), // ?tabs= (wins over ?tab=); a tab pressed by hand ends it
-  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis
+  toggles: { contour: true, arrows: true, cg: true, parts: true, names: false, limit: true, graph: true, joints: true, modules: false, spaces: false, heat: true, grip: false }, // joints: on at first (?off=joints); modules: modules, spaces (modules.js); heat: the energy's flow on a thermal analysis; grip: タイヤ (grip_panel.js)
   frozen: params.has("t"),
   // The test's motion follows the replay (auto); ▶ or dragging its bar plays it on its own (local)
   // until the replay playhead moves again.
@@ -157,6 +160,7 @@ document.body.classList.add(`look-${look}`);
 const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 const bench = new Workbench3D(viewport, look, { quality });
 const modLayer = new ModuleLayer(bench); // modules:
+const grip = new GripView(bench, viewport); // grip:
 const heat = new EnergyFlow(bench, viewport, { dev: DEV }); // heat: ids in its legend only with ?dev=1
 const nodeView = new NodeMotionView(bench, viewport); // node_motion: the nodes' motion (js/node_motion.js)
 function resize3d() {
@@ -165,6 +169,7 @@ function resize3d() {
   const h = viewport.clientHeight;
   if (w > 0 && h > 0) {
     bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
+    grip.resize(w, h); // grip:
     if (half && cmpView) cmpView.bench.resize(w, h, (window.devicePixelRatio || 1) * stageScale);
   }
 }
@@ -1445,7 +1450,7 @@ function setCompare(s, chain, ct) {
   // the viewport's right, and a gap), so its vehicle is framed in the rest of its half; the
   // left view looks through the same camera, so its vehicle sits the same way in its half.
   const lg = $("legend");
-  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : 0; // (in the present mode the legend is beside the view)
+  const room = c && !lg.hidden && lg.parentElement === viewport ? viewport.clientWidth - lg.offsetLeft + LEGEND_GAP_PX : c ? 0 : grip.reserved; // (in the present mode the legend is beside the view; grip: the tyre panel's strip)
   if (was !== !!c || room !== (bench.reserveRight ?? 0)) {
     if (was !== !!c) resize3d();
     bench.setReserve(room);
@@ -1473,6 +1478,7 @@ function renderToggles(motion, lc, graphs = false, design = null, heatAvail = fa
     btn("parts", "部品", t.parts) +
     btn("names", "名前", t.names) +
     btn("joints", "接合", t.joints) + // joints:
+    (hasGrip(motion) ? btn("grip", "タイヤ", t.grip) : "") + // grip:
     (heatAvail ? btn("heat", "熱の流れ", t.heat) : "") + // heat:
     (liftLimit(motion, lc) ? btn("limit", "限界の重ね", t.limit) : "") +
     (motion || graphs ? btn("graph", "グラフ", t.graph) : "");
@@ -1513,6 +1519,7 @@ function renderMotion(s, chain, motion) {
   const bar = $("animbar");
   viewport.classList.toggle("has-anim", !!motion);
   if (!motion) {
+    grip.hide(); // grip:
     bar.hidden = true;
     $("limitnote").hidden = true;
     shownMotion = null;
@@ -1526,6 +1533,7 @@ function renderMotion(s, chain, motion) {
   const ana = chain.shown;
   const tau = animTau(s, ana, motion);
   if (bench.frame?.t !== tau) bench.setFrame(motion.frame(tau));
+  grip.update(!!ui.toggles.grip && !ui.present, ana, motion, kcFor(s, ana), tau); // grip: the same clock as the motion
   shownMotion = { motion, ana, tau };
 
   bar.hidden = false;
@@ -1929,6 +1937,7 @@ window.hiraku = {
   request: draft ? { send: (t) => draftSend(t), answer: (a) => draftAnswer(a), start: (m) => draftStart(m), get state() { return draft; } } : null,
   player,
   ready,
+  grip, // grip: the tyre view (its frame: grip.frame), for the tests
   seek: seekAndDraw,
   state: () => player.state,
   bench,
