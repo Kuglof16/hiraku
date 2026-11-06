@@ -6,6 +6,12 @@ Field keys added to the common object (see common.py):
         amp_max: the largest node |vector| of that mode (the page scales by it)
     frf {channel, x (packed), y (packed), x_unit, y_unit, note}
     lines [{label, f_Hz}]   excitation frequencies from the record's results (wheel, motor)
+    each mode also has (members in frame.member_ids order; see member_strain):
+        strain {axial, bending, total (lists), max, per_mm, has_rotations}
+            relative strain per member, total / max in 0..1 on the page; per_mm = the largest total
+            strain per 1 mm of the largest node's motion (strain is linear in the mode amplitude)
+        energy {share (list, null where the section is unknown), top [{member, share, axial_part}]}
+    strain_method: text, the method as shown on the page
 """
 
 from __future__ import annotations
@@ -14,6 +20,120 @@ import math
 import sys
 
 from viewer.src import common
+
+TOP = 5
+
+
+# ---------------------------------------------------------------- section properties
+def section_props(sec: dict | None) -> dict | None:
+    """A (mm^2), I_v and I_s (mm^4: bending in the section's h direction and in its b direction), c_v, c_s
+    (mm, half sizes). rect_tube {b, h, t} and round_tube {d, t}; None for anything else."""
+    if not sec:
+        return None
+    d = sec.get("dims_mm", {})
+    if sec.get("shape") == "rect_tube" and {"b", "h", "t"} <= set(d):
+        b, h, t = float(d["b"]), float(d["h"]), float(d["t"])
+        bi, hi = b - 2 * t, h - 2 * t
+        return {"A": b * h - bi * hi, "I_v": (b * h ** 3 - bi * hi ** 3) / 12.0, "I_s": (h * b ** 3 - hi * bi ** 3) / 12.0,
+                "c_v": h / 2.0, "c_s": b / 2.0}
+    if sec.get("shape") == "round_tube" and {"d", "t"} <= set(d):
+        D, t = float(d["d"]), float(d["t"])
+        di = D - 2 * t
+        I = math.pi * (D ** 4 - di ** 4) / 64.0
+        return {"A": math.pi * (D ** 2 - di ** 2) / 4.0, "I_v": I, "I_s": I, "c_v": D / 2.0, "c_s": D / 2.0}
+    return None
+
+
+def _sub(a, b):
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _cross(a, b):
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+
+
+def _unit(a):
+    n = math.sqrt(_dot(a, a))
+    return [c / n for c in a] if n > 0 else [0.0, 0.0, 0.0]
+
+
+def local_axes(e):
+    """The member's 'vertical' axis v (h direction) and sideways axis s: v = global Z made square to the
+    member, as K1 orients a horizontal member (hiraku/solvers/k1_frame/model.py: local y up, h vertical);
+    a member within 25 deg of vertical uses global X instead (the viewer's choice)."""
+    ref = [1.0, 0.0, 0.0] if abs(e[2]) > math.cos(math.radians(25.0)) else [0.0, 0.0, 1.0]
+    v = _unit(_sub(ref, [c * _dot(ref, e) for c in e]))
+    return v, _cross(e, v)
+
+
+STRAIN_METHOD = (
+    "Strain per member from the mode shape, which has node translations only (no rotations in the record). "
+    "Axial: (u_b - u_a) . e / L. Bending: each node's rotation is estimated as the mean of the chord rotations "
+    "e x (u_b - u_a) / L of the members meeting there (rigid joints); a member's end rotation is that node rotation "
+    "less its own chord rotation (twist dropped), and the curvature at an end is (4 phi_near + 2 phi_far) / L "
+    "(Euler-Bernoulli, a cubic between the ends), times the half depth of the section in that direction. "
+    "Total = |axial| + the larger end's bending, normalised to the mode's largest member (relative: the mode has no "
+    "physical size). Strain energy: EA d^2 / 2L + (EI/L)(2 phi_a^2 + 2 phi_a phi_b + 2 phi_b^2) in each bending "
+    "direction, h taken as vertical as in K1 (members within 25 deg of vertical: h along x, the viewer's choice); "
+    "torsion is not included (no rotations in the record).")
+
+
+def member_strain(design: dict, frame: dict, shape: dict[str, list[float]]) -> dict:
+    """Per member (frame.member_ids order) axial, bending and total strain and strain energy for a shape
+    given as node -> translation (STRAIN_METHOD)."""
+    xyz = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
+    dm = {m["id"]: m for m in design.get("members", [])}
+    secs, mats = design.get("sections", {}), design.get("materials", {})
+    ids = frame["node_ids"]
+    u = {nid: [float(c) for c in shape.get(nid, [0.0, 0.0, 0.0])] for nid in ids}
+    geo = []
+    rot_sum = {nid: [0.0, 0.0, 0.0] for nid in ids}
+    rot_n = {nid: 0 for nid in ids}
+    for (ia, ib), mid in zip(frame["members"], frame["member_ids"]):
+        a, b = ids[ia], ids[ib]
+        d = _sub(xyz[b], xyz[a])
+        L = math.sqrt(_dot(d, d))
+        e = _unit(d)
+        du = _sub(u[b], u[a])
+        chord = [c / L for c in _cross(e, du)] if L > 0 else [0.0, 0.0, 0.0]
+        geo.append((a, b, L, e, du, chord))
+        for nid in (a, b):
+            rot_sum[nid] = [x + y for x, y in zip(rot_sum[nid], chord)]
+            rot_n[nid] += 1
+    rot = {nid: [c / rot_n[nid] for c in rot_sum[nid]] if rot_n[nid] else [0.0, 0.0, 0.0] for nid in ids}
+    axial, bend, total, energy, en_axial = [], [], [], [], []
+    for (a, b, L, e, du, chord), mid in zip(geo, frame["member_ids"]):
+        if L <= 0:
+            axial.append(0.0); bend.append(0.0); total.append(0.0); energy.append(None); en_axial.append(None)
+            continue
+        ea = _dot(du, e) / L
+        v, s = local_axes(e)
+        pa, pb = _sub(rot[a], chord), _sub(rot[b], chord)
+        # rotation about s bends in the v (h) direction, about v bends in the s (b) direction
+        phi = {"v": (_dot(pa, s), _dot(pb, s)), "s": (_dot(pa, v), _dot(pb, v))}
+        m = dm.get(mid, {})
+        sp = section_props(secs.get(m.get("section")))
+        E = (mats.get(m.get("material")) or {}).get("E_MPa")
+        c = {"v": sp["c_v"], "s": sp["c_s"]} if sp else {"v": 0.0, "s": 0.0}
+        kb = 0.0
+        for k, (fa, fb) in phi.items():
+            kb = max(kb, abs(4 * fa + 2 * fb) / L * c[k], abs(4 * fb + 2 * fa) / L * c[k])
+        axial.append(abs(ea))
+        bend.append(kb)
+        total.append(abs(ea) + kb)
+        if sp and E:
+            ua = E * sp["A"] * (ea * L) ** 2 / (2 * L)
+            ub = sum(E * sp["I_" + k] / L * (2 * fa * fa + 2 * fa * fb + 2 * fb * fb) for k, (fa, fb) in phi.items())
+            energy.append(ua + ub)
+            en_axial.append(ua)
+        else:
+            energy.append(None)
+            en_axial.append(None)
+    return {"axial": axial, "bending": bend, "total": total, "energy": energy, "energy_axial": en_axial}
 
 
 def build(args) -> dict:
@@ -35,12 +155,25 @@ def build(args) -> dict:
             flat.extend(float(c) for c in v)
             amp = max(amp, math.sqrt(sum(float(c) ** 2 for c in v)))
         n = i + 1
+        ms = member_strain(design, obj["frame"], pn)
+        smax = max(ms["total"], default=0.0)
+        en = [x for x in ms["energy"] if x is not None]
+        etot = sum(en)
+        share = [None if x is None or etot <= 0 else x / etot for x in ms["energy"]]
+        mids = obj["frame"]["member_ids"]
+        top = sorted((j for j in range(len(mids)) if share[j] is not None), key=lambda j: -share[j])[:TOP]
         modes.append({"label": f.get("label", f"mode {n}"), "f_Hz": float(f["frequency_Hz"]),
                       "shape": common.pack_f32(flat, [len(ids), 3]), "amp_max": amp,
-                      "share_bending": effects.get(f"mode {n}: share of the shape that bends the frame")})
+                      "share_bending": effects.get(f"mode {n}: share of the shape that bends the frame"),
+                      "strain": {"axial": ms["axial"], "bending": ms["bending"], "total": ms["total"], "max": smax,
+                                 "per_mm": smax / amp if amp > 0 else 0.0, "has_rotations": False},
+                      "energy": {"share": share, "known": len(en), "top": [
+                          {"member": mids[j], "share": share[j],
+                           "axial_part": ms["energy_axial"][j] / ms["energy"][j] if ms["energy"][j] else 0.0} for j in top]}})
     if not modes:
         raise LookupError(f"{rec['_path']}: no mode_shape fields")
     obj["modes"] = modes
+    obj["strain_method"] = STRAIN_METHOD
     frf = next((s for s in rec.get("series", []) or [] if s.get("channel", "").startswith("frequency_response")), None)
     if frf is not None:
         x = frf.get("x", {})
@@ -65,10 +198,14 @@ def build(args) -> dict:
         "Beam modes only: the frame is drawn as straight members between its nodes; the shape between nodes is not stored.",
         "Mode shapes are normalised (no physical amplitude): the scale sets how far the largest node moves on screen.",
         "Part boxes are not drawn: the record holds mode shapes at the frame nodes only.",
+        "Member strain is computed here from node translations only (the record has no rotations): bending is an "
+        "estimate (node rotation = mean chord rotation of the members at the node), torsion is left out; values are "
+        "relative to the mode's largest member.",
     ]
     if missing:
         obj["notes"].append(f"{len(missing)} frame nodes have no mode vector in the record (drawn still): {', '.join(sorted(missing))}")
-    obj["notes"].append(f"Motion: x(t) = node + scale x shape / |shape|max x sin(phase); colour = |shape| / |shape|max at each node.")
+    obj["notes"].append("Motion: x(t) = node + scale x shape / |shape|max x sin(phase); colour = member strain / the mode's "
+                        "largest (or, switched, |shape| / |shape|max at each node).")
     return obj
 
 

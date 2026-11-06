@@ -1,29 +1,72 @@
-"""Crash (C1) data for the viewer: python -m viewer.src.crash <run dir> [--out viewer/data]
+"""Crash (C1) data for the viewer: python -m viewer.src.crash <run dir> [--tool crash|crash_beam] [--out viewer/data]
 
-Field keys added to the common object (see common.py):
-    stress {label, unit, per_member (list in frame.member_ids order, null where the record has none), max}
-        the record's per_member stress, at the peak deceleration only
-    disp {label, unit, per_node (packed f32, n x 3, frame.node_ids order), max}
-        the record's per_node displacement, at the peak deceleration only
-    t (packed f32), decel, crush, wall_force (packed f32, same length): the record's series
-    a_max: the largest deceleration in the series (the instant of the stored fields)
-    x_front_mm: the vehicle's front-most x (frame nodes and part boxes), where it meets the wall
-The page scales the stored fields by a(t) / a_max (the tool solves the frame once, linearly, at the
-peak; that scaling is done on the page and said on screen) and moves the whole vehicle by crush(t).
+Reads either record kind (by default crash_beam when the run has one, else crash):
+
+model "A" (tool crash: 1-D mass and spring, the frame solved once, linearly, at the peak):
+    stress {label, unit, per_member (frame.member_ids order, null where none), max}   at the peak only
+    disp {label, unit, per_node (packed f32, n x 3), max}                           at the peak only
+    t, decel, crush, wall_force (packed f32, same length); a_max; units
+    x_front_mm, wall_x_mm: the vehicle's front-most x and the wall's face. The page does not move the
+    vehicle (A has no deformed shape); crush(t) is a plot only.
+
+model "B" (tool crash_beam: co-rotational beams with plastic hinges, its node_motion field):
+    frame: the run's mesh (node_motion nodes and elements; member_ids = each element's member id)
+    motion {t (packed, nF), pos (packed f32, nF x n x 3, mm), broken [[member id, ...] per frame]}
+    colour {strain (packed nF x ne, %, element axial strain from its length change),
+            fold (packed nF x ne, deg, largest change of the angle to a neighbouring element at its ends),
+            strain_absmax, fold_max}
+    part_off (packed nF x nparts x 3): each drawn part box moved by the mean motion of its carried_by nodes
+    wall_x_mm; beyond {nodes [per frame count], depth [per frame, mm], parts [...], part_depth [...],
+                       nodes_any, node_depth_max, parts_any, part_depth_max, tol_mm}
+    series {t, decel, crush} (packed) and units
+Every number here is computed from the record by this script; nothing is added that the run did not give.
 """
 
 from __future__ import annotations
 
 import math
+import re
 import sys
 
 from viewer.src import common
 
+TOL_MM = 0.05  # node_motion positions are rounded to 0.1 mm: beyond the wall means more than half of that
+
+
+# ---------------------------------------------------------------- shared
+def _wall(obj) -> dict | None:
+    return next((s for s in obj["scene"] if s["kind"] == "wall"), None)
+
+
+def _wall_row(wall) -> dict:
+    return {"label": "wall", "value": (f"rigid wall, face at x = {wall['c'][0] - wall['s'][0] / 2:g} mm, box centre "
+                                       f"({', '.join(f'{v:g}' for v in wall['c'])}) mm, size "
+                                       f"{' x '.join(f'{v:g}' for v in wall['s'])} mm") if wall else "no wall in the record's scene",
+            "source": "record scene (the tool's scene.wall)"}
+
+
+def _find(args):
+    tool = getattr(args, "tool", None)
+    if tool:
+        return common.find_analysis(args.run, tool, version=args.version, analysis_id=args.analysis)
+    try:
+        return common.find_analysis(args.run, "crash_beam", version=args.version, analysis_id=args.analysis)
+    except LookupError:
+        return common.find_analysis(args.run, "crash", version=args.version, analysis_id=args.analysis)
+
 
 def build(args) -> dict:
-    vdir, rec = common.find_analysis(args.run, "crash", version=args.version, analysis_id=args.analysis)
+    vdir, rec = _find(args)
     design = common.read_json(vdir / "design.json")
-    obj = common.base_object("crash", "Crash: frontal wall impact", args.run, vdir, rec, design)
+    if rec["tool"] == "crash_beam":
+        return build_b(args, vdir, rec, design)
+    return build_a(args, vdir, rec, design)
+
+
+# ---------------------------------------------------------------- A: crash (1-D)
+def build_a(args, vdir, rec, design) -> dict:
+    obj = common.base_object("crash", "Crash: frontal wall impact (A: 1-D mass and spring)", args.run, vdir, rec, design)
+    obj["model"] = "A"
     fr = obj["frame"]
     st = next((f for f in rec.get("fields", []) if f.get("kind") == "stress" and "per_member" in f), None)
     dp = next((f for f in rec.get("fields", []) if f.get("kind") == "displacement" and "per_node" in f), None)
@@ -45,8 +88,7 @@ def build(args) -> dict:
         if s is None:
             raise LookupError(f"{rec['_path']}: no series {name}")
         chans[name] = s
-    t = chans["deceleration"]["t_s"]
-    obj["t"] = common.pack_f32(t)
+    obj["t"] = common.pack_f32(chans["deceleration"]["t_s"])
     obj["decel"] = common.pack_f32(chans["deceleration"]["values"])
     obj["crush"] = common.pack_f32(chans["crush"]["values"])
     obj["wall_force"] = common.pack_f32(chans["wall_force"]["values"])
@@ -55,31 +97,193 @@ def build(args) -> dict:
     xs = [n["xyz_mm"][0] for n in design.get("nodes", [])]
     xs += [p["c"][0] + p["s"][0] / 2.0 for p in obj["parts"]]
     obj["x_front_mm"] = max(xs)
+    wall = _wall(obj)
+    obj["wall_x_mm"] = wall["c"][0] - wall["s"][0] / 2.0 if wall else None
     yld = sorted({float(m.get("yield_MPa")) for m in design.get("materials", {}).values() if m.get("yield_MPa")})
     obj["marks"] = [{"v": y, "label": f"yield {y:g}"} for y in yld[:2]]
     lc = common.load_case_of(vdir, rec["load_case_id"])
-    if lc is None and getattr(args, "speed", None):
-        lc = None
-    wall = next((s for s in obj["scene"] if s["kind"] == "wall"), None)
     mass = common.result(rec, "vehicle_mass")
     obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
-        {"label": "wall", "value": (f"rigid wall, centre ({', '.join(f'{v:g}' for v in wall['c'])}) mm, size "
-                                     f"{' x '.join(f'{v:g}' for v in wall['s'])} mm") if wall else "no wall in the record's scene",
-         "source": "record scene (the tool's scene.wall)"},
+        _wall_row(wall),
         {"label": "mass", "value": f"{mass:g} kg" if mass is not None else "not in the record",
          "source": "record result vehicle_mass (design as loaded, the case's loading)"},
         {"label": "peak deceleration", "value": f"{obj['a_max']:.2f} {obj['units']['deceleration']}",
          "source": "the series' largest value; the frame was solved at this instant"},
     ]
     obj["not_computed"] = [
-        "The crush is a lumped number (1-D mass and spring), shown as a translation of the whole vehicle into the wall, not a crushed shape.",
-        "Stress and displacement were solved once, at the peak deceleration; at other times they are the stored values x a(t) / a_max (linear frame).",
+        "A is a 1-D model: no deformed shape is drawn. The crush is one number (a mass on a spring); the vehicle is "
+        "drawn where it stands and crush(t) is shown in the plot only (it is not moved into or through the wall).",
+        "Stress and the elastic frame deflection were solved once, at the peak deceleration; at other times they are "
+        "the stored values x a(t) / a_max (linear frame). The deflection (off by default) is not a crushed shape.",
         "The rebound after the standstill is not followed; wall loads at the front nodes are the tool's share of the wall force.",
     ]
-    obj["notes"] = ["Frame displacement is the deflection with the wheel-centre rigid motion removed, multiplied by the scale; "
-                    "the translation by crush(t) is real size."]
+    obj["notes"] = ["Run crash_beam (B) on this design for a deformed shape over time."]
     return obj
 
 
+# ---------------------------------------------------------------- B: crash_beam (beams)
+def _assumption(rec, pattern) -> str | None:
+    for a in rec.get("assumptions", []) or []:
+        if re.search(pattern, a):
+            return a
+    return None
+
+
+def _fold_pairs(n_nodes, con):
+    """For each element, the (other element, shared node, other end of this, other end of that) at its ends."""
+    at = [[] for _ in range(n_nodes)]
+    for e, (a, b) in enumerate(con):
+        at[a].append(e)
+        at[b].append(e)
+    pairs = []
+    for e, (a, b) in enumerate(con):
+        lst = []
+        for nd in (a, b):
+            me = b if nd == a else a
+            for o in at[nd]:
+                if o != e:
+                    oa, ob = con[o]
+                    lst.append((nd, me, ob if oa == nd else oa))
+        pairs.append(lst)
+    return pairs
+
+
+def _angle(p, nd, i, j):
+    u = [p[i][k] - p[nd][k] for k in range(3)]
+    v = [p[j][k] - p[nd][k] for k in range(3)]
+    nu, nv = math.sqrt(sum(c * c for c in u)), math.sqrt(sum(c * c for c in v))
+    if nu < 1e-9 or nv < 1e-9:
+        return None
+    c = sum(u[k] * v[k] for k in range(3)) / (nu * nv)
+    return math.degrees(math.acos(max(-1.0, min(1.0, c))))
+
+
+def build_b(args, vdir, rec, design) -> dict:
+    obj = common.base_object("crash", "Crash: frontal wall impact (B: beams that yield and fold)", args.run, vdir, rec, design)
+    obj["model"] = "B"
+    nm = next((f for f in rec.get("fields", []) or [] if f.get("kind") == "node_motion"), None)
+    if nm is None:
+        raise LookupError(f"{rec['_path']}: a crash_beam record without a node_motion field (the mesh may have had "
+                          "more nodes than the contract allows; see its assumptions)")
+    ids = list(nm["nodes"])
+    index = {n: i for i, n in enumerate(ids)}
+    con = [[index[a], index[b]] for a, b, _m in nm["members"]]
+    emem = [m for _a, _b, m in nm["members"]]
+    dmem = {m["id"]: m for m in design.get("members", [])}
+    sections = design.get("sections", {})
+    frames = nm["frames"]
+    P = frames["positions_mm"]
+    nF, n, ne = len(P), len(ids), len(con)
+    obj["frame"] = {"node_ids": ids, "nodes": common.pack_f32([c for p in P[0] for c in p], [n, 3]), "members": con,
+                    "member_ids": emem, "member_names": [dmem.get(m, {}).get("name", m) for m in emem],
+                    "radius_mm": [common._radius(sections.get(dmem.get(m, {}).get("section"))) for m in emem]}
+    obj["motion"] = {"t": common.pack_f32(frames["t_s"]), "pos": common.pack_f32([c for F in P for p in F for c in p], [nF, n, 3]),
+                     "broken": frames.get("broken") or [[] for _ in range(nF)]}
+    # colour from the same run: element axial strain (length change) and fold angle at its ends
+    L0 = [math.dist(P[0][a], P[0][b]) for a, b in con]
+    pairs = _fold_pairs(n, con)
+    ang0 = [[_angle(P[0], nd, i, j) for nd, i, j in pr] for pr in pairs]
+    strain, fold = [], []
+    for F in P:
+        for e, (a, b) in enumerate(con):
+            strain.append(100.0 * (math.dist(F[a], F[b]) - L0[e]) / L0[e] if L0[e] > 0 else 0.0)
+            best = 0.0
+            for (nd, i, j), a0 in zip(pairs[e], ang0[e]):
+                a1 = _angle(F, nd, i, j)
+                if a0 is not None and a1 is not None:
+                    best = max(best, abs(a1 - a0))
+            fold.append(best)
+    # the colour range leaves out members broken by that frame (a removed element's ends fly apart)
+    brk = frames.get("broken") or [[] for _ in range(nF)]
+    whole = [k * ne + e for k in range(nF) for e in range(ne) if emem[e] not in set(brk[k])]
+    obj["colour"] = {"strain": common.pack_f32(strain, [nF, ne]), "fold": common.pack_f32(fold, [nF, ne]),
+                     "strain_absmax": max((abs(strain[i]) for i in whole), default=0.0),
+                     "fold_max": max((fold[i] for i in whole), default=0.0)}
+    # part boxes moved by the mean motion of their carried_by nodes (translation only)
+    offs = []
+    by_id = {p["id"]: p for p in design.get("parts", [])}
+    keep = []
+    for p in obj["parts"]:
+        cb = [index[c] for c in (by_id.get(p["id"], {}).get("carried_by") or []) if c in index]
+        if cb:
+            keep.append((p, cb))
+    obj["parts"] = [p for p, _ in keep]
+    for F in P:
+        for p, cb in keep:
+            for k in range(3):
+                offs.append(sum(F[i][k] - P[0][i][k] for i in cb) / len(cb))
+    obj["part_off"] = common.pack_f32(offs, [nF, len(keep), 3])
+    dropped = [p["id"] for p in common.parts_of(design) if p["id"] not in {q["id"] for q, _ in keep}]
+    # the wall and what is beyond it
+    wall = _wall(obj)
+    wx = wall["c"][0] - wall["s"][0] / 2.0 if wall else max(p[0] for p in P[0])
+    obj["wall_x_mm"] = wx
+    bn, bd, bp, bpd, any_nodes = [], [], [], [], set()
+    any_parts = set()
+    for k, F in enumerate(P):
+        over = [(F[i][0] - wx, i) for i in range(n) if F[i][0] > wx + TOL_MM]
+        bn.append(len(over))
+        bd.append(max((d for d, _ in over), default=0.0))
+        any_nodes |= {i for _, i in over}
+        po = []
+        for j, (p, _cb) in enumerate(keep):
+            front = p["c"][0] + p["s"][0] / 2.0 + offs[(k * len(keep) + j) * 3]
+            if front > wx + TOL_MM:
+                po.append(front - wx)
+                any_parts.add(p["id"])
+        bp.append(len(po))
+        bpd.append(max(po, default=0.0))
+    obj["beyond"] = {"nodes": bn, "depth": bd, "parts": bp, "part_depth": bpd, "nodes_any": len(any_nodes),
+                     "node_depth_max": max(bd, default=0.0), "parts_any": sorted(any_parts),
+                     "part_depth_max": max(bpd, default=0.0), "tol_mm": TOL_MM}
+    dec, cr = common.series(rec, "deceleration"), common.series(rec, "crush")
+    if dec is None or cr is None:
+        raise LookupError(f"{rec['_path']}: no deceleration or crush series")
+    obj["series"] = {"t": common.pack_f32(dec["t_s"]), "decel": common.pack_f32(dec["values"]),
+                     "crush": common.pack_f32(cr["values"])}
+    obj["units"] = {"deceleration": dec.get("unit", "g"), "crush": cr.get("unit", "mm")}
+    lc = common.load_case_of(vdir, rec["load_case_id"])
+    mass = _assumption(rec, r"^mass [\d.]+ kg")
+    obj["inputs"] = common.case_inputs(lc, rec["load_case_id"]) + [
+        _wall_row(wall),
+        {"label": "wall friction", "value": _assumption(rec, r"^wall friction") or "given in the case (see params)",
+         "source": "record assumptions (the tool's default when the case does not give wall_mu)"},
+        {"label": "beam break", "value": _assumption(rec, r"breaks \(is removed\)") or "given in the case (see params)",
+         "source": "record assumptions (the tool's default when the case does not give hinge_break_angle)"},
+        {"label": "mass", "value": mass.split(":")[0] if mass else "not in the record",
+         "source": "record assumptions (frame on its element nodes, parts on their carried_by nodes)"},
+        {"label": "mesh", "value": f"{n} nodes, {ne} beam elements of {len(set(emem))} members; {nF} frames kept of the run",
+         "source": "record node_motion field"},
+    ]
+    obj["not_computed"] = [
+        "Member stresses are not in the crash_beam record. The colour is computed here from the node positions of the "
+        "same run: element axial strain = change of the element's length / its length at t = 0 (positions are stored to "
+        "0.1 mm, so about 0.1 % on a 100 mm element), and fold = the largest change of the angle between the element and "
+        "a neighbouring element at its ends (a plastic hinge shows as a fold). Bending inside one element is not seen.",
+        "Part boxes are not deformed and do not touch the wall in the tool: each is moved by the mean motion of its "
+        "carried_by nodes (no rotation)." + (f" Not drawn (no carried_by node in the mesh): {len(dropped)} parts, e.g. "
+                                             f"{', '.join(dropped[:4])}." if dropped else ""),
+        f"Between the {nF} stored frames nothing is interpolated; the frame's broken pieces do not touch each other in the "
+        "tool. The record lists broken members, not elements: a member is marked from the frame its first element breaks.",
+    ]
+    b = obj["beyond"]
+    obj["notes"] = [
+        (f"Wall penetration: {b['nodes_any']} frame nodes go beyond the wall face (x = {wx:g} mm) at some frame, deepest "
+         f"{b['node_depth_max']:.1f} mm." if b["nodes_any"] else
+         f"Wall penetration: no frame node goes beyond the wall face (x = {wx:g} mm) in any stored frame "
+         f"(tolerance {TOL_MM} mm, half the record's 0.1 mm rounding).")
+        + (f" Part boxes moved with their nodes reach past it: {', '.join(b['parts_any'])}, up to {b['part_depth_max']:.1f} mm "
+           f"(the tool does not let part boxes touch the wall; {b['parts'][0]} of them already reach past the face at "
+           f"t = 0, up to {b['part_depth'][0]:.1f} mm: the wall touches the front-most frame node, not the parts)."
+           if b["parts_any"] else ""),
+        "Positions and the deformed shape are real size (no scale).",
+    ]
+    return obj
+
+
+def _extra(ap):
+    ap.add_argument("--tool", choices=["crash", "crash_beam"], help="record kind (default: crash_beam if the run has one)")
+
+
 if __name__ == "__main__":
-    common.main("crash", build, argv=sys.argv[1:])
+    common.main("crash", build, extra=_extra, argv=sys.argv[1:])

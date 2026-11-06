@@ -23,8 +23,8 @@ COMMON_KEYS = {"field", "title", "source", "frame", "parts", "scene", "vectors",
                "inputs", "not_computed", "notes"}
 
 
-def make(field):
-    args = SimpleNamespace(run=FX / field, version=None, analysis=None, load_case=None)
+def make(field, run=None, tool=None):
+    args = SimpleNamespace(run=FX / (run or field), version=None, analysis=None, load_case=None, tool=tool)
     return SCRIPTS[field].build(args)
 
 
@@ -109,10 +109,108 @@ class FieldDataTest(unittest.TestCase):
         self.assertAlmostEqual(o["a_max"], max(common.series(rec, "deceleration")["values"]))
         self.assertEqual([s["kind"] for s in o["scene"]], ["wall"])
         self.assertEqual(len(o["vectors"]), len(rec["vectors"]))
-        self.assertTrue(any("translation" in t for t in o["not_computed"]))
+        self.assertEqual(o["model"], "A")
+        self.assertTrue(any("A is a 1-D model: no deformed shape is drawn" in t for t in o["not_computed"]))
         self.assertTrue(any("a(t) / a_max" in t for t in o["not_computed"]))
+        self.assertEqual(o["wall_x_mm"], o["scene"][0]["c"][0] - o["scene"][0]["s"][0] / 2)
         labels = {r["label"] for r in o["inputs"]}
         self.assertTrue({"speed", "wall", "mass"} <= labels, labels)
+        # the page never moves the A vehicle: no crush(t) translation in its code path
+        js = (VIEWER / "js" / "crash.js").read_text(encoding="utf-8")
+        a_part = js[js.index("HV.crashA"):js.index("HV.crashB = ")]
+        self.assertNotIn("boxes.off", a_part)
+        self.assertNotIn("ghost.position", a_part)
+
+    def test_crash_b(self):
+        o = make("crash", "crash_b")
+        rec = common.find_analysis(FX / "crash_b", "crash_beam")[1]
+        nm = rec["fields"][0]
+        self.assertEqual(o["model"], "B")
+        fr, mo = o["frame"], o["motion"]
+        n, ne, nF = len(nm["nodes"]), len(nm["members"]), len(nm["frames"]["t_s"])
+        self.assertEqual((len(fr["node_ids"]), len(fr["members"]), len(fr["member_ids"])), (n, ne, ne))
+        pos = common.unpack_f32(mo["pos"])
+        self.assertEqual(len(pos), nF * n * 3)
+        self.assertEqual(len(common.unpack_f32(mo["t"])), nF)
+        self.assertEqual(len(mo["broken"]), nF)
+        # frame 0 is the mesh at rest; the last frame is the record's last, node by node
+        self.assertEqual(common.unpack_f32(fr["nodes"]), pos[:n * 3])
+        last = nm["frames"]["positions_mm"][-1]
+        for i in (0, n // 2, n - 1):
+            for a in range(3):
+                self.assertAlmostEqual(pos[((nF - 1) * n + i) * 3 + a], last[i][a], places=2)
+        for k in ("strain", "fold"):
+            v = common.unpack_f32(o["colour"][k])
+            self.assertEqual(len(v), nF * ne)
+            self.assertTrue(all(abs(x) < 1e-3 for x in v[:ne]), k)   # nothing at t = 0
+        # an element's strain recomputed by hand at the last frame
+        ia, ib = fr["members"][0]
+        P0, PL = nm["frames"]["positions_mm"][0], last
+        want = 100 * (math.dist(PL[ia], PL[ib]) - math.dist(P0[ia], P0[ib])) / math.dist(P0[ia], P0[ib])
+        self.assertAlmostEqual(common.unpack_f32(o["colour"]["strain"])[(nF - 1) * ne], want, places=3)
+        self.assertEqual(len(common.unpack_f32(o["part_off"])), nF * len(o["parts"]) * 3)
+        b = o["beyond"]
+        wx = o["wall_x_mm"]
+        self.assertEqual(wx, o["scene"][0]["c"][0] - o["scene"][0]["s"][0] / 2)
+        want_n = [sum(1 for p in F if p[0] > wx + b["tol_mm"]) for F in nm["frames"]["positions_mm"]]
+        self.assertEqual(b["nodes"], want_n)
+        self.assertEqual(len(b["parts"]), nF)
+        self.assertTrue(any("Wall penetration" in t for t in o["notes"]))
+        self.assertTrue(any("Member stresses are not in the crash_beam record" in t for t in o["not_computed"]))
+        self.assertTrue({"speed", "wall", "wall friction", "beam break", "mass", "mesh"} <= {r["label"] for r in o["inputs"]})
+        for k in ("t", "decel", "crush"):
+            self.assertEqual(len(common.unpack_f32(o["series"][k])), len(rec["series"][0]["t_s"]))
+        # --tool picks the kind; a run with only A falls back to A
+        with self.assertRaises(LookupError):
+            make("crash", "crash_b", tool="crash")
+        self.assertEqual(make("crash", "crash", tool=None)["model"], "A")
+
+    def test_nvh_strain_by_hand(self):
+        d = {"nodes": [{"id": "a", "xyz_mm": [0, 0, 0]}, {"id": "b", "xyz_mm": [1000, 0, 0]}, {"id": "c", "xyz_mm": [2000, 0, 0]}],
+             "members": [{"id": "m1", "node_a": "a", "node_b": "b", "section": "s", "material": "st"},
+                         {"id": "m2", "node_a": "b", "node_b": "c", "section": "s", "material": "st"}],
+             "sections": {"s": {"shape": "rect_tube", "dims_mm": {"b": 40, "h": 80, "t": 2}}},
+             "materials": {"st": {"E_MPa": 200000.0}}}
+        fr = common.frame_of(d)
+        # rigid translation and rigid rotation about z: no strain
+        for shape in ({"a": [1, 2, 3], "b": [1, 2, 3], "c": [1, 2, 3]},
+                      {"a": [0, 0, 0], "b": [0, 1e-3 * 1000, 0], "c": [0, 1e-3 * 2000, 0]}):
+            ms = nvh.member_strain(d, fr, shape)
+            self.assertLess(max(ms["total"]), 1e-9)
+        # stretch: axial = du / L
+        ms = nvh.member_strain(d, fr, {"a": [0, 0, 0], "b": [1, 0, 0], "c": [3, 0, 0]})
+        self.assertAlmostEqual(ms["axial"][0], 1e-3)
+        self.assertAlmostEqual(ms["axial"][1], 2e-3)
+        self.assertAlmostEqual(ms["bending"][0], 0.0)
+        # a kink at b (b up by w): chord rotations +-w/L, node b's rotation is their mean 0, ends a and c
+        # take their own member's chord; phi_b = -+w/L, curvature at b = 4 w / L^2, strain x h/2
+        w, L = 1.0, 1000.0
+        ms = nvh.member_strain(d, fr, {"a": [0, 0, 0], "b": [0, 0, w], "c": [0, 0, 0]})
+        self.assertAlmostEqual(ms["bending"][0], 4 * w / L ** 2 * 40.0, places=12)
+        sp = nvh.section_props(d["sections"]["s"])
+        self.assertAlmostEqual(sp["A"], 40 * 80 - 36 * 76)
+        self.assertAlmostEqual(sp["I_v"], (40 * 80 ** 3 - 36 * 76 ** 3) / 12)
+        self.assertAlmostEqual(ms["energy"][0], 200000.0 * sp["I_v"] / L * 2 * (w / L) ** 2, places=6)
+
+    def test_nvh_strain_data(self):
+        o = self.obj["nvh"]
+        ne = len(o["frame"]["member_ids"])
+        self.assertIn("translations only", o["strain_method"])
+        for m in o["modes"]:
+            st, en = m["strain"], m["energy"]
+            for k in ("axial", "bending", "total"):
+                self.assertEqual(len(st[k]), ne)
+            self.assertAlmostEqual(st["max"], max(st["total"]))
+            self.assertGreater(st["max"], 0)
+            self.assertAlmostEqual(st["per_mm"], st["max"] / m["amp_max"])
+            self.assertEqual(len(en["share"]), ne)
+            self.assertAlmostEqual(sum(s for s in en["share"] if s is not None), 1.0, places=9)
+            shares = [t["share"] for t in en["top"]]
+            self.assertEqual(shares, sorted(shares, reverse=True))
+            self.assertTrue(0 < len(en["top"]) <= nvh.TOP)
+            for t in en["top"]:
+                self.assertIn(t["member"], o["frame"]["member_ids"])
+                self.assertTrue(0 <= t["axial_part"] <= 1 + 1e-12)
 
     def test_assembly(self):
         o = self.obj["assembly"]
@@ -138,11 +236,15 @@ class FieldDataTest(unittest.TestCase):
 
     def test_keys_the_page_reads(self):
         # every D.<key> a field's script reads exists in that field's data; main.js and core.js read common keys
-        for f, o in self.obj.items():
-            js = (VIEWER / "js" / f"{f}.js").read_text(encoding="utf-8")
-            with self.subTest(field=f):
-                used = set(re.findall(r"\bD\.([A-Za-z_]+)", js))
-                self.assertTrue(used <= set(o), used - set(o))
+        crash_js = (VIEWER / "js" / "crash.js").read_text(encoding="utf-8")
+        cut = crash_js.index("HV.crashB = ")
+        parts = {f: [((VIEWER / "js" / f"{f}.js").read_text(encoding="utf-8"), o)] for f, o in self.obj.items()}
+        parts["crash"] = [(crash_js[:cut], self.obj["crash"]), (crash_js[cut:], make("crash", "crash_b"))]
+        for f, lst in parts.items():
+            for js, o in lst:
+                with self.subTest(field=f, model=o.get("model")):
+                    used = set(re.findall(r"\bD\.([A-Za-z_]+)", js))
+                    self.assertTrue(used <= set(o), used - set(o))
         for name in ("main.js", "core.js"):
             used = set(re.findall(r"\bD\.([A-Za-z_]+)", (VIEWER / "js" / name).read_text(encoding="utf-8")))
             self.assertTrue(used <= COMMON_KEYS, used - COMMON_KEYS)
@@ -181,10 +283,39 @@ class PageTest(unittest.TestCase):
         shutil.copytree(VIEWER, cls.dir, ignore=shutil.ignore_patterns("data", "src", "__pycache__", "*.py"))
         for f in SCRIPTS:
             common.write_data(f, make(f), cls.dir / "data")
+        # the same page with the crash_beam (B) record as the crash field
+        cls.dir_b = Path(cls.tmp.name) / "viewer_b"
+        shutil.copytree(cls.dir, cls.dir_b)
+        common.write_data("crash", make("crash", "crash_b"), cls.dir_b / "data")
 
     @classmethod
     def tearDownClass(cls):
         cls.tmp.cleanup()
+
+    def _check(self, d, f):
+        r = subprocess.run([self.py, str(Path(__file__).with_name("page_check.py")), str(d), f, "", "3"],
+                           capture_output=True, text=True, encoding="utf-8", timeout=300)
+        self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+        out = json.loads(r.stdout)
+        self.assertEqual(out["errors"], [])
+        self.assertGreater(out["drawn_px"], 1000)
+        return out
+
+    def test_crash_b_page(self):
+        out = self._check(self.dir_b, "crash")
+        self.assertIn("B: beams", out["title"])
+        self.assertIn("frame nodes beyond the wall face", out["hud"])
+        self.assertIn("Member stresses are not in the crash_beam record", out["notes"])
+
+    def test_crash_a_page_says_no_shape(self):
+        out = self._check(self.dir, "crash")
+        self.assertIn("A is a 1-D model: no deformed shape is drawn", out["hud"])
+
+    def test_nvh_page_strain(self):
+        out = self._check(self.dir, "nvh")
+        self.assertIn("member strain", out["hud"])
+        self.assertIn("strain energy, top members", out["hud"])
+        self.assertIn("translations only", out["notes"])
 
     def test_fields_load_without_console_errors(self):
         for f in SCRIPTS:
