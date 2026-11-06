@@ -20,11 +20,14 @@ EXPECTED_REDS = {
     1: {"assembly"},  # stage 0: H1-motion, H1-steer, H3, H6 and H7-handhold (nothing to hold to get in)
     2: {"assembly"},  # stage 0: H7-opening (the bolted side net shuts the way in)
     3: {"powertrain"},  # stage 2: P3 (time to 40 km/h); R7-hand passes at stage 1 (path_checked)
-    4: {"strength"},  # stage 3: R1s (the hot spot at the rail joints)
+    # stage 3: R1s (the hot spot at the rail joints) and C1-40kmh (K2's crash_beam: the least room to the occupant
+    # boxes -22.8 and -32.5 mm on 9bffe19c, run 20261106-182436); the rails and joints of version 5 answer both (+62.3 mm)
+    4: {"strength", "crash"},
     5: set(),
 }
-JUDGED_ON_LAST = ("R7-hand-300N", "R7-foot-500N")  # both judged on the last version, and passing
-PATH_CHECKED_ON_LAST = ("R7-hand-300N",)  # judged on the tool's value after the path check (contract 2fc1006)
+JUDGED_ON_LAST = ("R7-hand-300N", "R7-foot-500N", "C1-40kmh", "C1-split")  # judged on the last version, and passing
+# judged on the tool's value after the path check (contract 2fc1006): R7-hand on the grip, C1-40kmh on crash_beam
+PATH_CHECKED_ON_LAST = ("R7-hand-300N", "C1-40kmh")
 
 
 @unittest.skipUnless(os.environ.get("HIRAKU_SLOW_TESTS") == "1", "the N15 scripted run takes about half an hour (HIRAKU_SLOW_TESTS=1)")
