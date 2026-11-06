@@ -273,7 +273,9 @@ class StaticBrowserTest(unittest.TestCase):
         self.assertTrue(got["canvas"])
         self.assertIn("再生", got["mode"])
         self.assertFalse(got["stop"])
-        self.assertEqual(page.get_attribute("#mode a.launch-link", "href"), "?list=1")
+        # the way back to the list: 「☰ 一覧へ」 at the top left (no 「▶ その場で走らせる」 without a server)
+        self.assertEqual(page.get_attribute("#back-link", "href"), "?list=1")
+        self.assertIsNone(page.query_selector("#mode a.launch-link"))
         # ④: the strength tile replays its analyses in the tab; the prediction names its formula
         page.click('.tab[data-tab="grid"]')
         page.click('.tile[data-domain="strength"]')
