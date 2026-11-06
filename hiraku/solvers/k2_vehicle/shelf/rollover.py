@@ -221,6 +221,7 @@ def lane_change_run(veh, design: dict, speed: float, y_ref, x_end: float, *, mu:
     pts = design_points(design) if points is None else points
     con = BodyContact(sim, pts, mu, k=k, c=c)
     con.live = True
+    con.start()
     rec = ContactRecorder(sim, rec_hz, con, design) if rec_hz > 0 else None
     start_rolling(sim, speed)
     drv = PathDriver(sim, y_ref)
@@ -242,7 +243,7 @@ def lane_change_run(veh, design: dict, speed: float, y_ref, x_end: float, *, mu:
         else:
             drive, brake = [0.0] * sim.n, [0.0] * sim.n
         ext = con.ext()
-        sim.step(controls(sim, delta, drive, brake), ext)
+        sim.step(controls(sim, delta, drive, brake), ext, con.travel)
         w.step()
         if on_step is not None:
             on_step(sim, con)
@@ -286,6 +287,7 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
     sim, rec, con = sw["sim"], made["rec"], made["con"]
     touched_in_turn = rec.touch_unforced
     con.live = True
+    held = con.start()  # the points already under the table (the turn ran without the body's contact)
     rec.set_hz(hz)
     sign = 1.0 if left_up else -1.0
     theta = sw["tip_angle"]
@@ -301,7 +303,7 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
             sim.set_gravity(side_gravity(sign * theta))
             sim.road = table_with_floor(sign * theta, y_hinge)
         ext = con.ext()
-        sim.step(ctl, ext)
+        sim.step(ctl, ext, con.travel)
         w.step()
         if on_step is not None:
             on_step(sim, con)
@@ -314,7 +316,7 @@ def tilt_run(veh, design: dict, left_up: bool, *, mu: float, k: float = K_CONTAC
     rec.tick({"table_angle": ("deg", math.degrees(sign * theta))}, force=True)
     st = w.finish()
     st.update(recorder=rec, sim=sim, points=pts, tip_angle=sw["tip_angle"], t_wheels_off=sw["t_tip"],
-              hold_angle=target, touched_in_turn=touched_in_turn, t_fall=t_start, y_hinge=y_hinge)
+              hold_angle=target, touched_in_turn=touched_in_turn, t_fall=t_start, y_hinge=y_hinge, held=held)
     return st
 
 
@@ -489,6 +491,10 @@ class RolloverTiltTool(_RolloverBase):
         if st["touched_in_turn"]:
             notes.append(f"a body contact point was below the table at {st['touched_in_turn']} samples of the turn "
                          "to the tip (the turn runs without the body's contact)")
+        if st["held"]:
+            notes.append("under the table when the body's contact started (at the tip): " + ", ".join(st["held"])
+                         + "; each takes the table at that depth and is pushed only for what it goes deeper "
+                         "(contact.BodyContact.start: no energy from starting the contact)")
         # the body's roll to the floor at the end (the record's roll is to the table)
         sgn = 1.0 if left_up else -1.0
         th = sgn * st["hold_angle"]
