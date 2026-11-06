@@ -20,7 +20,7 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -105,7 +105,7 @@ class LoadingNoteBrowserTest(unittest.TestCase):
 
     def test_the_note_goes_when_the_record_is_read(self):
         page, errors = self.page()
-        page.goto(f"{self.base}/?run={RUN}&pace=0&t=9")
+        page.goto(f"{self.base}/?run={RUN}&pace=0&t=9", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.wait_for_function("!document.getElementById('loading-note')")
         self.assertEqual(errors, [])
@@ -121,7 +121,7 @@ class LoadingNoteBrowserTest(unittest.TestCase):
     def test_a_server_error_says_why_with_two_links(self):
         page, errors = self.page()
         page.route(EVENTS, lambda route: route.fulfill(status=500, body='{"error": "boom"}', content_type="application/json"))
-        page.goto(f"{self.base}/?run={RUN}")
+        page.goto(f"{self.base}/?run={RUN}", wait_until="domcontentloaded")
         self.check_failed(page, "サーバーが記録を返せませんでした (500)。")
         self.assertNotIn("/api/", page.inner_text("#loading-note"))
         # 開き直す reads it again (now it can be read): the note goes
@@ -133,10 +133,10 @@ class LoadingNoteBrowserTest(unittest.TestCase):
 
     def test_a_record_not_there_and_no_server(self):
         page, errors = self.page()
-        page.goto(f"{self.base}/?run=20991231-000000-nothing")
+        page.goto(f"{self.base}/?run=20991231-000000-nothing", wait_until="domcontentloaded")
         self.check_failed(page, "この記録は見つかりませんでした。消されたか、名前が違います。", "20991231-000000-nothing")
         page.route(EVENTS, lambda route: route.abort())
-        page.goto(f"{self.base}/?run={RUN}")
+        page.goto(f"{self.base}/?run={RUN}", wait_until="domcontentloaded")
         self.check_failed(page, "サーバーにつながりませんでした。HIRAKU が動いているか確かめてください。")
         page.click("#loading-note a:has-text('一覧へ')")
         page.wait_for_url("**/?list=1")
@@ -145,7 +145,7 @@ class LoadingNoteBrowserTest(unittest.TestCase):
     def test_dev_shows_the_status_and_the_address(self):
         page, errors = self.page()
         page.route(EVENTS, lambda route: route.fulfill(status=500, body="{}", content_type="application/json"))
-        page.goto(f"{self.base}/?run={RUN}&dev=1")
+        page.goto(f"{self.base}/?run={RUN}&dev=1", wait_until="domcontentloaded")
         self.check_failed(page, f"500 /api/runs/{RUN}/events?offset=0", dev=True)
         self.assertEqual(errors, [])
 

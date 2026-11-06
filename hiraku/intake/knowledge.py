@@ -51,7 +51,7 @@ def _check_expression(rule_id: str, check: str) -> None:
 
 
 def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *, origin: str, check_by: str | None,
-              trust: int, basis: str, kinds: list[str] | None = None) -> Record:
+              trust: int, basis: str, kinds: list[str] | None = None, level: str | None = None) -> Record:
     """A validated rule record. Raises IntakeError when the category, the formula or its names are wrong."""
     if category not in CATEGORIES:
         raise IntakeError(f"分類 {category!r} はありません。使えるのは {', '.join(CATEGORIES)} です")
@@ -70,6 +70,10 @@ def make_rule(rule_id: str, doc_id: str, category: str, text: str, check: str, *
         rule["check_by"] = check_by
     if kinds:
         rule["applies_to"] = {"kinds": list(kinds)}
+    if level == "advice":  # docs/contract.md 規則の強さ: its hits are advice, never a failure
+        rule["level"] = "advice"
+    elif level not in (None, "rule"):
+        raise ValueError(f"{rule_id}: level is rule or advice, got {level!r}")
     return rule
 
 
@@ -84,7 +88,7 @@ def load_builtin(folder: Path = KNOWLEDGE_DIR) -> list[Record]:
     out: list[Record] = []
     for d in docs:
         rules = [make_rule(r["id"], d["doc_id"], d["category"], r["text"], r["check"], origin="builtin", check_by=None,
-                           trust=r["trust"], basis=r["basis"], kinds=r.get("kinds")) for r in d["rules"]]
+                           trust=r["trust"], basis=r["basis"], kinds=r.get("kinds"), level=r.get("level")) for r in d["rules"]]
         out.append({"doc": {"doc_id": d["doc_id"], "filename": d["title"], "origin": "builtin"}, "rules": rules})
     ids = [r["rule_id"] for rec in out for r in rec["rules"]]
     if len(ids) != len(set(ids)):

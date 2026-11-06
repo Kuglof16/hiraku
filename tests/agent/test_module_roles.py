@@ -200,11 +200,27 @@ class RouteRedsTest(unittest.TestCase):
 
 
 class ModulePromptsTest(unittest.TestCase):
-    def test_module_designer_prompt(self):
+    def test_design_role_prompt(self):
+        """The design roles (structure, mechanism, electric) are not tied to what is made: each answers for the
+        modules whose owner it is, as many as the design type gives it."""
         for a in contract.MODULE_DESIGNERS:
+            with self.subTest(role=a):
+                p = prompts.designer_role_prompt(a)
+                self.assertIn(f"owner が {a} のモジュール", p)
+                self.assertIn(contract.DESIGNER_ROLES_JA[a.split(".", 1)[1]], p)
+                self.assertIn("revise_design(module=", p)
+                self.assertIn("モジュールごとに", p)
+                self.assertIn("hiraku:revise-a-module", p)
+                self.assertNotIn("道具", p)
+                self.assertIn(a, prompts.designer_role_description(a))
+
+    def test_module_designer_prompt(self):
+        """An older design's per-module designer (owner designer.<module>, contract.LEGACY_MODULE_DESIGNERS)."""
+        for a in contract.LEGACY_MODULE_DESIGNERS:
             m = a.split(".", 1)[1]
             with self.subTest(module=m):
-                p = prompts.module_designer_prompt(m)
+                p = prompts.designer_role_prompt(a)
+                self.assertEqual(p, prompts.module_designer_prompt(m))
                 self.assertIn(f'revise_design(module="{m}"', p)
                 self.assertIn("load_case_ids", p)
                 self.assertIn("get_context", p)
