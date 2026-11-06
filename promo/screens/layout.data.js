@@ -2974,7 +2974,7 @@ window.PROMO_LAYOUT = {
         }
       },
       "n13": {
-        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う",
+        "message": "ツールが無ければ、Claude がその場で作り、判定してから使う",
         "limits": {
           "label": 4,
           "why": "the three known-answer checks and the new tool's name; the shelf's other cards go without names"
