@@ -28,6 +28,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from hiraku.webserve import export_static as ex
+from qa import export_scan as es
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from hiraku.webserve.shelf import Shelf
 from tests.web.test_browser import ENABLED, sync_playwright
@@ -197,7 +198,7 @@ class ExportTest(unittest.TestCase):
     def test_scan_clean_and_planted(self):
         hook = self.tmp / "hook"
         hook.write_text("WORDS='zqprivatezq'\nPATHS='zqpathzq'\n", encoding="utf-8")
-        findings, checked = ex.scan(self.out, hook)
+        findings, checked = es.scan(self.out, hook)
         self.assertTrue(checked)
         self.assertEqual([str(f) for f in findings if f.level == "error"], [])
         root = self.tmp / "planted"
@@ -208,7 +209,7 @@ class ExportTest(unittest.TestCase):
         saved = make_saved(root, extra_line=line)
         out = root / "site"
         ex.export(out, saved_dir=saved, shelf=fake_shelf(), sample=False)
-        rules = sorted({f.rule for f in ex.scan(out, hook)[0] if f.level == "error"})
+        rules = sorted({f.rule for f in es.scan(out, hook)[0] if f.level == "error"})
         self.assertEqual(rules, ["home.path", "local.path", "private.word"])
 
     def test_readme_link_is_a_heading(self):

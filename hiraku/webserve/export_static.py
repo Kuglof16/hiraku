@@ -273,40 +273,8 @@ def export(
 
 
 # --- what must not be published ------------------------------------------------------------------
-def scan(out: Path | str, words_from: Path | None = None) -> tuple[list[Any], bool]:
-    """The export read as qa.judge_scan reads a branch (Scan.check_line, its patterns) plus drive
-    paths; gzipped records are read unpacked. Returns (findings, private words checked)."""
-    from qa.judge_scan import Finding, Scan, default_hook
-
-    out = Path(out)
-    hook = words_from
-    if hook is None:
-        try:
-            hook = default_hook(REPO_DIR)
-        except (OSError, subprocess.CalledProcessError):
-            hook = REPO_DIR / ".private" / "pre-commit"
-    s = Scan(REPO_DIR, "HEAD", hook)
-    checked = bool(s.private)
-    s.findings = []  # (the missing-patterns note is returned as `checked` instead)
-    for p in sorted(out.rglob("*")):
-        if not p.is_file():
-            continue
-        rel = p.relative_to(out).as_posix()
-        for pat in s.private:
-            if pat.search(rel):
-                s.add("error", "private.word", rel, "in the file name")
-        if p.suffix == ".gz":
-            text = gzip.decompress(p.read_bytes()).decode("utf-8", errors="replace")
-        elif p.suffix.lower() in SCAN_SUFFIXES or p.name == MARK_FILE:
-            text = p.read_text(encoding="utf-8", errors="replace")
-        else:
-            continue
-        for n, line in enumerate(text.splitlines(), start=1):
-            s.check_line(f"{rel}:{n}", line, doc=False)
-            m = DRIVE_PATH_RE.search(line)
-            if m:
-                s.findings.append(Finding("error", "local.path", f"{rel}:{n}", m.group(0)))
-    return s.findings, checked
+# (read by python -m qa.export_scan, which takes DRIVE_PATH_RE, SCAN_SUFFIXES and MARK_FILE from
+# here; hiraku/ does not import qa)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -332,14 +300,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  largest: {big} ({files[big] / 1e6:.1f} MB)")
     if args.no_scan:
         return 0
-    findings, checked = scan(args.out, args.words_from)
-    errors = [f for f in findings if f.level == "error"]
-    if not checked:
-        print("  scan: no private word patterns found (the private hook); private words not checked")
-    print(f"  scan: {len(errors)} error(s)")
-    for f in findings:
-        print(f"    {f}")
-    return 1 if errors else 0
+    cmd = [sys.executable, "-m", "qa.export_scan", str(args.out)] + (["--words-from", str(args.words_from)] if args.words_from else [])
+    return 0 if subprocess.run(cmd, cwd=REPO_DIR).returncode == 0 else 1
 
 
 if __name__ == "__main__":
