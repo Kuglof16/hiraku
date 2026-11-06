@@ -3975,7 +3975,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "RS1",
        "RS2"
@@ -4046,7 +4046,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "LS1",
        "LS2"
@@ -4212,6 +4212,334 @@ export const DEMOS = {
        }
       ],
       "module": "body"
+     },
+     {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        -300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_R1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         -310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        -300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         -300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R1",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -290.0,
+         400.0
+        ]
+       },
+       {
+        "to": "rail_R_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         -330.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R2",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_L2",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L1",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L2",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "rail_L_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         330.0,
+         400.0
+        ]
+       },
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         290.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
      },
      {
       "id": "occupant_R.neck",
@@ -16237,6 +16565,102 @@ export const DEMOS = {
        },
        {
         "center_mm": [
+         -1325.0,
+         -300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         -300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
          -1233.53436097791,
          -300.0,
          1417.0500000000002
@@ -16707,6 +17131,8 @@ export const DEMOS = {
        "grab_bar_d",
        "grab_bar_gap",
        "grab_bar_t",
+       "headrest_gap",
+       "headrest_height",
        "rollbar",
        "rollbar_b",
        "rollbar_d",
@@ -17458,6 +17884,8 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
+     "headrest_gap": "頭とヘッドレストの前後のすき間",
+     "headrest_height": "ヘッドレストの上端の高さ (座面から)",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -22634,13 +23062,13 @@ export const DEMOS = {
      {
       "part_id": "seat_R",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
       "part_id": "seat_L",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
@@ -22712,6 +23140,14 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "occupant_R.neck",
      "occupant_R.head",
      "occupant_R.thigh_L",
@@ -23007,6 +23443,54 @@ export const DEMOS = {
       "part_id": "cargo",
       "values": {
        "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seatback_R",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_R",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_R1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_R2",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "seatback_L",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_L",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_L1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_L2",
+      "values": {
+       "bottom_z_mm": 400.0
       }
      },
      {
@@ -24080,7 +24564,7 @@ export const DEMOS = {
      {
       "part_id": "support:FL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24088,7 +24572,7 @@ export const DEMOS = {
      {
       "part_id": "support:FR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24096,7 +24580,7 @@ export const DEMOS = {
      {
       "part_id": "support:RL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24104,7 +24588,7 @@ export const DEMOS = {
      {
       "part_id": "support:RR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -24668,7 +25152,11 @@ export const DEMOS = {
     "rule_id": "SY-04",
     "targets": [
      "seat_R",
-     "seat_L"
+     "seat_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -24814,6 +25302,14 @@ export const DEMOS = {
      "seat_belt_R",
      "seat_L",
      "seat_belt_L",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "wheel_FL",
      "wheel_FR",
      "wheel_RL",
@@ -33622,7 +34118,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "RS1",
        "RS2"
@@ -33693,7 +34189,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "LS1",
        "LS2"
@@ -33859,6 +34355,334 @@ export const DEMOS = {
        }
       ],
       "module": "body"
+     },
+     {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        -300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_R1",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         -310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        -300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         -300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R1",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -290.0,
+         400.0
+        ]
+       },
+       {
+        "to": "rail_R_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         -330.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_R2",
+      "name": "運転席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        -90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         -70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        300.0,
+        886.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        887.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "bracket_seat_L2",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1331.5,
+         310.0,
+         443.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L1",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        90.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         70.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
+     },
+     {
+      "id": "bracket_seat_L2",
+      "name": "助手席の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+      "kind": "bracket",
+      "box": {
+       "center_mm": [
+        -1331.5,
+        310.0,
+        421.6
+       ],
+       "size_mm": [
+        17.0,
+        40.0,
+        43.200000000000045
+       ]
+      },
+      "mass_kg": 0.08681472000000011,
+      "carried_by": [
+       "LS2",
+       "RS2"
+      ],
+      "system": "frame",
+      "connects_to": [
+       {
+        "to": "rail_L_S2H",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1340.0,
+         330.0,
+         400.0
+        ]
+       },
+       {
+        "to": "cross_S2",
+        "via": "weld",
+        "carries": "load",
+        "at_mm": [
+         -1323.0,
+         290.0,
+         400.0
+        ]
+       }
+      ],
+      "module": "occupant"
      },
      {
       "id": "occupant_R.neck",
@@ -45884,6 +46708,102 @@ export const DEMOS = {
        },
        {
         "center_mm": [
+         -1325.0,
+         -300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         -300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         -90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         300.0,
+         886.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         937.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         90.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
+         -1331.5,
+         310.0,
+         421.6
+        ],
+        "size_mm": [
+         67.0,
+         90.0,
+         93.20000000000005
+        ]
+       },
+       {
+        "center_mm": [
          -1233.53436097791,
          -300.0,
          1417.0500000000002
@@ -46354,6 +47274,8 @@ export const DEMOS = {
        "grab_bar_d",
        "grab_bar_gap",
        "grab_bar_t",
+       "headrest_gap",
+       "headrest_height",
        "rollbar",
        "rollbar_b",
        "rollbar_d",
@@ -47105,6 +48027,8 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
+     "headrest_gap": "頭とヘッドレストの前後のすき間",
+     "headrest_height": "ヘッドレストの上端の高さ (座面から)",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -52281,13 +53205,13 @@ export const DEMOS = {
      {
       "part_id": "seat_R",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
       "part_id": "seat_L",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
@@ -52359,6 +53283,14 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "occupant_R.neck",
      "occupant_R.head",
      "occupant_R.thigh_L",
@@ -52654,6 +53586,54 @@ export const DEMOS = {
       "part_id": "cargo",
       "values": {
        "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seatback_R",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_R",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_R1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_R2",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "seatback_L",
+      "values": {
+       "bottom_z_mm": 443.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_L",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "bracket_seat_L1",
+      "values": {
+       "bottom_z_mm": 400.0
+      }
+     },
+     {
+      "part_id": "bracket_seat_L2",
+      "values": {
+       "bottom_z_mm": 400.0
       }
      },
      {
@@ -53727,7 +54707,7 @@ export const DEMOS = {
      {
       "part_id": "support:FL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -53735,7 +54715,7 @@ export const DEMOS = {
      {
       "part_id": "support:FR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -53743,7 +54723,7 @@ export const DEMOS = {
      {
       "part_id": "support:RL",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -53751,7 +54731,7 @@ export const DEMOS = {
      {
       "part_id": "support:RR",
       "values": {
-       "static_load_N": 1440.1116625195161,
+       "static_load_N": 1440.963024093404,
        "stiffness_N_per_mm": 20.0,
        "travel_mm": 150.0
       }
@@ -54315,7 +55295,11 @@ export const DEMOS = {
     "rule_id": "SY-04",
     "targets": [
      "seat_R",
-     "seat_L"
+     "seat_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -54461,6 +55445,14 @@ export const DEMOS = {
      "seat_belt_R",
      "seat_L",
      "seat_belt_L",
+     "seatback_R",
+     "head_restraint_R",
+     "bracket_seat_R1",
+     "bracket_seat_R2",
+     "seatback_L",
+     "head_restraint_L",
+     "bracket_seat_L1",
+     "bracket_seat_L2",
      "wheel_FL",
      "wheel_FR",
      "wheel_RL",
