@@ -15,6 +15,9 @@
 //
 // ?quality= (high / medium / low) picks the cost of the real look (QUALITY).
 //
+// The workbench's real look shows the same sky with its horizon behind the vehicle and its haze
+// (Look.sky), over the dirt ground, with the sun fixed to the world where it always stood.
+//
 // The video's cut pages draw their views as a stage (Look opts.stage): the real look
 // there also shows the sky with its horizon (an HDRI) behind the vehicle, a haze that
 // melts the ground's far edge into it, a gravel road with dirt stains, and a sun that
@@ -419,6 +422,8 @@ const FINISH = {
   anodized: { family: "anodized", type: "physical", color: "#9ea3a8", roughness: 0.5, metalness: 0.85, clearcoat: 0.2, clearcoatRoughness: 0.5 },
   galvanized: { family: "galvanized", type: "standard", color: "#a3a9ad", roughness: 0.48, metalness: 1 },
   rubber: { family: "rubber", type: "standard", color: "#1d1e20", roughness: 0.88, metalness: 0, normal: "tread", normalScale: 1 },
+  // the tread's lugs (shapes.js wheelPieces with tread): their shape is the geometry, so no normal map
+  rubber_lug: { family: "rubber", type: "standard", color: "#1b1c1e", roughness: 0.92, metalness: 0 },
   fabric: { family: "fabric", type: "physical", color: "#2a2b2f", roughness: 0.95, metalness: 0, sheen: 0.6, sheenRoughness: 0.6, sheenColor: "#5a5c63", normal: "fabric", normalScale: 0.6 },
   // moulded plastic as it comes from the mould
   resin: { family: "resin", type: "physical", color: "#2b2e33", roughness: 0.42, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 },
@@ -463,7 +468,14 @@ const FINISH = {
 export const MATERIAL_OF = {
   sub: {
     tyre: { finish: "rubber" },
+    tread: { finish: "rubber_lug" },
     rim: { finish: "aluminium" },
+    // an occupant's segments dressed (OCCUPANT_WEAR): look values, not from the record; greys and
+    // browns, apart from the contour's colours (colormap.js) so a faded person is not read as a value
+    skin: { finish: "skin" },
+    jacket: { finish: "fabric", color: "#5a5248" },
+    trousers: { finish: "fabric", color: "#33343a" },
+    shoes: { finish: "vinyl", color: "#2a2623" },
     hub: { finish: "galvanized", color: "#7e8489" },
     spring: { finish: "painted_steel", color: "#8e2f22" },
     // the damper's cylinder and rod (shapes.js damper): black paint
@@ -512,7 +524,8 @@ export const MATERIAL_OF = {
     switch: { finish: "resin", color: "#b33a2a" },
     steering: { finish: "resin", color: "#1f2124" },
     occupant: { finish: "skin" },
-    cargo: { finish: "wood" },
+    // the design's cargo box: a plain box (no crate's planks: the design does not say it is wood)
+    cargo: { finish: "resin", color: "#6c6e66" },
     default: { finish: "painted_steel", color: "#7d828a" },
   },
   // a material's sort from words in its design.materials name (first match)
@@ -613,6 +626,24 @@ export function memberEntry(material, part = null) {
   return decide(MATERIAL_OF.kind[part] ?? MATERIAL_OF.kind.frame, materialSort(material), null);
 }
 
+// The real look dresses a person by the segment of each occupant part (shapes.js segmentOf: null
+// for the torso, else "head", "neck", "arm_L", "forearm_R", "hand_L", "thigh_R", "shank_L",
+// "foot_R", ...): skin where a person shows it, a jacket over the torso and arms, trousers on
+// the legs, shoes on the feet. Only the colour changes: the shapes stay those of the design's
+// segment boxes. The first row that matches; none: the jacket.
+const OCCUPANT_WEAR = [
+  [/^(head|neck|hand)/, "skin"],
+  [/^(thigh|shank|leg)/, "trousers"],
+  [/^foot/, "shoes"],
+];
+export function occupantSub(segment) {
+  return OCCUPANT_WEAR.find(([re]) => re.test(segment ?? ""))?.[1] ?? "jacket";
+}
+
+// The real look with a part faded while a contour is shown (the colours to be read are the
+// contour's): the opacity of the parts that have no value of their own. Look value.
+export const CONTOUR_FADE = 0.5;
+
 // Colours of the parts in the diagram look (pale, see-through).
 const ZU_PART = { battery: "#e8c547", seat: "#e9b872", occupant: "#e9b872", motor: "#2fa7d6", controller: "#4cbf7a", cargo: "#c9c3b6", link: "#6b665c", damper: "#3a3e44", ball_joint: "#6b665c" };
 // the diagram look's thin suspension parts (arms, damper, ball joints): less see-through than a box,
@@ -707,6 +738,9 @@ function hdriOf(renderer, role) {
 const SUN_ASIDE = (40 * Math.PI) / 180;
 const SUN_EL = (50 * Math.PI) / 180;
 const SUN_EL_RANGE = [(35 * Math.PI) / 180, (65 * Math.PI) / 180];
+// the workbench's sun: the direction (three.js world, m from the target) aimSun has always put it
+// at; with the sky behind (Look.sky) the sky is turned so that its own sun stands there
+const WORKBENCH_SUN = [2.5, 6, 3.5];
 export const HAZE = { near_m: 8, far_m: 70 };
 export const GROUND_MM = 150000;
 const STAIN_SIDE_MM = 9000;
@@ -727,15 +761,20 @@ export class Look {
     this.name = name === "real" ? "real" : "zu";
     this.real = this.name === "real";
     this.stage = !!opts.stage && this.real;
+    // the workbench's real look: the sky with its horizon behind the vehicle too (as the stage's,
+    // over the dirt ground), its sun where the workbench's sun always stood (WORKBENCH_SUN)
+    this.sky = this.real && !this.stage && opts.sky !== false;
     this.quality = QUALITY[quality] ? quality : DEFAULT_QUALITY;
     this.q = QUALITY[this.quality];
     this.textures = {};
     this.surfaces = []; // { role, material, span_mm: [u, v] } waiting for an asset
     // in use; the stage's ground is the gravel road and its sky the horizon
     this.groundRole = this.stage ? "gravel" : "dirt";
-    this.assets = this.stage ? { sky: false, horizon: false, gravel: false, concrete: false } : { sky: false, dirt: false, concrete: false };
+    this.assets = this.stage ? { sky: false, horizon: false, gravel: false, concrete: false } : { sky: false, horizon: false, dirt: false, concrete: false };
     this.backdrop = null; // the stage's sky: { tex, el, az, haze } once the HDRI is loaded
-    this.sunAz = null; // the stage's sun azimuth (three.js world, about y), set once (fixSun)
+    // the stage's sun azimuth (three.js world, about y), set once (fixSun); the workbench's is
+    // fixed to the world from the start (not from a camera)
+    this.sunAz = this.sky ? Math.atan2(WORKBENCH_SUN[2], WORKBENCH_SUN[0]) : null;
     this.fog = null;
     this.assetsReady = Promise.resolve();
   }
@@ -784,7 +823,7 @@ export class Look {
   // HDRI with the horizon lights the scene and is seen behind it (else the sky only lights it).
   async loadAssets(renderer, scene) {
     const roles = await rolesPresent();
-    for (const role of this.stage ? ["horizon", "sky"] : ["sky"]) {
+    for (const role of this.stage || this.sky ? ["horizon", "sky"] : ["sky"]) {
       if (!roles.includes(role)) continue;
       const got = await hdriOf(renderer, role);
       if (!got) continue;
@@ -836,7 +875,7 @@ export class Look {
     scene.background = !tinted && b ? b.tex : null;
     scene.fog = !tinted && b ? this.fog : null;
     const az = this.fixSun(camera, target);
-    const el = b ? Math.min(SUN_EL_RANGE[1], Math.max(SUN_EL_RANGE[0], b.el)) : SUN_EL;
+    const el = this.sky ? Math.atan2(WORKBENCH_SUN[1], Math.hypot(WORKBENCH_SUN[0], WORKBENCH_SUN[2])) : b ? Math.min(SUN_EL_RANGE[1], Math.max(SUN_EL_RANGE[0], b.el)) : SUN_EL;
     if (b) {
       // three.js turns a direction by the rotation's opposite before it looks the sky up, so a
       // turn of (the sky's sun azimuth - the wanted azimuth) about y brings the sky's sun there
@@ -921,7 +960,7 @@ export class Look {
   // dir: the sun's direction (unit, three.js world) when the stage sets it (stageFrame).
   aimSun(sun, center, points, dir = null) {
     if (!sun) return;
-    sun.position.copy(center).add(dir ? dir.clone().multiplyScalar(7.4) : new THREE.Vector3(2.5, 6, 3.5));
+    sun.position.copy(center).add(dir ? dir.clone().multiplyScalar(7.4) : new THREE.Vector3(...WORKBENCH_SUN));
     sun.target.position.copy(center);
     sun.target.updateMatrixWorld();
     const cam = sun.shadow.camera;
@@ -1020,7 +1059,7 @@ export class Look {
       m.userData.baseColor = "#" + m.color.getHexString();
       return m;
     }
-    if (sub === "tyre" || sub === "rim" || sub === "hub") return new THREE.MeshLambertMaterial({ color: "#fbf9f4" });
+    if (sub === "tyre" || sub === "tread" || sub === "rim" || sub === "hub") return new THREE.MeshLambertMaterial({ color: "#fbf9f4" });
     // (ZU_SUB only for the suspension's own parts: the suspension drawn from its mounting points keeps its colours)
     const color = (ZU_SOLID[kind] && ZU_SUB[sub]) || (ZU_PART[kind] ?? "#c9c3b6");
     const opacity = kind === "occupant" ? 0.8 : ZU_SOLID[kind] ?? 0.32;

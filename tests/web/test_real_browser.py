@@ -35,7 +35,8 @@ ASSET_FILES = {
     "horizon": ("kloofendal_48d_partly_cloudy", ["kloofendal_48d_partly_cloudy_1k.hdr"]),
     "gravel": ("gravel_road", ["gravel_road_diff_1k.jpg", "gravel_road_nor_gl_1k.jpg", "gravel_road_arm_1k.jpg"]),
 }
-WORKBENCH_ROLES = ("sky", "dirt", "concrete")  # what the workbench's real look reads
+# what the workbench's real look reads (the horizon: the sky behind the vehicle, look.js Look.sky)
+WORKBENCH_ROLES = ("sky", "horizon", "dirt", "concrete")
 
 # The canvas pixel at points of the contour and the legend's swatch for the same value.
 # Members: the middle of the top of each member with one value (a member coloured from its two
@@ -208,8 +209,11 @@ class RealLookBrowserTest(unittest.TestCase):
         )
         self.assertEqual(errors, [])
         expect = {role: all(f"{a}/{f}" in files for f in names) for role, (a, names) in ASSET_FILES.items() if role in WORKBENCH_ROLES}
+        # one HDRI lights the scene (look.js loadAssets: the horizon first, else the sky)
+        if expect["horizon"]:
+            expect["sky"] = False
         self.assertEqual(got["assets"], expect)
-        if expect["sky"]:
+        if expect["sky"] or expect["horizon"]:
             self.assertEqual(got["intensity"], 0.8)  # look.js: the HDRI's intensity
         if expect["dirt"]:
             self.assertEqual(got["ground"], {"map": 1024, "normal": True, "arm": True})
@@ -252,7 +256,7 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
         # no Poly Haven file listed: the drawn textures and the room light are used
         self.assertEqual(got["files"], [])
-        self.assertEqual(got["assets"], {"sky": False, "dirt": False, "concrete": False})
+        self.assertEqual(got["assets"], {"sky": False, "horizon": False, "dirt": False, "concrete": False})
         self.assertTrue(got["envIsRoom"])
         # painted steel tubes (the design's STKR400 / STKM13A): clearcoat over the paint
         self.assertEqual(got["member"], {"type": "MeshPhysicalMaterial", "finish": "painted_steel", "clearcoat": 1})
@@ -262,7 +266,8 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertGreater(got["seat"]["sheen"], 0)
         self.assertEqual(got["motor"]["finish"], "aluminium")
         self.assertEqual(got["battery"]["finish"], "resin")
-        self.assertEqual(got["cargo"]["finish"], "wood")
+        # the design's cargo box is drawn plain (look.js MATERIAL_OF), not as a wooden crate
+        self.assertEqual(got["cargo"]["finish"], "resin")
         # the sun's shadow box is fitted to the vehicle (its longest side + the 100 mm and 0.1 m
         # margins on each side, seen from the sun), not a fixed square
         longest = max(got["vehicle"]) / 1000

@@ -41,7 +41,7 @@ import { overOf } from "./fields.js";
 import { maxTagClass } from "./judged.js"; // the largest-value tag's colour (one rule)
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { GROUND_MM, Look, cutLookOf } from "./look.js";
+import { CONTOUR_FADE, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
 import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
@@ -378,7 +378,8 @@ export class Workbench3D {
   // ambient occlusion) when its quality has them.
   constructor(host, lookName = "zu", opts = {}) {
     this.host = host;
-    this.look = new Look(lookName, opts.quality, { stage: !!opts.stage });
+    // opts.sky false: the real look without the sky behind (look.js Look.sky; e.g. ④'s pictures)
+    this.look = new Look(lookName, opts.quality, { stage: !!opts.stage, sky: opts.sky });
     this.ownRenderer = !opts.renderer;
     this.groundStyle = opts.ground ?? null;
     this.renderer = opts.renderer ?? new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -584,7 +585,8 @@ export class Workbench3D {
       const lines = [];
       if (s.kind === "wheel") {
         // A tyre, rim, hub and spokes (the spokes show the wheel turning); one mesh per material.
-        const pieces = wheelPieces(r, w);
+        // (the real look: the tread's lugs as shapes, inside the design's radius)
+        const pieces = wheelPieces(r, w, { tread: this.look.real });
         for (const pc of pieces) if (pc.sub !== "rim") pushEdges(lines, pc.geo, null, 35);
         for (const pc of mergePieces(pieces)) {
           const mesh = new THREE.Mesh(pc.geo, this.look.partMaterial("wheel", pc.sub));
@@ -645,7 +647,8 @@ export class Workbench3D {
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
-        const mat = this.look.partMaterial("occupant");
+        // dressed by its segment in the real look (look.js occupantSub); one colour in the diagram
+        const mat = this.look.partMaterial("occupant", this.look.real ? occupantSub(segmentOf(p)) : null);
         for (const pc of occupantSegmentPieces(p)) {
           const mesh = new THREE.Mesh(pc.geo, mat);
           mesh.castShadow = this.look.real;
@@ -657,10 +660,10 @@ export class Workbench3D {
         const r = Math.min(sz[0], sz[1]) * 0.26;
         const head = Math.min(sz[0], sz[1]) * 0.2;
         const torsoLen = Math.max(10, sz[2] - 2 * head - 2 * r);
-        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(r, torsoLen, 6, 16), mat);
+        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(r, torsoLen, 6, 16), this.look.real ? this.look.partMaterial("occupant", occupantSub(null)) : mat);
         torso.rotation.x = Math.PI / 2; // capsule axis (local y) -> ISO z
         torso.position.set(c.x, c.y, c.z - sz[2] / 2 + r + torsoLen / 2);
-        const ball = new THREE.Mesh(new THREE.SphereGeometry(head, 20, 14), mat);
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(head, 20, 14), this.look.real ? this.look.partMaterial("occupant", occupantSub("head")) : mat);
         ball.position.set(c.x, c.y, c.z + sz[2] / 2 - head);
         for (const m of [torso, ball]) m.castShadow = this.look.real;
         g.add(torso, ball);
@@ -894,6 +897,19 @@ export class Workbench3D {
           twin.renderOrder = real && valued ? 3 : 0;
         }
         if (!real && m.userData.baseOpacity !== undefined) m.opacity = o.onBoard ? (valued ? 0.85 : m.userData.baseOpacity) : 0.07;
+        // The real look while a contour is shown: a part without a value of its own is faded
+        // (look.js CONTOUR_FADE), so the members' and the valued parts' colours can be read
+        // through it. (While the joints are on they keep what to go back to: joints.js partLook.)
+        if (real) {
+          const fade = !!ct && !valued;
+          const s = m.userData.jointsWas ?? m;
+          if (s.transparent !== fade) {
+            s.transparent = fade;
+            m.needsUpdate = true;
+          }
+          s.opacity = fade ? CONTOUR_FADE : 1;
+          s.depthWrite = !fade;
+        }
       });
     }
     this.joints?.partLook(); // joints: the parts see-through while the joints are on
@@ -958,8 +974,9 @@ export class Workbench3D {
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(ISO_TO_THREE);
-      // on a stage the road runs out to where the haze has hidden it (look.js GROUND_MM)
-      const far = this.look.stage ? GROUND_MM : 20000;
+      // on a stage (and under the workbench's sky) the ground runs out to where the haze has
+      // hidden it (look.js GROUND_MM)
+      const far = this.look.stage || this.look.sky ? GROUND_MM : 20000;
       holder.add(this.groundStyle === "shadow" ? this.look.shadowCatcher(x0 - 5000, x1 + 5000, y0 - 5000, y1 + 5000) : this.look.earth(x0 - far, x1 + far, y0 - far, y1 + far));
       this.ground.add(holder);
       return;
@@ -1873,9 +1890,10 @@ export class Workbench3D {
 
   render() {
     if (!this.noFollow && !this.focused) this.follow();
-    // the stage: the sky, the haze and the sun behind the vehicle (none on a see-through overlay)
+    // the stage: the sky, the haze and the sun behind the vehicle (none on a see-through overlay);
+    // the workbench's sky: the same sky and haze, its sun fixed to the world (look.js Look.sky)
     this.camera.updateMatrixWorld();
-    const sunDir = this.look.stage ? this.look.stageFrame(this.scene, this.camera, this.controls.target, !!this.tinted) : null;
+    const sunDir = this.look.stage || this.look.sky ?this.look.stageFrame(this.scene, this.camera, this.controls.target, !!this.tinted) : null;
     if (this.sun && this.bboxIso) {
       this.iso.updateWorldMatrix(true, false); // shadowPoints reads iso's world matrix (the renderer updates the rest)
       this.look.aimSun(this.sun, this.controls.target, this.shadowPoints(), sunDir);

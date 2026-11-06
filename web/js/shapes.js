@@ -368,10 +368,19 @@ export function mergePieces(pieces) {
   return out;
 }
 
+// The tread's lugs (opts.tread): look values, not from the record. The lugs stand on the tyre's
+// crown up to the design's radius r (the crown under them is r - depth); two rows across the
+// width, one staggered half a pitch, each lug a block leaning a little across the tread.
+export const TREAD = { depth_frac: 0.035, depth_max_mm: 14, pitch_mm: 95, fill: 0.55, row_frac: 0.42, lean_deg: 14 };
+
 // A wheel (tyre with a rounded tread, rim, hub and spokes) around ISO y, centre at 0.
-// Returns pieces like partPieces, with subs "tyre", "rim" and "hub".
-export function wheelPieces(r, w) {
-  const rimR = r * 0.62;
+// Returns pieces like partPieces, with subs "tyre", "rim" and "hub" (and "tread": the lugs,
+// with opts.tread). r and w are the design's radius and width (the lugs stay inside them).
+export function wheelPieces(r, w, opts = {}) {
+  const depth = opts.tread ? Math.min(TREAD.depth_max_mm, r * TREAD.depth_frac) : 0;
+  const lugs = depth > 0 ? treadLugs(r, w, depth) : [];
+  r -= depth;
+  const rimR = (r + depth) * 0.62;
   const round = Math.min(w * 0.3, (r - rimR) * 0.5);
   const pts = [];
   const half = w / 2;
@@ -389,7 +398,7 @@ export function wheelPieces(r, w) {
   pts.push(new THREE.Vector2(r - round, half), new THREE.Vector2(rimR, half * 0.92));
   // LatheGeometry turns the profile (x = radius, y = axial) around its y axis, which is ISO y here.
   const tyre = new THREE.LatheGeometry(pts, 64);
-  const out = [{ geo: tyre, sub: "tyre" }];
+  const out = [{ geo: tyre, sub: "tyre" }, ...lugs];
   out.push({ geo: new THREE.CylinderGeometry(rimR, rimR, w * 0.86, 48, 1, true), sub: "rim" });
   for (const side of [-1, 1]) {
     out.push({ geo: new THREE.CylinderGeometry(rimR * 0.3, rimR * 0.3, 10, 24).translate(0, (side * w * 0.36), 0), sub: "hub" });
@@ -397,6 +406,30 @@ export function wheelPieces(r, w) {
     for (let k = 0; k < 5; k += 1) {
       const a = (k / 5) * Math.PI * 2;
       out.push({ geo: rod([0, (side * w) * 0.36, 0], [rimR * Math.cos(a), (side * w) * 0.36, rimR * Math.sin(a)], Math.max(5, r * 0.035), 8), sub: "rim" });
+    }
+  }
+  return out;
+}
+
+// The lugs of a tyre of radius r and width w (TREAD), each a block from the crown (r - depth)
+// to r, around ISO y as the tyre's lathe.
+function treadLugs(r, w, depth) {
+  const n = Math.max(12, Math.round((2 * Math.PI * r) / TREAD.pitch_mm));
+  const len = ((2 * Math.PI * r) / n) * TREAD.fill;
+  const across = w * TREAD.row_frac;
+  const lean = (TREAD.lean_deg * Math.PI) / 180;
+  // the outer face's corners on the radius r (a flat face: its middle a little inside)
+  const rc = Math.sqrt(r * r - (len / 2) ** 2) - depth * 0.8;
+  const out = [];
+  for (const [row, side] of [[0, -1], [1, 1]]) {
+    for (let k = 0; k < n; k += 1) {
+      const a = ((k + row * 0.5) / n) * Math.PI * 2;
+      // radial x (depth), axial y (across), tangential z (len); leaning the other way in each row
+      const geo = new THREE.BoxGeometry(depth * 1.6, across, len)
+        .rotateX(side * lean)
+        .rotateY(-a)
+        .translate(rc * Math.cos(a), side * w * 0.25, rc * Math.sin(a));
+      out.push({ geo, sub: "tread" });
     }
   }
   return out;
