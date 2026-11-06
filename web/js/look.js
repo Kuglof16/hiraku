@@ -436,6 +436,8 @@ const FINISH = {
   // moulded plastic as it comes from the mould
   resin: { family: "resin", type: "physical", color: "#2b2e33", roughness: 0.42, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 },
   skin: { family: "skin", type: "standard", color: "#d8c7b0", roughness: 0.85, metalness: 0 },
+  // a crash test dummy's moulded vinyl skin (look.js MATERIAL_OF.sub.dummy_body)
+  dummy_skin: { family: "dummy", type: "standard", color: "#e8ae0e", roughness: 0.45, metalness: 0 },
   wood: { family: "wood", type: "standard", color: "#ffffff", roughness: 0.85, metalness: 0, map: "wood" },
   concrete: { family: "concrete", type: "standard", color: "#ffffff", roughness: 0.95, metalness: 0, surface: "concrete" },
 };
@@ -485,9 +487,14 @@ export const MATERIAL_OF = {
     jacket: { finish: "fabric", color: "#7d7466" },
     trousers: { finish: "fabric", color: "#5c5f66" },
     shoes: { finish: "vinyl", color: "#2a2623" },
-    // a dummy's joints (shapes.js occupantDummyPieces): dark moulded rubber-like plastic, far from
-    // the heat colour, the caution orange and the verdict's red
-    dummy_joint: { finish: "resin", color: "#18191b" },
+    // the real look's crash test dummy (shapes.js occupantDummyPieces): the body a yellow vinyl
+    // skin, the joints, the neck, the hands and the feet black. The yellow is #e8b21e moved a
+    // little (CIE76 ΔE*ab 3.0 from it) so it stands at least 16 from the contour's yellow #e8c547,
+    // the heat colour #ff5a1f, the caution orange #e9893a and the verdict's red #c8402a (#e8b21e
+    // itself is 13.1 from the contour's yellow); the test works the distances out
+    // (test_occupant_browser). Look values, not from the record.
+    dummy_body: { finish: "dummy_skin", color: "#e8ae0e" },
+    dummy_joint: { finish: "resin", color: "#1c1c1c" },
     hub: { finish: "galvanized", color: "#7e8489" },
     spring: { finish: "painted_steel", color: "#8e2f22" },
     // the damper's cylinder and rod (shapes.js damper): black paint
@@ -652,6 +659,7 @@ const OCCUPANT_WEAR = [
   [/^foot/, "shoes"],
 ];
 export const DUMMY_JOINT = "dummy_joint"; // the sub of a dummy's joints (MATERIAL_OF.sub)
+export const DUMMY_BODY = "dummy_body"; // the sub of a dummy's body (MATERIAL_OF.sub)
 export function occupantSub(segment) {
   return OCCUPANT_WEAR.find(([re]) => re.test(segment ?? ""))?.[1] ?? "jacket";
 }

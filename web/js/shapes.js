@@ -16,6 +16,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { H3_SHAPE } from "./hybrid3.js"; // the dummy's shape ratios (occupantDummyPieces)
 
 // One piece of a part: a geometry in the part's local frame (box centre at 0),
 // and which sub-material it takes (null = the part's own).
@@ -339,59 +340,139 @@ export function occupantSegmentPieces(part) {
 // The real look's occupant drawn as a crash test dummy: each segment's box holds the segment's
 // shape and its joints, so the head, the neck, the chest and the pelvis, the upper arms,
 // forearms, hands, thighs, shanks and feet read apart and the joints between them show.
-// Pieces in the part's local frame (as occupantSegmentPieces), sub null for the segment's own
-// colour, "joint" for a joint (dark), "pelvis" for the lower torso:
+// Pieces in the part's local frame (as occupantSegmentPieces), sub null for the body's colour,
+// "joint" for the dark pieces (the joints, the neck, the hands and the feet).
+//
+// What the design gives stays as it is: each segment's box (the AIST sizes the checks use), so
+// the lengths, the joints' centres (a section's radius in from each end of a limb's box: the
+// design's links, designgen kit/links.py link_box) and the head's outer size (its ellipsoid
+// touches its box's faces). What no calculation uses is taken from the Hybrid III 50th
+// percentile male's table (hybrid3.js H3_SHAPE), as ratios on the design's own sizes:
+// - the torso (a person with a head part; its longest side up, its larger other side across,
+//   the third front to back with the back at the box's -side): the chest at the top (DUMMY.chest
+//   of the height), its breadth the box's breadth (the shoulder breadth) x H3 chestBreadth, its
+//   depth the box's breadth x H3 chestDepth; the waist band below it (DUMMY.waist of the height,
+//   a joint) the chest's breadth and depth x H3 waist (the girths' ratio); the pelvis below, its
+//   breadth the box's breadth x H3 hipBreadth, its depth the box's depth (the design's: twice the
+//   seat back to hip length). The three against the box's back;
 // - a limb (arm, forearm, thigh, shank: a round section, as occupantSegmentPieces' capsule):
-//   a ball of the section's radius at each end of the box's longest side (the shoulder, elbow,
-//   wrist, hip, knee, ankle) and a slimmer cylinder between them;
-// - the neck: its rounded box as a joint;
-// - the torso (a person with a head part): along its longest side, the chest at the top, a
-//   narrower waist band (a joint), the pelvis below;
-// - the head, a hand, a foot: their shapes of occupantSegmentPieces.
-// Every piece stays inside the box; the shares are values for the picture (DUMMY), not from the
-// design. The torso's top is taken to be the end of its longest side towards +z of the box.
-export const DUMMY = { limb: 0.82, chest: 0.5, waist: 0.12, waistInset: 0.8 };
+//   a ball at each joint's centre and a tapered rod between them, DUMMY.limb of the balls' radii.
+//   The leg's balls from the table, scaled to the person by the knee pivot's height (the design's
+//   shank link plus the foot box's height, over H3 kneeHeight): the hip ball H3 thighHalf, the
+//   knee ball H3 kneeHalf (its front is the knee's front: the knee room's x), the ankle ball H3
+//   ankleHalf. The table has no arm thickness: the arms' balls are their boxes' radii (the AIST
+//   girths), so the forearm against the upper arm is the design's ratio; the wrist thinner
+//   (DUMMY.wrist, dummyJointRadii) so a hand on the wheel keeps it out of the ring;
+// - a foot: a rounded box its box's length and height, its breadth the length x H3 footBreadth;
+// - the neck, a hand: their rounded boxes (the table has no neck or hand size beside the head's);
+// - the head: the ball stretched to its box (occupantSegmentPieces).
+// No piece reaches outside its box: a size from the table larger than the box's is cut to the
+// box's (thinner, never longer). The shares below are values for the picture, not from the design
+// or the table. body: the person's parts by segment ("torso" the torso), for the leg's scale and
+// which end of a limb is towards the torso; without it the leg's balls are their boxes' radii.
+export const DUMMY = { limb: 0.82, chest: 0.5, waist: 0.12, wrist: 0.8 };
 const LIMB = /^(arm|forearm|thigh|shank|leg)(_|$)/;
-export function occupantDummyPieces(part, torso = false) {
+// The leg's scale of one side: the design's knee pivot height (shank link + foot height) over the
+// Hybrid III's; null without the shank and the foot.
+export function dummyLegScale(body, side) {
+  const shank = body?.[`shank_${side}`];
+  const foot = body?.[`foot_${side}`];
+  if (!shank || !foot) return null;
+  const s = shank.box.size_mm.map(Number);
+  const long = Math.max(...s);
+  const section = Math.min(...s.filter((_, i) => i !== s.indexOf(long)));
+  const knee = long - section + Math.min(...foot.box.size_mm.map(Number));
+  return knee / H3_SHAPE.kneeHeight;
+}
+// The joints' ball radii (mm) at the two ends of a limb's box, [proximal, distal], before the cut to
+// the box: the leg's from the table (dummyLegScale), the arm's its box's radius.
+// The wrist (a forearm's far end, or an arm's with no forearm) is DUMMY.wrist of the box's radius:
+// at the full radius the wrist ball of a hand on the steering wheel went 6.6 mm into its ring
+// (tests/web/occupant_designs 9ee90a9), at 0.8 it stays 2.5 mm off (test_dummy_browser).
+export function dummyJointRadii(seg, r, body) {
+  const side = seg.endsWith("_L") ? "L" : seg.endsWith("_R") ? "R" : null;
+  const wrist = seg.startsWith("forearm") || (seg.startsWith("arm") && !body?.[`forearm_${side}`]);
+  if (wrist) return [r, r * DUMMY.wrist];
+  const k = side ? dummyLegScale(body, side) : null;
+  if (k === null) return [r, r];
+  if (seg.startsWith("thigh")) return [H3_SHAPE.thighHalf * k, H3_SHAPE.kneeHalf * k];
+  if (seg.startsWith("shank")) return [H3_SHAPE.kneeHalf * k, H3_SHAPE.ankleHalf * k];
+  return [r, r];
+}
+// Which end of a limb's box is proximal (towards the torso): -1 or +1 along its longest side.
+// The torso's centre nearer the - end (or no torso: a link_box runs from a to b along +).
+function proximalSign(part, axis, torso) {
+  if (!torso) return -1;
+  const half = part.box.size_mm[axis] / 2;
+  const rpy = (part.box.rpy_deg ?? [0, 0, 0]).map((d) => (d * Math.PI) / 180);
+  const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rpy[0], rpy[1], rpy[2], "ZYX"));
+  const end = (s) => new THREE.Vector3(...[0, 1, 2].map((i) => (i === axis ? s * half : 0))).applyMatrix4(R).add(new THREE.Vector3(...part.box.center_mm));
+  const t = new THREE.Vector3(...torso.box.center_mm);
+  return end(-1).distanceTo(t) <= end(1).distanceTo(t) ? -1 : 1;
+}
+export function occupantDummyPieces(part, torso = false, body = null) {
   const size = part.box.size_mm.map(Number);
   const seg = segmentOf(part);
   const axis = size.indexOf(Math.max(...size));
   const along = (v) => [0, 1, 2].map((i) => (i === axis ? v : 0));
   // a cylinder / a capsule's axis (local y) turned onto the box's longest side
   const turn = (g) => (axis === 0 ? g.rotateZ(-Math.PI / 2) : axis === 2 ? g.rotateX(Math.PI / 2) : g);
-  const rounded = (sz, sub, at = [0, 0, 0]) => {
+  const rounded = (sz, sub, at = [0, 0, 0], piece = null) => {
     const r = Math.min(OCCUPANT_ROUND_SHARE * Math.min(...sz), Math.min(...sz) / 2 - 1e-3);
     const g = new RoundedBoxGeometry(sz[0], sz[1], sz[2], 3, r).translate(...at);
-    g.userData.occupant = sub === "joint" ? "joint" : "rounded_box";
+    g.userData.occupant = piece ?? (sub === "joint" ? "joint" : "rounded_box");
     return { geo: g, sub };
   };
   if (seg === null && torso) {
-    // the box's longest side split: chest (top), waist (a joint, narrower), pelvis (bottom)
     const L = size[axis];
-    // a slice share of L long, from (mm) below the top end, the other sides times inset
-    const part3 = (share, from, inset, sub) => {
-      const sz = size.map((s, i) => (i === axis ? L * share : s * inset));
-      return rounded(sz, sub, along(L / 2 - from - (L * share) / 2));
+    const [w, d] = [0, 1, 2].filter((i) => i !== axis).sort((i, j) => size[j] - size[i]); // across, front to back
+    const W = size[w];
+    // a slice share of L long, from (mm) below the top end, breadth x depth, against the back (-d)
+    const slice = (share, from, breadth, depth, sub) => {
+      const sz = [0, 0, 0];
+      sz[axis] = L * share;
+      sz[w] = Math.min(size[w], breadth);
+      sz[d] = Math.min(size[d], depth);
+      const at = along(L / 2 - from - (L * share) / 2);
+      at[d] = -size[d] / 2 + sz[d] / 2;
+      return rounded(sz, sub, at);
     };
-    const chest = part3(DUMMY.chest, 0, 1, null);
-    const waist = part3(DUMMY.waist, L * DUMMY.chest, DUMMY.waistInset, "joint");
-    const pelvis = part3(1 - DUMMY.chest - DUMMY.waist, L * (DUMMY.chest + DUMMY.waist), 1, "pelvis");
+    const chestB = W * H3_SHAPE.chestBreadth;
+    const chestD = W * H3_SHAPE.chestDepth;
+    const chest = slice(DUMMY.chest, 0, chestB, chestD, null);
+    const waist = slice(DUMMY.waist, L * DUMMY.chest, chestB * H3_SHAPE.waist, Math.min(chestD, size[d]) * H3_SHAPE.waist, "joint");
+    const pelvis = slice(1 - DUMMY.chest - DUMMY.waist, L * (DUMMY.chest + DUMMY.waist), W * H3_SHAPE.hipBreadth, size[d], null);
+    pelvis.geo.userData.occupant = "pelvis";
     return [chest, waist, pelvis];
   }
   if (seg === "neck") return [rounded(size, "joint")];
+  if (seg && /^hand/.test(seg)) return [rounded(size, "joint", [0, 0, 0], "rounded_box")];
+  if (seg && /^foot/.test(seg)) {
+    // the foot's breadth: the larger of its two short sides (the smaller is its height)
+    const [wi] = [0, 1, 2].filter((i) => i !== axis).sort((i, j) => size[j] - size[i]);
+    const sz = [...size];
+    sz[wi] = Math.min(size[wi], size[axis] * H3_SHAPE.footBreadth);
+    return [rounded(sz, "joint", [0, 0, 0], "rounded_box")];
+  }
   const [a, b] = size.filter((_, i) => i !== axis);
   if (seg && LIMB.test(seg) && Math.min(a, b) / Math.max(a, b) >= OCCUPANT_ROUND_SECTION) {
     const r = Math.min(a, b) / 2;
-    const half = size[axis] / 2 - r; // the balls' centres, r in from each end
+    const half = size[axis] / 2 - r; // the joints' centres, r in from each end (the design's links)
+    const [jp, jd] = dummyJointRadii(seg, r, body).map((x) => Math.min(x, r)); // cut to the box
+    const sp = proximalSign(part, axis, body?.torso ?? null);
     const out = [];
     if (half > 0) {
-      const g = turn(new THREE.CylinderGeometry(r * DUMMY.limb, r * DUMMY.limb, 2 * half, 18, 1));
+      // the rod's +end (CylinderGeometry's top, turned onto + of the axis) takes the + end's radius
+      const [top, bottom] = sp < 0 ? [jd, jp] : [jp, jd];
+      const g = turn(new THREE.CylinderGeometry(top * DUMMY.limb, bottom * DUMMY.limb, 2 * half, 18, 1));
       g.userData.occupant = "limb";
       out.push({ geo: g, sub: null });
     }
-    for (const s of half > 0 ? [-1, 1] : [0]) {
-      const g = new THREE.SphereGeometry(r, 16, 12).translate(...along(s * Math.max(0, half)));
+    const ends = half > 0 ? [[sp, jp], [-sp, jd]] : [[0, Math.min(jp, jd)]];
+    for (const [s, rad] of ends) {
+      const g = new THREE.SphereGeometry(rad, 16, 12).translate(...along(s * Math.max(0, half)));
       g.userData.occupant = "joint";
+      g.userData.radius_mm = rad;
       out.push({ geo: g, sub: "joint" });
     }
     return out;
