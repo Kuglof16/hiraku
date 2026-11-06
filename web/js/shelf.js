@@ -70,7 +70,13 @@ function checkState(t) {
 }
 
 // ?dev=1: the ids and the English are shown, folded under くわしく; without it, not at all.
-const DEV = new URLSearchParams(globalThis.location?.search ?? "").get("dev") === "1";
+const URLQ = new URLSearchParams(globalThis.location?.search ?? "");
+const DEV = URLQ.get("dev") === "1";
+// For a fixed picture (a video's frame): ?shelf=<filter> (all | claude | notok | unusable) picks the
+// filter and ?tool=<name> the tool whose card is open, from the start.
+const START_FILTER = Object.hasOwn(FILTER_FN, URLQ.get("shelf") ?? "") ? URLQ.get("shelf") : "all";
+const START_TOOL = URLQ.get("tool") || null;
+const SETTLE_CAP_MS = 60000; // settled() waits for the server's shelf at most this long
 
 // A formula's expression as K0 writes it (plain ASCII), shown with the usual signs: only a sign is put
 // for a sign, the expression is not rewritten. A name written in full (mu, theta) becomes its letter;
@@ -112,9 +118,13 @@ function marks(t) {
 }
 
 export function mountShelf(el, api) {
-  const ui = { mode: "domain", filter: "all", query: "", collapsed: new Set(), selected: null };
+  const ui = { mode: "domain", filter: START_FILTER, query: "", collapsed: new Set(), selected: START_TOOL };
   const shelf = { ready: false, tools: [], formulas: [], archetypes: {}, error: null, asked: false, failed: null };
   const code = new Map(); // `${runId}|${name}` -> {state: "loading"|"none"|"ok"|"error", n, text}
+  const codeDone = new Map(); // same key -> the promise of that read (for settled())
+  let titlesDone = null; // the promise of askTitles()
+  let shelfDone; // resolved once /api/shelf answered ready (built, or with its error)
+  const shelfBuilt = new Promise((r) => (shelfDone = r));
   const opened = new Set(); // the くわしく left open, by key (they stay open across the redraws)
   let timer = null;
 
@@ -157,7 +167,7 @@ export function mountShelf(el, api) {
   }
 
   async function ask() {
-    if (!shelf.asked) askTitles();
+    if (!shelf.asked) titlesDone = askTitles();
     shelf.asked = true;
     clearTimeout(timer);
     try {
@@ -165,6 +175,7 @@ export function mountShelf(el, api) {
       if (got.ready) {
         Object.assign(shelf, { ready: true, tools: got.tools ?? [], formulas: got.formulas ?? [], archetypes: got.archetypes ?? {},
           error: got.error ?? null, failed: null });
+        shelfDone();
       } else {
         timer = setTimeout(ask, POLL_MS);
       }
@@ -238,7 +249,7 @@ export function mountShelf(el, api) {
       code.set(key, { state: "loading" });
       // the versions the run's tools/ holds (GET /api/runs/<id>/tools), then only the newest file:
       // no guessing <name>-<n+1>.py and a 404 for it in the console
-      (async () => {
+      codeDone.set(key, (async () => {
         try {
           const lr = await fetch(getUrl(`/api/runs/${encodeURIComponent(runId)}/tools`), { cache: "no-store" });
           if (!lr.ok) throw new Error(`${lr.status}`);
@@ -255,7 +266,7 @@ export function mountShelf(el, api) {
           code.set(key, { state: "error", text: String(e.message ?? e) });
         }
         render();
-      })();
+      })());
     }
     return code.get(key);
   }
@@ -315,7 +326,8 @@ export function mountShelf(el, api) {
     const ok = tools.filter(allPassed).length;
     // before the shelf is built only this run's tools are known: no count until then
     sum.textContent = shelf.ready ? `${tools.length} ツール・OK ${ok}` : shelf.error ? "" : "棚を確かめています…";
-    note.hidden = shelf.ready && !shelf.error && !shelf.failed;
+    // the tools Claude wrote are all in the run's records: under that filter nothing waits for the server
+    note.hidden = (shelf.ready || ui.filter === "claude") && !shelf.error && !shelf.failed;
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
     note.textContent = shelf.error ? `棚を読めませんでした: ${shelf.error}`
       : shelf.failed ? `棚を読めませんでした (${shelf.failed})。もう一度聞いています…`
@@ -323,12 +335,30 @@ export function mountShelf(el, api) {
     const branches = shelfTree(tools, ui);
     fill(tree, branches.length ? branches.map(branch) : h("li", { class: "sh-dim" }, tools.length ? "条件に合うツールがありません" : shelf.ready ? "ツールがありません" : ""));
     fill(detailBox, detail(tools.find((t) => t.name === ui.selected) ?? null));
+    // ?tool=: the card scrolled to its known-answer checks (until another tool is chosen)
+    const h4 = START_TOOL && ui.selected === START_TOOL ? detailBox.querySelector(".sh-detail h4") : null;
+    if (h4 && detailBox.offsetParent) {
+      detailBox.scrollTop += h4.getBoundingClientRect().top - detailBox.getBoundingClientRect().top;
+    }
   }
 
   return {
     /** Draw again (the run's events changed, or the tab opened); asks the server for the shelf once. */
     render() {
       if (!shelf.asked) ask();
+      render();
+    },
+    /** Resolves once the shelf no longer changes by itself (a page opened at ?t= waits for it): the
+     *  server's shelf built (at most SETTLE_CAP_MS), the formulas' titles read, and the code of the
+     *  chosen tool, when Claude wrote it, read. */
+    async settled() {
+      if (!shelf.asked) ask();
+      const cap = new Promise((r) => setTimeout(r, SETTLE_CAP_MS));
+      await Promise.race([Promise.all([shelfBuilt, titlesDone]), cap]);
+      render();
+      const t = mergeTools(shelf.tools, api.tools()).find((x) => x.name === ui.selected);
+      const key = t && isClaude(t) ? `${api.runId()}|${t.name}` : null;
+      if (key && codeDone.has(key)) await Promise.race([codeDone.get(key), cap]);
       render();
     },
   };

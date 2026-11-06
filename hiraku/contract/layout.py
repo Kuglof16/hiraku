@@ -168,7 +168,9 @@ OWNERS = {
         "data/parts/",  # real components with their sources (sizes, masses, ratings)
         "data/materials/",
         "data/tyres/",  # tyre model coefficients (K2 team)
+        "viewer/",  # the result viewer: one page per run, a data script per performance field
         "tests/solvers/",
+        "tests/viewer/",
     ],
     "screen": [  # 画面部: three.js screens and replay
         "web/",

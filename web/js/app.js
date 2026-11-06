@@ -20,13 +20,16 @@
 //                   ?t= and seek, back or forth, show the tab of that time). Before the first entry the tab
 //                   is chosen as without it; an unknown tab name is left out; wins over ?tab=; a tab
 //                   pressed by hand ends it. Names as ?tab= (bench, grid, A1, A2, A4, A5, A7)
+//                   A7 so shown (or ?t= with &asm_from=) puts its parts in on the replay's time, one each
+//                   0.4 s from when it came up (assembly.js PART_S); &asm_from=-6 starts with
+//                   the last 6 parts, &asm_from=<step> at that step (the ones before in place)
 //   ?list=1         the run list; ?dev=1 shows it (and keeps it on the links) as the developers see it
 //   ?present=1      the present mode (js/present.js): the 3D on the whole screen and one card; the
 //                   見せる / 作業台 switch at the top right turns it on and off
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -37,6 +40,7 @@ import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMot
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
+import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
@@ -45,12 +49,12 @@ import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
-import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
+import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
-import { moduleColor, roundCardHtml } from "./proposals.js"; // modules:
+import { designerColor, roundCardHtml } from "./proposals.js"; // modules:
 import { TabContent, mountTabs } from "./tabs.js";
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
@@ -70,7 +74,8 @@ const SHOW_S = 5; // seconds of playback a bubble or hook warning stays
 const ANIM_MAX_S = 12; // a test's motion plays in at most this many seconds of replay
 
 const PET_COLORS = { lead: "#e9b872", designer: "#2fa7d6", packager: "#8e6bbf", system: "#c9c3b6", user: "#fbf9f4" };
-const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : id?.startsWith("designer.") ? moduleColor(id.slice(9)) : "#c9c3b6"); // modules: designer.<module>
+// (a design role designer.structure its own colour, an older record's designer.<module> its module's)
+const petColor = (id) => PET_COLORS[id] ?? (id?.startsWith("cae.") ? "#4cbf7a" : designerColor(id) ?? "#c9c3b6");
 
 const INTAKE_TABS = ["A1", "A2", "A5"]; // the intake screens (js/intake/), shown in their own tabs
 const TABS = ["bench", "grid", "A4", ...INTAKE_TABS, "A7"]; // A4: the tool shelf (js/shelf.js); A7: the assembly order (js/assembly.js)
@@ -135,11 +140,13 @@ if (params.get("status") === "0") document.body.classList.add("no-status");
 // ---- stage scaling -------------------------------------------------------
 const stage = $("stage");
 let stageScale = 1;
+let stageBase = ""; // the stage's fit to the window (?zoom= adds its own part after it, js/zoom.js)
+const ZOOM = parseZoom(params.get("zoom"));
 function fitStage() {
   stageScale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
   const left = (window.innerWidth - STAGE_W * stageScale) / 2;
   const top = (window.innerHeight - STAGE_H * stageScale) / 2;
-  stage.style.transform = `translate(${left}px, ${top}px) scale(${stageScale})`;
+  stage.style.transform = stageBase = `translate(${left}px, ${top}px) scale(${stageScale})`;
   agentPets?.setPixel((window.devicePixelRatio || 1) * stageScale);
   resize3d();
 }
@@ -237,6 +244,20 @@ function plannedTab(t) {
   let tab = null;
   for (const p of ui.tabPlan) if (p.t <= t + 1e-9) tab = p.tab;
   return tab;
+}
+
+// A7 on the replay's clock (assembly.js timedU): with ?tabs= showing A7, from the time that run of
+// A7 entries began; else with ?t= and &asm_from=, from its record's arrival (from: null); else none
+// (its own bar; ?t= alone opens it on the vehicle built, as before).
+function asmClock() {
+  const at = player.playhead;
+  let from = null;
+  for (const p of ui.tabPlan) {
+    if (p.t > at + 1e-9) break;
+    from = p.tab === "A7" ? from ?? p.t : null;
+  }
+  if (from !== null) return { at, from };
+  return params.has("t") && params.has("asm_from") ? { at, from: null } : null;
 }
 
 function currentTab(s) {
@@ -855,8 +876,9 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 // the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
 const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
 const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
-const AGENT_ALERT = ["止められた", "食い違い", "赤", "解析が通らない"];
-const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : a.active ? "active" : "");
+const AGENT_ALERT = ["赤", "解析が通らない"];
+const AGENT_HEED = ["止められた", "食い違い"]; // attention (orange), not a NG judgement
+const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : AGENT_HEED.includes(a.status) ? "heed" : a.active ? "active" : "");
 
 // The list's entries in the agents' order: one agent, or a bundle at its first member's place.
 function agentEntries(order) {
@@ -894,9 +916,10 @@ function agentRowHtml(s, id, extra = "") {
 function agentGroupHtml(s, g, ids) {
   const open = ui.openGroups.has(g);
   const as = ids.map((id) => s.agents[id]);
-  const alert = as.find((a) => agentCls(a) === "alert");
+  // (alert: a NG judgement, red; else heed: stopped by hooks or a mismatch, orange)
+  const alert = as.find((a) => agentCls(a) === "alert") ?? as.find((a) => agentCls(a) === "heed");
   const going = ids.filter((id) => agentCls(s.agents[id]) === "active");
-  const cls = alert ? "alert" : going.length ? "active" : as.every((a) => a.status === "✓") ? "done" : "";
+  const cls = alert ? agentCls(alert) : going.length ? "active" : as.every((a) => a.status === "✓") ? "done" : "";
   const st = alert ? alert.status
     : going.length ? `${s.agents[going[0]].status}${going.length > 1 ? ` ほか ${going.length - 1}` : ""}`
     : as.every((a) => a.status === as[0].status) ? as[0].status : "";
@@ -917,7 +940,7 @@ function renderAgents(s) {
   const rows = entries.reduce((n, e) => n + (e.group && ui.openGroups.has(e.group) ? 1 + e.ids.length : 1), 0);
   const ul = $("agents");
   ul.classList.toggle("many", rows > 6);
-  ul.classList.toggle("lots", rows > 8); // modules: the six module designers come on top of the others
+  ul.classList.toggle("lots", rows > 8); // modules: the module designers (an older record's six) come on top of the others
   ul.classList.toggle("pets", !!agentPets);
   ul.innerHTML = entries.map((e) => (e.group ? agentGroupHtml(s, e.group, e.ids) : agentRowHtml(s, e.id))).join("");
   agentPets?.mount(ul, "bench");
@@ -935,7 +958,10 @@ $("agents").addEventListener("click", (ev) => {
 function rank(id) {
   const fixed = ["lead", "designer", "packager"];
   if (fixed.includes(id)) return fixed.indexOf(id);
-  if (id.startsWith("designer.")) return 1.5; // modules: the module designers after the designer, in the record's order
+  // modules: the module designers after the designer: the design roles in the contract's order
+  // (structure, mechanism, electric), an older record's designer.<module> in the record's order
+  if (designerRole(id)) return 1.5 + DESIGNER_ROLES.indexOf(designerRole(id)) / 10;
+  if (id.startsWith("designer.")) return 1.5;
   if (id.startsWith("cae.")) return 3 + DOMAINS.indexOf(id.slice(4));
   return 20;
 }
@@ -1121,7 +1147,7 @@ function renderChain(s, chain) {
   if (cmp) {
     const ok = cmp.status === "match";
     const safe = isSafeSide(verdict);
-    c.className = `card ${ok ? "ok" : "bad"}`;
+    c.className = `card ${ok ? "ok" : "warn"}`; // a mismatch: attention (orange); red only for a NG verdict
     let v = "";
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
@@ -1154,7 +1180,7 @@ function renderChain(s, chain) {
       `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
       `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
-      `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "一致 ✓" : "食い違い ✗"}</span>` +
+      `<span class="badge ${ok ? "ok" : "warn"}">${ok ? "一致 ✓" : "食い違い !"}</span>` +
       cz +
       v;
     keepOpen(c);
@@ -1636,6 +1662,14 @@ function renderTransient(s, playhead, chain, resolved) {
     const w = hookWords(den.rule);
     h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
+  // the cause of a mismatch Claude wrote, until a verdict of its load case is OK (present.js openCause)
+  const cause = openCause(s);
+  const cn = $("causenote");
+  cn.hidden = !cause;
+  if (cause && cn.dataset.key !== cause.key) {
+    cn.dataset.key = cause.key;
+    cn.innerHTML = causeNoteHtml(cause);
+  }
   const run = chain.running ?? Object.values(s.running)[0] ?? null;
   const r = $("running");
   r.style.opacity = run ? 1 : 0;
@@ -1828,6 +1862,7 @@ function draw() {
   if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
   heat.show(heatOn ? heatIn : null, player.playhead); // heat:
   renderTransient(s, player.playhead, chain, resolved);
+  if (ZOOM) zoomTransform(stage, stageBase, ZOOM, player.playhead, STAGE_W, STAGE_H); // ?zoom=
   renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
   if (view === "bench") {
@@ -1842,7 +1877,7 @@ function draw() {
   // the pets of the list (the workbench; hidden in the present mode) or of the grid
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
-  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s);
+  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
@@ -2072,7 +2107,9 @@ function startPlayback() {
 }
 function play() {
   if (params.has("t")) {
-    seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
+    // (A4 shown: ready once the shelf no longer changes by itself, so the frame is the same each time)
+    seekAndDraw(Number(params.get("t")) || 0).then(() => (shelf && !$("view-shelf").hidden ? shelf.settled() : null))
+      .then(() => readyResolve(player.playhead));
     return;
   }
   ui.frozen = false;
@@ -2607,7 +2644,7 @@ $("view-intake").addEventListener("change", (ev) => {
 });
 
 fitStage();
-// the module names (designer.<module> → 「枠の設計役」) from the start, so a record still being read
+// the module names (an older record's designer.<module> → 「枠の設計役」) from the start, so a record still being read
 // does not show the ids; drawn again once they are in
 loadModuleNames().then(() => (drawn.rev = -1));
 if (ui.present) applyPresent();

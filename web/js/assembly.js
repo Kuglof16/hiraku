@@ -8,7 +8,9 @@
 //                       later parts not drawn
 //   stepRowsHtml        the list of steps (checks, fastenings), the current one marked
 //   AssemblySeek        the bar under the 3D: one tick per step, a knob, play
-//   AssemblyPanel       the A7 tab: the three together, the bar under the hand
+//   AssemblyPanel       the A7 tab: the three together, the bar under the hand; opened by
+//                       ?tabs= (or ?t= with &asm_from=) its progress follows the replay's time
+//                       (PART_S a part, timedU; ?asm_from= the step it starts from)
 //
 // Progress u runs from 0 to N (N steps): step k goes in while u runs from k-1 to k,
 // and u = k is the state with step k just in place.
@@ -99,6 +101,9 @@ export function fastenText(step, names, memberNames = {}) {
 }
 
 export const stepOk = (step) => CHECKS.every((c) => step[c.key] === true);
+// The checks whose failing is drawn in red on A7: a part that does not fit. Tool room and hand
+// reach failing are cautions (the caution colour), as on N16.
+export const HARD_CHECKS = ["no_interference"];
 
 // One interference of the record in words: each side by its name in the design ("member x" as a
 // fastening's target, a part by its name, else the id as written), how deep, and when. The
@@ -441,8 +446,31 @@ export class AssemblySeek {
   }
 }
 
+// ---- A7 on the replay's clock -----------------------------------------------------------
+// A7 opened by ?tabs= (or ?t= with &asm_from=) takes its progress from the replay's time: from the time
+// A7 came up, one part per PART_S seconds. The record has no times for the assembly, so PART_S
+// is the screen's pace of showing it (a choice of the screen, not a value from the record).
+export const PART_S = 0.4;
+
+// ?asm_from=-6: start with the last 6 parts going in; ?asm_from=k: start with step k (its
+// order). The parts before are in place from the start. The u the order starts from (0..n).
+export function startU(steps, from) {
+  const n = steps.length;
+  const k = from === null || from === undefined || String(from).trim() === "" ? NaN : Number(from);
+  if (!Number.isFinite(k) || k === 0) return 0;
+  if (k < 0) return Math.max(0, n + Math.round(k));
+  const i = steps.findIndex((s) => Number(s.order) === k);
+  return i >= 0 ? i : Math.max(0, Math.min(n, Math.round(k) - 1));
+}
+
+// The progress after `elapsed` seconds in A7 (the same time and arguments give the same u).
+export function timedU(steps, from, elapsed, partS = PART_S) {
+  return Math.min(steps.length, startU(steps, from) + Math.max(0, elapsed) / partS);
+}
+
 // ---- A7 -------------------------------------------------------------------------------
 const PLAY_STEP_S = 1.2; // seconds per step when the tab plays the order
+const ASM_FROM = new URLSearchParams(globalThis.location?.search ?? "").get("asm_from");
 
 export class AssemblyPanel {
   constructor(host) {
@@ -458,6 +486,8 @@ export class AssemblyPanel {
     this.gl = this.q(".asm-gl");
     this.view = new Workbench3D(this.gl, "zu");
     this.stage = new AssemblyStage(this.view);
+    // red only for a part that does not fit (as N16); tool room and hand reach are cautions, not red
+    this.stage.ngChecks = HARD_CHECKS;
     this.modules = mountAssemblySwitch(this); // modules: the module colours and spaces (modules.js)
     this.jointCtl = assemblyJointControls(this.q(".asm-3d"), this.view); // joints: its own 接合 switch and legend
     this.seek = new AssemblySeek(this.q(".asm-bar"), {
@@ -465,9 +495,11 @@ export class AssemblyPanel {
       onSeek: (u) => {
         this.playing = false;
         this.u = u;
+        this.byHand = true; // the hand takes the order off the replay's clock
       },
       onPlay: () => {
         if (!this.rec) return;
+        this.byHand = true;
         this.playing = !this.playing;
         if (this.playing && this.u >= this.rec.steps.length) this.u = 0;
       },
@@ -479,10 +511,14 @@ export class AssemblyPanel {
       if (i >= 0) {
         this.playing = false;
         this.u = i + 1;
+        this.byHand = true;
       }
     });
+    // video=1: the camera stays at the bench's default view (no orbit under a stray pointer)
+    if (document.body.classList.contains("video") && "enabled" in this.view.controls) this.view.controls.enabled = false;
     this.rec = null;
     this.u = 0;
+    this.byHand = false;
     this.playing = false;
     this.last = null;
     this.drawnCurrent = null;
@@ -503,8 +539,10 @@ export class AssemblyPanel {
     }
   }
 
-  // Called each frame while the tab is shown, with the events applied so far.
-  render(s) {
+  // Called each frame while the tab is shown, with the events applied so far. clock (app.js):
+  // { at: the replay's time, from: when A7 came up in ?tabs= (null: when its record arrived) },
+  // or null for the tab's own bar and play.
+  render(s, clock = null) {
     const rec = assemblyRecord(s);
     if (!this.started || rec?.ana !== this.rec?.ana || rec?.design !== this.rec?.design) {
       this.started = true;
@@ -515,7 +553,11 @@ export class AssemblyPanel {
     this.last = now;
     if (!this.rec) return;
     const n = this.rec.steps.length;
-    if (this.playing) {
+    if (clock && !this.byHand) {
+      const from = clock.from ?? s.tOf?.[this.rec.ana.analysis_id] ?? 0;
+      this.u = timedU(this.rec.steps, ASM_FROM, clock.at - from);
+      this.playing = false;
+    } else if (this.playing) {
       this.u = Math.min(n, this.u + dt / PLAY_STEP_S);
       if (this.u >= n) this.playing = false;
     }
@@ -539,7 +581,7 @@ export class AssemblyPanel {
     this.jointCtl.refresh(); // joints:
     if (!rec) return;
     this.u = rec.steps.length; // opens on the vehicle built, the last step marked
-    this.seek.setSteps(rec.steps);
+    this.seek.setSteps(rec.steps, HARD_CHECKS);
     this.sized = null;
     this.resize();
     this.q(".asm-intf").innerHTML = rec.interferences.length

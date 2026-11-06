@@ -1,5 +1,5 @@
 """?video=1 has no replay bar: the bench's (▶, the time band, "21.5 / 21.5 秒", 1×) and A7's assembly
-bar are hidden, in the present mode too; without video=1 both are there. ?t= and
+track, ▶ and switches are hidden (its band 手順 n / N stays), in the present mode too; without video=1 they are there. ?t= and
 window.hiraku.seek move the replay without the bar. What stood above a bar (the colour legend,
 A7's 接合 switch) comes down to the 3D's edge, and the layout lint finds nothing on these pages.
 A seek to a time the bar shows as the end (0.1 s) lands on the end: the run is finished there.
@@ -17,7 +17,7 @@ from pathlib import Path
 from tests.web.test_layout_lint_browser import ASSEMBLY, DOMAINS, ENABLED, READY, WIDTHS, Screen, describe, lint, start_servers
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -62,7 +62,7 @@ class VideoBarBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": size[0], "height": size[1]})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.bases['saved']}/?{query}")
+        page.goto(f"{self.bases['saved']}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function(READY, timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
@@ -79,24 +79,25 @@ class VideoBarBrowserTest(unittest.TestCase):
             self.assertTrue(view, query)
             self.assertEqual(got, {sel: shown for sel in got}, query)
 
-    def test_a7_bar_stays_its_play_button_only_without_video(self):
-        """A7's assembly bar (track and 手順 n / N) shows in the video too; only its ▶ goes."""
-        for query, play in ((A7, True), (f"{A7}&video=1", False)):
+    def test_a7_keeps_only_its_step_band_with_video(self):
+        """A7 in the video keeps its band 手順 n / N; its track, ▶ and 接合 switch go."""
+        sels = ("#view-asm .asm-bar", "#view-asm .as-label", "#view-asm .as-track", "#view-asm .as-play", "#view-asm .asm-joints-btn")
+        for query, ctl in ((A7, True), (f"{A7}&video=1", False)):
             page, errors = self.open(query)
-            got = {sel: page.evaluate(SHOWN, sel) for sel in ("#view-asm .asm-bar", "#view-asm .as-track", "#view-asm .as-label", "#view-asm .as-play")}
+            got = {sel: page.evaluate(SHOWN, sel) for sel in sels}
             label = page.evaluate("() => document.querySelector('#view-asm .as-label').textContent")
             page.close()
             self.assertEqual(errors, [], query)
-            self.assertEqual(got, {"#view-asm .asm-bar": True, "#view-asm .as-track": True, "#view-asm .as-label": True,
-                                   "#view-asm .as-play": play}, query)
+            self.assertEqual(got, {"#view-asm .asm-bar": True, "#view-asm .as-label": True, "#view-asm .as-track": ctl,
+                                   "#view-asm .as-play": ctl, "#view-asm .asm-joints-btn": ctl}, query)
             self.assertIn("手順", label, query)
 
     def test_what_stood_above_the_bar_comes_down(self):
         """The colour legend: 76 px over the bench's bottom with the bar, 12 px without (video=1).
-        A7's 接合 switch stays 66 px over its bar, which the video keeps. (The CSS bottom: the
+        A7's 接合 switch stays 66 px over its bar (the video hides it). (The CSS bottom: the
         legend is hidden on some pages.)"""
         for query, sel, gap in ((f"{BENCH}&t=1e6", "#legend", 76), (f"{BENCH}&t=1e6&video=1", "#legend", 12),
-                                (A7, ".asm-joints-btn", 66), (f"{A7}&video=1", ".asm-joints-btn", 66)):
+                                (A7, ".asm-joints-btn", 66)):
             page, errors = self.open(query)
             got = page.evaluate(GAP, sel)
             page.close()

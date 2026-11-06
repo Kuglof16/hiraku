@@ -178,6 +178,20 @@ class MissingPartsTest(unittest.TestCase):
         no_frame["members"], no_frame["nodes"] = [], []
         self.assertEqual([n["missing"] for n in check("SY-04", no_frame)["not_evaluable"]], [["frame"], ["frame"]])
 
+    def test_a_seat_back_and_a_head_restraint_must_be_held_too(self):
+        d = vehicle()
+        seat = next(p for p in d["parts"] if p["id"] == "seat_R")
+        d["parts"] += [part("back_R", "seatback", "seat", link("seat_R")), part("head_R", "head_restraint", "seat", link("back_R"))]
+        seat["connects_to"].append(link("back_R"))
+        rec = check("SY-04", d)
+        self.assertEqual((rec["hits"], rec["pass"]), ([], True))
+        self.assertIn("head_R", rec["targets"])  # they are part of what the rule looked at
+        loose = unlink(d, "back_R", "seat_R")
+        loose = unlink(loose, "seat_R", "back_R")
+        self.assertEqual(sorted(hit_ids(check("SY-04", loose))), ["back_R", "head_R"])  # neither is joined to the seat or the frame
+        self.assertIn("頭を受け止める", check("SY-04", loose)["hits"][0]["message"])
+        self.assertEqual(hit_ids(check("SY-04", unlink(d, "head_R", "back_R"))), ["head_R"])  # only the head restraint is loose
+
     def test_lamps(self):
         rec = check("SY-07", without(vehicle(), "taillamp", "stoplamp"))
         self.assertEqual(len(rec["hits"]), 2)
