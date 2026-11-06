@@ -247,6 +247,9 @@ VARIABLES: dict[str, Var] = {
                       f"{GUSSET_LEG_MM:g} mm, 1.5 x the cross member width, an assumption)"),
     "gusset_thickness": Var("mm", 2.3, 1.6, 4.5, "gusset plate thickness (used when gusset_leg > 0); the default (the "
                             "tube wall) is an assumption"),
+    "gusset_ends": Var("1", 0.0, 0.0, 1.0, "1: gussets (gusset_leg, gusset_thickness) also at the frame's two end "
+                       "corners, where a rail ends on its end cross member (an L joint: the inside corner only); 0: "
+                       "the T joints only. Written into design.variables only when it is 1"),
     "cross_members_through": Var("1", 0.0, 0.0, 1.0, "1: the cross members pass through a hole in the rail's inner "
                                  "wall to its outer wall and are welded to both (needs cross_h - cross_t < rail_h - "
                                  "rail_t); parts through_<member>_<node> carry the tube inside the rails, the beam "
@@ -306,12 +309,13 @@ _BASIS = {
 }
 VARIABLES.update({k: replace(VARIABLES[k], basis=b) for k, b in _BASIS.items()})
 DERIVED_BASIS = {"tyre_relaxation_length": "assumption"}  # basis of the DERIVED variables that have one
-SWITCHES = ("cross_members_through", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
+SWITCHES = ("cross_members_through", "gusset_ends", "rollbar", "rollbar_square", "driveshafts", "lamps", "lower_cross")  # 0 or 1
 ROLLBAR_VARS = ("rollbar", "rollbar_height", "rollbar_width", "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b",
                 "rollbar_t")
 ROLLBAR_MATERIALS = {0.0: "stkm13a", 1.0: "stkr400"}  # by rollbar_square (assumption)
 # Optional variables, written into design.variables only when one of their group differs from its default.
-OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "cross_members_through": ("cross_members_through",)}
+OPTIONAL = {"gusset_leg": ("gusset_leg", "gusset_thickness"), "gusset_ends": ("gusset_ends",),
+            "cross_members_through": ("cross_members_through",)}
 LEGACY = ("gussets",)  # the gusset switch of earlier designs (0: no gussets, whatever gusset_leg says); not an input now
 # Written into design.variables by build() from the other variables (not inputs).
 DERIVED = {
@@ -1246,7 +1250,9 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     tee = list(stations)[1:-1]  # the T joints: every station but the frame's two ends
     if v["gusset_leg"] > 0:
         others = [p for p in lay.parts if p["kind"] not in GUSSET_NEIGHBOURS]  # the gussets keep out of these
-        for st in tee:
+        # gusset_ends: also the front and rear end corners (L joints: the rail ends on its end cross member)
+        ends = [list(stations)[0], list(stations)[-1]] if v.get("gusset_ends", 0.0) == 1 else []
+        for st in tee + ends:
             for side in "LR":
                 lay.parts.extend(frame.gussets(f"{side}{st}", f"cross_{st}", v["gusset_leg"], v["gusset_thickness"], rho,
                                                avoid=others))
