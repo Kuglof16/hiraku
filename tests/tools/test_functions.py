@@ -54,6 +54,9 @@ class StartTest(RunCase, unittest.TestCase):
             get_context(self.ctx, {"sections": ["load_cases"], "domain": "nope"})
         reqs = get_context(self.ctx, {"sections": ["requirements"], "requirement_keys": ["Q15"]})["requirements"]
         self.assertEqual([r["key"] for r in reqs], ["Q15"])
+        # read before the records are written: the kept files (reading()) do not hide the new ones after
+        self.assertEqual(get_context(self.ctx, {"sections": ["records"]})["records"]["comparisons"], [])
+        self.assertEqual(get_context(self.ctx)["overview"]["records"]["comparison"], 0)
         ana, c1, c2 = self.run_p1()
         rec = get_context(self.ctx, {"sections": ["records"], "record_kinds": ["comparison"]})["records"]
         self.assertEqual(set(rec), {"comparisons"})
