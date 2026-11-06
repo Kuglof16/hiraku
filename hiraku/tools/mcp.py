@@ -228,6 +228,7 @@ for _name, _t in INTAKE_TOOLS.items():
     DESCRIPTIONS[_name] = _t["description"]
     HANDLERS[_name] = _t["function"]
 HANDLERS["rule_check"] = rule_check  # the intake's, then the assembly tile again (system rules)
+from hiraku.tools import cad_tools  # noqa: E402,F401 (adds export_step, import_step, edit_step to the tables above)
 
 
 def _text(obj: Any) -> str:

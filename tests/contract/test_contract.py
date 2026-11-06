@@ -487,6 +487,26 @@ class IntakeTest(unittest.TestCase):
         self.assertEqual(contract.errors("tool_input.find_tradeoffs", {"design_version": 2, "variables": ["tower_t"]}), [])
         self.assertIn("find_tradeoffs", contract.MCP_TOOLS_LATER)
 
+    def test_cad_tool_inputs(self):
+        for name in ("export_step", "import_step", "edit_step"):
+            self.assertIn(name, contract.MCP_TOOLS_LATER)
+        ok = contract.errors
+        self.assertEqual(ok("tool_input.export_step", {}), [])
+        self.assertEqual(ok("tool_input.export_step", {"design_version": 2, "path": "cad/v2.step"}), [])
+        self.assertNotEqual(ok("tool_input.export_step", {"path": "cad/v2.json"}), [])
+        self.assertNotEqual(ok("tool_input.export_step", {"design_version": 0}), [])
+        self.assertEqual(ok("tool_input.import_step", {"path": "cad/a.stp", "density_kg_m3": 7850}), [])
+        self.assertEqual(ok("tool_input.import_step", {"path": "cad/a.STEP", "density_kg_m3": {"*": 2700, "seat": 900}}), [])
+        self.assertNotEqual(ok("tool_input.import_step", {}), [])
+        self.assertNotEqual(ok("tool_input.import_step", {"path": "cad/a.step", "density_kg_m3": -1}), [])
+        move = {"op": "move", "name": "rail_L_FA", "by_mm": [10, 0, 0]}
+        brace = {"op": "add_brace", "name": "b1", "from_mm": [0, 0, 0], "to_mm": [0, 100, 0],
+                 "section": {"shape": "round_tube", "dims_mm": {"d": 20, "t": 2}}}
+        self.assertEqual(ok("tool_input.edit_step", {"path": "a.step", "edits": [move, brace], "out_path": "b.step"}), [])
+        self.assertNotEqual(ok("tool_input.edit_step", {"path": "a.step", "edits": []}), [])
+        self.assertNotEqual(ok("tool_input.edit_step", {"path": "a.step", "edits": [{**move, "op": "explode"}]}), [])
+        self.assertNotEqual(ok("tool_input.edit_step", {"path": "a.step", "edits": [{**move, "by_mm": [1, 2]}]}), [])
+
     def test_rule_questions_in_the_hearing(self):
         q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}
         self.assertEqual(contract.errors("hearing_asked", {"rule_questions": [q]}), [])
