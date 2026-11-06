@@ -125,8 +125,10 @@ class Builders(unittest.TestCase):
         # same mass spread over those boxes), 712.7 mm before the roll bar
         # was on by default (its tubes raise the centre of gravity), 718.8 mm before the suspension towers, the dash
         # and the occupants' bodies as parts, 726.5 mm before the floors and the deck were steel sheets 3.2 mm thick
-        # (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down
-        self.assertAlmostEqual(h[620.0], 706.9, delta=0.5)
+        # (were 20 mm boxes): the deck's top, and the cargo on it, came 16.8 mm down; 706.9 mm before the rear lower
+        # arms' brackets reached the rail's outer face (+0.70 kg, 10 mm further out each) and the seat mount brackets
+        # (+0.35 kg)
+        self.assertAlmostEqual(h[620.0], 706.3, delta=0.5)
 
     def test_cases_past_the_limit(self):
         for tid in BEYOND:
