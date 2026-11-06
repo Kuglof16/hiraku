@@ -9,7 +9,9 @@ build(args)) with the arguments its own command would get for that analysis (com
 viewer/data/<key>.js (after ja.translate, as common.write_data does). It returns
     {"field": <the page's data key: VIEW_DATA[field], data/<field>.js, index.html#<field>>, "data", "title", "source"}
 or, when the record cannot be shown, {"field": None, "reason": "<one plain Japanese line>"}.
-frame_shell (the page needs the frames a step-hit run saved, not in the record) returns a reason. rops_pushover
+step_climb is the strength field's beam model (as frame_static, with the record's step); load_path and frame_shell
+are built from the record alone by viewer/src/strength_records.py (the load-path model; the shell model at the one
+instant the record holds; the step hit's time series needs the frames a step-hit run saved). rops_pushover
 returns a reason in a run with version folders; in a run of events.jsonl only (below) the rops field is built for the
 record's version by viewer/src/rops.py, which re-runs the run's tools/rops_pushover-*.py (seconds).
 
@@ -38,7 +40,7 @@ Record = dict[str, Any]
 
 # tool -> the page's data key (each builder's own reader: the tools it looks for)
 TOOL_FIELD = {
-    "frame_static": "strength", "frame_shell": "strength",
+    "frame_static": "strength", "frame_shell": "strength", "step_climb": "strength", "load_path": "strength",
     "modal": "nvh", "modal_shell": "nvh_shell",
     "crash": "crash", "crash_beam": "crash",
     "tilt": "handling", "braking": "handling", "lane_change": "handling", "offroad_roll": "handling",
@@ -52,7 +54,6 @@ TOOL_FIELD = {
 
 NOT_HERE = {   # tools whose field needs more than the record (a reason, nothing solved)
     "rops_pushover": "ROPS の画面は run のツールをもう一度動かして押したときの形を求める (記録に変位がない)。ここでは解かないので見せられない",
-    "frame_shell": "シェルの応力の画面は段差の計算が保存したフレーム (frames.npz・frames_meta.pkl・load_paths.json) から作る。記録にはそれがない",
 }
 
 
@@ -99,10 +100,14 @@ def _has_series(rec: Record, *channels: str) -> bool:
 # ---------------------------------------------------------------- one function per field: (run, vdir, rec) -> data
 
 def _strength(run, vdir, rec):
-    from viewer.src import strength
+    from viewer.src import strength, strength_records
+    if rec["tool"] == "load_path":
+        return strength_records.load_path_record(run, vdir, rec)
+    if rec["tool"] == "frame_shell":
+        return strength_records.shell_record(run, vdir, rec)
     if not (_has_field(rec, "stress", "per_member") and _has_field(rec, "displacement", "per_node")):
         return "記録に部材ごとの応力 (per_member) と節点ごとの変位 (per_node) がない"
-    return strength.build(_args("strength", run, vdir, rec["analysis_id"], strength._extra))
+    return strength.build(_args("strength", run, vdir, rec["analysis_id"], strength._extra, tool=rec["tool"]))
 
 
 def _nvh(run, vdir, rec):

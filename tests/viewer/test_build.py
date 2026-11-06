@@ -35,6 +35,7 @@ CASES = [
     ("powertrain", "ana-0001", "powertrain", ["powertrain"]),
     ("powertrain_energy", "ana-0001", "powertrain", ["powertrain"]),
     ("aero", "ana-0001", "aero", ["aero"]),
+    ("strength_gap", "ana-0020", "strength", ["strength", "--tool", "step_climb", "--analysis", "ana-0020"]),
 ]
 
 
@@ -72,7 +73,8 @@ class ForAnalysisTest(unittest.TestCase):
         for tool, key in (("frame_static", "strength"), ("modal", "nvh"), ("modal_shell", "nvh_shell"),
                           ("crash_beam", "crash"), ("tilt", "handling"), ("offroad_roll", "handling"),
                           ("step_climb_dynamic", "powertrain"), ("crosswind", "aero"), ("drive_energy", "powertrain"),
-                          ("spray_reach", "assembly"), ("entry_opening", "assembly")):
+                          ("spray_reach", "assembly"), ("entry_opening", "assembly"), ("step_climb", "strength"),
+                          ("load_path", "strength"), ("frame_shell", "strength")):
             self.assertEqual(build.TOOL_FIELD[tool], key)
 
     def test_drive_energy_beside_thermal(self):
@@ -122,12 +124,14 @@ class ForAnalysisTest(unittest.TestCase):
             self.assertIn("mesh-0001", got["reason"])
 
     def test_tools_that_need_more_than_the_record(self):
-        for tool in ("rops_pushover", "frame_shell"):
-            with self.subTest(tool=tool):
-                d = self._edit("strength_beam", "ana-0083", lambda r: r.update(tool=tool))
-                got = build.for_analysis(d, "ana-0083")
-                self.assertReason(got)
-                self.assertEqual(got["reason"], build.NOT_HERE[tool])
+        d = self._edit("strength_beam", "ana-0083", lambda r: r.update(tool="rops_pushover"))
+        got = build.for_analysis(d, "ana-0083")
+        self.assertReason(got)
+        self.assertEqual(got["reason"], build.NOT_HERE["rops_pushover"])
+        # a frame_shell record without the shell's element field (the beam's fields only): a reason
+        got = build.for_analysis(self._edit("strength_beam", "ana-0083", lambda r: r.update(tool="frame_shell")), "ana-0083")
+        self.assertReason(got)
+        self.assertIn("per_element", got["reason"])
 
     def test_no_such_analysis_and_not_ok(self):
         self.assertReason(build.for_analysis(FX / "fatigue", "ana-9999"))
@@ -168,6 +172,85 @@ class ForAnalysisTest(unittest.TestCase):
                                cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(r.returncode, 1)
             self.assertIsNone(json.loads(j.read_text(encoding="ascii"))["field"])
+
+
+class StrengthRecordsTest(unittest.TestCase):
+    """step_climb, load_path and frame_shell records (fixtures/strength_gap, cut from the showcase runs) on the
+    strength field: the beam model with the step, the load-path model, the shell model at the record's one instant."""
+
+    FX = FX / "strength_gap"
+
+    def _rec(self, aid):
+        return common.read_json(next(self.FX.glob(f"v*/analyses/{aid}.json")))
+
+    def test_step_climb_beam_with_the_step(self):
+        got = build.for_analysis(self.FX, "ana-0020")
+        D = got["data"]
+        self.assertEqual((got["field"], D["model"], D["source"]["tool"]), ("strength", "beam", "step_climb"))
+        self.assertEqual([s["kind"] for s in D["scene"]], ["step", "step"])
+        self.assertEqual(len(D["stress"]["per_member"]), len(D["frame"]["member_ids"]))
+        self.assertEqual(sum(v is not None for v in D["stress"]["per_member"]), 6)
+        self.assertEqual(D["disp"]["per_node"]["shape"], [len(D["frame"]["node_ids"]), 3])
+        self.assertEqual(len(D["vectors"]), len(self._rec("ana-0020")["vectors"]))
+
+    def test_load_path(self):
+        got = build.for_analysis(self.FX, "ana-0017")
+        D = got["data"]
+        self.assertEqual((got["field"], D["model"], D["load_kind"]), ("strength", "load_path", "inertia"))
+        self.assertEqual(D["loaded"], ["seat_R", "seat_L", "deck"])
+        self.assertEqual(D["free"], [])
+        # the tool's own find_contacts on the record's design finds as many contacts as the record counts
+        self.assertEqual(len(D["contacts"]), D["n_contacts_record"])
+        self.assertTrue(all(len(c["p"]) == 3 and c["a"].startswith("part:") for c in D["contacts"]))
+        self.assertTrue(any(c["path"] for c in D["contacts"]))
+        self.assertTrue(D["members"] and set(D["members"]) <= set(D["frame"]["member_ids"]))
+        self.assertEqual(D["hot"]["member"], "cross_S1")
+        self.assertEqual(len(D["vectors"]), 3)
+
+    def test_load_path_free_part(self):
+        def free_deck(r):
+            r["results"].append({"quantity": "free_part.deck", "value": 1.0, "unit": "1", "where": "deck"})
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = copy_fixture("strength_gap", Path(tmp.name))
+        f = d / "v002" / "analyses" / "ana-0017.json"
+        rec = common.read_json(f)
+        free_deck(rec)
+        f.write_text(json.dumps(rec), encoding="utf-8")
+        D = build.for_analysis(d, "ana-0017")["data"]
+        self.assertEqual(D["free"], ["deck"])
+        self.assertFalse(any("part:deck" in (c["a"], c["b"]) for c in D["contacts"]))
+        self.assertLess(len(D["contacts"]), D["n_contacts_record"])
+
+    def test_frame_shell_one_instant(self):
+        from viewer.src import strength
+        got = build.for_analysis(self.FX, "ana-0039")
+        D = got["data"]
+        self.assertEqual((got["field"], D["model"]), ("strength", "shell"))
+        self.assertIn("時系列は記録にない", D["single"])
+        self.assertEqual(D["t"], [0.0])
+        self.assertEqual(D["mesh"]["quads"]["shape"], [216, 4])
+        self.assertEqual(D["mesh"]["nodes"]["shape"], [240, 3])
+        self.assertEqual(D["vm"]["shape"], [1, 216])
+        self.assertEqual(D["disp"]["shape"], [1, 240, 3])
+        self.assertEqual(D["part_off"]["shape"], [1, len(D["parts"]), 3])
+        rec = self._rec("ana-0039")
+        pe = next(f["per_element"] for f in rec["fields"] if f.get("surface") == "max")
+        vm = strength.unpack_np(D["vm"])[0] / 10.0
+        self.assertLess(max(abs(a - b) for a, b in zip(vm, pe)), 0.051)
+        self.assertEqual(D["el_max"][0][0], max(pe))
+        self.assertEqual((D["hot"][0]["joint"], D["hot"][0]["member"]), ("RE", "rail_R_BE"))
+        self.assertEqual(len(D["hot"][0]["pos"]), 3)
+        self.assertEqual(len(D["mounts"]), sum(v["kind"] == "reaction" for v in rec["vectors"]))
+        self.assertTrue(D["member_plot"])
+
+    def test_frame_shell_mesh_missing(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = copy_fixture("strength_gap", Path(t))
+            shutil.rmtree(d / "v003" / "meshes")
+            got = build.for_analysis(d, "ana-0039")
+            self.assertIsNone(got["field"])
+            self.assertIn("mesh-0002", got["reason"])
 
 
 def _event(seq, kind, data, v=None):
@@ -299,7 +382,9 @@ class UrlPageTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         root = Path(cls.tmp.name) / "viewer"
         shutil.copytree(VIEWER, root, ignore=shutil.ignore_patterns("data", "src", "__pycache__", "*.py"))
-        for name, fixture, aid in (("fatigue.json", "fatigue", "ana-0001"), ("shell.json", "shell", "ana-0001")):
+        for name, fixture, aid in (("fatigue.json", "fatigue", "ana-0001"), ("shell.json", "shell", "ana-0001"),
+                                   ("step.json", "strength_gap", "ana-0020"), ("path.json", "strength_gap", "ana-0017"),
+                                   ("fshell.json", "strength_gap", "ana-0039")):
             (root / name).write_text(json.dumps(build.for_analysis(FX / fixture, aid)), encoding="utf-8")
         cls.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(_Quiet, directory=str(root)))
         cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
@@ -330,6 +415,15 @@ class UrlPageTest(unittest.TestCase):
         out = self._check("?data=shell.json", "nvh_shell")
         self.assertEqual(out["shown_field"], "nvh")
         self.assertEqual(out["variant"], "nvh_shell")
+
+    def test_step_climb_load_path_frame_shell(self):
+        for q, title, tline in (("step.json", "段差を越える", "K1 の梁"), ("path.json", "荷重の経路", "触れている所"),
+                                ("fshell.json", "記録の 1 時刻", "時系列なし")):
+            with self.subTest(q=q):
+                out = self._check(f"?data={q}", "strength")
+                self.assertEqual(out["shown_field"], "strength")
+                self.assertIn(title, out["title"])
+                self.assertIn(tline, out["tline"])
 
 
 if __name__ == "__main__":
