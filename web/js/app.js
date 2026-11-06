@@ -2037,8 +2037,11 @@ function renderGrid(s) {
   // the pictures kept are copied at once; new ones are drawn once the grid has settled and the
   // page has loaded, one a task (a record loading renders the grid at each event, and a picture
   // costs frames of the software renderer)
+  // (a frame fixed at t, ?t= or a seek as the video's export does: all of them now, so the frame
+  // filmed has its pictures whichever redraw came last)
   clearTimeout(tilePicTimer);
-  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 0)) {
+  tilePicTimer = null;
+  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, ui.frozen ? Infinity : 0)) {
     const step = () => {
       const loaded = document.readyState === "complete";
       tilePicTimer = loaded && board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 1) ? null : setTimeout(step, loaded ? 0 : TILE_PIC_WAIT_MS);
@@ -2531,6 +2534,13 @@ async function seekAndDraw(t) {
   draw();
   await nextFrame();
   draw();
+  // ④'s grid: the frame at t has its tiles' pictures (renderGrid draws new ones on a timer, one a
+  // task, which a frame filmed right after the seek would come before)
+  if (!$("view-grid").hidden) {
+    clearTimeout(tilePicTimer);
+    tilePicTimer = null;
+    board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale);
+  }
   await nextFrame();
   document.documentElement.dataset.t = String(player.playhead);
   return player.playhead;
