@@ -59,7 +59,8 @@ offroad-4w:
   # Each revision answers the reds of the version before it (the shape comes from the requirements' reds):
   # version 1 layout and the hand hold to get in by (stage 0) -> version 2 the opening, shut by the bolted net
   # (stage 0, H7) -> version 3 the vehicle's motion (stage 2, P3) -> version 4 the shells (stage 3) red at R1s, the
-  # rail joints -> version 5: every tile green expected. R7-hand
+  # rail joints, and C1-40kmh red on K2's crash_beam (the towers fold into the occupants' room) -> version 5 (the
+  # rails, gussets and cross members of rev_joints answer both): every tile green expected. R7-hand
   # passes on the tool's value at stage 1 (docs/contract.md 手計算の役目: the grip's bound is loose, the load path is
   # checked by hand, tool_decides, basis path_checked), so no revision thickens the towers for it (the entry
   # rev_controls of the runs up to 4275bfe); R7-foot passes on its bound (safe side).
