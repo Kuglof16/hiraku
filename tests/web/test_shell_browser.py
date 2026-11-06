@@ -192,10 +192,10 @@ class ShellBrowserTest(unittest.TestCase):
         limit = self.events[0]["data"]["load_cases"][0]["criterion"]["limit"]["value"]
         self.assertEqual(got["main"][2], "ana-0004")
         self.assertAlmostEqual(got["main"][1], limit)  # both versions' top: the allowable stress
-        self.assertEqual(got["tags"], ["版 1", "版 2"])
+        self.assertEqual(got["tags"], ["v1", "v2"])
         v1, v2 = (self.shells[v]["results"][0]["value"] for v in (1, 2))
-        self.assertIn(f"版 1 (左): 最大 {sig4(v1)} MPa", got["cmp"])
-        self.assertIn(f"版 2 (右): 最大 {sig4(v2)} MPa", got["cmp"])
+        self.assertIn(f"v1 (左): 最大 {sig4(v1)} MPa", got["cmp"])
+        self.assertIn(f"v2 (右): 最大 {sig4(v2)} MPa", got["cmp"])
         self.assertLess(got["left"][0], got["right"][0])
         self.assertAlmostEqual(got["left"][1], got["right"][1], delta=2)
         # each vehicle on screen (its outline points projected through its view's camera) stays

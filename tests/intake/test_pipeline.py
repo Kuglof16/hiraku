@@ -9,6 +9,7 @@ from unittest import mock
 from hiraku import contract
 from hiraku.intake import IntakeError, events as ev, hearing, load_product
 from hiraku.intake.pipeline import intake, slug_for
+from tests.intake.test_hearing import NEW_DEFAULT_KEYS
 from tests.intake.test_tools import ToolsTestCase, call, make_ctx
 
 
@@ -29,7 +30,12 @@ class PipelineTest(unittest.TestCase):
         req = load_product("serving-robot")
         file_reqs = [r for r in req["requirements"] if r["key"] != "Q63"] + [
             {"key": "Q40", "name": "積載", "value": 40, "unit": "kg", "source": "user", "trust": 1},
-            {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1}]
+            {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1},
+            {"key": "Q58", "name": "最小回転半径の上限", "value": 3, "unit": "m", "source": "user", "trust": 1},
+            {"key": "Q21", "name": "荷台の固定点 1 か所が受けられる力の下限", "value": 8000, "unit": "N", "source": "user", "trust": 1},
+            {"key": "Q59", "name": "荷と荷台のあいだの摩擦の係数", "value": 0.6, "unit": "1", "source": "user", "trust": 1}]
+        file_reqs += [{"key": k, "name": hearing.item(k)["name"], "value": hearing.item(k)["default"]["value"],
+                       "unit": hearing.item(k)["default"]["unit"], "source": "user", "trust": 1} for k in NEW_DEFAULT_KEYS]
         got = intake(req["want"], req["flags"], "walk", product="serving-robot", requirements=file_reqs, from_file=True)
         kinds = [e["kind"] for e in got.events]
         self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 10 + [ev.HEARING_ANSWERED])  # no hearing.asked

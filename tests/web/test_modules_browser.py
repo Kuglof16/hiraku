@@ -214,10 +214,10 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertIn("パッケージ役が 1 つの版にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
-        self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージ役が 3 つの提案を版 2 にまとめた")
+        self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージ役が 3 つの提案を v2 にまとめた")
         self.assertEqual(card.locator(".rc-list li").count(), 3)
         log = page.locator("#log").inner_text()
-        self.assertIn("パッケージ役が 3 つの提案を版 2 にまとめた", log)
+        self.assertIn("パッケージ役が 3 つの提案を v2 にまとめた", log)
         self.assertIn(f"車体の設計役: {shown_name(page, 'cargo_height')}", log)
         # the grid's head names each module's change
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&pets=0&t=1e6")
@@ -287,12 +287,13 @@ class ModulesBrowserTest(unittest.TestCase):
 
     def test_six_designers_in_the_agents_list(self):
         names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in contract.MODULE_DESIGNERS]
-        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6")
+        # (the designers are one bundle 「設計役 ×n」 in the list; ?agents=open opens it)
+        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6&agents=open")
         text = page.locator("#agents").inner_text()
         for n in names:
             self.assertIn(n, text)
         # with the pets (this branch's pet3d.js may or may not have the six): each designer has a pet
-        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6")
+        page = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6&agents=open")
         if page.evaluate("document.documentElement.dataset.agentPets") != "on":
             self.skipTest("no pets on this server")
         for a in contract.MODULE_DESIGNERS:
