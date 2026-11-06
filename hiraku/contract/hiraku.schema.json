@@ -780,7 +780,33 @@
               "tolerance_stack_mm",
               "clearance_hole_mm",
               "position_tolerance_mm",
-              "closing_gap_mm"
+              "closing_gap_mm",
+              "uj_count",
+              "uj_angle_max_deg",
+              "uj_angle_diff_deg",
+              "uj_phase_error_deg",
+              "headrest_height_mm",
+              "headrest_width_mm",
+              "headrest_backset_mm",
+              "headrest_gap_mm",
+              "lashing_count",
+              "topover_count",
+              "lashing_pretension_N",
+              "lashing_angle_deg",
+              "cargo_blocked_forward",
+              "wire_current_A",
+              "wire_rated_current_A",
+              "wire_bundle_count",
+              "wire_fuse_rating_A",
+              "wire_insulation_max_degC",
+              "wire_place_max_degC",
+              "wire_voltage_rating_V",
+              "wire_bend_radius_mm",
+              "wire_outer_diameter_mm",
+              "wire_support_spacing_mm",
+              "wire_penetration_clearance_mm",
+              "wire_control_clearance_mm",
+              "battery_fuse_length_mm"
             ]
           },
           "additionalProperties": {
@@ -797,13 +823,44 @@
                 "minimum": 0
               },
               "unit": {
-                "const": "mm"
+                "enum": [
+                  "mm",
+                  "deg",
+                  "N",
+                  "N*m",
+                  "1",
+                  "%",
+                  "A",
+                  "V",
+                  "degC"
+                ],
+                "description": "Each name has one unit, the one in hiraku.intake.facts.FACTS (the rules check it)."
               },
               "basis": {
                 "type": "string",
                 "minLength": 1,
                 "description": "Where the value comes from: a design variable (e.g. 'variable rollbar_t'), a standard (edition and table, or 'not checked'), or 'assumption'."
               }
+            }
+          }
+        },
+        "rating": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "working_load_N",
+            "basis"
+          ],
+          "description": "The force a bought part is rated to carry in use (a strap's or a lashing point's working load, e.g. EN 12195-2 LC), written by the code that builds the design; the cargo restraint load case (R10) compares the force it gives the part with it.",
+          "properties": {
+            "working_load_N": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "basis": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Where the rating comes from: a standard or a maker's sheet (edition and table, or 'not checked'), or 'assumption'."
             }
           }
         }
@@ -1491,9 +1548,10 @@
             "temperature",
             "mode_shape",
             "damage",
-            "error_estimate"
+            "error_estimate",
+            "node_motion"
           ],
-          "description": "error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
+          "description": "node_motion: where the nodes of a deforming model are over time (e.g. the soft-body crash, C1 B): nodes and members give the model, frames.t_s and frames.positions_mm the positions at each kept moment, frames.broken the members broken by then; unit mm. error_estimate: estimated discretisation error of the stress in each element (per_element, unit %), e.g. Zienkiewicz-Zhu: the energy norm of (recovered smooth stress - element stress) over that of the recovered stress. Shows where the mesh should be finer."
         },
         "label": {
           "type": "string"
@@ -1566,6 +1624,34 @@
           ],
           "description": "For shell stresses: which surface of the wall (max = the larger of top and bottom)."
         },
+        "nodes": {
+          "type": "array",
+          "maxItems": 300,
+          "items": {
+            "type": "string"
+          },
+          "description": "For node_motion: the node ids, in the order of each frame's positions_mm."
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "For node_motion: the members drawn as lines, each [node id, node id, member id]."
+        },
         "frames": {
           "type": "object",
           "additionalProperties": false,
@@ -1609,10 +1695,64 @@
                 "type": "number"
               },
               "description": "The largest value at each moment."
+            },
+            "positions_mm": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/vec3"
+                }
+              },
+              "description": "For node_motion: one list per moment, one position (mm, design coordinates moved with the test) per node in nodes order."
+            },
+            "broken": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "description": "For node_motion: one list per moment, the member ids broken by then."
             }
           }
         }
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "node_motion"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "nodes",
+              "members",
+              "frames"
+            ],
+            "properties": {
+              "frames": {
+                "required": [
+                  "t_s",
+                  "positions_mm"
+                ],
+                "properties": {
+                  "t_s": {
+                    "maxItems": 150
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
       "dependentRequired": {
         "per_element": [
           "mesh_id"
@@ -3040,6 +3180,12 @@
           "items": {
             "$ref": "#/$defs/rule_question"
           }
+        },
+        "tradeoff_questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tradeoff_question"
+          }
         }
       },
       "anyOf": [
@@ -3051,6 +3197,11 @@
         {
           "required": [
             "rule_questions"
+          ]
+        },
+        {
+          "required": [
+            "tradeoff_questions"
           ]
         }
       ]
@@ -3104,6 +3255,33 @@
                 "enum": [
                   "revise_design",
                   "drop_rule"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "tradeoff_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "tradeoff_id",
+              "choice"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tradeoff_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "choice": {
+                "enum": [
+                  "favor_a",
+                  "favor_b",
+                  "keep_both"
                 ]
               },
               "note": {
@@ -5229,6 +5407,42 @@
             "$ref": "#/$defs/rule_question"
           },
           "description": "Rule hits that need the person's decision (change the design or drop the rule); asked with the requirement questions."
+        },
+        "tradeoff_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "tradeoff_id values returned by find_tradeoffs. The numbers in the question come from the code, never from this call."
+        }
+      }
+    },
+    "tool_input.find_tradeoffs": {
+      "description": "Agent-facing MCP tool (受付部, hiraku/intake/tools.py). 感度の記録 (K5) から、1 つの設計の数を動かすと 1 つの結果は良くなり別の結果は悪くなる組を探す。数はコードが記録から入れて返す。人に聞くなら、返った tradeoff_id を ask_user の tradeoff_ids に渡す。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Missing: the latest version with a sensitivity record."
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Design variables to look at. Missing: every variable with a sensitivity record."
+        },
+        "quantities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Result quantities to compare. Missing: every quantity with a sensitivity record."
         }
       }
     },
@@ -5354,6 +5568,90 @@
         "workaround": {
           "type": "string",
           "description": "What the agent did instead, e.g. made a tool in the run, assumed a value."
+        }
+      }
+    },
+    "tradeoff_side": {
+      "description": "One of the two results of a trade-off: its value now and after the step, read from the sensitivity record.",
+      "type": "object",
+      "required": [
+        "name",
+        "unit",
+        "now",
+        "after",
+        "record_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "$ref": "#/$defs/unit"
+        },
+        "now": {
+          "type": "number"
+        },
+        "after": {
+          "type": "number"
+        },
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The sensitivity analysis the two values come from."
+        }
+      }
+    },
+    "tradeoff_question": {
+      "description": "A design variable that makes one result better and another worse: the person chooses which to favour. Every number is written by the code from a sensitivity record (hiraku/intake), never by the model.",
+      "type": "object",
+      "required": [
+        "tradeoff_id",
+        "variable",
+        "step_pct",
+        "text",
+        "a",
+        "b"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tradeoff_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variable": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The design variable moved."
+        },
+        "step_pct": {
+          "type": "number",
+          "description": "How far the variable moves between now and after."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The question in the person's words."
+        },
+        "a": {
+          "$ref": "#/$defs/tradeoff_side",
+          "description": "The result that gets better."
+        },
+        "b": {
+          "$ref": "#/$defs/tradeoff_side",
+          "description": "The result that gets worse."
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "favor_a",
+              "favor_b",
+              "keep_both"
+            ]
+          },
+          "description": "Missing: all three."
         }
       }
     },

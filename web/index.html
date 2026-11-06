@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="css/shelf.css">
 <link rel="stylesheet" href="css/assembly.css">
 <link rel="stylesheet" href="css/joints.css"><!-- joints: -->
+<link rel="stylesheet" href="css/energy_flow.css"><!-- the energy's flow (js/energy_flow.js) -->
+<link rel="stylesheet" href="css/node_motion.css"><!-- node_motion: -->
 <!-- three.js r170 (0.170.0) from jsDelivr; the version is pinned here and nowhere else. -->
 <script type="importmap">
 {
@@ -24,13 +26,12 @@
   <header class="topbar">
     <div class="brand"><span class="wordmark">HIRAKU</span><span class="want" id="want"></span></div>
     <div class="pills">
-      <span class="pill" id="pill-version">版 —</span>
+      <span class="pill" id="pill-version">v—</span>
       <span class="pill" id="pill-cost">費用 —</span>
     </div>
     <div class="mode" id="mode"></div>
-    <!-- the present mode (js/present.js): the 3D on the whole screen and one card -->
+    <!-- the present mode (the 3D made large with #expand-btn, or ?present=1): 詳しく brings the panels back over it -->
     <div class="viewswitch" id="viewswitch">
-      <button data-view="present">見せる</button><button data-view="bench">作業台</button>
       <button class="detail-btn" id="detail-btn" title="記録・予測と照合・hooks を開く">詳しく</button>
     </div>
   </header>
@@ -56,6 +57,8 @@
     <section class="col-center" id="view-bench">
       <div class="tests" id="tests"></div>
       <div class="viewport" id="viewport">
+        <!-- the 3D large (the present mode) and back; Esc too (js/app.js applyPresent) -->
+        <button class="expand-btn" id="expand-btn" type="button" title="大きく見る" aria-label="大きく見る" aria-pressed="false"></button>
         <div class="now" id="now"></div>
         <div class="toggles" id="toggles"></div>
         <div class="legend" id="legend" data-kind="legend"></div>

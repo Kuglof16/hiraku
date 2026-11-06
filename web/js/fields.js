@@ -6,8 +6,11 @@
 
 // error_estimate: the estimated discretisation error of the stress per element (%), coloured from 0
 // like a stress, showing where the mesh should be finer.
-export const FIELD_ORDER = ["stress", "damage", "temperature", "mode_shape", "displacement", "error_estimate"];
-export const FIELD_JA = { stress: "応力", damage: "疲労度", temperature: "温度", mode_shape: "モードの形", displacement: "変位", error_estimate: "誤差の目安" };
+// node_motion: the nodes' positions over time (js/node_motion.js draws it); not a colour field, so
+// fieldsOf leaves it out (no contour, no legend, no button among the fields).
+export const FIELD_ORDER = ["stress", "damage", "temperature", "mode_shape", "displacement", "error_estimate", "node_motion"];
+export const FIELD_JA = { stress: "応力", damage: "疲労度", temperature: "温度", mode_shape: "モードの形", displacement: "変位", error_estimate: "誤差の目安", node_motion: "節の動き" };
+const NOT_COLOURED = ["node_motion"];
 // A shell's surfaces. The contract lists mesh elements counter-clockwise seen from the
 // outer side, so the element normal points out and "top" is the outer face.
 export const SURFACE_JA = { top: "外面", mid: "中面", bottom: "内面", max: "外面と内面の大きい方" };
@@ -25,7 +28,7 @@ function vectors(obj) {
 export function fieldsOf(analysis, { mesh = true } = {}) {
   if (!analysis || analysis.status !== "ok") return [];
   return (analysis.fields ?? [])
-    .filter((f) => FIELD_ORDER.includes(f.kind) && (mesh || !f.mesh_id))
+    .filter((f) => FIELD_ORDER.includes(f.kind) && !NOT_COLOURED.includes(f.kind) && (mesh || !f.mesh_id))
     .sort((a, b) => FIELD_ORDER.indexOf(a.kind) - FIELD_ORDER.indexOf(b.kind));
 }
 

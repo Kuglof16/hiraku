@@ -1,0 +1,28 @@
+/* node_motion: the tag of the nodes' motion on the 3D (js/node_motion.js NodeMotionView), at the
+   3D's lower right where the colour legend sits (placed above it when both show). No buttons: the
+   picture follows the replay's time only. */
+.nm-tag {
+  position: absolute;
+  right: 14px;
+  bottom: 76px;
+  z-index: 5;
+  background: rgba(251, 249, 244, 0.93);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 7px 12px 8px;
+  font-size: 15px;
+  line-height: 1.45;
+  max-width: 320px;
+  pointer-events: none;
+}
+.nm-tag[hidden] { display: none; }
+.nm-tag .nm-t { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nm-tag .nm-key {
+  display: inline-block;
+  width: 24px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-top: 2px dashed #8a857b; /* node_motion.js BROKEN_COLOR */
+}
+.nm-tag small { color: var(--muted, #6b665c); font-size: 13px; }
+body.video .nm-tag { bottom: 12px; }

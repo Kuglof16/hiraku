@@ -203,7 +203,7 @@
       { "key": "tilt", "q": "傾斜台", "sub": "上の輪が浮く角度", "unit": "°",
         "claude": [39, 38, 39],
         "hand": [{ "v": 39.85, "dp": 2 }],
-        "cae": { "v": 38.27, "dp": 2, "by": "K2" }, "tol_pct": 10 },
+        "cae": { "v": 38.26, "dp": 2, "by": "K2" }, "tol_pct": 10 },
       { "key": "stress", "q": "段差 100 mm", "sub": "フレームの最大応力", "unit": "MPa",
         "claude": [60],
         "hand": [{ "v": 40.0, "dp": 1, "note": "単純はり" }, { "v": 77.09, "dp": 2, "note": "つなぎ目、安全側" }],
@@ -268,7 +268,7 @@
     </div>`).join(""));
 
   document.querySelector(".src").innerHTML = [
-    `ツールなしの Claude (Opus 5.5、Claude Code の claude -p、ツールなし) に 2026-11-03 に聞いた答え。HIRAKU の値は動画用の運転の版 1`,
+    `ツールなしの Claude (Opus 5.5、Claude Code の claude -p、ツールなし) に 2026-11-03 に聞いた答え。HIRAKU の値は台本の運転 (Claude なし) の版 1`,
     `差 = (解析 − Claude の答え) ÷ Claude の答え。HIRAKU が予測と解析の照合で許す幅 (上から ${DATA.rows.map((r) => r.tol_pct + " %").join("・")}) に入れば ✓`,
   ].map((s) => `<li>${s}</li>`).join("");
 
