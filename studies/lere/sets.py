@@ -70,6 +70,11 @@ SETS = {
     "D33c45": _s({**B33, **C45}, "B33 + C45"),
     "D50h60": _s({**B50, **CH60F}, "B50 + Ch60f"),
     "D33h60": _s({**B33, **CH60F}, "B33 + Ch60f"),
+    # rail_b 45 (the bracket sets' b90 width): the rear lca brackets' welded length on the rail's bottom wall is
+    # about rail_b, so R9 plate / weld depend on it (b90 at rail_b 45: 0.81 / 0.63; A at rail_b 40: 1.00 / 0.80)
+    "Ar45": _s({"rail_b": 45}, "the base with rails 45 mm wide"),
+    "B50r45": _s({**B50, "rail_b": 45}, "B50 with rails 45 mm wide"),
+    "D50c45r45": _s({**B50, **C45, "rail_b": 45}, "D50c45 with rails 45 mm wide"),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
              "N1 upper bound: B50 + C45 + S2g0 (stays 48.6 x 3.2, gussets off) + roll bar 48.6 x 3.2"),
 }
