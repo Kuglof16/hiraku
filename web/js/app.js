@@ -255,8 +255,9 @@ function softwareGL() {
 const quality = qualityFromParams(params, softwareGL()); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
 // sky: the real look shows the sky with its horizon behind the vehicle (look.js Look.sky)
 const bench = new Workbench3D(viewport, look, { quality, sky: true });
-// ?words=1: every arrow's words as before (not only where chosen); the present mode does the same
-const WORDS_ALL = params.get("words") === "1";
+// ?words=1: every arrow's words as before (not only where chosen); the present mode does the same,
+// and so does ?video=1 (the filmed frames keep their arrows' words, present=0 included)
+const WORDS_ALL = params.get("words") === "1" || params.get("video") === "1";
 bench.autoWords = WORDS_ALL || params.get("present") === "1";
 const modLayer = new ModuleLayer(bench); // modules:
 const grip = new GripView(bench, viewport); // grip:
