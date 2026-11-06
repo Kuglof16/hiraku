@@ -1,0 +1,41 @@
+/* The energy's flow (js/energy_flow.js): its legend where the contour's would be (the contour
+   is off while it is shown), and the loss tags on the 3D (laid out outside the vehicle). */
+.heat-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 76px;
+  z-index: 5;
+  width: 268px;
+  max-height: calc(100% - 140px);
+  overflow: auto;
+  background: rgba(251, 249, 244, 0.94);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px 8px;
+  font-size: 13px;
+}
+.heat-legend[hidden] { display: none; }
+body.video .heat-legend { bottom: 12px; max-height: calc(100% - 70px); }
+/* the video layout (?video=1): no buttons over the flow (the toggles; the replay bar is gone already) */
+body.video .viewport.heat-on > .toggles { display: none; }
+.heat-legend .hl-ttl { font-weight: 600; font-size: 15px; }
+.heat-legend .hl-ttl small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.heat-legend .hl-time { font-variant-numeric: tabular-nums; margin: 2px 0 6px; }
+.heat-legend .hl-keys { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.heat-legend .hl-keys span { white-space: nowrap; }
+.heat-legend .hl-ln { display: inline-block; width: 18px; height: 5px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+.heat-legend .hl-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.heat-legend .hl-row { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; margin-top: 5px; }
+.heat-legend .hl-nm { white-space: nowrap; }
+.heat-legend .hl-sw { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--ink); border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.heat-legend .hl-v { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.heat-legend .hl-v.over { color: var(--red); }
+.heat-legend .hl-bar { grid-column: 1 / -1; position: relative; height: 10px; border: 1px solid var(--ink); border-radius: 2px; margin-top: 3px; }
+.heat-legend .hl-limline { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); }
+.heat-legend .hl-now { position: absolute; top: -5px; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--ink); }
+.heat-legend .hl-lim { grid-column: 1 / -1; font-size: 12px; color: var(--muted); white-space: nowrap; margin-top: 2px; }
+.heat-legend .hl-lim small { margin-left: 6px; }
+.heat-legend .hl-notes { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+/* a loss tag: its border in the heat colour (not the verdict's red) */
+.lbl-heat { border: 1.5px solid #ff5a1f; font-weight: 600; }
+.lbl-heat small { color: #8f2f0c; font-weight: 700; }

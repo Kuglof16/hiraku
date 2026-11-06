@@ -558,7 +558,10 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/launch/knowledge":
                 self._send_json(self.launcher.knowledge(body.get("run_id"), body.get("name"), body.get("text")))
             else:
-                self._send_json(self.launcher.start(body.get("requirements"), body.get("mode"), body.get("request")))
+                # the child is started and the answer comes at once (202, run_id still None); the
+                # screen follows GET /api/launch's "launch" until the child prints its folder
+                info = self.launcher.begin(body.get("requirements"), body.get("mode"), body.get("request"))
+                self._send_json(self.launcher.shown(info), HTTPStatus.ACCEPTED)
         except LaunchError as e:
             self._send_json({"error": str(e), **e.extra}, HTTPStatus(e.status))
 
