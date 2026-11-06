@@ -27,6 +27,7 @@ from hiraku.catalog import applies, read_data
 from hiraku.contract import layout
 from hiraku.contract.loading import LOADING_JA
 from hiraku.contract.protocols import LOADINGS
+from hiraku.intake import tradeoff
 from hiraku.intake.domains import IntakeError, normalize_flags
 
 Record = dict[str, Any]
@@ -405,22 +406,29 @@ def save_answer(run_path: Path, body: Record) -> Path:
         body["use_defaults"] = body.pop("useDefaults")
     if "ruleAnswers" in body:
         body["rule_answers"] = body.pop("ruleAnswers")
-    unknown = [k for k in body if k not in ("answers", "note", "use_defaults", "rule_answers")]
+    if "tradeoffAnswers" in body:
+        body["tradeoff_answers"] = body.pop("tradeoffAnswers")
+    unknown = [k for k in body if k not in ("answers", "note", "use_defaults", "rule_answers", "tradeoff_answers")]
     if unknown:
-        raise IntakeError(f"答えに {', '.join(unknown)} は使えません (answers・note・use_defaults・rule_answers だけ)")
+        raise IntakeError(f"答えに {', '.join(unknown)} は使えません (answers・note・use_defaults・rule_answers・tradeoff_answers だけ)")
     answers = body.get("answers", {})
     if not isinstance(answers, dict):
         raise IntakeError("answers は {要件の番号: 値} の形で渡してください")
     for key, answer in answers.items():
         _answer_requirement(item(key), answer)  # the same checks as when it is applied
-    asked = None
+    asked = asked_tradeoffs = None
     request = Path(run_path) / REQUEST_FILE
     if request.exists():  # the questions this answer is for: a rule answer must be to one of them
-        asked = json.loads(request.read_text(encoding="utf-8")).get("rule_questions") or []
+        asked_all = json.loads(request.read_text(encoding="utf-8"))
+        asked = asked_all.get("rule_questions") or []
+        asked_tradeoffs = asked_all.get("tradeoff_questions") or []
     rule_answers = check_rule_answers(body.get("rule_answers"), asked)
+    tradeoff_answers = tradeoff.check_answers(body.get("tradeoff_answers"), asked_tradeoffs)
     clean = {"answers": answers, "note": str(body.get("note") or ""), "use_defaults": bool(body.get("use_defaults", True))}
     if rule_answers:
         clean["rule_answers"] = rule_answers
+    if tradeoff_answers:
+        clean["tradeoff_answers"] = tradeoff_answers
     path = Path(run_path) / ANSWER_FILE
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(clean, ensure_ascii=False), encoding="utf-8")
@@ -469,6 +477,11 @@ def hearing_text(prepared: Prepared) -> str:
     for r in prepared.answered["answers"]:
         by[r["source"]] += 1
     rules = prepared.asked.get("rule_questions") or []
+    trades = prepared.asked.get("tradeoff_questions") or []
+    if trades and not prepared.asked["questions"] and not rules:  # only trade-offs were asked
+        got = {a["tradeoff_id"]: a["choice"] for a in prepared.answered.get("tradeoff_answers", [])}
+        return (f"両立しにくい 2 つの優先の相談 {len(trades)} 件、答え {len(got)} 件"
+                + (f"、答えが無いまま {len(trades) - len(got)} 件 (人がまだ決めていない)" if len(got) < len(trades) else ""))
     if rules and not prepared.asked["questions"]:  # only rule hits were asked
         got = {a["rule_id"]: a["choice"] for a in prepared.answered.get("rule_answers", [])}
         dropped = [r for r, c in got.items() if c == "drop_rule"]
@@ -479,4 +492,6 @@ def hearing_text(prepared: Prepared) -> str:
         return "要件のファイルのまま進みます" + (f" (既定値で足した {by['default']} 件: {keys})" if by["default"] else "")
     left = f"、答えが無いまま {len(prepared.unresolved)} 件 (聞いたが、答えも標準の値も無く、要件に入っていない)" if prepared.unresolved else ""
     more = (f"。当たった規則の相談 {len(rules)} 件、答え {len(prepared.answered.get('rule_answers', []))} 件") if rules else ""
+    if trades:
+        more += f"。優先の相談 {len(trades)} 件、答え {len(prepared.answered.get('tradeoff_answers', []))} 件"
     return f"質問 {len(prepared.asked['questions'])} 件、答え {by['hearing']} 件、既定値 {by['default']} 件{left}{more}"

@@ -80,14 +80,46 @@ class EstimateTest(unittest.TestCase):
             self.assertEqual(cost.estimates(tmp)["default"]["usd"], round(4 * PER_CALL, 2))
 
     def test_the_calibration_run_counts(self):
-        """The calibration run's 5 calls were cae.strength's (its events), so its default estimate is its cost."""
-        events = [{"kind": k, "agent": "cae.strength", "data": {f: f"{f}-{i}"}}
-                  for i, (k, f) in enumerate([("prediction.recorded", "prediction_id")] * 2
-                                             + [("analysis.started", "analysis_id")]
-                                             + [("comparison.recorded", "comparison_id")] * 2)]
+        """The calibration run is kept in showcase/: its record calls are CALIBRATION_CALLS, so its default
+        estimate (every role on Opus 5.5, as in its transcript) is its measured cost."""
+        run = Path(__file__).resolve().parents[2] / "showcase" / cost.CALIBRATION_RUN
+        self.assertEqual(cost.record_calls(run), cost.CALIBRATION_CALLS)
+        self.assertAlmostEqual(cost.estimate_mix(run, "default")["usd"], cost.CALIBRATION_USD)
+
+
+class TranscriptTest(unittest.TestCase):
+    """transcript_tokens / transcript_usd on a made-up Claude Code session: a message written on two lines
+    (one per content block, the same usage) counts once; a subagent's transcript beside it counts too."""
+
+    @staticmethod
+    def line(mid, model, out, read=0, write=0, write_1h=0):
+        return json.dumps({"type": "assistant", "message": {
+            "id": mid, "model": model, "usage": {
+                "input_tokens": 1, "output_tokens": out, "cache_read_input_tokens": read,
+                "cache_creation_input_tokens": write, "cache_creation": {"ephemeral_1h_input_tokens": write_1h}}}})
+
+    def test_counts_each_message_once(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run_folder(tmp, events)
-            self.assertAlmostEqual(cost.estimate_mix(tmp, "default")["usd"], cost.CALIBRATION_USD)
+            main = Path(tmp) / "sess.jsonl"
+            m1 = self.line("msg_1", "claude-opus-5-5", 100, read=1_000_000, write=10_000, write_1h=2_000)
+            main.write_text("\n".join([m1, m1, json.dumps({"type": "user", "message": {"content": "x"}}), "not json"]),
+                            encoding="utf-8")
+            (Path(tmp) / "sess" / "subagents").mkdir(parents=True)
+            (Path(tmp) / "sess" / "subagents" / "agent-a.jsonl").write_text(
+                self.line("msg_2", "claude-opus-5-5", 50), encoding="utf-8")
+            t = cost.transcript_tokens(main)
+            self.assertEqual(t, {"claude-opus-5-5": {"input": 2, "output": 150, "cache_read": 1_000_000,
+                                                     "cache_write": 10_000, "cache_write_1h": 2_000, "messages": 2}})
+            p = cost.PRICES["claude-opus-5-5"]
+            want = (2 * p["input"] + 150 * p["output"] + 1_000_000 * p["cache_read"] + 10_000 * p["cache_write"]) / 1e6
+            self.assertAlmostEqual(cost.transcript_usd(main), want)
+
+    def test_a_model_without_a_price_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp) / "sess.jsonl"
+            main.write_text(self.line("msg_1", "some-other-model", 1), encoding="utf-8")
+            with self.assertRaises(KeyError):
+                cost.transcript_usd(main)
 
 
 class DemoRunEstimatesTest(unittest.TestCase):

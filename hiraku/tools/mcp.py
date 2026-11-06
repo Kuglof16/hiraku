@@ -22,6 +22,7 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 from hiraku import contract
 from hiraku.contract import layout
 from hiraku.intake.tools import TOOLS as INTAKE_TOOLS
+from hiraku.tools import tradeoff_data  # noqa: F401 (registers find_tradeoffs' collector with hiraku.intake.tradeoff)
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RECORD_KINDS, RUN_TOOLS, rule_check

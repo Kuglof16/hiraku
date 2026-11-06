@@ -1,0 +1,87 @@
+{
+  "id": "a6061_t6",
+  "name": "Aluminium alloy 6061-T6",
+  "name_ja": "アルミニウム合金 6061-T6",
+  "category": "aluminium",
+  "standard": "Aluminum Association alloy 6061, temper T6 (specification minima of ASTM B209/B221 not read)",
+  "condition": "temper T6, room temperature (68-77 degF where stated); typical values of the Aluminum Association quoted by a supplier's datasheet, which marks them as not for design; elongation for 1.6 mm (1/16 in.) thickness",
+  "properties": {
+    "E_MPa": {
+      "value": 68900.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651' (PDF on aerospacemetals.com, no edition or date), mechanical properties: modulus of elasticity 68.9 GPa, AA typical, average of tension and compression",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "nu": {
+      "value": 0.33,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', mechanical properties: Poisson's ratio 0.33, stated as estimated from trends in similar Al alloys",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "density_kg_m3": {
+      "value": 2700.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', physical properties: density 2.7 g/cc, AA typical",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "yield_MPa": {
+      "value": 276.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', mechanical properties: tensile yield strength 276 MPa, AA typical (not a guaranteed minimum)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "tensile_MPa": {
+      "value": 310.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', mechanical properties: ultimate tensile strength 310 MPa, AA typical",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "elongation_pct": {
+      "value": 12.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', mechanical properties: elongation at break 12 % for 1/16 in. (1.6 mm) thickness, AA typical (17 % for 1/2 in. diameter)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "fatigue_limit_MPa": {
+      "value": 96.5,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', mechanical properties: fatigue strength 96.5 MPa at 500,000,000 cycles, completely reversed stress, RR Moore machine/specimen (AA)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "thermal_conductivity_W_mK": {
+      "value": 167.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', thermal properties: thermal conductivity 167 W/m-K at 77 degF, AA typical",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "specific_heat_J_kgK": {
+      "value": 896.0,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', thermal properties: specific heat capacity 0.896 J/g-degC (no note on the row); 896 J/(kg K) is the unit conversion",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "thermal_expansion_per_K": {
+      "value": 2.36e-05,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', thermal properties: CTE linear 23.6 um/m-degC, AA typical, average over 68-212 degF",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "resistivity_ohm_m": {
+      "value": 3.99e-08,
+      "kind": "typical",
+      "source": "secondary: ASM Aerospace Specification Metals datasheet 'Aluminum 6061-T6; 6061-T651', electrical properties: electrical resistivity 3.99e-006 ohm-cm at 68 degF, AA typical; 3.99e-08 ohm m is the unit conversion",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

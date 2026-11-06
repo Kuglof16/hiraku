@@ -22,7 +22,7 @@ from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
 from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
-from hiraku.intake import facts, hearing, knowledge, rulecheck
+from hiraku.intake import facts, hearing, knowledge, rulecheck, tradeoff
 from hiraku.intake.domains import IntakeError, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
 from hiraku.intake.products import ANSWERS_SUFFIX, PRODUCTS_DIR, load_product, product_files
@@ -171,6 +171,8 @@ def dropped_rules(ctx: Any) -> dict[str, str]:
 def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     rule_questions = _rule_questions(ctx, args.get("rule_hits"))
     rule_answers: list[Record] = []
+    tradeoff_questions = _tradeoff_questions(ctx, args.get("tradeoff_ids"))
+    tradeoff_answers: list[Record] = []
     answers: dict[str, Any] = dict(args.get("answers") or {})
     note = args.get("note")
     if args.get("answers_file"):
@@ -189,9 +191,9 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if wait > 0 and not answers and run_path is not None:
         # wait for a person: show the questions now (A2), then take what the screen writes into the run folder
         plan = hearing.plan_hearing(req, product_defaults=defaults, wording=wording, choices=choices)
-        if plan.questions or rule_questions:
+        if plan.questions or rule_questions or tradeoff_questions:
             hearing.clear_mailbox(run_path)
-            asked = {"questions": plan.questions, "rule_questions": rule_questions}
+            asked = {"questions": plan.questions, "rule_questions": rule_questions, "tradeoff_questions": tradeoff_questions}
             problem, repeated = _emit_changed(ctx, ev.asked_event(asked))
             if problem:
                 problems.append(problem)
@@ -204,6 +206,7 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
                 got_answers = answers
                 note = note or got.get("note")
                 rule_answers = hearing.check_rule_answers(got.get("rule_answers"), rule_questions)
+                tradeoff_answers = tradeoff.check_answers(got.get("tradeoff_answers"), tradeoff_questions)
     from_screen = bool(got_answers)
     try:
         prepared = hearing.prepare(req, answers, note, product_defaults=defaults, wording=wording, choices=choices,
@@ -213,13 +216,18 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
             raise
         # the screen's answer was refused here: keep the question open (A2 still asks) and say what to do, instead of
         # closing the hearing with no answers
-        hearing.write_request(run_path, {k: v for k, v in {"questions": plan.questions, "rule_questions": rule_questions}.items() if v})
+        hearing.write_request(run_path, {k: v for k, v in {"questions": plan.questions, "rule_questions": rule_questions,
+                                                           "tradeoff_questions": tradeoff_questions}.items() if v})
         return {"recorded": False, "answers": [], "ready": False, "refused": str(e),
                 "next": f"画面の答えを受け付けられませんでした ({e})。聞き取りは開いたままです。もう一度 wait_seconds をつけて呼ぶと、答え直しを待ちます"}
     if rule_questions:
         prepared.asked["rule_questions"] = rule_questions
     if rule_answers:
         prepared.answered["rule_answers"] = rule_answers
+    if tradeoff_questions:
+        prepared.asked["tradeoff_questions"] = tradeoff_questions
+    if tradeoff_answers:
+        prepared.answered["tradeoff_answers"] = tradeoff_answers
     to_emit = [e for e in ev.hearing_events(prepared) if not (asked_early and e["kind"] == ev.HEARING_ASKED)]
     unchanged = []
     for e in to_emit:  # the same questions, or the same (empty) answers, are not recorded again
@@ -258,6 +266,13 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
             out["rules_dropped"] = dropped  # rule_check leaves them out of this run from now on
         if revise:
             out["rules_to_revise"] = revise  # the designer changes the design for these
+    if tradeoff_questions:
+        out["tradeoff_questions"] = tradeoff_questions
+        out["tradeoff_answers"] = tradeoff_answers
+        waiting = [q["tradeoff_id"] for q in tradeoff_questions if q["tradeoff_id"] not in {a["tradeoff_id"] for a in tradeoff_answers}]
+        if waiting:
+            out["tradeoffs_waiting"] = waiting
+        out["tradeoff_choices"] = {a["tradeoff_id"]: a["choice"] for a in tradeoff_answers}  # the designer is told these
     if prepared.ignored:
         out["ignored"] = prepared.ignored  # answers to keys the requirements file already has
     if unchanged:
@@ -270,6 +285,52 @@ def ask_user_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         keys = "・".join(q["req_key"] for q in prepared.asked["questions"] if q["ask"] == "must" and q["req_key"] in prepared.unresolved)
         out["next"] = (f"必須の質問 {keys} に答えがありません。人に聞いて、言われたことだけを answers に入れてもう一度呼んでください "
                        "(推測で埋めない)")
+    return out
+
+
+# ------------------------------------------------------------------------------------ find_tradeoffs
+
+
+# The trade-offs find_tradeoffs returned for a run: ask_user takes their ids and writes the question from these records,
+# so the numbers in a question are never the model's.
+_tradeoffs: "weakref.WeakKeyDictionary[Any, dict[str, Record]]" = weakref.WeakKeyDictionary()
+_PATH_ROOTS = ("variables.", "sections.", "materials.", "parts.", "supports.")
+_MAX_VARIABLES = 8  # K5 runs the tool twice for each number and each load case
+
+
+def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
+    if args.get("design_version") not in (None, ctx.version):
+        raise ToolError(f"感度は今の版 {ctx.version} でだけ出せます (版 {args['design_version']} は指定できません)")
+    if tradeoff.collector is None:
+        raise ToolError("この実行には、感度を集めるしくみ (hiraku.tools 側の collector) がまだ登録されていません")
+    design = _store(ctx).design()
+    names = list(args.get("variables") or [f"variables.{k}" for k in (design.get("variables") or {})])
+    paths = [p if p.startswith(_PATH_ROOTS) else f"variables.{p}" for p in names][:_MAX_VARIABLES]
+    if not paths:
+        raise ToolError("動かす設計の数がありません。variables に設計の変数の名前 (または variables.<名前> などの道) を渡してください")
+    got = tradeoff.collector(ctx, paths, set(args.get("quantities") or []))
+    sens, meta, bases = got["sens"], got["meta"], got["bases"]
+    pairs = [p for p in tradeoff.find(sens, meta, bases) if all(k in p[s] for s in "ab" for k in ("now", "after"))]
+    questions = [tradeoff.to_question(p) for p in pairs]
+    store = _tradeoffs.setdefault(_store(ctx), {})
+    for q in questions:
+        store[q["tradeoff_id"]] = q
+    out: Record = {"tradeoffs": questions, "looked_at": {"variables": paths, "quantities": sorted(sens)}}
+    if got.get("skipped"):
+        out["skipped"] = got["skipped"]
+    out["next"] = ("人に優先を聞くなら、返った tradeoff_id を ask_user の tradeoff_ids に渡す (数は書かない)" if questions
+                   else "両立しにくい組は見つかりませんでした (聞くことはありません)")
+    return out
+
+
+def _tradeoff_questions(ctx: Any, ids: Any) -> list[Record]:
+    """The questions for the ids ask_user was given: the ones find_tradeoffs returned in this run."""
+    have = _tradeoffs.get(_store(ctx), {})
+    out = []
+    for i in ids or []:
+        if i not in have:
+            raise IntakeError(f"トレードオフ {i} は find_tradeoffs が返していません。返ったもの: {', '.join(have) or 'なし'}")
+        out.append(have[i])
     return out
 
 
@@ -478,6 +539,17 @@ TOOLS: dict[str, Record] = {
         ),
         "input_schema": contract_input("ask_user"),
         "function": ask_user_tool,
+    },
+    "find_tradeoffs": {
+        "description": (
+            "設計の数を動かすと、1 つの結果は良くなり別の結果は悪くなる組 (両立しにくい 2 つ) を、感度 (K5、解析を動かして測る) から探す。"
+            "数 (今の値・動かした後の値・10 % 動かしたときの変化) はコードが計算する。あなたは数を書かない。見つかった組を人に聞くなら、"
+            "返った tradeoff_id を ask_user の tradeoff_ids に渡す。人の答え (favor_a=良くなる方を優先 / favor_b=悪くなる方を悪くしない / "
+            "keep_both=どちらも守る) は設計役への指示に入れる。variables は動かす設計の数 (設計の変数の名前か、variables.<名前> などの道)、"
+            "quantities は比べる結果の名前。解析を何回も回すので、変数は絞る (最大 8)。"
+        ),
+        "input_schema": contract_input("find_tradeoffs"),
+        "function": find_tradeoffs_tool,
     },
     "import_knowledge": {
         "description": (

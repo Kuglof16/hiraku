@@ -262,6 +262,18 @@ def reader_name(src: Any) -> str:
     return f"{getattr(src, '__module__', '').rsplit('.', 1)[-1]}.{getattr(src, '__name__', repr(src))}"
 
 
+def upstream_analyses(ctx: RunContext, load_case: Record) -> dict[str, Record]:
+    """{load case id: its newest matched analysis of this version, whole (series included)} for the load cases that
+    feed this one (ctx.upstream_of), the analyses analyze hands a tool as its upstream."""
+    out: dict[str, Record] = {}
+    whole = getattr(ctx.store, "get_whole", None)
+    for lc in ctx.upstream_of(load_case["load_case_id"]):
+        a = _trusted_analysis(ctx, lc["load_case_id"])
+        if a is not None:
+            out[lc["load_case_id"]] = (whole("analysis", a["analysis_id"]) if whole else None) or a
+    return out
+
+
 def given_inputs(ctx: RunContext, spec: Record, load_case: Record) -> Record | None:
     """What a prediction's inputs_from reads off the current version's design for this load case
     (None when the prediction has none). Raises ReaderError when the reader does not apply."""
@@ -269,6 +281,9 @@ def given_inputs(ctx: RunContext, spec: Record, load_case: Record) -> Record | N
     if not src:
         return None
     reader = _reader(src) if isinstance(src, str) else src
+    up = upstream_analyses(ctx, load_case)
+    if up:  # R9's reader reads the mount forces of the analyses that feed it (load_case["upstream_analyses"])
+        load_case = dict(load_case, upstream_analyses=up)
     try:
         return reader(ctx.store.design(), load_case)
     except (KeyError, ValueError, TypeError) as e:

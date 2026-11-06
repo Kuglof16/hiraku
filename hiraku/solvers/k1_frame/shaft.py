@@ -38,8 +38,8 @@ def tube(D: float, t: float) -> dict[str, float]:
     return {"A": math.pi / 4.0 * (D ** 2 - d ** 2), "I": math.pi / 64.0 * (D ** 4 - d ** 4), "J": math.pi / 32.0 * (D ** 4 - d ** 4)}
 
 
-def bending_frequencies(L_mm: float, D_mm: float, t_mm: float, E_MPa: float, rho: float, n: int = N_ELEMENTS) -> np.ndarray:
-    """Bending frequencies (Hz) of a tube pinned at both ends, from n beam elements."""
+def _bending_system(L_mm: float, D_mm: float, t_mm: float, E_MPa: float, rho: float, n: int):
+    """(K, M, keep): beam elements of a tube pinned at both ends; keep = the free degrees of freedom."""
     sec = tube(D_mm, t_mm)
     EI = E_MPa * 1e6 * sec["I"] * 1e-12  # N m^2
     mu = rho * sec["A"] * 1e-6  # kg/m
@@ -55,13 +55,19 @@ def bending_frequencies(L_mm: float, D_mm: float, t_mm: float, E_MPa: float, rho
         K[i, i] += k
         M[i, i] += m
     keep = [i for i in range(size) if i not in (0, 2 * n)]  # no sideways motion at the two joints
+    return K, M, keep
+
+
+def bending_frequencies(L_mm: float, D_mm: float, t_mm: float, E_MPa: float, rho: float, n: int = N_ELEMENTS) -> np.ndarray:
+    """Bending frequencies (Hz) of a tube pinned at both ends, from n beam elements."""
+    K, M, keep = _bending_system(L_mm, D_mm, t_mm, E_MPa, rho, n)
     w2 = eigh(K[np.ix_(keep, keep)], M[np.ix_(keep, keep)], eigvals_only=True)
     return np.sqrt(np.clip(w2, 0.0, None)) / (2.0 * math.pi)
 
 
-def torsion_frequencies(L_mm: float, D_mm: float, t_mm: float, G_MPa: float, rho: float, J_in: float, J_out: float,
-                        n: int = N_ELEMENTS) -> np.ndarray:
-    """Torsion frequencies (Hz) of a tube between two discs (kg*m^2), free to turn; the first is the free turning (0)."""
+def _torsion_system(L_mm: float, D_mm: float, t_mm: float, G_MPa: float, rho: float, J_in: float, J_out: float,
+                    n: int):
+    """(K, M): torsion elements of a tube between two discs (kg*m^2), node 0 at J_in."""
     sec = tube(D_mm, t_mm)
     GJ = G_MPa * 1e6 * sec["J"] * 1e-12  # N m^2
     rJ = rho * sec["J"] * 1e-12  # kg m (polar inertia per length)
@@ -73,6 +79,13 @@ def torsion_frequencies(L_mm: float, D_mm: float, t_mm: float, G_MPa: float, rho
         M[i, i] += rJ * le / 6.0 * np.array([[2, 1], [1, 2]])
     M[0, 0] += J_in
     M[n, n] += J_out
+    return K, M
+
+
+def torsion_frequencies(L_mm: float, D_mm: float, t_mm: float, G_MPa: float, rho: float, J_in: float, J_out: float,
+                        n: int = N_ELEMENTS) -> np.ndarray:
+    """Torsion frequencies (Hz) of a tube between two discs (kg*m^2), free to turn; the first is the free turning (0)."""
+    K, M = _torsion_system(L_mm, D_mm, t_mm, G_MPa, rho, J_in, J_out, n)
     w2 = eigh(K, M, eigvals_only=True)
     return np.sqrt(np.clip(w2, 0.0, None)) / (2.0 * math.pi)
 
@@ -112,6 +125,59 @@ def shaft_inputs(design: dict) -> dict[str, dict[str, float]]:
         out[p["id"]] = {"L": float(np.linalg.norm(c.b - c.a)), "D": vals["driveshaft_diameter"], "t": vals["driveshaft_wall"],
                         "E": float(mat["E_MPa"]), "nu": float(mat["nu"]), "rho": float(mat["density_kg_m3"]),
                         "J_in": j_in, "J_out": vals["wheel_inertia"]}
+    return out
+
+
+def _unit_shape(u: np.ndarray) -> np.ndarray:
+    """A shape over its largest value, the largest positive."""
+    k = int(np.argmax(np.abs(u)))
+    return u / u[k] if u[k] != 0 else u
+
+
+def bending_shape(L_mm: float, D_mm: float, t_mm: float, E_MPa: float, rho: float, n: int = N_ELEMENTS) -> np.ndarray:
+    """Sideways displacement at the n + 1 element nodes (joint to joint) of the first bending mode of
+    bending_frequencies' model, over its largest."""
+    K, M, keep = _bending_system(L_mm, D_mm, t_mm, E_MPa, rho, n)
+    _, vec = eigh(K[np.ix_(keep, keep)], M[np.ix_(keep, keep)], subset_by_index=[0, 0])
+    full = np.zeros(K.shape[0])
+    full[keep] = vec[:, 0]
+    return _unit_shape(full[0::2])
+
+
+def torsion_shape(L_mm: float, D_mm: float, t_mm: float, G_MPa: float, rho: float, J_in: float, J_out: float,
+                  n: int = N_ELEMENTS) -> np.ndarray:
+    """Twist at the n + 1 element nodes (node 0 at the inner disc J_in) of the first torsion mode above the free
+    turning of torsion_frequencies' model, over its largest."""
+    K, M = _torsion_system(L_mm, D_mm, t_mm, G_MPa, rho, J_in, J_out, n)
+    _, vec = eigh(K, M, subset_by_index=[1, 1])
+    return _unit_shape(vec[:, 0])
+
+
+def shaft_ends(design: dict, pid: str) -> tuple[np.ndarray, np.ndarray]:
+    """(inner joint, outer joint) in mm: the ends of the axis of the part's box; the outer is the end nearer the
+    point (at_mm) where the part's first connects_to link with a point meets the wheel, or without one the end
+    farther from the centre plane y = 0."""
+    from ..k4_geometry.capsule import from_obb
+    from ..k4_geometry.obb import from_box
+
+    p = next(x for x in design["parts"] if x["id"] == pid)
+    c = from_obb(from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg")))
+    a, b = np.asarray(c.a, float), np.asarray(c.b, float)
+    at = next((np.asarray(l["at_mm"], float) for l in p.get("connects_to", []) if "at_mm" in l), None)
+    outer_is_b = (np.linalg.norm(b - at) < np.linalg.norm(a - at)) if at is not None else abs(b[1]) > abs(a[1])
+    return (a, b) if outer_is_b else (b, a)
+
+
+def driveshaft_shapes(design: dict) -> dict[str, dict]:
+    """For every driveshaft of driveshaft_modes: {"inner_mm", "outer_mm", "bending", "torsion"}, the two shapes at
+    the N_ELEMENTS + 1 element nodes evenly from the inner joint to the outer one."""
+    out = {}
+    for pid, i in shaft_inputs(design).items():
+        G = i["E"] / (2.0 * (1.0 + i["nu"]))
+        inner, outer = shaft_ends(design, pid)
+        out[pid] = {"inner_mm": inner, "outer_mm": outer,
+                    "bending": bending_shape(i["L"], i["D"], i["t"], i["E"], i["rho"]),
+                    "torsion": torsion_shape(i["L"], i["D"], i["t"], G, i["rho"], i["J_in"], i["J_out"])}
     return out
 
 

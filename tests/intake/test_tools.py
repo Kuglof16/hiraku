@@ -42,7 +42,7 @@ class ToolsTestCase(unittest.TestCase):
 
 class DefinitionsTest(unittest.TestCase):
     def test_every_tool_has_a_description_a_schema_and_a_function(self):
-        self.assertEqual(sorted(TOOLS), ["ask_user", "import_knowledge", "pick_domains", "rule_check"])
+        self.assertEqual(sorted(TOOLS), ["ask_user", "find_tradeoffs", "import_knowledge", "pick_domains", "rule_check"])
         for name, t in TOOLS.items():
             with self.subTest(tool=name):
                 self.assertTrue(t["description"])

@@ -508,6 +508,16 @@ class RunStore:
                     return v, self._read_record(p)
             return None
 
+    def get_whole(self, kind: str, record_id: str) -> Record | None:
+        """A record read whole from its file, a copy of one's own, also inside reading() (which keeps analyses
+        without READING_DROPS: a reader that needs an analysis' series, R9's mount forces, reads it here)."""
+        with self._lock:
+            for v in sorted(self._project.get("design_versions") or []):
+                p = layout.record_path(self.path, v, kind, record_id)
+                if p.exists():
+                    return _read_json(p)
+            return None
+
     def get(self, kind: str, record_id: str) -> Record | None:
         hit = self.find(kind, record_id)
         return hit[1] if hit else None
