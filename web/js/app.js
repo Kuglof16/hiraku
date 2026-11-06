@@ -902,7 +902,8 @@ function renderTop(s) {
   const status = s.status === "running" && runOver() ? "実行は終わった" : ({ running: "記録の途中", done: "完了", stopped: "途中で止まった", failed: "失敗", empty: "" }[s.status] ?? s.status);
   $("mode").innerHTML =
     // (the run list's words: 決まった手順, DRIVEN_JA / labels.js runSummaryJa)
-    `<span class="badge ${live ? "live" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
+    // (data-driver: a scripted run's replay and a Claude run's replay look apart; large with ?video=1)
+    `<span class="badge ${live ? "live" : ""}" data-driver="${live ? "" : scripted ? "scripted" : s.project?.driver ? "claude" : ""}">${live ? "● 実行中を追いかけ" : scripted ? "決まった手順の再生" : s.project?.driver ? "Claude の実行の再生" : "再生"}${status && !live ? `・${esc(status)}` : ""}</span>` +
     // the run's id only under ?dev=1 (people go back to the list by 「☰ 一覧へ」)
     (DEV ? `<a class="runid" href="${withDev("?list=1")}" title="実行の一覧へ">${esc(s.runId ?? "")}</a>` : "") +
     // a run this screen started can be stopped while it goes
