@@ -44,7 +44,7 @@ import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
-import { AssemblyPanel } from "./assembly.js";
+import { AssemblyPanel, assemblyRecord } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
@@ -1667,7 +1667,7 @@ let shownMotion = null; // { motion, ana, tau } of the last frame, for the bar's
 // series against another quantity, one Map per analysis (the chart redraws on a new one).
 let graphMemo = { ana: null, channels: null };
 function graphChannels(ana, motion) {
-  if (ana !== graphMemo.ana) graphMemo = { ana, channels: new Map([...(motion?.channels ?? []), ...xSeriesOf(ana)]) };
+  if (ana !== graphMemo.ana || heavyPending(ana)) graphMemo = { ana, channels: new Map([...(motion?.channels ?? []), ...xSeriesOf(ana)]) };
   return graphMemo.channels;
 }
 
@@ -1939,7 +1939,7 @@ function draw() {
 
 // A static export's heavy parts asked for and not read yet: one line on the 3D (or the grid).
 function heavyNote(view) {
-  const n = view === "bench" || view === "grid" ? heavyWaiting() : 0;
+  const n = view === "bench" || view === "grid" || view === "A7" ? heavyWaiting() : 0;
   let el = $("heavy-note");
   if (!n) {
     if (el) el.hidden = true;
@@ -1956,9 +1956,19 @@ function heavyNote(view) {
   if (el.textContent !== text) el.textContent = text;
 }
 
+// A static export: does what fn reads have parts not read yet? They are asked for (first); the
+// caller draws it once they are in (onHeavy).
+function waitsForHeavy(fn) {
+  const [, recs] = tracked(fn);
+  const pending = [...recs].filter(heavyPending);
+  for (const d of pending) askAll(d, true);
+  return pending.length > 0;
+}
+
 // A heavy part read: what was drawn from it before (nothing yet) is drawn again.
 onHeavy(() => {
   motionMemo = { ana: null, motion: null };
+  graphMemo = { ana: null, channels: null };
   contour = null;
   if (board) board.key = null;
   drawn.rev = -1;
@@ -2112,7 +2122,8 @@ function drawNow() {
   // the pets of the list (the workbench; hidden in the present mode) or of the grid
   // (playing: PET_PAINTS pets a frame, so the 3D keeps its pace; a frame stopped at t: all of them)
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
-  else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
+  // (a static export: once the assembly shown is read)
+  else if (tab === "A7" && !(STATIC && waitsForHeavy(() => assemblyRecord(s)))) (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }

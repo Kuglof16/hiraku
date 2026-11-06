@@ -158,6 +158,8 @@ HEAVY_DIR = "heavy"
 # analysis' fields, series, assembly...); a value is heavy when its JSON has HEAVY_MIN_BYTES or more
 HEAVY_KINDS = ("mesh.created", "analysis.finished")
 HEAVY_MIN_BYTES = 16_000
+# kept in the light record whatever their size: what web/js/state.js writes in the log (an analysis' results)
+LIGHT_KEYS = ("results",)
 _KEY_RE = re.compile(r"[A-Za-z0-9_]+")
 # web/js/series.js motionSpan: the channels that make a motion
 _POSE = ("body_x", "body_y", "body_z", "roll", "pitch", "yaw")
@@ -259,7 +261,7 @@ def split_record(data: bytes) -> tuple[bytes, dict[str, bytes]]:
             continue
         big = {}
         for key, value in d.items():
-            if not _KEY_RE.fullmatch(key):
+            if not _KEY_RE.fullmatch(key) or key in LIGHT_KEYS:
                 continue
             text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
             if len(text) >= HEAVY_MIN_BYTES:
