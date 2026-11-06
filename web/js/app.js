@@ -1325,7 +1325,9 @@ function keepOpen(el) {
   for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep);
 }
 // (?zoom= on a card folded under the chain's くわしく, e.g. cmp: that くわしく open, so the card is there to move in on)
-if (MORE_ALL || (ZOOM && $("chain-more").querySelector(ZOOM.selector))) $("chain-more").open = true;
+// (?video=1: the cards always shown, as before the fold: its くわしく is hidden, app.css)
+const VIDEO_LAYOUT = params.get("video") === "1";
+if (VIDEO_LAYOUT || MORE_ALL || (ZOOM && $("chain-more").querySelector(ZOOM.selector))) $("chain-more").open = true;
 
 function renderChain(s, chain) {
   const { loadCase, pred, ana, running, cmp, verdict, cause } = chain;
@@ -1584,7 +1586,8 @@ const TAB_HEADS = {
   },
 };
 const TAB_HEAD_EL = { A1: "tab-head-intake", A2: "tab-head-intake", A5: "tab-head-intake", A4: "tab-head-A4", A7: "tab-head-A7" };
-const tabOpen = new Set(MORE_ALL || draft ? Object.keys(TAB_HEADS) : []);
+// (?video=1: every tab whole, as before the fold; its band is hidden, app.css)
+const tabOpen = new Set(MORE_ALL || draft || VIDEO_LAYOUT ? Object.keys(TAB_HEADS) : []);
 const tabHeadHtml = {};
 function renderTabHead(s, tab) {
   const el = $(TAB_HEAD_EL[tab]);
