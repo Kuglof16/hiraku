@@ -109,6 +109,8 @@
 .in-parts-hit code { background: var(--i-paper); border: 1px solid var(--i-rule); border-radius: 4px; padding: 0 5px; margin: 0 2px; }
 .in-q header { display: flex; align-items: baseline; gap: 10px; }
 .in-state { margin-left: auto; font-size: 13px; color: var(--i-muted); }
+.a2-pets { flex: none; }
+.a2-pets:empty { display: none; }
 .in-badge { font-size: 12px; border-radius: 4px; padding: 0 8px; border: 1.5px solid var(--i-ink); }
 .in-badge.must { background: var(--i-ink); color: var(--i-paper); }
 .in-qtext { margin: 6px 0; }
@@ -159,6 +161,8 @@
 .in-st.ok { border-color: var(--i-green); color: var(--i-green); }
 .in-st.unk { border-color: var(--i-yellow); background: var(--i-orange-pale); }
 .in-st.none, .in-st.off { color: var(--i-muted); }
+.in-st.adv { border-color: var(--i-yellow); background: var(--i-orange-pale); }
+.in-part.adv { border-color: var(--i-yellow); background: var(--i-orange-pale); }
 .in-drop { border: 2px dashed var(--i-line); border-radius: 12px; padding: 12px 18px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; background: var(--i-panel); }
 .in-drop:hover { border-color: var(--i-blue); }
 .in-drop span { color: var(--i-muted); font-size: 14px; }

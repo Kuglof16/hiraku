@@ -166,6 +166,15 @@ class SystemCheckTest(BuildersCase, unittest.TestCase):
         self.check("SY-01", [])  # checked again after the fix: the latest check counts
         self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")
 
+    def test_an_advice_rule_never_turns_assembly_red(self):
+        """A check of a rule of level advice (docs/contract.md 規則の強さ) is shown but fails no design."""
+        s = self.ctx.store
+        s.add_record("rule_check", {"rule_check_id": s.next_id("rule_check"), "design_version": 1, "rule_id": "SY-01",
+                                    "targets": ["motor"], "level": "advice", "pass": False,
+                                    "hits": [{"part_id": "motor", "values": {}, "message": "m"}]},
+                     design_version=1, agent="packager")
+        self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")
+
     def test_other_categories_and_other_domains_are_not_affected(self):
         self.check("XX-01", [{"part_id": "seat", "values": {}, "message": "m"}])  # not a system rule
         self.assertNotEqual(update_judgement(self.ctx, "assembly")["state"], "red")

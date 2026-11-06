@@ -74,6 +74,8 @@
 .sh-checks tr.bad td { background: var(--red-pale); }
 .sh-checks tr.noval td { background: var(--orange-pale); }
 .sh-what { margin: 0 0 8px; font-size: 14px; color: var(--ink-2); }
+/* the video (?video=1): the table fits the card, without the long 答えの出し方 (the source) */
+body.video .sh-checks th:nth-child(8), body.video .sh-checks td.src { display: none; }
 
 /* ?dev=1 only: the ids and the English folded under くわしく */
 .sh-more summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 400; }

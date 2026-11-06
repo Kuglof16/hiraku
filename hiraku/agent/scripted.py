@@ -227,14 +227,17 @@ def _say(ctx: RunContext, agent: str, lc: Record, text: str) -> None:
 
 
 def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pred_ids: list[str],
-                         expected: Record | None = None) -> Record | None:
-    """Analyze, then compare every prediction the analysis has a result for.
+                         expected: Record | None = None, params: Record | None = None) -> Record | None:
+    """Analyze, then compare every prediction the analysis has a result for. params: the plan step's own
+    (analyze's params, e.g. step_climb_dynamic's record_run: speed for a record of the drive over the step).
 
     Returns the comparison of the expected mismatch when it happened (later
     compares in the domain are then denied by HK3, and recorded as such), else None.
     Raises Stop on anything the plan did not expect.
     """
     args = {"tool": tool, "load_case_id": lc["load_case_id"], "prediction_ids": pred_ids}
+    if params:
+        args["params"] = dict(params)
     _check_stop(ctx)
     denial = _deny(ctx, agent, "analyze", args)  # the rules once (analyze checks them again inside: _gate)
     if denial is not None:
@@ -297,7 +300,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if not pred_ids:  # every formula of the step was skipped: no prediction, so no analysis (HK1)
         _say(ctx, agent, lc, f"{lc['load_case_id']} は、この設計で使える予測の式が無いので、解析しません")
         return
-    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected)
+    hit = _analyze_and_compare(ctx, lc, agent, tool, pred_ids, expected, step.get("params"))
     if hit is None:
         return  # matched; the plan's retry is not needed
     expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)

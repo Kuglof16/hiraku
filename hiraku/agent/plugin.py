@@ -24,7 +24,6 @@ state and outbox files.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import sys
@@ -40,6 +39,7 @@ from hiraku.agent.hooks import PLUGIN_PREFIX, Hooks, stopped_data
 from hiraku.catalog import REPO_ROOT
 from hiraku.contract import layout
 from hiraku.store import RunStore
+from hiraku.store.run_store import HOOK_SKIPPED_KINDS
 from hiraku.tools import Attribution, RunContext, ToolError
 
 Record = dict[str, Any]
@@ -162,11 +162,11 @@ def specs_from_events(events: list[Record]) -> dict[str, Record]:
     return {e["data"]["name"]: e["data"] for e in events if e["kind"] == "tool.checked"}
 
 
-def open_store(run_dir: Path, tries: int = 5) -> RunStore:
+def open_store(run_dir: Path, tries: int = 5, skip_kinds: frozenset[str] = frozenset()) -> RunStore:
     """RunStore.open, again if the server was half-way through writing a line or a file."""
     for i in range(tries):
         try:
-            return RunStore.open(run_dir)
+            return RunStore.open(run_dir, skip_kinds=skip_kinds)
         except (ValueError, OSError):
             if i == tries - 1:
                 raise
@@ -199,7 +199,7 @@ def run_hook(event: str, input_data: Record, runs: Path | None = None) -> Record
     if run_dir is None:
         return {}
     with locked(run_dir):
-        store = open_store(run_dir)
+        store = open_store(run_dir, skip_kinds=HOOK_SKIPPED_KINDS)  # the hooks never read those events
         if store.project["status"] != "running":
             return {}
         state = read_state(run_dir)
@@ -350,6 +350,8 @@ class PluginServer:
 
     async def call_tool(self, name: str, args: Record) -> Record:
         """{"content": [{"type": "text", "text": ...}], "is_error"?} as hiraku.tools.mcp answers."""
+        import asyncio  # here, not at the top: the hook command imports this module and never needs it
+
         from hiraku.tools.mcp import HANDLERS, make_handler
 
         await asyncio.to_thread(self.drain)

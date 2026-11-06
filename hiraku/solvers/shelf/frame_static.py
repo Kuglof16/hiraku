@@ -134,11 +134,16 @@ def frame_known_answers() -> list[Record]:
     fm.add_force("B", (0.0, 0.0, -P))
     fm.solve()
     src = "cantilever with an end load: deflection P L^3 / (3 E I), root stress P L (h/2) / I"
+    src_ja = "片持ち梁の先に荷重: たわみ P L^3 / (3 E I)、根元の応力 P L (h/2) / I"
+    down_ja = f"片持ちの角パイプ {b:g}x{h:g}x{t:g}、先に {P / 1e3:g} kN を下向きに"
     out.append(check_record("cantilever 40x80x2 tube, 1 kN down at the tip", "tip_deflection",
                             P * L**3 / (3 * E * Iz), -fm.displacement("B")[2], "mm", CLOSED_FORM_TOL,
-                            src + "; vertical load uses the h (strong) axis"))
+                            src + "; vertical load uses the h (strong) axis",
+                            case_ja=down_ja,
+                            source_ja=src_ja + "。下向きの荷重なので h の向き (曲がりにくい向き) の軸で"))
     out.append(check_record("cantilever 40x80x2 tube, 1 kN down at the tip", "root_stress",
-                            P * L * (h / 2) / Iz, fm.member_stress("m")["max"], "MPa", CLOSED_FORM_TOL, src))
+                            P * L * (h / 2) / Iz, fm.member_stress("m")["max"], "MPa", CLOSED_FORM_TOL, src,
+                            case_ja=down_ja, source_ja=src_ja))
 
     fm = _beam(L, rect)
     fm.model.def_support("A", True, True, True, True, True, True)
@@ -146,7 +151,9 @@ def frame_known_answers() -> list[Record]:
     fm.solve()
     out.append(check_record("cantilever 40x80x2 tube, 1 kN sideways at the tip", "tip_deflection",
                             P * L**3 / (3 * E * Iy), fm.displacement("B")[1], "mm", CLOSED_FORM_TOL,
-                            src + "; sideways load uses the b (weak) axis"))
+                            src + "; sideways load uses the b (weak) axis",
+                            case_ja=f"片持ちの角パイプ {b:g}x{h:g}x{t:g}、先に {P / 1e3:g} kN を横向きに",
+                            source_ja=src_ja + "。横向きの荷重なので b の向き (曲がりやすい向き) の軸で"))
 
     span = 2000.0
     fm = _beam(span, rect)
@@ -157,7 +164,9 @@ def frame_known_answers() -> list[Record]:
     fm.solve()
     out.append(check_record("simply supported 2 m span, 1 kN at mid-span", "mid_deflection",
                             P * span**3 / (48 * E * Iz), -fm.displacement("m~2")[2], "mm", CLOSED_FORM_TOL,
-                            "simply supported beam, centre load: P L^3 / (48 E I)"))
+                            "simply supported beam, centre load: P L^3 / (48 E I)",
+                            case_ja=f"両端を単純支持した長さ {span / 1e3:g} m の梁、真ん中に {P / 1e3:g} kN",
+                            source_ja="両端を単純支持した梁の真ん中に荷重: P L^3 / (48 E I)"))
 
     fm = _beam(span, rect)
     fm.model.def_support("A", True, True, True, True, False, False)
@@ -167,7 +176,9 @@ def frame_known_answers() -> list[Record]:
     w = fixtures.STEEL["density_kg_m3"] * 1e-12 * A * STANDARD_GRAVITY * 1000.0
     out.append(check_record("simply supported 2 m span under its own weight", "mid_deflection",
                             5 * w * span**4 / (384 * E * Iz), -fm.displacement("m~2")[2], "mm", CLOSED_FORM_TOL,
-                            "simply supported beam, uniform load: 5 w L^4 / (384 E I), w = density * A * g"))
+                            "simply supported beam, uniform load: 5 w L^4 / (384 E I), w = density * A * g",
+                            case_ja=f"両端を単純支持した長さ {span / 1e3:g} m の梁、自分の重さだけ",
+                            source_ja="両端を単純支持した梁に一様な荷重: 5 w L^4 / (384 E I)、w = 密度 × 断面積 A × g"))
 
     d, tt = 50.0, 3.0
     J = math.pi / 32.0 * (d**4 - (d - 2 * tt) ** 4)
@@ -177,12 +188,16 @@ def frame_known_answers() -> list[Record]:
     fm.add_force("B", (0.0, 0.0, 0.0), (T, 0.0, 0.0))
     fm.solve()
     twist = fm.model.nodes["B"].RX[COMBO]
+    round_ja = f"片持ちの丸パイプ {d:g}x{tt:g}、先に {T / 1e3:g} N·m のねじり"
     out.append(check_record("cantilever 50x3 round tube, 500 N*m torque at the tip", "tip_twist",
                             T * L / (G * J), twist, "rad", CLOSED_FORM_TOL,
-                            "torsion of a round tube: twist T L / (G J)"))
+                            "torsion of a round tube: twist T L / (G J)",
+                            case_ja=round_ja, source_ja="丸パイプのねじり: ねじれ角 T L / (G J)"))
     out.append(check_record("cantilever 50x3 round tube, 500 N*m torque at the tip", "von_mises",
                             math.sqrt(3.0) * T * (d / 2) / J, fm.member_stress("m")["max"], "MPa", CLOSED_FORM_TOL,
-                            "shear T r / J, von Mises sqrt(3) tau"))
+                            "shear T r / J, von Mises sqrt(3) tau",
+                            case_ja=round_ja,
+                            source_ja="せん断応力 τ = T r / J、ミーゼス応力 = sqrt(3) τ"))
 
     lad = fixtures.ladder_design()
     res = analyze(lad)
@@ -190,12 +205,16 @@ def frame_known_answers() -> list[Record]:
     a = -float(res["mass"]["cg_mm"][0])
     Lw = 2000.0
     front = sum(res["ground"][s]["force_N"][2] for s in ("FL", "FR"))
+    ladder_ja = f"左右対称のはしご形のフレームが {len(res['ground'])} つの変形しない車輪の上で止まっている"
     out.append(check_record("symmetric ladder at rest on four rigid wheels", "front_axle_load",
                             m * STANDARD_GRAVITY * (Lw - a) / Lw, front, "N", CLOSED_FORM_TOL,
-                            "lever rule m g (L - a) / L (exact for a frame symmetric left to right)"))
+                            "lever rule m g (L - a) / L (exact for a frame symmetric left to right)",
+                            case_ja=ladder_ja,
+                            source_ja="てこの法則 m g (L - a) / L (フレームが左右対称なのでぴったり合う)"))
     total = sum(g["force_N"][2] for g in res["ground"].values())
     out.append(check_record("symmetric ladder at rest on four rigid wheels", "total_wheel_load",
-                            m * STANDARD_GRAVITY, total, "N", 1e-9, "sum of reactions equals the weight"))
+                            m * STANDARD_GRAVITY, total, "N", 1e-9, "sum of reactions equals the weight",
+                            case_ja=ladder_ja, source_ja="地面からの力の合計が重さと同じ"))
     return out
 
 

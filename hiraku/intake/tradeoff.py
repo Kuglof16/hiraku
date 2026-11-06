@@ -25,10 +25,20 @@ CHOICES = ["favor_a", "favor_b", "keep_both"]
 # bases: {quantity: {value, record_id}}, skipped: [why]}
 collector = None
 
+# What names the design numbers worth moving when the caller gives none (hiraku.tools registers it):
+# default_variables(ctx) -> [name or path]. Only numbers whose change really moves a result belong there.
+# None = nothing registered: every design variable is used.
+default_variables = None
+
 
 def register_collector(fn) -> None:
     global collector
     collector = fn
+
+
+def register_default_variables(fn) -> None:
+    global default_variables
+    default_variables = fn
 
 
 def _split(name: str) -> tuple[str, str] | None:

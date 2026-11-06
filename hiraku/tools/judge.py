@@ -455,13 +455,15 @@ def knowledge_rules(ctx: RunContext) -> dict[str, Record]:
 
 
 def system_misses(ctx: RunContext, version: int) -> list[tuple[Record, Record]]:
-    """(rule, its latest rule_check of the version) for each system rule that hits a part."""
-    rules = {rid: r for rid, r in knowledge_rules(ctx).items() if r.get("category") == SYSTEM_CATEGORY}
+    """(rule, its latest rule_check of the version) for each system rule that hits a part. A rule of level
+    advice (on the rule or copied on its check, docs/contract.md 規則の強さ) never fails a design: left out."""
+    rules = {rid: r for rid, r in knowledge_rules(ctx).items()
+             if r.get("category") == SYSTEM_CATEGORY and r.get("level") != "advice"}
     latest: dict[str, Record] = {}
     for c in ctx.store.records("rule_check", version):
         if c["rule_id"] in rules:
             latest[c["rule_id"]] = c
-    return [(rules[rid], c) for rid, c in latest.items() if c["hits"]]
+    return [(rules[rid], c) for rid, c in latest.items() if c["hits"] and c.get("level") != "advice"]
 
 
 def miss_line(rule: Record, check: Record) -> str:
