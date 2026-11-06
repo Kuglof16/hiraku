@@ -47,6 +47,9 @@ FACTS: dict[str, tuple[str, str, str]] = {
     "section_ratio_max": ("断面の外形 / 肉厚 (部材ごとに出して最大)", "1", "member"),
     "section_ratio_rect_max": ("角形鋼管の外形 / 肉厚 (部材ごとに出して最大。角形鋼管でなければ 0)", "1", "member"),
     "section_ratio_round_max": ("円形鋼管の外径 / 肉厚 (部材ごとに出して最大。円形鋼管でなければ 0)", "1", "member"),
+    "butt_end_count": ("角形鋼管の端のうち、別の部材の側面や角に突き当たる T・L の継ぎ手の数 (部材ごと。続きの部材が反対側にある端は数えない)", "1", "member"),
+    "butt_end_ungusseted": ("その T・L の継ぎ手のうち、節点にガセット (kind が gusset の部品) が付いていないものの数", "1", "member"),
+    "butt_end_partial_weld": ("その T・L の継ぎ手のうち、溶接が全周でないものの数 (節点の weld_extent が all_round でない。節点に weld_extent が無ければ、この名前は出さない)", "1", "member"),
     "member_count": ("部材の数", "1", "member"),
     "member_length_max_mm": ("部材のうち最長の長さ", "mm", "member"),
     "yield_MPa": ("部材の材料の降伏点 (最小)", "MPa", "member"),
@@ -160,6 +163,67 @@ def _box_facts(part: Record) -> dict[str, float]:
     return out
 
 
+ANTI_PARALLEL = -0.985  # cos of the angle (about 10 degrees) beyond which another member at a node continues this one
+
+
+def _butt_facts(design: Record, members: list[Record]) -> dict[str, float]:
+    """The T and L butt joints at the ends of these square tubes. A member's end is a butt joint when another member
+    ends at the same node, is not the straight continuation of this one, and this one has no continuation (a rail
+    that goes on past a cross member is not butted against it; the cross member is). Only rect tubes count."""
+    nodes = {n["id"]: n for n in design.get("nodes", [])}
+    sections = design.get("sections", {})
+    all_members = design.get("members", [])
+    at: dict[str, list[Record]] = {}
+    for m in all_members:
+        at.setdefault(m["node_a"], []).append(m)
+        at.setdefault(m["node_b"], []).append(m)
+
+    def direction(m: Record, node_id: str) -> list[float] | None:
+        a, b = nodes.get(m["node_a"]), nodes.get(m["node_b"])
+        if not a or not b:
+            return None
+        other = b if node_id == m["node_a"] else a
+        here = nodes[node_id]["xyz_mm"]
+        v = [o - h for o, h in zip(other["xyz_mm"], here)]
+        n = math.hypot(*v)
+        return [x / n for x in v] if n > 0 else None
+
+    def rect(m: Record) -> bool:
+        return sections.get(m["section"], {}).get("shape") == "rect_tube"
+
+    gusseted = {n for p in design.get("parts", []) if p.get("kind") == "gusset" for n in p.get("carried_by") or []}
+    count = ungusseted = partial = 0
+    unknown_weld = False
+    for m in members:
+        if not rect(m):
+            continue
+        for node_id in (m["node_a"], m["node_b"]):
+            if node_id not in nodes:
+                continue
+            mine = direction(m, node_id)
+            others = [(k, direction(k, node_id)) for k in at.get(node_id, []) if k is not m and rect(k)]
+            others = [(k, d) for k, d in others if d is not None]
+            if mine is None or not others:
+                continue
+            dots = [sum(x * y for x, y in zip(mine, d)) for _, d in others]
+            if any(dot <= ANTI_PARALLEL for dot in dots):
+                continue  # this member goes on past the node
+            if all(dot >= -ANTI_PARALLEL for dot in dots):
+                continue  # only parallel members that start here too: not a corner or a T
+            count += 1
+            if node_id not in gusseted:
+                ungusseted += 1
+            extent = nodes[node_id].get("weld_extent")
+            if extent is None:
+                unknown_weld = True
+            elif extent != "all_round":
+                partial += 1
+    out: dict[str, float] = {"butt_end_count": count, "butt_end_ungusseted": ungusseted}
+    if not unknown_weld:
+        out["butt_end_partial_weld"] = partial
+    return out
+
+
 def _member_facts(design: Record, members: list[Record]) -> dict[str, float]:
     nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
     sections = design.get("sections", {})
@@ -189,6 +253,7 @@ def _member_facts(design: Record, members: list[Record]) -> dict[str, float]:
         if _num(y):
             yields.append(y)
     out: dict[str, float] = {"member_count": len(members)}
+    out.update(_butt_facts(design, members))
     if walls:
         out["wall_mm"] = min(walls)
     if outers:

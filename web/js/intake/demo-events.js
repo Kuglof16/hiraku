@@ -669,7 +669,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -716,6 +716,36 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 1,
       "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
       "applies_to": {
        "kinds": [
         "frame"
@@ -18967,6 +18997,967 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0008",
     "design_version": 1,
+    "rule_id": "WD-04",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     }
+    ],
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 24,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
+    "rule_id": "WD-05",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 25,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0010",
+    "design_version": 1,
     "rule_id": "TL-01",
     "targets": [
      "floor_front",
@@ -19409,15 +20400,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
-   "ts": "2026-11-03T10:00:14.800+09:00",
-   "t": 14.8,
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0009",
+    "rule_check_id": "rchk-0011",
     "design_version": 1,
     "rule_id": "TL-02",
     "targets": [
@@ -19915,15 +20906,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
-   "ts": "2026-11-03T10:00:14.900+09:00",
-   "t": 14.9,
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0010",
+    "rule_check_id": "rchk-0012",
     "design_version": 1,
     "rule_id": "HU-01",
     "targets": [
@@ -19950,15 +20941,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
-   "ts": "2026-11-03T10:00:15.000+09:00",
-   "t": 15.0,
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0011",
+    "rule_check_id": "rchk-0013",
     "design_version": 1,
     "rule_id": "HU-02",
     "targets": [
@@ -20000,15 +20991,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
-   "ts": "2026-11-03T10:00:15.100+09:00",
-   "t": 15.1,
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0012",
+    "rule_check_id": "rchk-0014",
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
@@ -20363,15 +21354,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.200+09:00",
-   "t": 15.2,
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0013",
+    "rule_check_id": "rchk-0015",
     "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
@@ -20391,15 +21382,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0016",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -20419,15 +21410,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0015",
+    "rule_check_id": "rchk-0017",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -20560,15 +21551,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.500+09:00",
-   "t": 15.5,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0016",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -21610,15 +22601,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0019",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -21663,15 +22654,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
+   "seq": 35,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0018",
+    "rule_check_id": "rchk-0020",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -21720,15 +22711,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.800+09:00",
-   "t": 15.8,
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0019",
+    "rule_check_id": "rchk-0021",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -22084,50 +23075,6 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0020",
-    "design_version": 1,
-    "rule_id": "SY-01",
-    "targets": [
-     "motor",
-     "support:RL",
-     "support:RR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0021",
-    "design_version": 1,
-    "rule_id": "SY-02",
-    "targets": [
-     "steering_wheel",
-     "support:FL",
-     "support:FR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
    "seq": 37,
    "ts": "2026-11-03T10:00:16.100+09:00",
    "t": 16.1,
@@ -22138,11 +23085,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0022",
     "design_version": 1,
-    "rule_id": "SY-03",
+    "rule_id": "SY-01",
     "targets": [
-     "pedal_brake",
-     "support:FL",
-     "support:FR",
+     "motor",
      "support:RL",
      "support:RR"
     ],
@@ -22162,10 +23107,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0023",
     "design_version": 1,
-    "rule_id": "SY-04",
+    "rule_id": "SY-02",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "steering_wheel",
+     "support:FL",
+     "support:FR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -22183,10 +23129,13 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0024",
     "design_version": 1,
-    "rule_id": "SY-05",
+    "rule_id": "SY-03",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "pedal_brake",
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -22204,9 +23153,10 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0025",
     "design_version": 1,
-    "rule_id": "SY-06",
+    "rule_id": "SY-04",
     "targets": [
-     "rollbar"
+     "seat_R",
+     "seat_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -22224,8 +23174,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0026",
     "design_version": 1,
-    "rule_id": "SY-07",
-    "targets": [],
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -22242,10 +23195,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0027",
     "design_version": 1,
-    "rule_id": "SY-08",
+    "rule_id": "SY-06",
     "targets": [
-     "battery",
-     "motor"
+     "rollbar"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -22263,10 +23215,8 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0028",
     "design_version": 1,
-    "rule_id": "SY-09",
-    "targets": [
-     "battery"
-    ],
+    "rule_id": "SY-07",
+    "targets": [],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -22282,6 +23232,47 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "battery",
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -22408,15 +23399,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -22463,15 +23454,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 46,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 48,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0033",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -22728,7 +23719,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -22775,6 +23766,36 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 1,
       "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
       "applies_to": {
        "kinds": [
         "frame"
@@ -23790,7 +24811,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -23837,6 +24858,36 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 1,
       "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
       "applies_to": {
        "kinds": [
         "frame"
@@ -24625,7 +25676,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -24672,6 +25723,36 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 1,
       "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
       "applies_to": {
        "kinds": [
         "frame"
@@ -26226,7 +27307,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -26273,6 +27354,36 @@ export const DEMOS = {
       "origin": "builtin",
       "trust": 1,
       "basis": "EN 1993-1-8:2005 (incorporating corrigenda Dec 2005 and Jul 2009), 7.4.1 and Table 7.1 \"Range of validity for welded joints between CHS members\" (printed p. 108): chord 10 <= d0/t0 <= 50 (\"generally\"; the scan prints \"but:\" and nothing after it), brace in tension di/ti <= 50, members in compression Class 1 or 2; Table 7.8 (printed p. 116) also gives di/ti <= 50 for a circular brace in tension on a rectangular chord. Read 2026-11-03 in the public.resource.org scan of BS EN 1993-1-8:2005 (PDF p. 110 and 118), hosted at https:\/\/www.phd.eng.br/wp-content/uploads/2015/12/en.1993.1.8.2005-1.pdf. The check is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind \"but:\" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one (WD-01)",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      }
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
       "applies_to": {
        "kinds": [
         "frame"
@@ -44340,6 +45451,967 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0008",
     "design_version": 1,
+    "rule_id": "WD-04",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     }
+    ],
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 23,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
+    "rule_id": "WD-05",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     }
+    ]
+   }
+  },
+  {
+   "seq": 24,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0010",
+    "design_version": 1,
     "rule_id": "TL-01",
     "targets": [
      "floor_front",
@@ -44782,15 +46854,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 23,
-   "ts": "2026-11-03T10:00:14.800+09:00",
-   "t": 14.8,
+   "seq": 25,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0009",
+    "rule_check_id": "rchk-0011",
     "design_version": 1,
     "rule_id": "TL-02",
     "targets": [
@@ -45288,15 +47360,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
-   "ts": "2026-11-03T10:00:14.900+09:00",
-   "t": 14.9,
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0010",
+    "rule_check_id": "rchk-0012",
     "design_version": 1,
     "rule_id": "HU-01",
     "targets": [
@@ -45323,15 +47395,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
-   "ts": "2026-11-03T10:00:15.000+09:00",
-   "t": 15.0,
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0011",
+    "rule_check_id": "rchk-0013",
     "design_version": 1,
     "rule_id": "HU-02",
     "targets": [
@@ -45373,15 +47445,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
-   "ts": "2026-11-03T10:00:15.100+09:00",
-   "t": 15.1,
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0012",
+    "rule_check_id": "rchk-0014",
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
@@ -45736,15 +47808,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
-   "ts": "2026-11-03T10:00:15.200+09:00",
-   "t": 15.2,
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0013",
+    "rule_check_id": "rchk-0015",
     "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
@@ -45764,15 +47836,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0016",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -45792,15 +47864,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0015",
+    "rule_check_id": "rchk-0017",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -45933,15 +48005,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.500+09:00",
-   "t": 15.5,
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0016",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -46983,15 +49055,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0019",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -47036,15 +49108,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0018",
+    "rule_check_id": "rchk-0020",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -47093,15 +49165,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.800+09:00",
-   "t": 15.8,
+   "seq": 35,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0019",
+    "rule_check_id": "rchk-0021",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -47457,50 +49529,6 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0020",
-    "design_version": 1,
-    "rule_id": "SY-01",
-    "targets": [
-     "motor",
-     "support:RL",
-     "support:RR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0021",
-    "design_version": 1,
-    "rule_id": "SY-02",
-    "targets": [
-     "steering_wheel",
-     "support:FL",
-     "support:FR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
    "seq": 36,
    "ts": "2026-11-03T10:00:16.100+09:00",
    "t": 16.1,
@@ -47511,11 +49539,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0022",
     "design_version": 1,
-    "rule_id": "SY-03",
+    "rule_id": "SY-01",
     "targets": [
-     "pedal_brake",
-     "support:FL",
-     "support:FR",
+     "motor",
      "support:RL",
      "support:RR"
     ],
@@ -47535,10 +49561,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0023",
     "design_version": 1,
-    "rule_id": "SY-04",
+    "rule_id": "SY-02",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "steering_wheel",
+     "support:FL",
+     "support:FR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -47556,10 +49583,13 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0024",
     "design_version": 1,
-    "rule_id": "SY-05",
+    "rule_id": "SY-03",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "pedal_brake",
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -47577,9 +49607,10 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0025",
     "design_version": 1,
-    "rule_id": "SY-06",
+    "rule_id": "SY-04",
     "targets": [
-     "rollbar"
+     "seat_R",
+     "seat_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -47597,8 +49628,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0026",
     "design_version": 1,
-    "rule_id": "SY-07",
-    "targets": [],
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -47615,10 +49649,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0027",
     "design_version": 1,
-    "rule_id": "SY-08",
+    "rule_id": "SY-06",
     "targets": [
-     "battery",
-     "motor"
+     "rollbar"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -47636,10 +49669,8 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0028",
     "design_version": 1,
-    "rule_id": "SY-09",
-    "targets": [
-     "battery"
-    ],
+    "rule_id": "SY-07",
+    "targets": [],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -47655,6 +49686,47 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0029",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "battery",
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0030",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -47781,15 +49853,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -47836,15 +49908,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0033",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [

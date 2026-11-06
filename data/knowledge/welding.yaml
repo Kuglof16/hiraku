@@ -47,3 +47,24 @@ rules:
       is the upper limit 50 only: the lower limit 10 for chords, the section class and the exception behind
       "but:" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one
       (WD-01)
+  - id: WD-04
+    text: 角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する
+    kinds: [frame]
+    check: butt_end_partial_weld <= 0
+    trust: 3
+    basis: >-
+      assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A
+      butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet);
+      all round means the weld closes the whole perimeter of the cut end. The design says it with the node's
+      weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass
+  - id: WD-05
+    text: 力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける
+    kinds: [frame]
+    check: butt_end_ungusseted <= 0
+    trust: 3
+    basis: >-
+      assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every
+      T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not
+      computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that
+      goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes
+      through the wall of a rail is not told from a butt joint and counts as one
