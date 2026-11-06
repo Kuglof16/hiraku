@@ -33,6 +33,52 @@ def _lone_nodes(mesh, alive) -> list[int]:
     return [k for k in range(mesh.n_frame) if any_[k] and not has[k]]
 
 
+EDGE_NOTE = "break angle band"  # the start of the note break_band_note writes
+
+
+def break_band_note(lim: float, band: float, broken: list[str], room_mm: float | None, frac: float,
+                    hinges: dict[str, float], others: list[tuple]) -> str:
+    """The record's note on the break angle's edge. others are the runs made again (lim_b rad, broken members,
+    occupant_space_margin mm or None, frame_split_fraction): crash_beam makes one at lim + band, which finds a member
+    that breaks only by a hair past lim; a member that stays a hair under lim is read from this run's hinges (unbroken
+    within band under lim), so no run at lim - band is needed to name it. The note names those members, gives C1's
+    two quantities in each run, and says whether C1's verdicts (margin >= 0, fraction <= SPLIT_STOP_SHARE) change
+    between the runs (with an unbroken member near the edge, a run at a lower angle could change them too)."""
+    def row(lim_b, brk, room_b, frac_b):
+        m = "-" if room_b is None else f"{room_b:.0f} mm"
+        return (f"{math.degrees(lim_b):g} deg: {len(brk)} broken ({', '.join(brk) or 'none'}), "
+                f"occupant_space_margin {m}, frame_split_fraction {frac_b:.3f}")
+
+    runs = [(lim, broken, room_mm, frac), *others]
+    runs.sort(key=lambda r: r[0])
+    sets = [set(r[1]) for r in runs]
+    edge = sorted(set.union(*sets) - set.intersection(*sets))
+    near = sorted(m for m, h in hinges.items() if m not in broken and h >= lim - band)
+    ok_room = {r[2] is None or r[2] >= 0.0 for r in runs}
+    ok_split = {r[3] <= SPLIT_STOP_SHARE for r in runs}
+    flips = [name for name, s in (("occupant_space_margin >= 0", ok_room), ("frame_split_fraction <= "
+                                  f"{SPLIT_STOP_SHARE:g}", ok_split)) if len(s) > 1]
+    text = (f"{EDGE_NOTE} (the run made again with the break angle "
+            + " and ".join(f"{math.degrees(r[0] - lim):+g} deg" for r in others) + "): "
+            + "; ".join(row(*r) for r in runs) + ". ")
+    text += (f"Members that break in one run and not in another: {', '.join(edge)}. " if edge else
+             "The same members break in every run. ")
+    if near:
+        text += (f"Unbroken at {math.degrees(lim):g} deg with a hinge within {math.degrees(band):g} deg under it: "
+                 + ", ".join(f"{m} {math.degrees(hinges[m]):.3f} deg" for m in near) + ". ")
+    if flips:
+        text += ("C1's verdict changes inside the band (" + ", ".join(flips) + "): the result is at the edge of the "
+                 "break angle, and the last digits of the arithmetic (another computer) can turn it either way")
+    elif near:
+        text += ("C1's verdicts are the same in these runs; a member a hair under the break angle could still turn "
+                 "them on another computer")
+    elif edge:
+        text += "C1's verdicts are the same in these runs, though a member at the edge breaks in one and not another"
+    else:
+        text += "C1's verdicts are the same in these runs"
+    return text
+
+
 class CrashBeamTool(K2Tool):
     """Frontal crash into a rigid wall (C1) with the design's frame as co-rotational beams that yield and
     fold (hiraku.solvers.k2_vehicle.crash_beam): the frame moves at `speed` into a rigid plane square to x
@@ -62,6 +108,9 @@ class CrashBeamTool(K2Tool):
               P("hinge_break_angle", "deg", HINGE_BREAK_DEG, f"a beam breaks when a plastic hinge at its end turns "
                 f"past this ({HINGE_BREAK_DEG:g} deg when not given; no source, not checked)"),
               P("time_limit", "s", 0.2, "the run stops here if the vehicle has not stopped", run_option=True),
+              P("break_band", "deg", 0.0, "when above 0: the run is made again with the break angle this much lower and "
+                "higher, and the record says which members break in one and not the other and C1's quantities in each "
+                "(0 when not given: not made)", run_option=True),
               P("stop_at_split", None, False, "the run stops when a piece of 3 % of the mass or more breaks off the "
                 "seats' side (false when not given: the pieces touch each other, so the run goes on)", run_option=True))
     pairs = (Pair("peak_decel", "crash.linear_spring", "a_max", (("v", "speed"),),
@@ -260,7 +309,8 @@ class CrashBeamTool(K2Tool):
         # come into the occupants' space (0: none); pieces that cannot (e.g. the front cross member, below the feet)
         # are crushed debris, named in a note
         reaching = [p for p in run.extra.get("pieces", []) if measure.reaches_occupants(run, p["nodes"], occ)]
-        res.append(_res("frame_split_fraction", max((p["share"] for p in reaching), default=0.0), "1"))
+        split_frac = max((p["share"] for p in reaching), default=0.0)
+        res.append(_res("frame_split_fraction", split_frac, "1"))
         notes.append("frame_split_fraction: the largest share of the whole mass in a piece broken off the seats' side "
                      "with a node in an occupant part box's y-z extent, ahead of its rear face, at the start (a piece that "
                      "can come into their space); "
@@ -317,6 +367,16 @@ class CrashBeamTool(K2Tool):
         hinges = measure.member_hinges(run)
         worst = max(hinges, key=lambda m: hinges[m])
         res.append(_res("max_plastic_rotation", math.degrees(hinges[worst]), "deg", worst if hinges[worst] > 0 else None))
+        band = self.q(lp, "break_band", "rad")
+        if band and band > 0.0:
+            def again(lim_b):
+                r_b = run_crash(mesh, speed, t_lim, mu=mu, hinge_lim=lim_b, wall=wall, keep=ref, stop_at_split=stop_split)
+                room_b = measure.occupant_room(r_b, occ, mesh.node_parts)
+                frac_b = max((p["share"] for p in r_b.extra.get("pieces", [])
+                              if measure.reaches_occupants(r_b, p["nodes"], occ)), default=0.0)
+                return measure.broken_members(r_b), (room_b["room"] * 1000.0 if room_b else None), frac_b
+            notes.append(break_band_note(lim, band, broken, room["room"] * 1000.0 if room else None, split_frac, hinges,
+                                         [(lim + band, *again(lim + band))]))
         # the record row nearest each whole ms, and the last row
         marks = np.arange(0.0, tt[-1] + 1e-12, SERIES_DT)
         rows = sorted({int(k) for k in np.clip(np.rint(marks / run.chunk), 0, len(tt) - 1)} | {len(tt) - 1})

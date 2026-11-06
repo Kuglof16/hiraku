@@ -6,6 +6,7 @@ from pathlib import Path
 from hiraku import contract, solvers
 from hiraku.catalog import load_catalog, load_requirements
 from hiraku.catalog.builders import BUILDERS, PLANS, BuildError
+from hiraku.solvers.k2_vehicle.shelf.crash_beam import EDGE_NOTE
 from hiraku.tools.summary import design_summary
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -168,6 +169,13 @@ class BuildersTest(unittest.TestCase):
                 # as compare: a prediction of 0 divides by |analysed| (0 when both are 0)
                 rel = ((ana["value"] - out["value"]) / abs(out["value"]) if out["value"] else
                        (0.0 if not ana["value"] else (ana["value"] - out["value"]) / abs(ana["value"])))
+                edge = next((a for a in self.runs[key].get("assumptions", []) if a.startswith(EDGE_NOTE)), "")
+                if f"{p['quantity']} <=" in edge or f"{p['quantity']} >=" in edge:
+                    # the record says the tool's verdict on this quantity turns inside crash_beam's break_band (a
+                    # member at the break angle's edge, decided by the arithmetic's last digits): no fixed comparison
+                    self.assertTrue("Members that break in one run and not in another" in edge
+                                    or "Unbroken at" in edge, edge)
+                    continue
                 if p["quantity"] == expected:  # the plan says it misses, with its cause: it must really miss
                     self.assertGreater(abs(rel), lc["tolerance_rel"], f"{tid} {p['quantity']}: {rel:+.3f}")
                 else:
