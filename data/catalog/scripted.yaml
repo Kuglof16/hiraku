@@ -252,6 +252,37 @@ offroad-4w:
           inputs: {M: from.M, b: from.b, h: from.h, t: from.t, b_c: from.b_c, h_c: from.h_c, t_c: from.t_c, E: from.E,
                    nu: from.nu, leg: from.leg, through: from.through, open_end: from.open_end}
           inputs_from: analysis.joint_wall_calc
+      # Version 5 after the seat's mount brackets (seat_slide held at 56 mm) and the driver fit: the cabin, battery
+      # and cargo sit 125 mm further forward, the hand calculation stays and the shell's hot spot at the rear end
+      # rises, so the gap (+13.4 to +14.1 % on the earlier version 5s) passes the 15 %. The load path is checked by
+      # hand on version 5 (the R8 and R7 steps' load_path.free_parts 0, frame_shell's unsupported_load 0).
+      expected_mismatch:
+        quantity: max_hot_spot_stress
+        when: low
+        source: >-
+          the design department's demo scripted run 20261107-083441-offroad-4w-scripted (trial 7c2g 798619b0 with
+          claude/design-h3-seat-slide 5ed13167), version 5: R1s-step100 cmp-0143, joint_wall_bending 114.25 MPa
+          (joint LE, M 140.4 N*m) against frame_shell ana-0091 132.05 MPa at rail_L_BE@LE (+15.6 %). The scripted runs
+          of 2026-11-06 (20261106-192435 and the others of that day) on the version 5 before the seat brackets:
+          114.42 against 130.22 MPa (+13.8 %). Between the two: seat_x and battery_x -1170 -> -1045 mm, the
+          occupants and cargo forward by 62 to 125 mm; the upstream step_climb's static front wheel load
+          1281.7 -> 1372.5 N (+7.1 %) and push traction 2440 -> 2615 N (+7.1 %), the rear wheel load 2429 -> 2342 N
+          (-3.6 %); the hand calculation's moment at LE -0.15 %, the shell's hot spot +1.4 %
+        cause: >-
+          手計算 (つなぎ目の壁) は、レールのねじりを横の部材が受けたときの、横の部材の端のモーメントが側の壁を板として
+          曲げる応力だけを見る (左右のレールのモーメントの平均で、左右が逆にねじれる分、レールそのものが曲がる応力、
+          軸の力は入れない)。シェル (frame_shell) の後ろの端のつなぎ目 (LE) のホットスポットは、溶接の所の応力の全部で、
+          手計算が入れない分も含む。前の v5 でも手計算は 13.4〜14.1 % 低かった。座席の取付で運転席・バッテリー・荷台が
+          125 mm 前へ移ると、前輪の荷重と押す力が 7 % 増える。手計算のモーメントはほとんど変わらない (-0.15 %) が、
+          シェルは 1.4 % 上がり、差が 15 % を少し超える。どの分が増えたかは、分けて確かめていない
+        fix: >-
+          設計の変更は要らない。シェルのつなぎ目のホットスポットは 132.0 MPa で、限界 143.3 MPa の中にある (使う割合
+          0.92)。手計算は、つなぎ目の壁の板の曲げの値として残す
+        tool_decides: true
+        tool_decides_reason: >-
+          手計算は、横の部材の端の板の曲げだけを持ち、溶接の所に重なるほかの応力を持たないので、つなぎ目の
+          ホットスポットに届かない。力の道は、この版で手計算 (load_path.free_parts 0) とシェルの支えのない
+          荷重 0 で確かめてあるので、シェルの値で決める
     # The same step driven in K2 (step_climb_dynamic), after R1 and R1s: they read the step_climb
     # results (the wheel loads), and an upstream load case gives the newest matched analysis. So the
     # step goes with the heavy stage (stage: 3, after R1s; HK5 lets it: P1's own stage is 1), not with
