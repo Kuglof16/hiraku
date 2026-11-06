@@ -1,0 +1,40 @@
+{
+ "load_case_id": "P3-accel40",
+ "test_id": "P3",
+ "domain": "powertrain",
+ "title": "止まった所から 40 km/h まで 6 s 以内 (2 人 + 荷)",
+ "params": {
+  "loading": "two_cargo",
+  "target_speed": {
+   "value": 40.0,
+   "unit": "km/h"
+  },
+  "grade": {
+   "value": 0.0,
+   "unit": "%"
+  }
+ },
+ "requirement_keys": [
+  "Q30",
+  "Q33",
+  "Q40",
+  "Q50",
+  "Q51"
+ ],
+ "tolerance_rel": 0.1,
+ "criterion": {
+  "quantity": "time_to_speed",
+  "op": "<=",
+  "limit": {
+   "value": 6.0,
+   "unit": "s"
+  },
+  "basis": "Q51 6 s to Q50 40 km/h",
+  "requirement_keys": [
+   "Q51"
+  ]
+ },
+ "modules": [
+  "powertrain"
+ ]
+}

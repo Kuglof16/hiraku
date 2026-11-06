@@ -53,10 +53,24 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
             const c = document.getElementById('plot').getBoundingClientRect(), w = R.plotwrap;
             if (w && (c.right > w.right + 1 || c.bottom > w.bottom + 1)) bad.push('plot canvas outside its box');
             return bad; }""")
+        out["speed"] = page.evaluate("document.getElementById('speed').value")
         out["speed_shown"] = page.evaluate("getComputedStyle(document.getElementById('speedrow')).display !== 'none'")
         out["boxes_moved"] = page.evaluate("(() => { const b = HV.state.ctx && HV.state.ctx.boxes; return b ? b.off.filter(o => Math.hypot(o[0], o[1], o[2]) > 1e-3).length : 0; })()")
         out["tyres"] = page.evaluate("(() => { let n = 0; HV.state.ctx.root.traverse(o => { if (o.geometry && o.geometry.type === 'CylinderGeometry') n++; }); return n; })()")
+        # the ground drawn (js/look.js) and, at t = 0, the lowest point of each drawn tyre (its world box) above it
+        out["ground"] = page.evaluate("""() => { const T = window.THREE, ctx = HV.state.ctx, g = ctx && ctx.groundSpec;
+            if (!g || !ctx.ground) return null; const tyres = [];
+            HV.state.ctl.setTime(0); ctx.root.updateMatrixWorld(true);
+            ctx.root.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'CylinderGeometry' && o.geometry.parameters.radiusTop > 150) {
+              const b = new T.Box3().setFromObject(o, true); tyres.push(b.min.z - g.z); } });
+            HV.state.ctl.setTime(HV.state.t);
+            return { z: g.z, from: g.from, visible: ctx.ground.visible, tyre_gaps: tyres }; }""")
+        out["surround"] = page.evaluate("(() => { const b = document.getElementById('surroundBox'); return b ? { open: b.open, text: b.textContent } : null; })()")
         out["inputs"] = page.text_content("#inputs")[:2000]
+        out["switch"] = page.evaluate("[...document.querySelectorAll('#switch button')].map(b => b.textContent)")
+        # the code names after the Japanese quantity names (small grey type) in the inputs pane
+        out["codes"] = page.evaluate("[...document.querySelectorAll('#inputs .code')].map(e => e.textContent)")
+        out["contour"] = page.evaluate("(() => { const c = HV.state.ctl && HV.state.ctl.contour && HV.state.ctl.contour(); return c ? { min: c.min, max: c.max, note: c.note || '', title: c.title || '', scale: c.scale || '' } : null; })()")
         out["legend_shown"] = page.evaluate("getComputedStyle(document.getElementById('legend')).display !== 'none'")
         # coloured pixels in the 3D view (not the background)
         out["drawn_px"] = page.evaluate("""() => { HV.view.draw(); const c = HV.view.renderer.domElement; const g = document.createElement('canvas');

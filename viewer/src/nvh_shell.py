@@ -29,6 +29,7 @@ import sys
 from pathlib import Path
 
 from viewer.src import common
+from viewer.src import names as page_names   # build() has a local 'names'
 from viewer.src import nvh as beam
 
 KIND = {"body on springs": "body", "frame": "frame", "roll bar": "rollbar"}
@@ -125,7 +126,7 @@ def pairs_of(rec: dict) -> dict[int, dict]:
 
 def build(args) -> dict:
     run, vdir, rec, design, lc, mesh = find_record(args)
-    obj = common.base_object("nvh", "NVH (シェル): 管の壁の板の固有振動", run, vdir, rec, design)
+    obj = common.base_object("nvh", page_names.title("nvh", "管の壁の板の固有振動", "シェル"), run, vdir, rec, design)
     obj["model"] = "shell"
     if (Path(run) / "analysis.json").is_file():  # a one-record folder: its own name, the design's version
         obj["source"]["run"] = Path(run).resolve().name

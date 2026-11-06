@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import sys
 
-from viewer.src import common
+from viewer.src import common, names
 
 TOP = 5
 
@@ -195,7 +195,7 @@ def wheels_of(design: dict, per_node: dict[str, list[float]] | None = None) -> l
 def build(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "modal", version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
-    obj = common.base_object("nvh", "NVH: フレームの固有振動と周波数応答", args.run, vdir, rec, design)
+    obj = common.base_object("nvh", names.title("nvh", "フレームの固有振動と周波数応答"), args.run, vdir, rec, design)
     obj["model"] = "beam"   # the page's NVH field also takes nvh_shell.py's "shell"
     ids = obj["frame"]["node_ids"]
     lc =common.load_case_of(vdir, rec["load_case_id"])
