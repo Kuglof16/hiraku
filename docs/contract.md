@@ -141,7 +141,7 @@ MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp
 作るものを型で限定しない。設計は 2 つの道から作れる。
 
 - 型から作る: `propose_design` と `revise_design`。型 (`design.archetype`) があれば、座標はキットが計算する。
-- Claude が書く: `write_design` (設計そのもの。2 回目からは次の版) と `edit_design` (部材の追加など)。型は必須ではなく、下書きに使ったら `based_on` に書く。`check_design` が、参照・つながり・桁・干渉・質量をコードで確かめ、通らない設計は版にしない。
+- Claude が書く: `write_design` (設計そのもの。2 回目からは次の版) と `edit_design` (部材の追加など)。型は必須ではなく、下書きに使ったら `based_on` に書く。ツールが `written_by: claude` を付け、`revise_design` はこの設計を断る (変数から組み直すと書いた所が消えるため)。`check_design` が、参照・つながり・桁・干渉・質量をコードで確かめ、通らない設計は版にしない。
 
 どちらの道でも、数値はツールが計算する。解析の前に手計算で予測する決まりも同じ。カタログに builder が無い試験の荷重条件は `write_load_case` で書く。限度はモデルが数を書かず、`limit_from` の式からコードが計算する。
 

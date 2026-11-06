@@ -502,6 +502,11 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("tool_input.write_load_case", case), [])  # the code computes the limit
         for name in ("write_design", "edit_design", "check_design", "write_load_case"):
             self.assertIn(name, contract.MCP_TOOLS_LATER)
+        d = load("design.json")
+        d.update(written_by="claude", based_on="care_bed")
+        self.assertEqual(contract.errors("design", d), [])
+        d["written_by"] = "someone"
+        self.assertNotEqual(contract.errors("design", d), [])
 
     def test_rule_questions_in_the_hearing(self):
         q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}

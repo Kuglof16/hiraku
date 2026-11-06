@@ -1190,6 +1190,16 @@
           "type": "string",
           "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a design Claude wrote (write_design). What kind a design is, is read from this first."
         },
+        "written_by": {
+          "enum": [
+            "claude"
+          ],
+          "description": "Set by write_design and edit_design: Claude wrote this design itself. revise_design refuses such a design (rebuilding from variables would lose what was written), and the design's kind is not guessed from its variables."
+        },
+        "based_on": {
+          "type": "string",
+          "description": "The archetype whose first version was the draft of a design Claude wrote, if one was."
+        },
         "variable_names": {
           "type": "object",
           "additionalProperties": {
