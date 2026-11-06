@@ -1562,11 +1562,16 @@ let tilePicTimer = null;
 // A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
   const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
-  // the pictures kept are copied at once; new ones are drawn once the grid has settled (a record
-  // loading renders the grid at each event, and a picture costs a frame of the software renderer)
-  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, true)) {
-    clearTimeout(tilePicTimer);
-    tilePicTimer = setTimeout(() => board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale), TILE_PIC_WAIT_MS);
+  // the pictures kept are copied at once; new ones are drawn once the grid has settled and the
+  // page has loaded, one a task (a record loading renders the grid at each event, and a picture
+  // costs frames of the software renderer)
+  clearTimeout(tilePicTimer);
+  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 0)) {
+    const step = () => {
+      const loaded = document.readyState === "complete";
+      tilePicTimer = loaded && board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 1) ? null : setTimeout(step, loaded ? 0 : TILE_PIC_WAIT_MS);
+    };
+    tilePicTimer = setTimeout(step, TILE_PIC_WAIT_MS);
   }
   agentPets?.mount($("view-grid"), "grid");
   // a tile (or a chip of a domain not picked) whose domain has analysed something by now can

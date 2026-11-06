@@ -425,13 +425,18 @@ export class TileBoard {
   }
 
   // The tiles' 3D pictures (tile3d.js TileViews), once the tiles are laid out; scale: device
-  // pixels per CSS pixel of the tiles. cachedOnly: only the pictures already kept; returns
-  // whether every picture is shown.
-  drawPictures(views, scale, cachedOnly = false) {
+  // pixels per CSS pixel of the tiles. newMax: how many pictures not kept yet may be drawn now
+  // (0: only the ones kept are copied); returns whether every picture is shown.
+  drawPictures(views, scale, newMax = Infinity) {
     let all = true;
+    let left = newMax;
     for (const p of this.pictures ?? []) {
       const canvas = this.tiles.querySelector(`canvas.tile3d[data-domain="${p.domain}"]`);
-      if (canvas && !views.draw(canvas, p.domain, { ...p, scale }, cachedOnly)) all = false;
+      // (none, or not laid out: the grid hidden; drawn when the grid is rendered again)
+      if (!canvas || canvas.clientWidth < 2 || canvas.clientHeight < 2) continue;
+      if (views.draw(canvas, p.domain, { ...p, scale }, true)) continue;
+      if (left > 0 && views.draw(canvas, p.domain, { ...p, scale })) left -= 1;
+      else all = false;
     }
     return all;
   }

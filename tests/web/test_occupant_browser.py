@@ -167,8 +167,11 @@ class OccupantBrowserTest(unittest.TestCase):
             # the limbs are capsules; the torso, neck, hands and feet rounded boxes
             caps = sorted(i.split(".", 1)[1] for i, o in got.items() if o["meshes"][0]["type"] == "CapsuleGeometry")
             self.assertEqual(caps, sorted([s for s in SEGMENTS if s.split("_")[0] in ("arm", "forearm", "thigh", "shank")] * 2), look)
-            # the occupant's colour of look.js (the same as before), on every segment
-            self.assertEqual(len({m["color"] for o in got.values() for m in o["meshes"]}), 1, look)
+            # the diagram look: the occupant's one colour of look.js on every segment. The real look
+            # dresses a person by segment (look.js occupantSub: skin, jacket, trousers, shoes), so a
+            # person there has those four colours, the same for both persons; the shapes are unchanged
+            colours = {m["color"] for o in got.values() for m in o["meshes"]}
+            self.assertEqual(len(colours), 4 if look == "real" else 1, look)
 
     def test_one_ball_per_person_the_head(self):
         for look, drawn in self.drawn.items():
