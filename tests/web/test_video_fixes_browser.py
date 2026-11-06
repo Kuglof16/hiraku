@@ -143,6 +143,27 @@ class VideoFixesBrowserTest(unittest.TestCase):
                 self.assertEqual(errors, [])
                 page.close()
 
+    def test_zoom_moves_in_on_the_element_by_time(self):
+        """?zoom=cmp:<s>: before that time the stage as it is; from it the comparison card moves to the
+        middle and grows (a CSS transform); the same ?t= gives the same transform."""
+        probe = """() => { const r = document.getElementById('card-cmp').getBoundingClientRect();
+            return { tf: document.getElementById('stage').style.transform, cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width }; }"""
+        got = {}
+        for q in ("t=9", "t=9&zoom=cmp:20", "t=9&zoom=cmp:5", "t=9&zoom=cmp:8.4", "t=9&zoom=cmp:8.4&again"):
+            page, errors = self.open(f"run=sample&pace=0&{q}")
+            page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+            got[q] = page.evaluate(probe)
+            self.assertEqual(errors, [])
+            page.close()
+        plain, before, full, half = got["t=9"], got["t=9&zoom=cmp:20"], got["t=9&zoom=cmp:5"], got["t=9&zoom=cmp:8.4"]
+        self.assertEqual(before, plain)  # not yet
+        self.assertGreater(full["w"], plain["w"] * 1.5)
+        self.assertLess(abs(full["cx"] - 960), 3)
+        self.assertLess(abs(full["cy"] - 540), 3)
+        self.assertGreater(half["w"], plain["w"])  # on its way
+        self.assertLess(half["w"], full["w"])
+        self.assertEqual(got["t=9&zoom=cmp:8.4&again"], half)  # time only
+
     def test_cause_note_same_picture_at_t(self):
         """Opened at ?t= the card is there in the first frame, the same as after a seek."""
         page, errors = self.open("run=sample&pace=0&t=0")

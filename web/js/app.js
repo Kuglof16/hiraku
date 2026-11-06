@@ -37,6 +37,7 @@ import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMot
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
+import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
@@ -134,11 +135,13 @@ if (params.get("status") === "0") document.body.classList.add("no-status");
 // ---- stage scaling -------------------------------------------------------
 const stage = $("stage");
 let stageScale = 1;
+let stageBase = ""; // the stage's fit to the window (?zoom= adds its own part after it, js/zoom.js)
+const ZOOM = parseZoom(params.get("zoom"));
 function fitStage() {
   stageScale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
   const left = (window.innerWidth - STAGE_W * stageScale) / 2;
   const top = (window.innerHeight - STAGE_H * stageScale) / 2;
-  stage.style.transform = `translate(${left}px, ${top}px) scale(${stageScale})`;
+  stage.style.transform = stageBase = `translate(${left}px, ${top}px) scale(${stageScale})`;
   agentPets?.setPixel((window.devicePixelRatio || 1) * stageScale);
   resize3d();
 }
@@ -1834,6 +1837,7 @@ function draw() {
   if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
   heat.show(heatOn ? heatIn : null, player.playhead); // heat:
   renderTransient(s, player.playhead, chain, resolved);
+  if (ZOOM) zoomTransform(stage, stageBase, ZOOM, player.playhead, STAGE_W, STAGE_H); // ?zoom=
   renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
   if (view === "bench") {
