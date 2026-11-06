@@ -23,7 +23,7 @@ from hiraku.contract import layout
 from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
 from hiraku.intake import facts, hearing, knowledge, rulecheck, tradeoff
-from hiraku.intake.domains import IntakeError, pick_domains, reasons_missing
+from hiraku.intake.domains import IntakeError, add_tests, pick_domains, reasons_missing
 from hiraku.intake.flags import FLAGS, SPEED_CLASSES
 from hiraku.intake.products import ANSWERS_SUFFIX, PRODUCTS_DIR, load_product, product_files
 
@@ -95,6 +95,40 @@ def pick_domains_tool(ctx: Any, args: Record, agent: str | None) -> Record:
         out["reasons_missing"] = missing
         out["next"] = (f"{names} の理由はコードが仮に書きました。この製品に合わせた理由 (reasons) を付けて"
                        "もう一度呼ぶと、画面の札に出ます")
+    return out
+
+
+def _last_picked(ctx: Any) -> Record | None:
+    events = getattr(_store(ctx), "events", None)
+    for e in reversed(events() if events else []):
+        if e.get("kind") == ev.DOMAINS_PICKED:
+            return json.loads(json.dumps(e.get("data") or {}, ensure_ascii=False))
+    return None
+
+
+@_guard
+def add_tests_tool(ctx: Any, args: Record, agent: str | None) -> Record:
+    """Claude reviews the code's choice of domains and tests: adds tests from the catalog (adding only), or says why it adds none."""
+    last = _last_picked(ctx)
+    if last is None:
+        raise IntakeError("まだ分野を選んでいません。先に pick_domains を呼んでください (足すのは、その選びを見直したあとです)")
+    record, ignored, no_builder = add_tests(last, args.get("tests"), args.get("no_addition_reason"),
+                                            product=(getattr(ctx, "project", None) or {}).get("product"))
+    problem, repeated = _emit_changed(ctx, ev.picked_event(record))
+    out: Record = {"added_tests": record.get("added_tests", []), "recorded": problem is None}
+    if record.get("no_addition_reason"):
+        out["no_addition_reason"] = record["no_addition_reason"]
+    if ignored:
+        out["ignored"] = ignored
+        out["ignored_why"] = "もう選びに入っている試験なので足していません"
+    if repeated:
+        out["unchanged"] = "前に記録した選びと同じなので、記録は増やしていません"
+    if problem:
+        out["not_recorded"] = problem
+    if no_builder:
+        out["no_builder"] = no_builder
+        out["next"] = (f"{'・'.join(no_builder)} は荷重条件の作り方がまだ無い試験です。write_load_case で荷重条件を書くか、"
+                       "ツールを作る道へ。値が足りなければ ask_user で聞いてください")
     return out
 
 
@@ -526,6 +560,16 @@ TOOLS: dict[str, Record] = {
         ),
         "input_schema": contract_input("pick_domains"),
         "function": pick_domains_tool,
+    },
+    "add_tests": {
+        "description": (
+            "pick_domains でコードが選んだ分野と試験を、まとめ役 (あなた) が見直す。この製品に要ると判断した試験をカタログから足す "
+            "(tests: 試験の番号 test_id と、足す理由 reason)。足すだけで外せない (コードの選びは残る)。足さないときも、見直した理由を "
+            "no_addition_reason に書いて呼ぶ (足したときの理由は、その試験を足した理由。選びの画面の吹き出しに出る)。"
+            "builder の無い試験を足したら、結果の no_builder を見て、荷重条件は write_load_case で書くか、ツールを作る道へ。値が足りなければ ask_user。"
+        ),
+        "input_schema": contract_input("add_tests"),
+        "function": add_tests_tool,
     },
     "ask_user": {
         "description": (

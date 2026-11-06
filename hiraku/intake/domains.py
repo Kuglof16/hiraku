@@ -204,6 +204,65 @@ def reasons_missing(record: Record, reasons: dict[str, str] | None) -> list[str]
     return [p["domain"] for p in record["picks"] if p["domain"] not in given]
 
 
+def add_tests(record: Record, tests: list[Record] | None = None, no_addition_reason: str | None = None, *,
+              catalog: Catalog | None = None, product: str | None = None) -> tuple[Record, list[str], list[str]]:
+    """The `domains_picked` record with tests Claude adds to the code's choice (adding only: nothing is taken out).
+
+    tests: [{test_id, reason}], each a test of the catalog that is not in the record yet; a test whose domain is not picked
+    lights it (the reason is that domain's reason); a test of a domain the code left off takes the domain off the `off` list.
+    no_addition_reason: why Claude looked and adds nothing. Returns (record, ignored, no_builder): ignored are the ids
+    the record already had, no_builder the added ones no builder makes a load case for (write_load_case or a tool).
+    """
+    tests = list(tests or [])
+    reason = (no_addition_reason or "").strip()
+    if not tests and not reason:
+        raise IntakeError("tests (足す試験と理由) か no_addition_reason (足さない理由) のどちらかを渡してください。選びを見直したあとは、足さないときも理由を残します")
+    catalog = catalog or load_catalog()
+    out = {k: (list(v) if isinstance(v, list) else v) for k, v in record.items()}
+    out["picks"] = [dict(p, test_ids=list(p.get("test_ids") or [])) for p in record.get("picks", [])]
+    out["off"] = [dict(o) for o in record.get("off", [])]
+    out["assembly_test_ids"] = list(record.get("assembly_test_ids") or [])
+    have = {t for p in out["picks"] for t in p["test_ids"]} | set(out["assembly_test_ids"])
+    flags = record.get("flags") or {}
+    added = [dict(a) for a in record.get("added_tests", [])]
+    ignored: list[str] = []
+    no_builder: list[str] = []
+    seen: set[str] = set()
+    for item in tests:
+        if not isinstance(item, dict) or not str(item.get("test_id", "")).strip() or not str(item.get("reason", "")).strip():
+            raise IntakeError("tests の 1 件は {test_id, reason} です (reason は、この製品にこの試験が要る理由。空にはできません)")
+        tid, why = item["test_id"].strip(), item["reason"].strip()
+        try:
+            test = catalog.test(tid)
+        except KeyError:
+            known = ", ".join(t["id"] for t in catalog.tests)
+            raise IntakeError(f"試験 {tid!r} はカタログにありません。カタログの試験: {known}") from None
+        if tid in have or tid in seen:
+            ignored.append(tid)
+            continue
+        seen.add(tid)
+        d = test["domain"]
+        if d == "assembly":
+            out["assembly_test_ids"].append(tid)
+        else:
+            pick = next((p for p in out["picks"] if p["domain"] == d), None)
+            if pick is None:
+                out["off"] = [o for o in out["off"] if o["domain"] != d]
+                pick = {"domain": d, "shown_name": default_name(d, normalize_flags(flags), record.get("speed_class"), [tid]),
+                        "reason": why, "test_ids": []}
+                out["picks"].append(pick)
+                out["picks"].sort(key=lambda p: ANALYSIS_DOMAINS.index(p["domain"]))
+            pick["test_ids"].append(tid)
+        added.append({"test_id": tid, "reason": why})
+        if not has_builder(catalog, tid, product) and not can_write_load_cases():
+            no_builder.append(tid)
+    if added:
+        out["added_tests"] = added
+    if reason:
+        out["no_addition_reason"] = reason
+    return out, ignored, no_builder
+
+
 def project_picks(record: Record) -> list[Record]:
     """The picks in the shape project.json holds (domain_pick without test_ids)."""
     return [{k: p[k] for k in ("domain", "shown_name", "reason")} for p in record["picks"]]
