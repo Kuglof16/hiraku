@@ -6,11 +6,11 @@ import math
 
 from ..checks import _check
 from ..drive import PathDriver, SpeedController, controls, start_rolling
-from ..model import box_design, build_vehicle
+from ..model import DesignError, box_design, build_vehicle
 from ..record import Recorder
 from ..scenario import new_sim
 from ..units import G0
-from .base import MU, TIPPED_ROLL, K2Tool, P, Pair, _box, _half_width, _min_load, _ramp_gravity, _res, _side_ids
+from .base import MOTOR, MU, TIPPED_ROLL, K2Tool, P, Pair, _box, _half_width, _min_load, _ramp_gravity, _res, _side_ids
 from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
 # Section lengths (m) and lane offset of a double lane change: 15 / 30 / 25 / 25 / 15 / 15 m, offset
@@ -64,8 +64,11 @@ def dlc_path(x0: float = 10.0, offset: float = DLC_OFFSET, sections=DLC_SECTIONS
 
 
 def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz: float = 0.0, road=None,
-             gravity=None, steer_fn=None, ramp_s: float = 1.0) -> dict:
+             gravity=None, steer_fn=None, ramp_s: float = 1.0, motor=None) -> dict:
     """Drive along y_ref(x) at a held speed until the design origin passes x_end.
+
+    motor: the speed controller's drive is held to the motor's torque at the wheels (drive.SpeedController); without
+    it the drive has no limit.
 
     gravity = (gravity_of_angle, angle): the slope is made by turning gravity over ramp_s
     with the brakes held first; that turn is in the record (slope_angle), and the angle at
@@ -93,7 +96,7 @@ def path_run(veh, speed: float, y_ref, x_end: float, *, dt: float = 1e-3, rec_hz
     if not tipped:
         start_rolling(sim, speed)
     drv = PathDriver(sim, y_ref)
-    ctrl = SpeedController(sim)
+    ctrl = SpeedController(sim, motor=motor)
     log = LoadLog(sim) if rec is not None and any(has_mounts(c) for c in veh.corners) else None
     st = {"min_load": {c.id: math.inf for c in veh.corners}, "two_lift_time": 0.0, "any_lift": False,
           "max_ay": 0.0, "max_roll": 0.0, "max_err": 0.0, "max_steer": 0.0, "min_side": {"left": math.inf, "right": math.inf},
@@ -199,7 +202,8 @@ class LaneChangeTool(K2Tool):
               P("direction", None, "left", "the first lane change goes toward", choices=("left", "right")),
               P("find_limit", None, True, "also search max_speed_no_lift"),
               P("v_min", "km/h", 10.0, "lowest speed of the search"),
-              P("v_max", "km/h", 80.0, "highest speed of the search"))
+              P("v_max", "km/h", 80.0, "highest speed of the search"),
+              *MOTOR)
     pairs = (Pair("max_lateral_accel_g", "lane_change.peak_lateral_acceleration", "a_y_peak",
                   (("v", "speed"), ("Y", "offset")),
                   f"X = {DLC_SECTIONS[3] * 1000:g} mm, the shorter lane change of the course (back to the first "
@@ -254,7 +258,7 @@ class LaneChangeTool(K2Tool):
         return out
 
     def _lift(self, veh, speed, y_ref, x_end) -> bool:
-        st = path_run(veh, speed, y_ref, x_end, dt=self.dt)
+        st = path_run(veh, speed, y_ref, x_end, dt=self.dt, motor=self._motor)
         return st["any_lift"] or not st["finished"]
 
     def _run(self, design: dict, lp: dict) -> dict:
@@ -268,7 +272,13 @@ class LaneChangeTool(K2Tool):
         sign = -1.0 if self.text(lp, "direction") == "right" else 1.0
         y0, x_end = dlc_path(offset=self.q(lp, "offset", "m"))
         y_ref = (lambda x: sign * y0(x))
-        st = path_run(veh, speed, y_ref, x_end, dt=self.dt, rec_hz=self.record_hz)
+        # the held speed's drive is the motor's at most (a speed the motor cannot hold is not held)
+        try:
+            self._motor = self.motor(lp)
+        except DesignError:
+            self._motor = None
+            notes.append("no motor given (motor_torque, gear_ratio): the speed controller's drive has no limit")
+        st = path_run(veh, speed, y_ref, x_end, dt=self.dt, rec_hz=self.record_hz, motor=self._motor)
         cid, mn = _min_load(st["min_load"])
         light = min(st["min_side"], key=lambda k: st["min_side"][k])
         res = [_res("min_wheel_load", mn, "N", cid), _res("min_side_load", st["min_side"][light], "N", light),
