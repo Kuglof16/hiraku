@@ -138,6 +138,9 @@ OWNERS = {
         "LICENSE",
         "showcase/",  # saved runs committed as examples (the screen opens the newest)
         "tests/contract/",
+        "hiraku/cad/",  # CAD in and out through STEP (stands alone: imports only contract)
+        "hiraku/tools/cad_tools.py",  # the one adapter that registers the CAD tools
+        "tests/cad/",
         "docs/",
         "README.md",
         "HIRAKU.cmd",  # double-click launcher of the screen

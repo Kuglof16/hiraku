@@ -137,6 +137,30 @@ def member_hinges(run: CrashRun) -> dict[str, float]:
     return out
 
 
+def box_front(part: dict) -> float:
+    """m, the x of a part box's front face at the start."""
+    return (float(part["box"]["center_mm"][0]) + float(part["box"]["size_mm"][0]) / 2.0) / 1000.0
+
+
+def parts_past_wall(run: CrashRun, parts: list[dict], shares: dict[str, dict[int, float]]) -> dict[str, float]:
+    """{part: m} the part boxes whose front face, moved with their carried_by nodes, goes past the wall face over
+    the run, and the deepest (the boxes have no contact: such a part is taken as crushed against the wall)."""
+    out = {}
+    for p in parts:
+        sh = shares.get(p["id"])
+        if not sh or not p.get("box"):
+            continue
+        idx = np.array(list(sh.keys()))
+        wts = np.array(list(sh.values()), dtype=float)
+        if wts.sum() <= 0.0:  # a massless part: its nodes alike
+            wts = np.ones(len(idx))
+        move = (run.positions[:, idx, 0] - run.mesh.x0[idx, 0]) @ (wts / wts.sum())
+        depth = float((box_front(p) + move - run.wall_x).max())
+        if depth > 0.0:
+            out[p["id"]] = depth
+    return out
+
+
 def broken_members(run: CrashRun) -> list[str]:
     """The members with a broken element, in the order they broke."""
     out = []

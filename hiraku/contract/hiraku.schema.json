@@ -1188,7 +1188,17 @@
         },
         "archetype": {
           "type": "string",
-          "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a hand-made design."
+          "description": "The generator (hiraku.designgen ARCHETYPES name) that built this design; absent for a design Claude wrote (write_design). What kind a design is, is read from this first."
+        },
+        "written_by": {
+          "enum": [
+            "claude"
+          ],
+          "description": "Set by write_design and edit_design: Claude wrote this design itself. revise_design refuses such a design (rebuilding from variables would lose what was written), and the design's kind is not guessed from its variables."
+        },
+        "based_on": {
+          "type": "string",
+          "description": "The archetype whose first version was the draft of a design Claude wrote, if one was."
         },
         "variable_names": {
           "type": "object",
@@ -1296,6 +1306,38 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "Allowed |analyzed - predicted| / |predicted| for a match. Set by code from the catalog or tool spec, never by the model."
+        },
+        "written_by": {
+          "enum": [
+            "claude"
+          ],
+          "description": "Set by write_load_case: Claude wrote this load case. Absent for one built from the catalog."
+        },
+        "basis": {
+          "type": "string",
+          "description": "write_load_case: why this load case stands for the use, its source or an assumption said as one."
+        },
+        "limit_from": {
+          "type": "object",
+          "required": [
+            "expr"
+          ],
+          "additionalProperties": false,
+          "description": "write_load_case: how the code computed criterion.limit, kept so a later version computes it again from that version's materials and sections.",
+          "properties": {
+            "expr": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            },
+            "refs": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
         },
         "feeds": {
           "type": "array",
@@ -3184,6 +3226,30 @@
             "type": "string"
           },
           "description": "Why each flag was set (or left unset), in the lead's words."
+        },
+        "added_tests": {
+          "type": "array",
+          "description": "Tests Claude added to the code's choice (add_tests), each with its reason. Adding only: the code's tests stay.",
+          "items": {
+            "type": "object",
+            "required": [
+              "test_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "test_id": {
+                "$ref": "#/$defs/test_id"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_addition_reason": {
+          "type": "string",
+          "description": "Why Claude reviewed the choice and added nothing."
         },
         "picks": {
           "type": "array",
@@ -5283,6 +5349,258 @@
         }
       }
     },
+    "tool_input.add_tests": {
+      "description": "Lead: after the code's choice of domains and tests, Claude reviews it and adds tests from the catalog it judges necessary for this product, each with a reason, or says why it adds none. It cannot remove the code's tests.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "test_id",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "test_id": {
+                "$ref": "#/$defs/test_id"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_addition_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_input.write_design": {
+      "description": "Designer only: a design Claude writes itself (nodes, members, sections, materials, parts, supports), for a product no archetype fits or a layout no archetype can make. The first call makes version 1, a later call the next version. The tool sets design_version, parent_version and change_reason, runs check_design and refuses a design that fails.",
+      "type": "object",
+      "required": [
+        "design",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "design": {
+          "type": "object",
+          "description": "A design record (#/$defs/design) without design_version, parent_version and change_reason."
+        },
+        "based_on": {
+          "type": "string",
+          "description": "The archetype whose first version was used as a draft, if one was. A record of where the draft came from; the design stays one Claude wrote."
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_input.edit_design": {
+      "description": "Designer only: the next version of a design, as edits applied in order to the current one, for a design Claude wrote. The tool refuses an edit that leaves a broken reference, then runs check_design on the result.",
+      "type": "object",
+      "required": [
+        "edits",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "op"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "enum": [
+                  "add_node",
+                  "move_node",
+                  "remove_node",
+                  "add_member",
+                  "remove_member",
+                  "split_member",
+                  "set_section",
+                  "assign_section",
+                  "add_part",
+                  "set_part",
+                  "remove_part",
+                  "add_support",
+                  "set_support",
+                  "remove_support",
+                  "set_material",
+                  "set_variable"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "xyz_mm": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "joint": {
+                "type": "string"
+              },
+              "at_node": {
+                "type": "string"
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "key": {
+                "type": "string",
+                "description": "A key of design.sections or design.materials."
+              },
+              "name": {
+                "type": "string",
+                "description": "A key of design.variables."
+              },
+              "section": {
+                "type": [
+                  "object",
+                  "string"
+                ],
+                "description": "set_section: the section record. assign_section: the key of a section."
+              },
+              "member": {
+                "type": "object"
+              },
+              "part": {
+                "type": "object"
+              },
+              "support": {
+                "type": "object",
+                "description": "add_support: the support record."
+              },
+              "material": {
+                "type": "object"
+              },
+              "fields": {
+                "type": "object",
+                "description": "set_part, set_support: the fields to change."
+              },
+              "value": {
+                "$ref": "#/$defs/quantity"
+              },
+              "basis": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "tool_input.check_design": {
+      "description": "Check a written design without making a version: the schema, references (nodes, sections, materials, carried_by, frame_node), that every member and carried part connects to the supports, sizes against their units, interference (K4) and masses against the requirements. Results come from code. Without design, the current version.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design": {
+          "type": "object"
+        }
+      }
+    },
+    "tool_input.write_load_case": {
+      "description": "A load case Claude writes for a test the catalog has no builder for. Claude gives the conditions, the judged quantity and how the limit is made; the code computes the limit from limit_from and sets tolerance_rel, as for a catalog load case. Never a number the model made up for the limit.",
+      "type": "object",
+      "required": [
+        "test_id",
+        "domain",
+        "title",
+        "params",
+        "criterion",
+        "basis"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "test_id": {
+          "$ref": "#/$defs/test_id"
+        },
+        "domain": {
+          "$ref": "#/$defs/domain"
+        },
+        "title": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "description": "As load_case.params."
+        },
+        "requirement_keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/req_key"
+          }
+        },
+        "criterion": {
+          "type": "object",
+          "required": [
+            "quantity",
+            "op",
+            "limit_from"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "quantity": {
+              "type": "string"
+            },
+            "op": {
+              "enum": [
+                "<=",
+                ">=",
+                "<",
+                ">"
+              ]
+            },
+            "limit_from": {
+              "type": "object",
+              "required": [
+                "expr"
+              ],
+              "additionalProperties": false,
+              "description": "The limit as an expression the code evaluates, e.g. yield_MPa / Q61, with its names read from the requirements and the design's materials.",
+              "properties": {
+                "expr": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "refs": {
+                  "type": "object",
+                  "description": "Names used in expr: where each is read from (a requirement key or a path in the design).",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "basis": {
+          "type": "string",
+          "description": "Why this load case stands for the use: its source, or an assumption said as one."
+        }
+      }
+    },
     "tool_input.write_report": {
       "description": "Write the report: the model gives the summary and the next changes; numbers in them must match the records or the tool refuses.",
       "type": "object",
@@ -5602,6 +5920,201 @@
             "minLength": 1
           },
           "description": "Result quantities to compare. Missing: every quantity with a sensitivity record."
+        }
+      }
+    },
+    "tool_input.export_step": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 設計の版を STEP (ISO 10303-21) のファイルにして実行のフォルダに書く。部材と部品が 1 つずつ名前つきの立体になる。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Missing: the latest version."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "Where to write, relative to the run's folder. Missing: cad/design_v<N>.step."
+        }
+      }
+    },
+    "tool_input.import_step": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 実行のフォルダの中の STEP を読み、設計の記録 (design) と、立体ごとに何になったか (部材・部品) を返す。版は作らない。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "A STEP file inside the run's folder, relative to it (cad/frame.step). Paths outside the run's folder are refused."
+        },
+        "density_kg_m3": {
+          "description": "Density for the parts' masses: one number for every solid, or {solid name or '*': number}. Missing: masses are null.",
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          ]
+        }
+      }
+    },
+    "tool_input.edit_step": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cad_tools.py). 実行のフォルダの中の STEP の立体を動かす・回す・消す・足す・断面を変えて、別のファイルに書く。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "edits"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "A STEP file inside the run's folder, relative to it (cad/frame.step). Paths outside the run's folder are refused."
+        },
+        "out_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\.(step|stp|STEP|STP)$",
+          "description": "Where to write, relative to the run's folder. Missing: <name>_edit<N>.step next to path (never over it)."
+        },
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "op",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "enum": [
+                  "move",
+                  "rotate",
+                  "delete",
+                  "add_box",
+                  "set_section",
+                  "set_wall",
+                  "add_brace"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "by_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "axis": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "angle_deg": {
+                "type": "number"
+              },
+              "about_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "center_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "size_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rpy_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "section": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "shape",
+                  "dims_mm"
+                ],
+                "properties": {
+                  "shape": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "dims_mm": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                }
+              },
+              "t_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "from_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "to_mm": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            }
+          }
         }
       }
     },

@@ -119,6 +119,7 @@ def design_for(tool):
 
 
 COARSE = {"frame_shell": {"element_size": {"value": 20.0, "unit": "mm"}, "mesh_convergence": "off"},
+          "modal_shell": {"element_size": {"value": 20.0, "unit": "mm"}},
           # 8 facets per round tube (hot_spot_facets): the test needs the results' names, not the 40-facet read
           "frame_tubes": {"element_size": {"value": 40.0, "unit": "mm"}, "hot_spot_facets": {"value": 8, "unit": "1"}}}
 

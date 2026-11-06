@@ -302,7 +302,7 @@ items:
 
   - key: Q31
     name: 体格の範囲
-    applies_if: ride or lean or near_people or handheld
+    applies_if: ride or lean or handheld
     ask: default
     default:
       value: 若年女性 5 % 〜 若年男性 95 %
@@ -337,7 +337,7 @@ items:
 
   - key: Q34
     name: 弱い人がいるか
-    applies_if: always
+    applies_if: ride or lean or handheld or near_people
     ask: confirm
     why: いる場合は、はさまれや倒れかかりをより厳しく見るためです。
     example: いない / 子ども
