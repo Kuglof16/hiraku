@@ -105,6 +105,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - サスの取付点は、設計の `support.suspension.hardpoints_mm` (取付点の名前 → vec3、mm) に、設計を作るコードが書く。K2 の関数・梁とシェル・画面は、ここから読む (出どころを 1 つにする)。取付点ごとの力は、analysis の `vectors` に `kind: "joint"` (`at` は `<支持の id>.<取付点の名前>`、`origin_mm` は取付点、`vector_N` は車体が受ける力) で出す。サスのタワーはフレームの部材、金具の板は部品 (kind `bracket`) で持つ
 - 接地する所 (`support`) は任意で `tire` (`coefficients`: `data/tyres/` のタイヤの係数のファイル、`relaxation_length_mm`) を持ち、サスペンションは任意で `bushings` (腕の内側のブッシュの半径方向・軸方向とタイロッドの剛性 N/mm、K&C の C) を持つ。無い値は解く側が仮定して analysis の `assumptions` に書く
 - `series` は時間 (`t_s`) か、ほかの量 (`x`: `{quantity, unit, values}`。K&C の台のストロークや横力) のどちらか 1 つを横軸に持つ
+- 部品ごとの series: 1 つの部品の値 (電池ごとの温度・部品ごとの電力・損失 W など) の series は、任意の欄 `part_id` に設計の部品の id を書く。`channel` は今までどおり (`temp.battery`・`loss.motor` など)。同じ種類の部品が 2 つある設計では、画面は `part_id` でその部品に色を付ける。`part_id` の無い series は、部品に結び付けない
+- 値と field を結ぶ: result の任意の欄 `field_index` は、その値を読んだ field の、同じ analysis の `fields` の中の番号 (0 から)。例: `first_frame_mode` のモード形の field。画面は判定の値からその field を開く。番号が `fields` の外なら、画面は結び付けない
 - ツールの名前は棚の中で 1 つに 1 つ。段差越えは `step_climb` (MVP の形: 手計算の釣り合いの輪の力 → K1) と `step_climb_dynamic` (K2 で段差を走らせる) の 2 つ
 - ツールは任意の欄 `applies_to` に、使える設計の型 (`hiraku.designgen` の `ARCHETYPES` の名前。例: `frame_tubes` は `["space_frame_utv"]`) を並べてよい。無ければどの設計にも使える。設計の型は、その設計を作った generator の型。`analyze` は、版の設計の型が `applies_to` に無いツールを理由の文つきで断り、型の分からない設計 (手で作った設計) にも `applies_to` のあるツールは使わない。`list_tools` はこの欄も見せる
 - 部品の任意の欄 `material` (部材と同じく `design.materials` の鍵) と `finish` (`painted`・`powder_coat`・`bare`・`anodized`・`galvanized`・`molded`)。設計を作るコードが書き、画面の実物の見た目はここから材質を決める (無ければ部品の種類から)。質量と強さに効く値は `design.materials` の側に出典つきで
