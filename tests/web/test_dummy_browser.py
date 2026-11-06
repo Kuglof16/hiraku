@@ -251,8 +251,10 @@ class DummyBrowserTest(unittest.TestCase):
 
     def test_no_errors(self):
         self.assertEqual(self.errors, {"real": [], "plain": []})
-        # the showcase's four runs are among the designs drawn
-        self.assertEqual(len({n.split(" v")[0] for n, _, _ in self.designs if n.startswith("2026")}), 4)
+        # the showcase's four car runs (the whole dummy, a head and limbs) are among the designs
+        # drawn; other runs' occupants (the care bed's lying person: back, seat, thigh, leg) are too
+        whole = {n.split(" v")[0] for n, d, _ in self.designs if n.startswith("2026") and any(f"{p}.head" in {q["id"] for q in d["parts"]} for p in persons(d))}
+        self.assertEqual(len(whole), 4, whole)
 
     def test_table_in_inches_and_millimetres(self):
         self.assertEqual(self.table["inch"], TABLE_IN)
@@ -427,8 +429,10 @@ class DummyBrowserTest(unittest.TestCase):
                 mine = [m for i, o in got.items() if i.split(".", 1)[0] == person for m in o["meshes"]]
                 self.assertEqual({m["color"] for m in mine}, {BODY_YELLOW, JOINT_BLACK}, (name, person))
                 self.assertEqual({m["color"] for m in mine if m["piece"] == "joint"}, {JOINT_BLACK}, (name, person))
-        real = self.drawn[self.designs[0][0]]["parts"]
-        person = persons(self.designs[0][1])[0]
+        # the first design with the whole dummy (a head): not the care bed's lying person
+        name, d = next((n, d) for n, d, _ in self.designs for p in persons(d)[:1] if f"{p}.head" in self.drawn[n]["parts"])
+        real = self.drawn[name]["parts"]
+        person = persons(d)[0]
         by = lambda seg: real[f"{person}.{seg}" if seg else person]["meshes"]
         for seg in ("neck", "hand_L", "hand_R", "foot_L", "foot_R"):
             self.assertEqual({m["color"] for m in by(seg)}, {JOINT_BLACK}, seg)

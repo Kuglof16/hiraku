@@ -418,10 +418,21 @@ body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #ecee
   font-size: 15px;
   min-width: 150px;
   max-width: 250px;
+  /* its height kept under the toggles (app.js fitOverlays): the list of fields gives way first and
+     scrolls; the colour bar keeps its height (with even less room, the whole legend scrolls) */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
+.legend > * { flex: none; }
+.legend > .fields { flex: 0 1 auto; min-height: 44px; overflow-y: auto; scrollbar-width: thin; margin-bottom: 6px; }
+.legend > .fields > .kinds:last-child { margin-bottom: 0; }
 .legend[hidden] { display: none; }
 .legend .ttl { font-weight: 600; margin-bottom: 6px; }
-.legend .bar { display: grid; grid-template-columns: 18px auto; column-gap: 8px; }
+/* (the top tick's number stands half its line above the bar: the bar keeps that much below the title) */
+.legend .bar { display: grid; grid-template-columns: 18px auto; column-gap: 8px; margin-top: 10px; }
+body.video .legend .bar { margin-top: 8px; }
 .legend .sw { height: 16px; border-left: 1.5px solid var(--ink); border-right: 1.5px solid var(--ink); }
 .legend .sw:first-child { border-top: 1.5px solid var(--ink); }
 .legend .sw.end { border-bottom: 1.5px solid var(--ink); }
@@ -1170,6 +1181,8 @@ body.video .mode .stop-btn { display: none; }
   pointer-events: none;
 }
 .now[hidden] { display: none; }
+/* beside the colour legend (app.js fitOverlays): one line, cut with an ellipsis */
+.now.one-line { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: none; }
 /* app.js loadingNote: while a record is read */
 .loading-note { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 50; background: rgba(251, 249, 244, 0.96);
   border: 2px solid var(--ink); border-radius: 12px; padding: 12px 20px; font-size: 18px; pointer-events: none; }
@@ -1254,6 +1267,8 @@ body.present .col-left, body.present .col-right { display: none; }
 /* the video's A1 and A2 (the intake screens) are filmed without the rail's card ("いま:"): they use the whole width */
 body.video.present[data-intake-tab="A1"] .present-rail, body.video.present[data-intake-tab="A2"] .present-rail { display: none; }
 body.video.present[data-intake-tab="A1"] .main, body.video.present[data-intake-tab="A2"] .main { padding-right: 24px; }
+/* nor with the tab's first lines (いま / 調べる分野 / 次): with them the domains' last row went under the frame */
+body.video #view-intake[data-tab="A1"] > .tab-head, body.video #view-intake[data-tab="A2"] > .tab-head { display: none; }
 body.present .tests, body.present .toggles, body.present .hint, body.present .bench-more, body.present .bubble,
 body.present .running, body.present .limitnote, body.present .animbar, body.present .now { display: none; }
 /* only the main labels in the 3D (the largest value, the picked wheel's force) */
@@ -1261,7 +1276,7 @@ body.present .gl-labels .lbl:not(.lbl-key) { display: none; }
 body.present .cmp-view .lbl-key, body.present .cmp-view .gl-leaders { display: none; }
 body.present .cmp-tags span { font-size: 18px; }
 /* the colour bar alone: no field switches, no notes */
-body.present .legend .kinds, body.present .legend .acts, body.present .legend .src, body.present .legend .conv, body.present .legend .cmp { display: none; }
+body.present .legend .fields, body.present .legend .kinds, body.present .legend .acts, body.present .legend .src, body.present .legend .conv, body.present .legend .cmp { display: none; }
 /* the grid: no small chart in the tiles (one graph at most on the screen) */
 body.present .tile svg.spark { display: none; }
 body.present .tile h3 { font-size: 26px; }

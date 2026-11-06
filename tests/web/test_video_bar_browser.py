@@ -124,27 +124,41 @@ class VideoBarBrowserTest(unittest.TestCase):
         self.assertEqual(seen[""], seen["&video=1"])
 
     def test_a_time_shown_as_the_end_is_the_end(self):
-        """The bar shows 0.1 s: a seek less than 0.05 s before the last event's time (?t=2656 on a
-        record ending at 2656.009) applies it, the run's end; a time further before does not."""
-        for video in ("", "&video=1"):
+        """The bar shows 0.1 s: a seek less than 0.05 s before the bar's end (?t=2656 on a record
+        ending at 2656.009) lands on the end, every event applied; a time further before does not.
+        The bar's end: on the event clock (the default) the last event's time and its own time on
+        screen (player.js duration, 81e936de); on the paced clock (video=1) the last event's time."""
+        for video, clock in (("", "event"), ("&video=1", "paced")):
             page, errors = self.open(f"run=sample&t=0{video}")
             got = page.evaluate("""async () => { const pl = window.hiraku.player, n = pl.events.length;
-              const end = pl.duration, prev = pl.events[n - 2].t;
-              if (end !== pl.events[n - 1].t) return { endIsNotTheLastEvent: [end, pl.events[n - 1].t] };
+              const end = pl.duration, last = pl.events[n - 1], prev = pl.events[n - 2].t;
               await window.hiraku.seek(end - 0.03);
               const near = { applied: pl.applied, t: pl.playhead, status: pl.state.status };
-              const mid = Math.max(prev, end - 0.5) + 0.06 < end - 0.06 ? (Math.max(prev, end - 0.5) + end) / 2 : null;
+              // after the last event, still more than 0.05 s before the end (the event clock's hold)
+              const held = last.t + 0.06 < end - 0.06 ? (last.t + end) / 2 : null;
+              let inHold = null;
+              if (held !== null) { await window.hiraku.seek(held); inHold = { applied: pl.applied, t: pl.playhead }; }
+              // before the last event
+              const lo = Math.max(prev, last.t - 0.5);
+              const mid = lo + 0.06 < last.t - 0.06 ? (lo + last.t) / 2 : null;
               let before = null;
               if (mid !== null) { await window.hiraku.seek(mid); before = { applied: pl.applied, t: pl.playhead }; }
               await window.hiraku.seek(1e6);
-              return { n, end, near, mid, before, last: pl.events[n - 1].kind, endStatus: pl.state.status }; }""")
+              return { n, end, lastT: last.t, dwell: last.dwell ?? 0, clock: pl.clock, near, held, inHold, mid, before,
+                       last: last.kind, endStatus: pl.state.status }; }""")
             page.close()
             self.assertEqual(errors, [], video)
-            self.assertNotIn("endIsNotTheLastEvent", got, video)  # (the replay ends at the last event, as 150416)
+            self.assertEqual(got["clock"], clock, video)
             self.assertEqual(got["last"], "run.finished", video)
+            self.assertAlmostEqual(got["end"], got["lastT"] + (got["dwell"] if clock == "event" else 0), places=9, msg=video)
             self.assertEqual(got["near"], {"applied": got["n"], "t": got["end"], "status": got["endStatus"]}, video)
-            self.assertIsNotNone(got["mid"], video)  # (the sample's end comes after a gap)
-            self.assertEqual(got["before"], {"applied": got["n"] - 1, "t": got["mid"]}, video)
+            if clock == "event":
+                self.assertIsNotNone(got["held"], video)  # (run.finished keeps its time on screen)
+                self.assertEqual(got["inHold"], {"applied": got["n"], "t": got["held"]}, video)
+            if clock == "paced":
+                self.assertIsNotNone(got["mid"], (video, got))  # (the sample's end comes after a gap; the event clock closes it)
+            if got["mid"] is not None:
+                self.assertEqual(got["before"], {"applied": got["n"] - 1, "t": got["mid"]}, video)
 
     def test_no_layout_breaks_with_video(self):
         problems = lint(self.browser, self.bases, VIDEO_SCREENS, WIDTHS)
