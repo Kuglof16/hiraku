@@ -469,7 +469,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
+   "text": "確かめる分野を 7 つ、試験を 26 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -521,9 +521,10 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "空力",
-      "reason": "外・走 に当てはまるので、F1 横風 を当てる。F2 空気抵抗 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
       "test_ids": [
-       "F1"
+       "F1",
+       "F2"
       ]
      },
      {
@@ -30902,7 +30903,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
+   "text": "確かめる分野を 7 つ、試験を 26 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -30954,9 +30955,10 @@ export const DEMOS = {
      {
       "domain": "aero",
       "shown_name": "空力",
-      "reason": "外・走 に当てはまるので、F1 横風 を当てる。F2 空気抵抗 は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "外・走 に当てはまるので、F1 横風・F2 空気抵抗 を当てる",
       "test_ids": [
-       "F1"
+       "F1",
+       "F2"
       ]
      },
      {
