@@ -268,8 +268,8 @@
     </div>`).join(""));
 
   document.querySelector(".src").innerHTML = [
-    `ツールなしの Claude (Opus 5.5、Claude Code の claude -p、ツールなし) に 2026-11-03 に聞いた答え。HIRAKU の値は台本の運転 (Claude なし) の版 1`,
-    `差 = (解析 − Claude の答え) ÷ Claude の答え。HIRAKU が予測と解析の照合で許す幅 (上から ${DATA.rows.map((r) => r.tol_pct + " %").join("・")}) に入れば ✓`,
+    `ツールなしの Claude (Opus 5.5、Claude Code の claude -p、ツールなし) に 2026-11-03 に聞いた答え。HIRAKU の値は台本の運転 (Claude なし) の v1`,
+    `差 = (解析 − Claude の答え) ÷ Claude の答え。HIRAKU が予測と解析の判定で許す幅 (上から ${DATA.rows.map((r) => r.tol_pct + " %").join("・")}) に入れば ✓`,
   ].map((s) => `<li>${s}</li>`).join("");
 
   window.n10 = { DATA, diffs, worst, ok };
