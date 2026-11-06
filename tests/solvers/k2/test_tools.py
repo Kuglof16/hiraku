@@ -513,7 +513,19 @@ class StepRecordRun(unittest.TestCase):
         self.assertLess(t[0], 0.05)
         self.assertGreater(t[-1], res["climb_time"])
         self.assertTrue(any("record_run = speed" in a for a in rec["assumptions"]))
-        self.assertTrue(any("tyre's vertical stiffness" in a and "without a source" in a for a in rec["assumptions"]))
+        note = next(a for a in rec["assumptions"] if "tyre's vertical stiffness" in a)
+        # box_design gives neither variable: both are K2's defaults
+        self.assertIn("tyre_stiffness K2's default", note)
+        self.assertIn("bump_stop_factor K2's default", note)
+
+    def test_the_stiffness_note_gives_each_variable_its_basis(self):
+        from hiraku.solvers.k2_vehicle.shelf.step import stiffness_sources
+        d = box_design(variables={"tyre_stiffness": {"value": 80.0, "unit": "N/mm", "basis": "a shop page (not checked)"},
+                                  "bump_stop_factor": {"value": 10.0, "unit": "1"}})
+        got = stiffness_sources(d)
+        self.assertIn("tyre_stiffness a shop page (not checked)", got)
+        self.assertIn("bump_stop_factor from the design without a source (no basis)", got)
+        self.assertEqual(contract.errors("design", d), [])
 
     def test_the_vectors_at_the_peak_balance_the_weight_and_carry_the_mount_loads(self):
         from hiraku.solvers.k2_vehicle.units import G0
