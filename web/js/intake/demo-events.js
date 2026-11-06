@@ -680,7 +680,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -732,6 +732,38 @@ export const DEMOS = {
         "frame"
        ]
       }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
      }
     ]
    }
@@ -19640,6 +19672,969 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0008",
     "design_version": 1,
+    "rule_id": "WD-04",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     }
+    ],
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     }
+    ],
+    "level": "advice"
+   }
+  },
+  {
+   "seq": 24,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
+    "rule_id": "WD-05",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     }
+    ],
+    "level": "advice"
+   }
+  },
+  {
+   "seq": 25,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0010",
+    "design_version": 1,
     "rule_id": "TL-01",
     "targets": [
      "floor_front",
@@ -20082,15 +21077,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
-   "ts": "2026-11-03T10:00:14.800+09:00",
-   "t": 14.8,
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0009",
+    "rule_check_id": "rchk-0011",
     "design_version": 1,
     "rule_id": "TL-02",
     "targets": [
@@ -20588,15 +21583,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
-   "ts": "2026-11-03T10:00:14.900+09:00",
-   "t": 14.9,
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0010",
+    "rule_check_id": "rchk-0012",
     "design_version": 1,
     "rule_id": "HU-01",
     "targets": [
@@ -20623,15 +21618,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
-   "ts": "2026-11-03T10:00:15.000+09:00",
-   "t": 15.0,
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0011",
+    "rule_check_id": "rchk-0013",
     "design_version": 1,
     "rule_id": "HU-02",
     "targets": [
@@ -20673,15 +21668,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
-   "ts": "2026-11-03T10:00:15.100+09:00",
-   "t": 15.1,
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0012",
+    "rule_check_id": "rchk-0014",
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
@@ -21036,15 +22031,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.200+09:00",
-   "t": 15.2,
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0013",
+    "rule_check_id": "rchk-0015",
     "design_version": 1,
     "rule_id": "HR-01",
     "targets": [
@@ -21070,15 +22065,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0016",
     "design_version": 1,
     "rule_id": "HR-02",
     "targets": [
@@ -21104,15 +22099,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0015",
+    "rule_check_id": "rchk-0017",
     "design_version": 1,
     "rule_id": "HR-03",
     "targets": [
@@ -21138,15 +22133,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.500+09:00",
-   "t": 15.5,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0016",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "HR-04",
     "targets": [
@@ -21172,15 +22167,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0019",
     "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
@@ -21200,15 +22195,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
+   "seq": 35,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0018",
+    "rule_check_id": "rchk-0020",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -21228,15 +22223,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.800+09:00",
-   "t": 15.8,
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0019",
+    "rule_check_id": "rchk-0021",
     "design_version": 1,
     "rule_id": "WR-01",
     "targets": [
@@ -21257,15 +22252,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0022",
     "design_version": 1,
     "rule_id": "WR-02",
     "targets": [
@@ -21286,15 +22281,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0021",
+    "rule_check_id": "rchk-0023",
     "design_version": 1,
     "rule_id": "WR-03",
     "targets": [
@@ -21314,15 +22309,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 37,
-   "ts": "2026-11-03T10:00:16.100+09:00",
-   "t": 16.1,
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0022",
+    "rule_check_id": "rchk-0024",
     "design_version": 1,
     "rule_id": "WR-04",
     "targets": [
@@ -21342,15 +22337,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 38,
-   "ts": "2026-11-03T10:00:16.200+09:00",
-   "t": 16.2,
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0023",
+    "rule_check_id": "rchk-0025",
     "design_version": 1,
     "rule_id": "WR-05",
     "targets": [
@@ -21369,15 +22364,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 39,
-   "ts": "2026-11-03T10:00:16.300+09:00",
-   "t": 16.3,
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0024",
+    "rule_check_id": "rchk-0026",
     "design_version": 1,
     "rule_id": "WR-06",
     "targets": [
@@ -21398,15 +22393,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 40,
-   "ts": "2026-11-03T10:00:16.400+09:00",
-   "t": 16.4,
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0025",
+    "rule_check_id": "rchk-0027",
     "design_version": 1,
     "rule_id": "WR-07",
     "targets": [
@@ -21427,15 +22422,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 41,
-   "ts": "2026-11-03T10:00:16.500+09:00",
-   "t": 16.5,
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0026",
+    "rule_check_id": "rchk-0028",
     "design_version": 1,
     "rule_id": "WR-08",
     "targets": [
@@ -21454,15 +22449,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 42,
-   "ts": "2026-11-03T10:00:16.600+09:00",
-   "t": 16.6,
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0027",
+    "rule_check_id": "rchk-0029",
     "design_version": 1,
     "rule_id": "WR-09",
     "targets": [
@@ -21481,15 +22476,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 43,
-   "ts": "2026-11-03T10:00:16.700+09:00",
-   "t": 16.7,
+   "seq": 45,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0028",
+    "rule_check_id": "rchk-0030",
     "design_version": 1,
     "rule_id": "WR-10",
     "targets": [
@@ -21508,15 +22503,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.800+09:00",
-   "t": 16.8,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0029",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "WR-11",
     "targets": [
@@ -21535,15 +22530,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -21676,15 +22671,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 46,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 48,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0033",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -22726,65 +23721,6 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 47,
-   "ts": "2026-11-03T10:00:17.100+09:00",
-   "t": 17.1,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0032",
-    "design_version": 1,
-    "rule_id": "CS-01",
-    "targets": [
-     "cargo"
-    ],
-    "hits": [],
-    "not_evaluable": [
-     {
-      "part_id": "cargo",
-      "missing": [
-       "topover_count",
-       "lashing_angle_sin",
-       "lashing_pretension_N"
-      ]
-     }
-    ],
-    "pass": true
-   }
-  },
-  {
-   "seq": 48,
-   "ts": "2026-11-03T10:00:17.200+09:00",
-   "t": 17.2,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0033",
-    "design_version": 1,
-    "rule_id": "CS-02",
-    "targets": [
-     "cargo"
-    ],
-    "hits": [],
-    "not_evaluable": [
-     {
-      "part_id": "cargo",
-      "missing": [
-       "cargo_blocked_forward",
-       "topover_count",
-       "lashing_angle_sin",
-       "lashing_pretension_N"
-      ]
-     }
-    ],
-    "pass": true
-   }
-  },
-  {
    "seq": 49,
    "ts": "2026-11-03T10:00:17.300+09:00",
    "t": 17.3,
@@ -22795,7 +23731,7 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0034",
     "design_version": 1,
-    "rule_id": "CS-03",
+    "rule_id": "CS-01",
     "targets": [
      "cargo"
     ],
@@ -22824,6 +23760,65 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0035",
     "design_version": 1,
+    "rule_id": "CS-02",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "cargo_blocked_forward",
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 51,
+   "ts": "2026-11-03T10:00:17.500+09:00",
+   "t": 17.5,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0036",
+    "design_version": 1,
+    "rule_id": "CS-03",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 52,
+   "ts": "2026-11-03T10:00:17.600+09:00",
+   "t": 17.6,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0037",
+    "design_version": 1,
     "rule_id": "CS-04",
     "targets": [
      "cargo"
@@ -22842,15 +23837,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 51,
-   "ts": "2026-11-03T10:00:17.500+09:00",
-   "t": 17.5,
+   "seq": 53,
+   "ts": "2026-11-03T10:00:17.700+09:00",
+   "t": 17.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0036",
+    "rule_check_id": "rchk-0038",
     "design_version": 1,
     "rule_id": "CS-05",
     "targets": [
@@ -22869,15 +23864,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 52,
-   "ts": "2026-11-03T10:00:17.600+09:00",
-   "t": 17.6,
+   "seq": 54,
+   "ts": "2026-11-03T10:00:17.800+09:00",
+   "t": 17.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0037",
+    "rule_check_id": "rchk-0039",
     "design_version": 1,
     "rule_id": "CS-06",
     "targets": [
@@ -22898,15 +23893,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 53,
-   "ts": "2026-11-03T10:00:17.700+09:00",
-   "t": 17.7,
+   "seq": 55,
+   "ts": "2026-11-03T10:00:17.900+09:00",
+   "t": 17.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0038",
+    "rule_check_id": "rchk-0040",
     "design_version": 1,
     "rule_id": "CS-07",
     "targets": [
@@ -22926,15 +23921,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 54,
-   "ts": "2026-11-03T10:00:17.800+09:00",
-   "t": 17.8,
+   "seq": 56,
+   "ts": "2026-11-03T10:00:18.000+09:00",
+   "t": 18.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0039",
+    "rule_check_id": "rchk-0041",
     "design_version": 1,
     "rule_id": "CS-08",
     "targets": [
@@ -22953,15 +23948,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 55,
-   "ts": "2026-11-03T10:00:17.900+09:00",
-   "t": 17.9,
+   "seq": 57,
+   "ts": "2026-11-03T10:00:18.100+09:00",
+   "t": 18.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0040",
+    "rule_check_id": "rchk-0042",
     "design_version": 1,
     "rule_id": "CS-09",
     "targets": [
@@ -22980,15 +23975,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 56,
-   "ts": "2026-11-03T10:00:18.000+09:00",
-   "t": 18.0,
+   "seq": 58,
+   "ts": "2026-11-03T10:00:18.200+09:00",
+   "t": 18.2,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0041",
+    "rule_check_id": "rchk-0043",
     "design_version": 1,
     "rule_id": "CS-10",
     "targets": [
@@ -23008,15 +24003,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 57,
-   "ts": "2026-11-03T10:00:18.100+09:00",
-   "t": 18.1,
+   "seq": 59,
+   "ts": "2026-11-03T10:00:18.300+09:00",
+   "t": 18.3,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0042",
+    "rule_check_id": "rchk-0044",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -23061,15 +24056,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 58,
-   "ts": "2026-11-03T10:00:18.200+09:00",
-   "t": 18.2,
+   "seq": 60,
+   "ts": "2026-11-03T10:00:18.400+09:00",
+   "t": 18.4,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0043",
+    "rule_check_id": "rchk-0045",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -23118,15 +24113,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 59,
-   "ts": "2026-11-03T10:00:18.300+09:00",
-   "t": 18.3,
+   "seq": 61,
+   "ts": "2026-11-03T10:00:18.500+09:00",
+   "t": 18.5,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0044",
+    "rule_check_id": "rchk-0046",
     "design_version": 1,
     "rule_id": "UJ-01",
     "targets": [
@@ -23145,15 +24140,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 60,
-   "ts": "2026-11-03T10:00:18.400+09:00",
-   "t": 18.4,
+   "seq": 62,
+   "ts": "2026-11-03T10:00:18.600+09:00",
+   "t": 18.6,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0045",
+    "rule_check_id": "rchk-0047",
     "design_version": 1,
     "rule_id": "UJ-02",
     "targets": [
@@ -23173,15 +24168,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 61,
-   "ts": "2026-11-03T10:00:18.500+09:00",
-   "t": 18.5,
+   "seq": 63,
+   "ts": "2026-11-03T10:00:18.700+09:00",
+   "t": 18.7,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0046",
+    "rule_check_id": "rchk-0048",
     "design_version": 1,
     "rule_id": "UJ-03",
     "targets": [
@@ -23201,15 +24196,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 62,
-   "ts": "2026-11-03T10:00:18.600+09:00",
-   "t": 18.6,
+   "seq": 64,
+   "ts": "2026-11-03T10:00:18.800+09:00",
+   "t": 18.8,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0047",
+    "rule_check_id": "rchk-0049",
     "design_version": 1,
     "rule_id": "UJ-04",
     "targets": [
@@ -23228,15 +24223,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 63,
-   "ts": "2026-11-03T10:00:18.700+09:00",
-   "t": 18.7,
+   "seq": 65,
+   "ts": "2026-11-03T10:00:18.900+09:00",
+   "t": 18.9,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0048",
+    "rule_check_id": "rchk-0050",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -23592,50 +24587,6 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 64,
-   "ts": "2026-11-03T10:00:18.800+09:00",
-   "t": 18.8,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0049",
-    "design_version": 1,
-    "rule_id": "SY-01",
-    "targets": [
-     "motor",
-     "support:RL",
-     "support:RR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 65,
-   "ts": "2026-11-03T10:00:18.900+09:00",
-   "t": 18.9,
-   "run_id": "20261103-100000-offroad-4w",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0050",
-    "design_version": 1,
-    "rule_id": "SY-02",
-    "targets": [
-     "steering_wheel",
-     "support:FL",
-     "support:FR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
    "seq": 66,
    "ts": "2026-11-03T10:00:19.000+09:00",
    "t": 19.0,
@@ -23646,11 +24597,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0051",
     "design_version": 1,
-    "rule_id": "SY-03",
+    "rule_id": "SY-01",
     "targets": [
-     "pedal_brake",
-     "support:FL",
-     "support:FR",
+     "motor",
      "support:RL",
      "support:RR"
     ],
@@ -23670,10 +24619,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0052",
     "design_version": 1,
-    "rule_id": "SY-04",
+    "rule_id": "SY-02",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "steering_wheel",
+     "support:FL",
+     "support:FR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -23691,10 +24641,13 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0053",
     "design_version": 1,
-    "rule_id": "SY-05",
+    "rule_id": "SY-03",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "pedal_brake",
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -23712,9 +24665,10 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0054",
     "design_version": 1,
-    "rule_id": "SY-06",
+    "rule_id": "SY-04",
     "targets": [
-     "rollbar"
+     "seat_R",
+     "seat_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -23732,8 +24686,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0055",
     "design_version": 1,
-    "rule_id": "SY-07",
-    "targets": [],
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -23750,10 +24707,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0056",
     "design_version": 1,
-    "rule_id": "SY-08",
+    "rule_id": "SY-06",
     "targets": [
-     "battery",
-     "motor"
+     "rollbar"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -23771,10 +24727,8 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0057",
     "design_version": 1,
-    "rule_id": "SY-09",
-    "targets": [
-     "battery"
-    ],
+    "rule_id": "SY-07",
+    "targets": [],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -23790,6 +24744,47 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0058",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "battery",
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 74,
+   "ts": "2026-11-03T10:00:19.800+09:00",
+   "t": 19.8,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0059",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 75,
+   "ts": "2026-11-03T10:00:19.900+09:00",
+   "t": 19.9,
+   "run_id": "20261103-100000-offroad-4w",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0060",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -23916,15 +24911,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 74,
-   "ts": "2026-11-03T10:00:19.800+09:00",
-   "t": 19.8,
+   "seq": 76,
+   "ts": "2026-11-03T10:00:20.000+09:00",
+   "t": 20.0,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0059",
+    "rule_check_id": "rchk-0061",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -23971,15 +24966,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 75,
-   "ts": "2026-11-03T10:00:19.900+09:00",
-   "t": 19.9,
+   "seq": 77,
+   "ts": "2026-11-03T10:00:20.100+09:00",
+   "t": 20.1,
    "run_id": "20261103-100000-offroad-4w",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0060",
+    "rule_check_id": "rchk-0062",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [
@@ -24236,7 +25231,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -24288,6 +25283,38 @@ export const DEMOS = {
         "frame"
        ]
       }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
      }
     ]
    }
@@ -25853,7 +26880,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -25905,6 +26932,38 @@ export const DEMOS = {
         "frame"
        ]
       }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
      }
     ]
    }
@@ -27124,7 +28183,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -27176,6 +28235,38 @@ export const DEMOS = {
         "frame"
        ]
       }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
      }
     ]
    }
@@ -29493,7 +30584,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "knowledge.imported",
    "agent": "lead",
-   "text": "最初から入っているナレッジ「溶接の決まり」から 3 件の規則",
+   "text": "最初から入っているナレッジ「溶接の決まり」から 5 件の規則",
    "data": {
     "doc": {
      "doc_id": "KN-WD",
@@ -29545,6 +30636,38 @@ export const DEMOS = {
         "frame"
        ]
       }
+     },
+     {
+      "rule_id": "WD-04",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する",
+      "check": "butt_end_partial_weld <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. A butt joint of a square tube is a T joint (an end meets the side of another tube) or an L joint (two ends meet); all round means the weld closes the whole perimeter of the cut end. The design says it with the node's weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
+     },
+     {
+      "rule_id": "WD-05",
+      "doc_id": "KN-WD",
+      "category": "weld",
+      "text": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける",
+      "check": "butt_end_ungusseted <= 0",
+      "origin": "builtin",
+      "trust": 3,
+      "basis": "assumption: the author's practical experience (a CAE practitioner's judgement); no document was read for this rule. Every T and L butt joint of the frame is taken as one that carries force: how much force each joint carries is not computed here. A joint has a gusset when a part of kind gusset is carried by its node (carried_by). A tube that goes on past a node (another tube straight on the other side) is not butted there; a cross member that passes through the wall of a rail is not told from a butt joint and counts as one",
+      "applies_to": {
+       "kinds": [
+        "frame"
+       ]
+      },
+      "level": "advice"
      }
     ]
    }
@@ -48204,6 +49327,969 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0008",
     "design_version": 1,
+    "rule_id": "WD-04",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "rail_L_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_L_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_FA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "rail_R_BE",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_F",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_A",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_S2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_B",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "cross_E",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_post_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_L",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_post_R",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     },
+     {
+      "part_id": "dash_cross",
+      "missing": [
+       "butt_end_partial_weld"
+      ]
+     }
+    ],
+    "pass": true,
+    "checked": [
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_partial_weld": 0.0
+      }
+     }
+    ],
+    "level": "advice"
+   }
+  },
+  {
+   "seq": 23,
+   "ts": "2026-11-03T10:00:14.800+09:00",
+   "t": 14.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0009",
+    "design_version": 1,
+    "rule_id": "WD-05",
+    "targets": [
+     "rail_L_FA",
+     "rail_L_LAp1_LAu1",
+     "rail_L_LAu1_LA",
+     "rail_L_LA_LAu2",
+     "rail_L_LAu2_LAp2",
+     "rail_L_AS1",
+     "rail_L_S1S2",
+     "rail_L_S2H",
+     "rail_L_HB",
+     "rail_L_BE",
+     "rail_R_FA",
+     "rail_R_RAp1_RAu1",
+     "rail_R_RAu1_RA",
+     "rail_R_RA_RAu2",
+     "rail_R_RAu2_RAp2",
+     "rail_R_AS1",
+     "rail_R_S1S2",
+     "rail_R_S2H",
+     "rail_R_HB",
+     "rail_R_BE",
+     "cross_F",
+     "cross_A",
+     "cross_S1",
+     "cross_S2",
+     "cross_B",
+     "cross_E",
+     "tower_post_LA1",
+     "tower_top_LA1",
+     "tower_post_LA2",
+     "tower_top_LA2",
+     "tower_arm_LA",
+     "lower_leg_LA1",
+     "lower_leg_LA2",
+     "tower_post_RA1",
+     "tower_top_RA1",
+     "tower_post_RA2",
+     "tower_top_RA2",
+     "tower_arm_RA",
+     "lower_leg_RA1",
+     "lower_leg_RA2",
+     "tower_post_LB",
+     "tower_arm_LB",
+     "tower_post_RB",
+     "tower_arm_RB",
+     "lower_cross_A1",
+     "lower_cross_A2",
+     "dash_post_L",
+     "dash_post_R",
+     "dash_cross"
+    ],
+    "hits": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 1)"
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      },
+      "message": "力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける に合わない (butt_end_ungusseted = 2)"
+     }
+    ],
+    "not_evaluable": [],
+    "pass": false,
+    "checked": [
+     {
+      "part_id": "rail_L_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAp1_LAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu1_LA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LA_LAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_LAu2_LAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_L_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_FA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAp1_RAu1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu1_RA",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RA_RAu2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_RAu2_RAp2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_AS1",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S1S2",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_S2H",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_HB",
+      "values": {
+       "butt_end_ungusseted": 0.0
+      }
+     },
+     {
+      "part_id": "rail_R_BE",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "cross_F",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_A",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_S2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_B",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "cross_E",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_LA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_LA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA1",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_top_RA2",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RA",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_leg_RA2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_post_LB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_LB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "tower_post_RB",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "tower_arm_RB",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A1",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "lower_cross_A2",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     },
+     {
+      "part_id": "dash_post_L",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_post_R",
+      "values": {
+       "butt_end_ungusseted": 1.0
+      }
+     },
+     {
+      "part_id": "dash_cross",
+      "values": {
+       "butt_end_ungusseted": 2.0
+      }
+     }
+    ],
+    "level": "advice"
+   }
+  },
+  {
+   "seq": 24,
+   "ts": "2026-11-03T10:00:14.900+09:00",
+   "t": 14.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0010",
+    "design_version": 1,
     "rule_id": "TL-01",
     "targets": [
      "floor_front",
@@ -48646,15 +50732,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 23,
-   "ts": "2026-11-03T10:00:14.800+09:00",
-   "t": 14.8,
+   "seq": 25,
+   "ts": "2026-11-03T10:00:15.000+09:00",
+   "t": 15.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0009",
+    "rule_check_id": "rchk-0011",
     "design_version": 1,
     "rule_id": "TL-02",
     "targets": [
@@ -49152,15 +51238,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 24,
-   "ts": "2026-11-03T10:00:14.900+09:00",
-   "t": 14.9,
+   "seq": 26,
+   "ts": "2026-11-03T10:00:15.100+09:00",
+   "t": 15.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0010",
+    "rule_check_id": "rchk-0012",
     "design_version": 1,
     "rule_id": "HU-01",
     "targets": [
@@ -49187,15 +51273,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 25,
-   "ts": "2026-11-03T10:00:15.000+09:00",
-   "t": 15.0,
+   "seq": 27,
+   "ts": "2026-11-03T10:00:15.200+09:00",
+   "t": 15.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0011",
+    "rule_check_id": "rchk-0013",
     "design_version": 1,
     "rule_id": "HU-02",
     "targets": [
@@ -49237,15 +51323,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 26,
-   "ts": "2026-11-03T10:00:15.100+09:00",
-   "t": 15.1,
+   "seq": 28,
+   "ts": "2026-11-03T10:00:15.300+09:00",
+   "t": 15.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0012",
+    "rule_check_id": "rchk-0014",
     "design_version": 1,
     "rule_id": "HU-03",
     "targets": [
@@ -49600,15 +51686,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 27,
-   "ts": "2026-11-03T10:00:15.200+09:00",
-   "t": 15.2,
+   "seq": 29,
+   "ts": "2026-11-03T10:00:15.400+09:00",
+   "t": 15.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0013",
+    "rule_check_id": "rchk-0015",
     "design_version": 1,
     "rule_id": "HR-01",
     "targets": [
@@ -49634,15 +51720,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 28,
-   "ts": "2026-11-03T10:00:15.300+09:00",
-   "t": 15.3,
+   "seq": 30,
+   "ts": "2026-11-03T10:00:15.500+09:00",
+   "t": 15.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0014",
+    "rule_check_id": "rchk-0016",
     "design_version": 1,
     "rule_id": "HR-02",
     "targets": [
@@ -49668,15 +51754,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 29,
-   "ts": "2026-11-03T10:00:15.400+09:00",
-   "t": 15.4,
+   "seq": 31,
+   "ts": "2026-11-03T10:00:15.600+09:00",
+   "t": 15.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0015",
+    "rule_check_id": "rchk-0017",
     "design_version": 1,
     "rule_id": "HR-03",
     "targets": [
@@ -49702,15 +51788,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 30,
-   "ts": "2026-11-03T10:00:15.500+09:00",
-   "t": 15.5,
+   "seq": 32,
+   "ts": "2026-11-03T10:00:15.700+09:00",
+   "t": 15.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0016",
+    "rule_check_id": "rchk-0018",
     "design_version": 1,
     "rule_id": "HR-04",
     "targets": [
@@ -49736,15 +51822,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 31,
-   "ts": "2026-11-03T10:00:15.600+09:00",
-   "t": 15.6,
+   "seq": 33,
+   "ts": "2026-11-03T10:00:15.800+09:00",
+   "t": 15.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0017",
+    "rule_check_id": "rchk-0019",
     "design_version": 1,
     "rule_id": "BT-01",
     "targets": [
@@ -49764,15 +51850,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 32,
-   "ts": "2026-11-03T10:00:15.700+09:00",
-   "t": 15.7,
+   "seq": 34,
+   "ts": "2026-11-03T10:00:15.900+09:00",
+   "t": 15.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0018",
+    "rule_check_id": "rchk-0020",
     "design_version": 1,
     "rule_id": "BT-02",
     "targets": [
@@ -49792,15 +51878,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 33,
-   "ts": "2026-11-03T10:00:15.800+09:00",
-   "t": 15.8,
+   "seq": 35,
+   "ts": "2026-11-03T10:00:16.000+09:00",
+   "t": 16.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0019",
+    "rule_check_id": "rchk-0021",
     "design_version": 1,
     "rule_id": "WR-01",
     "targets": [
@@ -49821,15 +51907,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 34,
-   "ts": "2026-11-03T10:00:15.900+09:00",
-   "t": 15.9,
+   "seq": 36,
+   "ts": "2026-11-03T10:00:16.100+09:00",
+   "t": 16.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0020",
+    "rule_check_id": "rchk-0022",
     "design_version": 1,
     "rule_id": "WR-02",
     "targets": [
@@ -49850,15 +51936,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 35,
-   "ts": "2026-11-03T10:00:16.000+09:00",
-   "t": 16.0,
+   "seq": 37,
+   "ts": "2026-11-03T10:00:16.200+09:00",
+   "t": 16.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0021",
+    "rule_check_id": "rchk-0023",
     "design_version": 1,
     "rule_id": "WR-03",
     "targets": [
@@ -49878,15 +51964,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 36,
-   "ts": "2026-11-03T10:00:16.100+09:00",
-   "t": 16.1,
+   "seq": 38,
+   "ts": "2026-11-03T10:00:16.300+09:00",
+   "t": 16.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0022",
+    "rule_check_id": "rchk-0024",
     "design_version": 1,
     "rule_id": "WR-04",
     "targets": [
@@ -49906,15 +51992,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 37,
-   "ts": "2026-11-03T10:00:16.200+09:00",
-   "t": 16.2,
+   "seq": 39,
+   "ts": "2026-11-03T10:00:16.400+09:00",
+   "t": 16.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0023",
+    "rule_check_id": "rchk-0025",
     "design_version": 1,
     "rule_id": "WR-05",
     "targets": [
@@ -49933,15 +52019,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 38,
-   "ts": "2026-11-03T10:00:16.300+09:00",
-   "t": 16.3,
+   "seq": 40,
+   "ts": "2026-11-03T10:00:16.500+09:00",
+   "t": 16.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0024",
+    "rule_check_id": "rchk-0026",
     "design_version": 1,
     "rule_id": "WR-06",
     "targets": [
@@ -49962,15 +52048,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 39,
-   "ts": "2026-11-03T10:00:16.400+09:00",
-   "t": 16.4,
+   "seq": 41,
+   "ts": "2026-11-03T10:00:16.600+09:00",
+   "t": 16.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0025",
+    "rule_check_id": "rchk-0027",
     "design_version": 1,
     "rule_id": "WR-07",
     "targets": [
@@ -49991,15 +52077,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 40,
-   "ts": "2026-11-03T10:00:16.500+09:00",
-   "t": 16.5,
+   "seq": 42,
+   "ts": "2026-11-03T10:00:16.700+09:00",
+   "t": 16.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0026",
+    "rule_check_id": "rchk-0028",
     "design_version": 1,
     "rule_id": "WR-08",
     "targets": [
@@ -50018,15 +52104,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 41,
-   "ts": "2026-11-03T10:00:16.600+09:00",
-   "t": 16.6,
+   "seq": 43,
+   "ts": "2026-11-03T10:00:16.800+09:00",
+   "t": 16.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0027",
+    "rule_check_id": "rchk-0029",
     "design_version": 1,
     "rule_id": "WR-09",
     "targets": [
@@ -50045,15 +52131,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 42,
-   "ts": "2026-11-03T10:00:16.700+09:00",
-   "t": 16.7,
+   "seq": 44,
+   "ts": "2026-11-03T10:00:16.900+09:00",
+   "t": 16.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0028",
+    "rule_check_id": "rchk-0030",
     "design_version": 1,
     "rule_id": "WR-10",
     "targets": [
@@ -50072,15 +52158,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 43,
-   "ts": "2026-11-03T10:00:16.800+09:00",
-   "t": 16.8,
+   "seq": 45,
+   "ts": "2026-11-03T10:00:17.000+09:00",
+   "t": 17.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0029",
+    "rule_check_id": "rchk-0031",
     "design_version": 1,
     "rule_id": "WR-11",
     "targets": [
@@ -50099,15 +52185,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 44,
-   "ts": "2026-11-03T10:00:16.900+09:00",
-   "t": 16.9,
+   "seq": 46,
+   "ts": "2026-11-03T10:00:17.100+09:00",
+   "t": 17.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0030",
+    "rule_check_id": "rchk-0032",
     "design_version": 1,
     "rule_id": "AS-01",
     "targets": [
@@ -50240,15 +52326,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 45,
-   "ts": "2026-11-03T10:00:17.000+09:00",
-   "t": 17.0,
+   "seq": 47,
+   "ts": "2026-11-03T10:00:17.200+09:00",
+   "t": 17.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0031",
+    "rule_check_id": "rchk-0033",
     "design_version": 1,
     "rule_id": "AS-02",
     "targets": [
@@ -51290,65 +53376,6 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 46,
-   "ts": "2026-11-03T10:00:17.100+09:00",
-   "t": 17.1,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0032",
-    "design_version": 1,
-    "rule_id": "CS-01",
-    "targets": [
-     "cargo"
-    ],
-    "hits": [],
-    "not_evaluable": [
-     {
-      "part_id": "cargo",
-      "missing": [
-       "topover_count",
-       "lashing_angle_sin",
-       "lashing_pretension_N"
-      ]
-     }
-    ],
-    "pass": true
-   }
-  },
-  {
-   "seq": 47,
-   "ts": "2026-11-03T10:00:17.200+09:00",
-   "t": 17.2,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0033",
-    "design_version": 1,
-    "rule_id": "CS-02",
-    "targets": [
-     "cargo"
-    ],
-    "hits": [],
-    "not_evaluable": [
-     {
-      "part_id": "cargo",
-      "missing": [
-       "cargo_blocked_forward",
-       "topover_count",
-       "lashing_angle_sin",
-       "lashing_pretension_N"
-      ]
-     }
-    ],
-    "pass": true
-   }
-  },
-  {
    "seq": 48,
    "ts": "2026-11-03T10:00:17.300+09:00",
    "t": 17.3,
@@ -51359,7 +53386,7 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0034",
     "design_version": 1,
-    "rule_id": "CS-03",
+    "rule_id": "CS-01",
     "targets": [
      "cargo"
     ],
@@ -51388,6 +53415,65 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0035",
     "design_version": 1,
+    "rule_id": "CS-02",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "cargo_blocked_forward",
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 50,
+   "ts": "2026-11-03T10:00:17.500+09:00",
+   "t": 17.5,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0036",
+    "design_version": 1,
+    "rule_id": "CS-03",
+    "targets": [
+     "cargo"
+    ],
+    "hits": [],
+    "not_evaluable": [
+     {
+      "part_id": "cargo",
+      "missing": [
+       "topover_count",
+       "lashing_angle_sin",
+       "lashing_pretension_N"
+      ]
+     }
+    ],
+    "pass": true
+   }
+  },
+  {
+   "seq": 51,
+   "ts": "2026-11-03T10:00:17.600+09:00",
+   "t": 17.6,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0037",
+    "design_version": 1,
     "rule_id": "CS-04",
     "targets": [
      "cargo"
@@ -51406,15 +53492,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 50,
-   "ts": "2026-11-03T10:00:17.500+09:00",
-   "t": 17.5,
+   "seq": 52,
+   "ts": "2026-11-03T10:00:17.700+09:00",
+   "t": 17.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0036",
+    "rule_check_id": "rchk-0038",
     "design_version": 1,
     "rule_id": "CS-05",
     "targets": [
@@ -51433,15 +53519,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 51,
-   "ts": "2026-11-03T10:00:17.600+09:00",
-   "t": 17.6,
+   "seq": 53,
+   "ts": "2026-11-03T10:00:17.800+09:00",
+   "t": 17.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0037",
+    "rule_check_id": "rchk-0039",
     "design_version": 1,
     "rule_id": "CS-06",
     "targets": [
@@ -51462,15 +53548,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 52,
-   "ts": "2026-11-03T10:00:17.700+09:00",
-   "t": 17.7,
+   "seq": 54,
+   "ts": "2026-11-03T10:00:17.900+09:00",
+   "t": 17.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0038",
+    "rule_check_id": "rchk-0040",
     "design_version": 1,
     "rule_id": "CS-07",
     "targets": [
@@ -51490,15 +53576,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 53,
-   "ts": "2026-11-03T10:00:17.800+09:00",
-   "t": 17.8,
+   "seq": 55,
+   "ts": "2026-11-03T10:00:18.000+09:00",
+   "t": 18.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0039",
+    "rule_check_id": "rchk-0041",
     "design_version": 1,
     "rule_id": "CS-08",
     "targets": [
@@ -51517,15 +53603,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 54,
-   "ts": "2026-11-03T10:00:17.900+09:00",
-   "t": 17.9,
+   "seq": 56,
+   "ts": "2026-11-03T10:00:18.100+09:00",
+   "t": 18.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0040",
+    "rule_check_id": "rchk-0042",
     "design_version": 1,
     "rule_id": "CS-09",
     "targets": [
@@ -51544,15 +53630,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 55,
-   "ts": "2026-11-03T10:00:18.000+09:00",
-   "t": 18.0,
+   "seq": 57,
+   "ts": "2026-11-03T10:00:18.200+09:00",
+   "t": 18.2,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0041",
+    "rule_check_id": "rchk-0043",
     "design_version": 1,
     "rule_id": "CS-10",
     "targets": [
@@ -51572,15 +53658,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 56,
-   "ts": "2026-11-03T10:00:18.100+09:00",
-   "t": 18.1,
+   "seq": 58,
+   "ts": "2026-11-03T10:00:18.300+09:00",
+   "t": 18.3,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0042",
+    "rule_check_id": "rchk-0044",
     "design_version": 1,
     "rule_id": "SU-01",
     "targets": [
@@ -51625,15 +53711,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 57,
-   "ts": "2026-11-03T10:00:18.200+09:00",
-   "t": 18.2,
+   "seq": 59,
+   "ts": "2026-11-03T10:00:18.400+09:00",
+   "t": 18.4,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0043",
+    "rule_check_id": "rchk-0045",
     "design_version": 1,
     "rule_id": "SU-02",
     "targets": [
@@ -51682,15 +53768,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 58,
-   "ts": "2026-11-03T10:00:18.300+09:00",
-   "t": 18.3,
+   "seq": 60,
+   "ts": "2026-11-03T10:00:18.500+09:00",
+   "t": 18.5,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0044",
+    "rule_check_id": "rchk-0046",
     "design_version": 1,
     "rule_id": "UJ-01",
     "targets": [
@@ -51709,15 +53795,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 59,
-   "ts": "2026-11-03T10:00:18.400+09:00",
-   "t": 18.4,
+   "seq": 61,
+   "ts": "2026-11-03T10:00:18.600+09:00",
+   "t": 18.6,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0045",
+    "rule_check_id": "rchk-0047",
     "design_version": 1,
     "rule_id": "UJ-02",
     "targets": [
@@ -51737,15 +53823,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 60,
-   "ts": "2026-11-03T10:00:18.500+09:00",
-   "t": 18.5,
+   "seq": 62,
+   "ts": "2026-11-03T10:00:18.700+09:00",
+   "t": 18.7,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0046",
+    "rule_check_id": "rchk-0048",
     "design_version": 1,
     "rule_id": "UJ-03",
     "targets": [
@@ -51765,15 +53851,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 61,
-   "ts": "2026-11-03T10:00:18.600+09:00",
-   "t": 18.6,
+   "seq": 63,
+   "ts": "2026-11-03T10:00:18.800+09:00",
+   "t": 18.8,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0047",
+    "rule_check_id": "rchk-0049",
     "design_version": 1,
     "rule_id": "UJ-04",
     "targets": [
@@ -51792,15 +53878,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 62,
-   "ts": "2026-11-03T10:00:18.700+09:00",
-   "t": 18.7,
+   "seq": 64,
+   "ts": "2026-11-03T10:00:18.900+09:00",
+   "t": 18.9,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0048",
+    "rule_check_id": "rchk-0050",
     "design_version": 1,
     "rule_id": "MF-01",
     "targets": [
@@ -52156,50 +54242,6 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 63,
-   "ts": "2026-11-03T10:00:18.800+09:00",
-   "t": 18.8,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0049",
-    "design_version": 1,
-    "rule_id": "SY-01",
-    "targets": [
-     "motor",
-     "support:RL",
-     "support:RR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
-   "seq": 64,
-   "ts": "2026-11-03T10:00:18.900+09:00",
-   "t": 18.9,
-   "run_id": "20261103-100000-offroad-4w-file",
-   "kind": "rule_check.recorded",
-   "agent": "packager",
-   "design_version": 1,
-   "data": {
-    "rule_check_id": "rchk-0050",
-    "design_version": 1,
-    "rule_id": "SY-02",
-    "targets": [
-     "steering_wheel",
-     "support:FL",
-     "support:FR"
-    ],
-    "hits": [],
-    "not_evaluable": [],
-    "pass": true
-   }
-  },
-  {
    "seq": 65,
    "ts": "2026-11-03T10:00:19.000+09:00",
    "t": 19.0,
@@ -52210,11 +54252,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0051",
     "design_version": 1,
-    "rule_id": "SY-03",
+    "rule_id": "SY-01",
     "targets": [
-     "pedal_brake",
-     "support:FL",
-     "support:FR",
+     "motor",
      "support:RL",
      "support:RR"
     ],
@@ -52234,10 +54274,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0052",
     "design_version": 1,
-    "rule_id": "SY-04",
+    "rule_id": "SY-02",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "steering_wheel",
+     "support:FL",
+     "support:FR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -52255,10 +54296,13 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0053",
     "design_version": 1,
-    "rule_id": "SY-05",
+    "rule_id": "SY-03",
     "targets": [
-     "seat_R",
-     "seat_L"
+     "pedal_brake",
+     "support:FL",
+     "support:FR",
+     "support:RL",
+     "support:RR"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -52276,9 +54320,10 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0054",
     "design_version": 1,
-    "rule_id": "SY-06",
+    "rule_id": "SY-04",
     "targets": [
-     "rollbar"
+     "seat_R",
+     "seat_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -52296,8 +54341,11 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0055",
     "design_version": 1,
-    "rule_id": "SY-07",
-    "targets": [],
+    "rule_id": "SY-05",
+    "targets": [
+     "seat_R",
+     "seat_L"
+    ],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -52314,10 +54362,9 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0056",
     "design_version": 1,
-    "rule_id": "SY-08",
+    "rule_id": "SY-06",
     "targets": [
-     "battery",
-     "motor"
+     "rollbar"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -52335,10 +54382,8 @@ export const DEMOS = {
    "data": {
     "rule_check_id": "rchk-0057",
     "design_version": 1,
-    "rule_id": "SY-09",
-    "targets": [
-     "battery"
-    ],
+    "rule_id": "SY-07",
+    "targets": [],
     "hits": [],
     "not_evaluable": [],
     "pass": true
@@ -52354,6 +54399,47 @@ export const DEMOS = {
    "design_version": 1,
    "data": {
     "rule_check_id": "rchk-0058",
+    "design_version": 1,
+    "rule_id": "SY-08",
+    "targets": [
+     "battery",
+     "motor"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 73,
+   "ts": "2026-11-03T10:00:19.800+09:00",
+   "t": 19.8,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0059",
+    "design_version": 1,
+    "rule_id": "SY-09",
+    "targets": [
+     "battery"
+    ],
+    "hits": [],
+    "not_evaluable": [],
+    "pass": true
+   }
+  },
+  {
+   "seq": 74,
+   "ts": "2026-11-03T10:00:19.900+09:00",
+   "t": 19.9,
+   "run_id": "20261103-100000-offroad-4w-file",
+   "kind": "rule_check.recorded",
+   "agent": "packager",
+   "design_version": 1,
+   "data": {
+    "rule_check_id": "rchk-0060",
     "design_version": 1,
     "rule_id": "SY-10",
     "targets": [
@@ -52480,15 +54566,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 73,
-   "ts": "2026-11-03T10:00:19.800+09:00",
-   "t": 19.8,
+   "seq": 75,
+   "ts": "2026-11-03T10:00:20.000+09:00",
+   "t": 20.0,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0059",
+    "rule_check_id": "rchk-0061",
     "design_version": 1,
     "rule_id": "U1-01",
     "targets": [
@@ -52535,15 +54621,15 @@ export const DEMOS = {
    }
   },
   {
-   "seq": 74,
-   "ts": "2026-11-03T10:00:19.900+09:00",
-   "t": 19.9,
+   "seq": 76,
+   "ts": "2026-11-03T10:00:20.100+09:00",
+   "t": 20.1,
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "rule_check.recorded",
    "agent": "packager",
    "design_version": 1,
    "data": {
-    "rule_check_id": "rchk-0060",
+    "rule_check_id": "rchk-0062",
     "design_version": 1,
     "rule_id": "U1-03",
     "targets": [

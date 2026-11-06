@@ -249,7 +249,7 @@ class CheckAllTest(unittest.TestCase):
         checks = rulecheck.check_all(rules, mini_design(), requirements(Q15=100, Q19=40))
         s = rulecheck.summarize(checks)
         self.assertEqual(s["rules"], len(rules))  # every built-in rule has a record (the count is the data's)
-        self.assertEqual(s["hits"], sum(len(c["hits"]) for c in checks))
+        self.assertEqual(s["hits"], sum(len(c["hits"]) for c in checks if not rulecheck.is_advice(c)))  # an advice rule never counts as a hit
         line = rulecheck.summary_line(checks, rules)
         self.assertIn(f"{len(rules)} 規則", line)
         self.assertIn("AS-01", line)

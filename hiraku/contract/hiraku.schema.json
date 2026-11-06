@@ -3509,6 +3509,13 @@
           ],
           "description": "builtin: shipped with HIRAKU; dropped: from a file the person gave."
         },
+        "level": {
+          "enum": [
+            "rule",
+            "advice"
+          ],
+          "description": "Missing: rule. advice: its hits are recorded and shown as advice; they never fail a design, are not asked of the person and do not stop the run. A part it cannot evaluate is not listed as a finding on the screen."
+        },
         "check_by": {
           "enum": [
             "code",
@@ -3646,6 +3653,13 @@
             }
           },
           "description": "Parts that break the rule."
+        },
+        "level": {
+          "enum": [
+            "rule",
+            "advice"
+          ],
+          "description": "The rule's level, copied here. Missing: rule. With advice, pass still says whether hits is empty, and the hits do not count in any judgement."
         },
         "not_evaluable": {
           "type": "array",
