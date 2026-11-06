@@ -1,6 +1,6 @@
 # HIRAKU のプラグイン (Claude Code)
 
-自分の Claude Code から HIRAKU を動かすためのプラグインです。要件のファイルから実行を始め、まとめ役・設計役・CAE 役が、手計算で予測してから解析し、予測と比べ (予測との判定)、食い違いの原因を書いて基準の判定 (OK / NG) を出します。中身は HIRAKU のツール (MCP のサーバー `hiraku`)・hooks (HK1〜HK6)・役 (agents)・手順 (skills)・コマンド `/hiraku:run` です。
+自分の Claude Code から HIRAKU を動かすためのプラグインです。要件のファイルから実行を始め、まとめ役・設計役・CAE 役が、手計算で予測してから解析し、予測と比べ (予想通り / 不一致)、不一致の原因を書いて基準の判定 (OK / NG) を出します。中身は HIRAKU のツール (MCP のサーバー `hiraku`)・hooks (HK1〜HK6)・役 (agents)・手順 (skills)・コマンド `/hiraku:run` です。
 
 - この道筋では、HIRAKU は Claude を呼ばず、Claude Code も起動しません。考えるのは自分の Claude Code のセッション (自分のサインイン) で、HIRAKU はツールと hooks として働くだけです。`ANTHROPIC_API_KEY` は要りません。費用は HIRAKU からは分からないので、記録の `cost_usd` は null です
 - 費用の上限 (要件の `cost_limit_usd`) は、この道筋では HIRAKU が守らせられません。払うのは自分の Claude Code (自分のサインインの枠) で、HIRAKU には使った額が届かないからです (`project.cost_usd` は null のまま)。止まるための守りは、設計を直す回数の上限 `round_limit` (使い切ると HK4 は終わりを止めません) と、ターンの上限 (Claude Code の側の設定) です。HK4 が終わりを止める回数にも上限があります (まとめ役 3 回、役ごと版ごとに 2 回)
@@ -28,7 +28,7 @@ python -m venv .venv
    ```
 
    - プラグインはリポジトリの中から読ませます。別の場所に写したプラグインは、リポジトリを見つけられません (理由は `scripts/hiraku_cli.py` の冒頭の説明)。
-   - `--allowedTools "mcp__plugin_hiraku_hiraku"` は、HIRAKU のツールを毎回聞かずに使わせる設定です (サーバー `hiraku` のツール全部)。付けないと、役のサブエージェントが予測・解析・予測との判定を呼ぶたびに、Claude Code が許可を聞きます (1 回の実行で数十回)。
+   - `--allowedTools "mcp__plugin_hiraku_hiraku"` は、HIRAKU のツールを毎回聞かずに使わせる設定です (サーバー `hiraku` のツール全部)。付けないと、役のサブエージェントが予測・解析・比べるツールを呼ぶたびに、Claude Code が許可を聞きます (1 回の実行で数十回)。
    - 始めたら `/mcp` で、プラグインの `hiraku` のサーバーがつながっているかを見られます。つながっていなければ、上の「用意」の venv ができているかを確かめます。
 
 2. 要件のファイルを渡して実行を始めます (ファイル名だけなら `data/requirements/` から探します)。
