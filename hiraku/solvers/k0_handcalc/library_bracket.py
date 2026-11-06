@@ -10,8 +10,9 @@ point is split by the pin axis u (normal to the plates) and the plates' base lin
     F_t = F_p.base                 along the base line
     F_v = F_p.(u x base)           in the plates' plane, normal to the base (pulling the plates off)
 
-d = pin (bolt) diameter, n = pins, t = plate thickness, s = weld leg, a = 0.7 s, b = plate base width, e = height
-of the pin centre above the base (the weld). Each plate takes half of every force.
+d = pin (bolt) diameter, n = pins, t = plate thickness, s = weld leg, a = 0.7 s, b = the plate's welded base length
+(the part of the base on the tube wall, bracket_inputs.weld_span; not the bracket box's width), e = height of the pin
+centre above the base (the weld). Each plate takes half of every force.
 
     pin shear (double shear, shank area, threads out of the shear planes)  tau = |F_p| / (2 n pi d^2 / 4)
     bearing (each plate; the frame's wall is not checked)                    sigma_b = |F_p| / (2 n d t)
@@ -67,14 +68,18 @@ SOURCE = ("EN 1993-1-8:2005 Table 3.4 (bolt shear alpha_v 0.6, bearing k1 alpha_
           "bending of the plate's base section and of the weld lines")
 
 QUANTITIES = ("bolt_shear_utilisation", "bolt_bearing_utilisation", "plate_bending_utilisation", "weld_utilisation")
+# R9's bolt load cases judge one quantity: the larger of the pin's shear and bearing utilisations (mount_bracket.pin)
+BOLT_QUANTITY = "bolt_utilisation"
 FORMULA_OF = {"bolt_shear_utilisation": "mount_bracket.pin_shear",
               "bolt_bearing_utilisation": "mount_bracket.pin_bearing",
               "plate_bending_utilisation": "mount_bracket.plate_bending",
-              "weld_utilisation": "mount_bracket.weld"}
+              "weld_utilisation": "mount_bracket.weld",
+              BOLT_QUANTITY: "mount_bracket.pin"}
 INPUTS_OF = {"bolt_shear_utilisation": ("F_t", "F_v", "d", "n", "f_ub"),
              "bolt_bearing_utilisation": ("F_t", "F_v", "d", "n", "t", "f_u"),
              "plate_bending_utilisation": ("F_n", "F_t", "F_v", "t", "b", "e", "f_y"),
-             "weld_utilisation": ("F_n", "F_t", "F_v", "t", "s", "b", "e", "f_u")}
+             "weld_utilisation": ("F_n", "F_t", "F_v", "t", "s", "b", "e", "f_u"),
+             BOLT_QUANTITY: ("F_t", "F_v", "d", "n", "t", "f_u", "f_ub")}
 
 
 # ---------------------------------------------------------------- plain numbers (QA's test calls these)
@@ -120,6 +125,7 @@ def clevis_utilisations(F, u, base, d: float, n: int, t: float, s: float | None,
     st = stresses(f["F_n"], f["F_t"], f["F_v"], d, n, t, s, b, e)
     r = resistances(f_y, f_u, f_ub)
     out = {"bolt_shear_utilisation": st["tau"] / r["f_v"], "bolt_bearing_utilisation": st["sigma_b"] / r["f_b"]}
+    out[BOLT_QUANTITY] = max(out["bolt_shear_utilisation"], out["bolt_bearing_utilisation"])
     if "sigma" in st:
         out["plate_bending_utilisation"] = st["sigma"] / r["f_plate"]
         out["weld_utilisation"] = st["tau_w"] / r["f_vw"]
@@ -136,7 +142,8 @@ def _inputs(names) -> dict:
         "n": {"unit": "1", "description": "pins carrying the force (part.joint.bolts)", "min": 1},
         "t": {"unit": "mm", "description": "plate thickness (part.joint.plate_t_mm)", "min": 0},
         "s": {"unit": "mm", "description": "fillet weld leg (part.joint.weld_leg_mm; throat 0.7 s)", "min": 0},
-        "b": {"unit": "mm", "description": "plate base width (from the bracket's box)", "min": 0},
+        "b": {"unit": "mm", "description": "the plate's welded base length: the part of its base on the tube wall "
+                                           "(bracket_inputs.weld_span, the length the shell ties)", "min": 0},
         "e": {"unit": "mm", "description": "height of the pin centre above the plate's base (from the box and the hard point)",
               "min": 0},
         "f_y": {"unit": "MPa", "description": "plate yield strength (STKR400 taken, materials.json)", "min": 0},
@@ -189,6 +196,29 @@ def _pin_bearing() -> Formula:
          "the hole's end and edge distances at their minimum 1.2 d0, d0 = d + 2 mm (the smallest alpha_b and k1)"])
 
 
+def _pin_value(v: dict) -> dict:
+    st = stresses(0.0, v["F_t"], v["F_v"], v["d"], int(round(v["n"])), v["t"], None, None, None)
+    r = resistances(245.0, v["f_u"], v["f_ub"])
+    us, ub = st["tau"] / r["f_v"], st["sigma_b"] / r["f_b"]
+    return {"u": max(us, ub), "u_shear": us, "u_bearing": ub}
+
+
+def _pin() -> Formula:
+    return Formula(
+        formula_id="mount_bracket.pin", title="サスペンションの取付の金具のピン (せん断と支圧の大きい方)",
+        domain="strength",
+        expression="u = max(tau / f_v, sigma_b / f_b): mount_bracket.pin_shear and mount_bracket.pin_bearing",
+        inputs=_inputs(("F_t", "F_v", "d", "n", "t", "f_u", "f_ub")),
+        outputs={"u": ("1", "bolt_utilisation: the larger of bolt_shear_utilisation and bolt_bearing_utilisation", None),
+                 "u_shear": ("1", "bolt_shear_utilisation (mount_bracket.pin_shear)", None),
+                 "u_bearing": ("1", "bolt_bearing_utilisation (mount_bracket.pin_bearing)", None)},
+        assumptions=_COMMON + ["the pin's shear and the plates' bearing as in mount_bracket.pin_shear and .pin_bearing; "
+                               "R9's bolt load cases judge the larger of the two (one criterion per load case)"],
+        source=SOURCE, primary="u",
+        requires=[(lambda v: v["d"] > 0 and v["n"] >= 1 and v["t"] > 0, "d and t must be positive and n at least 1")],
+        fn=_pin_value)
+
+
 def _plate() -> Formula:
     Fn, Ft, Fv, t, b, e, f_y = sp.symbols("F_n F_t F_v t b e f_y", real=True)
     sig = 6 * (Fn / 2) * e / (b * t**2) + 6 * (Ft / 2) * e / (t * b**2) + (Fv / 2) / (b * t)
@@ -231,8 +261,8 @@ def _weld() -> Formula:
 
 
 def all_formulas() -> list[Formula]:
-    return [_pin_shear(), _pin_bearing(), _plate(), _weld()]
+    return [_pin_shear(), _pin_bearing(), _pin(), _plate(), _weld()]
 
 
-__all__ = ["FORMULA_OF", "INPUTS_OF", "QUANTITIES", "all_formulas", "clevis_utilisations", "resistances",
+__all__ = ["BOLT_QUANTITY", "FORMULA_OF", "INPUTS_OF", "QUANTITIES", "all_formulas", "clevis_utilisations", "resistances",
            "split_force", "stresses"]

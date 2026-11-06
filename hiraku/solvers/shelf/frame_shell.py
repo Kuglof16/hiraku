@@ -54,6 +54,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..k0_handcalc.vehicle import DesignError
 from ..k1_frame import analyze as beam_analyze
 from ..k1_frame import stress_terms
 from ..k1_frame.surface import wall_von_mises
@@ -66,6 +67,7 @@ from ..k1_shell.stress import CORNER_SKIP_T, HOT_SPOT_READ_T, hot_spot_factors
 from . import hot_spots, scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, LoadCaseError, Param, Predicts, Record, mesh_of, on_board, param_list,
                    param_value, result, run_param)
+from .frame_static import (R9_SUPPORT, R9_SUPPORTS, r9_supports)
 from .frame_static import (FRAMES_ASSUMPTION, JOINT_INPUTS, STEP_BENDING, STEP_HEIGHT, STEP_SUPPORTS, add_frames,
                            PATH_FORMULA, PATH_PREDICTS, front_supports, g_factor, lost_load_outputs, member_effect,
                            member_results,
@@ -315,9 +317,9 @@ def shell_outputs(design: Record, res: dict, beam: dict, up_lc: str | None, step
             v, ee = res["excluded_max"]
             effects.append({"name": (f"largest element stress inside the wheel mounts (left out of max_stress; in the "
                                      f"stress fields, whose largest it is when above max_stress): element {ee} of "
-                                     f"{ms.element_member[ee]} (so until the bracket plates are meshed into the shell "
-                                     f"and judged by R9, which shows only the hand calculation of the pins, plates and "
-                                     f"welds now)"), "value": v, "unit": "MPa"})
+                                     f"{ms.element_member[ee]} (the mount brackets' plates and welds are judged by "
+                                     f"R9's plate and weld load cases, the pins by R9's bolt load cases)"),
+                        "value": v, "unit": "MPa"})
     effects.append(member_effect("max_stress", member_peak))
     effects += [
         {"name": src},
@@ -412,6 +414,186 @@ def shell_hot_spots(tool, load_case: Record, res: dict) -> list[Record] | None:
     sharp = hot_spots.row(worst, "max_stress", peak, limit, note=hot_spots.SHARP_NOTE,
                           at_mm=element_place(res, e)["centre_mm"])
     return hot_spots.top(rows, keep=[sharp])
+
+
+# ---------------------------------------------------------------- R9 サスペンション取付: the brackets in the shell
+R9_QUANTITIES = ("plate_bending_utilisation", "weld_utilisation")  # judged by the shell; bolt_* stay the hand calc's
+R9_ASSUMPTIONS = [
+    "R9: 金具 (kind bracket で joint のある部品) のうち、管の壁の上に立つものは、シェルの板 2 枚 (ピンに直角の耳、板厚 "
+    "plate_t_mm) にした。根元の節は、壁の上にある範囲で壁の節と共有 (溶接)。ピンの穴 (d + 2 mm) の縁に、K2 の取付点の力を "
+    "split_force で分け、耳ごとに半分、面内の分は力に向いた半周に cos の重みで、ピンに沿う分は穴の全周に等しく載せた "
+    "(ピンそのものは入れていない)。k1_shell.brackets",
+    "R9: 溶接 weld_utilisation と板 plate_bending_utilisation は、耳ごとに、根元の節に耳の要素がかける力の合力 R と、溶接した"
+    "範囲の中央まわりのモーメント M から、溶接した長さ L で、library_bracket の式 (mount_bracket.weld、.plate_bending と同じ"
+    "形、線の力と 3 つの応力を足す: 安全側) で出した公称の値: w = |R|/(2L) + |M.base|/(L t_p) + 3|M.u|/L^2 を 0.7 s で割り "
+    "f_vw (library_bracket.resistances、EN 1993-1-8 4.5.3.3 の簡易法、確かめていない) で割る。sigma = 6|M.base|/(L t_p^2) + "
+    "6|M.u|/(t_p L^2) + |R.up|/(L t_p) を f_y (STKR400 245 MPa、materials.json、確かめていない) で割る。根元の端の線の力と根元の"
+    "要素の von Mises は、硬い耳が薄い壁に着く端で特異 (細かくすると上がる) なので、出すが判定しない",
+    "R9: 溶接した長さ L は、金具の根元のうち管の壁の上にある長さ (壁の中面の幅の中で、箱の幅と重なる所。"
+    "bracket_inputs.weld_span: 手計算の b も同じ関数の値)。壁からはみ出た所は板の縁で、溶接していない (金具ごとの L と"
+    "箱の幅は effects)。段 3 より前の手計算は箱の幅の全部を溶接とみていた",
+    "R9: 穴の縁の 1 列の要素は、ピンの力を少ない節に載せた尖り (細かくすると上がる): max_stress として出し、判定しない",
+    "R9: bolt_shear_utilisation と bolt_bearing_utilisation はシェルに無い (ピンを入れていない): 手計算 "
+    "(mount_bracket.pin_shear / pin_bearing) の値のまま",
+    "R9: 力は上流の解析ごとに、その取付点の |F| が最大の瞬間の、全部の取付点の力でシェルを解き、その中で利用率が最大のもの "
+    "(手計算と同じ選び方)",
+    "R9: 車輪の取付の区画 (support の frame_node の管の壁、節から管の高さの範囲) は、今までどおり最大の応力から外す: "
+    "地面の力、支えのモーメント、ばね下の重さはそこから入れるため。金具の板とその根元はそこから外していない",
+]
+
+
+def _r9_skipped(design: Record, ms, sid: str) -> dict[str, str]:
+    from ..k0_handcalc.bracket_inputs import mount_points
+
+    ids = {g["bracket"] for g in mount_points(design, sid).values() if g.get("bracket")}
+    return {k: v for k, v in ms.bracket_skipped.items() if k in ids}
+
+
+def r9_values(design: Record, sid: str, upstream: dict | None, size: float) -> dict:
+    """The shell's R9 values of support sid's meshed brackets: for each upstream analysis with K2's mount series and
+    each bracket's mount, the shell solved at the instant of that mount's largest |F| (all the mounts' forces of
+    that instant), the worst over the analyses. {"worst": {(quantity, mount): {...}}, "used", "solves", "frame"}."""
+    from ..k1_shell.frame import shared_frame
+    from .frame_static import upstream_mount_series
+
+    frame, _ = shared_frame(design, size)
+    mine = [b for b in frame.mesh.brackets if b.support == sid]
+    worst: dict[tuple[str, str], dict] = {}
+    used, solves = [], 0
+    rejected: dict[str, str] = {}  # upstream analyses whose mount forces the shell cannot balance, and why
+    for lc_id, ana in (upstream or {}).items():
+        got = upstream_mount_series({lc_id: ana}, design)
+        if got is None:
+            continue
+        _, ana_id, instants = got
+        peak: dict[str, tuple[int, float]] = {}
+        for k, inst in enumerate(instants):
+            for m, _, f in inst["mount_loads"][sid]["vectors"]:
+                mag = float(np.linalg.norm(f))
+                if m not in peak or mag > peak[m][1]:
+                    peak[m] = (k, mag)
+        solved: dict[int, dict] = {}
+        mine_worst: dict[tuple[str, str], dict] = {}
+        try:
+            for b in mine:
+                if b.mount not in peak:
+                    continue
+                k = peak[b.mount][0]
+                if k not in solved:
+                    inst = instants[k]
+                    solved[k] = analyze_shell(design, frame=frame, mount_loads=inst["mount_loads"],
+                                              gravity_mps2=inst["gravity_mps2"], inertia_N=inst["inertia_N"])["brackets"]
+                v = solved[k][b.id]
+                for q in R9_QUANTITIES:
+                    mine_worst[(q, b.mount)] = {"value": float(v[q]), "bracket": b.id, "load_case_id": lc_id,
+                                                "analysis_id": ana_id, "t_s": float(instants[k]["t_s"]), "vals": v}
+        except DesignError as e:  # its forces do not balance the sprung weight here (mount_balance): left out, said
+            rejected[lc_id] = str(e)
+            solves += len(solved)
+            continue
+        used.append(lc_id)
+        for key, w in mine_worst.items():
+            if key not in worst or w["value"] > worst[key]["value"]:
+                worst[key] = w
+        solves += len(solved)
+    return {"worst": worst, "used": used, "solves": solves, "frame": frame, "rejected": rejected}
+
+
+def r9_hot_spots(load_case: Record, got: dict) -> list[Record] | None:
+    """analysis.hot_spots of R9 (criterion on plate_bending_utilisation or weld_utilisation, limit 1): one row per
+    mount bracket (where = the bracket part for the plate, '<bracket>@<member>' for its weld), and the hole edge's
+    largest element stress as a max_stress row with SHARP_NOTE (not judged). None without such a criterion."""
+    crit = (load_case or {}).get("criterion") or {}
+    q = crit.get("quantity")
+    if q not in R9_QUANTITIES or crit.get("op") not in ("<=", "<"):
+        return None
+    limit = float(crit["limit"]["value"])
+    rows, sharp = [], None
+    for (qq, mount), w in got["worst"].items():
+        v = w["vals"]
+        if qq == q == "plate_bending_utilisation":
+            rows.append(hot_spots.row(w["bracket"], q, w["value"], limit, unit="1", at_mm=v["plate_at_mm"],
+                                      note=(f"{mount}: plate root {v['plate_sigma']:.1f} MPa (nominal, from the "
+                                            f"shell's base resultant over {v['weld_length_mm']:.1f} mm) / f_y "
+                                            f"{v['f_plate']:g} MPa ({w['load_case_id']} t {w['t_s']:.3f} s)")))
+        elif qq == q == "weld_utilisation":
+            rows.append(hot_spots.row(f"{w['bracket']}@{v['member']}", q, w["value"], limit, unit="1",
+                                      at_mm=v["weld_at_mm"],
+                                      note=(f"{mount}: base weld line {v['weld_line_N_per_mm']:.1f} N/mm, tau_w "
+                                            f"{v['tau_w']:.1f} MPa / f_vw {v['f_vw']:.1f} MPa ({w['load_case_id']} t "
+                                            f"{w['t_s']:.3f} s)")))
+        if qq == q and (sharp is None or v["hole_vm"] > sharp[0]):
+            sharp = (v["hole_vm"], w["bracket"], v)
+    if sharp is None:
+        return rows or None
+    vm, bid, v = sharp
+    keep = hot_spots.row(bid, "max_stress", vm, v["f_plate"], note=hot_spots.SHARP_NOTE, at_mm=v["hole_at_mm"])
+    return hot_spots.top(rows, keep=[keep])
+
+
+def r9_outputs(design: Record, load_case: Record, upstream: dict | None, size: float) -> Record:
+    """frame_shell's record for an R9 load case (r9_values of each of its corners, r9_hot_spots). A place is
+    '<support>.<mount>': the results '<quantity>.<support>.<mount>' for each, and '<quantity>' the worst of them
+    (its where the place)."""
+    t0 = time.perf_counter()
+    sids = r9_supports(load_case)
+    got = {"worst": {}, "used": [], "solves": 0, "frame": None}
+    for sid in sids:
+        one = r9_values(design, sid, upstream, size)
+        got["worst"].update({(q, f"{sid}.{m}"): w for (q, m), w in one["worst"].items()})
+        got["used"] = list(dict.fromkeys(got["used"] + one["used"]))
+        got["solves"] += one["solves"]
+        got["frame"] = one["frame"]
+        got.setdefault("rejected", {}).update(one["rejected"])
+    if not got["used"]:
+        raise LoadCaseError(f"{load_case.get('load_case_id', 'R9')}: no upstream analysis with K2's mount series "
+                            f"(mount_x/y/z.<support>.<mount> of {', '.join(sids)}) was given; the mount forces are not "
+                            f"invented")
+    ms = got["frame"].mesh
+    results, effects = [], []
+    for q in R9_QUANTITIES:
+        per = {m: w for (qq, m), w in got["worst"].items() if qq == q}
+        for m, w in sorted(per.items()):
+            results.append(result(f"{q}.{m}", w["value"], "1", m))
+        if per:
+            m, w = max(per.items(), key=lambda kv: kv[1]["value"])
+            results.insert(0, result(q, w["value"], "1", m))
+    for (q, m), w in sorted(got["worst"].items()):
+        v = w["vals"]
+        what = (f"base weld line {v['weld_line_N_per_mm']:.2f} N/mm over {v['weld_length_mm']:.1f} mm welded, tau_w "
+                f"{v['tau_w']:.2f} MPa (local peak at the base's end {v['weld_line_peak_N_per_mm']:.1f} N/mm, "
+                f"singular, not judged)" if q == "weld_utilisation"
+                else f"plate root {v['plate_sigma']:.2f} MPa nominal (base row's peak von Mises "
+                     f"{v['plate_vm_peak']:.1f} MPa, hole edge {v['hole_vm']:.1f} MPa: singular, not judged)")
+        effects.append({"name": f"{q} at {m} ({w['bracket']}): {what}; {w['load_case_id']} t {w['t_s']:.3f} s",
+                        "value": w["value"], "unit": "1"})
+    lengths = {w["bracket"]: (w["vals"]["weld_length_mm"], w["vals"]["box_width_mm"]) for w in got["worst"].values()}
+    for bid, (L, b) in sorted(lengths.items()):
+        effects.append({"name": (f"{bid}: welded length {L:.1f} mm (the part of its base on the tube wall, the hand "
+                                 f"calculation's b too) of the box's width {b:.1f} mm (note for the design department: "
+                                 f"{'the base overhangs the wall' if L < b - 1e-6 else 'the whole base is on the wall'})"),
+                        "value": L, "unit": "mm"})
+    assumptions = list(R9_ASSUMPTIONS)
+    skipped = {}
+    for sid in sids:
+        skipped.update(_r9_skipped(design, ms, sid))
+    for lc_id, why in sorted(got.get("rejected", {}).items()):
+        assumptions.append(f"R9: 上流の {lc_id} の取付点の力はシェルで釣り合わないので使わなかった (手計算は使う): {why}")
+    if skipped:
+        assumptions.append("R9: シェルの板にしていない金具 (手計算だけ。力はこれまでどおり carried_by の節に): "
+                           + "; ".join(f"{k} ({v})" for k, v in sorted(skipped.items())))
+    effects.append({"name": (f"shell model: {ms.n_nodes} nodes, {ms.n_elements} elements (edge {ms.element_size_mm:g} mm), "
+                             f"{len(ms.brackets)} mount brackets meshed as two plates each; solved at {got['solves']} "
+                             f"instants of {', '.join(got['used'])}"), "value": float(ms.n_elements), "unit": "1"})
+    lost, said = lost_load_outputs()  # the path check reads unsupported_load on the analysis that decides
+    results.append(lost)
+    effects.append(said)
+    out = {"results": results, "fields": [], "effects": effects, "assumptions": assumptions,
+           "timings_s": {"total": time.perf_counter() - t0}}
+    hot = r9_hot_spots(load_case, got)
+    if hot is not None:
+        out["hot_spots"] = hot
+    return out
 
 
 def mesh_fields(res: dict, mesh: Record, zz: dict | None = None) -> list[Record]:
@@ -868,8 +1050,10 @@ class FrameShell(BuiltinTool):
     title = "フレームの静的 (シェル: 管の壁の板)"
     domain = "strength"
     base = "K1"
-    tests = ["R1"]
+    tests = ["R1", "R9"]
     formulas = [
+        "mount_bracket.plate_bending",
+        "mount_bracket.weld",
         "frame_static.joint_wall_bending",
         "frame_static.rail_joint_stress",
         "frame_static.rail_step_bending",
@@ -878,7 +1062,7 @@ class FrameShell(BuiltinTool):
         "mass_props.static_wheel_loads",
         PATH_FORMULA,
     ]
-    load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS)
+    load_case_params = (LOADING, G_FACTOR, STEP_HEIGHT, STEP_SUPPORTS, R9_SUPPORTS, R9_SUPPORT)
     run_params = (ELEMENT_SIZE, MESH_CONVERGENCE)
     judged_as = {"max_stress": "max_hot_spot_stress"}  # the contract: max_stress is reported, not judged
     predicts = (
@@ -890,6 +1074,13 @@ class FrameShell(BuiltinTool):
                  STEP_BENDING + "; the shell includes the stress concentration at the joints, which the formula does not"),
         Predicts("wheel_load_<support>", "mass_props.static_wheel_loads", "wheel_load_<support>",
                  "at rest only (no step_height, no upstream forces)"),
+        # R9 plate and weld cases (the brackets meshed as plates): declared so that the run's stage rule
+        # (tools.shelf.load_case_stage) counts frame_shell as the tool that gives them
+        Predicts("plate_bending_utilisation", "mount_bracket.plate_bending", "u",
+                 "R9 plates: the hand formula takes the plate as a cantilever from the tube wall; the shell has the "
+                 "concentration around the pin hole and the wall's bending"),
+        Predicts("weld_utilisation", "mount_bracket.weld", "u",
+                 "R9 welds: the hand formula takes the throat's mean stress; the shell has the weld line's ends"),
         PATH_PREDICTS,
     )
     upstream = ("an analysis with reaction and grip vectors at every support (step_climb, step_climb_dynamic): "
@@ -916,6 +1107,10 @@ class FrameShell(BuiltinTool):
         the error estimate and the displacements are added as fields on it when
         it is the mesh solved here), and run_params."""
         design = on_board(design, load_case)
+        if load_case.get("test_id") == "R9":
+            size = run_param(params, ELEMENT_SIZE)
+            up = params.get("upstream_analyses") or load_case.get("upstream_analyses")  # (not a declared load case param)
+            return r9_outputs(design, load_case, up, size)
         g = g_factor(load_case)
         up = upstream_ground_forces(params.get("upstream_analyses"), design)
         step = param_value(load_case, "step_height", "mm")

@@ -44,8 +44,9 @@ class FormulaTest(unittest.TestCase):
         self.assertAlmostEqual(u["bolt_bearing_utilisation"], sb / f_b, places=12)
         self.assertAlmostEqual(u["plate_bending_utilisation"], sig / f_p, places=12)
         self.assertAlmostEqual(u["weld_utilisation"], tw / f_vw, places=12)
+        self.assertAlmostEqual(u["bolt_utilisation"], max(tau / f_v, sb / f_b), places=12)
         no = lb.clevis_utilisations(self.F, self.U, self.BASE, self.D, self.N, self.T, None, None, None)
-        self.assertEqual(set(no), {"bolt_shear_utilisation", "bolt_bearing_utilisation"})
+        self.assertEqual(set(no), {"bolt_shear_utilisation", "bolt_bearing_utilisation", "bolt_utilisation"})
 
     def test_registry(self):
         from hiraku.solvers.k0_handcalc.library import all_formulas
@@ -124,14 +125,20 @@ class DemoTest(unittest.TestCase):
         from hiraku.catalog.builders.mounts_r9 import r9_inputs
         from hiraku.solvers.k0_handcalc.bracket_inputs import NoForces
 
-        lc = {"load_case_id": "R9-FL", "params": {"support": "FL"}}
+        lc = {"load_case_id": "R9-bolt-front", "params": {"supports": "FL,FR"}}
         with self.assertRaises(NoForces):
             r9_inputs(self.design, lc)
-        up = {"S4-brake": _series(self.design, "FL", "lca_rear", (0.0, 0.0, 6000.0))}
+        up = {"S4-brake": _series(self.design, "FR", "lca_rear", (0.0, 0.0, 6000.0))}
         got = r9_inputs(self.design, lc, up)
-        self.assertEqual(got["worst.bolt_shear_utilisation"], "lca_rear")
-        self.assertEqual(got["weld_utilisation.uca_front.s"], {"value": 3.0, "unit": "mm"})
+        self.assertEqual(got["worst.bolt_shear_utilisation"], "FR.lca_rear")  # the side and the mount
+        self.assertEqual(got["worst.bolt_utilisation"], "FR.lca_rear")
+        self.assertEqual(got["weld_utilisation.FL.uca_front.s"], {"value": 3.0, "unit": "mm"})
         self.assertEqual(got["bolt_shear_utilisation.d"], {"value": 10.0, "unit": "mm"})
+        # the welded length b: the base on the rail's top wall (rail 40 wide, 2.3 wall), from the wall's inner mid-line
+        # to the box's end at the rail's centre line; not the box's width
+        self.assertAlmostEqual(got["weld_utilisation.FL.uca_front.b"]["value"], (40.0 - 2.3) / 2.0, places=6)
+        one = r9_inputs(self.design, {"load_case_id": "R9-FL", "params": {"support": "FL"}}, up)
+        self.assertNotIn("bolt_utilisation.FR.lca_rear.d", one)
 
     def test_variables(self):
         from hiraku.designgen import ladder_4w
@@ -172,18 +179,61 @@ class DemoTest(unittest.TestCase):
 
         req = load_requirements(Path(__file__).resolve().parents[2] / "data" / "requirements" / "offroad-4w.yaml")
         spec = {"id": "R9", "domain": "strength"}
+        from hiraku.catalog.build import recipe_for
+
         cases = BUILDERS["R9"](spec, req, self.design)
-        self.assertEqual([c["load_case_id"] for c in cases], ["R9-FL", "R9-FR", "R9-RL", "R9-RR"])
+        want = {"R9-plate-front": ("plate_bending_utilisation", "frame_shell", "FL,FR"),
+                "R9-weld-front": ("weld_utilisation", "frame_shell", "FL,FR"),
+                "R9-bolt-front": ("bolt_utilisation", "frame_static", "FL,FR"),
+                "R9-plate-rear": ("plate_bending_utilisation", "frame_shell", "RL,RR"),
+                "R9-weld-rear": ("weld_utilisation", "frame_shell", "RL,RR"),
+                "R9-bolt-rear": ("bolt_utilisation", "frame_static", "RL,RR")}
+        self.assertEqual({c["load_case_id"] for c in cases}, set(want))
         for c in cases:
-            self.assertNotIn("criterion", c)  # shown, not judged
+            qty, tool, sids = want[c["load_case_id"]]
             self.assertEqual(c["test_id"], "R9")
-        plan = PLANS["R9"]
-        qs = {p["quantity"] for p in plan["predictions"]}
-        self.assertIn("weld_utilisation", qs)
-        self.assertIn("bolt_shear_utilisation.uca_front", qs)
-        self.assertEqual(len(qs), 4 * 7)
+            self.assertEqual(c["criterion"]["quantity"], qty)
+            self.assertEqual((c["criterion"]["op"], c["criterion"]["limit"]), ("<=", {"value": 1.0, "unit": "1"}))
+            self.assertEqual(c["params"]["supports"], sids)
+            plan = recipe_for(PLANS, c)
+            self.assertEqual(plan["tool"], tool)
+            qs = [p["quantity"] for p in plan["predictions"]]
+            self.assertEqual(qs[0], "unsupported_load")  # the path check first (load_path.PATH_PREDICTION)
+            self.assertEqual(qs[1], qty)  # the group's worst place
+            self.assertEqual(len(qs), 1 + 1 + 2 * 6)  # and each side's six mounts
+            self.assertIn(f"{qty}.{sids[:2]}.uca_front", qs)
         for t in ("S1", "S3", "S4", "S5", "P1", "P3"):
             self.assertIn("R9", FEEDS[t])
+
+    def test_group_by_support(self):
+        from hiraku.catalog.builders import mounts_r9
+
+        old = mounts_r9.GROUP_BY
+        try:
+            mounts_r9.GROUP_BY = "support"  # the one-line change the design department may ask for
+            self.assertEqual(mounts_r9.groups(self.design), {s: [s] for s in ("FL", "FR", "RL", "RR")})
+        finally:
+            mounts_r9.GROUP_BY = old
+        self.assertEqual(mounts_r9.groups(self.design), {"front": ["FL", "FR"], "rear": ["RL", "RR"]})
+
+    def test_bolt_tool(self):
+        """frame_static's R9 pin case: bolt_utilisation at the worse place of the axle, each side's own rows."""
+        from hiraku.solvers.shelf.frame_static import FrameStatic
+
+        up = {"S4-brake": _series(self.design, "RR", "uca_rear", (0.0, 5000.0, 0.0))}
+        lc = {"load_case_id": "R9-bolt-rear", "test_id": "R9", "params": {"supports": "RL,RR"},
+              "criterion": {"quantity": "bolt_utilisation", "op": "<=", "limit": {"value": 1.0, "unit": "1"}}}
+        tool = FrameStatic()
+        rec = tool.analyse(self.design, tool.declared(lc), {"upstream_analyses": up})
+        res = {r["quantity"]: r for r in rec["results"]}
+        self.assertEqual(res["bolt_utilisation"]["where"], "RR.uca_rear")
+        self.assertEqual(res["bolt_utilisation"]["value"], res["bolt_utilisation.RR.uca_rear"]["value"])
+        self.assertEqual(res["bolt_utilisation"]["value"], max(res["bolt_shear_utilisation.RR.uca_rear"]["value"],
+                                                               res["bolt_bearing_utilisation.RR.uca_rear"]["value"]))
+        where = {h["where"] for h in rec["hot_spots"]}
+        self.assertIn("RR.uca_rear", where)
+        self.assertIn("RL.uca_rear", where)  # the other side keeps its own row
+        self.assertIn("R9", tool.spec()["tests"])
 
 
 if __name__ == "__main__":
