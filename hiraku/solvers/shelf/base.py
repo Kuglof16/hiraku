@@ -303,6 +303,45 @@ class BuiltinTool(ABC):
             out["upstream"] = self.upstream
         return out
 
+    def shape(self, design: Record) -> str | None:
+        """What this tool needs of the design's shape (hiraku.solvers.shelf.applies): None when the design has
+        it, else why not; by default the tool's entry in applies.SHAPES. A tool with a shape check (an entry
+        there, or its own override) is judged by it on a design of no known kind."""
+        from .applies import shape_of
+
+        return shape_of(self.name, design)
+
+    def _has_shape(self) -> bool:
+        from .applies import SHAPES
+
+        return self.name in SHAPES or type(self).shape is not BuiltinTool.shape
+
+    def _not_for(self, why: str) -> str:
+        return f"{self.name} はこの設計に使えません: {why}"
+
+    def applies(self, design: Record) -> str | None:
+        """None when the tool applies to the design, else a short reason (Japanese) why not. First the tool's
+        shape() (run() refuses on it too); then applies_to (the kinds of design), as analyze judged it before:
+        a design of a known kind (archetype, or the generator that made it) must be one of them; a design of no
+        known kind (one Claude wrote) is judged by shape() and the kind's mark (applies.KIND_MARKS) when the
+        tool has a shape check, else refused."""
+        from .applies import KIND_MARKS, design_kind
+
+        why = self.shape(design)
+        if why:
+            return self._not_for(why)
+        if not self.applies_to:
+            return None
+        kind = design_kind(design)
+        if kind in self.applies_to:
+            return None
+        if kind is None and self._has_shape():
+            mark = KIND_MARKS.get(self.name)
+            why = mark(design) if mark else None
+            return self._not_for(why) if why else None
+        return (f"{self.name} は {' / '.join(self.applies_to)} の型の設計のためのツールです (この設計の型: "
+                f"{kind or 'なし (手で書いた設計)'})")
+
     def declared(self, load_case: Record) -> Record:
         """The load case as analyse sees it: given parameters checked against
         load_case_params, defaults filled in, undeclared names not readable."""
@@ -340,7 +379,11 @@ class BuiltinTool(ABC):
             rec["error"] = "the design does not fit the contract: " + "; ".join(errs[:5])
         else:
             try:
-                rec.update(self.analyse(design, self.declared(load_case), params or {}))
+                declared = self.declared(load_case)  # a missing load-case param is said first
+                why = self.shape(design)
+                if why:  # the tool cannot run on this design: refused with the reason (the contract's "failed")
+                    raise DesignError(self._not_for(why))
+                rec.update(self.analyse(design, declared, params or {}))
             except DesignError as e:
                 rec["status"] = "failed"
                 rec["error"] = str(e)

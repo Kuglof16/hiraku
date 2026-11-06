@@ -141,6 +141,9 @@ OWNERS = {
         "hiraku/cad/",  # CAD in and out through STEP (stands alone: imports only contract)
         "hiraku/tools/cad_tools.py",  # the one adapter that registers the CAD tools
         "tests/cad/",
+        "hiraku/cfd/",  # air flow on the GPU (stands alone: imports only contract)
+        "hiraku/tools/cfd_tools.py",  # the one adapter that registers the flow tool
+        "tests/cfd/",
         "docs/",
         "README.md",
         "HIRAKU.cmd",  # double-click launcher of the screen

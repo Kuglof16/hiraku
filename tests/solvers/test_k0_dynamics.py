@@ -80,6 +80,16 @@ class CrosswindTest(unittest.TestCase):
         self.assertAlmostEqual(W, 0.0, delta=1e-6)
 
 
+class DragTest(unittest.TestCase):
+    def test_drag_force_by_hand(self):
+        # 1/2 * 1.2 * 0.5 * 2 m^2 * (10 m/s)^2 = 60 N
+        self.assertAlmostEqual(out("drag.force", C_d=q(0.5, "1"), A=q(2, "m^2"), v=q(10, "m/s"), rho=q(1.2, "kg/m^3"))["F"],
+                               60.0, places=9)
+        # 36 km/h is 10 m/s: the same force
+        self.assertAlmostEqual(out("drag.force", C_d=q(0.5, "1"), A=q(2, "m^2"), v=q(36, "km/h"), rho=q(1.2, "kg/m^3"))["F"],
+                               60.0, places=9)
+
+
 class LaneChangeTest(unittest.TestCase):
     def test_inner_wheel_load_reaches_zero_at_the_threshold(self):
         o = out("lane_change.inner_wheel_load", m=q(591, "kg"), a_y=q(0.5, "g"), h=q(593, "mm"), t=q(1100, "mm"))

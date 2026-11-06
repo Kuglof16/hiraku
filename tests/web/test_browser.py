@@ -851,7 +851,7 @@ class BrowserReplayTest(unittest.TestCase):
         ana = next(e for e in events if e["kind"] == "analysis.finished")["data"]
         # shape example: one mounting point's force, not a result
         ana["vectors"] = list(ana.get("vectors") or []) + [{"kind": "joint", "at": "FL.lca_front", "origin_mm": [-150.0, 300.0, 330.0], "vector_N": [0.0, -800.0, 1200.0]}]
-        page, errors = self.open("run=sample&pace=0&t=0")
+        page, errors = self.open("run=sample&pace=0&t=0&words=1")  # every arrow's words (by default only where chosen)
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
         tags = page.evaluate("[...document.querySelectorAll('.lbl-vec')].map((x) => x.textContent)")
         self.assertEqual(errors, [])
@@ -1559,8 +1559,8 @@ class BrowserReplayTest(unittest.TestCase):
             page.wait_for_url(f"**/?run={run_id}")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_function("document.getElementById('runlist').hidden && !document.getElementById('loading-note')")
-            # back to the list by 「☰ 一覧へ」; the run's id is not on the screen without ?dev=1
-            back = page.evaluate("""() => ({ link: [...document.querySelectorAll("#mode a")].map((a) => [a.textContent, a.getAttribute("href")]),
+            # back to the list by 「☰ 一覧へ」 at the top left by the wordmark; the run's id is not on the screen without ?dev=1
+            back = page.evaluate("""() => ({ link: [...document.querySelectorAll(".brand a, #mode a")].map((a) => [a.textContent, a.getAttribute("href")]),
                                              text: document.getElementById("mode").textContent })""")
             self.assertEqual(back["link"], [["☰ 一覧へ", "?list=1"]])
             self.assertNotIn(run_id, back["text"])
@@ -1668,9 +1668,12 @@ class BrowserReplayTest(unittest.TestCase):
               // the last quarter second is after every event (run.finished waits 0.3 s after screen.focus)
               // the first member runs from the front axle (which does not move in this mode) backward
               const nvhLine = () => document.querySelector('#tiles svg.side[data-domain="nvh"] line[data-a]').getAttribute("y2");
+              // (two moments an eighth of a second apart: the event clock's end can lie on a whole or
+              // half second, where the swing is at rest, so neither of them is taken)
               const p = window.hiraku.player.playhead;
-              const y1a = nvhLine();
               await window.hiraku.seek(p - 0.25);
+              const y1a = nvhLine();
+              await window.hiraku.seek(p - 0.125);
               out.swing = [y1a, nvhLine()];
               return out;
             }""",
@@ -1713,7 +1716,7 @@ class BrowserReplayTest(unittest.TestCase):
         for i, ev in enumerate(events):
             ev["t"] = round(i * 0.02, 3)
         events[-1]["t"] = events[-2]["t"] + 60.0
-        page, errors = self.open("run=sample&t=0")
+        page, errors = self.open("run=sample&t=0&pace=paced")  # the paced clock (the event clock: test_event_play_browser)
         got = page.evaluate(
             """async (events) => {
               await window.hiraku.load(events, 0);

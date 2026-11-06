@@ -102,7 +102,7 @@ class VideoFixesBrowserTest(unittest.TestCase):
         t_c1 = t_of[("cause.recorded", "cause-0001")]
         t_c2 = t_of[("cause.recorded", "cause-0002")]
         t_ver = next(e["t"] for e in events if e["kind"] == "verdict.recorded")
-        probe = """() => { const n = document.getElementById('causenote'); const h = document.getElementById('hookflash');
+        probe = """() => { const n = document.getElementById('causenote'); const h = document.getElementById('hookline');
             const st = (el) => el ? getComputedStyle(el) : null;
             const hookLi = document.querySelector('#log li.hook'); const cmp = document.getElementById('card-cmp');
             return { shown: !n.hidden && n.checkVisibility(), text: n.textContent, size: st(n.querySelector('.tx'))?.fontSize,

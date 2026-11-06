@@ -830,7 +830,9 @@ class JointsBrowserTest(unittest.TestCase):
         # step 1 in place: the bolt where it is fastened
         one = at(1)
         np.testing.assert_allclose(one["battery"]["now"], one["battery"]["at"], atol=1e-6)
-        self.assertFalse(one["seat"]["shown"])
+        # (the seat, step 2, starts 0.25 of a step before the battery is in: assembly.js's eased overlap)
+        self.assertTrue(one["seat"]["shown"])
+        self.assertFalse(at(0.7)["seat"]["shown"])
         self.assertTrue(at(3)["seat"]["shown"])
         self.assertEqual(page.errors, [])
         page.close()

@@ -202,10 +202,10 @@ class FrameTubes(BuiltinTool):
             out["stage"] = self.stage
         return out
 
-    def applies(self, design: Record) -> str | None:
+    def shape(self, design: Record) -> str | None:
         """None for a design this tool is for: every support on a double wishbone (a K&C table with hardpoints)
         whose six body-side pickups are frame nodes, as space_frame_utv builds them; else why not, saying what
-        the tool is for and what to use instead."""
+        the tool is for and what to use instead (BuiltinTool.applies says it with the tool's name)."""
         nodes = [np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])]
         missing = []
         for s in design.get("supports", []):
@@ -215,8 +215,12 @@ class FrameTubes(BuiltinTool):
                     missing.append(f"{s.get('id')}.{k}")
         if not design.get("supports") or missing:
             where = f" (not at a frame node: {', '.join(missing[:4])}{', ...' if len(missing) > 4 else ''})" if missing else ""
-            return ("frame_tubes は立体フレーム (space_frame_utv) の設計に使います。この設計のサスペンションの取付点はフレームの"
+            return ("立体フレーム (space_frame_utv) の設計に使います。この設計のサスペンションの取付点はフレームの"
                     f"節にありません{where}。梯子フレームなら frame_shell を使ってください")
+        if any((s.get("suspension") or {}).get("type") != "kc_table" or not s["suspension"].get("kc_table")
+               for s in design["supports"]):
+            return ("立体フレーム (space_frame_utv) の設計に使います。どの支持もサスペンションが K&C 表 "
+                    "(suspension.type kc_table と kc_table) であることが要ります")
         return None
 
     def make_mesh(self, design: Record) -> Record:

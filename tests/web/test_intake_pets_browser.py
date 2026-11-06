@@ -99,6 +99,14 @@ READ = """async ({ t, tab }) => {
 }"""
 
 
+# A2's row of pets (n of them) and its two columns are on the screen with a height
+A2_LAID_OUT = """(n) => {
+  const box = (sel) => { const e = document.querySelector(sel); return e && e.offsetParent !== null && e.getBoundingClientRect().height > 0; };
+  return box(".a2-pets") && box(".in-pane.a2 .in-left") && box(".in-pane.a2 .in-right")
+    && [...document.querySelectorAll(".a2-pets .ipet")].filter((e) => e.offsetParent !== null).length === n;
+}"""
+
+
 @unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
 class IntakePetsTest(unittest.TestCase):
     @classmethod
@@ -284,7 +292,11 @@ class IntakePetsTest(unittest.TestCase):
         """present=1 and video=1 at 1920 x 1080: the row is A2_PETS_H (120 px) tall at the top of the left
         column and both columns end above the subtitle band (the bottom 170 px)."""
         page, errors = self.open("present=1&video=1&tab=A2&t=1e6")
-        got = self.read(page, 1e6)
+        page.evaluate("async () => { await window.hiraku.seek(1e6); }")
+        # the row and both columns laid out (in a full run the page can be read before A2's pane is
+        # shown): waited for as a condition, then read
+        page.wait_for_function(A2_LAID_OUT, arg=len(ORDER), timeout=60000)
+        got = self.read(page, None)
         self.assertEqual(len(got["a2"]), len(ORDER))
         self.assertAlmostEqual(got["pets"]["h"], 120, delta=1)
         self.assertLessEqual(got["left"]["bottom"], STAGE_BOTTOM)

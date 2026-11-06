@@ -135,6 +135,14 @@ export function shellFreeEdges(rec) {
   return out;
 }
 
+// "四角 12・六面体 8 節点 4" from kindCounts' counts.
+export function kindCountsText(c) {
+  return [...KINDS, "other"]
+    .filter((k) => c[k])
+    .map((k) => `${KIND_JA[k] ?? "そのほか"} ${c[k]}`)
+    .join("・");
+}
+
 // "四角 12・六面体 8 節点 4": the counts of each kind in KINDS order, then any other.
 // Kept per elements list (with its element_kind): the replay applies a mesh.created again on
 // every rebuild of its state, and the record's lists do not change.
@@ -143,11 +151,7 @@ export function kindCountText(rec) {
   const els = rec.elements;
   const kept = els && typeof els === "object" ? countTexts.get(els) : undefined;
   if (kept && kept.given === rec.element_kind) return kept.text;
-  const c = kindCounts(rec);
-  const text = [...KINDS, "other"]
-    .filter((k) => c[k])
-    .map((k) => `${KIND_JA[k] ?? "そのほか"} ${c[k]}`)
-    .join("・");
+  const text = kindCountsText(kindCounts(rec));
   if (els && typeof els === "object") countTexts.set(els, { given: rec.element_kind, text });
   return text;
 }

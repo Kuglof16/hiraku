@@ -37,7 +37,7 @@ PROBE = """() => {
     present: document.body.classList.contains("present"),
     scene: document.body.dataset.presentScene,
     kinds,
-    shown: Object.fromEntries(["log", "card-cmp", "card-pred", "hooks", "chips", "tabs", "toggles", "tests", "present-card"].map((id) => [id, seen(document.getElementById(id))])),
+    shown: Object.fromEntries(["log", "card-cmp", "card-pred", "hooks", "hooks-more", "chips", "tabs", "toggles", "tests", "present-card"].map((id) => [id, seen(document.getElementById(id))])),
     view: rect(vp),
     legend: seen(document.getElementById("legend")) ? rect(document.getElementById("legend")) : null,
     graph: seen(document.getElementById("graph")) ? rect(document.getElementById("graph")) : null,
@@ -95,7 +95,7 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertLessEqual(got["kinds"]["legend"], 1, got)
         self.assertLessEqual(got["kinds"]["graph"], 1, got)
         self.assertLessEqual(got["kinds"]["label"], 3, got)
-        for hidden in ("log", "card-cmp", "card-pred", "hooks", "chips", "tabs", "toggles", "tests"):
+        for hidden in ("log", "card-cmp", "card-pred", "hooks", "hooks-more", "chips", "tabs", "toggles", "tests"):
             self.assertFalse(got["shown"][hidden], hidden)
         self.assertTrue(got["shown"]["present-card"])
         # the colour bar and the graph are beside the view, not over it
@@ -138,7 +138,8 @@ class PresentBrowserTest(unittest.TestCase):
         page.click("#expand-btn")
         back = self.probe(page)
         self.assertFalse(back["present"])
-        for shown in ("log", "card-cmp", "hooks", "tabs", "toggles"):
+        # (the footer's hooks list is folded under 「くわしく」, test_topbar_browser)
+        for shown in ("log", "card-cmp", "hooks-more", "tabs", "toggles"):
             self.assertTrue(back["shown"][shown], shown)
         self.assertEqual(back["legendIn"], "viewport")
         self.assertNotIn("present=1", page.url)
@@ -193,7 +194,9 @@ class PresentBrowserTest(unittest.TestCase):
     def test_only_the_picked_wheel_has_words_on_the_workbench(self):
         events, _ = tilt_events()
         finished_t = next(e["t"] for e in events if e["kind"] == "analysis.finished")
-        page, errors = self.open("run=sample&pace=0&t=0")
+        # words=1: the words where nothing is chosen (the largest wheel), as the present mode has them
+        # (by default an arrow has words only where chosen: test_declutter_browser)
+        page, errors = self.open("run=sample&pace=0&t=0&words=1")
         page.evaluate("async ([ev, t]) => { await window.hiraku.load(ev, t); }", [events, finished_t + 3])
         words = """() => {
           const b = window.hiraku.bench;
@@ -229,7 +232,7 @@ class PresentBrowserTest(unittest.TestCase):
         page, errors = self.open("run=sample&pace=0&t=2.5")
         early = page.evaluate(
             """() => ({ line: document.querySelector('#log li.hook').textContent, done: document.querySelector('#log li.hook').classList.contains('done'),
-                        flash: document.getElementById('hookflash').textContent, row: document.getElementById('hooks').textContent,
+                        flash: document.getElementById('hookline').textContent, row: document.getElementById('hooks').textContent,
                         now: document.getElementById('now').textContent })"""
         )
         self.assertIn("止めました", early["line"])
@@ -237,9 +240,11 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertIn("詳しい記録", early["line"])
         self.assertNotIn("解決済み", early["line"])
         self.assertFalse(early["done"])
-        self.assertIn("次に:", early["flash"])
+        # the stop in one line (what was stopped, what the agent is made to do), without the rule's id
+        self.assertEqual(early["flash"], "!予測を書く前の解析を止めました。先に予測を書かせます")
         self.assertNotIn("解決済み", early["row"])
         self.assertIn("hooks が止めた", early["now"])
+        self.assertNotIn("HK1", early["now"])
         late = page.evaluate(
             """async () => { await window.hiraku.seek(9); return { line: document.querySelector('#log li.hook').textContent,
                   done: document.querySelector('#log li.hook').classList.contains('done'), row: document.getElementById('hooks').textContent,

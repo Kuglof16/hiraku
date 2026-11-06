@@ -100,6 +100,7 @@ HV.QUANTITY_JA = {
  "fatigue_damage": "疲労の損傷度",
  "fatigue_life": "疲労寿命",
  "first_body_mode": "車体の 1 次の固有振動数",
+ "first_frame_involving_mode": "フレームが関わる最初の固有振動数",
  "first_frame_mode": "フレームの 1 次の固有振動数",
  "first_frequency": "1 次の固有振動数",
  "first_rollbar_mode": "ロールバーの 1 次の固有振動数",

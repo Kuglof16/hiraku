@@ -88,10 +88,13 @@ def _ok(op, v, lim):
 
 # ---------------------------------------------------------------- beam: frame_static record
 def build_beam(args) -> dict:
-    vdir, rec = common.find_analysis(args.run, "frame_static", version=args.version, analysis_id=args.analysis)
+    """frame_static, or step_climb (the same K1 frame outputs with the step climbed; the step in the record's scene)."""
+    tool = getattr(args, "tool", None) or "frame_static"
+    vdir, rec = common.find_analysis(args.run, tool, version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
     lc = common.load_case_of(vdir, rec["load_case_id"])
-    obj = common.base_object("strength", names.title("strength", "フレームの梁の応力 (K1)"), args.run, vdir, rec, design)
+    title = "段差を越えるときのフレームの梁の応力 (K1)" if tool == "step_climb" else "フレームの梁の応力 (K1)"
+    obj = common.base_object("strength", names.title("strength", title), args.run, vdir, rec, design)
     obj["model"] = "beam"
     fr = obj["frame"]
     st = next((f for f in rec.get("fields", []) if f.get("kind") == "stress" and "per_member" in f), None)
@@ -126,6 +129,15 @@ def build_beam(args) -> dict:
         {"label": "mass", "value": f"{common.result(rec, 'vehicle_mass') or 0:.1f} kg", "source": "record result vehicle_mass"}]
     obj["notes"] = ["梁は K1 の 1 本の線 (管のつなぎ目の壁の応力は見えない: R1s のシェルで見る)。色は部材の中の相当応力の最大。",
                     "変形は記録の節点の変位 (車輪の中心の剛体の動きを除いたもの) × 倍率。部品の箱は載っている節点と一緒に動く。"]
+    if tool == "step_climb":
+        tag = next((r["quantity"][:-len("_wheel_force")] for r in rec.get("results", [])
+                    if r["quantity"].endswith("_wheel_force")), "front")
+        obj["inputs"] += [{"label": f"{tag} wheel force (push)", "value": f"{common.result(rec, tag + '_wheel_force') or 0:.0f} N",
+                           "source": f"record result {tag}_wheel_force (shelf.step_climb: K0 rigid-body statics as the wheel lifts off)"},
+                          {"label": "step", "value": ", ".join(s["label"] for s in obj["scene"]) or "-",
+                           "source": "record scene (the step under the climbing wheels, drawn as the ground's step)"}]
+        obj["notes"].append("段差越え (step_climb): 段差に乗る輪が浮く瞬間の輪の力 (K0 の剛体の釣り合い) を K1 のフレームに載せた 1 時刻の静的な計算。"
+                            "段差は記録の scene の箱。矢印は記録の輪の反力と荷重。")
     return obj
 
 
@@ -146,6 +158,29 @@ def _changes(text: str, base: dict) -> tuple[dict, list[str]]:
             continue
         out[m.group(1)] = {"value": float(m.group(2)), "unit": var.get("unit", "mm")}
     return out, unknown
+
+
+def part_offsets(ledger: dict, design: dict, X: np.ndarray, D: np.ndarray) -> np.ndarray:
+    """[T, nparts, 3]: each part box moved by the mean displacement of the mesh nodes X near the design nodes the
+    ledger puts it on (within the nearest distance + NEAR_MM); D [T, N, 3]."""
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    near: dict[str, np.ndarray] = {}
+
+    def nodes_at(n):
+        if n not in near:
+            d = np.linalg.norm(X - xyz[n], axis=1)
+            near[n] = np.nonzero(d <= d.min() + NEAR_MM)[0]
+        return near[n]
+
+    sets = []
+    for e in ledger["parts"]:
+        ns = [nodes_at(n) for n, _ in e["nodes"] if n in xyz] if e["cat"] != "not_in" else []
+        sets.append(np.concatenate(ns) if ns else None)
+    off = np.zeros((len(D), len(sets), 3), np.float32)
+    for j, s in enumerate(sets):
+        if s is not None and len(s):
+            off[:, j] = D[:, s].mean(axis=1)
+    return off
 
 
 def build_shell(args) -> dict:
@@ -202,24 +237,7 @@ def build_shell(args) -> dict:
     # move with the mesh nodes at their design nodes
     lc = {"params": {}}
     obj["ledger"] = ledgers.shell_ledger(design, lc, obj["parts"], set(members))
-    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
-    near: dict[str, np.ndarray] = {}
-
-    def nodes_at(n):
-        if n not in near:
-            d = np.linalg.norm(X - xyz[n], axis=1)
-            near[n] = np.nonzero(d <= d.min() + NEAR_MM)[0]
-        return near[n]
-
-    sets = []
-    for e in obj["ledger"]["parts"]:
-        ns = [nodes_at(n) for n, _ in e["nodes"] if n in xyz] if e["cat"] != "not_in" else []
-        sets.append(np.concatenate(ns) if ns else None)
-    off = np.zeros((len(ts), len(sets), 3), np.float32)
-    for j, s in enumerate(sets):
-        if s is not None and len(s):
-            off[:, j] = D[:, s].mean(axis=1)
-    obj["part_off"] = pack_np(off, "f32")
+    obj["part_off"] = pack_np(part_offsets(obj["ledger"], design, X, D), "f32")
     obj["marks"] = _yields(design)
     obj["inputs"] = [
         {"label": "frames", "value": f"{len(ts)} instants of the step hit ({ts[0]:.3f} to {ts[-1]:.3f} s)",
@@ -253,6 +271,7 @@ def _extra(ap):
     ap.add_argument("--frames", help="folder with frames.npz, frames_meta.pkl and load_paths.json (the shell)")
     ap.add_argument("--name", help="the run's name on screen (the shell; default: the run folder's name)")
     ap.add_argument("--every", type=int, default=1, help="keep every n-th instant (the shell)")
+    ap.add_argument("--tool", default="frame_static", help="the beam record's tool: frame_static or step_climb")
 
 
 if __name__ == "__main__":

@@ -159,7 +159,8 @@ class AssemblyReplayBrowserTest(unittest.TestCase):
             got = self.at(page, T_A7)
             self.assertEqual(got["u"], u0, arg)
             self.assertEqual(got["label"], f"手順 {u0} / {N}", arg)
-            self.assertEqual(got["visible"], [i < u0 for i in range(N)], arg)
+            # the parts before in place, and the next one already starting on its way in (assembly.js LEAD)
+            self.assertEqual(got["visible"], [i <= u0 for i in range(N)], arg)
             self.assertEqual(got["kinds"], ["part"] * N, arg)
             self.assertEqual(got["pos"][:u0], [[0, 0, 0]] * u0, arg)  # in place from the start
             # the next part on its path, half in

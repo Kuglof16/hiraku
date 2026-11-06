@@ -154,7 +154,11 @@ class ExportTest(unittest.TestCase):
                     if nxt >= size or nxt == offset:
                         break
                     offset = nxt
-                self.assertEqual(gzip.decompress((data / "runs" / rid / "events.jsonl.gz").read_bytes()), read, rid)
+                # the light record with its heavy parts put back: the server's events, line for line
+                run_dir = data / "runs" / rid
+                parts = {p.name: p.read_bytes() for p in (run_dir / ex.HEAVY_DIR).glob("*")} if (run_dir / ex.HEAVY_DIR).is_dir() else {}
+                joined = ex.join_record(gzip.decompress((run_dir / ex.LIGHT_FILE).read_bytes()), parts)
+                self.assertEqual(joined, [json.loads(line) for line in read.splitlines()], rid)
         finally:
             server.shutdown()
             server.server_close()
@@ -274,14 +278,17 @@ class StaticBrowserTest(unittest.TestCase):
         self.assertTrue(got["canvas"])
         self.assertIn("再生", got["mode"])
         self.assertFalse(got["stop"])
-        self.assertEqual(page.get_attribute("#mode a.launch-link", "href"), "?list=1")
+        # the way back to the list: 「☰ 一覧へ」 at the top left (no 「▶ その場で走らせる」 without a server)
+        self.assertEqual(page.get_attribute("#back-link", "href"), "?list=1")
+        self.assertIsNone(page.query_selector("#mode a.launch-link"))
         # ④: the strength tile replays its analyses in the tab; the prediction names its formula
         page.click('.tab[data-tab="grid"]')
         page.click('.tile[data-domain="strength"]')
         page.wait_for_function("!document.getElementById('domain-head').hidden")
         page.evaluate("window.hiraku.seek(1e6)")
         title = self.formulas["frame_static.rail_bending"]
-        page.wait_for_function("(t) => document.getElementById('card-pred').innerText.includes(t)", arg=title, timeout=10000)
+        # (textContent: the card is folded under ③'s くわしく)
+        page.wait_for_function("(t) => document.getElementById('card-pred').textContent.includes(t)", arg=title, timeout=10000)
         # A4: the shelf from data/shelf.json, the run's tool code from data/runs/<id>/tools/
         page.click('.tab[data-tab="A4"]')
         page.wait_for_function(f"document.querySelectorAll('#view-shelf .sh-tool').length >= {len(SHELF_TOOLS)}", timeout=10000)
@@ -309,7 +316,7 @@ class StaticBrowserTest(unittest.TestCase):
                 self.clean(page, seen)
 
     def test_first_screen_is_the_request(self):
-        """A bare page: ① of the picked run with its request; ② has its hearing; the run list is a tab;
+        """A bare page: ① of the picked run with its request; ② has its hearing; the run list is 一覧へ at the top left;
         「この記録を再生する」 goes to ③ and plays."""
         page, seen = self.open("")
         state = """() => ({
@@ -327,11 +334,11 @@ class StaticBrowserTest(unittest.TestCase):
         self.assertIn(want, got["bar"])
         self.assertIn("この記録を再生する", got["bar"])
         self.assertIn(want, page.inner_text("#intake-host"))
-        # the steps in order, then the run list's tab (a link) after them
+        # the steps in order; the run list is 「☰ 一覧へ」 at the top left, not a tab
         order = page.evaluate("[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.tab ?? t.getAttribute('href'))")
         self.assertEqual(order[:3], ["A1", "A2", "bench"])
-        self.assertIn("?list=1", order)
-        self.assertGreater(order.index("?list=1"), order.index("A7"))
+        self.assertNotIn("?list=1", order)
+        self.assertEqual(page.get_attribute("#back-link", "href"), "?list=1")
         # ②: the hearing of the record
         page.click('.tab[data-tab="A2"]')
         page.wait_for_function("document.querySelector('.tab.on')?.dataset.tab === 'A2'")
@@ -345,8 +352,9 @@ class StaticBrowserTest(unittest.TestCase):
         first_design = page.evaluate("window.hiraku.player.events.find((e) => e.kind === 'design.created').t")
         self.assertGreaterEqual(got["playhead"], first_design)
         self.assertLess(got["playhead"], page.evaluate("window.hiraku.player.duration") / 2)
-        # the run list's tab opens the list
-        page.click("#tabs a.tab-list")
+        # 「☰ 一覧へ」 at the top left opens the list (no tab of its own beside the domain chips)
+        self.assertIsNone(page.query_selector("#tabs a.tab-list"))
+        page.click("#back-link")
         page.wait_for_selector("#runlist .local-run a", timeout=20000)
         self.clean(page, seen)
 

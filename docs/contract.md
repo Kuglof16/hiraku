@@ -23,6 +23,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
 | 品質保証部 | `tests/verification/`、`qa/` (Rapier との比べは `qa/rapier/`、Node はここだけ) |
 | 広報部 | `promo/` |
+| 流れの解析 (CAD と同じく統括部の受け持ち、作るのは流体解析部) | `hiraku/cfd/`、`hiraku/tools/cfd_tools.py`、`tests/cfd/` |
 | 受付部 | `hiraku/intake/` (分野を選ぶ・ヒアリング・ナレッジの規則)、`data/requirements/products/` (デモ以外の製品の要件)、`data/knowledge/` (最初から入っている規則)、`web/js/intake/` (A1・A2・A5 の画面)、`tests/intake/` |
 
 機械で引く表は `hiraku/contract/layout.py` の `OWNERS` (`owner_of(path)`)。
@@ -138,6 +139,10 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 見本として残す実行は `showcase/<run_id>/` (`layout.SHOWCASE_DIR`。統括部の持ち場。runs/ はコミットしない)。画面は URL に `?run=` が無いとき、ここのいちばん新しい実行を再生する
 
 MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更 `changes`、generator の選択 `choices` (例 `part_mounts: brackets`、選べる値は `get_context` の `design_choices`)、少なくとも一方と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
+
+## 流れの解析 (2026-11-06)
+
+`cfd_aero` (`MCP_TOOLS_LATER`、実行の中で使うツールにはまだ入れない) は、設計の v の流れを GPU で解き、`<実行のフォルダ>/cfd/v<N>/` に各ケースの記録と `aero_record.json` を書く。GPU が無ければ回さないと答え、CPU では回さない。GPU のメモリが足りなければ待つように答える。`replay` は保存した記録を GPU なしで読む。解析の記録の `physically_validated` が false の値は、実験と比べて確かめていない (`assumptions` にも 確かめていない と書く)。
 
 ## Claude が書く設計 (2026-11-06)
 
