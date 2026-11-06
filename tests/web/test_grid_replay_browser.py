@@ -166,17 +166,25 @@ class GridReplayBrowserTest(unittest.TestCase):
         page, errors = self.open("tab=grid&t=0")
         read = """async (evs) => { await window.hiraku.load(evs, 1e6);
             await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-            return Object.fromEntries([...document.querySelectorAll('.tile')].map((t) => [t.dataset.domain, t.querySelector('.sum').textContent])); }"""
+            const off = document.querySelector('#tiles .offline');
+            return { tiles: [...document.querySelectorAll('#tiles .tile')].map((t) => t.dataset.domain),
+                     off: off?.querySelector('.offwords').textContent ?? null,
+                     only: off?.querySelector('.only')?.textContent ?? null,
+                     why: Object.fromEntries([...(off?.querySelectorAll('.offwhy li') ?? [])].map((li) => [li.querySelector('b').textContent, li.textContent])) }; }"""
+        # the domains not picked are no tiles: one line names them (tiles.js offLine), why only when opened
         plain = page.evaluate(read, events)
-        self.assertEqual(plain["crash"], "")
+        self.assertEqual(plain["tiles"], ["strength"])
+        self.assertEqual(plain["off"], "今回は選んでいない: 衝突・音振・熱・操安・動力・空力・組み立て")
+        self.assertIsNone(plain["only"])
         for ev in events:
             for p in ev.get("data", {}).get("domain_picks", []) or []:
                 p["reason"] = "要件のファイルが試験 R1 段差 (見本) を選んだ"
         chosen = page.evaluate(read, events)
         line = "この実行は R1 だけを確かめます (要件のファイルが選んだ試験)"
-        for d in ("crash", "nvh", "thermal", "handling", "powertrain", "aero", "assembly"):
-            self.assertEqual(chosen[d], line, d)
-        self.assertNotEqual(chosen["strength"], line)
+        self.assertEqual(chosen["only"], line)
+        self.assertEqual(chosen["tiles"], ["strength"])
+        for d in ("衝突", "音振", "熱", "操安", "動力", "空力", "組み立て"):
+            self.assertIn(line, chosen["why"][d], d)
         self.assertEqual(errors, [])
 
 

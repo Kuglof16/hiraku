@@ -235,6 +235,44 @@ function tilePet(s, d, pets) {
   return `<span class="say tilesay" data-say="${esc(id)}"></span><span class="petslot tilepet" data-pet-slot="${esc(id)}"></span>`;
 }
 
+// The tile's one number: the verdict that decides the domain as recorded (a failed one first,
+// else the one with the smallest margin, margin_pct; else the first). null without verdicts.
+export function headline(verdicts) {
+  if (!verdicts.length) return null;
+  const failed = verdicts.filter((x) => x.pass === false);
+  const list = failed.length ? failed : verdicts;
+  const m = (x) => (Number.isFinite(x.margin_pct) ? x.margin_pct : Infinity);
+  return list.reduce((a, b) => (m(b) < m(a) ? b : a));
+}
+
+// The tiles' columns for n tiles (app.css .tiles uses --cols): two side by side up to four
+// (2 x 2), then three a row (seven domains and assembly: 3, 3, 2).
+export function gridColumns(n) {
+  if (n <= 2) return 2;
+  if (n === 3) return 3;
+  if (n === 4) return 2;
+  return 3;
+}
+
+// The line over the tiles that names the domains not picked (none: nothing). Why each was not
+// picked (the record's domains.picked off[].reason, or the tests the file chose) only when it is
+// opened. A domain among them whose test was analysed (it fed another one) is a chip that can
+// replay it (app.js renderGrid marks it, as a tile).
+function offLine(s, off, design, v) {
+  if (!off.length) return "";
+  const reasons = Object.fromEntries((s.intake?.picked?.off ?? []).map((x) => [x.domain, x.reason]));
+  const only = onlyTestsLine(s);
+  const rows = off.map((d) => `<li><b>${esc(DOMAIN_JA[d])}</b> ${esc(reasons[d] ?? only ?? "選ばなかった理由は記録に無い")}</li>`).join("");
+  const chips = off
+    .filter((d) => design && domainAnalysis(s, d, v).ana)
+    .map((d) => `<span class="offchip" data-domain="${d}" title="選んでいないが、ほかの試験のために解析した (参考)">${esc(DOMAIN_JA[d])} (参考)</span>`)
+    .join("");
+  return (
+    `<div class="offline" data-role="not-picked"><span class="offwords">今回は選んでいない: ${off.map((d) => esc(DOMAIN_JA[d])).join("・")}</span>${chips}` +
+    `<details class="offwhy"><summary>理由</summary>${only ? `<p class="only">${esc(only)}</p>` : ""}<ul>${rows}</ul></details></div>`
+  );
+}
+
 export class TileBoard {
   constructor(head, tiles) {
     this.head = head;
@@ -270,7 +308,10 @@ export class TileBoard {
     const change = built
       ? `<span class="change" data-built="${v}">${built}</span>`
       : design && design.parent_version != null && design.change_reason ? `<span class="change long" title="${esc(design.change_reason)}">${verLabel(design.parent_version)} → ${verLabel(v)} で変えたこと: ${keepAsides(design.change_reason)}</span>` : "";
-    const headIds = pets ? pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)) : [];
+    // The domains not picked are not tiles (below): an agent placed on one of them stands in the
+    // head with the agents of no domain
+    const off = TILE_ORDER.filter((d) => judgementState(s, d).state === "off");
+    const headIds = pets ? pets.order.filter((id) => (gridPlaceOf(id) === "head" || off.includes(gridPlaceOf(id))) && pets.has(id)) : [];
     const headN = headIds.length;
     this.head.innerHTML =
       `<h2>${verLabel(v)} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
@@ -280,15 +321,21 @@ export class TileBoard {
 
     const picks = Object.fromEntries((s.project?.domain_picks ?? []).map((p) => [p.domain, p]));
     this.modeViews = [];
-    const html = TILE_ORDER.map((d) => {
+    this.pictures = [];
+    // The domains not picked are not tiles: one line names them (why, when it is opened); one of
+    // them with a test analysed (it fed another one) is a small chip there that can replay it.
+    const shown = TILE_ORDER.filter((d) => !off.includes(d));
+    const html = shown.map((d) => {
       const j = judgementState(s, d);
       const info = design ? domainAnalysis(s, d, v) : { ana: null, loadCase: null };
       let drawing = "";
       let caption = "";
-      // A domain not picked is still drawn when a test of it was analysed (it fed another one).
-      if (design && (j.state !== "off" || info.ana)) {
-        const { body, ct } = tileSvg(s, d, design, info);
-        drawing = body;
+      let ct = null;
+      if (design) {
+        const t = tileSvg(s, d, design, info);
+        drawing = t.body;
+        ct = t.ct;
+        this.pictures.push({ domain: d, design, ct, lc: info.loadCase, ana: info.ana, key: `${v}|${d}|${info.ana?.analysis_id ?? "-"}|${ct?.key ?? "-"}` });
         if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.reference ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
         for (const x of info.ana?.interferences ?? []) {
           caption += `${caption ? "・" : ""}${thingName(design, x.a)} × ${thingName(design, x.b)} ${fmt(x.depth_mm, 3)} mm 干渉${x.state === "motion" ? ` (${x.condition ?? "動いたとき"})` : ""}`;
@@ -307,11 +354,9 @@ export class TileBoard {
         ? info.ana ? "この版の解析は記録にあるが、判定がまだ記録に無い" : "この版の解析がまだ記録に無い"
         : "";
       // (a tile still まだ with some verdicts: those are the ones judged so far, not the tile's pass)
-      const lead = failed.length ? `不合格 ${failed.length} 件: ` : j.state === "green" ? "合格: " : "判定のある分: ";
-      const only = j.state === "off" && !info.ana ? onlyTestsLine(s) : null;
-      const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why || only || "";
+      const lead = failed.length ? `NG ${failed.length} 件: ` : j.state === "green" ? "OK: " : "判定のある分: ";
+      const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why || "";
       const nv = j.judgement?.verdict_ids?.length ?? 0;
-      const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
       const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
       const safe = ns ? `<span class="tb safe" title="一致ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
@@ -329,18 +374,34 @@ export class TileBoard {
             ? `赤・${failedIds.join("・")}`
             : STATE_WORD[j.state];
       const wordTitle = j.state === "red" && failed.length ? ` title="${esc(failed.map((x) => `${x.load_case_id}: ${caseTitle(s, x.load_case_id)}`).join("\n"))}"` : "";
+      // the large mark: OK / NG (red only for NG), else まだ; with a count held, 保留 beside it
+      const mark = j.state === "green" ? "OK" : j.state === "red" ? "NG" : "まだ";
+      const big = headline(verdicts);
+      const number = big
+        ? `<div class="num" data-role="number"><span class="nq">${esc(`${big.test_id ?? big.load_case_id ?? ""} ${quantityName(s.comparisons[big.comparison_id]?.quantity ?? big.quantity)}`.trim())}</span>` +
+          `<b class="nv${big.pass === false ? " ng" : ""}">${esc(fmtQ(big.value, 3))}</b><span class="nl">${esc(`${opLabel(big.op)} ${fmtQ(big.limit, 3)}`)}</span></div>`
+        : `<div class="num none" data-role="number"><span class="nq">${esc(why)}</span></div>`;
       return (
-        `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}"><div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="state"${wordTitle}>${esc(word)}</span></div>` +
+        `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}">` +
+        `<div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
+        `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"></canvas></div>` +
+        `<div class="side">${number}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
+        // the words and the small drawings: only when the tile is opened
+        `<details class="more"><summary>くわしく</summary>` +
+        `<div class="state"${wordTitle}>${esc(word)}</div>` +
         (held.length ? `<div class="heldband">${heldBandHtml(held)}</div>` : "") +
         referenceRowsHtml(refs) +
-        `<div class="draw">${drawing}</div>${spark}` +
+        `<span class="sum"${recorded && recorded !== summary ? ` title="${esc(`記録の要約: ${recorded}`)}"` : ""}>${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>` +
         `<div class="cap">${esc(caption)}</div>` +
         // the strength tile: the mounts are not judged (labels.js JUDGED_JA.mountsNotJudged)
         (d === "strength" && (s.project?.load_cases ?? []).some((c) => c.domain === "strength") ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
-        `<div class="tf" data-say-host><span class="sum"${recorded && recorded !== summary ? ` title="${esc(`記録の要約: ${recorded}`)}"` : ""}>${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>${safe}${badge}${tilePet(s, d, pets)}</div></div>`
+        `<div class="draw">${drawing}</div>${spark}` +
+        `</details></div>`
       );
     }).join("");
-    this.tiles.innerHTML = html;
+    this.tiles.dataset.n = String(shown.length);
+    this.tiles.style.setProperty("--cols", String(gridColumns(shown.length)));
+    this.tiles.innerHTML = offLine(s, off, design, v) + html;
 
     // Keep what a mode shape needs to swing its lines each frame.
     for (const d of DOMAINS) {
@@ -350,6 +411,7 @@ export class TileBoard {
       const ct = contourOf(info.ana, field, info.loadCase?.criterion);
       if (!ct?.modes) continue;
       const svg = this.tiles.querySelector(`svg.side[data-domain="${d}"]`);
+      if (!svg) continue; // (a domain not picked: no tile)
       const view = sideView(design);
       const dmax = Math.max(...Object.values(ct.modes).map((x) => Math.hypot(...x)));
       if (!(dmax > 0)) continue;
@@ -360,6 +422,18 @@ export class TileBoard {
     const limit = s.project?.round_limit;
     const atLimit = !!s.stopReason || (limit != null && roundsUsed(s) >= limit && s.status !== "running");
     return { reds, atLimit };
+  }
+
+  // The tiles' 3D pictures (tile3d.js TileViews), once the tiles are laid out; scale: device
+  // pixels per CSS pixel of the tiles. cachedOnly: only the pictures already kept; returns
+  // whether every picture is shown.
+  drawPictures(views, scale, cachedOnly = false) {
+    let all = true;
+    for (const p of this.pictures ?? []) {
+      const canvas = this.tiles.querySelector(`canvas.tile3d[data-domain="${p.domain}"]`);
+      if (canvas && !views.draw(canvas, p.domain, { ...p, scale }, cachedOnly)) all = false;
+    }
+    return all;
   }
 
   // Swing mode shapes with the replay clock (once a second), like the 3D view.

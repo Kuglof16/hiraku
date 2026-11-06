@@ -378,7 +378,7 @@ export class Workbench3D {
   // ambient occlusion) when its quality has them.
   constructor(host, lookName = "zu", opts = {}) {
     this.host = host;
-    // opts.sky false: the real look without the sky behind (look.js Look.sky; e.g. ④'s pictures)
+    // opts.sky true: the real look with the sky behind (look.js Look.sky; the ③ workbench, app.js)
     this.look = new Look(lookName, opts.quality, { stage: !!opts.stage, sky: opts.sky });
     this.ownRenderer = !opts.renderer;
     this.groundStyle = opts.ground ?? null;

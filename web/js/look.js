@@ -763,7 +763,9 @@ export class Look {
     this.stage = !!opts.stage && this.real;
     // the workbench's real look: the sky with its horizon behind the vehicle too (as the stage's,
     // over the dirt ground), its sun where the workbench's sun always stood (WORKBENCH_SUN)
-    this.sky = this.real && !this.stage && opts.sky !== false;
+    // (opts.sky true: asked for by the workbench only, app.js; the cut pages' see-through views
+    // and ④'s pictures keep a clear background)
+    this.sky = this.real && !this.stage && opts.sky === true;
     this.quality = QUALITY[quality] ? quality : DEFAULT_QUALITY;
     this.q = QUALITY[this.quality];
     this.textures = {};

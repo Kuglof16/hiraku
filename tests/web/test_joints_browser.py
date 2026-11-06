@@ -370,8 +370,9 @@ class JointsBrowserTest(unittest.TestCase):
         return page
 
     def bench(self, look="zu", on=True, run=JOINTS_RUN, size=(1280, 720)):
-        # the joints are on at first (app.js ui.toggles); on=False: ?off=joints
-        return self.open(f"?run={run}&tab=bench&pace=0&t=1e6&look={look}{'' if on else '&off=joints'}", size)
+        # the joints are on at first in the diagram look and off in the real look (app.js: the real
+        # look shows the vehicle as it is), so on=True asks for them (?on=joints); on=False: ?off=joints
+        return self.open(f"?run={run}&tab=bench&pace=0&t=1e6&look={look}{'&on=joints' if on else '&off=joints'}", size)
 
     def test_counts_match_the_design(self):
         want, rule = expected_counts(design())
@@ -672,6 +673,13 @@ class JointsBrowserTest(unittest.TestCase):
             self.assertEqual(page.evaluate(BUTTON), "on", query)
             self.assertTrue(got["on"] and got["group"], query)
             self.assertIsNotNone(page.evaluate(LEGEND), query)
+            self.assertEqual(page.errors, [], query)
+            page.close()
+        # the real look opens with them off (the vehicle as it is, not see-through); ?on=joints on
+        for query, want in (("", ""), ("&on=joints", "on")):
+            page = self.open(f"?run={JOINTS_RUN}&tab=bench&pace=0&t=1e6&look=real{query}")
+            self.assertEqual(page.evaluate(BUTTON), want, query)
+            self.assertEqual(page.evaluate(SUMMARY)["on"], want == "on", query)
             self.assertEqual(page.errors, [], query)
             page.close()
         page = self.bench("zu", on=False)
