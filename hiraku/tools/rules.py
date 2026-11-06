@@ -134,15 +134,15 @@ def lower_stage_left(ctx: RunContext, stage: int, skip: str | None = None) -> li
         if lc_id == skip:  # the same load case: only a red from a lighter tool stops the heavier one
             made_by = _verdict_tool(ctx, ver) if ver is not None and not ver["pass"] else None
             if made_by is not None and tool_stage(ctx, made_by) < stage:
-                out.append((n, lc, f"赤、{ver['verdict_id']}"))
+                out.append((n, lc, f"NG、{ver['verdict_id']}"))
             continue
         if ver is not None and not ver["pass"]:
-            out.append((n, lc, f"赤、{ver['verdict_id']}"))
+            out.append((n, lc, f"NG、{ver['verdict_id']}"))
             continue
         if lc["domain"] not in held:
             held[lc["domain"]] = held_cases(ctx, lc["domain"], v)
         if lc_id in held[lc["domain"]]:
-            out.append((n, lc, "合格にできない: " + "、".join(held[lc["domain"]][lc_id])))
+            out.append((n, lc, "OK にできない: " +"、".join(held[lc["domain"]][lc_id])))
         elif ver is None:
             out.append((n, lc, "未判定"))
     if out:  # cases that cannot be judged hold no heavier stage (contract 110b991): no K0 formula, or ended by a cause
@@ -157,15 +157,15 @@ def _h5(ctx: RunContext, lc_id: str, tool: str, domain: str | None) -> Denial | 
     if not left:
         return None
     named = "、".join(f"{lc['load_case_id']} ({_stage_ja(s)}、{what})" for s, lc, what in left)
-    reds = [x for x in left if x[2].startswith("赤")]
+    reds = [x for x in left if x[2].startswith("NG")]
     red_hint = ""
     if reds:
         ids = ", ".join(what.split("、", 1)[1] for _, _, what in reds)
-        red_hint = (f"赤のもの ({ids}) は、重い計算に進む前に、設計役 (designer) に通らなかった試験と合否の ID を渡して "
-                    f"revise_design で次の版 (版 {ctx.version + 1}) を作らせてください (新しい版は段 0 からやり直す)。")
+        red_hint = (f"NG のもの ({ids}) は、重い計算に進む前に、設計役 (designer) に通らなかった試験と合否の ID を渡して "
+                    f"revise_design で次の版 (v{ctx.version + 1}) を作らせてください (新しい版は段 0 からやり直す)。")
     return Denial(HK5, (
-        f"{tool} は{_stage_ja(n)}のツールなので、{lc_id} の解析は止めました。版 {ctx.version} で、それより軽い段の荷重条件に"
-        f"赤か未判定が残っています: {named}。軽い段から確かめてください: 未判定のものは予測 → analyze → compare で"
+        f"{tool} は{_stage_ja(n)}のツールなので、{lc_id} の解析は止めました。v{ctx.version} で、それより軽い段の荷重条件に"
+        f"NG か未判定が残っています:{named}。軽い段から確かめてください: 未判定のものは予測 → analyze → compare で"
         f"判定を付けます。{red_hint}同じ段のツールは並べて回してかまいません"
     ), domain)
 
@@ -204,7 +204,7 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
     good = [p["prediction_id"] for p in ctx.store.records("prediction", v) if p["load_case_id"] == lc_id]
     bad = [i for i in ids if i not in good]
     if not ids or bad:
-        what = f"予測 {', '.join(bad)} は版 {v} の {lc_id} の予測ではありません" if bad else "予測の ID がありません"
+        what = f"予測 {', '.join(bad)} は v{v} の {lc_id} の予測ではありません" if bad else "予測の ID がありません"
         hint = f"使える予測は {', '.join(good)} です。" if good else ""
         return Denial(HK1, (
             f"予測が無いので解析は止めました ({what})。{hint}"
@@ -216,7 +216,7 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
 
 def check_compare(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
     pred = ctx.prediction(args.get("prediction_id") or "")
-    return _h3(ctx, pred["domain"] if pred else None, "照合")
+    return _h3(ctx, pred["domain"] if pred else None, "予測との判定")
 
 
 CHECKS = {"analyze": check_analyze, "compare": check_compare}
@@ -425,8 +425,8 @@ def judged_end(ctx: RunContext) -> tuple[str, str | None, str]:
     reds = [j for j in ctx.store.judgements() if j["state"] == "red"]
     if reds and ctx.version - 1 >= ctx.project["round_limit"]:
         names = "、".join(_ja(j["domain"]) for j in reds)
-        return ("stopped", f"{names}が赤のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を"
-                           f"使い切りました (版 {ctx.version})", "round_limit")
+        return ("stopped", f"{names}が NG のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を"
+                           f"使い切りました (v{ctx.version})", "round_limit")
     return "done", None, "done"
 
 
@@ -457,9 +457,9 @@ def red_left_reason(ctx: RunContext) -> str | None:
         what = "、".join(f"{v['test_id']} ({v['load_case_id']}、{v['verdict_id']})" for v in failed) or j["summary"]
         parts.append(f"{_ja(j['domain'])}: {what}")
     hand = f"と合否の ID ({', '.join(ids)}) " if ids else " "
-    return (f"赤の分野が残っていますが、設計の直しがあと {left} 回できます (round_limit {limit}、今の版 {ctx.version})。"
+    return (f"NG の分野が残っていますが、設計の直しがあと {left} 回できます (round_limit {limit}、今の版 v{ctx.version})。"
             f"{' / '.join(parts)}。設計役 (designer) に、通らなかった試験{hand}を渡して、revise_design で"
-            f"次の版 (版 {ctx.version + 1}) を作らせてください。新しい版で全部の荷重条件をやり直します")
+            f"次の版 (v{ctx.version + 1}) を作らせてください。新しい版で全部の荷重条件をやり直します")
 
 
 def holding(ctx: RunContext, version: int | None = None) -> list[tuple[str, list[str]]]:
@@ -486,7 +486,7 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
         return None
     if not ctx.version:
         return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
-                "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
+                "propose_design で最初の版を作らせてください。v1 ができると試験の荷重条件が決まります")
     left = [(d, lcs) for d, lcs in holding(ctx) if domain is None or d == domain]
     if not left:
         return None
@@ -507,7 +507,7 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
                              f"compare で一致させると判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
                 continue
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
-            first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
+            first = f"{'・'.join(ups)} の予測との判定を OK にし、" if ups else ""
             if not _usable_tools(ctx, lc["test_id"]):
                 first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、"
                          f"check_tool で試してから make_tool で棚に入れ、{first}")
@@ -517,9 +517,9 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
     tail = ""
     if open_:
         tail = f" 原因の書かれていない食い違い {', '.join(c['comparison_id'] for c in open_)} も残っています (record_cause)。"
-    order = " 軽い段から順に (段 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算) 確かめ、赤が出たら次の段の前に設計役が直します。" \
+    order = " 軽い段から順に (段 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算) 確かめ、NG が出たら次の段の前に設計役が直します。" \
         if len({s for s in stage.values() if s is not None}) > 1 else ""
-    return (f"まだ判定の無い (合格にできない試験の残る) 分野があるので終われません。{' / '.join(parts)}。{order}{tail}").strip()
+    return (f"まだ判定の無い (OK にできない試験の残る) 分野があるので終われません。{' / '.join(parts)}。{order}{tail}").strip()
 
 
 def cannot_judge_text(ctx: RunContext) -> str | None:
@@ -530,14 +530,14 @@ def cannot_judge_text(ctx: RunContext) -> str | None:
     if cannot:
         named = "、".join(f"{lc_id} ({q})" for lc_id, q in cannot.items())
         parts.append(f"{named} は、判定の量を予測する手計算 (K0) の式が式の台帳に無いので、この実行では判定できません "
-                     f"(予測が無いと解析も照合もできない)")
+                     f"(予測が無いと解析も予測との判定もできない)")
     if ended:  # contract 110b991: the mismatch's cause was recorded as ending the step without a verdict
         parts.append(f"{'、'.join(ended)} は、食い違いの原因を記録して判定なしで終えたので、この実行では判定していません")
         by_id = {lc["load_case_id"]: lc for lc in ctx.load_cases}
         for lc_id in ended:  # the tool's numbers when it found the case beyond its criterion (no red without a prediction)
             said = beyond_text(ctx, by_id[lc_id], ctx.version) if lc_id in by_id and ctx.version else None
             if said:
-                parts.append(f"{lc_id}: {said}。手計算の予測がここに届かないので、赤にもしていません。")
+                parts.append(f"{lc_id}: {said}。手計算の予測がここに届かないので、NG にもしていません。")
     return " ".join(parts) or None
 
 
@@ -581,9 +581,9 @@ def stage_blocked(ctx: RunContext) -> dict[str, str]:
             n = load_case_stage(ctx, ctx.load_case(lc_id))
             if n is None:
                 continue
-            reds = [(m, lc) for m, lc, what in lower_stage_left(ctx, n, skip=lc_id) if what.startswith("赤")]
+            reds = [(m, lc) for m, lc, what in lower_stage_left(ctx, n, skip=lc_id) if what.startswith("NG")]
             if reds:
-                out[lc_id] = ("低い段の赤が残るので判定していない ("
+                out[lc_id] = ("低い段の NG が残るので判定していない ("
                               + "、".join(f"{_stage_ja(m)} の {lc['load_case_id']}" for m, lc in reds) + ")")
     return out
 
@@ -597,8 +597,8 @@ def stage_blocked_end(ctx: RunContext) -> str | None:
         return None
     reds = [j for j in ctx.store.judgements() if j["state"] == "red"]
     names = "、".join(_ja(j["domain"]) for j in reds) or "低い段"
-    return (f"{names}が赤のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました "
-            f"(版 {ctx.version})。" + " / ".join(f"{lc_id}: {blocked[lc_id]}" for lc_id in left))
+    return (f"{names}が NG のまま、設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました "
+            f"(v{ctx.version})。" + " / ".join(f"{lc_id}: {blocked[lc_id]}" for lc_id in left))
 
 
 def excused_pending(ctx: RunContext) -> str | None:
@@ -636,7 +636,7 @@ def excused_pending(ctx: RunContext) -> str | None:
 
                 held = unresolved_mismatches(ctx, lc, ctx.version)
                 if held and all(cause is not None for _, cause in held) and not beyond_results(ctx, lc, ctx.version):
-                    written = "; ".join(f"照合 {c['comparison_id']} の食い違いの原因 {cause['cause_id']}: "
+                    written = "; ".join(f"予測との判定 {c['comparison_id']} の食い違いの原因 {cause['cause_id']}: "
                                         f"{cause.get('cause', '')}" for c, cause in held)
                     reasons.append(f"{lc_id}: {written}")
                     continue

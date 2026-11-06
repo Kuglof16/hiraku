@@ -647,7 +647,7 @@ class SafeSideTest(RunCase, unittest.TestCase):
         text = rules.cannot_judge_text(self.ctx)
         self.assertIn("R1-step100 は、食い違いの原因を記録して判定なしで終えた", text)
         self.assertRegex(text, r"R1-step100: ツール frame_static では .*max_stress が [\d.]+ MPa で、基準 ≤ [\d.]+ MPa を超える")
-        self.assertIn("赤にもしていません", text)
+        self.assertIn("NG にもしていません", text)
         self.assertNotIn("R1-step100", judge.latest_verdicts(self.ctx, 1))  # no red without a prediction
         with mock.patch.object(judge, "beyond_results", return_value=[]):  # within its criterion: nothing more said
             self.assertNotIn("ツール", rules.cannot_judge_text(self.ctx))
@@ -1046,7 +1046,7 @@ class GreenConditionsTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.version, 2)
         tile = self.tile()
         self.assertEqual(tile["state"], "pending")
-        self.assertIn("版 1 で解析", tile["summary"])
+        self.assertIn("v1 で解析", tile["summary"])
         self.assertIn("この版ではまだ回していない", tile["summary"])
         orig = shell.run
         shell.run = lambda *a: {"status": "failed", "base": "K1", "results": [], "error": "gusset at no T joint"}
@@ -1193,8 +1193,8 @@ class CheckCacheTest(RunCase, unittest.TestCase):
         self.tools["step_climb"].checks_from_cache = True  # K2's tools: the tests' disk cache was used
         check_shelf(self.ctx)
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertIn("ツール step_climb の照合は、試験のために覚えておいた前の結果を使いました", said)
-        self.assertFalse(any("frame_static の照合" in t for t in said))
+        self.assertIn("ツール step_climb の確かめは、試験のために覚えておいた前の結果を使いました", said)
+        self.assertFalse(any("frame_static の確かめは" in t for t in said))
 
 
 class RunToolsOnlyTest(RunCase, unittest.TestCase):

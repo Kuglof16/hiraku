@@ -321,7 +321,7 @@ def _where(ctx: RunContext, ref: Any, load_case: Record, given: Record | None, r
         lc_id, quantity = rest.rsplit(".", 1)
         up = _load_case_of(ctx, lc_id, load_case)
         a = _trusted_analysis(ctx, up)
-        return f"{up} の照合で一致した解析 {a['analysis_id'] if a else '?'} の結果 {quantity}"
+        return f"{up} の予測との判定が OK だった解析 {a['analysis_id'] if a else '?'} の結果 {quantity}"
     return text
 
 

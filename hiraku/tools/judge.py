@@ -65,7 +65,7 @@ def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Recor
     hand = [p for p in ctx.store.records("prediction", version) if p.get("formula_id") == PATH_FORMULA
             and (p["load_case_id"] == lc_id or p["quantity"] == "free_parts")]
     if not hand:
-        return (f"版 {version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
+        return (f"v{version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
                 "記録されていない")
     if not any(p["value"] == 0 for p in hand):
         p = hand[-1]
@@ -73,7 +73,7 @@ def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Recor
     seen = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == lc_id and a["status"] == "ok"
             and any(r.get("quantity") == UNSUPPORTED_LOAD for r in a.get("results") or [])]
     if not seen:
-        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (unsupported_load を出すもの、load_path など) が"
+        return (f"v{version} で {lc_id} の力の道をたどるツールの解析 (unsupported_load を出すもの、load_path など) が"
                 "まだ回っていない")
     for a in [seen[-1]] + ([analysis] if analysis is not None and analysis is not seen[-1] else []):
         res = a.get("results") or []
@@ -330,7 +330,7 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
             why = f"原因 {cause['cause_id']} に合う合否がまだ無い"
         else:
             why = f"原因 {cause['cause_id']} がまだ解けていない"
-        out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
+        out.append(f"予測との判定 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
     crit = load_case.get("criterion")
     for a, r in beyond_results(ctx, load_case, version):
         out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"
@@ -364,8 +364,8 @@ def unchecked_since_beyond(ctx: RunContext, load_case: Record, version: int) -> 
         return None
     failed = [a["analysis_id"] for a in mine if a["status"] != "ok"]
     now = f"この版の解析 {'、'.join(failed)} は失敗した" if failed else "この版ではまだ回していない"
-    return (f"版 {w} で解析 {worst['analysis_id']} ({worst['tool']}) が基準を超えた。同じか重い段のツールで "
-            f"{crit['quantity']} を出す解析が要るが、{now} (軽い段のツールの合格では消えない)")
+    return (f"v{w} で解析 {worst['analysis_id']} ({worst['tool']}) が基準を超えた。同じか重い段のツールで "
+            f"{crit['quantity']} を出す解析が要るが、{now} (軽い段のツールで基準の判定が OK でも消えない)")
 
 
 def beyond_text(ctx: RunContext, load_case: Record, version: int) -> str | None:
@@ -502,9 +502,9 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     if held:  # a result past the limit on a case no formula predicts: said, not hidden (it gets no verdict)
         cannot = no_formula_cases(ctx)
         held = {k: why + [NO_FORMULA_NOTE] if k in cannot else why for k, why in held.items()}
-    held_line = "まだ合格にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
+    held_line = "まだ OK にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
-        lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
+        lines = ([f"NG {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
                 ([f"系の欠け {len(misses)} 件: " + "、".join(miss_line(r, c) for r, c in misses)] if misses else [])
         state, summary = "red", "。".join(lines + hot_spot_asks(ctx, reds, v))
         if missing:
@@ -517,7 +517,7 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
         if rest:
             summary += "。まだ判定していない試験: " + "、".join(rest)
     elif got and not missing:
-        state, summary = "green", "合格: " + "、".join(verdict_line(x) for x in got)
+        state, summary = "green", "OK: " + "、".join(verdict_line(x) for x in got)
     else:
         state, summary = "pending", "まだ判定していない試験: " + ("、".join(missing) or "なし")
     return {

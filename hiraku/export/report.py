@@ -16,7 +16,7 @@ from hiraku.store import RunStore
 Record = dict[str, Any]
 Section = tuple[str, list[str | list[list[str]]]]  # heading, paragraphs (str) or tables (rows of cells)
 
-STATE_JA = {"green": "合格", "red": "不合格", "pending": "未判定"}
+STATE_JA = {"green": "OK", "red": "NG", "pending": "未判定"}
 
 
 def _amount(q: Record | None) -> str:
@@ -40,7 +40,7 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
     comparison it explains."""
     from hiraku.export.tables import in_domains
 
-    rows = [["原因", "版", "照合", "荷重条件", "量", "差", "原因の文", "直し方", "安全側"]]
+    rows = [["原因", "版", "予測との判定", "荷重条件", "量", "差", "原因の文", "直し方", "安全側"]]
     for v in sorted(store.project.get("design_versions") or []):
         cmps = {c["comparison_id"]: c for c in store.records("comparison", v)}
         for c in store.records("cause", v):
@@ -48,7 +48,7 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
                 ver = store.get("verdict", c["verdict_id"]) or {}
                 if not in_domains(store, ver.get("load_case_id"), domains):
                     continue
-                rows.append([c["cause_id"], str(v), f"{c['verdict_id']} ({c.get('where', '')})", ver.get("load_case_id", ""),
+                rows.append([c["cause_id"], f"v{v}", f"{c['verdict_id']} ({c.get('where', '')})", ver.get("load_case_id", ""),
                              ver.get("quantity", ""), "予測していない場所", " ".join(c["cause"].split()),
                              " ".join(c["fix"].split()), ""])
                 continue
@@ -59,7 +59,7 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
             safe = (f"はい: {c.get('safe_side_reason', '')}" if c.get("safe_side")
                     else f"ツールの値で判定 (道は手計算で確かめた): {c.get('tool_decides_reason', '')}" if c.get("tool_decides")
                     else "")
-            rows.append([c["cause_id"], str(v), c["comparison_id"], pred.get("load_case_id", ""), cmp.get("quantity", ""),
+            rows.append([c["cause_id"], f"v{v}", c["comparison_id"], pred.get("load_case_id", ""), cmp.get("quantity", ""),
                          f"{cmp['diff_rel'] * 100:+.1f} %" if "diff_rel" in cmp else "", " ".join(c["cause"].split()),
                          " ".join(c["fix"].split()), safe])
     return [rows] if len(rows) > 1 else ["食い違いはありません"]
@@ -73,12 +73,12 @@ def sections(store: RunStore, domains: Iterable[str] | None = None) -> list[Sect
     out: list[Section] = [("実行", [
         f"run_id: {p['run_id']}", f"作りたいもの: {p['want']}", f"状態: {p.get('status')}"
         + (f" ({p['stop_reason']})" if p.get("stop_reason") else ""),
-        f"設計の版: {', '.join(str(v) for v in p.get('design_versions') or [])}",
+        f"設計の版: {', '.join(f'v{v}' for v in p.get('design_versions') or [])}",
     ])]
     if rep is None:
         out.append(("報告", ["この実行には報告の記録 (report.json) がありません"]))
     else:
-        out.append(("まとめ", [rep["summary"], f"報告の版: {rep['design_version']}"]))
+        out.append(("まとめ", [rep["summary"], f"報告の版: v{rep['design_version']}"]))
         causes = {c["cause_id"]: c for c in store.records("cause")}
         for d in rep["domains"]:
             if domains is not None and d["domain"] not in set(domains):
@@ -93,7 +93,7 @@ def sections(store: RunStore, domains: Iterable[str] | None = None) -> list[Sect
             if d.get("assumptions"):
                 body.append([["前提"]] + [[a] for a in d["assumptions"]])
             if d.get("differences"):
-                rows = [["照合", "差", "原因"]]
+                rows = [["予測との判定", "差", "原因"]]
                 for x in d["differences"]:
                     c = causes.get(x.get("cause_id") or "")
                     rows.append([x["comparison_id"], f"{x['diff_rel'] * 100:+.1f} %",
