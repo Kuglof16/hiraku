@@ -2,7 +2,7 @@
 
 import { fill, h } from "./dom.js";
 import { ITEM_CHOICES, ITEM_CHOICES_ALT, ITEM_HELP } from "./data.js";
-import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, TRUST_JA } from "./model.js";
+import { assumptions, hearingRows, RULE_CHOICE_JA, ruleRows, showValue, SOURCE_JA, tradeoffChoiceJa, tradeoffRows, TRUST_JA } from "./model.js";
 
 const STATE_JA = { asking: "答えを待っています", answered: "答えました", defaulted: "標準の値のまま", open: "答えなしで進みました", ended: "実行が終わりました" };
 
@@ -77,6 +77,29 @@ function ruleQuestion(q, api, ui) {
     q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この判断は使われません") : null);
 }
 
+/** Two results that pull apart: the numbers the code worked out, and what the person can prefer. */
+function tradeoffQuestion(q, api, ui) {
+  const picked = ui.tradeoffAnswers[q.tradeoff_id];
+  const interactive = q.state === "asking" && !!api.answerHearing;
+  const num = (side, word) => h("li", {}, h("b", {}, side.name), ` ${word}: `, h("span", { class: "in-num" }, `${showValue(side.now, side.unit)} → ${showValue(side.after, side.unit)}`));
+  return h("article", { class: `in-q in-tq ${q.state}`, dataset: { tradeoff: q.tradeoff_id }, title: "どちらを優先するかの質問" },
+    h("header", {},
+      h("span", { class: "in-badge" }, "この 2 つは両立しにくいです"),
+      h("span", { class: "in-state" }, STATE_JA[q.state])),
+    h("p", { class: "in-qtext" }, q.text),
+    h("ul", { class: "in-tq-nums" }, num(q.a, "良くなる"), num(q.b, "悪くなる")),
+    h("p", { class: "in-why" }, `${q.variable} を ${q.step_pct} % 動かしたときの、HIRAKU の計算です。`),
+    h("div", { class: "in-choices" }, q.choices.map((c) =>
+      h("button", {
+        class: `in-choice${picked && picked.choice === c ? " picked" : ""}${q.answer && q.answer.choice === c ? " chosen" : ""}`,
+        type: "button", disabled: !interactive,
+        onclick: () => { ui.tradeoffAnswers[q.tradeoff_id] = { tradeoff_id: q.tradeoff_id, choice: c }; ui.rerender(); },
+      }, tradeoffChoiceJa(q, c)))),
+    q.answer ? h("p", { class: "in-answer" }, h("b", {}, "答え"), " ", tradeoffChoiceJa(q, q.answer.choice)) : null,
+    q.state === "open" ? h("p", { class: "in-default must" }, "答えなしで進みました") : null,
+    q.state === "ended" ? h("p", { class: "in-default must" }, "実行が終わったので、この判断は使われません") : null);
+}
+
 /** The name of a choice as the person reads it for this product (an item's choices_if renames some for some flags). */
 function choiceName(key, value, flags) {
   const alt = ITEM_CHOICES_ALT[key];
@@ -116,26 +139,33 @@ function useDefaultsOrSay(api, ui, rows) {
 export function askingPanel(m, api, ui) {
   const rows = hearingRows(m).filter((r) => r.state === "asking");
   const rules = ruleRows(m).filter((r) => r.state === "asking");
-  if (!rows.length && !rules.length) return null;
+  const trades = tradeoffRows(m).filter((r) => r.state === "asking");
+  if (!rows.length && !rules.length && !trades.length) return null;
   const must = rows.filter((r) => r.ask === "must");
   const rest = rows.length - must.length;
   const canSend = !!api.answerHearing && !ui.sending;
-  const need = must.length + rules.length;
+  const need = must.length + rules.length + trades.length;
   const actions = h("div", { class: "in-actions" },
     h("button", { class: "in-btn", type: "button", disabled: !canSend, onclick: () => useDefaultsOrSay(api, ui, rows) }, "標準の値のまま進める"),
     h("button", { class: "in-btn primary", type: "button", disabled: !canSend,
-      onclick: () => submit(api, ui, { answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true }) },
+      onclick: () => submit(api, ui, { answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), ...tradeoffBody(ui), note: ui.note || "", useDefaults: true }) },
     ui.sending ? "送っています…" : "答えて進める"));
   return h("section", { class: "in-ask-top" },
     h("div", { class: "in-ask-head" },  // the buttons sit beside the title, so they are in sight however many questions there are
       h("h2", {}, "HIRAKU からの質問", h("small", {}, need ? `答えが要るもの ${need} 件` : `答えなくても進めます (${rows.length} 件)`)),
       actions),
     ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした。${ui.error}`) : null,
-    need ? h("div", { class: "in-ask-list" }, [...must.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui))]) : null,
+    need ? h("div", { class: "in-ask-list" }, [...must.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui)), ...trades.map((q) => tradeoffQuestion(q, api, ui))]) : null,
     rest && need ? h("p", { class: "in-foot" }, `答えなくても進める質問が、ほかに ${rest} 件あります (答えなければ標準の値を使います)。`,
       ui.show ? h("button", { class: "in-btn small", type: "button", onclick: () => ui.show("A2") }, "ほかの質問を見る") : null) : null,
     !need && ui.show ? h("p", { class: "in-foot" }, "答えなければ標準の値を使います。",
       h("button", { class: "in-btn small", type: "button", onclick: () => ui.show("A2") }, "質問を見る")) : null);
+}
+
+/** The trade-off answers of the person, only when there are some (the body stays as it was without trade-offs). */
+function tradeoffBody(ui) {
+  const a = Object.values(ui.tradeoffAnswers || {});
+  return a.length ? { tradeoffAnswers: a } : {};
 }
 
 /** Send the answers; a refusal (the host's promise rejects with the reason) is shown under the buttons. */
@@ -156,24 +186,25 @@ export function renderA2(el, m, api, ui) {
   // the questions that need an answer come first (and keep their order among themselves)
   const rows = hearingRows(m).map((r, i) => [r, i]).sort((a, b) => (b[0].ask === "must" && b[0].state === "asking") - (a[0].ask === "must" && a[0].state === "asking") || a[1] - b[1]).map(([r]) => r);
   const rules = ruleRows(m);
+  const trades = tradeoffRows(m);
   // another hearing (a new run, other questions): what was picked for the earlier one is not sent with this one
-  const sig = [...rows.map((r) => r.req_key), ...rules.map((r) => r.rule_id)].join(",");
+  const sig = [...rows.map((r) => r.req_key), ...rules.map((r) => r.rule_id), ...trades.map((r) => r.tradeoff_id)].join(",");
   if (ui.askedSig !== sig) {
-    if (ui.askedSig !== undefined) { ui.answers = {}; ui.ruleAnswers = {}; }
+    if (ui.askedSig !== undefined) { ui.answers = {}; ui.ruleAnswers = {}; ui.tradeoffAnswers = {}; }
     ui.askedSig = sig;
   }
-  const asking = [...rows, ...rules].some((r) => r.state === "asking");
-  const answersBody = () => ({ answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), note: ui.note || "", useDefaults: true });
+  const asking = [...rows, ...rules, ...trades].some((r) => r.state === "asking");
+  const answersBody = () => ({ answers: ui.answers, ruleAnswers: Object.values(ui.ruleAnswers), ...tradeoffBody(ui), note: ui.note || "", useDefaults: true });
   const canSend = asking && !!api.answerHearing && !ui.sending;
   const must = rows.filter((r) => r.ask === "must" && !r.answer && r.state !== "ended");
   const bySource = (s) => m.requirements.filter((r) => r.source === s).length;
   fill(el,
     h("section", { class: "in-left" },
-      h("h2", {}, "HIRAKU からの質問", h("small", {}, rows.length || rules.length ? `${[rows.length ? `確認したいこと ${rows.length} 件` : "", rules.length ? `ルール ${rules.length} 件` : ""].filter(Boolean).join("・")}` : "")),
+      h("h2", {}, "HIRAKU からの質問", h("small", {}, rows.length || rules.length || trades.length ? `${[rows.length ? `確認したいこと ${rows.length} 件` : "", rules.length ? `ルール ${rules.length} 件` : "", trades.length ? `優先の相談 ${trades.length} 件` : ""].filter(Boolean).join("・")}` : "")),
       h("div", { class: "in-qs", dataset: { keepScroll: "a2-qs" } },
-        rows.length || rules.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui))]
+        rows.length || rules.length || trades.length ? [...rows.map((q) => question(q, api, ui)), ...rules.map((q) => ruleQuestion(q, api, ui)), ...trades.map((q) => tradeoffQuestion(q, api, ui))]
           : h("p", { class: "in-empty" }, m.requirements.length ? "足りない情報はないので、そのまま進みます" : "いまは聞くことがありません")),
-      rows.length || rules.length
+      rows.length || rules.length || trades.length
         ? h("div", { class: "in-composer" },
             h("textarea", { class: "in-input", rows: 2, placeholder: "ほかに伝えたいこと", value: ui.note || "", oninput: (e) => { ui.note = e.target.value; }, disabled: !canSend }),
             ui.error ? h("p", { class: "in-warn", role: "alert" }, `受け付けられませんでした。${ui.error}`) : null,
