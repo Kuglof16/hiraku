@@ -19,7 +19,7 @@ from hiraku import contract
 from hiraku.agent.session import start_run
 from hiraku.tools import Attribution, ToolError
 from hiraku.tools.functions import write_design
-from hiraku.tools.load_case_writer import (WRITTEN_KEY, WRITTEN_TOLERANCE_REL, LimitError, _limit_value, limit_value,
+from hiraku.tools.load_case_writer import (WRITTEN_TOLERANCE_REL, LimitError, _limit_value, limit_value,
                                            write_load_case)
 from tests.tools import fakes
 from tests.tools.test_write_design import robot_requirements, serving_robot
@@ -148,9 +148,9 @@ class WriteLoadCaseTest(Run, unittest.TestCase):
         self.assertEqual(self.ctx.project["load_cases"][-1], lc)  # version 1: project.load_cases
         self.assertEqual(lc["params"], r2_args()["params"])
         self.assertEqual(contract.errors("load_case", lc), [])
-        said = [e for e in self.ctx.store.events() if WRITTEN_KEY in (e.get("data") or {})]
-        self.assertEqual(len(said), 1)
-        self.assertEqual(said[0]["data"][WRITTEN_KEY]["input"], r2_args())
+        self.assertEqual((lc["written_by"], lc["basis"]), ("claude", r2_args()["basis"]))
+        self.assertEqual(lc["limit_from"], r2_args()["criterion"]["limit_from"])
+        self.assertFalse(any((e.get("data") or {}).get("written_load_case") for e in self.ctx.store.events()))
         self.assertEqual(self.kinds()[-3:-1], ["project.updated", "agent.said"])
         tile = next(j for j in self.ctx.store.judgements(1) if j["domain"] == "strength")
         self.assertEqual(tile["state"], "pending")
@@ -233,7 +233,7 @@ class WriteLoadCaseTest(Run, unittest.TestCase):
 
         write_load_case(self.ctx, r2_args(), "cae.strength")
         again = RunContext(store=RunStore.open(self.ctx.store.path), formulas=fakes.FakeFormulas(), tools=fakes.shelf())
-        self.assertEqual(written_inputs(again), {"R2-g3": r2_args()})
+        self.assertEqual(written_inputs(again.load_cases), {"R2-g3": r2_args(requirement_keys=["Q61"])})
         self.assertTrue(again.has_load_case("R2-g3"))
 
     def test_on_version_2_it_goes_to_the_versions_load_cases(self):

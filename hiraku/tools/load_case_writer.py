@@ -6,17 +6,17 @@ Claude gives the conditions (params), the judged quantity, the comparison and ho
 limit from that expression (limit_value), sets tolerance_rel (the catalog's for the test, else
 WRITTEN_TOLERANCE_REL) and names the load case. The model never writes the limit's number.
 
-Where a written load case is kept: the contract's load_case has no place for limit_from, so the tool's input
-is kept in the run's events, as an agent.said of the caller whose data.written_load_case holds the input and
-the load case (WRITTEN_KEY). The load case itself goes where the catalog's go: project.load_cases for version
-1 (project.updated), v<NNN>/load_cases.json from version 2 (load_cases.created). When a new version's load
-cases are built again (functions.rebuild_load_cases), the written ones are made again from that input on the
-new design (rebuilt_written): their limit follows the new version's materials and sections.
+Where a written load case is kept: where the catalog's go, project.load_cases for version 1 (project.updated),
+v<NNN>/load_cases.json from version 2 (load_cases.created). It carries written_by ("claude"), basis and
+limit_from, so the tool's input can be read back from the load case itself (written_inputs). When a new
+version's load cases are built again (functions.rebuild_load_cases), the written ones are made again from that
+input on the new design (rebuilt_written): their limit follows the new version's materials and sections.
 """
 
 from __future__ import annotations
 
 import ast
+import copy
 import keyword
 import math
 import re
@@ -26,8 +26,6 @@ from hiraku import contract
 from hiraku.tools.context import RunContext, ToolError
 
 Record = dict[str, Any]
-
-WRITTEN_KEY = "written_load_case"  # agent.said data key that keeps a written load case's input
 
 # tolerance_rel of a written load case whose test has none in the catalog (data/catalog/tests.yaml gives it
 # for P1, R1 and R1s only). HIRAKU's choice, from no standard: the 15 % that most of the catalog's builders
@@ -369,6 +367,7 @@ def _make(ctx: RunContext, args: Record, design: Record, lc_id: str, tolerance: 
     lc["tolerance_rel"] = float(tolerance)
     lc["written_by"] = "claude"
     lc["basis"] = args["basis"].strip()
+    lc["limit_from"] = copy.deepcopy(crit_in["limit_from"])  # a later version computes the limit again from it
     if design.get("modules"):  # as the catalog's builders set it on a design with modules
         from hiraku.catalog.build import _builders_modules
 
@@ -408,7 +407,7 @@ def write_load_case(ctx: RunContext, args: dict[str, Any], agent: str | None = N
     """A load case Claude writes for a test the catalog has no builder for (tool_input.write_load_case). Called
     by the test's domain role (cae.<domain>, the packager for assembly) or the lead. The tool names it, computes
     the limit (limit_value), sets tolerance_rel, adds it to the version's load cases, keeps the input for the
-    next versions (WRITTEN_KEY) and updates the domain's tile. Returns {load_case_id, criterion, tolerance_rel,
+    next versions (written_by, basis, limit_from on the load case) and updates the domain's tile. Returns {load_case_id, criterion, tolerance_rel,
     owner, stage}."""
     from hiraku.catalog import load_catalog
     from hiraku.tools.functions import _check_input
@@ -449,21 +448,28 @@ def write_load_case(ctx: RunContext, args: dict[str, Any], agent: str | None = N
     _add_role(ctx, catalog, role, domain, agent)
     ctx.store.emit("agent.said", agent=agent, domain=domain, design_version=v,
                    text=f"{test_id} の荷重条件 {lc_id}「{lc['title']}」を書きました。限度は {limit} ({crit['basis']})。"
-                        f"根拠: {args['basis'].strip()}",
-                   data={WRITTEN_KEY: {"load_case_id": lc_id, "design_version": v, "input": args, "load_case": lc}})
+                        f"根拠: {args['basis'].strip()}")
     update_judgement(ctx, domain, v)
     return {"load_case_id": lc_id, "criterion": crit, "tolerance_rel": lc["tolerance_rel"],
             "owner": ctx.owner(lc_id), "stage": load_case_stage(ctx, lc)}
 
 
-def written_inputs(ctx: RunContext) -> dict[str, Record]:
-    """load case id -> the write_load_case input it was written from (the run's agent.said WRITTEN_KEY events)."""
+def written_inputs(load_cases: list[Record]) -> dict[str, Record]:
+    """load case id -> the write_load_case input read back from each load case Claude wrote (written_by,
+    basis and limit_from on the load case)."""
     out: dict[str, Record] = {}
-    for e in ctx.store.events():
-        if e["kind"] == "agent.said":
-            w = (e.get("data") or {}).get(WRITTEN_KEY)
-            if isinstance(w, dict) and isinstance(w.get("input"), dict):
-                out[w["load_case_id"]] = w["input"]
+    for lc in load_cases:
+        if lc.get("written_by") != "claude" or not isinstance(lc.get("limit_from"), dict):
+            continue
+        crit = lc["criterion"]
+        args: Record = {"test_id": lc["test_id"], "domain": lc["domain"], "title": lc["title"],
+                        "params": copy.deepcopy(lc["params"]),
+                        "criterion": {"quantity": crit["quantity"], "op": crit["op"],
+                                      "limit_from": copy.deepcopy(lc["limit_from"])},
+                        "basis": lc.get("basis", "")}
+        if lc.get("requirement_keys"):
+            args["requirement_keys"] = list(lc["requirement_keys"])
+        out[lc["load_case_id"]] = args
     return out
 
 

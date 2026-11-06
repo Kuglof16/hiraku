@@ -1420,7 +1420,7 @@ def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
 
     v = design["design_version"]
     before = ctx.store.version_load_cases(v - 1)
-    written = written_inputs(ctx)  # load cases Claude wrote (write_load_case): made again from their input below
+    written = written_inputs(before)  # load cases Claude wrote (write_load_case): made again from their input below
     tests = list(dict.fromkeys(lc["test_id"] for lc in before
                                if not lc["load_case_id"].endswith("-beyond") and lc["load_case_id"] not in written))
     req = requirements_now(ctx)
