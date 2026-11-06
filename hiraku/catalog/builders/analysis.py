@@ -30,6 +30,7 @@ C1_TOL = 0.15
 # broken off the seats' side may have: crash_beam.SPLIT_STOP_SHARE (3 %, HIRAKU's choice, no source).
 C1_SPLIT_ID = "C1-split"
 C1_SPLIT_LIMIT = 0.03
+C1_BREAK_BAND_DEG = 1.0  # HIRAKU's choice: how far the break angle is moved each way to find the edge
 
 
 def c1_crash(spec: Record, req: Record, design: Record) -> list[Record]:
@@ -38,7 +39,10 @@ def c1_crash(spec: Record, req: Record, design: Record) -> list[Record]:
         v, vkey = number(req, "Q65", "km/h"), "Q65"
     else:  # the crash speed is the top speed unless the requirements say otherwise
         v, vkey = number(req, "Q50", "km/h"), "Q50"
-    common = {"test_id": "C1", "domain": spec["domain"], "params": {"speed": q(v, "km/h"), "loading": load},
+    # break_band: crash_beam makes the run again with its break angle 1 deg lower and higher, so the record says when
+    # C1's verdict sits on the break angle's edge (a member that breaks or not by the last digits of the arithmetic)
+    common = {"test_id": "C1", "domain": spec["domain"],
+              "params": {"speed": q(v, "km/h"), "loading": load, "break_band": q(C1_BREAK_BAND_DEG, "deg")},
               "requirement_keys": [vkey, *keys] + (["Q31"] if entry(req, "Q31") else []),
               "tolerance_rel": tolerance(spec, C1_TOL)}
     room = dict(copy.deepcopy(common), load_case_id=f"C1-{v:g}kmh",
