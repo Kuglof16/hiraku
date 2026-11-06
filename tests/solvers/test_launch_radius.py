@@ -34,7 +34,9 @@ class LoadedRadiusTest(unittest.TestCase):
         self.assertAlmostEqual(rad["r_mm"], want, places=6)
         self.assertAlmostEqual(got["inputs"]["rolling_radius"]["value"], want, places=6)
         self.assertEqual(got["inputs"]["rolling_radius"]["unit"], "mm")
-        self.assertTrue(0.0 < free - want < 0.1 * free)  # a deflection, small against the radius
+        # a deflection, small against the radius: at 60 N/mm about 32 mm on 300 mm (10.7 %); the BKT sheet in
+        # TYRE_STIFFNESS_BASIS has 28 mm at the rated load on a 315 mm free radius
+        self.assertTrue(0.0 < free - want < 0.15 * free)
 
     def test_free_radius_without_tyre_stiffness(self):
         d = json.loads(json.dumps(DESIGN))

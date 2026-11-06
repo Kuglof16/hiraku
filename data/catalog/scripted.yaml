@@ -113,9 +113,12 @@ offroad-4w:
       changes:
         motor_peak_power: {value: 17, unit: kW}
       reason: >-
-        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
+        P3: 40 km/h までの時間が 6 s を超える (値は版 3 の P3 の合否の記録) ので、モーターの最大出力を 10 kW から上げる。
         このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
       source: >-
+        With tyre_stiffness 80 N/mm (the analysis department's aed92d35): the demo scripted run 20261106-125316-offroad-4w-scripted
+        gave P3 time_to_speed 7.267 s on version 3 (red), 5.479 s on version 4 with this change and 5.674 s on version 5
+        (with 150 N/mm, run 20261106-081501: 7.386, 5.724 and 5.937 s). Before, with 150 N/mm:
         the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
         (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
         With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
