@@ -161,7 +161,7 @@ class AgentPetsTest(unittest.TestCase):
         # (one row per agent: the bundles of the agents' list open, ?agents=open; the bundles have their own test)
         # (?petmotion=on: the pets move as with a GPU, though this Chromium draws by SwiftShader; None: as detected)
         pm = f"&petmotion={motion}" if motion else ""
-        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}{pm}&{query}")
+        page.goto(f"{base}/?run={RUN}&pace=0{'&agents=open' if bundles_open else ''}{pm}&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         return page, errors
