@@ -4,6 +4,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from hiraku import contract
 from hiraku.intake import IntakeError, events as ev, hearing, load_product
@@ -28,7 +29,8 @@ class PipelineTest(unittest.TestCase):
         req = load_product("serving-robot")
         file_reqs = [r for r in req["requirements"] if r["key"] != "Q63"] + [
             {"key": "Q40", "name": "積載", "value": 40, "unit": "kg", "source": "user", "trust": 1},
-            {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1}]
+            {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1},
+            {"key": "Q58", "name": "最小回転半径の上限", "value": 3, "unit": "m", "source": "user", "trust": 1}]
         got = intake(req["want"], req["flags"], "walk", product="serving-robot", requirements=file_reqs, from_file=True)
         kinds = [e["kind"] for e in got.events]
         self.assertEqual(kinds, [ev.DOMAINS_PICKED] + [ev.KNOWLEDGE_IMPORTED] * 10 + [ev.HEARING_ANSWERED])  # no hearing.asked
@@ -100,6 +102,22 @@ class MailboxTest(unittest.TestCase):
                                       clock=lambda: t[0])
         self.assertIsNone(got)
         self.assertEqual(sum(naps), 2.0)
+
+    def test_read_waits_out_a_busy_file(self):
+        hearing.save_answer(self.run_path, {"answers": {"Q40": 1}})
+        real = Path.read_text
+        busy = [2]
+
+        def flaky(self_, *a, **k):  # Windows: the file is being replaced; open() says "Permission denied" for a moment
+            if self_.name == hearing.ANSWER_FILE and busy[0]:
+                busy[0] -= 1
+                raise PermissionError(13, "Permission denied")
+            return real(self_, *a, **k)
+
+        with mock.patch.object(Path, "read_text", flaky):
+            got = hearing.read_answer(self.run_path)
+        self.assertEqual(got["answers"], {"Q40": 1})
+        self.assertEqual(busy[0], 0)
 
     def test_wait_returns_what_arrives(self):
         def late():

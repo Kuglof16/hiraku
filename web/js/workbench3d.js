@@ -38,6 +38,7 @@ import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { GRAY, OVER_COLOR, colorOf } from "./colormap.js";
 import { overOf } from "./fields.js";
+import { maxTagClass } from "./judged.js"; // the largest-value tag's colour (one rule)
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
 import { GROUND_MM, Look, cutLookOf } from "./look.js";
@@ -1126,7 +1127,7 @@ export class Workbench3D {
         const where = new THREE.Vector3();
         for (const n of ids) where.add(v3(P[n]));
         where.multiplyScalar(1 / ids.length);
-        const tag = keyLabel(esc(contour.mesh.tag ?? `最大 ${fmtVU(contour.frameMax ?? contour.fieldMax, contour.field.unit)}`), "lbl-max");
+        const tag = keyLabel(esc(contour.mesh.tag ?? `最大 ${fmtVU(contour.frameMax ?? contour.fieldMax, contour.field.unit)}`), maxTagClass(contour));
         tag.position.copy(where);
         this.overGhosts.add(tag);
       }
@@ -1213,7 +1214,7 @@ export class Workbench3D {
       }
     }
     if (contour?.where && this.members[contour.where] && contour.result) {
-      const tag = keyLabel(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, "lbl-max");
+      const tag = keyLabel(`最大 ${esc(fmtVU(contour.result.value, contour.result.unit))}`, maxTagClass(contour));
       tag.position.copy(this.members[contour.where].mid);
       this.overGhosts.add(tag);
     }
@@ -1866,6 +1867,8 @@ export class Workbench3D {
     this.camera.updateProjectionMatrix();
     this.controls.target.copy(other.controls.target);
     this.noFollow = true;
+    // one camera, one sun: the other view's (look.js fixSun)
+    if (other.look.sunAz !== null) this.look.sunAz = other.look.sunAz;
   }
 
   render() {
@@ -2043,6 +2046,8 @@ export class Workbench3D {
     this.controls.update();
     this.followBase = null;
     this.followApplied = null;
+    // a cut's sun is fixed to the world from its first framing (look.js fixSun)
+    if (this.look.stage) this.look.fixSun(this.camera, this.controls.target);
   }
 }
 

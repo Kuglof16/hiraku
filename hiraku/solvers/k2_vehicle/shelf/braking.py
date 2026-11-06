@@ -10,7 +10,8 @@ from ..model import DesignError, box_design, build_vehicle
 from ..record import Recorder
 from ..scenario import HOLD_TORQUE, new_sim, slope_gravity
 from ..units import G0
-from .base import FRONT_AREA, MU, RHO, K2Tool, P, Pair, _length, _min_load, _ramp_gravity, _res, _slope
+from .base import (FRONT_AREA, MU, RHO, K2Tool, P, Pair, _box, _half_width, _length, _min_load, _ramp_gravity, _res,
+                   _slope)
 from .mounts import LoadLog, has_mounts, mount_peak, mount_series, mount_vectors, state_at
 
 
@@ -89,7 +90,8 @@ def brake_stop(veh, v0: float, *, reaction: float = 0.0, brake_torque: float | N
                 log.tick()
     return {"stopping": x_stop - x_cmd, "braking": x_stop - x_brake, "peak_decel": peak_dec, "min_load": min_load,
             "min_rear_axle": min_rear if rear else None, "max_pitch": max_pitch, "recorder": rec, "sim": sim,
-            "states": log.states if log is not None else [], "t_brake": t_brake, "t_stop": t_stop}
+            "states": log.states if log is not None else [], "t_brake": t_brake, "t_stop": t_stop,
+            "x_cmd": x_cmd, "x_brake": x_brake, "x_stop": x_stop}
 
 
 class BrakingTool(K2Tool):
@@ -108,6 +110,10 @@ class BrakingTool(K2Tool):
     the mount_* series of mounts.mount_series (closer from the brakes coming on to the stop, and
     at each mount's largest force), mount_force_peak (N, the largest of all the mounts, where
     '<support>.<mount> at t <s> s') and the joint vectors at that instant.
+    Scene: the road under the stop with its mu in the label (ground; on a grade, the slope),
+    and, when the load case's criterion limits stopping_distance or braking_distance in m, the
+    stop line (gate, [0, width, 0]) where the front of the front tyres may come to rest: their
+    front when the distance starts (the brake command, or the brakes coming on) plus the limit.
     """
 
     name = "braking"
@@ -164,6 +170,29 @@ class BrakingTool(K2Tool):
                        source_ja="止まるまでの距離 s = v² / (2 μ g)。μ は、ロックした輪の前後の力の合計 / 車の重さ "
                                  "(止まっているときの荷重で。ブレーキで荷重が前に移る分は入れていない)")]
 
+    def _stop_scene(self, veh, r: dict, grade: float | None) -> list:
+        """The road with its mu and the criterion's stop line (road frame, the run's x)."""
+        mu = max(c.mu for c in veh.corners)
+        front = max(float(c.pos[0]) + c.radius for c in veh.corners)  # front of the front tyres from the design origin
+        crit = self._criterion
+        lim = crit.get("limit") or {}
+        start = {"stopping_distance": r["x_cmd"], "braking_distance": r["x_brake"]}.get(crit.get("quantity"))
+        line = start + front + float(lim["value"]) if start is not None and lim.get("unit") == "m" else None
+        x0 = -_length(veh) - 1.0
+        x1 = max(r["x_stop"] + front, line if line is not None else -math.inf) + 2.0
+        if grade:
+            scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)、路面の摩擦係数 μ {mu:g}", veh, x0, x1,
+                            front_up=math.atan(grade))]
+        else:
+            hw = _half_width(veh) + 1.0
+            scene = [_box("ground", f"路面 (摩擦係数 μ {mu:g})", (x0, -hw, 0.0), (x1, hw, 0.0))]
+        if line is not None:
+            hw = _half_width(veh) + 0.5
+            what = "ブレーキを踏んだ所" if crit["quantity"] == "stopping_distance" else "ブレーキが効きはじめた所"
+            scene.append(_box("gate", f"止まる線 ({what}から {float(lim['value']):g} m。前のタイヤの前の端がここまでに止まる)",
+                              (line, -hw, 0.0), (line, hw, 0.0)))
+        return scene
+
     def _run(self, design: dict, lp: dict) -> dict:
         veh = self.vehicle(design, lp)
         notes = list(veh.assumptions)
@@ -195,8 +224,7 @@ class BrakingTool(K2Tool):
         rec = r["recorder"]
         grade = self.q(lp, "grade", "1")
         # the recorded run is the stop (on the grade); the parking run is not recorded
-        scene = [_slope(f"縦の坂 {grade * 100:g} % (前が上)", veh, -_length(veh) - 1.0,
-                        r["stopping"] + v0 * 0.5 + _length(veh) + 2.0, front_up=math.atan(grade))] if grade else []
+        scene = self._stop_scene(veh, r, grade)
         series, vectors = rec.series(), rec.vectors(-1)
         if r["states"]:
             # the body's loads at the mounts: closer from the brakes coming on to just after the stop

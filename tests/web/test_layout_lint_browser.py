@@ -45,6 +45,7 @@ HELD = "20261104-200000-held"  # held: a load case without a criterion counting 
 MODULES = "20261104-210000-modules"  # modules: tests.web.modules_fixture.RUN_ID
 JOINTS = "20261102-207000-joints"  # joints: the frozen offroad-4w v1 alone (test_joints_browser.joints_events)
 FIRSTTIME = "20261105-200000-firsttime"  # many load cases sharing ids, long log ids, a long change (tests.web.firsttime_fixture)
+HEAT = "20261106-120000-heat"  # heat: the energy's flow on a thermal record cut from a showcase run (tests.web.heat_fixture)
 
 READY = "window.hiraku && window.hiraku.ready"
 
@@ -68,10 +69,11 @@ SCREENS = (
     Screen("一覧 (保存なし)", "?list=1", wait="document.querySelector('#launch .pick')", root="#runlist", server="unsaved"),
     Screen("一覧 (dev)", "?list=1&dev=1", wait="document.querySelector('#launch .lreq') && document.querySelector('#runlist table')", root="#runlist"),
     Screen("作業台", f"?run={DOMAINS}&tab=bench&pace=0&t=1e6"),
-    Screen("全分野", f"?run={DOMAINS}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果", f"?run={DOMAINS}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (分野の再生)", f"?run={DOMAINS}&tab=grid&domain=strength&pace=0&t=4.5"),
     # the agents' pets with their bubbles out (js/agent_pets.js): 空力's judgement at 17.0 s, the lead's line at 17.5 s
     Screen("作業台 (吹き出し)", f"?run={DOMAINS}&tab=bench&pace=0&t=17.6"),
-    Screen("全分野 (吹き出し)", f"?run={DOMAINS}&tab=grid&pace=0&t=17.6"),
+    Screen("解析結果 (吹き出し)", f"?run={DOMAINS}&tab=grid&pace=0&t=17.6"),
     Screen("A1", "?new=1", wait="document.querySelector('#view-intake textarea')"),
     Screen("A2", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6"),
     Screen("A5", f"?run={HEARING}&tab=A5&live=0&pace=0&t=1e6"),
@@ -82,17 +84,23 @@ SCREENS = (
     Screen("組み立て (接合)", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6&on=joints"),  # joints: A7's own 接合 switch and legend
     Screen("見せる", f"?run={DOMAINS}&present=1&pace=0&t=1e6"),
     # held: the 保留 bands
-    Screen("全分野 (保留)", f"?run={HELD}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (保留)", f"?run={HELD}&tab=grid&pace=0&t=1e6"),
     Screen("作業台 (保留)", f"?run={HELD}&tab=bench&pace=0&t=1e6"),
     # modules: the sample record of a design in modules (tests.web.modules_fixture)
     Screen("作業台 (モジュール・空間)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=modules,spaces"),
     Screen("作業台 (提案の並び)", f"?run={MODULES}&tab=bench&pace=0&t=4.6"),
-    Screen("全分野 (モジュール)", f"?run={MODULES}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (モジュール)", f"?run={MODULES}&tab=grid&pace=0&t=1e6"),
     # joints and modules: both toggles on the same bench (the two legends side by side)
     Screen("作業台 (接合・モジュール)", f"?run={MODULES}&tab=bench&pace=0&t=1e6&on=joints,modules,spaces"),
     # the shapes of a real record a first-time viewer opened: the chips' row, the log, the change line
     Screen("作業台 (試験が多い)", f"?run={FIRSTTIME}&tab=bench&pace=0&t=1e6&on=names"),
-    Screen("全分野 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
+    Screen("解析結果 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
+    # heat: the flow's legend and its loss tags (the run's thermal record at its end), and in the video layout.
+    # Known (found when these rows were added; they come from the showcase record's own words, not from
+    # the flow): #log, the record's long bracketed asides broken across lines (paren); #card-cmp, the
+    # comparison card's criterion line "(判定を待っている)" broken (paren).
+    Screen("作業台 (熱の流れ)", f"?run={HEAT}&tab=bench&pace=0&t=24", known=("#log", "#card-cmp")),
+    Screen("作業台 (熱の流れ・動画)", f"?run={HEAT}&tab=bench&pace=0&t=24&video=1", known=("#log", "#card-cmp")),
 )
 
 
@@ -141,6 +149,10 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     from tests.web.firsttime_fixture import firsttime_events
 
     _write_run(runs, FIRSTTIME, firsttime_events())
+    from tests.web.heat_fixture import RUN_ID as HEAT_RUN, heat_events  # heat:
+
+    assert HEAT_RUN == HEAT
+    _write_run(runs, HEAT, heat_events())
     return runs, saved
 
 

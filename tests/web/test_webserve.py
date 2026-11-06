@@ -110,6 +110,30 @@ class ReadEventsTest(unittest.TestCase):
         c = read_events(self.path, b["next_offset"])
         self.assertEqual([e["seq"] for e in c["events"]], [2])
 
+    def test_lines_unparsed_end_where_the_parsed_read_ends(self):
+        # read_event_lines (the ndjson form) gives the bytes read_events parses: the same
+        # next_offset at every step, the over-long line skipped and counted the same way
+        first = _line(0, "run.started")
+        long = _line(1, "agent.said", text="x" * 300)
+        text = first + long + "not json" + CRLF + _line(2, "cost.updated") + '{"seq": 3, "kind": "agent.s'
+        self.path.write_bytes(text.encode("utf-8"))
+        self._limits(read=64, line=200)
+        offset, steps = 0, []
+        for _ in range(10):
+            parsed, lines = read_events(self.path, offset), webserver.read_event_lines(self.path, offset)
+            self.assertEqual([lines[k] for k in ("next_offset", "size", "reset")], [parsed[k] for k in ("next_offset", "size", "reset")])
+            self.assertEqual(lines["data"], self.path.read_bytes()[offset:lines["next_offset"]] if not lines["bad_lines"] else b"")
+            steps.append((lines["next_offset"], lines["bad_lines"], parsed["bad_lines"], [e["seq"] for e in parsed["events"]]))
+            if lines["next_offset"] == offset:
+                break
+            offset = lines["next_offset"]
+        n0, n1 = len(first.encode()), len((first + long).encode())
+        n2 = n1 + len("not json" + CRLF)
+        n3 = n2 + len(_line(2, "cost.updated").encode())
+        # the long line: skipped (bad in both); "not json": bad only once parsed; the
+        # half-written line: left for later
+        self.assertEqual(steps, [(n0, 0, 0, [0]), (n1, 1, 1, []), (n2, 0, 1, []), (n3, 0, 0, [2]), (n3, 0, 0, [])])
+
     def test_a_long_line_still_being_written_is_left_for_later(self):
         first = _line(0, "run.started")
         self.path.write_bytes((first + '{"seq": 1, "kind": "agent.said", "text": "' + "x" * 300).encode("utf-8"))
@@ -193,6 +217,33 @@ class ServerTest(unittest.TestCase):
         self.assertEqual([e["seq"] for e in out["events"]], [0, 1])
         _, _, body = self.get(f"/api/runs/{RUN_ID}/events?offset={out['next_offset']}")
         self.assertEqual(json.loads(body)["events"], [])
+
+    def test_events_as_ndjson_are_the_lines_as_they_are(self):
+        path = self.runs / RUN_ID / "events.jsonl"
+        raw = path.read_bytes()
+        status, headers, body = self.get(f"/api/runs/{RUN_ID}/events?offset=0&format=ndjson")
+        self.assertEqual(status, 200)
+        self.assertTrue(headers["Content-Type"].startswith("application/x-ndjson"))
+        self.assertEqual(body, raw)  # not parsed, not re-encoded
+        self.assertEqual(int(headers["Content-Length"]), len(raw))
+        self.assertEqual(
+            [headers[h] for h in ("X-Hiraku-Next-Offset", "X-Hiraku-Size", "X-Hiraku-Reset", "X-Hiraku-Bad-Lines")],
+            [str(len(raw)), str(len(raw)), "0", "0"],
+        )
+        # the same next offset and size as the JSON form; from the end: nothing, nothing moves
+        out = json.loads(self.get(f"/api/runs/{RUN_ID}/events?offset=0")[2])
+        self.assertEqual(out["next_offset"], len(raw))
+        self.assertEqual([json.loads(line) for line in body.splitlines()], out["events"])
+        _, headers, body = self.get(f"/api/runs/{RUN_ID}/events?offset={len(raw)}&format=ndjson")
+        self.assertEqual((body, headers["X-Hiraku-Next-Offset"]), (b"", str(len(raw))))
+        # an offset past the end starts again from 0 (reset), as the JSON form
+        _, headers, body = self.get(f"/api/runs/{RUN_ID}/events?offset={len(raw) + 99}&format=ndjson")
+        self.assertEqual((body, headers["X-Hiraku-Reset"]), (raw, "1"))
+
+    def test_events_as_ndjson_refuse_what_the_json_form_refuses(self):
+        self.assertEqual(self.get_error("/api/runs/..%5Csecret/events?format=ndjson"), 400)
+        self.assertEqual(self.get_error("/api/runs/20991231-000000-nothing/events?format=ndjson"), 404)
+        self.assertEqual(self.get_error(f"/api/runs/{RUN_ID}/events?offset=abc&format=ndjson"), 400)
 
     def test_sample_events(self):
         _, _, body = self.get("/api/runs/sample/events")
@@ -629,7 +680,7 @@ class LaunchTest(unittest.TestCase):
         self.servers.append(server)
         return f"http://127.0.0.1:{server.server_address[1]}"
 
-    def post(self, base, body, headers=None):
+    def post_raw(self, base, body, headers=None):
         req = urllib.request.Request(base + "/api/launch", data=json.dumps(body).encode("utf-8"), method="POST",
                                      headers={"Content-Type": "application/json", **(headers or {})})
         try:
@@ -637,6 +688,24 @@ class LaunchTest(unittest.TestCase):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
+
+    def post(self, base, body, headers=None):
+        """POST /api/launch as the screen does: the 202 at once, then GET /api/launch's "launch" until
+        it has started (200 and its info, with the run_id) or failed (its error_status and error)."""
+        status, out = self.post_raw(base, body, headers)
+        if status != 202:
+            return status, out
+        self.assertEqual((out["state"], out["run_id"]), ("starting", None))
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+                got = json.loads(r.read())["launch"]
+            if got["state"] == "started":
+                return 200, got
+            if got["state"] == "failed":
+                return got["error_status"], got
+            time.sleep(0.1)
+        self.fail("the start did not settle in 30 s")
 
     def test_status_lists_requirements_and_never_the_key(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
@@ -647,6 +716,32 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(info["requirements"][0]["cost_limit_usd"], 2.0)
         self.assertTrue(info["claude_ready"])
         self.assertNotIn(self.SECRET, raw)
+
+    def test_the_post_answers_at_once_and_the_status_follows_the_start(self):
+        # a child that takes 2 s before it prints its folder: the POST answers in well under that
+        # (202, no run_id yet); GET /api/launch says starting with the child's last line, then started
+        code = ("import pathlib, sys, time; print('loading the tools', flush=True); time.sleep(2); "
+                f"d = pathlib.Path(sys.argv[1]) / '{self.RUN}'; d.mkdir(parents=True); (d / 'events.jsonl').write_text(''); "
+                "print(f'run folder: {d}', flush=True); time.sleep(3)")
+        base = self.serve({}, command=lambda req, mode, runs: [sys.executable, "-c", code, str(runs)])
+        t0 = time.monotonic()
+        status, out = self.post_raw(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertLess(time.monotonic() - t0, 1.0)
+        self.assertEqual((status, out["state"], out["run_id"], out["mode"]), (202, "starting", None, "scripted"))
+        time.sleep(1.0)
+        with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+            info = json.loads(r.read())
+        self.assertEqual((info["launch"]["state"], info["launch"]["last_line"]), ("starting", "loading the tools"))
+        self.assertIsNone(info["running"]["run_id"])
+        self.assertEqual(self.post_raw(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})[0], 409)  # still starting
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+                got = json.loads(r.read())["launch"]
+            if got["state"] != "starting":
+                break
+            time.sleep(0.1)
+        self.assertEqual((got["state"], got["run_id"]), ("started", self.RUN))
 
     def test_scripted_run_starts_and_only_one_at_a_time(self):
         base = self.serve({})
@@ -905,7 +1000,7 @@ class LaunchTest(unittest.TestCase):
         folder = self.runs / "_requests" / done["request_id"]
         self.assertTrue((folder / "requirements.yaml").is_file() and (folder / "intake.json").is_file())
         self.assertEqual(post("/api/launch", {"request": "../evil", "mode": "scripted"})[0], 400)
-        status, out = post("/api/launch", {"request": done["request_id"], "mode": "scripted"})
+        status, out = self.post(base, {"request": done["request_id"], "mode": "scripted"})  # (202, then followed)
         self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, f"_requests/{done['request_id']}"))
         self.assertEqual(seen, [(folder / "requirements.yaml", folder / "intake.json")])
         status, bad = post("/api/request", {"want": 7})

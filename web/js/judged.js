@@ -75,15 +75,29 @@ export function judgedCriterion(s, loadCaseId, version) {
 // range with no allowable, and says it is for reference (ct.reference; a mesh's largest-value
 // tag too). A contour that holds one part to its limit (partLimit, e.g. the battery's
 // temperature) is left as it is. ct.role: "judged", "reference" or null (cannot be told).
+// ct.pass: the verdict of the load case in the analysis' version (true / false), null when there
+// is none yet.
 export function judgedContour(s, ana, field, loadCaseId, meshes = null) {
   if (!ana || !field) return null;
-  const { criterion } = judgedCriterion(s, loadCaseId, ana.design_version ?? s.currentVersion);
+  const { criterion, verdict } = judgedCriterion(s, loadCaseId, ana.design_version ?? s.currentVersion);
   const ct = contourOf(ana, field, criterion, meshes);
   if (!ct || ct.partLimit) return ct;
   const role = fieldRole(ana, field, ct.fieldMax, criterion);
-  const key = `${ct.key}|${role ?? "-"} ${criterion?.limit?.value ?? "-"}`;
-  if (role !== "reference") return { ...ct, key, role };
+  const pass = typeof verdict?.pass === "boolean" ? verdict.pass : null;
+  const key = `${ct.key}|${role ?? "-"} ${criterion?.limit?.value ?? "-"} ${pass ?? "-"}`;
+  if (role !== "reference") return { ...ct, key, role, pass };
   const own = ct.limitKnown ? contourOf(ana, field, null, meshes) : ct;
   const tag = own.mesh && !own.frames ? `${JUDGED_JA.refTag} 最大 ${fmtVU(own.fieldMax, field.unit)}` : null;
-  return { ...own, key, role, reference: { quantity: judgedQuantity(ana.tool, criterion.quantity) }, mesh: tag ? { ...own.mesh, tag } : own.mesh };
+  return { ...own, key, role, pass, reference: { quantity: judgedQuantity(ana.tool, criterion.quantity) }, mesh: tag ? { ...own.mesh, tag } : own.mesh };
+}
+
+// The one rule for the colour of a contour's largest-value tag on the 3D (workbench3d.js):
+// red only when the value is the judged quantity (ct.role "judged") and the version's verdict
+// failed (ct.pass false); the muted reference colour for a value the verdict does not use
+// (ct.role "reference"); else the plain ink (passed, no verdict yet, or cannot be told, e.g. a
+// contour not made by judgedContour).
+export function maxTagClass(ct) {
+  if (ct?.role === "judged" && ct.pass === false) return "lbl-max lbl-fail";
+  if (ct?.role === "reference") return "lbl-max lbl-ref";
+  return "lbl-max";
 }

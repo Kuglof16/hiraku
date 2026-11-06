@@ -71,7 +71,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -380,7 +380,8 @@ class Runs(unittest.TestCase):
         self.assertEqual(res["tip_slope_angle"]["unit"], "deg")
         self.assertLess(res["tip_slope_angle"]["value"], 55.0)
         series = {s["channel"]: s for s in rec["series"]}
-        self.assertEqual(len({len(s["values"]) for s in rec["series"]}), 1)
+        # the series against time share one time base (the tyre curves are against slip: their own x)
+        self.assertEqual(len({len(s["values"]) for s in rec["series"] if "t_s" in s}), 1)
         self.assertEqual(series["slope_angle"]["values"][0] < 5.0, True)  # the record starts level
         self.assertLess(max(abs(v) for v in series["roll"]["values"]), 61.0)  # and stops once tipped
         self.assertEqual(rec["scene"][1]["angle_channel"], "slope_angle")
@@ -402,6 +403,23 @@ class Runs(unittest.TestCase):
         self.assertAlmostEqual(r["braking_distance"], v * v / (2 * mu_lock * 9.80665), delta=0.05 * r["braking_distance"])
         self.assertEqual(r["min_rear_wheel_load"], r["min_wheel_load"])  # load moves forward: a rear wheel is lightest
         self.assertGreater(r["max_pitch"], 0.0)  # nose down
+
+    def test_braking_scene_has_the_road_mu_and_the_criterion_stop_line(self):
+        # no criterion in the load case: the road with its mu only
+        scene = self.recs["braking"]["scene"]
+        self.assertEqual([o["kind"] for o in scene], ["ground"])
+        self.assertIn("μ 0.6", scene[0]["label"])
+        self.assertEqual(scene[0]["size_mm"][2], 0.0)
+        # a run through Tool.run takes the criterion from the load case
+        from hiraku.solvers.k2_vehicle.shelf.braking import BrakingTool
+        lc = {"load_case_id": "S4-t", "test_id": "S4", "domain": "handling", "title": "S4",
+              "params": {"loading": "empty", "speed": q(35.0, "km/h"), "mu": q(0.6, "1")},
+              "criterion": {"quantity": "stopping_distance", "op": "<=", "limit": {"value": 14.0, "unit": "m"}}}
+        rec = BrakingTool().run(demo_design(), lc, [{"prediction_id": "pred-0001"}], {})
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual([o["kind"] for o in rec["scene"]], ["ground", "gate"])
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+
 
     def test_launch_reaches_40(self):
         r = self.res("launch")
@@ -433,6 +451,88 @@ class Runs(unittest.TestCase):
         self.assertEqual(self.res("lane_change")["two_wheel_lift"], 0.0)
         self.assertLess(self.res("lane_change")["max_path_error"], 1.0)
         self.assertGreaterEqual(self.res("offroad_roll")["two_wheel_lift_time"], 0.0)
+
+
+class BrakingScene(unittest.TestCase):
+    def test_the_stop_line_is_the_front_tyres_front_when_the_distance_starts_plus_the_limit(self):
+        from hiraku.solvers.k2_vehicle.shelf.braking import BrakingTool
+        tool = BrakingTool()
+        veh = build_vehicle(on_board(demo_design(), "two_cargo"), {"mu": 0.6})
+        front = max(float(c.pos[0]) + c.radius for c in veh.corners)
+        r = {"x_cmd": 4.86, "x_brake": 5.0, "x_stop": 15.0}
+        for quantity, start in (("stopping_distance", 4.86), ("braking_distance", 5.0)):
+            tool._criterion = {"quantity": quantity, "op": "<=", "limit": {"value": 14.0, "unit": "m"}}
+            got = tool._stop_scene(veh, r, None)
+            self.assertEqual([o["kind"] for o in got], ["ground", "gate"])
+            gate = got[1]
+            self.assertAlmostEqual(gate["position_mm"][0], round((start + front + 14.0) * 1000.0, 1), places=6)
+            self.assertEqual(gate["size_mm"][0], 0.0)
+            self.assertEqual(gate["size_mm"][2], 0.0)
+            self.assertGreater(gate["size_mm"][1], 0.0)
+            ground = got[0]
+            self.assertIn("μ 0.6", ground["label"])
+            self.assertGreater(ground["position_mm"][0] + ground["size_mm"][0] / 2.0, gate["position_mm"][0])
+            for o in got:
+                self.assertEqual(contract.errors("scene_object", o), [])
+        # a criterion on another quantity or unit draws no line; on a grade the slope carries the mu
+        tool._criterion = {"quantity": "peak_decel", "op": "<=", "limit": {"value": 9.0, "unit": "m/s^2"}}
+        got = tool._stop_scene(veh, r, 0.1)
+        self.assertEqual([o["kind"] for o in got], ["slope"])
+        self.assertIn("μ 0.6", got[0]["label"])
+
+
+class StepRecordRun(unittest.TestCase):
+    """step_climb_dynamic's run option record_run = speed: the record shows run 2 (driving at the step)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = box_design(susp="kc_table", wheel_mass=15.0)
+        lc = {"load_case_id": "p1", "params": {"step_height": {"value": 100.0, "unit": "mm"},
+                                                "speed": {"value": 10.0, "unit": "km/h"}}}
+        tool = TOOLS["step_climb_dynamic"]
+        cls.push = tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {})
+        cls.speed = tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {"record_run": "speed"})
+        cls.m = build_vehicle(cls.d).m_total
+
+    def test_the_record_is_run_2_with_the_same_results(self):
+        rec = self.speed
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        self.assertNotIn("effects", rec)  # record_run is read
+        res = {r["quantity"]: r["value"] for r in rec["results"]}
+        base = {r["quantity"]: r["value"] for r in self.push["results"]}
+        for q in ("climbed", "climbable", "peak_wheel_force", "climb_time", "front_wheel_force"):
+            self.assertEqual(res[q], base[q], q)
+        self.assertEqual(res["climbed"], 1.0)
+        # run 2's step stands step_push's run_up (2 m) further than run 1's
+        self.assertAlmostEqual(rec["scene"][0]["position_mm"][0] - self.push["scene"][0]["position_mm"][0], 2000.0,
+                               delta=0.2)
+        self.assertIn("10 km/h", rec["scene"][0]["label"])
+        # the series run from the start of the roll until after the climb
+        t = rec["series"][0]["t_s"]
+        self.assertLess(t[0], 0.05)
+        self.assertGreater(t[-1], res["climb_time"])
+        self.assertTrue(any("record_run = speed" in a for a in rec["assumptions"]))
+        self.assertTrue(any("tyre's vertical stiffness" in a and "without a source" in a for a in rec["assumptions"]))
+
+    def test_the_vectors_at_the_peak_balance_the_weight_and_carry_the_mount_loads(self):
+        from hiraku.solvers.k2_vehicle.units import G0
+        vec = self.speed["vectors"]
+        road = [v for v in vec if v["kind"] in ("reaction", "grip", "inertia")]
+        self.assertEqual(sum(v["kind"] == "inertia" for v in road), 1)
+        tot = [sum(v["vector_N"][k] for v in road) for k in range(3)]
+        tol = 1e-4 * self.m * G0  # the recorder rounds the wheel vectors
+        self.assertAlmostEqual(tot[0], 0.0, delta=tol)
+        self.assertAlmostEqual(tot[1], 0.0, delta=tol)
+        self.assertAlmostEqual(tot[2], self.m * G0, delta=tol)
+        # the largest wheel force of the snapshot is peak_wheel_force
+        peak = max(sum(a * a for a in [x + y for x, y in zip(r["vector_N"], g["vector_N"])]) ** 0.5
+                   for r in vec if r["kind"] == "reaction" for g in vec if g["kind"] == "grip" and g["at"] == r["at"])
+        res = {r["quantity"]: r["value"] for r in self.speed["results"]}
+        self.assertAlmostEqual(peak, res["peak_wheel_force"], delta=1e-3 * res["peak_wheel_force"])
+        self.assertTrue(any(v["kind"] == "joint" for v in vec))
+        self.assertTrue(any(s["channel"].startswith("mount_") for s in self.speed["series"]))
+        self.assertIn("mount_force_peak", res)
 
 
 if __name__ == "__main__":

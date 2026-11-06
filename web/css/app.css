@@ -247,6 +247,14 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 .agents ul.pets li.petrow { padding: 2px 0; font-size: inherit; grid-template-columns: 52px auto minmax(0, 1fr); gap: 0 8px; }
 .agents ul.pets.many li.petrow { padding: 1px 0; grid-template-columns: 42px auto minmax(0, 1fr); }
 .agents ul.pets.many .petrow .petslot { width: 42px; height: 42px; }
+/* a bundle of one role kind (app.js agentGroupHtml): 「▸ 設計役 ×6」, opened into its members */
+.agents .ag-toggle { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.agents .ag-toggle .caret { font-size: 0.8em; color: var(--muted); width: 0.9em; }
+.agents .ag-toggle .cnt { font-weight: 700; }
+.agents .ag-toggle:hover { text-decoration: underline; }
+.agents li.member { margin-left: 18px; }
+.agents ul.pets li.petrow.member { grid-template-columns: 42px auto minmax(0, 1fr); }
+.agents ul.pets li.petrow.member .petslot { width: 42px; height: 42px; }
 .agents ul.pets.many .petrow .nm { font-size: 15px; }
 .agents ul.pets.many .petrow .st { font-size: 13px; }
 .agents ul.pets.many .petrow .say { font-size: 12.5px; }
@@ -354,7 +362,10 @@ body.look-real .viewport { background: linear-gradient(180deg, #d9e2ea 0%, #ecee
 .lbl small { display: block; color: var(--muted); font-size: 13px; }
 .lbl-id, .lbl-node { font-family: var(--mono); font-size: 12px; background: transparent; color: var(--muted); }
 .lbl-axis { background: transparent; color: var(--muted); font-size: 12px; }
-.lbl-max { border: 1.5px solid var(--red); color: var(--red); font-weight: 700; font-size: 14px; }
+/* the largest-value tag: its tone is judged.js maxTagClass (red only for a judged value that failed) */
+.lbl-max { border: 1.5px solid var(--ink); color: var(--ink); font-weight: 700; font-size: 14px; }
+.lbl-max.lbl-fail { border-color: var(--red); color: var(--red); }
+.lbl-max.lbl-ref { border-color: var(--muted); color: var(--muted); font-weight: 600; }
 .lbl-vec { border: 1.5px solid currentColor; font-weight: 600; }
 .lbl-vec small { color: inherit; font-weight: 400; }
 .lbl-reaction { color: var(--blue); }
@@ -741,6 +752,10 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .draftbar.starting .way button { opacity: 0.45; cursor: progress; }
 .draftbar .starting { flex-basis: 100%; color: var(--blue); }
 .draftbar .starting .secs { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.draftbar .starting .step, .runlist .starting .step { margin-left: 6px; }
+/* the list's note while a start is on its way (app.js launchStartingNote) */
+.runlist .starting { margin: 0 0 10px; padding: 8px 12px; border: 2px solid var(--blue); border-radius: 10px; color: var(--blue); font-size: 16px; background: var(--card, #fffdf8); }
+.runlist .starting .secs { margin-left: 8px; font-variant-numeric: tabular-nums; }
 .draftbar .err a { font-weight: 600; }
 .runlist .new-request { font-weight: 700; color: var(--ink); }
 .grid-head { display: flex; align-items: center; gap: 20px; font-size: 18px; flex-wrap: nowrap; min-width: 0; }
@@ -766,6 +781,21 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .tile.off { border-style: dashed; color: var(--muted); background: transparent; }
 .tile.pending { border-color: var(--ink); border-style: dashed; }
 .tile .state { font-weight: 700; font-size: 15px; }
+/* ④: a tile that replays its domain in the tab when pressed (app.js renderGrid / openDomain) */
+.tile.can-replay { cursor: pointer; }
+.tile.can-replay:hover { box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.12); }
+.tile .replay-tag { margin: 0 auto 0 10px; font-size: 13px; font-weight: 600; color: var(--ink); border: 1.5px solid var(--line); border-radius: 999px; padding: 0 9px; white-space: nowrap; }
+.tile.can-replay:hover .replay-tag { border-color: var(--ink); }
+body.video .tile .replay-tag { display: none; }
+/* ④ with a domain replaying: the head over the 3D (what replays, and 格子に戻る) */
+.domain-head { display: flex; align-items: baseline; gap: 8px; font-size: 18px; padding: 2px 4px 6px; }
+.domain-head[hidden] { display: none; }
+.domain-head .dh-tab { color: var(--muted); font-weight: 600; }
+.domain-head .dh-sep { color: var(--muted); }
+.domain-head .dh-dom { font-size: 22px; }
+.domain-head .dh-what { color: var(--muted); }
+.domain-head .dh-close { margin-left: auto; font-size: 16px; font-weight: 600; border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 14px; background: var(--panel); cursor: pointer; }
+body.video .domain-head .dh-close { display: none; }
 .tile.green .state { color: var(--green); }
 .tile.red .state { color: var(--red); }
 .tile .draw { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
@@ -852,7 +882,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .runlist button:disabled { color: var(--muted); border-color: var(--line); cursor: default; }
 .runlist button.go { color: var(--panel); background: var(--ink); }
 .runlist .why { color: var(--muted); font-size: 13px; }
-.runlist .confirm { color: var(--red); font-size: 14px; font-weight: 600; }
+.runlist .confirm { color: var(--orange, #b26b00); font-size: 14px; font-weight: 600; } /* caution, not a verdict: red is for a failed verdict only */
 .runlist .demo-runs { border: 1.5px solid var(--ink); border-radius: 12px; padding: 2px 12px; margin-bottom: 6px; }
 .runlist .demo-runs .lreq:last-child { border-bottom: none; }
 .runlist .demo .dhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 17px; }
@@ -860,7 +890,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .runlist .demo .shows { font-size: 14px; margin-top: 2px; }
 .runlist .demo .err { color: var(--red); font-size: 14px; }
 .runlist .demo .cost { font-size: 14px; margin-top: 2px; }
-.runlist .demo .cost.over { color: var(--red); font-weight: 600; }
+.runlist .demo .cost.over { color: var(--orange, #b26b00); font-weight: 600; }
 .runlist .over { color: var(--red); font-size: 13px; font-weight: 600; }
 .runlist .demo-a1 { font-size: 15px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 14px; text-decoration: none; white-space: nowrap; }
 .runlist .keyless { margin: 4px 0 8px; padding: 8px 12px; font-size: 15px; background: var(--card, #fffdf8); border: 1.5px solid var(--line); border-radius: 10px; }
@@ -925,7 +955,7 @@ body.video .mode .stop-btn { display: none; }
 .runlist .more .dhead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .runlist .more .cuts { display: flex; gap: 6px; margin-top: 2px; }
 .runlist .more .cut { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
-.runlist .more .cost.over { color: var(--red); }
+.runlist .more .cost.over { color: var(--orange, #b26b00); }
 .runlist .demo .dhead + .more { margin-left: 0; }
 /* a new request, first in the list */
 .runlist .fresh-top { display: flex; align-items: baseline; gap: 14px; margin: 0 0 10px; }
@@ -974,6 +1004,9 @@ body.video .mode .stop-btn { display: none; }
 .loading-note .ln-sub { font-size: 15px; margin-top: 6px; color: var(--ink-2, #555); }
 .loading-note a { pointer-events: auto; margin-left: 10px; font-weight: 600; }
 .loading-note.failed { border-color: #b3261e; }
+/* while reading: on the 3D only (in #viewport, the stage's own pixels), the tabs and their screens uncovered */
+.loading-note.in-view { position: absolute; top: 40%; font-size: 24px; padding: 16px 26px; white-space: nowrap; }
+.loading-note.in-view .ln-sub { font-size: 19px; }
 body.video .loading-note { display: none; }
 
 /* the verdict in one sentence, then the value beside its criterion */
@@ -1000,13 +1033,17 @@ body.video .loading-note { display: none; }
 .lbl-key { font-size: 16px; }
 .lbl-key small { font-size: 14px; }
 
-/* the switch between the present mode and the workbench */
+/* 詳しく, in the present mode only */
 .viewswitch { display: flex; align-items: center; }
 .viewswitch button { font-size: 16px; padding: 4px 16px; border: 1.5px solid var(--ink); color: var(--ink); background: var(--panel); }
-.viewswitch button[data-view="present"] { border-radius: 999px 0 0 999px; }
-.viewswitch button[data-view="bench"] { border-radius: 0 999px 999px 0; border-left: none; }
-.viewswitch button.on { background: var(--ink); color: var(--panel); font-weight: 700; }
 .viewswitch .detail-btn { display: none; margin-left: 12px; border-radius: 999px; border-color: var(--line); color: var(--muted); }
+/* the 3D's corner: make it large (the present mode) and back; the toggles move left of it */
+.expand-btn { position: absolute; top: 8px; right: 10px; z-index: 9; width: 38px; height: 38px; padding: 0; display: grid; place-items: center;
+  border: 1.5px solid var(--ink); border-radius: 10px; background: rgba(251, 249, 244, 0.95); color: var(--ink); cursor: pointer; }
+.expand-btn:hover { background: var(--ink); color: var(--panel); }
+.expand-btn svg { width: 22px; height: 22px; }
+body:not(.video) .toggles { right: 58px; }
+body.video .expand-btn { display: none; }
 .viewswitch .detail-btn.on { border-color: var(--ink); color: var(--ink); }
 body.video .viewswitch { display: none; }
 
@@ -1077,6 +1114,8 @@ body.present .asm-caption { font-size: 24px; font-weight: 700; }
 .pc-ref .pc-ref-h { font-weight: 700; }
 .pc-ref ul { margin: 2px 0 0; padding-left: 20px; }
 .pc-note { color: var(--muted); font-size: 15px; line-height: 1.4; }
+.pc-dev summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.pc-dev .sub { color: var(--muted); font-size: 13px; line-height: 1.35; }
 .card tr.ref td { color: var(--muted); font-size: 12px; }
 .card .ref-tag { font-size: 11px; }
 .card .not-judged { color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }

@@ -20,9 +20,10 @@ import { BAND_COLORS } from "./colormap.js";
 import { contourOf, fieldsOf } from "./fields.js";
 import { clearOfBand, cubicBezier, flyIn, gridRects, loadLayout, outwardOrder, rateLabel, squeeze } from "./compose.js";
 import { CutN04, CutN15 } from "./cut_grid.js";
-import { NG_WORD, OK_WORD, esc, fmt } from "./labels.js";
+import { NG_WORD, OK_WORD, SCRIPTED_CUT_JA, esc, fmt } from "./labels.js";
 import { motionOf } from "./series.js";
 import { applyEvent, initialState } from "./state.js";
+import { fetchAllEvents } from "./eventread.js";
 import { VIEWS, Workbench3D, cutView, cutViews } from "./workbench3d.js";
 import { looksReady } from "./look.js";
 import { CutN16 } from "./cut_n16.js";
@@ -36,6 +37,7 @@ import { CutN11 } from "./cut_n11.js";
 import { CutN12 } from "./cut_n12.js";
 import { CutN13 } from "./cut_n13.js";
 import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
+import { TilePets, loadPets, missingPetKeys, roleOf } from "./cut_pets.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -58,18 +60,7 @@ const TILES = {
   heat: { test: "T1", name: "熱", field: "temperature" },
 };
 
-async function readRun(runId) {
-  const events = [];
-  let offset = 0;
-  for (;;) {
-    const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events?offset=${offset}`, { cache: "no-store" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error ?? res.status);
-    events.push(...body.events);
-    if (body.next_offset >= body.size || body.next_offset === offset) return events;
-    offset = body.next_offset;
-  }
-}
+const readRun = fetchAllEvents;
 
 function stateOf(events) {
   let s = initialState();
@@ -499,8 +490,15 @@ class CutN01 {
 // story they all play from lead_s to the end. Inside its turn a pane's records are paced
 // (pace.js): where the vehicle or the case past the limit turns fast (a roll-over) they play
 // slower and the rest faster, so nothing turns faster than 90 deg/s on the screen.
+//
+// Each pane with a record has the 3D pet (cut_pets.js, as N04's tiles) of the agent that ran
+// its test: the event that recorded the pane's analysis names it (its agent; a record without
+// one, the agent of the load case's domain). Its box is n02.pane.pet at the pane's bottom
+// right. It works while its pane plays, then reacts to the pane's verdict (pass on ✓ OK,
+// mismatch on ✕ NG) for n00.motion.pass_dur_s and holds still (idle): posed from t only.
+// The pets are not counted as moving (as N04's).
 
-const N02_KEYS = ["duration_s", "grid", "panes", "pane", "pane.verdict.of_label", "times", "overlay", "colors"];
+const N02_KEYS = ["duration_s", "grid", "panes", "pane", "pane.verdict.of_label", "pane.pet.w", "pane.pet.h", "pane.pet.right", "pane.pet.bottom", "times", "overlay", "colors"];
 const N02_TESTS = {
   tilt: { test: "S1", name: "傾斜台" },
   wind: { test: "F1", name: "横風" },
@@ -513,12 +511,15 @@ const BEYOND = /-beyond$/;
 const N02_LEGEND_SCALE = 1.5;
 
 class CutN02 {
-  constructor(layout, s) {
+  constructor(layout, s, events = []) {
     const missing = N02_KEYS.filter((k) => k.split(".").reduce((o, x) => (o == null ? undefined : o[x]), layout.n02) === undefined);
     if (missing.length) throw new Error(`layout.json の n02 に無い: ${missing.join(", ")}`);
+    const top = missingPetKeys(layout);
+    if (top.length) throw new Error(`layout.json に無い: ${top.join(", ")}`);
     this.layout = layout;
     this.story = storyOf(layout, "n02");
     this.s = s;
+    this.events = events;
     this.spec = layout.n02;
     this.stage = $("stage");
     this.stage.style.background = this.spec.colors.bg;
@@ -526,6 +527,42 @@ class CutN02 {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(1);
     this.build();
+    // the pets come with /pets/pet3d.js; the page waits for them (main awaits loaded)
+    this.loaded = this.attachPets();
+  }
+
+  // The agent whose event recorded the analysis (analysis.finished, else analysis.started);
+  // a record without one: the agent of the load case's domain (cut_pets.js roleOf).
+  agentOf(c) {
+    const id = c.ana.analysis_id;
+    const real = (a) => !!a && a !== "system" && a !== "user";
+    const by = (kind) => this.events.find((e) => e.kind === kind && e.data?.analysis_id === id && real(e.agent))?.agent;
+    return by("analysis.finished") ?? by("analysis.started") ?? (c.lc.domain ? roleOf(c.lc.domain) : null);
+  }
+
+  // The panes' pets (cut_pets.js TilePets), when the server serves pet3d.js; else none. A
+  // pane's pet works from its turn's start (pending) and at its end reacts to the verdict.
+  async attachPets() {
+    const root = document.documentElement;
+    try {
+      const HP = await loadPets();
+      const roles = new Set((HP?.ROLES ?? []).map((r) => r.id));
+      const panes = this.panes.filter((p) => p.view && roles.has(p.agent));
+      if (!HP || !panes.length) {
+        root.dataset.pets = "none";
+        return;
+      }
+      const P = this.spec.pane.pet;
+      this.pets = new TilePets(HP, this.layout, panes.map((p) => ({
+        key: p.key, role: p.agent, box: p.petBox, w: P.w, h: P.h,
+        changes: [{ at: p.from, state: "pending" }, { at: p.to, state: p.verdict === true ? "green" : p.verdict === false ? "red" : "none" }],
+      })));
+      this.pets.resize(this.scale);
+      root.dataset.pets = "on";
+    } catch (e) {
+      this.pets = null;
+      root.dataset.pets = `error: ${e}`;
+    }
   }
 
   // The test's case and its case past the limit (the newest motion of each).
@@ -594,6 +631,10 @@ class CutN02 {
         el.insertAdjacentHTML("beforeend", `<span class="none" style="font-size:${this.layout.min_text_px}px">記録がまだ無い (${esc(def.test)})</span>`);
         return pane;
       }
+      // the pet's box (n02.pane.pet at the bottom right; attachPets draws in it)
+      const P = st.pet;
+      el.insertAdjacentHTML("beforeend", `<div class="pet" data-box="n02.pane.${key}.pet" style="right:${P.right}px;bottom:${P.bottom}px;width:${P.w}px;height:${P.h}px"></div>`);
+      Object.assign(pane, { petBox: el.querySelector(".pet"), agent: this.agentOf(ok), verdict });
       pane.view = this.makeView(ok, null, inner.w, inner.h);
       pane.ghost = over ? this.makeView(over, sp.overlay, inner.w, inner.h) : null;
       pane.span = Math.max(ok.motion.duration, over?.motion?.duration ?? 0);
@@ -652,6 +693,7 @@ class CutN02 {
         c.height = Math.round(p.inner.h * scale);
       }
     }
+    this.pets?.resize(scale);
   }
 
   draw(t) {
@@ -677,6 +719,7 @@ class CutN02 {
         p.ghost.renderInto(p.ghostEl.getContext("2d"), p.ghostEl.width, p.ghostEl.height, this.scale);
       }
     }
+    this.pets?.draw(t);
   }
 }
 
@@ -733,6 +776,28 @@ function checkStory() {
   return story.last;
 }
 
+// ---- what drove the run --------------------------------------------------------
+// A run the record says was scripted (project.driver "scripted", contract) is a fixed
+// sequence played back with no Claude: the cut says so in small text in the top right,
+// in the margin above layout.safe (no cut draws there; the story note is top left), so it
+// covers no picture, tag or subtitle. Nothing for a run driven by Claude, nor for an older
+// record without a driver (not guessed). A note (data-kind "note"): not counted by the story.
+
+function addDriverTag(layout, s) {
+  if (s.project?.driver !== "scripted") return;
+  const safe = layout.safe ?? { x: 96, y: 60, w: 1728 };
+  const px = layout.min_text_px ?? 18;
+  const h = Math.ceil(px * 1.2) + 6; // line-height 1.2, padding 2 + border 1 a side
+  const el = document.createElement("p");
+  el.className = "cut-driver";
+  el.dataset.box = "driver";
+  el.dataset.kind = "note";
+  el.dataset.driver = "scripted";
+  el.textContent = SCRIPTED_CUT_JA;
+  Object.assign(el.style, { right: `${(layout.stage?.w ?? STAGE_W) - safe.x - safe.w}px`, top: `${Math.max(0, safe.y - h - 12)}px`, fontSize: `${px}px` });
+  $("stage").append(el);
+}
+
 // ---- page -------------------------------------------------------------------
 const STAGE_W = 1920;
 const STAGE_H = 1080;
@@ -783,8 +848,10 @@ async function main() {
     const name = params.get("cut") ?? "n05";
     if (!CUTS[name]) throw new Error(`no cut named ${name}`);
     const [layout, events] = await Promise.all([loadLayout(), readRun(params.get("run") ?? "sample")]);
+    const s = stateOf(events);
     // the events too, in seq order, for the cuts that read them as they came (N09, N13, N14)
-    cut = new CUTS[name](layout, stateOf(events), [...events].sort((a, b) => a.seq - b.seq));
+    cut = new CUTS[name](layout, s, [...events].sort((a, b) => a.seq - b.seq));
+    if (!ONLY_HERO) addDriverTag(layout, s);
     if (cut.loaded) await cut.loaded; // what a cut loads after it is built (N04 / N15: the pets)
     await looksReady(); // the real look's Poly Haven files, so a frame at ?t= is the same every time
     window.hiraku.cut = cut;
