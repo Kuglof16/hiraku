@@ -7,6 +7,12 @@ elasticity d ln y / d ln x by central differences. When the two one-sided
 slopes disagree (contact in K2 makes results jump), the term says the
 sensitivity is lost in noise instead of giving a number to trust.
 
+A design variable (variables.<name>) is moved by its value alone: the design is
+not rebuilt, so the parts, sections and supports the generator made from it stay
+as they were. A result that does not move is then not a sensitivity of 0: the
+term says it was not looked at (no share). A result that moves gives the
+sensitivity to the value alone (what the tool reads of the variable itself).
+
 Paths name numbers inside the design, e.g.
     variables.motor_peak_power            (a quantity: its value)
     sections.rt40x80x2.3.dims_mm.t        (dots inside keys are matched greedily)
@@ -27,7 +33,11 @@ Record = dict[str, Any]
 NOISE_RATIO = 0.3  # one-sided slopes further apart than this (relative) are called noisy
 FLAT_REL = 1e-9  # a result that moves less than this (relative) does not depend on the number
 
-_SUFFIX_UNITS = {"_mm": "mm", "_kg": "kg", "_MPa": "MPa", "_N_per_mm": "N/mm", "_Ns_per_mm": "1", "_kg_m3": "kg/m^3"}
+VARIABLES = "variables."  # paths to design variables: the generator builds the design from them
+NOT_LOOKED_AT = ("not looked at: the result does not move when only the variable's value changes; the parts the "
+                 "design is built from it need the design rebuilt")
+
+_SUFFIX_UNITS ={"_mm": "mm", "_kg": "kg", "_MPa": "MPa", "_N_per_mm": "N/mm", "_Ns_per_mm": "1", "_kg_m3": "kg/m^3"}
 
 
 def _step_into(node: Any, parts: list[str]) -> tuple[Any, Any]:
@@ -125,11 +135,18 @@ def sensitivity(tool, design: Record, load_case: Record, quantity: str, paths: l
             continue
         sp, sm = (yp - y0) / h, (y0 - ym) / h
         big = max(abs(sp), abs(sm))
+        variable = path.startswith(VARIABLES)
         if big * h <= FLAT_REL * abs(y0):
-            term["share"] = 0.0  # the result does not move (round-off only)
+            if variable:
+                # with_value changes the variable's own value only; the parts, sections and supports the
+                # generator built from it stay as they were, so a flat result says nothing (not a zero)
+                term["name"] += f" ({NOT_LOOKED_AT})"
+            else:
+                term["share"] = 0.0  # the result does not move (round-off only)
         elif sp * sm < 0 or abs(sp - sm) > NOISE_RATIO * big:
             term["name"] += " (lost in noise: the two one-sided slopes disagree)"
         else:
+            # a term with a share keeps its name "<quantity> to <path>" as it is: the screen matches the path
             term["share"] = (yp - ym) / (2.0 * h) * x0 / y0
         terms.append(term)
     return terms

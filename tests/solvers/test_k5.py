@@ -61,6 +61,18 @@ class SensitivityTest(unittest.TestCase):
         self.assertEqual(sens[1]["share"], 0.0)  # stiffness scale does not change these stresses
         self.assertIs(strongest(sens), sens[0])
 
+    def test_a_variable_that_does_not_move_is_not_a_zero(self):
+        """wheelbase builds the frame, but with_value changes only its value: frame_static's result stays, and
+        K5 says it did not look (no share) instead of a sensitivity of 0 (a number outside the variables that does
+        not move still gives 0: test_through_run_params)."""
+        lc = {"load_case_id": "R1", "test_id": "R1", "domain": "strength", "title": "x",
+              "params": {"step_height": q(100, "mm")}, "tolerance_rel": 0.15}
+        t = sensitivity(TOOLS["frame_static"], DESIGN, lc, "max_stress", ["variables.wheelbase"])
+        self.assertNotIn("share", t[0])
+        self.assertIn("not looked at", t[0]["name"])
+        self.assertTrue(t[0]["name"].startswith("max_stress to variables.wheelbase ("))
+        self.assertIsNone(strongest(t))
+
     def test_bad_request_is_reported(self):
         lc = {"load_case_id": "R1", "test_id": "R1", "domain": "strength", "title": "x", "params": {}, "tolerance_rel": 0.15}
         rec = TOOLS["frame_static"].run(DESIGN, lc, PRED, {"sensitivity": {"quantity": "nothing", "paths": ["parts.cargo.mass_kg"]}})
