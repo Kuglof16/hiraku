@@ -110,6 +110,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from ..k0_handcalc.vehicle import DesignError, member_props
+from . import brackets as _bk
 from . import cache
 
 ELEMENT_SIZE_MM = 10.0
@@ -174,6 +175,8 @@ class _Run:
     ext: list[float] = field(default_factory=lambda: [0.0, 0.0])  # added length at start / end (negative: cut back)
     forced_s: set = field(default_factory=set)
     forced_c: list = field(default_factory=lambda: [set(), set(), set(), set()])
+    bracket_s: set = field(default_factory=set)  # the mount brackets' cheeks (brackets.py)
+    bracket_c: list = field(default_factory=lambda: [set(), set(), set(), set()])  # their base lines' ends
 
     # ---- section geometry
     def wall_lengths(self) -> list[float]:
@@ -319,6 +322,13 @@ class ShellMesh:
     through_joints: list[str] = field(default_factory=list)  # design nodes of the through joints
     weld_strips: bool = False  # grid lines at t and 2t from the weld lines (module notes)
     weld_lines: list[WeldLine] = field(default_factory=list)
+    brackets: list = field(default_factory=list)  # brackets.MountBracket: the suspension mount brackets meshed
+    bracket_skipped: dict[str, str] = field(default_factory=dict)  # bracket part -> why it is not meshed
+    bracket_material: dict[str, str] = field(default_factory=dict)  # bracket part -> member whose material it takes
+
+    def bracket_of(self, support: str, mount: str):
+        """The meshed bracket at a support's mount, or None."""
+        return next((b for b in self.brackets if b.support == support and b.mount == mount), None)
 
     @property
     def n_nodes(self) -> int:
@@ -495,7 +505,7 @@ def _ring_yz(run: _Run, size: float) -> tuple[np.ndarray, list[tuple[int, float]
         return np.stack([rho * np.cos(ph), rho * np.sin(ph)], axis=1), [(-1, float(p)) for p in ph]
     pts, tags = [], []
     for wall, Lw in enumerate(run.wall_lengths()):
-        ws = _divide([0.0, Lw, *[c for c in run.forced_c[wall] if TOL < c < Lw - TOL]], size)
+        ws = _divide([0.0, Lw, *[c for c in run.forced_c[wall] | run.bracket_c[wall] if TOL < c < Lw - TOL]], size)
         for w in ws[:-1]:
             pts.append(run.wall_point(wall, w))
             tags.append((wall, float(w)))
@@ -933,31 +943,59 @@ def joint_layout(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_st
     """The tubes' runs, their joints and the gussets as the mesh lays them out before the grids (a joint whose grid
     lines clash with another's becomes tied, and a gusset on a tied joint raises DesignError): (mem, runs, ends,
     joints, gussets, run_through, mount_nodes). The design generator calls it to refuse such gussets."""
+    return _layout(design, element_size_mm, weld_strips)[:7]
+
+
+def _layout(design: dict, element_size_mm: float, weld_strips: bool):
+    """joint_layout's tuple and (the mount brackets to mesh, {bracket id: why it is not meshed}): a bracket whose
+    lines would cut a shared joint's ring is left out and the layout made again without it (brackets.py)."""
     size = float(element_size_mm)
     if not size > 0:
         raise ValueError("element_size_mm must be positive")
-    mem = _members(design)
-    runs, ends = _runs(design, mem)
-    joints = _classify(runs, ends, through_mode(design))
-    gparts = _gusset_parts(design)
-    run_through = {n: r for r in runs for n in r.nodes_at if n not in (r.start_node, r.end_node)}
-    mount_nodes = [s.get("frame_node") for s in design.get("supports", []) if s.get("frame_node") in run_through]
-    gussets: list[_Gusset] = []
-    for _ in range(2 * len(joints) + 2):
-        _set_forced(runs, joints, size, weld_strips)
-        if _fit_through(runs, joints):
-            continue
-        gussets = _place_gussets(runs, joints, gparts, size, weld_strips)
-        _mount_lines(run_through, mount_nodes, joints)
-        bad = _clashes(runs, joints)
-        if not bad:
-            break
-        whom = {id(j): _clashing_with(j, joints, runs) for j in bad}
-        for j in bad:
-            _untie_through(runs, j)
-            j.kind = "tied"
-            j.reason = f"its grid lines would clash with {whom[id(j)]}"
-    return mem, runs, ends, joints, gussets, run_through, mount_nodes
+    dropped: dict[str, str] = {}
+    snaps: dict[str, dict[int, float]] = {}  # bracket -> {span end: w}: ends moved onto a joint's ring lines
+    for _attempt in range(3 * len(_bk.bracket_parts(design)) + 1):
+        mem = _members(design)
+        runs, ends = _runs(design, mem)
+        joints = _classify(runs, ends, through_mode(design))
+        plans, skipped = _bk.plan_brackets(design, runs, size)
+        plans = [p for p in plans if p.id not in dropped]
+        for p in plans:
+            for end, w in snaps.get(p.id, {}).items():
+                span = list(p.span)
+                span[end] = w
+                p.span = tuple(span)
+        for p in plans:
+            r = runs[p.run]
+            r.bracket_s.update(round(float(s), 9) for s in p.s)
+            r.bracket_c[p.wall] |= _bk.wall_c_lines(p, r.wall_lengths()[p.wall])
+        gparts = _gusset_parts(design)
+        run_through = {n: r for r in runs for n in r.nodes_at if n not in (r.start_node, r.end_node)}
+        mount_nodes = [s.get("frame_node") for s in design.get("supports", []) if s.get("frame_node") in run_through]
+        gussets: list[_Gusset] = []
+        for _ in range(2 * len(joints) + 2):
+            _set_forced(runs, joints, size, weld_strips)
+            if _fit_through(runs, joints):
+                continue
+            gussets = _place_gussets(runs, joints, gparts, size, weld_strips)
+            _mount_lines(run_through, mount_nodes, joints)
+            bad = _clashes(runs, joints)
+            if not bad:
+                break
+            whom = {id(j): _clashing_with(j, joints, runs) for j in bad}
+            for j in bad:
+                _untie_through(runs, j)
+                j.kind = "tied"
+                j.reason = f"its grid lines would clash with {whom[id(j)]}"
+        cut = {p.id: why for p in plans if (why := _bk.conflicts(p, runs, joints))}
+        if not cut:
+            return mem, runs, ends, joints, gussets, run_through, mount_nodes, plans, {**skipped, **dropped}
+        for pid, why in cut.items():
+            if isinstance(why, tuple):
+                snaps.setdefault(pid, {})[why[1]] = float(why[2])
+            else:
+                dropped[pid] = why
+    raise DesignError("the mount brackets' grid lines do not settle; report the design")
 
 
 def _clashing_with(j: _Joint, joints: list[_Joint], runs: list[_Run]) -> str:
@@ -984,7 +1022,7 @@ def _clashing_with(j: _Joint, joints: list[_Joint], runs: list[_Run]) -> str:
 
 def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_strips: bool = True) -> ShellMesh:
     size = float(element_size_mm)
-    mem, runs, ends, joints, gussets, run_through, mount_nodes = joint_layout(design, size, weld_strips)
+    mem, runs, ends, joints, gussets, run_through, mount_nodes, bplans, bskipped = _layout(design, size, weld_strips)
 
     # ---- grids per run
     all_nodes, grids, run_elems = [], [], []
@@ -994,7 +1032,7 @@ def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_str
         foot = [(j.footprint[0], j.footprint[1]) for j in joints if j.kind != "tied" and j.host == r.id]
         member_lines = [s for s in r.nodes_at.values()
                         if lo < s < hi and not any(a - TOL <= s <= b + TOL for a, b in foot)]
-        ss = _divide([lo, hi, *[s for s in r.forced_s | r.extra_s if lo < s < hi], *member_lines], size)
+        ss = _divide([lo, hi, *[s for s in r.forced_s | r.extra_s | r.bracket_s if lo < s < hi], *member_lines], size)
         yz, _ = _ring_yz(r, size)
         P = (r.origin[None, None, :] + ss[:, None, None] * r.ex + yz[None, :, :1] * r.ey + yz[None, :, 1:] * r.ez)
         ns, nc = len(ss), len(yz)
@@ -1065,8 +1103,37 @@ def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_str
     elements_per_run = [remap[el] for el in elements_per_run]
     gus_el = [remap[q] for q in gus_el]
 
+    # ---- mount bracket cheeks: base nodes inside the tied span are the wall's nodes (brackets.py)
+    bk_el, bk_info = [], []
+    if bplans:
+        tree = cKDTree(nodes)
+        for pl in bplans:
+            r = runs[pl.run]
+            Lw = r.wall_lengths()[pl.wall]
+            _, tags = _ring_yz(r, size)
+            cs = [w for wall, w in tags if wall == pl.wall] + [Lw]
+            ring_w = [(c - pl.c_of_w[0]) / pl.c_of_w[1] for c in cs]
+            ring_w = [v for v in ring_w if pl.span[0] - 1e-6 <= v <= pl.span[1] + 1e-6]
+            cheeks = []
+            for k in range(2):
+                P, Q, info = _bk.plate_grid(pl, np.array(ring_w), size)
+                Xk = _bk.to_xyz(pl, k, P)
+                base = info["base"]
+                dist, near = tree.query(Xk[base])
+                if len(base) < 2 or float(np.max(dist)) > 1e-3:
+                    raise DesignError(f"bracket {pl.id!r}: its base nodes do not fall on the wall's grid, so it would "
+                                      f"not be welded on; report the design")
+                idmap = np.empty(len(Xk), int)
+                idmap[base] = near
+                rest = np.setdiff1d(np.arange(len(Xk)), base)
+                idmap[rest] = len(nodes) + np.arange(len(rest))
+                nodes = np.vstack([nodes, Xk[rest]])
+                bk_el.append(idmap[Q])
+                cheeks.append((pl, k, idmap, info, len(Q)))
+            bk_info.append(cheeks)
+
     # ---- element member, stations
-    elements = np.vstack(elements_per_run + gus_el)
+    elements = np.vstack(elements_per_run + gus_el + bk_el)
     centres = nodes[elements].mean(axis=1)
     element_member: list[str] = []
     run_first = []
@@ -1079,6 +1146,23 @@ def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_str
         element_member.extend(r.members[i] for i in k)
     for g, q in zip(gussets, gus_el):
         element_member.extend([g.id] * len(q))
+    brackets_out = []
+    for cheeks in bk_info:
+        pl = cheeks[0][0]
+        br = _bk.MountBracket(pl.id, pl.support, pl.mount, pl.member, pl.t, pl.weld_leg, pl.u, pl.e_w, pl.e_h, pl.b,
+                              pl.e, float(pl.span[1] - pl.span[0]))
+        for _, k, idmap, info, nq in cheeks:
+            first = len(element_member)
+            element_member.extend([pl.id] * nq)
+            br.elements.append(first + np.arange(nq))
+            br.hole_nodes.append(idmap[info["hole"]])
+            br.hole_angles.append(np.asarray(info["hole_angles"], float))
+            br.base_nodes.append(idmap[info["base"]])
+            br.base_w.append(np.asarray(info["base_w"], float))
+            br.base_elements.append(first + info["base_quads"])
+            br.hole_elements.append(first + info["hole_quads"])
+            br.hole_centres.append(_bk.to_xyz(pl, k, np.array([pl.hole]))[0])
+        brackets_out.append(br)
     st_s = np.empty(len(elements))
     st_yz = np.empty((len(elements), 2))
     for mid, m in mem.items():
@@ -1091,6 +1175,12 @@ def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_str
         rel = centres[sel] - g.O
         st_s[sel] = rel @ g.u_s
         st_yz[sel] = np.stack([rel @ g.u_in, rel @ g.normal], axis=1)
+    for br in brackets_out:  # along the base line from the plate's edge, up from the wall, along the pin
+        pl = next(p for p in bplans if p.id == br.id)
+        sel = np.concatenate(br.elements)
+        rel = centres[sel] - pl.origin
+        st_s[sel] = rel @ pl.e_w
+        st_yz[sel] = np.stack([rel @ pl.e_h, rel @ pl.u], axis=1)
 
     # ---- rings, joints, links
     run_of = {mid: r for r in runs for mid in r.members}
@@ -1221,19 +1311,31 @@ def _build_mesh(design: dict, element_size_mm: float = ELEMENT_SIZE_MM, weld_str
         notes.append(f"Weld strips: grid lines at t and 2t (t the wall the strip lies on) from the {len(weld_lines)} weld "
                      f"line segments of the shared joints, on the wall the branch meets and on the branch's walls, for "
                      f"the structural hot-spot stress; gusset legs graded to match.")
+    if bplans:
+        notes.append(f"Suspension mount brackets (parts of kind bracket with joint, {len(bplans)}): two plates each "
+                     f"(the clevis cheeks, plate_t_mm thick, normal to the pin), standing on the tube wall, their base "
+                     f"nodes shared with the wall where the base lies on it (welded), a pin hole of d + 2 mm in an "
+                     f"O-grid; material of the tube they stand on.")
+    if bskipped:
+        notes.append("Brackets not meshed (their force on the joint nodes of their carried_by nodes): "
+                     + "; ".join(f"{k} ({v})" for k, v in sorted(bskipped.items())) + ".")
 
     return ShellMesh(
         nodes=nodes, elements=elements, element_member=element_member,
-        member_thickness_mm={**{mid: m.t for mid, m in mem.items()}, **{g.id: g.t for g in gussets}},
+        member_thickness_mm={**{mid: m.t for mid, m in mem.items()}, **{g.id: g.t for g in gussets},
+                             **{p.id: p.t for p in bplans}},
         element_size_mm=size,
         station_s_mm=st_s, station_yz_mm=st_yz, end_rings=end_rings,
         joints={k: np.array(sorted(v)) for k, v in joint_nodes.items()}, joint_kinds=joint_kinds,
         links=links, notes=notes, shared_rings=dict(shared_rings),
         member_axes={**{mid: np.stack([m.d, m.ey, m.ez]) for mid, m in mem.items()},
-                     **{g.id: np.stack([g.u_s, g.u_in, g.normal]) for g in gussets}},
+                     **{g.id: np.stack([g.u_s, g.u_in, g.normal]) for g in gussets},
+                     **{p.id: np.stack([p.e_w, p.e_h, p.u]) for p in bplans}},
         mounts=mounts, mount_elements=mount_elements, mount_half_mm=mount_half, part_material=part_material,
         through_joints=sorted({j.node for j in joints if j.through and j.kind != "tied"}),
         weld_strips=bool(weld_strips), weld_lines=weld_lines,
+        brackets=brackets_out, bracket_skipped=dict(sorted(bskipped.items())),
+        bracket_material={p.id: p.member for p in bplans},
     )
 
 
