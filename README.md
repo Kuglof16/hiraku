@@ -170,7 +170,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 .venv\Scripts\python -m unittest
 ```
 
-全部で 1,900 本ほどあります。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照合・重い試験)。
+`tests/` の下の `def test_` は 248 ファイルに 2,882 行あります (2026-11-06 の grep の数。回った数ではありません)。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照合・重い試験)。
 
 板とソリッドの大きなモデルを速く解く道 (任意。Windows と Linux だけ。無ければ SciPy の SuperLU で解く):
 
@@ -187,9 +187,9 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 ## いま動くもの
 
-- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 10 の試験 (段差越え P1・強度 R1・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「手計算で予測 → 解析 → 照合」で回す流れ。基準のある試験は合否まで出す (P1 は基準が無く照合まで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で合否を出す
-- 設計役が設計の変数を変えて次の版を作る (`revise_design`)。デモの車両では、版 1 と 2 で組み立ての試験が赤、版 3 で P3 が赤になり、版 4 で全部緑になる (数は統括部が提出前に確かめる)
-- 解析のツール 25 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。`hiraku.solvers.builtin_tools()` の数で、棚の 17 と K2 の 8)。どれも答えの分かっている例と照合してから使う。手計算の式 61 個 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は 9 つのツール (frame_static・frame_shell・step_climb・drive_energy・thermal・crash・modal・fatigue・assembly) に `params.sensitivity` で付く。感度の試験があるのは frame_static だけ
+- デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 11 の試験 (段差越え P1・強度 R1・レールの継ぎ目の局所の応力 R1s・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「手計算で予測 → 解析 → 判定」で回す流れ。基準のある試験は OK か NG かまで出す (P1 は基準が無く、予測との照らし合わせまで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で OK か NG かを出す
+- 設計役が設計の変数を変えて次の版を作る (`revise_design`)。版ごとに何が赤で、次の版で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
+- 解析のツール 26 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 17 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 9 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`))。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照合は無い)。感度 (K5) は 9 つのツール (frame_static・frame_shell・step_climb・drive_energy・thermal・crash・modal・fatigue・assembly) に `params.sensitivity` で付く。感度の試験があるのは frame_static だけ
 - 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
 - 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
 - 画面から実行を始める口。一覧「HIRAKU でできること」の行ごとに、走らせ方を選ぶ: 「見る」(記録を再生する。無料)、「再現する」(決まった手順の運転。無料、Claude を呼ばない)、「実行する」(Claude で新しく実行する。Anthropic の API キーが要り、行ごとの費用の上限で止まる)。「試す」は、その依頼の文を入れた依頼の画面を開く。「自分で頼む」で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。「実行する」は、HIRAKU を起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
@@ -233,7 +233,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 ### hooks
 
-hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK_RULES`、`docs/contract.md`)。中身は `hiraku/tools/rules.py`、SDK への組み込みは `hiraku/agent/hooks.py`、Claude Code のプラグインでのつなぎは [plugins/hiraku/hooks/hooks.json](plugins/hiraku/hooks/hooks.json)。
+hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK_RULES`、`docs/contract.md`)。中身は `hiraku/tools/rules.py`、SDK への組み込みは `hiraku/agent/hooks.py`、Claude Code のプラグインでのつなぎは [plugins/hiraku/hooks/hooks.json](plugins/hiraku/hooks/hooks.json)。
 
 なぜ要ったか:
 - 予測を解析のあとに書けば、結果に合わせた予測になる。手計算で先に予測し、それと照らし合わせるのが確かめの芯なので、順番をプロンプトに頼まずに止める (HK1)。
@@ -247,6 +247,7 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
 | HK3 | PreToolUse | 原因の書かれていない食い違いがある分野では、`analyze` と `compare` を止める (`rules.py` の `_h3`) |
 | HK4 | Stop / SubagentStop | 選んだ分野に判定の無いものが残っている間は、終わらせない。止めた回数には上限がある (まとめ役 3 回、役ごとに 2 回。`hooks.py` の `MAX_STOP_BLOCKS`・`MAX_SUBAGENT_STOP_BLOCKS`) |
 | HK5 | PreToolUse | 軽い計算から確かめる。その版で、低い段 (0 レイアウトと規則・1 軽い計算・2 車の動き・3 重い有限要素) のツールで確かめる荷重条件に赤か未判定が残る間は、高い段の `analyze` を止める。直す回数を使い切ったときは、高い段を回さずに終わる |
+| HK6 | PreToolUse | 設計がモジュールに分かれているとき、`revise_design` は module を付けて、そのモジュールの設計役だけが、自分のモジュールの中だけを変える提案として出す。レイアウトの変数・空間・取付点を変えるのはパッケージ役の `build_version` だけ (`rules.py` の HK6) |
 
 - 止めたときは `hook.denied` か `hook.blocked_stop` の event を出す。理由の文には「足りないもの」と「次に呼ぶもの」を書き、それが Claude に返る (`hooks.py`、`rules.py` の冒頭)。
 - ツールの関数も、同じ確かめをもう一度する。だから hook を通らずに呼んでも、規則は抜けない (`rules.py` の冒頭、`hiraku/tools/functions.py` の `_gate`)。
@@ -353,17 +354,17 @@ hooks の規則は HK1〜HK5 の 5 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `tests/` の下の試験の関数 (`def test_`) は、149 ファイルに 1,909 個ある (全部の部署を合わせた試しの取り込み fdc7948 の時点。文字列の中にある 1 つ、`tests/verification/test_run_tests.py` が一時の試験を書くための見本は数えない)。
+  - `tests/` の下の `def test_` は、248 ファイルに 2,882 行ある (2026-11-06 の grep の数。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
 ### Codex について
 
 - `git log --all --grep="Drafted with Codex"` に当たるコミットは 0 件。
-- `codex` という字を含むコミット (大文字小文字を区別しない) は 1 件ある。35975dd「first_look: cuts and screens seen as a first-time viewer, judged by an image model」。
+- `codex` という字を含むコミット (大文字小文字を区別しない) は 2 件ある。35975dd「first_look: cuts and screens seen as a first-time viewer, judged by an image model」と c22c311「first_look: say plainly when the Codex CLI is not installed」。
   - 中身は `qa/first_look.py`。画面と動画の静止画を、見る人の目で Codex CLI に評価させる品質保証部のツール。
   - このコミットにも `Co-Authored-By: Claude` の行がある。
-- 全部の branch のコミット 680 件のうち、487 件に `Co-Authored-By: Claude` の行がある (`git log --all --grep="Co-Authored-By: Claude"`)。
+- 全部の branch のコミット 2,177 件のうち、1,652 件に `Co-Authored-By: Claude` の行がある (2026-11-06。`git rev-list --branches --remotes --count`、同じく `--grep="Co-Authored-By: Claude"` を付けて)。
 
 ## 期間中に作ったもの
 
