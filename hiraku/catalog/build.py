@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import sys
 from typing import Any, Callable
 
 from hiraku.catalog.loader import Catalog
@@ -242,23 +243,27 @@ def _r1_joint(spec: Record, req: Record, design: Record) -> Record:
 Builder = Callable[[Record, Record, Record], Record]
 
 # Builders named by `build:` in data/catalog/tests.yaml (this module's own).
+def _builders_modules() -> Any:
+    """hiraku/catalog/builders/modules.py (it imports nothing of HIRAKU), loaded from its file under a name of
+    its own: importing it as hiraku.catalog.builders.modules would run the builders package's __init__ (the
+    formulas, sympy and numpy), which this module's importers (the plugin's hook command, twice per tool call)
+    would pay for on every start; and it must not depend on what sys.modules holds as hiraku.catalog.builders
+    (tests put a stand-in there)."""
+    import importlib.util
+    from pathlib import Path
+
+    name = "hiraku.catalog._builders_modules"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).parent / "builders" / "modules.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
 def _with_modules(build: Builder) -> Builder:
-    """load_case.modules on designs split into modules, as the builders package sets it (builders.modules).
-    builders.modules is imported on the first build, not here: importing it runs the builders package's
-    __init__ (the formulas, sympy and numpy), which this module's importers (the plugin's hook command
-    among them) would otherwise pay for on every start."""
-    wrapped_once: list[Builder] = []
-
-    def wrapped(spec: Record, req: Record, design: Record) -> Record:
-        if not wrapped_once:
-            from hiraku.catalog.builders.modules import with_modules
-
-            wrapped_once.append(with_modules(build))
-        return wrapped_once[0](spec, req, design)
-
-    wrapped.__name__ = getattr(build, "__name__", "build")
-    wrapped.general = getattr(build, "general", build)  # type: ignore[attr-defined]
-    return wrapped
+    # load_case.modules on designs split into modules, as the builders package sets it (builders.modules)
+    return _builders_modules().with_modules(build)
 
 
 BUILDERS: dict[str, Builder] = {
