@@ -744,7 +744,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      },
      {
       "rule_id": "WD-05",
@@ -759,7 +760,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      }
     ]
    }
@@ -20019,7 +20021,8 @@ export const DEMOS = {
        "butt_end_partial_weld": 0.0
       }
      }
-    ]
+    ],
+    "level": "advice"
    }
   },
   {
@@ -20615,7 +20618,8 @@ export const DEMOS = {
        "butt_end_ungusseted": 2.0
       }
      }
-    ]
+    ],
+    "level": "advice"
    }
   },
   {
@@ -25291,7 +25295,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      },
      {
       "rule_id": "WD-05",
@@ -25306,7 +25311,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      }
     ]
    }
@@ -26938,7 +26944,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      },
      {
       "rule_id": "WD-05",
@@ -26953,7 +26960,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      }
     ]
    }
@@ -28238,7 +28246,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      },
      {
       "rule_id": "WD-05",
@@ -28253,7 +28262,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      }
     ]
    }
@@ -30635,7 +30645,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      },
      {
       "rule_id": "WD-05",
@@ -30650,7 +30661,8 @@ export const DEMOS = {
        "kinds": [
         "frame"
        ]
-      }
+      },
+      "level": "advice"
      }
     ]
    }
@@ -49661,7 +49673,8 @@ export const DEMOS = {
        "butt_end_partial_weld": 0.0
       }
      }
-    ]
+    ],
+    "level": "advice"
    }
   },
   {
@@ -50257,7 +50270,8 @@ export const DEMOS = {
        "butt_end_ungusseted": 2.0
       }
      }
-    ]
+    ],
+    "level": "advice"
    }
   },
   {

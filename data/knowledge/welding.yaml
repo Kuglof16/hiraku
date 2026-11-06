@@ -48,6 +48,7 @@ rules:
       "but:" are not checked. The limit was 35 for every tube before 2026-11-03; 35 is the rectangular one
       (WD-01)
   - id: WD-04
+    level: advice
     text: 角形鋼管を突き当てる T・L の継ぎ手は、全周を溶接する
     kinds: [frame]
     check: butt_end_partial_weld <= 0
@@ -58,6 +59,7 @@ rules:
       all round means the weld closes the whole perimeter of the cut end. The design says it with the node's
       weld_extent (all_round or partial); a node without it makes the rule not evaluable, it does not pass
   - id: WD-05
+    level: advice
     text: 力がかかる角形鋼管の T・L の継ぎ手には、ガセットを付ける
     kinds: [frame]
     check: butt_end_ungusseted <= 0

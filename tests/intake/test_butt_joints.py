@@ -1,6 +1,7 @@
 import unittest
 
-from hiraku.intake import facts, knowledge, rulecheck
+from hiraku import contract
+from hiraku.intake import IntakeError, facts, knowledge, rulecheck
 
 SECTIONS = {"rt": {"shape": "rect_tube", "dims_mm": {"b": 40, "h": 80, "t": 2.3}}, "rd": {"shape": "round_tube", "dims_mm": {"d": 40, "t": 2.3}}}
 
@@ -74,6 +75,42 @@ class ButtJointRulesTest(unittest.TestCase):
             basis = self.rule(rid)["basis"]
             self.assertIn("practical experience", basis)  # the basis the author asked for
             self.assertEqual(self.rule(rid)["trust"], 3)
+
+
+class AdviceLevelTest(unittest.TestCase):
+    """WD-04 and WD-05 are advice (docs/contract.md 規則の強さ): recorded and shown, never a failure, never asked."""
+
+    def setUp(self):
+        self.rules = knowledge.all_rules(knowledge.load_builtin())
+        self.checks = rulecheck.check_all([r for r in self.rules if r["rule_id"] in ("WD-04", "WD-05")], design(), None)
+
+    def test_the_two_rules_are_advice_and_the_records_say_so(self):
+        for rid in ("WD-04", "WD-05"):
+            self.assertEqual(next(r for r in self.rules if r["rule_id"] == rid)["level"], "advice")
+        self.assertEqual([c["level"] for c in self.checks], ["advice", "advice"])
+        self.assertEqual(contract.errors("rule_check", self.checks[1]), [])
+
+    def test_other_rules_have_no_level(self):
+        self.assertTrue(all("level" not in r for r in self.rules if r["rule_id"] not in ("WD-04", "WD-05")))
+
+    def test_advice_hits_do_not_count_as_hits_or_as_gaps(self):
+        s = rulecheck.summarize(self.checks)
+        self.assertEqual((s["hits"], s["hit_rules"], s["not_evaluable_rules"], s["passed_rules"]), (0, 0, 0, 0))
+        self.assertEqual((s["advice_hits"], s["advice_rules"]), (1, 1))  # WD-05 hit the cross member
+        line = rulecheck.summary_line(self.checks, self.rules)
+        self.assertIn("助言 1 件", line)
+        self.assertNotIn("当たった部品", line)
+
+    def test_the_agent_is_told_about_advice_apart_from_hits(self):
+        from hiraku.intake.tools import _rule_questions
+        from tests.intake.test_tools import make_ctx
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = make_ctx(Path(tmp))
+            with self.assertRaises(IntakeError):
+                _rule_questions(ctx, [{"rule_id": "WD-05", "parts": ["cross"], "text": "ガセットが無い"}])
 
 
 if __name__ == "__main__":
