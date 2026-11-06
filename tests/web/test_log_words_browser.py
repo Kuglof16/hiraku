@@ -1,7 +1,7 @@
 """The log's words for a tool and a load case: a tool by labels.js's name, else its title in the
 record (tool.checked, up to the bracket), else its name; a load case by its title in the record.
 A hearing whose asked questions got neither an answer nor a default says how many, and what
-that is (答えが無いまま).
+that is (答えも標準の値も無い n つは、要件に入っていません).
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -112,9 +112,11 @@ class LogWordsBrowserTest(unittest.TestCase):
 
     def test_the_hearing_says_what_no_answer_is(self):
         got = self.lines(with_check_and_hearing())
-        answered = [x for x in got["lines"] if "答えがそろった" in x]
+        answered = [x for x in got["lines"] if "標準の値で進めました" in x or "答えてもらいました" in x]
         self.assertEqual(len(answered), 1, got["lines"])
-        self.assertIn("答えが無いまま 1 個 (聞いたが、答えも既定値も無いので要件に入っていない)", answered[0])
+        # the intake's plain line (hiraku/intake/hearing.py hearing_text): the one left is said, and the design does not start yet
+        self.assertIn("答えも標準の値も無い 1 つは、要件に入っていません", answered[0])
+        self.assertNotIn("設計を始めます", answered[0])
 
 
     def caption(self, pred_change):

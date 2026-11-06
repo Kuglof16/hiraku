@@ -1092,6 +1092,9 @@ body.present .stage { grid-template-rows: 64px minmax(0, 1fr) var(--band); }
 body.present .tabsrow, body.present .statusrow, body.present .pills { display: none; }
 body.present .main { grid-template-columns: minmax(0, 1fr); padding: 14px 452px 14px 24px; }
 body.present .col-left, body.present .col-right { display: none; }
+/* the video's A1 and A2 (the intake screens) are filmed without the rail's card ("いま:"): they use the whole width */
+body.video.present[data-intake-tab="A1"] .present-rail, body.video.present[data-intake-tab="A2"] .present-rail { display: none; }
+body.video.present[data-intake-tab="A1"] .main, body.video.present[data-intake-tab="A2"] .main { padding-right: 24px; }
 body.present .tests, body.present .toggles, body.present .hint, body.present .bubble,
 body.present .running, body.present .limitnote, body.present .animbar, body.present .now { display: none; }
 /* only the main labels in the 3D (the largest value, the picked wheel's force) */

@@ -217,8 +217,9 @@ PRESENT_PROBE = """() => {
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class TabPlanPresentBrowserTest(_RunPage):
     """?present=1&video=1&tabs=A1:0,A2:40,bench:55 (how the films are shot): the tab of the replay's
-    time, the present mode kept (the intake screens shown as they are, left of the card), the bottom
-    170 px empty, and the same picture twice at the same t."""
+    time, the present mode kept (the intake screens shown as they are; with video=1 A1 and A2 have no
+    「いま:」 card and use the width, the workbench keeps its card), the bottom 170 px empty, and the
+    same picture twice at the same t."""
 
     QUERY = f"present=1&video=1&tabs=A1:0,A2:{ASKED_AT},bench:55"
 
@@ -229,9 +230,13 @@ class TabPlanPresentBrowserTest(_RunPage):
         self.assertEqual(got["view"], "view-bench" if tab == "bench" else "view-intake", t)
         if tab != "bench":
             self.assertEqual(got["screen"], tab, t)
-        self.assertIsNotNone(got["card"], t)
         v, r = got["viewRect"], got["rail"]
-        self.assertLessEqual(v["x"] + v["w"], r["x"], t)  # the view lies left of the card's rail
+        if tab == "bench":
+            self.assertIsNotNone(got["card"], t)
+            self.assertLessEqual(v["x"] + v["w"], r["x"], t)  # the view lies left of the card's rail
+        else:
+            # (video=1: the intake screens are filmed without the 「いま:」 card, intake_pets.js)
+            self.assertIsNone(got["card"], t)
         self.assertLessEqual(got["main"]["y"] + got["main"]["h"], STAGE["height"] - 170, t)  # the subtitles' band
         self.assertLessEqual(v["y"] + v["h"], STAGE["height"] - 170, t)
 

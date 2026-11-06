@@ -38,6 +38,7 @@ import { FIELD_JA, FIELD_ORDER, atFrame, contourOf, convergenceLine, fieldsOf, f
 import { motionOf, motionSpan, nearestAt, wheelName, xSeriesOf } from "./series.js";
 import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMotionTau } from "./node_motion.js";
 import { mountIntake } from "./intake/index.js";
+import { REPLY_STEP_S } from "./intake/a1.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
@@ -48,6 +49,7 @@ import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1 and A2
 import { reportNextHtml } from "./report_next.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, referenceResults } from "./judged.js";
@@ -186,6 +188,7 @@ window.addEventListener("resize", fitStage);
 // ---- the agents' pets (js/agent_pets.js) ------------------------------------
 // promo/pets/pet3d.js and layout.json's n00 camera; ?pets=0, or either missing: circles and names.
 let agentPets = null;
+let intakePets = null; // js/intake_pets.js, made on the first intake frame once the pets are loaded
 const petsReady = (params.get("pets") === "0" ? Promise.resolve(null) : AgentPets.load().catch(() => null)).then((p) => {
   agentPets = p;
   document.documentElement.dataset.agentPets = p ? "on" : "none";
@@ -724,7 +727,7 @@ function intakeGlowPlace(t) {
   let ahead = 0;
   for (const at of intake?.model?.litAt?.values?.() ?? []) {
     if (t < at) ahead += 1;
-    else if (t - at <= INTAKE_GLOW_NEAR) return "n";
+    else if (t - at <= INTAKE_GLOW_NEAR + REPLY_STEP_S * DOMAINS.length) return "n"; // (A1's cards answer REPLY_STEP_S apart from it)
   }
   return ahead;
 }
@@ -1814,6 +1817,7 @@ function draw() {
     $("view-bench").hidden = view !== "bench";
     $("view-grid").hidden = view !== "grid";
     $("view-intake").hidden = !intakeTab;
+    document.body.dataset.intakeTab = intakeTab ? tab : ""; // css: no present card over A1 / A2 in the video
     $("view-shelf").hidden = tab !== "A4";
     $("view-asm").hidden = tab !== "A7";
     $("main").classList.toggle("wide", view === "grid" || tab === "A4" || tab === "A7" || intakeTab); // A6, A4, A7 and the intake screens use the whole width
@@ -1895,6 +1899,7 @@ function draw() {
   if (agentPets && (view === "bench" || view === "grid")) agentPets.tick(s, player.events, player.playhead, view, ui.frozen ? Infinity : PET_PAINTS);
   else if (tab === "A7") (asmPanel ??= window.hiraku.asm = new AssemblyPanel($("view-asm"))).render(s, asmClock());
   if (INTAKE_TABS.includes(tab)) syncIntakeTime();
+  if (agentPets && intake && INTAKE_TABS.includes(tab)) (intakePets ??= new IntakePets(agentPets)).tick(intake, player.events, player.playhead, ui.frozen ? Infinity : PET_PAINTS);
   drawRulePeek(s, INTAKE_TABS.includes(tab));
 }
 
