@@ -119,6 +119,8 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "revise_design": contract_input_schema("revise_design"),
     "build_version": contract_input_schema("build_version"),
     "propose_design": contract_input_schema("propose_design"),
+    "write_design": contract_input_schema("write_design"),
+    "check_design": contract_input_schema("check_design"),
     "make_tool": contract_input_schema("make_tool"),
     "check_tool": check_tool_input_schema(),
     "write_report": contract_input_schema("write_report"),
@@ -200,6 +202,19 @@ DESCRIPTIONS = {
         "最初の版を作る。座標はツールが出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
         "版 1 ができると試験の荷重条件と担当の役が決まる"
     ),
+    "write_design": (
+        "設計役だけが使う。合う型が無い製品や、型では作れない形のときに、設計そのもの (nodes・members・sections・"
+        "materials・parts・supports、variables は無ければ {}) を書いて版にする。1 回目は版 1、2 回目からは次の版 "
+        "(回数は round_limit まで、新しい版では全部の荷重条件をやり直す)。design_version・parent_version・change_reason は"
+        "ツールが付ける。型を下書きに使ったら based_on にその型を書く。ツールが check_design で確かめ、通らない設計は"
+        "問題を全部挙げて断る。モジュールに分かれた設計では使わない"
+    ),
+    "check_design": (
+        "書いた設計を、版にせずに確かめる。契約の形、参照 (部材の節点・断面・材料、部品の carried_by・connects_to、支えの "
+        "frame_node)、全部の部材と部品を載せる節点が支えまでつながるか、長さが mm として変でないか、干渉 (K4) の数、"
+        "部品の質量の和と要件 Q40 (積載) との比べ。数はコードが出す。ok が false なら problems を直す。design を付けなければ"
+        "今の版"
+    ),
     "write_report": (
         "まとめ役が最後に 1 回呼ぶ。summary (分野ごとの結果を記録の ID と一緒に) と next (次に変えるなら: 分野・変更・理由) "
         "だけを書く。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値はツールが記録から入れる。"
@@ -250,7 +265,7 @@ def for_agent(name: str, result: Any) -> Any:
 # Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
-ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_report")
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_design", "write_report")
 NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
              "見つかりません)。同じ入力でもう一度呼んでください")
 

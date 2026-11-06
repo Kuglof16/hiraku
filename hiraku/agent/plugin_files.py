@@ -21,8 +21,8 @@ from pathlib import Path
 from hiraku import contract
 from hiraku.agent import prompts
 from hiraku.agent.roles import (CAE_EFFORT, CAE_TOOLS, DESIGNER_EFFORT, DESIGNER_TOOLS, MODULE_DESIGNER_TOOLS,
-                                MODULE_PACKAGER_TOOLS, PLUGIN_DIR, PLUGIN_NAME, module_designer_skills, plugin_skills,
-                                sdk_name)
+                                MODULE_PACKAGER_TOOLS, PLUGIN_DIR, PLUGIN_NAME, designer_skills, module_designer_skills,
+                                plugin_skills, sdk_name)
 
 GENERATED = "<!-- written by python -m hiraku.agent.plugin_files from hiraku/agent/prompts.py; do not edit -->"
 
@@ -58,7 +58,7 @@ def agent_files() -> dict[str, str]:
     a designer per module (designer-<module>; HK6 lets only designer.<module> propose on a design with modules), and
     the packager with build_version and its rules for modules (they say they hold for a design with modules)."""
     out = {"agents/designer.md": _agent("designer", prompts.DESIGNER_DESCRIPTION, prompts.DESIGNER_PROMPT,
-                                        DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False),
+                                        DESIGNER_TOOLS, DESIGNER_EFFORT, skills=False, skill_names=designer_skills()),
            "agents/packager.md": _agent("packager", prompts.cae_description("assembly", modules=True),
                                         prompts.cae_prompt("assembly", modules=True), MODULE_PACKAGER_TOOLS,
                                         CAE_EFFORT, skills=True)}
