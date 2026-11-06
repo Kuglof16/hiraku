@@ -672,7 +672,7 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 .pb-marks .m-ng { top: 10px; height: 8px; background: var(--red); }
 .pb-marks .m-cause { top: 5px; height: 5px; background: #8e6bbf; }
 .pb-marks .m-v { top: 0; height: 29px; width: 1.5px; background: var(--ink); }
-.pb-marks .m-v b { position: absolute; left: 3px; top: -2px; font-size: 10px; line-height: 1; font-weight: 700; font-style: normal; color: var(--ink); }
+.pb-marks .m-vl { position: absolute; top: 0; font-size: 10px; line-height: 1; font-weight: 700; color: var(--ink); white-space: nowrap; }
 .pb-times { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; min-width: 110px; }
 .pb-time { font-size: 16px; font-variant-numeric: tabular-nums; text-align: right; }
 .pb-rec { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }

@@ -158,7 +158,7 @@ class EventPlayBrowserTest(unittest.TestCase):
         page, errors = self.open()
         page.wait_for_function("document.querySelectorAll('#pb-marks i').length > 0")
         got = page.evaluate("""() => { const n = {}; for (const i of document.querySelectorAll('#pb-marks i')) n[i.className] = (n[i.className] ?? 0) + 1;
-          return { n, v: [...document.querySelectorAll('#pb-marks .m-v b')].map((b) => b.textContent) }; }""")
+          return { n, v: [...document.querySelectorAll('#pb-marks .m-vl')].map((b) => b.textContent) }; }""")
         self.assertEqual(got["n"], {"m-v": 2, "m-ana": 2, "m-cmp": 1, "m-mis": 1, "m-ok": 1, "m-ng": 1, "m-cause": 1})
         self.assertEqual(got["v"], ["v1", "v2"])
         self.assertEqual(errors, [])

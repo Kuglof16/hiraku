@@ -1872,8 +1872,13 @@ function renderPlaybar(span = null) {
       if (!inBar(e)) continue;
       const kind = markKind(e);
       if (!kind) continue;
-      const label = kind === "v" ? `<b>${esc(verLabel(e.data?.design_version ?? ""))}</b>` : "";
-      marks.push(`<i class="m-${kind}" style="${pos(e)}" title="${esc(MARK_JA[kind])}">${label}</i>`);
+      marks.push(`<i class="m-${kind}" style="${pos(e)}" title="${esc(MARK_JA[kind])}"></i>`);
+      if (kind === "v") {
+        // the version's name beside its mark (its own box: right of the mark, left of it near the end)
+        const f = (e.t - lo) / dur;
+        const at = f > 0.9 ? `right:calc(${((1 - f) * 100).toFixed(3)}% + 3px)` : `left:calc(${(f * 100).toFixed(3)}% + 3px)`;
+        marks.push(`<b class="m-vl" style="${at}">${esc(verLabel(e.data?.design_version ?? ""))}</b>`);
+      }
     }
     $("pb-marks").innerHTML = marks.join("");
     $("pb-ticks").innerHTML = player.events
