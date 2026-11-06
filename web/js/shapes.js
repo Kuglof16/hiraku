@@ -336,6 +336,69 @@ export function occupantSegmentPieces(part) {
   return [{ geo: g, sub: null }];
 }
 
+// The real look's occupant drawn as a crash test dummy: each segment's box holds the segment's
+// shape and its joints, so the head, the neck, the chest and the pelvis, the upper arms,
+// forearms, hands, thighs, shanks and feet read apart and the joints between them show.
+// Pieces in the part's local frame (as occupantSegmentPieces), sub null for the segment's own
+// colour, "joint" for a joint (dark), "pelvis" for the lower torso:
+// - a limb (arm, forearm, thigh, shank: a round section, as occupantSegmentPieces' capsule):
+//   a ball of the section's radius at each end of the box's longest side (the shoulder, elbow,
+//   wrist, hip, knee, ankle) and a slimmer cylinder between them;
+// - the neck: its rounded box as a joint;
+// - the torso (a person with a head part): along its longest side, the chest at the top, a
+//   narrower waist band (a joint), the pelvis below;
+// - the head, a hand, a foot: their shapes of occupantSegmentPieces.
+// Every piece stays inside the box; the shares are values for the picture (DUMMY), not from the
+// design. The torso's top is taken to be the end of its longest side towards +z of the box.
+export const DUMMY = { limb: 0.82, chest: 0.5, waist: 0.12, waistInset: 0.8 };
+const LIMB = /^(arm|forearm|thigh|shank|leg)(_|$)/;
+export function occupantDummyPieces(part, torso = false) {
+  const size = part.box.size_mm.map(Number);
+  const seg = segmentOf(part);
+  const axis = size.indexOf(Math.max(...size));
+  const along = (v) => [0, 1, 2].map((i) => (i === axis ? v : 0));
+  // a cylinder / a capsule's axis (local y) turned onto the box's longest side
+  const turn = (g) => (axis === 0 ? g.rotateZ(-Math.PI / 2) : axis === 2 ? g.rotateX(Math.PI / 2) : g);
+  const rounded = (sz, sub, at = [0, 0, 0]) => {
+    const r = Math.min(OCCUPANT_ROUND_SHARE * Math.min(...sz), Math.min(...sz) / 2 - 1e-3);
+    const g = new RoundedBoxGeometry(sz[0], sz[1], sz[2], 3, r).translate(...at);
+    g.userData.occupant = sub === "joint" ? "joint" : "rounded_box";
+    return { geo: g, sub };
+  };
+  if (seg === null && torso) {
+    // the box's longest side split: chest (top), waist (a joint, narrower), pelvis (bottom)
+    const L = size[axis];
+    // a slice share of L long, from (mm) below the top end, the other sides times inset
+    const part3 = (share, from, inset, sub) => {
+      const sz = size.map((s, i) => (i === axis ? L * share : s * inset));
+      return rounded(sz, sub, along(L / 2 - from - (L * share) / 2));
+    };
+    const chest = part3(DUMMY.chest, 0, 1, null);
+    const waist = part3(DUMMY.waist, L * DUMMY.chest, DUMMY.waistInset, "joint");
+    const pelvis = part3(1 - DUMMY.chest - DUMMY.waist, L * (DUMMY.chest + DUMMY.waist), 1, "pelvis");
+    return [chest, waist, pelvis];
+  }
+  if (seg === "neck") return [rounded(size, "joint")];
+  const [a, b] = size.filter((_, i) => i !== axis);
+  if (seg && LIMB.test(seg) && Math.min(a, b) / Math.max(a, b) >= OCCUPANT_ROUND_SECTION) {
+    const r = Math.min(a, b) / 2;
+    const half = size[axis] / 2 - r; // the balls' centres, r in from each end
+    const out = [];
+    if (half > 0) {
+      const g = turn(new THREE.CylinderGeometry(r * DUMMY.limb, r * DUMMY.limb, 2 * half, 18, 1));
+      g.userData.occupant = "limb";
+      out.push({ geo: g, sub: null });
+    }
+    for (const s of half > 0 ? [-1, 1] : [0]) {
+      const g = new THREE.SphereGeometry(r, 16, 12).translate(...along(s * Math.max(0, half)));
+      g.userData.occupant = "joint";
+      out.push({ geo: g, sub: "joint" });
+    }
+    return out;
+  }
+  return occupantSegmentPieces(part);
+}
+
 // The pieces of one part (or wheel) that take the same material (sub) as one geometry each:
 // one draw call per material instead of one per piece (a view through a shared renderer is
 // drawn many times a frame). The pieces' geometries are used up (disposed).

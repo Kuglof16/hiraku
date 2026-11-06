@@ -41,12 +41,12 @@ import { overOf } from "./fields.js";
 import { maxTagClass } from "./judged.js"; // the largest-value tag's colour (one rule)
 import { FIX_R_COLOR, FIX_T_COLOR, FREE_EDGE_COLOR, LOAD_COLOR } from "./quality.js";
 import { esc, fmt, fmtVU, vectorName } from "./labels.js";
-import { CONTOUR_FADE, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
+import { CONTOUR_FADE, DUMMY_JOINT, GROUND_MM, Look, cutLookOf, occupantSub } from "./look.js";
 import { RealPost, sharedPost, skipsDepth } from "./realpost.js";
 import { SceneProps, liftIsLimit, sceneOf } from "./scene.js";
 import { edgePairs, outerFaces } from "./meshkind.js";
 import { ANGLE, lerpAt, wheelName } from "./series.js";
-import { mergePieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
+import { mergePieces, occupantDummyPieces, occupantSegmentPieces, partPieces, personOf, segmentOf, wheelPieces } from "./shapes.js";
 import { JointMarks } from "./joints.js"; // joints: the joint marks (toggle 接合)
 import { frameEnds, tubeGeometry, tubeSection } from "./tubes.js"; // the frame's hollow tubes
 
@@ -647,10 +647,14 @@ export class Workbench3D {
         holder.position.copy(c);
         const rpy = p.box.rpy_deg ?? [0, 0, 0];
         holder.rotation.set((rpy[0] * Math.PI) / 180, (rpy[1] * Math.PI) / 180, (rpy[2] * Math.PI) / 180, "ZYX");
-        // dressed by its segment in the real look (look.js occupantSub); one colour in the diagram
+        // dressed by its segment in the real look (look.js occupantSub); one colour in the diagram.
+        // The real look draws a crash test dummy (shapes.js occupantDummyPieces): its joints dark
+        // (look.js DUMMY_JOINT), the pelvis in the legs' colour
         const mat = this.look.partMaterial("occupant", this.look.real ? occupantSub(segmentOf(p)) : null);
-        for (const pc of occupantSegmentPieces(p)) {
-          const mesh = new THREE.Mesh(pc.geo, mat);
+        const pieces = this.look.real ? occupantDummyPieces(p, segmentOf(p) === null) : occupantSegmentPieces(p);
+        for (const pc of pieces) {
+          const m = pc.sub === "joint" ? this.look.partMaterial("occupant", DUMMY_JOINT) : pc.sub === "pelvis" ? this.look.partMaterial("occupant", occupantSub("thigh")) : mat;
+          const mesh = new THREE.Mesh(pc.geo, m);
           mesh.castShadow = this.look.real;
           holder.add(mesh);
         }

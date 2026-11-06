@@ -480,9 +480,13 @@ export const MATERIAL_OF = {
     // an occupant's segments dressed (OCCUPANT_WEAR): look values, not from the record; greys and
     // browns, apart from the contour's colours (colormap.js) so a faded person is not read as a value
     skin: { finish: "skin" },
-    jacket: { finish: "fabric", color: "#5a5248" },
-    trousers: { finish: "fabric", color: "#33343a" },
+    // (lighter than the dummy's dark joints, so the shoulders, elbows, hips and knees show)
+    jacket: { finish: "fabric", color: "#7d7466" },
+    trousers: { finish: "fabric", color: "#5c5f66" },
     shoes: { finish: "vinyl", color: "#2a2623" },
+    // a dummy's joints (shapes.js occupantDummyPieces): dark moulded rubber-like plastic, far from
+    // the heat colour, the caution orange and the verdict's red
+    dummy_joint: { finish: "resin", color: "#18191b" },
     hub: { finish: "galvanized", color: "#7e8489" },
     spring: { finish: "painted_steel", color: "#8e2f22" },
     // the damper's cylinder and rod (shapes.js damper): black paint
@@ -646,6 +650,7 @@ const OCCUPANT_WEAR = [
   [/^(thigh|shank|leg)/, "trousers"],
   [/^foot/, "shoes"],
 ];
+export const DUMMY_JOINT = "dummy_joint"; // the sub of a dummy's joints (MATERIAL_OF.sub)
 export function occupantSub(segment) {
   return OCCUPANT_WEAR.find(([re]) => re.test(segment ?? ""))?.[1] ?? "jacket";
 }
