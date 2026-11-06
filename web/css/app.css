@@ -61,9 +61,14 @@ body.video .statusrow, body.no-status .statusrow { display: none; }
 body.no-status .stage, body.video .stage { grid-template-rows: 64px 56px minmax(0, 1fr) 0 var(--band); }
 body.video .hint { display: none; }
 /* the video has no replay bar (the bench's): ?t= and window.hiraku.seek move the replay without
-   it. What stood above it comes down by the bar's height. A7's assembly bar stays (its track and
-   "手順 n / N" show the steps one by one), only its ▶ goes. */
-body.video .playbar, body.video .asm-bar .as-play { display: none; }
+   it. What stood above it comes down by the bar's height. A7 keeps only its band "手順 n / N"
+   (at the bar's left): its track, its ▶ and its switches (接合, モジュール) go, and its list of
+   steps does not take the pointer (the order follows the replay's time, assembly.js timedU). */
+body.video .playbar, body.video .asm-bar .as-play, body.video .asm-bar .as-track { display: none; }
+body.video .asm-bar { right: auto; }
+body.video .asm-bar .as-label { min-width: 0; text-align: left; }
+body.video .asm-3d > .asm-joints-btn, body.video .asm-3d > .modtoggles { display: none; }
+body.video .asm-side .asm-steps { pointer-events: none; }
 body.video .legend, body.video .running { bottom: 12px; }
 body.video .animbar { bottom: 12px; }
 body.video .viewport.has-anim .running, body.video .viewport.has-anim .legend, body.video .graph { bottom: 60px; }

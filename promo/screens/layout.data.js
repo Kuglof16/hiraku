@@ -1407,6 +1407,16 @@ window.PROMO_LAYOUT = {
       "wind"
     ],
     "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
+    "runup": {
+      "tile": "step_stuck",
+      "order": [
+        "stops",
+        "climbs"
+      ],
+      "gap_px": 12,
+      "lead_share": 0.75,
+      "_note": "added by the screens department (2026-11-06), for the promo department to move: the tile that shows the step test's run 2 (rolling at the step at the load case's speed) as two panes stacked in order, the step it stops at (stops) over the step it climbs (climbs), gap_px apart; lead_share: the share of the tile's play given to the stretch both records have (the approach, the hit and the climb), the rest to the stopped run's later tries and standstill. Used only when the run holds such records (web/js/cut_n06.js)"
+    },
     "tile": {
       "border_px": 2,
       "radius_px": 12,
@@ -2931,8 +2941,8 @@ window.PROMO_LAYOUT = {
       "n06": {
         "message": "作ってみると、うまくいかない",
         "limits": {
-          "label": 6,
-          "why": "six failures, one tag each, no figures"
+          "label": 7,
+          "why": "six failures, one tag each, no figures; the step tile (n06.runup) shows two runs, each with its tag, whose step height and speed are the record's (7, 2026-11-06)"
         }
       },
       "n07": {
