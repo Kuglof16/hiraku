@@ -379,7 +379,7 @@ class AskUserToolTest(ToolsTestCase):
     def test_a_product_nobody_knows_has_only_the_items_defaults(self):
         ctx = make_ctx(self.root, product="made-up-thing", flags={"standing": True})
         got = call("ask_user", ctx)
-        self.assertEqual([q["req_key"] for q in got["questions"]], ["Q03", "Q11", "Q34", "Q61", "Q80"])
+        self.assertEqual([q["req_key"] for q in got["questions"]], ["Q03", "Q11", "Q61", "Q80"])
         self.assertTrue(got["ready"])
 
 

@@ -29416,7 +29416,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 17 件、答え 2 件、既定値 33 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "質問 17 件、答え 2 件、既定値 32 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {
@@ -29526,14 +29526,6 @@ export const DEMOS = {
       "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
       "value": 9.525,
       "unit": "mm"
-     },
-     {
-      "key": "Q31",
-      "name": "体格の範囲",
-      "source": "default",
-      "trust": 1,
-      "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html. Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
-      "value": "子どもを含む"
      },
      {
       "key": "Q39",

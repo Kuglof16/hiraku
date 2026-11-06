@@ -300,7 +300,7 @@ _MAX_VARIABLES = 8  # K5 runs the tool twice for each number and each load case
 
 def find_tradeoffs_tool(ctx: Any, args: Record, agent: str | None) -> Record:
     if args.get("design_version") not in (None, ctx.version):
-        raise ToolError(f"感度は今の版 {ctx.version} でだけ出せます (版 {args['design_version']} は指定できません)")
+        raise ToolError(f"感度は今の v{ctx.version} でだけ出せます (v{args['design_version']} は指定できません)")
     if tradeoff.collector is None:
         raise ToolError("この実行には、感度を集めるしくみ (hiraku.tools 側の collector) がまだ登録されていません")
     design = _store(ctx).design()
