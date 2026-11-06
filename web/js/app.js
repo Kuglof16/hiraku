@@ -12,7 +12,7 @@
 //   ?off=joints     turn overlays off at load (joints: the joint marks, on by default; A7 follows it too)
 //   ?tab=grid       open on ④ 解析結果 (the domains' grid) instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 //   ?tab=grid&domain=strength
-//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 照合 cards,
+//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 判定 cards,
 //                   the play bar from its first prediction to its last comparison); a tile pressed does
 //                   the same and sets it, 「格子に戻る」 drops it. With ?t= that frame (t as the whole replay's)
 //   ?tabs=A1:0,A2:44.5,bench:80
@@ -107,7 +107,7 @@ const ui = {
   fieldKind: null, // contour field picked in the legend (null: the first one)
   fieldVariant: null, // among the fields of that kind: `${tool}|${variantOf}` (the analysis' tool; the beams, or a mesh and its surface)
   zoomMax: false, // the camera at a shell contour's largest element (legend: 最大の所に寄る)
-  compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
+  compare: false, // the previous design version beside the current one (legend: 1 つ前の設計と比べる)
   meshMode: null, // the mesh's own view in place of a field (quality.js MODE_ORDER), or null
   qualityMetric: null, // the mesh check's metric the elements are coloured by (null: the first)
   stoppable: null, // the run id when this screen started the run being followed
@@ -309,7 +309,7 @@ function renderDomainHead(span) {
   if (!span) return;
   const html =
     `<span class="dh-tab">${esc(TAB_JA.grid.no)} ${esc(TAB_JA.grid.name)}</span><span class="dh-sep">›</span>` +
-    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 照合)</span>` +
+    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 判定)</span>` +
     `<button class="dh-close" type="button" data-act="close-domain">× 格子に戻る</button>`;
   if (el.dataset.html !== html) {
     el.dataset.html = html;
@@ -1146,7 +1146,7 @@ function renderChain(s, chain) {
     const used = verdict ? (valueFromJa(verdict) === "予測" ? "pred" : "ana") : null;
     const tag = `<small class="used">判定の値</small>`;
     c.innerHTML =
-      `<h3>3. 照合</h3>` +
+      `<h3>3. 判定</h3>` +
       `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
       `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
@@ -1157,7 +1157,7 @@ function renderChain(s, chain) {
   } else {
     c.className = "card wait";
     const tol = loadCase ? `許す幅 ${fmtPct(loadCase.tolerance_rel, 0)} (荷重条件で決まっている)` : "";
-    c.innerHTML = `<h3>3. 照合</h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>`;
+    c.innerHTML = `<h3>3. 判定</h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>`;
   }
 }
 
@@ -1351,7 +1351,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
       : "");
   const acts =
     zoomAct +
-    (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "前の版と比べる"}</button>` : "");
+    (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "1 つ前の設計と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
     ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
@@ -1381,7 +1381,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     `<div class="bar">${bandRows(ct, relative)}</div>` +
     over +
     cmp +
-    `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの版の最大値" : "・上端 = 最大値"}</div>`;
+    `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの設計の最大値" : "・上端 = 最大値"}</div>`;
 }
 
 // ---- before / after (the previous version's same field beside the current one) ----
@@ -1560,7 +1560,7 @@ function renderGrid(s) {
     const ok = !!sp && sp.t0 <= player.playhead + 1e-6;
     el.classList.toggle("can-replay", ok);
     if (ok) {
-      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 照合) をここで再生します`;
+      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 判定) をここで再生します`;
       el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
     }
   }

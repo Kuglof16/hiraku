@@ -78,7 +78,7 @@ export const PET_EVENTS = [
   { kind: "run.finished", who: "all", base: true, motion: "idle", when: "実行が終わった" },
   { kind: "verdict.recorded", who: "agent", base: false, motion: "pass", when: "判定が合格になった (同じ verdict_id で前は不合格・無し)" },
   { kind: "judgement.updated", who: "domain", base: false, motion: "pass", when: "分野の判定が緑になった (その分野の前の判定が緑でない)" },
-  { kind: "comparison.recorded", who: "agent", base: false, motion: "mismatch", when: "照合が食い違った (同じ comparison_id で前は一致・無し)" },
+  { kind: "comparison.recorded", who: "agent", base: false, motion: "mismatch", when: "判定で食い違った (同じ comparison_id で前は一致・無し)" },
   { kind: "hook.denied", who: "agent", base: false, motion: "blocked", when: "hooks に止められた" },
   { kind: "hook.blocked_stop", who: "agent", base: false, motion: "blocked", when: "hooks が終わるのを止めた" },
   { kind: "agent.said", who: "agent", base: false, motion: "report", when: "話した (吹き出しと同じ間)" },

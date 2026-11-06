@@ -48,7 +48,7 @@ export function n12Records(s) {
   const cause = (params.get("cause") ? s.causes[params.get("cause")] : null) ?? causes.find((c) => c.resolved_by) ?? causes[0];
   if (!cause) throw new Error("食い違いの原因の記録が無い");
   const bad = s.comparisons[cause.comparison_id];
-  if (!bad) throw new Error("原因が説明する照合の記録が無い");
+  if (!bad) throw new Error("原因が説明する判定の記録が無い");
   const fixed = cause.resolved_by ? s.comparisons[cause.resolved_by] ?? null : null;
   const ana = s.analyses[bad.analysis_id];
   const lc = (s.project?.load_cases ?? []).find((c) => c.load_case_id === ana?.load_case_id) ?? null;

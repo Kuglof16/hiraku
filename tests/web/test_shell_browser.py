@@ -231,7 +231,7 @@ class ShellBrowserTest(unittest.TestCase):
         v1 = self.shells[1]["results"][0]["value"]
         self.assertAlmostEqual(got[1], v1)
         self.assertFalse(got[2])
-        self.assertIn("上端 = 2 つの版の最大値", page.evaluate("() => document.querySelector('#legend .src').textContent"))
+        self.assertIn("上端 = 2 つの設計の最大値", page.evaluate("() => document.querySelector('#legend .src').textContent"))
         page.close()
 
     # ---- N07 ----------------------------------------------------------------------
@@ -388,7 +388,7 @@ class ShellBrowserTest(unittest.TestCase):
         self.assertEqual(got, {"err": None, "n": 1, "v": 2})
         page.close()
         page, errors = self.cut(0, "&before=3")
-        self.assertIn("版 3 のメッシュの上の値の記録が無い", page.evaluate("() => document.querySelector('.err')?.textContent ?? ''"))
+        self.assertIn("v3 のメッシュの上の値の記録が無い", page.evaluate("() => document.querySelector('.err')?.textContent ?? ''"))
         page.close()
 
 

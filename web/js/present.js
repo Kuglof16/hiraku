@@ -19,7 +19,7 @@ import { versionChangeLine } from "./proposals.js";
 
 const HOOK_WORDS = {
   HK1: { what: "予測の前に解析しようとしたので、止めました", next: "先に手計算で予測を記録してから、解析します" },
-  HK2: { what: "照合がすんでいないツールを使おうとしたので、止めました", next: "照合ずみのツールで解析します" },
+  HK2: { what: "判定がすんでいないツールを使おうとしたので、止めました", next: "判定ずみのツールで解析します" },
   HK3: { what: "予測と解析が食い違ったまま進もうとしたので、止めました", next: "食い違いの原因を書いてから進みます" },
   HK4: { what: "判定がそろう前に終わろうとしたので、止めました", next: "残りの判定を出してから終わります" },
   // modules: HK6 (docs/contract.md: a designer changes only its own module; build_version is refused on a clash or a part outside its space)

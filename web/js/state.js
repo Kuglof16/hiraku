@@ -410,12 +410,12 @@ export function applyEvent(s, ev) {
       put(s, "comparisons", d.comparison_id, d, ev);
       const ok = d.status === "match";
       const txt = ok
-        ? `照合: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で一致`
-        : `照合: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。` +
+        ? `判定: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で一致`
+        : `判定: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。` +
           (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
       logRecord(s, ev, d.comparison_id, ok ? "ok" : "bad", `${who(ev)}: ${txt}`);
       if (!again) {
-        if (agent) agent.status = ok ? "照合した" : "食い違い";
+        if (agent) agent.status = ok ? "判定: 一致" : "食い違い";
         setActivity(s, ev, txt);
       }
       break;
@@ -450,7 +450,7 @@ export function applyEvent(s, ev) {
     }
     case "tool.checked": {
       s.tools[d.name] = d;
-      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
+      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の判定: ${d.usable ? "使える" : "まだ使えない"}`);
       break;
     }
     case "hook.denied": {

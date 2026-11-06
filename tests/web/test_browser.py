@@ -219,7 +219,7 @@ class BrowserReplayTest(unittest.TestCase):
                 cmpCard: document.getElementById("card-cmp").className,
                 causeBox: document.querySelector("#card-cmp .cause")?.textContent ?? "",
                 hookLines: document.querySelectorAll("#log li.hook").length,
-                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("照合:")).map((li) => li.textContent),
+                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("判定: 差")).map((li) => li.textContent),
                 logLen: s.log.length,
                 status: s.status,
                 stopReason: s.stopReason,

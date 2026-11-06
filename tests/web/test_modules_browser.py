@@ -211,7 +211,7 @@ class ModulesBrowserTest(unittest.TestCase):
         text = card.inner_text()
         self.assertIn("足まわりの設計役", text)
         self.assertIn(shown_name(page, "front_spring_rate"), text)
-        self.assertIn("パッケージ役が 1 つの版にまとめるのを待っている", text)
+        self.assertIn("パッケージ役が 1 つの設計にまとめるのを待っている", text)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t={T_BUILT}")
         card = page.locator("#roundcard")
         self.assertEqual(card.locator(".rc-head").inner_text(), "パッケージ役が 3 つの提案を v2 にまとめた")

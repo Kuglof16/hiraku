@@ -41,7 +41,7 @@ import * as THREE from "three";
 import { BAND_COLORS, BANDS } from "./colormap.js";
 import { clearOfBand } from "./compose.js";
 import { FIELD_JA, contourOf, fieldsOf, onSharedScale, preferredField, sameField } from "./fields.js";
-import { OK_WORD, esc, fmt, unitLabel } from "./labels.js";
+import { OK_WORD, esc, fmt, unitLabel, verLabel } from "./labels.js";
 import { OVERLAY, VIEWS, cutView, isoToThree } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { PACE_LIMIT_DEG_S } from "./pace.js";
@@ -183,12 +183,12 @@ export class CutN07 {
     const va = num("after") ?? versions.at(-1);
     this.lc = (s.project?.load_cases ?? []).find((c) => c.load_case_id === lc) ?? null;
     const before = meshAnalysis(s, lc, vb);
-    if (!before) throw new Error(`版 ${vb} のメッシュの上の値の記録が無い (${lc})`);
+    if (!before) throw new Error(`${verLabel(vb)} のメッシュの上の値の記録が無い (${lc})`);
     const fb = preferredField(meshFields(s, before), s.meshes);
     const after = va !== vb ? meshAnalysis(s, lc, va) : null;
-    if (va !== vb && !after) throw new Error(`版 ${va} のメッシュの上の値の記録が無い (${lc})`);
+    if (va !== vb && !after) throw new Error(`${verLabel(va)} のメッシュの上の値の記録が無い (${lc})`);
     const fa = after ? fieldsOf(after).find((f) => sameField(f, fb) && s.meshes[f.mesh_id]) : null;
-    if (after && !fa) throw new Error(`版 ${va} に版 ${vb} と同じ field が無い`);
+    if (after && !fa) throw new Error(`${verLabel(va)} に ${verLabel(vb)} と同じ field が無い`);
     const crit = this.lc?.criterion ?? null;
     // the element stress (the "max" surface first, preferredField) on the allowable's band
     const [cb, ca] = onSharedScale([contourOf(before, fb, crit, s.meshes), fa ? contourOf(after, fa, crit, s.meshes) : null]);

@@ -220,7 +220,7 @@ class AgentPetsTest(unittest.TestCase):
         page, errors = self.open(self.serve(), "tab=bench&t=0")
         got = page.evaluate(READ, {"t": 2.8, "tab": None})
         on = {s["agent"]: s["text"] for s in got["says"] if s["on"]}
-        self.assertTrue(on["cae.nvh"].startswith("照合: 差"), on)  # the comparison's log line
+        self.assertTrue(on["cae.nvh"].startswith("判定: 差"), on)  # the comparison's log line
         got = page.evaluate(READ, {"t": 3.3, "tab": None})
         on = {s["agent"]: s["text"] for s in got["says"] if s["on"]}
         self.assertTrue(on["cae.crash"].endswith("…"), on)
@@ -228,7 +228,7 @@ class AgentPetsTest(unittest.TestCase):
         self.assertLessEqual(len(on["cae.crash"]), 26)
         self.assertEqual(on["cae.nvh"], "解析が終わった")  # its newer line (analysis.finished at 3.0) replaced it
         log = page.evaluate("() => [...document.querySelectorAll('#log li')].map((li) => li.textContent)")
-        self.assertTrue(any(line.startswith("音振: 照合: 差") for line in log), log)
+        self.assertTrue(any(line.startswith("音振: 判定: 差") for line in log), log)
         later = page.evaluate(READ, {"t": 3.2 + 5.05, "tab": None})
         self.assertNotIn("cae.crash", {s["agent"] for s in later["says"] if s["on"]})
         # the judgement's line is the bubble of its domain's agent (the event's agent is system)

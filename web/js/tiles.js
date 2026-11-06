@@ -259,7 +259,7 @@ export class TileBoard {
         const now = redCases(ver);
         const fixed = before ? [...before].filter((x) => !now.has(x)) : [];
         const kept = before ? [...now].filter((x) => before.has(x)) : [];
-        const tip = [now.size ? `赤の試験: ${[...now].join("・")}` : "赤の試験なし", fixed.length ? `前の版から直った: ${fixed.join("・")}` : "", kept.length ? `前の版から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
+        const tip = [now.size ? `赤の試験: ${[...now].join("・")}` : "赤の試験なし", fixed.length ? `1 つ前の設計から直った: ${fixed.join("・")}` : "", kept.length ? `1 つ前の設計から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
         before = now;
         return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">${verLabel(ver)} 赤 ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
       })
@@ -304,7 +304,7 @@ export class TileBoard {
       const recorded = j.judgement?.summary ?? picks[d]?.reason ?? "";
       // a tile still まだ with no word from the record: why, as far as the record tells
       const why = j.state === "pending" && !j.judgement?.summary
-        ? info.ana ? "この版の解析は記録にあるが、判定がまだ記録に無い" : "この版の解析がまだ記録に無い"
+        ? info.ana ? `${verLabel(v)} の解析は記録にあるが、判定がまだ記録に無い` : `${verLabel(v)} の解析がまだ記録に無い`
         : "";
       // (a tile still まだ with some verdicts: those are the ones judged so far, not the tile's pass)
       const lead = failed.length ? `不合格 ${failed.length} 件: ` : j.state === "green" ? "合格: " : "判定のある分: ";

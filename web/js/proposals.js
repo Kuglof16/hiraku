@@ -118,7 +118,7 @@ export function roundCardHtml(s, playhead) {
     return (
       `<div class="rc-head" data-round="pending">${esc(verLabel(pending[0].baseVersion ?? s.currentVersion))} を直す提案: 設計役 ${who} 人が並べて出した</div>` +
       `<ol class="rc-list">${pending.map((p) => rowHtml(p, base)).join("")}</ol>` +
-      `<div class="rc-foot">${esc(agentName("packager"))}が 1 つの版にまとめるのを待っている</div>`
+      `<div class="rc-foot">${esc(agentName("packager"))}が 1 つの設計にまとめるのを待っている</div>`
     );
   }
   const v = s.currentVersion;

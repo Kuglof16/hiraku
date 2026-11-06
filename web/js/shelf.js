@@ -318,7 +318,7 @@ export function mountShelf(el, api) {
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
     note.textContent = shelf.error ? `棚を読めませんでした: ${shelf.error}`
       : shelf.failed ? `棚を読めませんでした (${shelf.failed})。もう一度聞いています…`
-      : shelf.ready ? "" : "棚を読み込んでいます… (初めの 1 回は、ツールの照合を回すので少しかかります)";
+      : shelf.ready ? "" : "棚を読み込んでいます… (初めの 1 回は、ツールの判定を回すので少しかかります)";
     const branches = shelfTree(tools, ui);
     fill(tree, branches.length ? branches.map(branch) : h("li", { class: "sh-dim" }, tools.length ? "条件に合うツールがありません" : shelf.ready ? "ツールがありません" : ""));
     fill(detailBox, detail(tools.find((t) => t.name === ui.selected) ?? null));
