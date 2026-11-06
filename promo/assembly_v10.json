@@ -117,25 +117,25 @@
    "cuts": [
     "N12b"
    ],
-   "video": "${WORK}/clips/n12b_real_1080p.mp4"
+   "video": "${WORK}/clips/n12b_w_1080p.mp4"
   },
   {
    "cuts": [
     "N13a"
    ],
-   "video": "${WORK}/clips/n13a_real3d_1080p.mp4"
+   "video": "${WORK}/clips/n13a_w_1080p.mp4"
   },
   {
    "cuts": [
     "N13b"
    ],
-   "video": "${WORK}/clips/n13b_real_1080p.mp4"
+   "video": "${WORK}/clips/n13b_w_1080p.mp4"
   },
   {
    "cuts": [
     "N13c"
    ],
-   "video": "${WORK}/clips/n13c_real3d_1080p.mp4"
+   "video": "${WORK}/clips/n13c_w_1080p.mp4"
   },
   {
    "cuts": [
