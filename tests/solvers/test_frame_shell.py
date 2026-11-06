@@ -33,7 +33,7 @@ class FrameShellToolTest(unittest.TestCase):
     def test_on_the_shelf(self):
         t = tool("frame_shell")
         self.assertTrue(t.needs_mesh)
-        self.assertEqual((t.domain, t.base, t.tests), ("strength", "K1", ["R1"]))
+        self.assertEqual((t.domain, t.base, t.tests), ("strength", "K1", ["R1", "R9"]))  # R9: the mount brackets
         d = t.describe()
         self.assertEqual([p["name"] for p in d["params"]], ["loading", "g_factor", "step_height", "step_supports"])
         self.assertEqual([p["name"] for p in d["run_params"]], ["element_size", "mesh_convergence"])
@@ -264,16 +264,24 @@ class ReinforcedJointsTest(unittest.TestCase):
         through = sum(p["mass_kg"] for p in d["parts"] if p["id"].startswith("through_"))
         self.assertGreater(through, 0.0)
         self.assertEqual(len([p for p in res["shell_parts"] if p.startswith("through_")]), 8)
+        # the suspension mount brackets meshed as plates (k1_shell.brackets) are shell elements too
+        meshed_t = set(res["mesh"].bracket_material)
+        self.assertTrue(meshed_t <= set(res["shell_parts"]))
+        brackets_t = sum(p["mass_kg"] for p in d["parts"] if p["id"] in meshed_t)
         self.assertAlmostEqual(res["total_mass_kg"] - res["shell_mass_kg"],
-                               summ["mass_kg"] - summ["frame_mass_kg"] - through, places=9)
+                               summ["mass_kg"] - summ["frame_mass_kg"] - through - brackets_t, places=9)
         self.assertLess(res["residual_ratio"], 1e-6)
         self.assertFalse(res["excluded"][res["worst_element"]])
         g = loading.on_board(self.gusset, "two_cargo")
         gres = analyze_shell(g, element_size_mm=20.0)
         gsum = mass_summary(g)
         plates = sum(p["mass_kg"] for p in g["parts"] if p["kind"] == "gusset")
+        # the suspension mount brackets meshed as plates (k1_shell.brackets) are shell elements too
+        meshed = set(gres["mesh"].bracket_material)
+        self.assertTrue(meshed <= set(gres["shell_parts"]))
+        brackets = sum(p["mass_kg"] for p in g["parts"] if p["id"] in meshed)
         self.assertAlmostEqual(gres["total_mass_kg"] - gres["shell_mass_kg"],
-                               gsum["mass_kg"] - gsum["frame_mass_kg"] - plates, places=9)
+                               gsum["mass_kg"] - gsum["frame_mass_kg"] - plates - brackets, places=9)
 
 
 if __name__ == "__main__":

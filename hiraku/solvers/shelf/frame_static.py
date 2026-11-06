@@ -27,7 +27,7 @@ from ..k1_frame.model import COMBO
 from ..k1_frame.surface import surface_field
 from . import fixtures, hot_spots, scene
 from .base import (G_FACTOR, LOADING, BuiltinTool, Param, Predicts, Record, check_record, mesh_of, on_board, param_list,
-                   param_value, result)
+                   param_value, plate_parts, result)
 
 CLOSED_FORM_TOL = 1e-3
 STEP_HEIGHT = Param("step_height", "mm", "height of the step the step_supports climb (without it: the vehicle at rest)")
@@ -264,11 +264,16 @@ class FrameStatic(BuiltinTool):
             add_frames(out, beam_frames(design, series))
         mesh, why = mesh_of(design, params)
         if mesh is not None:
-            plates = frozenset(p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset")
+            plates = plate_parts(design)
             out["fields"].append(surface_field(res["model"], mesh, plates=plates))
-            if plates & set(mesh["element_member"]):
+            on = plates & set(mesh["element_member"])
+            kind = {q["id"]: q.get("kind") for q in design.get("parts", [])}
+            if any(kind.get(p) == "gusset" for p in on):
                 out["effects"].append({"name": "the gusset plates on the mesh are drawn at 0: the beam model carries "
                                                "them as mass only"})
+            if any(kind.get(p) == "bracket" for p in on):
+                out["effects"].append({"name": "the mount brackets' plates on the mesh are drawn at 0: the beam model "
+                                               "carries them as mass only"})
         elif why:
             out["effects"].append({"name": why})
         if up is None and step is not None:
