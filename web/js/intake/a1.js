@@ -126,7 +126,7 @@ function reviewLine(m) {
 }
 
 export function renderA1(el, m, api, ui) {
-  const cards = inTurn(domainCards(m).sort((a, b) => ORDER[a.state] - ORDER[b.state]), ui.time); // the ones that light first (stable: domain order inside)
+  const cards = inTurn(domainCards(m).sort((a, b) => ORDER[a.state] - ORDER[b.state]), ui.replyInTurn ? ui.time : null); // the ones that light first (stable: domain order inside)
   const lit = cards.filter((c) => c.state === "lit").length;
   const draftN = cards.filter((c) => c.state === "draft").length;
   const assembly = m.domains?.assembly_test_ids || [];
