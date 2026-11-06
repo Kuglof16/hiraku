@@ -356,6 +356,12 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("rule_check", {**r, "hits": [], "pass": False}), [])
         self.assertEqual(contract.errors("rule_check", {**r, "hits": [], "pass": True}), [])
 
+    def test_advice_rule_keeps_pass_as_it_is(self):
+        r = load("rule_check.json")
+        self.assertEqual(contract.errors("rule_check", {**r, "level": "advice"}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**r, "level": "advice", "pass": True}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**r, "level": "note"}), [])
+
     def test_mesh_event_and_field(self):
         m = load("mesh.json")
         ev = {**self.ev, "kind": "mesh.created", "agent": "cae.strength", "design_version": 1, "data": m}
