@@ -26,6 +26,7 @@ from hiraku.tools import tradeoff_data  # noqa: F401 (registers find_tradeoffs' 
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RECORD_KINDS, RUN_TOOLS, rule_check
+from hiraku.tools.load_case_writer import write_load_case
 
 Record = dict[str, Any]
 
@@ -124,6 +125,7 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "make_tool": contract_input_schema("make_tool"),
     "check_tool": check_tool_input_schema(),
     "write_report": contract_input_schema("write_report"),
+    "write_load_case": contract_input_schema("write_load_case"),
 }
 
 DESCRIPTIONS = {
@@ -233,6 +235,13 @@ DESCRIPTIONS = {
         "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
         "hiraku.solvers の一部だけ"
     ),
+    "write_load_case": (
+        "その試験の分野の役 (組み立ては packager) かまとめ役が使う。カタログに作り方 (builder) の無い試験の荷重条件を書いて、"
+        "今の版に足す。条件 (params)・判定の量と向き・限度の作り方 (limit_from: 式 expr、単位 unit、名前ごとの refs = 要件の key "
+        "か設計の道、例 {\"expr\": \"yield / Q61\", \"unit\": \"MPa\", \"refs\": {\"yield\": \"materials.steel.yield_MPa\", "
+        "\"Q61\": \"Q61\"}}) と根拠 (basis) を書く。限度の数は書かない: コードが式から計算し、tolerance_rel と ID も付ける。"
+        "次の版でも残り、限度はその版の設計で計算し直す"
+    ),
 }
 
 # The intake department's tools (pick_domains, ask_user, import_knowledge, rule_check) bring their
@@ -243,6 +252,7 @@ for _name, _t in INTAKE_TOOLS.items():
     DESCRIPTIONS[_name] = _t["description"]
     HANDLERS[_name] = _t["function"]
 HANDLERS["rule_check"] = rule_check  # the intake's, then the assembly tile again (system rules)
+HANDLERS["write_load_case"] = write_load_case  # hiraku.tools.load_case_writer
 
 
 def _text(obj: Any) -> str:
@@ -265,7 +275,7 @@ def for_agent(name: str, result: Any) -> Any:
 # Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
-ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_design", "write_report")
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_design", "write_report", "write_load_case")
 NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
              "見つかりません)。同じ入力でもう一度呼んでください")
 

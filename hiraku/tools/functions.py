@@ -1416,10 +1416,13 @@ def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
     the run says so."""
     from hiraku.catalog import load_catalog
     from hiraku.catalog.build import build_load_cases
+    from hiraku.tools.load_case_writer import rebuilt_written, written_inputs
 
     v = design["design_version"]
     before = ctx.store.version_load_cases(v - 1)
-    tests = list(dict.fromkeys(lc["test_id"] for lc in before if not lc["load_case_id"].endswith("-beyond")))
+    written = written_inputs(ctx)  # load cases Claude wrote (write_load_case): made again from their input below
+    tests = list(dict.fromkeys(lc["test_id"] for lc in before
+                               if not lc["load_case_id"].endswith("-beyond") and lc["load_case_id"] not in written))
     req = requirements_now(ctx)
     skipped: list = []
     try:
@@ -1427,8 +1430,8 @@ def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
     except ValueError as e:
         built, skipped = [], [("*", str(e))]
     by_id = {lc["load_case_id"]: lc for lc in built}
-    kept = [lc["load_case_id"] for lc in before if lc["load_case_id"] not in by_id]
-    load_cases = [by_id.get(lc["load_case_id"], lc) for lc in before]
+    load_cases, kept = rebuilt_written(ctx, design, [by_id.get(lc["load_case_id"], lc) for lc in before], written)
+    kept += [lc["load_case_id"] for lc in before if lc["load_case_id"] not in by_id and lc["load_case_id"] not in written]
     changed = [new["load_case_id"] for old, new in zip(before, load_cases) if old != new]
     text = (f"版 {v} の荷重条件を、この版の設計で作り直しました"
             + (f" (変わったもの: {'、'.join(changed)})" if changed else " (前の版と同じ)"))
@@ -2474,4 +2477,5 @@ INTAKE_TOOLS = ("pick_domains", "ask_user", "import_knowledge", "rule_check", "f
 # The MCP tools of a run: the contract's MVP set, the designer's (revise_design, propose_design, and for a design
 # Claude writes write_design and check_design), tool making (with its template), the report and the intake tools.
 RUN_TOOLS = (*contract.MCP_TOOLS_MVP, *contract.MCP_TOOLS_DESIGNER, *contract.MCP_TOOLS_PACKAGER, "propose_design",
-             "write_design", "check_design", "make_tool", "check_tool", "get_tool_template", "write_report", *INTAKE_TOOLS)
+             "write_design", "check_design", "make_tool", "check_tool", "get_tool_template", "write_report", *INTAKE_TOOLS,
+             "write_load_case")  # hiraku.tools.load_case_writer (mcp.py registers it)

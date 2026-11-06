@@ -22,7 +22,7 @@ from hiraku.tools.context import RunContext
 Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
-             "get_tool_template", "check_tool", "make_tool")
+             "get_tool_template", "check_tool", "make_tool", "write_load_case")  # write_load_case: tests without a builder
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 # designs with modules: the packager also builds each round's version
 MODULE_PACKAGER_TOOLS = (*PACKAGER_TOOLS, *contract.MCP_TOOLS_PACKAGER)
