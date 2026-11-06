@@ -67,12 +67,12 @@ def moment_centre(design: dict[str, Any]) -> tuple[np.ndarray, float]:
 
 def _group(part: dict[str, Any]) -> str:
     kind = part.get("kind", "")
-    if kind == "occupant" or part.get("module") == "occupant":
-        return "occupants"
-    if kind == "cargo":
-        return "cargo"
     if kind == "side_net":
         return "side_nets"
+    if kind == "cargo":
+        return "cargo"
+    if kind == "occupant" or part.get("module") == "occupant":
+        return "occupants"
     return part.get("module") or "body"
 
 
@@ -234,10 +234,13 @@ def frontal_area_m2(shapes: list[Shape], yaw_deg: float = 0.0, cell: float = 0.0
 def run_vehicle(gpu: Gpu, design: dict[str, Any], yaw_deg: float = 0.0, speed_ms: float = 40.0 / 3.6, dx: float = 0.08, u_lattice: float = 0.05,
                 smagorinsky: float = 0.15, domain: Domain | None = None, flow_throughs: float = 1.2, average_L_over_U: float = 12.0,
                 loading: str | None = "two_cargo", rotate_wheels: bool = True, interpolate: bool = True, fields: bool = True,
-                reference_area_m2: float | None = None) -> VehicleRun:
-    """One steady-air run. The air is uniform over height: no atmospheric boundary layer."""
+                reference_area_m2: float | None = None, air_speed_ms: float | None = None) -> VehicleRun:
+    """One steady-air run. The air is uniform over height: no atmospheric boundary layer.
+
+    The air speed is V / cos(yaw), a wind square to the path, unless air_speed_ms says otherwise (a vehicle
+    at rest in a side wind: speed_ms 0, yaw 90, air_speed_ms the wind)."""
     domain = domain or Domain()
-    air = speed_ms / math.cos(math.radians(yaw_deg))
+    air = air_speed_ms if air_speed_ms is not None else speed_ms / math.cos(math.radians(yaw_deg))
     shapes, info = design_shapes(design, yaw_deg, speed_ms, loading, u_lattice, rotate_wheels, dx)
     grid = domain.grid(dx)
     vox: Voxels = voxelize(shapes, grid, ground=True)
@@ -288,7 +291,7 @@ def run_vehicle(gpu: Gpu, design: dict[str, Any], yaw_deg: float = 0.0, speed_ms
     conv = {"quarter_means_Fx_N": quarters, "spread_pct": 100.0 * (max(quarters) - min(quarters)) / abs(mean_fx) if mean_fx else None,
             "average_L_over_U": average_L_over_U, "flow_throughs_before": flow_throughs}
     coeff = {"q_Pa": q, "reference_area_m2": area, "Cd": -float(fv[0]) / (q * area), "CdA_m2": -float(fv[0]) / q, "Cy": float(fv[1]) / (q * area), "Cl": float(fv[2]) / (q * area),
-             "side_centre_height_m": float(mv[0]) / float(fv[1]) if abs(fv[1]) > 1e-6 else None}
+             "side_centre_height_m": -float(mv[0]) / float(fv[1]) if abs(fv[1]) > 1e-6 else None}  # Mx = y Fz - z Fy
     assumptions = ["空気は高さによらず一様 (大気の境界層なし)", "外形は部品の箱と部材の管と車輪の円柱 (外板の曲面は設計に無い)",
                    "タイヤと地面のすき間が 1.5 格子より狭い所は箱で埋める",
                    f"壁は格子 {dx * 1000:.0f} mm の補間つき跳ね返し、壁関数なし、Smagorinsky Cs={smagorinsky}", "冷却の流れは入れない"] + info["assumptions"]
