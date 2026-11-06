@@ -1,0 +1,54 @@
+{
+"load_case_id": "T1-40C",
+"test_id": "T1",
+"domain": "thermal",
+"title": "気温 40 ℃ で林道の周回を 20 km 走ったときの電池の温度 (2 人 + 荷)",
+"params": {
+"distance": {
+"value": 20.0,
+"unit": "km"
+},
+"grade_low": {
+"value": 7.0,
+"unit": "%"
+},
+"grade_high": {
+"value": 12.0,
+"unit": "%"
+},
+"speed_low": {
+"value": 20.0,
+"unit": "km/h"
+},
+"speed_high": {
+"value": 40.0,
+"unit": "km/h"
+},
+"ambient_temperature": {
+"value": 40.0,
+"unit": "degC"
+},
+"loading": "two_cargo"
+},
+"requirement_keys": [
+"Q19",
+"Q54",
+"Q50",
+"Q30",
+"Q33",
+"Q40"
+],
+"tolerance_rel": 0.15,
+"criterion": {
+"quantity": "temp_battery_max",
+"op": "<=",
+"limit": {
+"value": 55.0,
+"unit": "degC"
+},
+"basis": "T1: the design variable battery_max_temperature (the part's limit; its source is in the design generator), against the lumped temperature of the part"
+},
+"modules": [
+"powertrain"
+]
+}

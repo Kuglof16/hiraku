@@ -19,11 +19,14 @@ import {
   opLabel,
   plainText,
   verLabel,
+  judgedWords,
+  MISMATCH_STATUS,
+  RED_STATUS,
   plainToolName,
   quantityName,
   ruleOf,
 } from "./labels.js";
-import { kindCountText } from "./meshkind.js";
+import { kindCountText, kindCountsText } from "./meshkind.js";
 import { proposalText } from "./proposals.js";
 
 const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts", "meshes"];
@@ -110,7 +113,10 @@ function put(s, kind, id, rec, ev) {
 }
 
 // t is display time (the replay's clock); tRec is the recorded t shown on the line.
+// Every log line and the activity line carry the record's words through judgedWords (OK / NG,
+// 判定, vN), as do what an agent said and the notes under a line.
 function log(s, ev, level, text) {
+  text = judgedWords(text);
   s.log.push({ seq: ev.seq, t: ev.t, tRec: ev.t_rec ?? ev.t, kind: ev.kind, agent: ev.agent ?? null, domain: ev.domain ?? null, level, text });
   s.touched = { idx: s.log.length - 1, seq: ev.seq };
 }
@@ -126,14 +132,14 @@ function logRecord(s, ev, id, level, text) {
     s.log[s.log.length - 1].recId = id;
     return false;
   }
-  Object.assign(s.log[i], { level, text, updatedT: ev.t_rec ?? ev.t });
+  Object.assign(s.log[i], { level, text: judgedWords(text), updatedT: ev.t_rec ?? ev.t });
   s.touched = { idx: i, seq: ev.seq };
   s.logRev += 1;
   return true;
 }
 
 function setActivity(s, ev, text) {
-  s.activity = { agent: ev.agent ?? null, domain: ev.domain ?? null, text, t: ev.t, seq: ev.seq };
+  s.activity = { agent: ev.agent ?? null, domain: ev.domain ?? null, text: judgedWords(text), t: ev.t, seq: ev.seq };
 }
 
 function focusLoadCase(s, loadCaseId, t) {
@@ -200,8 +206,11 @@ export function applyEvent(s, ev) {
       s.intake.picked = d;
       const picks = d.picks ?? [];
       const tests = new Set(picks.flatMap((p) => p.test_ids ?? []));
+      for (const id of d.assembly_test_ids ?? []) tests.add(id);
       const names = picks.map((p) => p.shown_name ?? DOMAIN_JA[p.domain] ?? p.domain).join("・");
-      const txt = `分野を選んだ: ${names || "なし"} (当てはまる試験 ${tests.size}・選ばなかった分野 ${(d.off ?? []).length})`;
+      // the intake's plain line (hiraku/intake/domains.py summary_line), with the domains' names after it
+      const added = (d.added_tests ?? []).length;
+      const txt = `確かめる分野を ${picks.length} つ、試験を ${tests.size} 個選びました${added ? ` (Claude が足した ${added} 個を含む)` : ""}${names ? `: ${names}` : ""}`;
       log(s, ev, "info", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -210,13 +219,16 @@ export function applyEvent(s, ev) {
       const qs = d.questions ?? [];
       s.intake.questions = qs;
       if (agent) agent.status = "答え待ち";
-      const must = qs.filter((q) => q.ask === "must").length;
-      // rule hits that need a person (contract: rule_questions), in the same ask or on their own
+      // rule hits that need a person (contract: rule_questions) and trade-offs, in the same ask or on their own
       const rqs = d.rule_questions ?? [];
+      const tqs = d.tradeoff_questions ?? [];
+      s.intake.asked = { rules: rqs.length, trades: tqs.length };
+      // the intake's plain line (hiraku/intake/events.py asked_event): one rule hit is said in its own sentence
       const said = [];
-      if (qs.length || !rqs.length) said.push(`足りない要件を ${qs.length} 個${rqs.length ? "" : "聞いた"} (値がまだ無い ${must}・既定値を確かめる ${qs.length - must})`);
-      if (rqs.length) said.push(`規則の当たりを ${rqs.length} 個聞いた${qs.length ? "" : " (設計を直すか、規則を外すか)"}`);
-      const txt = said.join("・");
+      if (qs.length) said.push(`決まっていないことを ${qs.length} つ聞きます`);
+      if (rqs.length) said.push(rqs.length === 1 && rqs[0].text ? String(rqs[0].text).trim().replace(/。$/, "") : `規則に当たったことを ${rqs.length} つ、このままでいいか聞きます`);
+      if (tqs.length) said.push(`どちらを優先するかを ${tqs.length} つ聞きます`);
+      const txt = said.join("。");
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -227,19 +239,36 @@ export function applyEvent(s, ev) {
       s.intake.note = d.note ?? null;
       if (agent) agent.status = "見守り";
       const byDefault = ans.filter((a) => a.source === "default").length;
+      const byHearing = ans.filter((a) => a.source === "hearing").length;
       const ras = d.rule_answers ?? [];
-      const said = [];
-      if (ans.length || !ras.length) said.push(`答えがそろった: ${ans.length} 個 (既定値のまま ${byDefault})`);
-      if (ras.length) {
-        const n = (c) => ras.filter((a) => a.choice === c).length;
-        said.push(`規則の当たりの答え: 設計を直す ${n("revise_design")}・規則を外す ${n("drop_rule")}`);
-      }
-      // asked (hearing.asked), with neither an answer nor a default in hearing.answered: the
-      // record's "答えが無いまま" (hiraku/intake/hearing.py unresolved), said what it is
+      const tas = d.tradeoff_answers ?? [];
+      const asked = s.intake.asked ?? { rules: 0, trades: 0 };
+      const rules = asked.rules || ras.length;
+      const trades = asked.trades || tas.length;
+      // asked (hearing.asked), with neither an answer nor a default in hearing.answered (hiraku/intake/hearing.py unresolved)
       const got = new Set(ans.map((a) => a.key));
+      const qn = (s.intake.questions ?? []).length;
       const left = (s.intake.questions ?? []).filter((q) => q.req_key && !got.has(q.req_key)).length;
-      if (left) said.push(`答えが無いまま ${left} 個 (聞いたが、答えも既定値も無いので要件に入っていない)`);
-      const txt = said.join("・");
+      // the intake's plain line (hiraku/intake/hearing.py hearing_text): no ids, no counts of defaults
+      const standard = "分からない所は標準の値で進めました";
+      const dropped = ras.filter((a) => a.choice === "drop_rule").length;
+      let txt;
+      if (trades && !qn && !rules) {
+        txt = tas.length >= trades ? "どちらを優先するかの答えをもらいました" : `どちらを優先するかは、${trades - tas.length} つがまだ決まっていません (人がまだ決めていない)`;
+      } else if (rules && !qn) {
+        txt = (ras.length >= rules ? "規則に当たったことへの答えをもらいました" : `規則に当たったことのうち ${rules - ras.length} つが、まだ決まっていません (人がまだ決めていない)`)
+          + (dropped ? `。${dropped} つの規則は、この実行では外します` : "");
+      } else if (!qn) {
+        txt = byDefault ? `聞くことはありませんでした。${standard}` : "聞くことはありませんでした。設計を始めます";
+      } else {
+        const said = [byHearing ? `${byHearing} つ答えてもらいました` : "答えはなかったので、標準の値で進めました"];
+        if (byHearing && byDefault) said.push(standard);
+        if (left) said.push(`答えも標準の値も無い ${left} つは、要件に入っていません`);
+        if (rules) said.push(ras.length ? "規則に当たったことへの答えもあります" : "規則に当たったことは、まだ決まっていません");
+        if (trades) said.push(tas.length ? "どちらを優先するかの答えもあります" : "どちらを優先するかは、まだ決まっていません");
+        if (!left) said.push("設計を始めます");
+        txt = said.join("。");
+      }
       log(s, ev, "step", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -278,7 +307,7 @@ export function applyEvent(s, ev) {
       s.reports[d.design_version] = d;
       s.report = d;
       const reds = (d.domains ?? []).filter((x) => x.state === "red").length;
-      log(s, ev, "ok", `${verLabel(d.design_version)} の報告を書いた (分野 ${(d.domains ?? []).length}・赤 ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
+      log(s, ev, "ok", `${verLabel(d.design_version)} の報告を書いた (分野 ${(d.domains ?? []).length}・NG ${reds}・まだ確かめていない ${(d.unchecked ?? []).length})`);
       setActivity(s, ev, `報告: ${String(d.summary ?? "").split("\n")[0]}`);
       break;
     }
@@ -315,7 +344,7 @@ export function applyEvent(s, ev) {
     }
     case "agent.said":
     case "user.said": {
-      const text = plainText(ev.text);
+      const text = judgedWords(plainText(ev.text));
       s.said = { agent: ev.kind === "user.said" ? "user" : ev.agent, text, t: ev.t, seq: ev.seq };
       log(s, ev, "said", text);
       setActivity(s, ev, text.split("\n")[0]);
@@ -360,10 +389,12 @@ export function applyEvent(s, ev) {
     case "mesh.created": {
       // A mesh (shells, solids or both) of one design version; fields name it by mesh_id.
       put(s, "meshes", d.mesh_id, d, ev);
-      const els = d.elements ?? [];
-      const kinds = kindCountText({ elements: els, element_kind: d.element_kind });
+      // (a static export's light record: the counts written beside the event, its lists read later)
+      const lite = ev._lite?.kinds ? ev._lite : null;
+      const els = lite ? null : d.elements ?? [];
+      const kinds = lite ? kindCountsText(lite.kinds) : kindCountText({ elements: els, element_kind: d.element_kind });
       const size = d.element_size_mm ? `・要素の大きさ ${fmt(d.element_size_mm, 3)} mm` : "";
-      const txt = `${verLabel(d.design_version)} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length}${kinds ? ` (${kinds})` : ""}${size}`;
+      const txt = `${verLabel(d.design_version)} のメッシュを作った: 節 ${lite ? lite.nodes : (d.nodes_mm ?? []).length}・要素 ${lite ? lite.elements : els.length}${kinds ? ` (${kinds})` : ""}${size}`;
       logRecord(s, ev, d.mesh_id, "info", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
@@ -410,12 +441,12 @@ export function applyEvent(s, ev) {
       put(s, "comparisons", d.comparison_id, d, ev);
       const ok = d.status === "match";
       const txt = ok
-        ? `照合: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で一致`
-        : `照合: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。` +
+        ? `比べた: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で予想通り`
+        : `比べた: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で不一致。` +
           (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
       logRecord(s, ev, d.comparison_id, ok ? "ok" : "warn", `${who(ev)}: ${txt}`); // a mismatch: attention, not NG
       if (!again) {
-        if (agent) agent.status = ok ? "照合した" : "食い違い";
+        if (agent) agent.status = ok ? "予想通り" : MISMATCH_STATUS;
         setActivity(s, ev, txt);
       }
       break;
@@ -423,10 +454,10 @@ export function applyEvent(s, ev) {
     case "cause.recorded": {
       const before = s.causes[d.cause_id];
       put(s, "causes", d.cause_id, d, ev);
-      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で一致)` : ""}` : "";
+      const done = d.resolved ? ` — 直った${d.resolved_by ? ` (${d.resolved_by} で予想通り)` : ""}` : "";
       const safe = d.safe_side ? ` — 安全側で見られている: ${d.safe_side_reason ?? ""}` : "";
       logRecord(s, ev, d.cause_id, d.resolved ? "ok" : "warn", `${who(ev)}: 原因「${d.cause}」→ 直し方「${d.fix}」${done}${safe}`);
-      if (!before) setActivity(s, ev, d.safe_side ? `食い違いの原因を書いた。安全側で見られている` : `食い違いの原因を書いた: ${d.cause}`);
+      if (!before) setActivity(s, ev, d.safe_side ? `不一致の原因を書いた。安全側で見られている` : `不一致の原因を書いた: ${d.cause}`);
       else if (d.resolved && !before.resolved) setActivity(s, ev, `原因 ${d.cause_id} は直った`);
       break;
     }
@@ -434,23 +465,23 @@ export function applyEvent(s, ev) {
       put(s, "verdicts", d.verdict_id, d, ev);
       const how = isSafeSide(d) ? ` (安全側で判定: ${valueFromJa(d)}の値・${d.cause_id ?? ""})` : "";
       // named by the quantity compared (frame_shell: the hot-spot stress for a max_stress criterion)
-      const txt = `判定${how}: ${quantityName(s.comparisons[d.comparison_id]?.quantity ?? d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "合格" : "不合格"} (余裕 ${fmtMargin(d)})`;
+      const txt = `判定${how}: ${quantityName(s.comparisons[d.comparison_id]?.quantity ?? d.quantity)} ${fmtQ(d.value)} ${opLabel(d.op)} ${fmtQ(d.limit)} → ${d.pass ? "OK" : "NG"} (余裕 ${fmtMargin(d)})`;
       logRecord(s, ev, d.verdict_id, d.pass ? "ok" : "bad", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;
     }
     case "judgement.updated": {
       s.judgements[`${d.design_version}|${d.domain}`] = { ...d, t: ev.t, seq: ev.seq };
-      const state = { green: "緑", red: "赤", pending: "まだ" }[d.state] ?? d.state;
+      const state = { green: "OK", red: "NG", pending: "まだ" }[d.state] ?? d.state;
       const a = s.agents[`cae.${d.domain}`];
       if (a && d.state === "green") a.status = "✓";
-      if (a && d.state === "red") a.status = "赤";
-      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: ${verLabel(d.design_version)} の判定は${state}${d.summary ? ` — ${d.summary}` : ""}`);
+      if (a && d.state === "red") a.status = RED_STATUS;
+      log(s, ev, d.state === "green" ? "ok" : d.state === "red" ? "bad" : "muted", `${DOMAIN_JA[d.domain] ?? d.domain}: ${verLabel(d.design_version)} の判定は ${state}${d.summary ? ` — ${d.summary}` : ""}`);
       break;
     }
     case "tool.checked": {
       s.tools[d.name] = d;
-      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の照合: ${d.usable ? "使える" : "まだ使えない"}`);
+      log(s, ev, d.usable ? "ok" : "warn", `ツール「${d.title ?? d.name}」の判定: ${d.usable ? "使える" : "まだ使えない"}`);
       break;
     }
     case "hook.denied": {
@@ -494,7 +525,7 @@ export function applyEvent(s, ev) {
   }
   if (ev.text && s.touched?.seq === ev.seq && !["agent.said", "user.said", "hook.denied", "hook.blocked_stop", "run.finished"].includes(ev.kind)) {
     // Extra words on a record event are shown as is under its log line.
-    s.log[s.touched.idx].note = ev.text;
+    s.log[s.touched.idx].note = judgedWords(ev.text);
     if (s.touched.idx !== s.log.length - 1) s.logRev += 1;
   }
   return s;

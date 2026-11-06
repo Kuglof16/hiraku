@@ -17,7 +17,7 @@ import math
 import numpy as np
 
 from ..k4_geometry import model as k4
-from ..k4_geometry.people import slide_ends
+from ..k4_geometry.people import occupants, slide_ends
 
 # not assembled: the people and the load ride in, the frame and what is welded to it is there before any part (as
 # catalog.builders.analysis.NOT_ASSEMBLED, which the solvers may not import)
@@ -102,11 +102,16 @@ def overlaps(design: dict, only: set[str] | None = None) -> list[tuple[str, str,
 
 def overlap_inputs(design: dict) -> dict:
     """assembly.overlap_count's inputs: overlaps at rest, and those of the driver's seat moved to each end of its
-    slide (only the pairs with a moved part, as the tool), plus where the deepest is."""
+    slide (only the pairs with a moved part, as the tool), plus where the deepest is. As the tool
+    (shelf.assembly._rider_pair), a moved seat part (seat, back, head restraint) against an occupant's body or one of
+    its segments is not counted at the slide's ends: the body stays at the travel's middle there."""
     rest = overlaps(design)
+    riders = {f"part:{o['id']}" for o in occupants(design)}
     ends = []
     for _label, d_end, moved in slide_ends(design):
-        ends += overlaps(d_end, {f"part:{pid}" for pid in moved})
+        keys = {f"part:{pid}" for pid in moved}
+        ends += [(a, b, o) for a, b, o in overlaps(d_end, keys)
+                 if not any(x in keys and y.split(".", 1)[0] in riders for x, y in ((a, b), (b, a)))]
     allp = sorted(rest + ends, key=lambda t: -t[2])
     left = (sum(1 for m in design.get("members", []) if member_box(design, m) is None)
             + sum(1 for p in design.get("parts", []) if turned(p)))

@@ -1,5 +1,5 @@
 """The run list's rows (no ?dev=1) each say what replaying the record shows — how it was driven and
-how far the design went, from the record: 「決まった手順で最後まで・v4 で全部合格」 — with
+how far the design went, from the record: 「決まった手順で最後まで・v4 で全部 OK」 — with
 when it started and the want under it, and how it ended in the right column only (完了 / 途中で止まった).
 Saved and local records are one table, newest first; a record without project.driver (older than the
 field) or one that ended at the domain picks is kept under the closed 「この PC の記録」.
@@ -23,9 +23,10 @@ import unittest
 from pathlib import Path
 
 from hiraku.webserve.server import make_server
+from tests.web.test_layout_lint_browser import LAUNCH_FILLED
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -83,8 +84,8 @@ def build(runs: Path) -> None:
 SHORT = "依頼: 林道を走れる 2 人乗りの小さなオフロード車両"
 EXPECTED = {
     GOING: ["Claude の運転・いま v1", ["11/4 10:00", SHORT], ["going", "実行中"], False],
-    STOPPED: ["Claude の運転・v2 まで・不合格が残った", ["11/4 09:15", SHORT], ["stopped", "途中で止まった"], False],
-    PASSED: ["決まった手順で最後まで・v4 で全部合格", ["11/4 08:40", SHORT], ["done", "完了"], False],
+    STOPPED: ["Claude の運転・v2 まで・NG が残った", ["11/4 09:15", SHORT], ["stopped", "途中で止まった"], False],
+    PASSED: ["決まった手順で最後まで・v4 で全部 OK", ["11/4 08:40", SHORT], ["done", "完了"], False],
     PICKS: ["決まった手順・分野を選ぶところまで", ["11/3 12:00", SHORT], ["done", "完了"], True],
     OLD: ["v1 まで", ["11/3 01:31", SHORT], ["stopped", "途中で止まった"], True],
 }
@@ -94,11 +95,19 @@ EXPECTED = {
 class RunListRowsBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from hiraku.webserve.launch import Launcher
+
         cls.tmp = Path(tempfile.mkdtemp())
-        build(cls.tmp / "runs")
-        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None)
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
-        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+        runs = cls.tmp / "runs"
+        build(runs)
+        # the list's launcher with and without an API key, whatever the window running the test has
+        # (the key changes the list's ways to run and its buttons; nothing is started here)
+        cls.servers, cls.bases = [], {}
+        for name, env in (("no key", {}), ("key", {"ANTHROPIC_API_KEY": "test-value-not-a-real-key"})):
+            server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=Launcher(runs, env=env))
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            cls.servers.append(server)
+            cls.bases[name] = f"http://127.0.0.1:{server.server_address[1]}"
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(args=["--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
 
@@ -106,16 +115,18 @@ class RunListRowsBrowserTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.browser.close()
         cls.pw.stop()
-        cls.server.shutdown()
-        cls.server.server_close()
+        for server in cls.servers:
+            server.shutdown()
+            server.server_close()
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def open(self, width, height, query="?list=1"):
+    def open(self, width, height, query="?list=1", key="no key"):
         page = self.browser.new_page(viewport={"width": width, "height": height})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/{query}")
+        page.goto(f"{self.bases[key]}/{query}", wait_until="domcontentloaded")
         page.wait_for_selector("#runlist table")
+        page.wait_for_function(LAUNCH_FILLED, timeout=60000)
         page.evaluate("document.fonts.ready")
         return page, errors
 
@@ -146,13 +157,22 @@ class RunListRowsBrowserTest(unittest.TestCase):
             self.assertNotIn(state, rsum)
 
     def test_the_rows_pass_the_layout_lint(self):
-        for width, height in ((1280, 720), (900, 506)):
-            page, errors = self.open(width, height)
-            page.wait_for_timeout(300)  # the list fills #launch after its own fetch
-            problems = page.evaluate(LINT_JS, {"root": "#runlist"})
+        for key in self.bases:
+            for width, height in ((1280, 720), (900, 506)):
+                page, errors = self.open(width, height, key=key)  # (open waits until #launch is filled)
+                problems = page.evaluate(LINT_JS, {"root": "#runlist"})
+                keyless = page.evaluate("document.querySelectorAll('#launch .keyless').length")
+                page.close()
+                self.assertEqual(errors, [])
+                self.assertEqual(keyless, 0, key)  # the plain list does not say what is missing
+                self.assertEqual(problems, [], f"{key} @{width}")
+        # ?dev=1 says when the server's window has no key (the server's launcher, not the window's)
+        for key in self.bases:
+            page, errors = self.open(1280, 720, "?list=1&dev=1", key=key)
+            keyless = page.evaluate("document.querySelectorAll('#launch .keyless').length")
             page.close()
             self.assertEqual(errors, [])
-            self.assertEqual(problems, [], f"@{width}")
+            self.assertEqual(keyless, 1 if key == "no key" else 0, key)
 
     def test_the_dev_list_is_as_it_was(self):
         page, errors = self.open(1280, 720, "?list=1&dev=1")

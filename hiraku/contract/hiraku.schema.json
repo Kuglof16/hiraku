@@ -119,14 +119,15 @@
       "pattern": "^(lead|designer|packager|system|user|designer\\.(structure|mechanism|electric)|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
     },
     "base": {
-      "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity.",
+      "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity, K6 air flow (hiraku/cfd).",
       "enum": [
         "K0",
         "K1",
         "K2",
         "K3",
         "K4",
-        "K5"
+        "K5",
+        "K6"
       ]
     },
     "test_id": {
@@ -297,6 +298,13 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a record-only load case (id ending -drive, no criterion, feeding nothing) for the screen and the video: P1 step_climb_dynamic with record_run speed (driving over the step at 1x); S3 the lane change at 1.25 times its speed (near the tyres' limit); S1 rollover_tilt, the tilt table 1 deg past its limit (a computed rollover)."
         },
         "stop_after": {
           "enum": [
@@ -2387,6 +2395,10 @@
           "type": "string",
           "pattern": "^ana-[0-9]{4,}$"
         },
+        "physically_validated": {
+          "type": "boolean",
+          "description": "false: the values were not compared with an experiment on this kind of object (assumptions say 確かめていない)."
+        },
         "tool": {
           "type": "string"
         },
@@ -3970,6 +3982,13 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a record-only load case (id ending -drive, no criterion, feeding nothing) for the screen and the video: P1 step_climb_dynamic with record_run speed (driving over the step at 1x); S3 the lane change at 1.25 times its speed (near the tyres' limit); S1 rollover_tilt, the tilt table 1 deg past its limit (a computed rollover)."
         },
         "stop_after": {
           "enum": [
@@ -5920,6 +5939,71 @@
             "minLength": 1
           },
           "description": "Result quantities to compare. Missing: every quantity with a sensitivity record."
+        }
+      }
+    },
+    "tool_input.cfd_aero": {
+      "description": "Agent-facing MCP tool (hiraku/tools/cfd_tools.py). 設計の v の空気の流れを GPU で解き、ヨーごとの力と係数の表を実行のフォルダに書く。GPU が無ければ回さない。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "design_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Missing: the latest version."
+        },
+        "yaws_deg": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": -90.0,
+            "maximum": 90.0
+          },
+          "minItems": 1,
+          "maxItems": 21,
+          "description": "Yaw angles; + is wind from the left. A moving vehicle takes up to +-85, at rest up to +-90. Missing: 0, +-5, +-10, +-15, +-20, and F1's wind on both sides: at rest at yaw 90, and at the load case's speed."
+        },
+        "speed_kmh": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0
+              },
+              "minItems": 1,
+              "maxItems": 4
+            }
+          ],
+          "description": "Vehicle speed, or several to compute the speed effect. 0: at rest in the wind wind_ms. Missing: the design variable max_speed."
+        },
+        "wind_ms": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "The wind on a vehicle at rest. Missing: the F1 load case's wind speed."
+        },
+        "dx_mm": {
+          "type": "number",
+          "minimum": 20.0,
+          "maximum": 320.0,
+          "description": "Grid size. Missing: 80."
+        },
+        "replay": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\.json$"
+            }
+          ],
+          "description": "Read a stored record instead of running: its path relative to the run's folder, or true for the newest of the version. Needs no GPU."
         }
       }
     },

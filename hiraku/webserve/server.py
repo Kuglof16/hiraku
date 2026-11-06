@@ -34,6 +34,11 @@ Standard library only. Routes:
     GET /api/formulas                  the K0 formulas' ids and Japanese titles (formula_titles)
     GET /api/modules                    the contract's module ids, MODULE_NAMES_JA and the
                                         module designers (web/js/modules.js)
+    GET /viewer/<path>                  the result viewer (viewer/, read only; 404 without it)
+    GET /api/viewer[?run=<run_id>]      whether the viewer's answers are provisional (viewer_link.info)
+    GET /api/runs/<run_id>/viewer/<analysis_id>
+                                        what the viewer draws for one analysis (viewer_link.answer),
+                                        opened as /viewer/index.html?data=<this url>#<field>
 
 Saved runs are run folders kept in the repository (saved_dir/<run_id>/, the
 same layout as runs/) so a fresh checkout has something to replay. The screen
@@ -62,6 +67,7 @@ from hiraku.contract import EXAMPLES_DIR
 from hiraku.contract.layout import EVENTS_FILE, JUDGEMENTS_FILE, PROJECT_FILE, RUN_ID_RE, SHOWCASE_DIR, TOOLS_DIR
 from hiraku.webserve.launch import DEMO_RUNS_FILE, Launcher, LaunchError
 from hiraku.webserve.shelf import Shelf
+from hiraku.webserve import viewer_link
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -96,6 +102,7 @@ _EVENTS_PATH_RE = re.compile(r"^/api/runs/([^/]+)/events$")
 _TOOL_FILE_RE = re.compile(r"^/api/runs/([^/]+)/tools/([a-z0-9_]+-[0-9]+(?:\.py|\.check\.json))$")
 _TOOL_LIST_RE = re.compile(r"^/api/runs/([^/]+)/tools/?$")
 _TOOL_NAME_RE = re.compile(r"^([a-z0-9_]+)-([0-9]+)\.py$")
+_VIEWER_API_RE = re.compile(r"^/api/runs/([^/]+)/viewer/([A-Za-z0-9_.-]+)$")
 MAX_READ_BYTES = 8 * 1024 * 1024  # one response; the client asks again for the rest
 # One line longer than MAX_READ_BYTES is still read whole up to this size (a mesh.created or an
 # analysis.finished with per-element values of a large mesh); a longer line is skipped as bad.
@@ -463,6 +470,9 @@ class Handler(BaseHTTPRequestHandler):
     shelf: Shelf = Shelf()
     quiet: bool = False
     assets: bool = True  # /api/assets lists the Poly Haven files (False: none, for the fall-back)
+    viewer_dir: Path = viewer_link.VIEWER_DIR
+    viewer_data_dir: Path = viewer_link.VIEWER_DATA_DIR
+    viewer_build = None  # the viewer's entry (None: viewer.src.build.for_analysis when it exists; False: provisional)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
         if not self.quiet:
@@ -512,6 +522,21 @@ class Handler(BaseHTTPRequestHandler):
         m = _TOOL_LIST_RE.match(path)
         if m:
             self._send_tool_list(m.group(1))
+            return
+        if path == "/api/viewer":
+            runs = {}
+            for rid in query.get("run", [])[:1]:
+                ev = events_path(self.runs_dir, rid, self.saved_dir)
+                if ev is not None and ev.exists():
+                    runs[rid] = ev.parent
+            self._send_json(viewer_link.info(self.viewer_data_dir, self.viewer_build, runs))
+            return
+        m = _VIEWER_API_RE.match(path)
+        if m:
+            self._send_viewer(m.group(1), m.group(2))
+            return
+        if path == "/viewer" or path.startswith("/viewer/"):
+            self._send_viewer_file(path[len("/viewer"):])
             return
         if path.startswith("/api/"):
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
@@ -636,9 +661,27 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _send_static(self, path: str) -> None:
+    def _send_viewer(self, run_id: str, analysis_id: str) -> None:
+        path = events_path(self.runs_dir, run_id, self.saved_dir)
+        if path is None:
+            self._send_json({"error": f"bad run id {run_id!r}"}, HTTPStatus.BAD_REQUEST)
+            return
+        if not path.exists():
+            self._send_json({"error": f"no events for {run_id}"}, HTTPStatus.NOT_FOUND)
+            return
+        self._send_json(viewer_link.answer(path, analysis_id, self.viewer_data_dir, self.viewer_build))
+
+    def _send_viewer_file(self, path: str) -> None:
+        """A file under viewer/ (the result viewer, read only); data/ from viewer_data_dir."""
+        rel = path.lstrip("/")
+        if rel == "data" or rel.startswith("data/"):
+            self._send_static(rel[len("data"):], Path(self.viewer_data_dir))
+            return
+        self._send_static(path, Path(self.viewer_dir))
+
+    def _send_static(self, path: str, root_dir: Path | None = None) -> None:
         rel = path.lstrip("/") or "index.html"
-        root = self.web_dir.resolve()
+        root = (root_dir or self.web_dir).resolve()
         target = (root / rel).resolve()
         if target.is_dir():
             target = target / "index.html"
@@ -710,6 +753,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    # socketserver's listen backlog is 5; a page asks for its modules on several connections at
+    # once, and with a busy machine the accept loop falls behind (a browser test saw
+    # ERR_CONNECTION_REFUSED with other browser tests running beside it)
+    request_queue_size = 64
+
     # On Windows SO_REUSEADDR (HTTPServer's default) lets a second socket bind a port another
     # server already listens on, so a second HIRAKU would quietly share the port with an old one.
     # There the port is bound exclusively instead: a port in use fails with OSError.
@@ -741,6 +789,9 @@ def make_server(
     pets_file: Path | str = PETS_FILE,
     demo_runs_file: Path | str = DEMO_RUNS_FILE,
     assets: bool = True,
+    viewer_dir: Path | str = viewer_link.VIEWER_DIR,
+    viewer_data_dir: Path | str | None = None,
+    viewer_build=None,
 ) -> ThreadingHTTPServer:
     """Build (but do not start) the server. Port 0 picks a free port.
 
@@ -767,6 +818,11 @@ def make_server(
             "shelf": shelf or Shelf(),
             "quiet": quiet,
             "assets": assets,
+            "viewer_dir": Path(viewer_dir),
+            "viewer_data_dir": Path(viewer_data_dir) if viewer_data_dir is not None else Path(viewer_dir) / "data",
+            # (staticmethod: a plain function as a class attribute would be bound to the handler)
+            # (False: the provisional answers even when the entry exists, for tests)
+            "viewer_build": staticmethod(viewer_build) if callable(viewer_build) else viewer_build,
         },
     )
     return Server((host, port), handler)

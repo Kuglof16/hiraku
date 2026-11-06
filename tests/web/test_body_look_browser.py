@@ -22,7 +22,7 @@ from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.body_fixture import ADDED, BASE, added_ids, body_design, body_events, schema_has_part_material
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -169,7 +169,7 @@ class BodyLookBrowserTest(unittest.TestCase):
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
         # off=joints: the parts' own look (the joints, on at first, make the parts see-through)
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look={look}&off=joints")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look={look}&off=joints", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -296,7 +296,7 @@ class BodyLookBrowserTest(unittest.TestCase):
         design = body_design()
         size = {p["id"]: p["box"]["size_mm"] for p in design["parts"]}
         real = self.look_of("real", design)["parts"]
-        zu = self.look_of("zu", design)["parts"]
+        zu = self.look_of("plain", design)["parts"]  # ?look=plain: the diagram (the default is the real look)
         boxes = ["hood", "fender_FL", "side_panel_R", "bulkhead", "floor", "seat_R_back", "seat_L_cushion", "bracket_column", "bracket_seat_R_F", "rollbar", "reducer"]
         for pid in boxes:
             (r,) = real[pid]
@@ -312,7 +312,9 @@ class BodyLookBrowserTest(unittest.TestCase):
         src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
         for name, want in ZU_PRINT.items():
             design = json.loads((ZU_DESIGNS / f"{name}.json").read_text(encoding="utf-8"))
-            page, errors = self.open("zu")
+            # ?look=plain: the diagram, asked for by name now that the workbench opens in the real look
+            # (the fingerprints are unchanged: the diagram is drawn as before)
+            page, errors = self.open("plain")
             got = page.evaluate(ZU_FINGERPRINT, [src[0], {**src[1], "data": design}])
             page.close()
             self.assertEqual(errors, [], name)

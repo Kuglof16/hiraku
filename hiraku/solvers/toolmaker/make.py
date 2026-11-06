@@ -60,7 +60,7 @@ def _child(code: str, action: str, args: Record | None, timeout_s: float) -> Rec
     lines =[ln for ln in p.stdout.decode("ascii", "replace").splitlines() if ln.startswith(MARK)]
     if not lines:
         tail = p.stderr.decode("utf-8", "replace")[-800:]
-        return {"ok": False, "error": f"道具のプロセスが答えを返さずに終わりました (終了コード {p.returncode}): {tail}"}
+        return {"ok": False, "error": f"ツールのプロセスが答えを返さずに終わりました (終了コード {p.returncode}): {tail}"}
     return json.loads(lines[-1][len(MARK):])
 
 
@@ -137,12 +137,12 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
     out = _child(code, "check", None, timeout_s)
     made.printed = out.get("printed", "")
     if not out.get("ok"):
-        made.problems.append(out.get("error", "道具が走りませんでした"))
+        made.problems.append(out.get("error", "ツールが走りませんでした"))
         return made
     spec, checks = out.get("spec"), out.get("checks")
     described = out.get("describe")
     if described is not None and not isinstance(described, dict):
-        made.problems.append("describe() は dict を返してください (load case params と predicts。棚の道具と同じ形)")
+        made.problems.append("describe() は dict を返してください (load case params と predicts。棚のツールと同じ形)")
         described = None
     if not isinstance(spec, dict) or not isinstance(checks, list):
         made.problems.append("spec() は tool_spec の dict を、check() は tool_check の list を返してください")
@@ -170,7 +170,7 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
         made.problems.append(f"spec() の形が契約の tool_spec に合いません: {'; '.join(errs[:3])}")
         spec["usable"] = False
     if made.name in taken:
-        made.problems.append(f"道具の名前 {made.name!r} は棚にもうあります。別の名前にしてください")
+        made.problems.append(f"ツールの名前 {made.name!r} は棚にもうあります。別の名前にしてください")
         spec["usable"] = False
     made.spec = spec
     made.usable = spec["usable"]

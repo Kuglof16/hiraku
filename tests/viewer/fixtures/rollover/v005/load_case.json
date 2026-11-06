@@ -1,0 +1,38 @@
+{
+ "load_case_id": "S1-tilt-two_cargo",
+ "test_id": "S1",
+ "domain": "handling",
+ "title": "傾斜台で倒れない (2 人 + 荷)",
+ "params": {
+  "loading": "two_cargo",
+  "direction": "both",
+  "cargo_cg_above_deck": {
+   "value": 150.0,
+   "unit": "mm"
+  }
+ },
+ "requirement_keys": [
+  "Q30",
+  "Q33",
+  "Q40",
+  "Q60",
+  "Q41"
+ ],
+ "tolerance_rel": 0.1,
+ "criterion": {
+  "quantity": "tilt_angle",
+  "op": ">=",
+  "limit": {
+   "value": 24.0,
+   "unit": "deg"
+  },
+  "basis": "Q60 24 deg (for the loading of Q30)",
+  "requirement_keys": [
+   "Q60"
+  ]
+ },
+ "modules": [
+  "package",
+  "suspension"
+ ]
+}

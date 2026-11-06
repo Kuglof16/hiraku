@@ -1,6 +1,7 @@
-"""Opening a record (?run=): while it is read, a note says so at once with 「☰ 一覧へ」 that can be
-pressed; when it cannot be read, the note says why in words (the status and the address only under
-?dev=1) with 「↻ 開き直す」 and 「☰ 一覧へ」 (web/js/app.js loadingNote, loadFailedNote).
+"""Opening a record (?run=) from hiraku.webserve: while it is read, the page is one line (「記録を読み込んでいます
+NN %」) and the lead's pet, no frame (tabs, the top band, the 3D); when it cannot be read, the same line says
+why (「記録を読み込めませんでした (what)。what to do」; the status and the address after it only under ?dev=1)
+with 「↻ 開き直す」 and 「☰ 一覧へ」, not in red (web/index.html #boot, web/js/app.js boot, loadFailedWhy).
 
 The read is held back by a fetch that never answers (an init script), or failed with Playwright's
 routing of /api/runs/<id>/events.
@@ -11,6 +12,7 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -20,16 +22,20 @@ from pathlib import Path
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 RUN = "20261105-120000-loading"
 EVENTS = "**/api/runs/*/events*"
-NOTE = """() => { const n = document.getElementById("loading-note");
-  return n && { failed: n.classList.contains("failed"), lines: [...n.children].map((c) => c.textContent),
-    links: [...n.querySelectorAll("a")].map((a) => [a.textContent, a.getAttribute("href")]) }; }"""
+NOTE = """() => { const n = document.getElementById("boot");
+  return n && { failed: n.classList.contains("failed"), line: document.getElementById("boot-line").textContent,
+    links: [...n.querySelectorAll("a")].map((a) => [a.textContent, a.getAttribute("href")]),
+    frame: document.getElementById("stage").checkVisibility({ visibilityProperty: true }),
+    color: getComputedStyle(document.getElementById("boot-line")).color }; }"""
+HOLD = """(() => { const real = window.fetch; window.heldReads = 0;
+  window.fetch = (u, o) => (String(u).includes("/events") ? (window.heldReads++, new Promise(() => {})) : real(u, o)); })()"""
 
 
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
@@ -60,93 +66,73 @@ class LoadingNoteBrowserTest(unittest.TestCase):
         self.addCleanup(page.close)
         return page, errors
 
-    def test_while_reading_the_note_and_the_list_link_show_at_once(self):
+    def test_while_reading_one_line_and_no_frame(self):
         page, errors = self.page()
-        # the read of the record never comes back (only on this page, before app.js runs)
-        page.add_init_script("""(() => { const real = window.fetch; window.heldReads = 0;
-          window.fetch = (u, o) => (String(u).includes("/events") ? (window.heldReads++, new Promise(() => {})) : real(u, o)); })()""")
+        page.add_init_script(HOLD)  # the read of the record never comes back (only on this page)
         page.goto(f"{self.base}/?run={RUN}", wait_until="domcontentloaded")
-        page.wait_for_selector("#loading-note")
+        page.wait_for_function("window.heldReads > 0")
         got = page.evaluate(NOTE)
-        self.assertEqual(got["failed"], False)
-        self.assertEqual(got["lines"][0], "記録を読み込んでいます…")  # (the size is not known yet)
-        self.assertEqual(got["links"], [["☰ 一覧へ", "?list=1"]])
-        self.assertGreater(page.evaluate("window.heldReads"), 0)
-        self.assertTrue(page.is_visible("#loading-note a"))
-        # the link can be pressed (the note itself lets clicks through, its link does not)
-        page.click("#loading-note a")
-        page.wait_for_url("**/?list=1")
-        page.wait_for_selector("#runlist h2")
-        self.assertFalse(page.evaluate("() => document.getElementById('runlist').hidden"))
+        self.assertEqual((got["failed"], got["frame"], got["links"]), (False, False, []), got)
+        self.assertTrue(got["line"].startswith("記録を読み込んでいます"), got)
+        self.assertTrue(page.is_visible("#boot-pet"))
         self.assertEqual(errors, [])
 
-    def test_the_note_is_on_the_3d_only(self):
-        """While reading, the note is inside the 3D (#viewport): over the workbench it shows within the
-        3D's box; on another tab (④) it is not seen, and the tabs are never under it."""
-        held = """(() => { const real = window.fetch;
-          window.fetch = (u, o) => (String(u).includes("/events") ? new Promise(() => {}) : real(u, o)); })()"""
-        for tab, seen in (("bench", True), ("grid", False)):
-            with self.subTest(tab=tab):
-                page, errors = self.page()
-                page.add_init_script(held)
-                page.goto(f"{self.base}/?run={RUN}&tab={tab}", wait_until="domcontentloaded")
-                page.wait_for_selector("#loading-note", state="attached")
-                got = page.evaluate("""() => { const n = document.getElementById("loading-note");
-                  const r = n.getBoundingClientRect(), v = document.getElementById("viewport").getBoundingClientRect();
-                  const tabs = [...document.querySelectorAll(".tab")].map((b) => { const q = b.getBoundingClientRect();
-                    return document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2)?.closest(".tab") === b; });
-                  return { inView: n.parentElement.id, seen: n.checkVisibility(), within: r.left >= v.left && r.right <= v.right && r.top >= v.top && r.bottom <= v.bottom, tabs }; }""")
-                self.assertEqual(got["inView"], "viewport")
-                self.assertEqual(got["seen"], seen)
-                if seen:
-                    self.assertTrue(got["within"], got)
-                self.assertTrue(all(got["tabs"]), got)
-                self.assertEqual(errors, [])
-
-    def test_the_note_goes_when_the_record_is_read(self):
+    def test_the_line_goes_when_the_record_is_read(self):
         page, errors = self.page()
-        page.goto(f"{self.base}/?run={RUN}&pace=0&t=9")
+        page.goto(f"{self.base}/?run={RUN}&pace=0&t=9", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
-        page.wait_for_function("!document.getElementById('loading-note')")
+        page.wait_for_function("!document.getElementById('boot')")
+        self.assertTrue(page.evaluate("document.getElementById('stage').checkVisibility({ visibilityProperty: true })"))
+        self.assertEqual(errors, [])
+
+    def test_the_list_shows_without_the_line(self):
+        page, errors = self.page()
+        page.goto(f"{self.base}/?list=1", wait_until="domcontentloaded")
+        page.wait_for_selector("#runlist h2")
+        self.assertFalse(page.evaluate("!!document.getElementById('boot')"))
         self.assertEqual(errors, [])
 
     def check_failed(self, page, why, href_run=RUN, dev=False):
-        page.wait_for_selector("#loading-note.failed")
+        page.wait_for_selector("#boot.failed")
         got = page.evaluate(NOTE)
         q = "&dev=1" if dev else ""
-        self.assertEqual(got["lines"][:2], ["記録を読み込めませんでした", why])
+        self.assertEqual(got["line"], why)
+        self.assertFalse(got["frame"])
         self.assertEqual(got["links"], [["↻ 開き直す", f"?run={href_run}{q}"], ["☰ 一覧へ", f"?list=1{q}"]])
+        r, g, b = (int(x) for x in re.findall(r"\d+", got["color"])[:3])
+        self.assertLess(r - max(g, b), 60, got["color"])  # (not red)
         return got
 
     def test_a_server_error_says_why_with_two_links(self):
         page, errors = self.page()
         page.route(EVENTS, lambda route: route.fulfill(status=500, body='{"error": "boom"}', content_type="application/json"))
-        page.goto(f"{self.base}/?run={RUN}")
-        self.check_failed(page, "サーバーが記録を返せませんでした (500)。")
-        self.assertNotIn("/api/", page.inner_text("#loading-note"))
-        # 開き直す reads it again (now it can be read): the note goes
+        page.goto(f"{self.base}/?run={RUN}", wait_until="domcontentloaded")
+        self.check_failed(page, "記録を読み込めませんでした (サーバー 500)。ページを読み込み直してください")
+        self.assertNotIn("/api/", page.inner_text("#boot"))
+        # 開き直す reads it again (now it can be read): the line goes
         page.unroute(EVENTS)
-        page.click("#loading-note a:has-text('開き直す')")
+        page.click("#boot a:has-text('開き直す')")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
-        page.wait_for_function("!document.getElementById('loading-note')")
+        page.wait_for_function("!document.getElementById('boot')")
         self.assertEqual(errors, [])
 
     def test_a_record_not_there_and_no_server(self):
         page, errors = self.page()
-        page.goto(f"{self.base}/?run=20991231-000000-nothing")
-        self.check_failed(page, "この記録は見つかりませんでした。消されたか、名前が違います。", "20991231-000000-nothing")
+        page.goto(f"{self.base}/?run=20991231-000000-nothing", wait_until="domcontentloaded")
+        self.check_failed(page, "記録を読み込めませんでした (見つかりません)。消されたか、名前が違います。一覧から選び直してください",
+                          "20991231-000000-nothing")
         page.route(EVENTS, lambda route: route.abort())
-        page.goto(f"{self.base}/?run={RUN}")
-        self.check_failed(page, "サーバーにつながりませんでした。HIRAKU が動いているか確かめてください。")
-        page.click("#loading-note a:has-text('一覧へ')")
+        page.goto(f"{self.base}/?run={RUN}", wait_until="domcontentloaded")
+        self.check_failed(page, "記録を読み込めませんでした (ネットワーク)。HIRAKU が動いているか確かめて、ページを読み込み直してください")
+        page.click("#boot a:has-text('一覧へ')")
         page.wait_for_url("**/?list=1")
         self.assertEqual(errors, [])
 
     def test_dev_shows_the_status_and_the_address(self):
         page, errors = self.page()
         page.route(EVENTS, lambda route: route.fulfill(status=500, body="{}", content_type="application/json"))
-        page.goto(f"{self.base}/?run={RUN}&dev=1")
-        self.check_failed(page, f"500 /api/runs/{RUN}/events?offset=0", dev=True)
+        page.goto(f"{self.base}/?run={RUN}&dev=1", wait_until="domcontentloaded")
+        self.check_failed(page, f"記録を読み込めませんでした (サーバー 500)。ページを読み込み直してください — 500 /api/runs/{RUN}/events?offset=0", dev=True)
         self.assertEqual(errors, [])
 
 

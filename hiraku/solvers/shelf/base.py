@@ -204,10 +204,17 @@ def on_board(design: Record, load_case: Record) -> Record:
         raise LoadCaseError(str(e)) from None
 
 
+def plate_parts(design: Record) -> frozenset[str]:
+    """Parts the shell mesh may carry as plates: gussets, and suspension mount brackets (kind bracket with
+    joint; k1_shell.brackets meshes those that stand on a tube wall)."""
+    return frozenset(p["id"] for p in design.get("parts", [])
+                     if p.get("kind") == "gusset" or (p.get("kind") == "bracket" and p.get("joint")))
+
+
 def mesh_of(design: Record, params: dict) -> tuple[Record | None, str | None]:
     """The version's shell mesh passed in params["mesh"] (tools with needs_mesh), or None and why
     it is not used: none passed (known-answer checks, unit tests), or made from another design. Its elements
-    belong to the design's members or to its gusset parts."""
+    belong to the design's members, its gusset parts or its suspension mount brackets (plate_parts)."""
     mesh = (params or {}).get("mesh")
     if mesh is None:
         return None, None
@@ -215,7 +222,7 @@ def mesh_of(design: Record, params: dict) -> tuple[Record | None, str | None]:
     if int(mesh.get("design_version", -1)) != version:
         return None, f"mesh {mesh.get('mesh_id')} is of design version {mesh.get('design_version')}, not {version}; not drawn"
     members = {m["id"] for m in design.get("members", [])}
-    members |= {p["id"] for p in design.get("parts", []) if p.get("kind") == "gusset"}  # plates meshed with the frame
+    members |= plate_parts(design)  # plates meshed with the frame
     stray = sorted(set(mesh.get("element_member", [])) - members)
     if stray:
         return None, f"mesh {mesh.get('mesh_id')} has elements of {', '.join(stray[:3])}, not members of this design; not drawn"
@@ -296,6 +303,45 @@ class BuiltinTool(ABC):
             out["upstream"] = self.upstream
         return out
 
+    def shape(self, design: Record) -> str | None:
+        """What this tool needs of the design's shape (hiraku.solvers.shelf.applies): None when the design has
+        it, else why not; by default the tool's entry in applies.SHAPES. A tool with a shape check (an entry
+        there, or its own override) is judged by it on a design of no known kind."""
+        from .applies import shape_of
+
+        return shape_of(self.name, design)
+
+    def _has_shape(self) -> bool:
+        from .applies import SHAPES
+
+        return self.name in SHAPES or type(self).shape is not BuiltinTool.shape
+
+    def _not_for(self, why: str) -> str:
+        return f"{self.name} はこの設計に使えません: {why}"
+
+    def applies(self, design: Record) -> str | None:
+        """None when the tool applies to the design, else a short reason (Japanese) why not. First the tool's
+        shape() (run() refuses on it too); then applies_to (the kinds of design), as analyze judged it before:
+        a design of a known kind (archetype, or the generator that made it) must be one of them; a design of no
+        known kind (one Claude wrote) is judged by shape() and the kind's mark (applies.KIND_MARKS) when the
+        tool has a shape check, else refused."""
+        from .applies import KIND_MARKS, design_kind
+
+        why = self.shape(design)
+        if why:
+            return self._not_for(why)
+        if not self.applies_to:
+            return None
+        kind = design_kind(design)
+        if kind in self.applies_to:
+            return None
+        if kind is None and self._has_shape():
+            mark = KIND_MARKS.get(self.name)
+            why = mark(design) if mark else None
+            return self._not_for(why) if why else None
+        return (f"{self.name} は {' / '.join(self.applies_to)} の型の設計のためのツールです (この設計の型: "
+                f"{kind or 'なし (手で書いた設計)'})")
+
     def declared(self, load_case: Record) -> Record:
         """The load case as analyse sees it: given parameters checked against
         load_case_params, defaults filled in, undeclared names not readable."""
@@ -333,7 +379,11 @@ class BuiltinTool(ABC):
             rec["error"] = "the design does not fit the contract: " + "; ".join(errs[:5])
         else:
             try:
-                rec.update(self.analyse(design, self.declared(load_case), params or {}))
+                declared = self.declared(load_case)  # a missing load-case param is said first
+                why = self.shape(design)
+                if why:  # the tool cannot run on this design: refused with the reason (the contract's "failed")
+                    raise DesignError(self._not_for(why))
+                rec.update(self.analyse(design, declared, params or {}))
             except DesignError as e:
                 rec["status"] = "failed"
                 rec["error"] = str(e)

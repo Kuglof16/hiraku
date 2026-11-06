@@ -322,7 +322,7 @@ class ScriptedFirstDesignTest(FirstDesignCase, unittest.TestCase):
         self.assertLess(kinds.index("design.created"), kinds.index("project.updated"))
         self.assertLess(kinds.index("project.updated"), kinds.index("prediction.recorded"))
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said" and e["agent"] == "designer"]
-        self.assertEqual(said, ["要件から最初の版を作ります", "版 1 ができました。試験: P1-step100"])
+        self.assertEqual(said, ["要件から最初の版を作ります", "v1 ができました。試験: P1-step100"])
         self.assertEqual(self.ctx.store.design()["change_reason"], "既定の変数で")
 
     def test_stop_button_before_the_first_version(self):

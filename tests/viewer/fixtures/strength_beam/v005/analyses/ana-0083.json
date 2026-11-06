@@ -1,0 +1,1299 @@
+{
+"tool": "frame_static",
+"base": "K1",
+"design_version": 5,
+"load_case_id": "R1-step100",
+"prediction_ids": [
+"pred-0142"
+],
+"status": "ok",
+"results": [
+{
+"quantity": "max_stress",
+"value": 52.0289674491692,
+"unit": "MPa",
+"where": "cross_B"
+},
+{
+"quantity": "min_safety_factor",
+"value": 4.708915283382433,
+"unit": "1",
+"where": "cross_B"
+},
+{
+"quantity": "max_displacement",
+"value": 1.2718696312071744,
+"unit": "mm",
+"where": "RSGV2"
+},
+{
+"quantity": "vehicle_mass",
+"value": 719.8409957604887,
+"unit": "kg"
+},
+{
+"quantity": "frame_mass",
+"value": 102.48696723336542,
+"unit": "kg"
+},
+{
+"quantity": "wheel_load_FL",
+"value": 1082.8134440962344,
+"unit": "N",
+"where": "FL"
+},
+{
+"quantity": "wheel_load_FR",
+"value": 1099.7770174570337,
+"unit": "N",
+"where": "FR"
+},
+{
+"quantity": "wheel_load_RL",
+"value": 2428.746887113221,
+"unit": "N",
+"where": "RL"
+},
+{
+"quantity": "wheel_load_RR",
+"value": 2447.8913524081067,
+"unit": "N",
+"where": "RR"
+},
+{
+"quantity": "max_stress_axial",
+"value": 0.4122098402693435,
+"unit": "MPa",
+"where": "cross_B"
+},
+{
+"quantity": "max_stress_bending_vertical",
+"value": 46.63212974076341,
+"unit": "MPa",
+"where": "cross_B"
+},
+{
+"quantity": "max_stress_bending_sideways",
+"value": 4.984157933531148,
+"unit": "MPa",
+"where": "cross_B"
+},
+{
+"quantity": "max_stress_torsion",
+"value": 0.22113390451386528,
+"unit": "MPa",
+"where": "cross_B"
+},
+{
+"quantity": "unsupported_load",
+"value": 0.0,
+"unit": "1"
+},
+{
+"quantity": "max_stress.rail_L_FA",
+"value": 3.577292446083761,
+"unit": "MPa",
+"where": "rail_L_FA"
+},
+{
+"quantity": "max_stress.rail_L_LAp1_LAu1",
+"value": 12.974219751772669,
+"unit": "MPa",
+"where": "rail_L_LAp1_LAu1"
+},
+{
+"quantity": "max_stress.rail_L_LAu1_LA",
+"value": 19.274754333844104,
+"unit": "MPa",
+"where": "rail_L_LAu1_LA"
+},
+{
+"quantity": "max_stress.rail_L_LA_LAu2",
+"value": 14.695176470143952,
+"unit": "MPa",
+"where": "rail_L_LA_LAu2"
+},
+{
+"quantity": "max_stress.rail_L_LAu2_LAp2",
+"value": 10.869490925760013,
+"unit": "MPa",
+"where": "rail_L_LAu2_LAp2"
+},
+{
+"quantity": "max_stress.rail_L_LAp2_LSO",
+"value": 10.235514008226266,
+"unit": "MPa",
+"where": "rail_L_LAp2_LSO"
+},
+{
+"quantity": "max_stress.rail_L_AS1",
+"value": 21.21834933523868,
+"unit": "MPa",
+"where": "rail_L_AS1"
+},
+{
+"quantity": "max_stress.rail_L_S1S2",
+"value": 20.43322193805052,
+"unit": "MPa",
+"where": "rail_L_S1S2"
+},
+{
+"quantity": "max_stress.rail_L_LSG_LS2",
+"value": 18.433802206490324,
+"unit": "MPa",
+"where": "rail_L_LSG_LS2"
+},
+{
+"quantity": "max_stress.rail_L_S2H",
+"value": 15.922798147757213,
+"unit": "MPa",
+"where": "rail_L_S2H"
+},
+{
+"quantity": "max_stress.rail_L_HB",
+"value": 43.1033890386156,
+"unit": "MPa",
+"where": "rail_L_HB"
+},
+{
+"quantity": "max_stress.rail_L_BE",
+"value": 22.461985123221456,
+"unit": "MPa",
+"where": "rail_L_BE"
+},
+{
+"quantity": "max_stress.rail_R_FA",
+"value": 3.6421134213614548,
+"unit": "MPa",
+"where": "rail_R_FA"
+},
+{
+"quantity": "max_stress.rail_R_RAp1_RAu1",
+"value": 12.980340382948844,
+"unit": "MPa",
+"where": "rail_R_RAp1_RAu1"
+},
+{
+"quantity": "max_stress.rail_R_RAu1_RA",
+"value": 19.197785032001935,
+"unit": "MPa",
+"where": "rail_R_RAu1_RA"
+},
+{
+"quantity": "max_stress.rail_R_RA_RAu2",
+"value": 14.706110212181416,
+"unit": "MPa",
+"where": "rail_R_RA_RAu2"
+},
+{
+"quantity": "max_stress.rail_R_RAu2_RAp2",
+"value": 11.314298945678605,
+"unit": "MPa",
+"where": "rail_R_RAu2_RAp2"
+},
+{
+"quantity": "max_stress.rail_R_RAp2_RSO",
+"value": 11.016844258101768,
+"unit": "MPa",
+"where": "rail_R_RAp2_RSO"
+},
+{
+"quantity": "max_stress.rail_R_AS1",
+"value": 21.718889601246016,
+"unit": "MPa",
+"where": "rail_R_AS1"
+},
+{
+"quantity": "max_stress.rail_R_S1S2",
+"value": 20.538038679190876,
+"unit": "MPa",
+"where": "rail_R_S1S2"
+},
+{
+"quantity": "max_stress.rail_R_RSG_RS2",
+"value": 18.468429498372892,
+"unit": "MPa",
+"where": "rail_R_RSG_RS2"
+},
+{
+"quantity": "max_stress.rail_R_S2H",
+"value": 16.002650795156853,
+"unit": "MPa",
+"where": "rail_R_S2H"
+},
+{
+"quantity": "max_stress.rail_R_HB",
+"value": 43.52007541268739,
+"unit": "MPa",
+"where": "rail_R_HB"
+},
+{
+"quantity": "max_stress.rail_R_BE",
+"value": 22.647709198749414,
+"unit": "MPa",
+"where": "rail_R_BE"
+},
+{
+"quantity": "max_stress.cross_F",
+"value": 7.630446812629567,
+"unit": "MPa",
+"where": "cross_F"
+},
+{
+"quantity": "max_stress.cross_A",
+"value": 21.696259920194038,
+"unit": "MPa",
+"where": "cross_A"
+},
+{
+"quantity": "max_stress.cross_S1",
+"value": 11.35734859796296,
+"unit": "MPa",
+"where": "cross_S1"
+},
+{
+"quantity": "max_stress.cross_S2",
+"value": 18.104568468247408,
+"unit": "MPa",
+"where": "cross_S2"
+},
+{
+"quantity": "max_stress.cross_B",
+"value": 52.0289674491692,
+"unit": "MPa",
+"where": "cross_B"
+},
+{
+"quantity": "max_stress.cross_E",
+"value": 30.661191955675385,
+"unit": "MPa",
+"where": "cross_E"
+},
+{
+"quantity": "max_stress.tower_post_LA1",
+"value": 2.821903081135703,
+"unit": "MPa",
+"where": "tower_post_LA1"
+},
+{
+"quantity": "max_stress.tower_top_LA1",
+"value": 2.1468559061165533,
+"unit": "MPa",
+"where": "tower_top_LA1"
+},
+{
+"quantity": "max_stress.tower_post_LA2",
+"value": 13.957206756960845,
+"unit": "MPa",
+"where": "tower_post_LA2"
+},
+{
+"quantity": "max_stress.tower_top_LA2",
+"value": 2.320562286703906,
+"unit": "MPa",
+"where": "tower_top_LA2"
+},
+{
+"quantity": "max_stress.tower_arm_LA",
+"value": 0.028915010079181118,
+"unit": "MPa",
+"where": "tower_arm_LA"
+},
+{
+"quantity": "max_stress.lower_leg_LA1",
+"value": 27.852213269148006,
+"unit": "MPa",
+"where": "lower_leg_LA1"
+},
+{
+"quantity": "max_stress.lower_leg_LA2",
+"value": 12.323254962466907,
+"unit": "MPa",
+"where": "lower_leg_LA2"
+},
+{
+"quantity": "max_stress.tower_post_RA1",
+"value": 2.6018734910909,
+"unit": "MPa",
+"where": "tower_post_RA1"
+},
+{
+"quantity": "max_stress.tower_top_RA1",
+"value": 2.1866982167005973,
+"unit": "MPa",
+"where": "tower_top_RA1"
+},
+{
+"quantity": "max_stress.tower_post_RA2",
+"value": 14.879918807530466,
+"unit": "MPa",
+"where": "tower_post_RA2"
+},
+{
+"quantity": "max_stress.tower_top_RA2",
+"value": 2.5134559946055743,
+"unit": "MPa",
+"where": "tower_top_RA2"
+},
+{
+"quantity": "max_stress.tower_arm_RA",
+"value": 0.028915010075775297,
+"unit": "MPa",
+"where": "tower_arm_RA"
+},
+{
+"quantity": "max_stress.lower_leg_RA1",
+"value": 27.970787970651912,
+"unit": "MPa",
+"where": "lower_leg_RA1"
+},
+{
+"quantity": "max_stress.lower_leg_RA2",
+"value": 12.863294513303435,
+"unit": "MPa",
+"where": "lower_leg_RA2"
+},
+{
+"quantity": "max_stress.tower_post_LB",
+"value": 0.06899431084923416,
+"unit": "MPa",
+"where": "tower_post_LB"
+},
+{
+"quantity": "max_stress.tower_arm_LB",
+"value": 0.01576375703631854,
+"unit": "MPa",
+"where": "tower_arm_LB"
+},
+{
+"quantity": "max_stress.tower_post_RB",
+"value": 0.06899431096755557,
+"unit": "MPa",
+"where": "tower_post_RB"
+},
+{
+"quantity": "max_stress.tower_arm_RB",
+"value": 0.01576375706690597,
+"unit": "MPa",
+"where": "tower_arm_RB"
+},
+{
+"quantity": "max_stress.lower_cross_A1",
+"value": 6.7438355087964,
+"unit": "MPa",
+"where": "lower_cross_A1"
+},
+{
+"quantity": "max_stress.lower_cross_A2",
+"value": 3.9561540773625063,
+"unit": "MPa",
+"where": "lower_cross_A2"
+},
+{
+"quantity": "max_stress.dash_post_L",
+"value": 9.779780841643564,
+"unit": "MPa",
+"where": "dash_post_L"
+},
+{
+"quantity": "max_stress.dash_post_R",
+"value": 11.359922232284838,
+"unit": "MPa",
+"where": "dash_post_R"
+},
+{
+"quantity": "max_stress.dash_cross",
+"value": 6.79916192017102,
+"unit": "MPa",
+"where": "dash_cross"
+},
+{
+"quantity": "max_stress.rollbar_foot_L",
+"value": 6.590511563629343,
+"unit": "MPa",
+"where": "rollbar_foot_L"
+},
+{
+"quantity": "max_stress.rollbar_post_L",
+"value": 11.775319144008925,
+"unit": "MPa",
+"where": "rollbar_post_L"
+},
+{
+"quantity": "max_stress.rollbar_foot_R",
+"value": 6.619226344315027,
+"unit": "MPa",
+"where": "rollbar_foot_R"
+},
+{
+"quantity": "max_stress.rollbar_post_R",
+"value": 11.772175071524547,
+"unit": "MPa",
+"where": "rollbar_post_R"
+},
+{
+"quantity": "max_stress.rollbar_top",
+"value": 3.2253318753358853,
+"unit": "MPa",
+"where": "rollbar_top"
+},
+{
+"quantity": "max_stress.side_foot_LS2",
+"value": 3.9483162818850377,
+"unit": "MPa",
+"where": "side_foot_LS2"
+},
+{
+"quantity": "max_stress.side_post_LS2_1",
+"value": 2.775538990722976,
+"unit": "MPa",
+"where": "side_post_LS2_1"
+},
+{
+"quantity": "max_stress.side_post_LS2_2",
+"value": 0.6141413623569272,
+"unit": "MPa",
+"where": "side_post_LS2_2"
+},
+{
+"quantity": "max_stress.side_foot_LSG",
+"value": 2.57378181580999,
+"unit": "MPa",
+"where": "side_foot_LSG"
+},
+{
+"quantity": "max_stress.side_post_LSG_1",
+"value": 5.125727543758898,
+"unit": "MPa",
+"where": "side_post_LSG_1"
+},
+{
+"quantity": "max_stress.side_post_LSG_2",
+"value": 0.7159003289796879,
+"unit": "MPa",
+"where": "side_post_LSG_2"
+},
+{
+"quantity": "max_stress.side_bar_L1",
+"value": 1.850346608448715,
+"unit": "MPa",
+"where": "side_bar_L1"
+},
+{
+"quantity": "max_stress.side_bar_L2",
+"value": 0.32204689255466246,
+"unit": "MPa",
+"where": "side_bar_L2"
+},
+{
+"quantity": "max_stress.side_foot_RS2",
+"value": 4.317949445153612,
+"unit": "MPa",
+"where": "side_foot_RS2"
+},
+{
+"quantity": "max_stress.side_post_RS2_1",
+"value": 2.909135292626607,
+"unit": "MPa",
+"where": "side_post_RS2_1"
+},
+{
+"quantity": "max_stress.side_post_RS2_2",
+"value": 0.6780524918838075,
+"unit": "MPa",
+"where": "side_post_RS2_2"
+},
+{
+"quantity": "max_stress.side_foot_RSG",
+"value": 2.802438801352443,
+"unit": "MPa",
+"where": "side_foot_RSG"
+},
+{
+"quantity": "max_stress.side_post_RSG_1",
+"value": 5.520974355830828,
+"unit": "MPa",
+"where": "side_post_RSG_1"
+},
+{
+"quantity": "max_stress.side_post_RSG_2",
+"value": 0.7791236831629184,
+"unit": "MPa",
+"where": "side_post_RSG_2"
+},
+{
+"quantity": "max_stress.side_bar_R1",
+"value": 2.1739984442522946,
+"unit": "MPa",
+"where": "side_bar_R1"
+},
+{
+"quantity": "max_stress.side_bar_R2",
+"value": 0.35518964688148474,
+"unit": "MPa",
+"where": "side_bar_R2"
+},
+{
+"quantity": "max_stress.side_open_foot_L",
+"value": 0.2666479503140821,
+"unit": "MPa",
+"where": "side_open_foot_L"
+},
+{
+"quantity": "max_stress.side_open_foot_R",
+"value": 0.2666479503194274,
+"unit": "MPa",
+"where": "side_open_foot_R"
+},
+{
+"quantity": "max_stress.grab_L_1",
+"value": 0.32979005849112764,
+"unit": "MPa",
+"where": "grab_L_1"
+},
+{
+"quantity": "max_stress.grab_L_2",
+"value": 0.25789102224641663,
+"unit": "MPa",
+"where": "grab_L_2"
+},
+{
+"quantity": "max_stress.grab_L_3",
+"value": 0.40274684678788714,
+"unit": "MPa",
+"where": "grab_L_3"
+},
+{
+"quantity": "max_stress.grab_R_1",
+"value": 0.2708664217522333,
+"unit": "MPa",
+"where": "grab_R_1"
+},
+{
+"quantity": "max_stress.grab_R_2",
+"value": 0.2890386474711949,
+"unit": "MPa",
+"where": "grab_R_2"
+},
+{
+"quantity": "max_stress.grab_R_3",
+"value": 0.47016846010159985,
+"unit": "MPa",
+"where": "grab_R_3"
+}
+],
+"fields": [
+{
+"kind": "stress",
+"label": "von Mises (max along each member)",
+"unit": "MPa",
+"per_member": {
+"rail_L_FA": 3.577292446083761,
+"rail_L_LAp1_LAu1": 12.974219751772669,
+"rail_L_LAu1_LA": 19.274754333844104,
+"rail_L_LA_LAu2": 14.695176470143952,
+"rail_L_LAu2_LAp2": 10.869490925760013,
+"rail_L_LAp2_LSO": 10.235514008226266,
+"rail_L_AS1": 21.21834933523868,
+"rail_L_S1S2": 20.43322193805052,
+"rail_L_LSG_LS2": 18.433802206490324,
+"rail_L_S2H": 15.922798147757213,
+"rail_L_HB": 43.1033890386156,
+"rail_L_BE": 22.461985123221456,
+"rail_R_FA": 3.6421134213614548,
+"rail_R_RAp1_RAu1": 12.980340382948844,
+"rail_R_RAu1_RA": 19.197785032001935,
+"rail_R_RA_RAu2": 14.706110212181416,
+"rail_R_RAu2_RAp2": 11.314298945678605,
+"rail_R_RAp2_RSO": 11.016844258101768,
+"rail_R_AS1": 21.718889601246016,
+"rail_R_S1S2": 20.538038679190876,
+"rail_R_RSG_RS2": 18.468429498372892,
+"rail_R_S2H": 16.002650795156853,
+"rail_R_HB": 43.52007541268739,
+"rail_R_BE": 22.647709198749414,
+"cross_F": 7.630446812629567,
+"cross_A": 21.696259920194038,
+"cross_S1": 11.35734859796296,
+"cross_S2": 18.104568468247408,
+"cross_B": 52.0289674491692,
+"cross_E": 30.661191955675385,
+"tower_post_LA1": 2.821903081135703,
+"tower_top_LA1": 2.1468559061165533,
+"tower_post_LA2": 13.957206756960845,
+"tower_top_LA2": 2.320562286703906,
+"tower_arm_LA": 0.028915010079181118,
+"lower_leg_LA1": 27.852213269148006,
+"lower_leg_LA2": 12.323254962466907,
+"tower_post_RA1": 2.6018734910909,
+"tower_top_RA1": 2.1866982167005973,
+"tower_post_RA2": 14.879918807530466,
+"tower_top_RA2": 2.5134559946055743,
+"tower_arm_RA": 0.028915010075775297,
+"lower_leg_RA1": 27.970787970651912,
+"lower_leg_RA2": 12.863294513303435,
+"tower_post_LB": 0.06899431084923416,
+"tower_arm_LB": 0.01576375703631854,
+"tower_post_RB": 0.06899431096755557,
+"tower_arm_RB": 0.01576375706690597,
+"lower_cross_A1": 6.7438355087964,
+"lower_cross_A2": 3.9561540773625063,
+"dash_post_L": 9.779780841643564,
+"dash_post_R": 11.359922232284838,
+"dash_cross": 6.79916192017102,
+"rollbar_foot_L": 6.590511563629343,
+"rollbar_post_L": 11.775319144008925,
+"rollbar_foot_R": 6.619226344315027,
+"rollbar_post_R": 11.772175071524547,
+"rollbar_top": 3.2253318753358853,
+"side_foot_LS2": 3.9483162818850377,
+"side_post_LS2_1": 2.775538990722976,
+"side_post_LS2_2": 0.6141413623569272,
+"side_foot_LSG": 2.57378181580999,
+"side_post_LSG_1": 5.125727543758898,
+"side_post_LSG_2": 0.7159003289796879,
+"side_bar_L1": 1.850346608448715,
+"side_bar_L2": 0.32204689255466246,
+"side_foot_RS2": 4.317949445153612,
+"side_post_RS2_1": 2.909135292626607,
+"side_post_RS2_2": 0.6780524918838075,
+"side_foot_RSG": 2.802438801352443,
+"side_post_RSG_1": 5.520974355830828,
+"side_post_RSG_2": 0.7791236831629184,
+"side_bar_R1": 2.1739984442522946,
+"side_bar_R2": 0.35518964688148474,
+"side_open_foot_L": 0.2666479503140821,
+"side_open_foot_R": 0.2666479503194274,
+"grab_L_1": 0.32979005849112764,
+"grab_L_2": 0.25789102224641663,
+"grab_L_3": 0.40274684678788714,
+"grab_R_1": 0.2708664217522333,
+"grab_R_2": 0.2890386474711949,
+"grab_R_3": 0.47016846010159985
+}
+},
+{
+"kind": "displacement",
+"label": "frame deflection (wheel-centre rigid motion removed)",
+"unit": "mm",
+"per_node": {
+"LA": [
+-0.054041318497091095,
+-0.005517707437760769,
+-0.2269952183362249
+],
+"LAd": [
+-0.3093639481380377,
+-0.10880233889221466,
+-0.21875216021039706
+],
+"LAl1": [
+0.1952253618310476,
+0.015979690719402015,
+-0.10815448463013533
+],
+"LAl2": [
+0.17818408679788128,
+0.013937231516354093,
+-0.4372961042021466
+],
+"LAm": [
+-0.3022924723048298,
+-0.10880233889221466,
+-0.23625223001059428
+],
+"LAp1": [
+-0.054076521653199316,
+0.010229326467250138,
+0.10232595516966904
+],
+"LAp2": [
+-0.05232295142300583,
+-0.06706760523499916,
+-0.5744622798228767
+],
+"LAt1": [
+-0.3021534786703852,
+-0.08792331750122827,
+0.10231568997651937
+],
+"LAt2": [
+-0.3024314659392744,
+-0.13640248818130413,
+-0.5747132672734631
+],
+"LAu1": [
+-0.05405367048169046,
+0.019370228244889404,
+-0.11080333693255953
+],
+"LAu2": [
+-0.05343838268162259,
+-0.040331839832246905,
+-0.34697346585317856
+],
+"LB": [
+-0.04208005189681574,
+0.0021610346965999228,
+-0.85687340052169
+],
+"LBd": [
+-0.05307904305230707,
+-0.6405829884855464,
+-0.637531368898972
+],
+"LBm": [
+-0.0748016160368439,
+-0.6397311228783097,
+-0.7954808130163074
+],
+"LDT": [
+-0.8316829872732949,
+-0.07733697707530313,
+-0.5749491749382829
+],
+"LE": [
+-0.042081751445274686,
+0.007166087421063616,
+-0.9792994393037722
+],
+"LF": [
+-0.054076153827057605,
+-0.005138128394307363,
+0.23486678268855019
+],
+"LGB1": [
+0.04072120917882767,
+-0.27625690477679277,
+-0.8628752981832243
+],
+"LGB2": [
+0.24165967705756897,
+-0.7316095679958328,
+-0.8628702772918534
+],
+"LH": [
+-0.04502205026247956,
+-0.010571539852504808,
+-1.0321072675040297
+],
+"LHO": [
+-0.08709310677334123,
+-0.010478184589642725,
+-0.7122310430541863
+],
+"LHT": [
+0.7212855544294853,
+0.05440493668129918,
+-0.7129204456555099
+],
+"LS1": [
+-0.04871740780375143,
+0.001007514372218521,
+-1.1246367930339471
+],
+"LS2": [
+-0.04549762050912558,
+0.0007030138421225685,
+-1.0745104767612441
+],
+"LS2O": [
+-0.08652321730055004,
+0.0007301077131609546,
+-0.791852385826177
+],
+"LS2V1": [
+0.05171272545842562,
+-0.3313197702469522,
+-0.7921403559584506
+],
+"LS2V2": [
+0.2567226845159428,
+-0.7943420510745665,
+-0.7922696620040024
+],
+"LSG": [
+-0.04795279067195708,
+0.012175472160673162,
+-1.159689737896924
+],
+"LSGO": [
+-0.030266131163776945,
+0.012148378289635775,
+-0.9520643084847401
+],
+"LSGV1": [
+0.051595528227149856,
+-0.27625500760452376,
+-0.952237337511984
+],
+"LSGV2": [
+0.2567022808220147,
+-0.7316114651681032,
+-0.9524198785015273
+],
+"LSO": [
+-0.051584110517420935,
+-0.06382499553946627,
+-0.7219840282175545
+],
+"LSOO": [
+-0.0316814334021354,
+-0.06382499553946627,
+-0.5321739321465935
+],
+"RA": [
+-0.06042933290323746,
+0.000663915728749298,
+-0.28929398858047994
+],
+"RAd": [
+-0.3125010335925734,
+0.06588268023217782,
+-0.29383628809554535
+],
+"RAl1": [
+0.18947735649597755,
+0.013591180446988552,
+-0.1495276771503204
+],
+"RAl2": [
+0.1703021706143862,
+0.01323328300046464,
+-0.4757921867458864
+],
+"RAm": [
+-0.3038931414727667,
+0.06588268023217782,
+-0.29683538430180295
+],
+"RAp1": [
+-0.0604598220442024,
+-0.021441405140956507,
+0.03496074145502068
+],
+"RAp2": [
+-0.0586861242794378,
+0.06696457333866501,
+-0.6294446798895569
+],
+"RAt1": [
+-0.30377461429110886,
+0.03847277579821058,
+0.03495090788857874
+],
+"RAt2": [
+-0.3040116686544246,
+0.09876908706765931,
+-0.6298444720570319
+],
+"RAu1": [
+-0.06044003084743568,
+-0.026486111621432315,
+-0.17501955132647962
+],
+"RAu2": [
+-0.05981768075453582,
+0.037511256483882066,
+-0.4071312953299799
+],
+"RB": [
+-0.04833585190341294,
+0.0035685804926415543,
+-0.7974215362102346
+],
+"RBd": [
+-0.04882089086854659,
+0.6824027982429691,
+-0.5657602554801916
+],
+"RBm": [
+-0.0700533418133942,
+0.681570153107877,
+-0.7324510811603047
+],
+"RDT": [
+-0.8292441214231949,
+-0.07649661803757946,
+-0.630353931870034
+],
+"RE": [
+-0.048334152354954044,
+0.003356886424795036,
+-0.9006964496378469
+],
+"RF": [
+-0.0604601898703442,
+-0.008534268313849278,
+0.16570020716135472
+],
+"RGB1": [
+0.06779083643327116,
+0.2830261237352858,
+-0.8738290170442572
+],
+"RGB2": [
+0.3323940919763072,
+0.7500142302124102,
+-0.8738130977145548
+],
+"RH": [
+-0.05129196681284805,
+0.01439210262813348,
+-1.0045314928434437
+],
+"RHO": [
+-0.09361805672025719,
+0.014298747365271203,
+-0.6633603406948965
+],
+"RHT": [
+0.7539363231408924,
+0.05503336827712241,
+-0.6640502620090736
+],
+"RS1": [
+-0.055023285882915246,
+0.0019767054420088692,
+-1.1451960400631482
+],
+"RS2": [
+-0.05176962699450094,
+0.002890163400418838,
+-1.0529366300615768
+],
+"RS2O": [
+-0.09437371154935895,
+0.002857353310644045,
+-0.7552808954199359
+],
+"RS2V1": [
+0.08123670236171948,
+0.34812306668475895,
+-0.755600824927086
+],
+"RS2V2": [
+0.35033871661050653,
+0.8241578537567636,
+-0.7557347053091057
+],
+"RSG": [
+-0.054250818949078045,
+-0.008825506102540764,
+-1.1704608885188101
+],
+"RSGO": [
+-0.037741223353656594,
+-0.00879269601276711,
+-0.9652781653982329
+],
+"RSGV1": [
+0.0811212163668546,
+0.2830241105001795,
+-0.9654266793623879
+],
+"RSGV2": [
+0.35031798235477274,
+0.7500162434475175,
+-0.96561136312226
+],
+"RSO": [
+-0.05793554264080607,
+0.06491602587609692,
+-0.7720481609779775
+],
+"RSOO": [
+-0.04011769352549527,
+0.06491602587609692,
+-0.6159496269901117
+]
+}
+}
+],
+"vectors": [
+{
+"kind": "reaction",
+"at": "FL",
+"origin_mm": [
+223.60679774997897,
+610.0,
+100.0
+],
+"vector_N": [
+-1210.6222339749243,
+2.578252454997472,
+1082.8134440962344
+]
+},
+{
+"kind": "reaction",
+"at": "FR",
+"origin_mm": [
+223.60679774997897,
+-610.0,
+100.0
+],
+"vector_N": [
+-1229.5880855629503,
+2.578252454997472,
+1099.7770174570337
+]
+},
+{
+"kind": "reaction",
+"at": "RL",
+"origin_mm": [
+-2020.0,
+610.0,
+0.0
+],
+"vector_N": [
+0.0,
+0.0,
+2428.746887113221
+]
+},
+{
+"kind": "grip",
+"at": "RL",
+"origin_mm": [
+-2020.0,
+610.0,
+0.0
+],
+"vector_N": [
+1220.1051597689373,
+-2.5782524549974726,
+0.0
+]
+},
+{
+"kind": "reaction",
+"at": "RR",
+"origin_mm": [
+-2020.0,
+-610.0,
+0.0
+],
+"vector_N": [
+0.0,
+0.0,
+2447.8913524081067
+]
+},
+{
+"kind": "grip",
+"at": "RR",
+"origin_mm": [
+-2020.0,
+-610.0,
+0.0
+],
+"vector_N": [
+1220.1051597689373,
+-2.5782524549974726,
+0.0
+]
+},
+{
+"kind": "load",
+"at": "cg",
+"origin_mm": [
+-1291.7482254943252,
+-3.193203539012114,
+580.6276233291449
+],
+"vector_N": [
+0.0,
+0.0,
+-7059.228701074596
+]
+}
+],
+"effects": [
+{
+"name": "axial (cross_B)",
+"value": 0.4122098402693435,
+"unit": "MPa",
+"share": 0.007889239197940724
+},
+{
+"name": "bending_vertical (cross_B)",
+"value": 46.63212974076341,
+"unit": "MPa",
+"share": 0.8924872477423209
+},
+{
+"name": "bending_sideways (cross_B)",
+"value": 4.984157933531148,
+"unit": "MPa",
+"share": 0.09539125536704353
+},
+{
+"name": "torsion (cross_B)",
+"value": 0.22113390451386528,
+"unit": "MPa",
+"share": 0.004232257692694905
+},
+{
+"name": "どの部品の重さと慣性も、carried_by の節 (無ければいちばん近い支え) に載せた: 支えのない荷重は 0 (部品の形が枠に触れているかは見ていない。それは手計算の道の確かめ load_path.free_parts が見る)",
+"value": 0.0,
+"unit": "1"
+},
+{
+"name": "max_stress per member: 82 results max_stress.<member id>; the largest (max_stress) is in cross_B",
+"value": 52.0289674491692,
+"unit": "MPa"
+},
+{
+"name": "the gusset plates on the mesh are drawn at 0: the beam model carries them as mass only"
+}
+],
+"hot_spots": [
+{
+"where": "cross_B",
+"quantity": "max_stress",
+"value": {
+"value": 52.0289674491692,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.3629927961569944,
+"predicted": true
+},
+{
+"where": "rail_R_HB",
+"quantity": "max_stress",
+"value": {
+"value": 43.52007541268739,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.30362843311177246,
+"predicted": false
+},
+{
+"where": "rail_L_HB",
+"quantity": "max_stress",
+"value": {
+"value": 43.1033890386156,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.30072131887406234,
+"predicted": false
+},
+{
+"where": "cross_E",
+"quantity": "max_stress",
+"value": {
+"value": 30.661191955675385,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.2139152927140143,
+"predicted": false
+},
+{
+"where": "lower_leg_RA1",
+"quantity": "max_stress",
+"value": {
+"value": 27.970787970651912,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.19514503235338543,
+"predicted": false
+},
+{
+"where": "lower_leg_LA1",
+"quantity": "max_stress",
+"value": {
+"value": 27.852213269148006,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.19431776699405584,
+"predicted": false
+},
+{
+"where": "rail_R_BE",
+"quantity": "max_stress",
+"value": {
+"value": 22.647709198749414,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.15800727347964708,
+"predicted": false
+},
+{
+"where": "rail_L_BE",
+"quantity": "max_stress",
+"value": {
+"value": 22.461985123221456,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.15671152411549852,
+"predicted": false
+},
+{
+"where": "rail_R_AS1",
+"quantity": "max_stress",
+"value": {
+"value": 21.718889601246016,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.15152713675287915,
+"predicted": false
+},
+{
+"where": "cross_A",
+"quantity": "max_stress",
+"value": {
+"value": 21.696259920194038,
+"unit": "MPa"
+},
+"limit": {
+"value": 143.33333333333334,
+"unit": "MPa"
+},
+"utilisation": 0.15136925525716768,
+"predicted": false
+}
+],
+"wall_time_s": 1.8174677999923006,
+"analysis_id": "ana-0083",
+"inputs_from": [
+"ana-0081"
+]
+}

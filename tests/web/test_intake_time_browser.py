@@ -78,7 +78,7 @@ class _RunPage(unittest.TestCase):
         page = self.browser.new_page(viewport=STAGE)
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run={RUN}&live=0&pace=0&{query}")
+        page.goto(f"{self.base}/?run={RUN}&live=0&pace=0&{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
@@ -105,7 +105,9 @@ class IntakeTimeBrowserTest(_RunPage):
         self.assertEqual((late["just"], late["shadows"]), (0, [""]))  # the glow is over
 
     def test_the_same_t_twice_is_the_same_picture(self):
-        for query in (f"tab=A1&t={LIT_AT + 0.25}", f"tab=A2&t={ASKED_AT + 2.5}"):
+        # pets=0: the picture of the intake screens alone, not of whichever pet3d.js the repository has
+        # (the pets' own same picture at the same t: test_agent_pets_browser)
+        for query in (f"tab=A1&pets=0&t={LIT_AT + 0.25}", f"tab=A2&pets=0&t={ASKED_AT + 2.5}"):
             _, first = self.shot(query)
             _, again = self.shot(query)
             self.assertTrue(first == again, f"{query}: the two pictures differ")
@@ -215,8 +217,9 @@ PRESENT_PROBE = """() => {
 @unittest.skipUnless(ENABLED, "browser test: run with python -m tests.web.browser (needs Playwright)")
 class TabPlanPresentBrowserTest(_RunPage):
     """?present=1&video=1&tabs=A1:0,A2:40,bench:55 (how the films are shot): the tab of the replay's
-    time, the present mode kept (the intake screens shown as they are, left of the card), the bottom
-    170 px empty, and the same picture twice at the same t."""
+    time, the present mode kept (the intake screens shown as they are; with video=1 A1 and A2 have no
+    「いま:」 card and use the width, the workbench keeps its card), the bottom 170 px empty, and the
+    same picture twice at the same t."""
 
     QUERY = f"present=1&video=1&tabs=A1:0,A2:{ASKED_AT},bench:55"
 
@@ -227,9 +230,13 @@ class TabPlanPresentBrowserTest(_RunPage):
         self.assertEqual(got["view"], "view-bench" if tab == "bench" else "view-intake", t)
         if tab != "bench":
             self.assertEqual(got["screen"], tab, t)
-        self.assertIsNotNone(got["card"], t)
         v, r = got["viewRect"], got["rail"]
-        self.assertLessEqual(v["x"] + v["w"], r["x"], t)  # the view lies left of the card's rail
+        if tab == "bench":
+            self.assertIsNotNone(got["card"], t)
+            self.assertLessEqual(v["x"] + v["w"], r["x"], t)  # the view lies left of the card's rail
+        else:
+            # (video=1: the intake screens are filmed without the 「いま:」 card, intake_pets.js)
+            self.assertIsNone(got["card"], t)
         self.assertLessEqual(got["main"]["y"] + got["main"]["h"], STAGE["height"] - 170, t)  # the subtitles' band
         self.assertLessEqual(v["y"] + v["h"], STAGE["height"] - 170, t)
 
@@ -245,7 +252,7 @@ class TabPlanPresentBrowserTest(_RunPage):
         for t in (LIT_AT + 0.25, ASKED_AT + 2.5, 57):
             shots = []
             for _ in range(2):
-                page, errors = self.open(f"{self.QUERY}&t={t}")
+                page, errors = self.open(f"{self.QUERY}&pets=0&t={t}")  # (pets=0: as in IntakeTimeBrowserTest)
                 shots.append(page.screenshot())
                 page.close()
                 self.assertEqual(errors, [], t)

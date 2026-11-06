@@ -242,13 +242,13 @@ class ModulePromptsTest(unittest.TestCase):
         ctx = fake_ctx(MODULAR_DESIGN, LOAD_CASES, [LEAD],
                        [red(1, "R1-frame-bending"), red(2, "H1-interference")])
         text = roles.routing_text(ctx)
-        self.assertIn("版 1", text)
+        self.assertIn("v1", text)
         self.assertIn("designer-frame", text)
         self.assertIn("R1-frame-bending", text)
         self.assertIn("packager (パッケージ役): H1-interference", text)
-        self.assertIn("build_version で版 2", text)
+        self.assertIn("build_version で v2", text)
         only_package = prompts.routing_text(3, {"packager": ["H1-interference"]})
-        self.assertIn("build_version で版 4", only_package)
+        self.assertIn("build_version で v4", only_package)
 
 
 class ModuleSkillTest(unittest.TestCase):
@@ -318,7 +318,7 @@ class PluginHooksRoutingTest(unittest.TestCase):
         h = self.hooks()
         out = h.decide("PostToolUse", {"tool_name": self.TOOL, "tool_input": {}})
         text = out["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("HIRAKU の振り分け (版 1", text)
+        self.assertIn("HIRAKU の振り分け (v1", text)
         self.assertIn("designer-frame", text)
         self.assertEqual(h.decide("PostToolUse", {"tool_name": self.TOOL, "tool_input": {}}), {})  # told already
         self.assertEqual(h.state()["routed"], {"1": text})

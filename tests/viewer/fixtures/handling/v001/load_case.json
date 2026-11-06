@@ -1,0 +1,45 @@
+{
+ "load_case_id": "S4-brake35",
+ "test_id": "S4",
+ "domain": "handling",
+ "title": "35 km/h から急制動、μ 0.6 で 14 m 以内に止まる (2 人 + 荷)",
+ "params": {
+  "loading": "two_cargo",
+  "speed": {
+   "value": 35.0,
+   "unit": "km/h"
+  },
+  "mu": {
+   "value": 0.6,
+   "unit": "1"
+  },
+  "reaction_time": {
+   "value": 0.0,
+   "unit": "s"
+  }
+ },
+ "requirement_keys": [
+  "Q30",
+  "Q33",
+  "Q40",
+  "Q11",
+  "Q52"
+ ],
+ "tolerance_rel": 0.05,
+ "criterion": {
+  "quantity": "stopping_distance",
+  "op": "<=",
+  "limit": {
+   "value": 14.0,
+   "unit": "m"
+  },
+  "basis": "Q52 14 m from 35 km/h (細目告示 第171条 第5項, borrowed)",
+  "requirement_keys": [
+   "Q52"
+  ]
+ },
+ "modules": [
+  "suspension",
+  "package"
+ ]
+}

@@ -1,7 +1,7 @@
 """The log's words for a tool and a load case: a tool by labels.js's name, else its title in the
 record (tool.checked, up to the bracket), else its name; a load case by its title in the record.
 A hearing whose asked questions got neither an answer nor a default says how many, and what
-that is (答えが無いまま).
+that is (答えも標準の値も無い n つは、要件に入っていません).
 
 Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Playwright is installed, as test_browser.
 """
@@ -9,14 +9,17 @@ Skipped unless HIRAKU_WEB_BROWSER=1 (python -m tests.web.browser sets it) and Pl
 import copy
 import json
 import os
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -63,7 +66,8 @@ LINES = """async (events) => {
 class LogWordsBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -75,12 +79,13 @@ class LogWordsBrowserTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def lines(self, events):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate(LINES, events)
@@ -107,9 +112,11 @@ class LogWordsBrowserTest(unittest.TestCase):
 
     def test_the_hearing_says_what_no_answer_is(self):
         got = self.lines(with_check_and_hearing())
-        answered = [x for x in got["lines"] if "答えがそろった" in x]
+        answered = [x for x in got["lines"] if "標準の値で進めました" in x or "答えてもらいました" in x]
         self.assertEqual(len(answered), 1, got["lines"])
-        self.assertIn("答えが無いまま 1 個 (聞いたが、答えも既定値も無いので要件に入っていない)", answered[0])
+        # the intake's plain line (hiraku/intake/hearing.py hearing_text): the one left is said, and the design does not start yet
+        self.assertIn("答えも標準の値も無い 1 つは、要件に入っていません", answered[0])
+        self.assertNotIn("設計を始めます", answered[0])
 
 
     def caption(self, pred_change):
@@ -121,7 +128,7 @@ class LogWordsBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         got = page.evaluate("""async (events) => {

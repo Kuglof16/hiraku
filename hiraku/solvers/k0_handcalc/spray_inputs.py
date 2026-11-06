@@ -31,6 +31,9 @@ ARC_STEP_DEG = 5.0  # HIRAKU's choice, an assumption, no source: spacing of the 
 LINES_ACROSS = 5  # HIRAKU's choice, an assumption, no source: tread points across the tyre's width
 LINE_LENGTH_MM = 3000.0  # HIRAKU's choice, an assumption, no source: how far a line is followed
 # The fender variables of the ladder_4w design (hiraku.designgen.ladder_4w VARIABLES)
+# The parts that stand right behind the occupants and stop spray before it reaches them (ladder_4w's seatback_<side>,
+# head_restraint_<side>): K0's scene holds them besides the occupants and the fender
+SEAT_BACK_KINDS = ("seatback", "head_restraint")
 FENDER_VARS = ("fenders", "fender_front_deg", "fender_rear_deg", "fender_gap", "fender_width")
 
 
@@ -167,8 +170,10 @@ def spray_arc_inputs(design: dict, load_case: dict) -> dict:
 def spray_reach_inputs(design: dict, load_case: dict) -> dict:
     """spray.reaching_lines' inputs, counted on a simpler scene than the tool's: the occupants' body-part boxes
     (the load case's loading) and the fender as the design's variables give it (a cylinder of radius R + gap over
-    the angles from fender_front_deg ahead of the top to fender_rear_deg behind, fender_width wide); no other part,
-    no member and no ground. n_aim: lines that meet an occupant's box within line_length; n_cover: those of them
+    the angles from fender_front_deg ahead of the top to fender_rear_deg behind, fender_width wide), and the seats'
+    backs and head restraints (kinds SEAT_BACK_KINDS, the boxes right behind the occupants); no other part, no
+    member and no ground. n_aim: lines that meet an occupant's box within line_length before any seat back's or
+    head restraint's box; n_cover: those of them
     that meet the fender's cylinder first (a tangent line leaves the cylinder sqrt((R + g)^2 - R^2) from its start,
     at the angle theta - acos(R / (R + g)) from the top)."""
     from hiraku.contract.loading import loading_of, on_board
@@ -182,6 +187,8 @@ def spray_reach_inputs(design: dict, load_case: dict) -> dict:
         raise DesignError(str(e)) from None
     occ = [from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"), p["id"])
            for p in d.get("parts", []) if p.get("kind") == "occupant"]
+    backs = [from_box(p["box"]["center_mm"], p["box"]["size_mm"], p["box"].get("rpy_deg"), p["id"])
+             for p in d.get("parts", []) if p.get("kind") in SEAT_BACK_KINDS]
     f = fender(design)
     centre = {w["support"]: w for w in wheels(design)}
     n_aim = n_cover = 0
@@ -189,6 +196,10 @@ def spray_reach_inputs(design: dict, load_case: dict) -> dict:
         hits = [h[0] for h in (ray_box(line.origin, line.direction, b) for b in occ)
                 if h is not None and 0.0 <= h[0] <= s["line_length"]]
         if not hits:
+            continue
+        behind = [h[0] for h in (ray_box(line.origin, line.direction, b) for b in backs)
+                  if h is not None and 0.0 <= h[0] <= s["line_length"]]
+        if behind and min(behind) < min(hits):  # stopped by a seat's back or head restraint before the occupant
             continue
         n_aim += 1
         if f is None:

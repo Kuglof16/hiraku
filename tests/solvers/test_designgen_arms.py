@@ -93,8 +93,9 @@ class ArmsTest(unittest.TestCase):
             for role in ("lca_f", "lca_r", "uca_f", "uca_r"):
                 self.assertGreater(self.parts[ids[role]]["mass_kg"], 0.0)
         v = build_vehicle(self.design, {})
-        # v1's unsprung masses as before the arms (the knuckle, wheel, caliper and half the suspension)
-        self.assertEqual([round(c.m_u, 4) for c in v.corners], [18.5, 18.5, 18.0537, 18.0537])
+        # v1's unsprung masses as before the arms (the knuckle, wheel, caliper and half the suspension); the caliper
+        # (kind brake_caliper, 1.5 kg) counts since K2's UNSPRUNG_KINDS has its kind (18.5 / 18.0537 before)
+        self.assertEqual([round(c.m_u, 4) for c in v.corners], [20.0, 20.0, 19.5537, 19.5537])
 
     def test_a_box_too_light_is_an_error(self):
         from hiraku.designgen.ladder_4w import DesignGenError

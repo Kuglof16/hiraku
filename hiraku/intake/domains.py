@@ -61,6 +61,26 @@ def normalize_flags(flags: dict[str, Any]) -> dict[str, bool]:
     return {f: bool(flags.get(f, False)) for f in FLAGS}
 
 
+# A flag the code adds when the sentence's other flags make it follow and nobody said otherwise (a flag given as false stays
+# false): {flag: (flags that all must be true, what the person reads as the reason)}. The catalog's vibration test (N1) and
+# its temperature tests (T1, T2) are lit by these two flags, which a reading of the sentence tends to leave out.
+IMPLIED_FLAGS: dict[str, tuple[tuple[str, ...], str]] = {
+    "vibration": (("self_propelled",), "自分で動く (モーターや車輪が回る) ので、振動源があるとみなした (コードが補った)"),
+    "continuous": (("self_propelled", "battery"), "電池で自分で動くので、続けて動いて発熱が問題になるとみなした (コードが補った)"),
+}
+
+
+def implied_flags(flags: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """The flags with the implied ones added (only where the flag is absent), and the reason of each one added."""
+    out = dict(flags)
+    why: dict[str, str] = {}
+    for flag, (needs, reason) in IMPLIED_FLAGS.items():
+        if flag not in flags and all(flags.get(n) is True for n in needs):
+            out[flag] = True
+            why[flag] = reason
+    return out, why
+
+
 def tests_by_domain(catalog: Catalog, flags: dict[str, bool], speed_class: str | None) -> dict[str, list[str]]:
     """The catalog's tests that apply to these flags, per domain (assembly included), in catalog order."""
     out: dict[str, list[str]] = {d: [] for d in contract.DOMAINS}
@@ -195,8 +215,10 @@ def pick_domains(
     if speed_class is not None and speed_class not in contract.schema()["$defs"]["speed_class"]["enum"]:
         raise IntakeError(f"speed_class は static・walk・vehicle のどれか ({speed_class!r} は使えません)")
     catalog = catalog or load_catalog()
+    flags, implied = implied_flags(dict(flags))
     flags = normalize_flags(flags)
     flag_reasons = _check_keys("flag_reasons", flag_reasons, tuple(FLAGS))
+    flag_reasons = {**{f: r for f, r in implied.items() if f not in flag_reasons}, **flag_reasons} or None
     reasons = _check_keys("reasons", reasons, ANALYSIS_DOMAINS)
     shown_names = _check_keys("shown_names", shown_names, ANALYSIS_DOMAINS)
     exclude = list(exclude or [])
@@ -216,7 +238,7 @@ def pick_domains(
             taken = runnable(catalog, ids, product)  # test_ids: a builder makes the case, or Claude writes it
             unbuilt = [t for t in ids if t not in taken]
             written = written_note(catalog, taken, product)
-            given = (reasons.get(d) or "").strip()
+            given = (reasons.get(d) or "").strip().rstrip("。")  # the note joins with its own 。
             note = "。".join(n for n in (written, unbuilt_note(catalog, unbuilt)) if n)
             reason = (f"{given}。{note}" if given and note else given) or code_reason(catalog, d, taken, flags, unbuilt, written)
             picks.append({"domain": d, "shown_name": name, "reason": reason, "test_ids": taken})
@@ -248,6 +270,25 @@ def ids_in(text: str, extra: list[str] | None = None) -> list[str]:
         if x and re.search(rf"(?<![A-Za-z0-9_]){re.escape(x)}(?![A-Za-z0-9_])", text):
             found.append(x)
     return list(dict.fromkeys(found))
+
+
+_UNBUILT_TAIL = "は荷重条件の作り方がまだ無いので、この実行では見ない"
+
+
+def _without_unbuilt(reason: str, name: str) -> str:
+    """The reason without `name` ("S2 旋回での転倒") in its "...は荷重条件の作り方がまだ無いので、この実行では見ない" sentence:
+    a test Claude adds is taken into the run, so the sentence must not say it is not looked at."""
+    sentences = reason.split("。")
+    out = []
+    for s in sentences:
+        if s.endswith(_UNBUILT_TAIL):  # "S2 旋回での転倒 (J ターン・定常円)・F2 … は荷重条件…": a title may hold a "・" itself
+            names = s[: -len(_UNBUILT_TAIL)].rstrip()
+            if names == name:
+                continue
+            names = names.replace("・" + name, "").replace(name + "・", "", 1)
+            s = names + " " + _UNBUILT_TAIL
+        out.append(s)
+    return "。".join(x for x in out if x)
 
 
 def add_tests(record: Record, tests: list[Record] | None = None, no_addition_reason: str | None = None, *,
@@ -301,6 +342,7 @@ def add_tests(record: Record, tests: list[Record] | None = None, no_addition_rea
                 out["picks"].append(pick)
                 out["picks"].sort(key=lambda p: ANALYSIS_DOMAINS.index(p["domain"]))
             pick["test_ids"].append(tid)
+            pick["reason"] = _without_unbuilt(pick["reason"], f"{tid} {test['title']}") or why
         added.append({"test_id": tid, "reason": why})
         if not has_builder(catalog, tid, product):
             no_builder.append(tid)
@@ -317,6 +359,8 @@ def project_picks(record: Record) -> list[Record]:
 
 
 def summary_line(record: Record) -> str:
-    """"7 分野: 操安 (5)・動力 (4)…" for logs and the chat reply."""
-    names = "・".join(f"{p['shown_name']} ({len(p['test_ids'])})" for p in record["picks"])
-    return f"{len(record['picks'])} 分野: {names}"
+    """One line for logs and the chat: "確かめる分野を 7 つ、試験を 18 個選びました" (the tests Claude added are counted, and said)."""
+    tests = {t for p in record["picks"] for t in p["test_ids"]} | set(record.get("assembly_test_ids") or [])
+    line = f"確かめる分野を {len(record['picks'])} つ、試験を {len(tests)} 個選びました"
+    added = len(record.get("added_tests") or [])
+    return f"{line} (Claude が足した {added} 個を含む)" if added else line

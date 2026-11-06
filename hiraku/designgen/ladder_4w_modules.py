@@ -20,7 +20,7 @@ KIND_MODULE = {
     "tie_rod": "steering", "accelerator_pedal": "steering", "brake_pedal": "steering",
     "brake_master_cylinder": "steering", "pedal_stand": "steering", "bearing": "steering", "pushrod": "steering",
     # occupant: the seats and what keeps the people in
-    "seat": "occupant", "seat_belt": "occupant", "side_net": "occupant", "net_clip": "occupant", "door": "occupant",
+    "seat": "occupant", "seatback": "occupant", "head_restraint": "occupant", "seat_belt": "occupant", "side_net": "occupant", "net_clip": "occupant", "door": "occupant",
     "door_hinge": "occupant", "door_latch": "occupant", "occupant": "occupant", "rollbar": "occupant",
     "grab_handle": "occupant",
     # powertrain
@@ -36,6 +36,7 @@ KIND_MODULE = {
 # A part is in the module of the variables that place it: the column's bracket and the bulkhead (and the dash members
 # below) move with steering_column_angle, steering_wheel_height and the column's place, so they are steering's
 ID_MODULE = (("toe_link_", "suspension"), ("stand_pedal", "steering"), ("bracket_column", "steering"),
+             ("bracket_seat_", "occupant"),  # under the seatbacks: they move with the seat's variables
              ("bulkhead", "steering"))
 
 MEMBER_MODULE = (("rail_", "frame"), ("cross_", "frame"), ("lower_", "frame"), ("tower_", "frame"), ("dash_", "steering"),
@@ -46,12 +47,13 @@ VARIABLE_MODULE = {
     **dict.fromkeys(("wheelbase", "track", "rail_spacing", "rail_height", "front_overhang", "rear_overhang", "seat_x",
                      "seat_y", "steering_x", "battery_x", "pedal_x", "bulkhead_dx"), "package"),
     **dict.fromkeys(("rail_b", "rail_h", "rail_t", "cross_b", "cross_h", "cross_t", "tower_b", "tower_t", "lower_b",
-                     "lower_t", "lower_cross", "gusset_leg", "gusset_thickness", "cross_members_through"), "frame"),
+                     "lower_t", "lower_cross", "gusset_leg", "gusset_thickness", "gusset_ends", "cross_members_through"),
+                    "frame"),
     **dict.fromkeys(("wheel_radius", "wheel_width", "front_spring_rate", "rear_spring_rate", "suspension_travel",
                      "mount_plate_t", "mount_bolt_d", "mount_weld_leg"), "suspension"),
     **dict.fromkeys(("steering_column_angle", "steering_wheel_height", "max_steer_angle", "pedal_mount",
                      "bulkhead_t"), "steering"),
-    **dict.fromkeys(("seat_height", "seat_slide", "seat_depth", "rollbar", "rollbar_height", "rollbar_width",
+    **dict.fromkeys(("seat_height", "seat_slide", "seat_depth", "headrest_height", "headrest_gap", "rollbar", "rollbar_height", "rollbar_width",
                      "rollbar_offset", "rollbar_square", "rollbar_d", "rollbar_b", "rollbar_t",
                      "side_bars", "side_bar_count", "side_bar_low", "side_bar_high", "side_bar_d", "side_bar_t",
                      "side_net", "side_net_wire_d", "side_net_pitch", "rollbar_foot_b", "rollbar_foot_h",

@@ -1,9 +1,15 @@
 // Names shown on the screen and number formatting. Formatting only rounds
 // recorded values for display; it never makes a new number.
 
-// The cuts' words for a pass and a fail (one wording on every cut).
+// The cuts' words for a verdict's pass and fail (one wording on every cut). OK / NG are for a
+// criterion's verdict only; a prediction against an analysis is 予想通り / 不一致.
 export const OK_WORD = "✓ OK";
 export const NG_WORD = "✕ NG";
+export const MATCH_WORD = "✓ 予想通り";
+export const MISMATCH_WORD = "! 不一致";
+// An agent's status word after a mismatch and after a red judgement (app.js marks both as alerts).
+export const MISMATCH_STATUS = "不一致";
+export const RED_STATUS = "NG";
 
 export const DOMAINS = ["handling", "powertrain", "aero", "crash", "strength", "nvh", "thermal", "assembly"];
 
@@ -43,7 +49,7 @@ export const TAB_JA = {
   // the grid's tiles: the domains, and assembly (tiles.js TILE_ORDER); the count from DOMAINS
   grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析を再生します`, id: "A6 (grid)" },
   A7: { no: "⑤", name: "組み立て", tip: "組み立ての順番を 3D で確かめます", id: "A7" },
-  A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、照合の結果を見ます", id: "A4" },
+  A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、判定の結果を見ます", id: "A4" },
   A5: { no: "", name: "守るルール", tip: "設計のチェックに使うルールを見ます。ファイルを置くと足せます", id: "A5" },
 };
 // A design version on the screen: v7 (one wording everywhere; null: v—).
@@ -110,7 +116,7 @@ export const STOP_CODE_JA = {
   turn_limit: "ターン数の上限に達した",
   user_stop: "人が止めた",
   error: "エラーで止まった",
-  red_left: "赤の分野を残したまま終わった", // rounds were left, but the hooks' stop limit ended it with red domains
+  red_left: "NG の分野を残したまま終わった", // rounds were left, but the hooks' stop limit ended it with red domains
 };
 
 // Why a role stopped (agent.stopped stop_code, contract a31e520), in words. run_ended: the run
@@ -144,8 +150,8 @@ export function agentStopWhy(d) {
 // Rule ids come from hiraku/contract/protocols.py HOOK_RULES.
 export const RULES = [
   { id: "HK1", key: "HK1_prediction_first", ja: "予測が先" },
-  { id: "HK2", key: "HK2_tool_usable", ja: "OK のツールだけ" },
-  { id: "HK3", key: "HK3_cause_before_continue", ja: "食い違いは原因が先" },
+  { id: "HK2", key: "HK2_tool_usable", ja: "使えるツールだけ" },
+  { id: "HK3", key: "HK3_cause_before_continue", ja: "不一致は原因が先" },
   { id: "HK4", key: "HK4_no_stop_before_judged", ja: "判定がそろうまで終われない" },
   { id: "HK5", key: "HK5_light_first", ja: "軽い計算から" },
   { id: "HK6", key: "HK6_module_scope", ja: "持ち場" }, // modules: contract d9631a5
@@ -220,6 +226,7 @@ const QUANTITY_JA = {
   // nvh
   first_body_mode: "車体の 1 次の固有振動数",
   first_frame_mode: "フレームの 1 次の固有振動数",
+  first_frame_involving_mode: "フレームが関わる最初の固有振動数",
   wheel_rotation_frequency: "車輪の回転の周波数",
   motor_rotation_frequency: "モーターの回転の周波数",
   excitation_gap: "加振との離れ",
@@ -537,7 +544,8 @@ export function channelPartName(id) {
 const PLAIN_JA = {
   max_hot_spot_stress: "つなぎ目の応力",
   min_side_load: "軽い側の輪の重さ",
-  first_frame_mode: "フレームのいちばん低い揺れの速さ",
+  first_frame_mode: "フレームが揺れやすい、いちばん低い揺れの回数 (1 秒あたり)",
+  first_frame_involving_mode: "フレームが揺れやすい、いちばん低い揺れの回数 (1 秒あたり)",
   fatigue_damage: "くり返しの力による傷み",
   // the known-answer checks of the use-count fatigue tool (N13) and its results
   cycles_at_FAT: "基準の強さで壊れるまでの回数",
@@ -712,6 +720,13 @@ export function quantityName(q) {
   }
   return q;
 }
+// A frame member's name for people: its design name before any bracket (as the parts' names on the
+// tiles and the assembly's steps), else 部材 and its id.
+export function memberName(design, id) {
+  const m = (design?.members ?? []).find((x) => x.id === id);
+  return m?.name ? String(m.name).replace(/\s*[（(].*$/, "") || `部材 ${id}` : `部材 ${id}`;
+}
+
 // The words that tell the judged number from a value shown for reference (the present card,
 // the workbench's comparison card, the colour bar and the 3D's largest-value tag).
 export const JUDGED_JA = {
@@ -857,7 +872,7 @@ export function runState(r) {
 // summary (hiraku/webserve/server.py _run_summary: driver, finished, end_status, stop_reason,
 // stop_after, last_version, judged {green, red, pending}) — how it was driven, then how far the design went (last_version) and how it was judged.
 // The state column says 完了 / 途中で止まった, so a stopped row here says only how far it got
-// (and a red domain left over): 「決まった手順で最後まで・v5 で全部合格」
+// (and a red domain left over): 「決まった手順で最後まで・v5 で全部 OK」
 // 「Claude の運転・v4 まで」 (the version as verLabel writes it).
 const HOW_JA = { scripted: "決まった手順", agent_sdk: "Claude の運転", claude_code_plugin: "Claude の運転" };
 export function runSummaryJa(r) {
@@ -870,12 +885,12 @@ export function runSummaryJa(r) {
   let far = "";
   if (state === "done") {
     const head = how ? `${how}で最後まで` : "";
-    if (v && j && j.green > 0 && !j.red && !j.pending) far = `${verLabel(v)} で全部合格`;
-    else if (v && j) far = `${verLabel(v)} で` + [j.green ? `合格 ${j.green}` : "", j.red ? `不合格 ${j.red}` : "", j.pending ? `合否の出ていない分野 ${j.pending}` : ""].filter(Boolean).join("・");
+    if (v && j && j.green > 0 && !j.red && !j.pending) far = `${verLabel(v)} で全部 OK`;
+    else if (v && j) far = `${verLabel(v)} で` + [j.green ? `OK ${j.green}` : "", j.red ? `NG ${j.red}` : "", j.pending ? `判定の出ていない分野 ${j.pending}` : ""].filter(Boolean).join("・");
     else if (v) far = `${verLabel(v)} まで`;
     return [head, far].filter(Boolean).join("・");
   }
-  if (v) far = `${verLabel(v)} まで` + (j?.red ? `・不合格が残った` : "");
+  if (v) far = `${verLabel(v)} まで` + (j?.red ? `・NG が残った` : "");
   return [how, far].filter(Boolean).join("・");
 }
 
@@ -897,11 +912,11 @@ export const DEMO_LINE_JA = {
   "n09-electric-guitar": "ギターを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
   "n09-care-bed": "介護ベッドを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
   "n09-serving-robot": "料理を運ぶロボットを作るなら、何を確かめる？ — Claude が作るものに合わせて解析を選びます",
-  "n11-n12": "要件の書き間違いを見つける — 手計算と解析の食い違いから、cm と mm の取り違えを見つけて直します",
+  "n11-n12": "要件の書き間違いを見つける — 手計算と解析の不一致から、cm と mm の取り違えを見つけて直します",
   n13: "手元に無い計算を作る — 横転したときの計算のツールを Claude がその場で書き、確かめてから使います",
   n14: "メモを渡して決まりにする — 途中で渡した設計のメモが決まりになり、当てはまる部品について聞き返します",
-  video: "小さなオフロード車を試験して直す — 不合格の所を直してもう一度確かめます。限界を超える試験も入っています",
-  demo: "小さなオフロード車の 11 の試験 — 不合格の所を 4 回直して、v5 で全部合格します",
+  video: "小さなオフロード車を試験して直す — NG の所を直してもう一度確かめます。限界を超える試験も入っています",
+  demo: "小さなオフロード車の 11 の試験 — NG の所を 4 回直して、v5 で全部 OK になります",
 };
 // The demo run recommended at the top of the run list when no saved run is there (its scripted run).
 export const PICK_DEMO_ID = "video";
@@ -951,6 +966,29 @@ export function esc(s) {
 export function keepAsides(s, max = 40) {
   const re = new RegExp(`\\(((?:[^()]|\\([^()]*\\)){1,${max}})\\)`, "g");
   return esc(s).replace(re, '<span class="aside">($1)</span>');
+}
+
+// Words from the record (a judgement's summary written by hiraku/tools/judge.py, what an agent
+// or the scripted driver said, a proposal's reason) in the screen's words: OK / NG for 合格 /
+// 不合格 and for 緑 / 赤 meaning a verdict, 判定 for 合否, 比べ for 照合 (a prediction against an
+// analysis) and 不一致 for 食い違い, vN for 版 N. The record keeps its own words (beyond.js reads
+// them as written); only what is shown changes. 赤 / 緑 as a colour (赤い, 赤色, 半透明の赤 ...)
+// are kept.
+const NOT_ASCII = "[^\\s\\x00-\\x7f]";
+export function judgedWords(text) {
+  return String(text ?? "")
+    // judge.py's 「まだ OK にできない試験」 (before: まだ合格にできない) names a test still held
+    // back, often beside its NG value: no OK beside it on the screen
+    .replace(/まだ\s*(?:合格|OK)\s*にできない/g, "まだ判定を出せない")
+    .replace(/不合格|合格/g, (m) => (m === "不合格" ? "NG" : "OK"))
+    .replace(/合否/g, "判定")
+    .replace(/照合/g, "比べ")
+    .replace(/食い違った/g, "不一致だった")
+    .replace(/食い違い/g, "不一致")
+    .replace(/(?<!半透明の)([赤緑])(?![いく色字み])/g, (m, c) => (c === "赤" ? "NG" : "OK"))
+    .replace(/版\s*(\d+)/g, "v$1")
+    .replace(new RegExp(`(${NOT_ASCII})(OK|NG|v\\d)`, "g"), "$1 $2")
+    .replace(new RegExp(`(OK|NG)(${NOT_ASCII})`, "g"), (m, w, c) => ("、。・)）:：".includes(c) ? m : `${w} ${c}`));
 }
 
 // What an agent said, as plain text: Markdown marks (bold, headings, code,

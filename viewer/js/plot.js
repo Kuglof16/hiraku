@@ -1,6 +1,6 @@
 // Plot pane for series: one or more panels side by side, each with its own y axis.
 // panel = {title, xlabel, unit, x: [...], ys: [{name, v: [...], col}], marks: [{x, label, col}],
-//          cursor: x value or null, logy: bool}
+//          bands: [{x0, x1, label, col}], cursor: x value or null, logy: bool}
 window.HV = window.HV || {};
 (function (HV) {
   'use strict';
@@ -20,7 +20,7 @@ window.HV = window.HV || {};
       const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
       this.boxes = [];
       const n = this.panels.length;
-      if (!n) { g.fillStyle = '#777'; g.font = '12px system-ui, sans-serif'; g.fillText('no series for this field', 12, 20); return; }
+      if (!n) { g.fillStyle = '#777'; g.font = '12px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.fillText('この分野のグラフはない', 12, 20); return; }
       const pw = W / n;
       this.panels.forEach((p, i) => this.box(g, p, i * pw, pw, H));
     }
@@ -36,16 +36,26 @@ window.HV = window.HV || {};
       const X = v => L + w * (v - x0) / (x1 - x0);
       const Y = p.logy ? v => T + h * (1 - (ly(v) - ly(y0)) / (ly(y1) - ly(y0))) : v => T + h * (1 - (v - y0) / (y1 - y0));
       this.boxes.push({ L, T, w, h, inv: px => x0 + (px - L) / w * (x1 - x0) });
-      g.font = '10px system-ui, sans-serif'; g.lineWidth = 1;
+      g.font = '10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.lineWidth = 1;
       // grid and axes
       const yt = p.logy ? logTicks(y0, y1) : niceTicks(y0, y1, 5), xt = niceTicks(x0, x1, Math.max(3, Math.floor(w / 70)));
       g.strokeStyle = '#e2e2e2'; g.fillStyle = '#555';
       for (const v of yt) { const y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(L + w, y); g.stroke(); g.fillText(HV.fmt(v), X0 + 4, y + 3); }
       for (const v of xt) { const x = X(v); g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + h); g.stroke(); g.fillText(HV.fmt(v), x - 8, T + h + 12); }
       g.strokeStyle = '#888'; g.strokeRect(L, T, w, h);
-      g.fillStyle = '#333'; g.font = 'bold 11px system-ui, sans-serif';
-      g.fillText(p.title + (p.unit ? ` [${p.unit}]` : ''), L, 13);
-      g.font = '10px system-ui, sans-serif'; g.fillStyle = '#555'; g.fillText(p.xlabel || '', L + w - g.measureText(p.xlabel || '').width, T + h + 25);
+      g.fillStyle = '#333'; g.font = 'bold 11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
+      const head = p.title + (p.unit ? ` [${p.unit}]` : '');
+      g.fillText(head, L, 13);
+      // the series' code name after the Japanese title, small and grey (p.code: the record's channel)
+      if (p.code) { const x = L + g.measureText(head).width + 6; g.font = '10px Consolas, monospace'; g.fillStyle = '#6b665c'; g.fillText(`(${p.code})`, x, 13); }
+      g.font = '10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.fillStyle = '#555'; g.fillText(p.xlabel || '', L + w - g.measureText(p.xlabel || '').width, T + h + 25);
+      // bands (a shaded x range, e.g. after the frame split)
+      for (const b of p.bands || []) {
+        const a = X(Math.max(b.x0, x0)), z = X(Math.min(b.x1, x1));
+        if (!(z > a)) continue;
+        g.fillStyle = b.col || 'rgba(160,160,160,0.18)'; g.fillRect(a, T, z - a, h);
+        if (b.label) { g.fillStyle = '#666'; g.fillText(b.label, Math.min(a + 4, L + w - g.measureText(b.label).width - 2), T + h - 4); }
+      }
       // marks
       for (const m of p.marks || []) {
         if (m.x < x0 || m.x > x1) continue;
@@ -64,9 +74,9 @@ window.HV = window.HV || {};
       g.restore();
       // cursor and the values there
       if (p.cursor !== null && p.cursor !== undefined) {
-        const x = X(p.cursor); g.strokeStyle = '#d00'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + h); g.stroke(); g.lineWidth = 1;
+        const x = X(p.cursor); g.strokeStyle = '#1d1d1f'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + h); g.stroke(); g.lineWidth = 1;
         let k = 0, bd = Infinity; p.x.forEach((v, i) => { const d = Math.abs(v - p.cursor); if (d < bd) { bd = d; k = i; } });
-        g.font = 'bold 10.5px system-ui, sans-serif';
+        g.font = 'bold 10.5px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
         p.ys.forEach((s, j) => { g.fillStyle = s.col || '#1f4e9c'; const t = `${s.name ? s.name + ' ' : ''}${HV.fmt(s.v[k])}`; g.fillText(t, Math.min(x + 5, L + w - g.measureText(t).width - 2), T + 12 + 12 * j); });
       }
     }

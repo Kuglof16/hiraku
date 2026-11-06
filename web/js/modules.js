@@ -19,6 +19,7 @@ import * as THREE from "three";
 import { MODULE_JA, esc, fmt, moduleName } from "./labels.js";
 import { OUTSIDE_COLOR, moduleColor } from "./proposals.js";
 import { keepLegendsApart } from "./joints.js";
+import { getUrl } from "./source.js";
 
 export const ENVELOPE_TOL_MM = 0.5; // as k4_geometry.joints.ENVELOPE_TOL_MM
 // The spaces' see-through (screen choices): all alike, the module pointed at, the others then.
@@ -28,7 +29,7 @@ const SPACE_EDGE = { faint: 0.45, lit: 1, dim: 0.15 };
 // The module names from the server (the contract's), once. Without the route: the ids as written.
 let namesLoaded = null;
 export function loadModuleNames() {
-  namesLoaded ??= fetch("/api/modules", { cache: "no-store" })
+  namesLoaded ??= fetch(getUrl("/api/modules"), { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : null))
     .then((info) => {
       if (info?.names) Object.assign(MODULE_JA, info.names);
@@ -135,7 +136,7 @@ export function moduleLegendHtml(design, { colors, spaces }) {
     out = outs.length
       ? `<div class="mout" data-outside="${outs.length}"><span class="mdot" style="--mod:${OUTSIDE_COLOR}"></span>はみ出し ${outs.length} 個: ${names.map((n) => `<span class="mo1">${esc(n)}</span>`).join("・")}${outs.length > 3 ? " ほか" : ""}` +
         // docs/contract.md HK6: a part outside its module's space makes build_version refuse
-        `<div class="mbad">部品がはみ出していると、次の版を作るときに断られる (HK6)</div></div>`
+        `<div class="mbad">部品がはみ出していると、次の設計を作るときに断られる (HK6)</div></div>`
       : `<div class="mout none" data-outside="0">はみ出し 0 個 (どれも自分のモジュールの空間に収まっている)</div>`;
   }
   // what the numbers in the rows count

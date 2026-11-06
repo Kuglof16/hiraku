@@ -227,7 +227,7 @@ class CutRealLookTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{base}/cut.html?{query}&t=0")
+        page.goto(f"{base}/cut.html?{query}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         ready = page.evaluate("window.hiraku.ready")
         self.assertNotIn("error", ready, query)

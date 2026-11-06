@@ -26,7 +26,7 @@
 import * as THREE from "three";
 import { clearOfBand } from "./compose.js";
 import { contourOf, fieldsOf } from "./fields.js";
-import { esc } from "./labels.js";
+import { esc, verLabel } from "./labels.js";
 import { channelsOf, motionOf, xSeriesOf } from "./series.js";
 import { AssemblyStage, assemblyRecord } from "./assembly.js";
 import { VIEWS, cutView } from "./workbench3d.js";
@@ -208,7 +208,7 @@ export class CutGrid {
     this.s = s;
     const all = [...s.versions].sort((a, b) => a - b);
     const asked = params.has("version") ? Number(params.get("version")) : all.at(-1);
-    if (!s.designs[asked]) throw new Error(`版 ${params.get("version") ?? asked} の記録が無い (この記録の版: ${all.join(", ") || "無し"})`);
+    if (!s.designs[asked]) throw new Error(`${verLabel(params.get("version") ?? asked)} の記録が無い (この記録にあるもの: ${all.map(verLabel).join(", ") || "無し"})`);
     // N04 draws one version; N15 the versions in order up to the asked one
     this.versions = name === "n15" ? all.filter((v) => v <= asked) : [asked];
     this.textPx = Math.max(layout.min_text_px, spec.tile.rate.size_px);
@@ -470,7 +470,7 @@ export class CutGrid {
       else {
         layer.rec = recordFor(this.s, tile.key, def, v);
         if (layer.rec) this.makeView(tile, layer);
-        else el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">版 ${v} の記録が無い (${esc(def.test ?? tile.key)})</span>`);
+        else el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">${verLabel(v)} の記録が無い (${esc(def.test ?? tile.key)})</span>`);
       }
     }
     el.style.display = "none";
@@ -595,7 +595,7 @@ export class CutGrid {
     const asm = assemblyFor(this.s, layer.v);
     const el = layer.el;
     if (!asm) {
-      el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">版 ${layer.v} の組み立ての記録が無い</span>`);
+      el.insertAdjacentHTML("beforeend", `<span class="none" data-kind="note" style="font-size:${this.textPx}px">${verLabel(layer.v)} の組み立ての記録が無い</span>`);
       return;
     }
     const design = this.s.designs[layer.v];
@@ -724,7 +724,7 @@ export class CutGrid {
     this.headerFor = v;
     const num = (n) => `<span class="num" data-kind="number">${esc(String(n))}</span>`;
     if (this.name === "n15") this.header.innerHTML = `繰り返し ${num(this.roundsTo(v))} 回`;
-    else this.header.innerHTML = `設計の版 ${num(v)}・直し ${esc(String(this.roundsTo(v)))} 回`;
+    else this.header.innerHTML = `設計 ${verLabel(num(v))}・直し ${esc(String(this.roundsTo(v)))} 回`;
   }
 }
 

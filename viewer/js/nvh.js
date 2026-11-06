@@ -4,9 +4,12 @@
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
 HV.fields.nvh = {
-  label: 'NVH (固有振動)',
-  variants: [{ key: 'nvh', label: '梁' }, { key: 'nvh_shell', label: 'シェル' }],
+  label: HV.FIELD_LABEL.nvh,   // js/names.js: the contract's DOMAIN_NAMES_JA
+  // always: a variant of other designs (sets before / after a fix) that can be opened from any other; lazy: its data
+  // is loaded only when it is asked for (main.js)
+  variants: [{ key: 'nvh', label: '梁' }, { key: 'nvh_shell', label: 'シェル' }, { key: 'nvh_frf', label: '接地面の加振', always: true, lazy: true }],
   async init(D, ctx) {
+    if (D.model === 'frf') return HV.nvhFrf(D, ctx);
     if (D.model === 'shell') return HV.nvhShell(D, ctx);
     const beams = await ctx.addBeams();
     const nodes0 = beams.nodes0, n = nodes0.length / 3;
@@ -64,8 +67,8 @@ HV.fields.nvh = {
       contour: spec,
       plot() {
         if (!frf) return [];
-        const marks = D.modes.map((m, i) => ({ x: m.f_Hz, label: `mode ${i + 1}`, col: i === S.mode ? '#d00' : '#999', w: i === S.mode ? 2 : 1, dash: i === S.mode ? [] : [3, 3] }))
-          .concat((D.lines || []).map(l => ({ x: l.f_Hz, label: l.label, col: '#2a6', dash: [6, 3] })));
+        const marks = D.modes.map((m, i) => ({ x: m.f_Hz, label: `モード ${i + 1}`, col: i === S.mode ? '#8e6bbf' : '#999', w: i === S.mode ? 2 : 1, dash: i === S.mode ? [] : [3, 3] }))
+          .concat((D.lines || []).map(l => ({ x: l.f_Hz, label: l.label, col: '#2f7d4f', dash: [6, 3] })));
         return [{ title: `周波数応答 ${D.frf.channel} (クリックで近いモード)`, unit: D.frf.y_unit, xlabel: `周波数 [${D.frf.x_unit}]`,
                   x: Array.from(frf.x), ys: [{ name: '', v: Array.from(frf.y), col: '#1f4e9c' }], marks, cursor: null, logy: true }];
       },
@@ -186,8 +189,8 @@ HV.nvhShell = async function (D, ctx) {
     plot() {
       const x = D.modes.map(m => m.n);
       const ys = [{ name: 'シェル', v: D.modes.map(m => m.f_Hz), col: '#1f4e9c' },
-                  { name: '梁 (MAC で対応)', v: D.modes.map(m => m.beam ? m.beam.f_Hz : NaN), col: '#c60' }];
-      const marks = [{ x: D.modes[S.mode].n, label: `mode ${D.modes[S.mode].n}`, col: '#d00', w: 2 }];
+                  { name: '梁 (MAC で対応)', v: D.modes.map(m => m.beam ? m.beam.f_Hz : NaN), col: '#e9893a' }];
+      const marks = [{ x: D.modes[S.mode].n, label: `モード ${D.modes[S.mode].n}`, col: '#8e6bbf', w: 2 }];
       return [{ title: 'モードの周波数: シェルと、対応する梁のモード (クリックでモード)', unit: 'Hz', xlabel: 'シェルのモード番号', x, ys, marks, cursor: null, logy: false }];
     },
     plotClick(_, x) { let b = 0, bd = Infinity; D.modes.forEach((m, i) => { const d = Math.abs(m.n - x); if (d < bd) { bd = d; b = i; } }); pick(b); },
@@ -228,6 +231,130 @@ HV.nvhShell = async function (D, ctx) {
   };
   function mark() { document.querySelectorAll('#modelist div').forEach((d, i) => d.classList.toggle('on', i === S.mode)); }
   function pick(i) { S.mode = i; mark(); update(); HV.refresh(); }
+  update();
+  return ctl;
+};
+
+// NVH: response to the tyres' ground displacement (src/nvh_frf.py, studies/lere/frf.py): the frequency response
+// of the chosen output and input pattern for every set (before / after a fix) on one plot; a frequency picked on
+// the plot shows each set's shell (one canvas, the sets side by side across y) moved by the real part of its
+// complex response over a cycle, coloured by the cycle's largest von Mises (one colour scale for all sets).
+HV.FRF_COL = ['#1f4e9c', '#e9893a', '#2f7d4f', '#8e6bbf'];
+HV.nvhFrf = async function (D, ctx) {
+  const T = window.THREE, NT = 36;
+  const sets = await Promise.all(D.sets.map(async (s, i) => {
+    const nodes = await HV.unpack(s.shell.nodes), quads = await HV.unpack(s.shell.quads);
+    for (let j = 1; j < nodes.length; j += 3) nodes[j] += s.offset_y;
+    const shell = new HV.Shell(ctx.view, nodes, quads);
+    for (let j = 0; j < nodes.length; j += 3) for (let a = 0; a < 3; a++) { ctx.lo[a] = Math.min(ctx.lo[a], nodes[j + a]); ctx.hi[a] = Math.max(ctx.hi[a], nodes[j + a]); }
+    const x = Array.from(await HV.unpack(s.x)), curves = {};
+    for (const p of Object.keys(s.curves)) { curves[p] = {}; for (const o of Object.keys(s.curves[p])) curves[p][o] = { acc: Array.from(await HV.unpack(s.curves[p][o].acc)), disp: Array.from(await HV.unpack(s.curves[p][o].disp)) }; }
+    return { s, i, nodes0: nodes, cur: new Float32Array(nodes.length), shell, x, curves, cache: {} };
+  }));
+  const group = new T.Group(); sets.forEach(z => group.add(z.shell.group)); ctx.root.add(group);
+  ctx.beams = { mesh: group, ghost: { visible: false } }; ctx.has.frame = true;
+  const pats = Object.keys(D.patterns), outs = Object.keys(D.outputs);
+  const S = { p: pats[0], o: outs[0], q: 'acc', f: null, scale: 30, t: 0, log: false };
+  const keyF = () => { const ks = D.keys[S.p] || []; if (S.f === null) { const rb = sets[0].s.rollbar_Hz; S.f = ks.reduce((b, v) => Math.abs(v - (rb || 0)) < Math.abs(b - (rb || 0)) ? v : b, ks[0]); } return S.f; };
+  async function shapeOf(z, p, f) {   // {re, im, vm, u_max, vm_max} of set z at the stored key
+    const key = Object.keys(z.s.shapes).find(kk => { const [pp, ff] = kk.split('@'); return pp === p && Math.abs(+ff - f) < 1e-6; });
+    if (!key) return null;
+    if (!z.cache[key]) { const sh = z.s.shapes[key]; z.cache[key] = { re: await HV.unpack(sh.re), im: await HV.unpack(sh.im), vm: await HV.unpack(sh.vm), u_max: sh.u_max, vm_max: sh.vm_max }; }
+    return z.cache[key];
+  }
+  const X = Array.from(new Set(sets.flatMap(z => z.x))).sort((a, b) => a - b);   // every set's frequencies
+  let now = [];   // the shapes shown, per set
+  async function load() { const f = keyF(); now = await Promise.all(sets.map(z => shapeOf(z, S.p, f))); }
+  const vmMax = () => Math.max(1e-9, ...now.filter(Boolean).map(h => h.vm_max));
+  const spec = () => ({ min: S.log ? vmMax() * 1e-2 : 0, max: vmMax(), log: S.log, unit: 'MPa / mm',
+                        title: '1 周期の中の von Mises の最大 (入力 1 mm あたり)', note: 'すべての組で同じ色の目盛' });
+  function update() {
+    const ph = 2 * Math.PI * S.t / NT, c = Math.cos(ph), sn = Math.sin(ph), sp = spec();
+    sets.forEach((z, j) => {
+      const h = now[j];
+      if (!h) { z.shell.setNodes(z.nodes0); z.shell.colourElements(() => [0.75, 0.75, 0.75]); return; }
+      for (let i = 0; i < z.cur.length; i++) z.cur[i] = z.nodes0[i] + S.scale * (h.re[i] * c - h.im[i] * sn);
+      z.shell.setNodes(z.cur);
+      z.shell.colourElements(e => HV.colour(sp, h.vm[e]));
+    });
+  }
+  const valAt = (z, f) => { const v = z.curves[S.p][S.o][S.q]; let k = 0, bd = Infinity; z.x.forEach((x, i) => { const d = Math.abs(x - f); if (d < bd) { bd = d; k = i; } }); return v[k]; };
+  const ctl = {
+    nT: NT, t0: 0, playMs: 50, ground: null,
+    timeNote: '応答の位相 (1 周期、時間ではない)',
+    scale: { min: 0, max: 300, step: 1, value: S.scale, label: '変形の表示倍率 (実際の変位 × この数)', note: 'すべての組で同じ倍率' },
+    setScale(v) { S.scale = v; update(); },
+    setTime(i) { S.t = i; update(); },
+    setLog(on) { S.log = on; update(); },
+    timeText(i) { return `${D.patterns[S.p]}  ${keyF().toFixed(2)} Hz   位相 ${Math.round(360 * i / NT)}°`; },
+    hud() {
+      const f = keyF();
+      return [`入力: 接地面の上下 ${D.input_mm} mm (振幅)、${D.patterns[S.p]}   ` + sets.map(z => `${z.s.label} (${z.s.name})`).join(' | ') + '  ← y の向きに並べた (手前から)',
+              `${D.outputs[S.o]} @${f.toFixed(2)} Hz: ` + sets.map((z, j) => `${z.s.name} ${HV.fmt(valAt(z, f))} ${S.q === 'acc' ? 'm/s²' : 'mm'}` +
+                (now[j] ? ` (最大変位 ${HV.fmt(now[j].u_max)} mm、応力 ${HV.fmt(now[j].vm_max)} MPa)` : ' (形なし)')).join('  |  ')];
+    },
+    contour: spec,
+    plot() {
+      const marks = [], bands = [];
+      sets.forEach((z, j) => {
+        const col = HV.FRF_COL[j % HV.FRF_COL.length];
+        if (z.s.rollbar_Hz) marks.push({ x: z.s.rollbar_Hz, label: `ロールバー ${z.s.name}`, col, dash: [5, 3] });
+        if (z.s.frame_Hz) marks.push({ x: z.s.frame_Hz, label: `フレーム ${z.s.name}`, col, dash: [2, 2] });
+        if (z.s.hop_Hz) bands.push({ x0: z.s.hop_Hz[0] - 0.3, x1: z.s.hop_Hz[1] + 0.3, label: j === 0 ? 'ばね下のホップ' : '', col: 'rgba(150,150,150,0.16)' });
+      });
+      const unit = S.q === 'acc' ? 'm/s² / mm' : 'mm / mm';
+      return [{ title: `${D.outputs[S.o]}、${D.patterns[S.p]} (クリックで形)`, unit, xlabel: '周波数 [Hz]', x: X,
+                ys: sets.map((z, j) => ({ name: z.s.name, v: X.map(f => valAt(z, f)), col: HV.FRF_COL[j % HV.FRF_COL.length] })),
+                marks, bands, cursor: keyF(), logy: S.q === 'disp' }];
+    },
+    plotClick(_, x) {   // the nearest frequency with a stored shape (loaded, then drawn)
+      const ks = D.keys[S.p] || []; if (!ks.length) return;
+      S.f = ks.reduce((b, v) => Math.abs(v - x) < Math.abs(b - x) ? v : b, ks[0]);
+      load().then(() => { mark(); update(); HV.refresh(); });
+    },
+    pickables: () => sets.map(z => z.shell.mesh),
+    info(hit) {
+      const j = sets.findIndex(z => z.shell.mesh === hit.object), z = sets[j], e = z.shell.elementOf(hit), h = now[j];
+      return `<b>${HV.esc(z.s.label)} (${HV.esc(z.s.name)})</b> 要素 ${e}<br>${keyF().toFixed(2)} Hz、${HV.esc(D.patterns[S.p])}<br>` +
+             `von Mises (1 周期の最大) ${h ? HV.fmt(h.vm[e]) : '-'} MPa (入力 1 mm あたり)`;
+    },
+    panel(div) {
+      const add = (tag, txt, cls) => { const e = document.createElement(tag); if (txt) e.textContent = txt; if (cls) e.className = cls; div.appendChild(e); return e; };
+      add('h3', '入力の並び (接地面 1 mm)');
+      for (const p of pats) {
+        const l = add('label'); l.style.display = 'block';
+        const r = document.createElement('input'); r.type = 'radio'; r.name = 'frfpat'; r.id = 'frfpat_' + p; r.checked = S.p === p;
+        r.onchange = async () => { S.p = p; const ks = D.keys[p] || []; S.f = ks.reduce((b, v) => Math.abs(v - S.f) < Math.abs(b - S.f) ? v : b, ks[0]); await load(); fillKeys(); fillPeaks(); update(); HV.refresh(); };
+        l.append(r, ' ' + D.patterns[p]);
+      }
+      add('h3', '見る点');
+      const sel = add('select'); sel.id = 'frfout';
+      for (const o of outs) { const op = document.createElement('option'); op.value = o; op.textContent = D.outputs[o]; sel.appendChild(op); }
+      sel.value = S.o; sel.onchange = () => { S.o = sel.value; fillPeaks(); HV.refresh(); };
+      const qrow = add('div', null, 'row');
+      for (const [k, lab] of [['acc', '加速度'], ['disp', '変位']]) {
+        const l = document.createElement('label'); const r = document.createElement('input'); r.type = 'radio'; r.name = 'frfq'; r.id = 'frfq_' + k; r.checked = S.q === k;
+        r.onchange = () => { S.q = k; HV.refresh(); }; l.append(r, ' ' + lab + ' '); qrow.appendChild(l);
+      }
+      add('h3', '形のある周波数 (クリック)');
+      const kl = add('div', null, 'list'); kl.id = 'frfkeys';
+      add('h3', '山 (周波数、入力 1 mm あたりの加速度、もとのモード)');
+      const pl = add('div', null, 'muted'); pl.id = 'frfpeaks';
+      function fillKeys() {
+        kl.replaceChildren(...(D.keys[S.p] || []).map(f => { const d = document.createElement('div'); d.textContent = `${f.toFixed(2)} Hz`; d.dataset.f = f;
+          d.onclick = async () => { S.f = f; await load(); mark(); update(); HV.refresh(); }; return d; }));
+        mark();
+      }
+      function fillPeaks() {
+        pl.replaceChildren(...sets.map((z, j) => { const d = document.createElement('div'); d.style.color = HV.FRF_COL[j % HV.FRF_COL.length];
+          d.textContent = `${z.s.label} ${z.s.name}: ` + ((z.s.peaks[S.p] || {})[S.o] || []).map(k => `${k.f_Hz.toFixed(2)} Hz ${HV.fmt(k.acc_mps2)} (${k.kind} ${k.mode_f_Hz.toFixed(2)} Hz)`).join('、 '); return d; }));
+      }
+      ctl._fill = () => { fillKeys(); fillPeaks(); };
+      fillKeys(); fillPeaks();
+    },
+  };
+  function mark() { document.querySelectorAll('#frfkeys div').forEach(d => d.classList.toggle('on', Math.abs(+d.dataset.f - keyF()) < 1e-6)); }
+  await load();
   update();
   return ctl;
 };

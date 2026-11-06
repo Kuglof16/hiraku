@@ -1,0 +1,57 @@
+{
+ "load_case_id": "P4-20km",
+ "test_id": "P4",
+ "domain": "powertrain",
+ "title": "林道の周回を 20 km 走って電池が残るか (2 人 + 荷)",
+ "params": {
+  "distance": {
+   "value": 20.0,
+   "unit": "km"
+  },
+  "grade_low": {
+   "value": 7.0,
+   "unit": "%"
+  },
+  "grade_high": {
+   "value": 14.0,
+   "unit": "%"
+  },
+  "speed_low": {
+   "value": 20.0,
+   "unit": "km/h"
+  },
+  "speed_high": {
+   "value": 40.0,
+   "unit": "km/h"
+  },
+  "soc_start": {
+   "value": 100.0,
+   "unit": "%"
+  },
+  "loading": "two_cargo"
+ },
+ "requirement_keys": [
+  "Q54",
+  "Q13",
+  "Q50",
+  "Q30",
+  "Q33",
+  "Q40"
+ ],
+ "criterion": {
+  "quantity": "soc_end",
+  "op": ">",
+  "limit": {
+   "value": 0.0,
+   "unit": "%"
+  },
+  "basis": "P4: charge is left at the end of Q54 20 km",
+  "requirement_keys": [
+   "Q54"
+  ]
+ },
+ "tolerance_rel": 0.1,
+ "modules": [
+  "powertrain"
+ ]
+}

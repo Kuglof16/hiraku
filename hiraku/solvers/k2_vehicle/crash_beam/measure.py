@@ -17,8 +17,9 @@ from .sim import WINDOW, CrashRun, hinge_rotations
 
 
 def front_nodes(run: CrashRun) -> list[int]:
-    """The mesh nodes at the front-most x at the start (they touch the wall first)."""
-    x = run.mesh.x0[:, 0]
+    """The frame's mesh nodes at the front-most x at the start (they touch the wall first; the wheel nodes are not
+    among them)."""
+    x = run.mesh.x0[:run.mesh.n_frame, 0]
     return [int(i) for i in np.nonzero(x >= x.max() - 1e-9)[0]]
 
 
@@ -29,13 +30,25 @@ def shortening(run: CrashRun, ref: list[int], front: list[int] | None = None) ->
     return gap[0] - gap
 
 
+def crush(run: CrashRun, ref: list[int]) -> np.ndarray:
+    """(rows,) m: how far the ref nodes (their mean) have moved toward the wall since the frame's front-most node
+    reached it (the start, when the wall is at that node; later by the gap / the speed when the wall is ahead of
+    it), at least 0. While the front is held at the wall this is the shortening of the structure ahead of the ref
+    nodes (shortening()); unlike that, it does not count a broken-off front piece moving back from the wall."""
+    gap = run.wall_x - float(run.mesh.x0[:run.mesh.n_frame, 0].max())
+    travel = run.positions[:, ref, 0].mean(axis=1) - run.mesh.x0[ref, 0].mean()
+    return np.maximum(travel - max(gap, 0.0), 0.0)
+
+
 def _points(run: CrashRun, k: int) -> np.ndarray:
-    """The mesh nodes and the middles of the elements not broken by row k (m)."""
+    """The frame's mesh nodes and the middles of its elements not broken by row k (m); the wheel nodes and links are
+    left out."""
     p = run.positions[k]
     t = run.t_all[k]
-    alive = [e for e in range(run.mesh.ne) if run.broken_at.get(e, np.inf) > t + 1e-12]
+    alive = [e for e in run.mesh.frame_elements() if run.broken_at.get(e, np.inf) > t + 1e-12]
     con = run.mesh.con[alive]
-    return np.vstack([p, 0.5 * (p[con[:, 0]] + p[con[:, 1]])]) if alive else p
+    nodes = p[:run.mesh.n_frame]
+    return np.vstack([nodes, 0.5 * (p[con[:, 0]] + p[con[:, 1]])]) if alive else nodes
 
 
 def occupant_room(run: CrashRun, parts: list[dict], shares: dict[str, dict[int, float]]) -> dict | None:
@@ -93,7 +106,7 @@ def occupant_room_by_member(run: CrashRun, parts: list[dict], shares: dict[str, 
     for k in range(len(run.t_all)):
         p = run.positions[k]
         t = run.t_all[k]
-        alive = [e for e in range(run.mesh.ne) if run.broken_at.get(e, np.inf) > t + 1e-12]
+        alive = [e for e in run.mesh.frame_elements() if run.broken_at.get(e, np.inf) > t + 1e-12]
         if not alive:
             continue
         ends_a, ends_b = p[con[alive, 0]], p[con[alive, 1]]
@@ -132,7 +145,8 @@ def member_hinges(run: CrashRun) -> dict[str, float]:
     """rad, the largest plastic hinge rotation at the end of the run over each member's elements."""
     hr = hinge_rotations(run.final)
     out: dict[str, float] = {}
-    for e, mid in enumerate(run.mesh.member_of):
+    for e in run.mesh.frame_elements():
+        mid = run.mesh.member_of[e]
         out[mid] = max(out.get(mid, 0.0), float(hr[e]))
     return out
 
@@ -159,6 +173,19 @@ def parts_past_wall(run: CrashRun, parts: list[dict], shares: dict[str, dict[int
         if depth > 0.0:
             out[p["id"]] = depth
     return out
+
+
+def reaches_occupants(run: CrashRun, nodes: list[int], parts: list[dict]) -> bool:
+    """Whether a piece (its nodes, at the start) has a node inside some occupant part box's y-z extent and ahead of
+    the box's rear face: a piece that can come into the occupants' space."""
+    x0 = run.mesh.x0[nodes]
+    for p in parts:
+        c = np.asarray(p["box"]["center_mm"], float) / 1000.0
+        h = np.asarray(p["box"]["size_mm"], float) / 2000.0
+        inside = ((np.abs(x0[:, 1] - c[1]) <= h[1]) & (np.abs(x0[:, 2] - c[2]) <= h[2]) & (x0[:, 0] > c[0] - h[0]))
+        if inside.any():
+            return True
+    return False
 
 
 def broken_members(run: CrashRun) -> list[str]:
