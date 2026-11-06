@@ -177,7 +177,7 @@ console.log(JSON.stringify(out));
 """)
         by = dict(got)
         self.assertIn("mountIntake", by["index.js"])
-        self.assertEqual(by["a1.js"], ["renderA1"])
+        self.assertEqual(by["a1.js"], ["REPLY_STEP_S", "inTurn", "renderA1"])
         self.assertEqual(by["a2.js"], ["askingPanel", "renderA2", "submit"])
         self.assertEqual(by["a5.js"], ["renderA5"])
 
@@ -746,6 +746,21 @@ console.log(JSON.stringify({ n: before.length, same: before.every((s, i) => s ==
         self.assertTrue(got["same"])
         self.assertTrue(got["kept"])
         self.assertEqual((got["states"]["handling"], got["states"]["thermal"], got["states"]["nvh"]), ("lit", "off", "off"))
+
+    def test_with_a_playback_time_the_domains_answer_one_after_another(self):
+        got = self.run_body("""
+import { REPLY_STEP_S } from '%s';
+const states = (t) => { intake.setTime(t); return Object.fromEntries([...intake.petSlots].map(([d, s]) => [d, s.dataset.state])); };
+const fired = [];
+intake.petSlots.forEach((s) => s.addEventListener && s.addEventListener('in-pet-state', (ev) => fired.push([ev.detail.domain, ev.detail.state])));
+console.log(JSON.stringify({ step: REPLY_STEP_S, a: states(1.0), b: states(1.0 + REPLY_STEP_S), c: states(1.0 + 2 * REPLY_STEP_S), z: states(30) }));
+""" % url('a1.js'))
+        self.assertEqual(got["step"], 0.5)
+        self.assertEqual((got["a"]["handling"], got["a"]["aero"], got["a"]["powertrain"]), ("lit", "wait", "wait"))  # the first answers at once
+        self.assertEqual((got["b"]["aero"], got["b"]["powertrain"]), ("lit", "wait"))
+        self.assertEqual((got["c"]["powertrain"], got["c"]["crash"]), ("off", "wait"))  # the ones left off come after the picks, in domain order
+        self.assertEqual({d: s for d, s in got["z"].items() if d in ("handling", "aero", "thermal", "nvh")},
+                         {"handling": "lit", "aero": "lit", "thermal": "off", "nvh": "off"})
 
     def test_the_headline_counts_what_was_picked(self):
         got = self.run_body("""console.log(JSON.stringify({ text: el.text() }));""")

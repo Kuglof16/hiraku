@@ -6,6 +6,7 @@ import { askingPanel } from "./a2.js";
 import { DOMAIN_PLAIN, domainCards, saidOf } from "./model.js";
 
 const GLOW_S = 0.5; // seconds the glow of a newly lit card lasts
+export const REPLY_STEP_S = 0.5; // with a playback time, the domains answer one after another, this many seconds apart
 const PLACEHOLDER = "作りたいものを書いてください。例: 林道を走れる小さな 2 人乗りの電動車";
 
 function bubble(msg) {
@@ -97,8 +98,24 @@ function card(c, api, ui) {
 
 const ORDER = { lit: 0, draft: 0, off: 1, wait: 2 };
 
+/** With a playback time (a replay, a film) the pets answer in turn: the first picked domain at the time the record picked them,
+ *  the next REPLY_STEP_S later, then the ones left off; until its turn a domain is still thinking. Live, all at once.
+ *  (From the time of the record's pick on; earlier the cards stay as the model has them.) */
+export function inTurn(cards, time, step = REPLY_STEP_S) {
+  if (time === null || time === undefined) return cards;
+  const base = cards.find((c) => c.state === "lit" && c.litAt !== null)?.litAt ?? null;
+  if (base === null || time < base) return cards; // before the record picked them the cards are as the model has them (the glow test)
+  let k = 0;
+  return cards.map((c) => {
+    if (c.state !== "lit" && c.state !== "off") return c;
+    const at = base + k++ * step;
+    if (time >= at) return c.state === "lit" ? { ...c, litAt: at } : c;
+    return { ...c, state: "wait", reason: "", testIds: [], testCount: 0, litAt: null };
+  });
+}
+
 export function renderA1(el, m, api, ui) {
-  const cards = domainCards(m).sort((a, b) => ORDER[a.state] - ORDER[b.state]); // the ones that light first (stable: domain order inside)
+  const cards = inTurn(domainCards(m).sort((a, b) => ORDER[a.state] - ORDER[b.state]), ui.time); // the ones that light first (stable: domain order inside)
   const lit = cards.filter((c) => c.state === "lit").length;
   const draftN = cards.filter((c) => c.state === "draft").length;
   const assembly = m.domains?.assembly_test_ids || [];
