@@ -146,21 +146,42 @@ class HandCaseTest(unittest.TestCase):
 
 
 class R9RoleTest(unittest.TestCase):
-    def test_frame_shell_judges_plate_and_weld_bolts_stay_hand(self):
-        from hiraku.catalog.builders.mounts_r9 import R9_CRITERIA, R9_PLAN
+    def test_frame_shell_judges_plate_and_weld_frame_static_the_pins(self):
+        from hiraku.catalog.builders.mounts_r9 import KINDS, R9_CRITERIA, R9_PLANS
         from hiraku.solvers.k0_handcalc import library_bracket as lb
         from hiraku.solvers.shelf.frame_shell import R9_QUANTITIES, FrameShell
+        from hiraku.solvers.shelf.frame_static import FrameStatic
 
-        self.assertEqual(set(R9_CRITERIA), {"plate_bending_utilisation", "weld_utilisation"})
-        self.assertEqual(set(R9_QUANTITIES), set(R9_CRITERIA))
-        self.assertEqual(R9_PLAN["tool"], "frame_shell")
-        self.assertIn("R9", FrameShell.tests)
-        self.assertIn(lb.FORMULA_OF["plate_bending_utilisation"], FrameShell.formulas)
-        self.assertIn(lb.FORMULA_OF["weld_utilisation"], FrameShell.formulas)
-        for q in ("bolt_shear_utilisation", "bolt_bearing_utilisation"):
-            self.assertNotIn(q, R9_CRITERIA)
-            self.assertNotIn(lb.FORMULA_OF[q], FrameShell.formulas)
-            self.assertTrue(any(p["quantity"] == q for p in R9_PLAN["predictions"]), q)  # the hand calc's still
+        self.assertEqual(set(R9_CRITERIA), {"plate_bending_utilisation", "weld_utilisation", "bolt_utilisation"})
+        self.assertEqual({q for q, t in KINDS.values() if t == "frame_shell"}, set(R9_QUANTITIES))
+        for q, tool in KINDS.values():
+            cls = FrameShell if tool == "frame_shell" else FrameStatic
+            self.assertIn("R9", cls.tests)
+            self.assertIn(lb.FORMULA_OF[q], cls.formulas)
+        for lc_id, plan in R9_PLANS.items():
+            kind = lc_id.split("-")[1]
+            self.assertEqual(plan["tool"], KINDS[kind][1])
+            self.assertEqual({p["formula_id"] for p in plan["predictions"]}, {lb.FORMULA_OF[KINDS[kind][0]]})
+        self.assertNotIn(lb.FORMULA_OF["bolt_utilisation"], FrameShell.formulas)  # the pin is not in the shell
+
+    def test_hand_and_shell_welded_lengths(self):
+        """The hand calculation's b and the shell's tied span are one function's (bracket_inputs.weld_span)."""
+        import json
+        from pathlib import Path
+
+        from hiraku.solvers.k0_handcalc.bracket_inputs import mount_points
+        from hiraku.solvers.k1_shell.mesh import build_mesh
+
+        for d in (bc.design(), json.loads((Path(__file__).resolve().parents[2] / "data" / "designs" /
+                                           "offroad-4w-v1.json").read_text(encoding="utf-8"))):
+            ms = build_mesh(d, 10.0)
+            self.assertTrue(ms.brackets)
+            for br in ms.brackets:
+                g = mount_points(d, br.support)[br.mount]
+                self.assertEqual(g["bracket"], br.id)
+                self.assertAlmostEqual(g["b"], br.span_mm, places=6, msg=br.id)
+                self.assertEqual(g["weld_span"]["L"], g["b"])
+                self.assertLessEqual(g["b"], g["box_b"] + 1e-9)
 
     def test_r9_needs_upstream_forces(self):
         from hiraku.solvers.shelf.base import LoadCaseError

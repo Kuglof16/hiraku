@@ -32,8 +32,9 @@ along the pin F_n / 2 goes evenly on all the hole's nodes. The pin itself is not
 
 The read-back (bracket_values): per cheek, the plate elements' nodal forces on the tied base nodes
 (K_e u_e of the cheek's elements; the force the wall puts on the cheek) give the base's resultant R and
-its moment M about the middle of the tied base (base_resultant). Over the welded length L (the tied span,
-not the box's b) and with the formulas of library_bracket (mount_bracket.weld and .plate_bending, the
+its moment M about the middle of the tied base (base_resultant). Over the welded length L (the tied span:
+bracket_inputs.weld_span, the same length the hand calculation takes as b; a span end moved by snap_end makes
+it shorter, said in the record) and with the formulas of library_bracket (mount_bracket.weld and .plate_bending, the
 line forces and the three stresses added, safe side), each cheek welded on both sides:
     w = |R| / (2 L) + |M . base| / (L t_p) + 3 |M . u| / L^2           (N/mm, one fillet line)
     sigma = 6 |M . base| / (L t_p^2) + 6 |M . u| / (t_p L^2) + |R . up| / (L t_p)
@@ -60,6 +61,7 @@ from ..k0_handcalc import library_bracket as lb
 from ..k0_handcalc.bracket_inputs import mount_points, plate_material
 
 BASE_TOL_MM = 1.0  # the box's base face on the wall's outer surface within this
+SPAN_TOL_MM = 1e-6  # the tied span and bracket_inputs.weld_span (the hand calculation's welded length) agree within this
 HOLE_ROOM = 1.5  # the hole block's half size a must be at least this many hole radii
 HOLE_LAYERS_RATIO = 1.3  # O-grid layers grow by this toward the block's sides
 TOL = 1e-6
@@ -136,7 +138,7 @@ def _mounts_of(design: dict) -> dict:
         except (KeyError, ValueError):
             continue
         for m, g in pts.items():
-            if g.get("bracket") and g.get("b") is not None and g["bracket"] not in out:
+            if g.get("bracket") and g.get("box_b") is not None and g["bracket"] not in out:
                 out[g["bracket"]] = (s["id"], m, dict(g, hp=s["suspension"]["hardpoints_mm"][m]))
     return out
 
@@ -182,6 +184,11 @@ def plan_brackets(design: dict, runs, size: float) -> tuple[list[BracketPlan], d
                 ends = sorted([float(p0 @ e_w), float((p0 + Lw * dc) @ e_w)])
                 lo_w = float(c[j] - size_b[j] / 2.0)
                 w0, w1 = max(ends[0], lo_w) - lo_w, min(ends[1], lo_w + size_b[j]) - lo_w
+                # the welded length the hand calculation takes (bracket_inputs.weld_span) must be this wall's span;
+                # the run's own numbers are kept (the wall's grid is made from them)
+                ws = g.get("weld_span")
+                if ws is None or max(abs(ws["span"][0] - w0), abs(ws["span"][1] - w1)) > SPAN_TOL_MM:
+                    continue
                 if w1 - w0 < 2.0 * t:
                     continue
                 # the plate in the box's other directions must lie along the tube (its cross-section offset)

@@ -35,7 +35,8 @@ class FrameShellToolTest(unittest.TestCase):
         self.assertTrue(t.needs_mesh)
         self.assertEqual((t.domain, t.base, t.tests), ("strength", "K1", ["R1", "R9"]))  # R9: the mount brackets
         d = t.describe()
-        self.assertEqual([p["name"] for p in d["params"]], ["loading", "g_factor", "step_height", "step_supports"])
+        self.assertEqual([p["name"] for p in d["params"]], ["loading", "g_factor", "step_height", "step_supports",
+                                                          "supports", "support"])  # the last two: R9's corners
         self.assertEqual([p["name"] for p in d["run_params"]], ["element_size", "mesh_convergence"])
         self.assertEqual(d["run_params"][0]["default"], {"value": 10.0, "unit": "mm"})
         ids = [p["formula_id"] for p in d["predicts"]]

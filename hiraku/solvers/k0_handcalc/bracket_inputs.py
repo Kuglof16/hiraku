@@ -14,7 +14,8 @@ Geometry (from the bracket part's box and the hard point, no field of its own):
 - the pin along the body's x: the plates are the box's two faces across the car, as kit/mounts._bracket draws
   their mass (an assumption: the arms' pivot axes and the damper's eye are taken along x);
 - the plates' base: the box face (of the four along x) toward the frame node the bracket is carried by; the base
-  line runs along the other of y and z; b = the box's size along the base line;
+  line runs along the other of y and z; b = the welded length: the part of the base on the tube wall under it
+  (weld_span, which the shell's mesh reads too), not the box's size along the base line (box_b);
 - e = the distance from the base to the hard point (the pin centre) normal to the base; where the hard point is on
   the base (a clevis on a member's end, whose node is the hard point), the pin is taken a hole edge distance (1.2
   d0) inside the plates' free end: e = the box's depth - 1.2 d0.
@@ -36,6 +37,9 @@ from . import library_bracket as lb
 Record = dict[str, Any]
 MOUNTS = ("lca_front", "lca_rear", "uca_front", "uca_rear", "damper_upper", "tie_inner")  # k2_vehicle.kinematics.MOUNTS
 NODE_TOL_MM = 2.0  # a bracket's box holds its hard point within this
+BASE_TOL_MM = 1.0  # the box's base face on a tube wall's outer face within this (k1_shell.brackets.BASE_TOL_MM)
+END_CLEVIS_NOTE = ("its base is not on a tube wall running along the pin (a clevis on a member's end); the box's width "
+                   "taken as the welded length (not checked against the member's section)")
 MATERIALS = Path(__file__).resolve().parents[3] / "data" / "materials" / "materials.json"
 PLATE_MATERIAL = "stkr400"  # the brackets' plates taken as the frame's steel (assumption)
 PIN_AXIS = np.array([1.0, 0.0, 0.0])
@@ -48,6 +52,9 @@ ASSUMPTIONS = [
     "the plates' base on the box face toward the frame node that carries the bracket; e from the base to the hard point "
     "(on the base: a hole edge distance 1.2 d0 inside the plates' free end)",
     "the plates' steel taken as STKR400 (f_y 245, f_u 400 MPa); the pin grade 8.8",
+    "the welded length b of the plate and weld formulas: the part of the plate's base that lies on the tube wall "
+    "(weld_span: the box's extent along the base line within the wall's mid-line width), the length the shell ties; "
+    "the rest of the box's width overhangs the wall and is not welded (before stage 3 the box's whole width was taken)",
 ]
 
 
@@ -109,9 +116,60 @@ def plate_geometry(part: Record, hp, carrier_xyz, d0: float) -> Record:
             "base_at": float(base_at), "base_side": side}
 
 
+def weld_span(design: Record, part: Record, geom: Record) -> Record | None:
+    """The part of a bracket's base that lies on a tube wall (the welded length; the hand calculation and the shell
+    mesh, k1_shell.brackets.plan_brackets, both read this): a rect tube member running along the pin axis whose wall's
+    outer face is the box's base face (within BASE_TOL_MM) and whose segment holds the box's centre along the pin; the
+    wall's extent across is its mid-line width (the outer size less one wall thickness, as the shell's walls end at the
+    neighbouring walls' mid-surfaces). {"span": (w0, w1) from the box's low face along the base line, "L": w1 - w0,
+    "member", "box_b": the box's size along the base line}; None when no such wall is under the base."""
+    from hiraku.solvers.k1_shell.mesh import k1_axes  # the shell's member axes (the same wall layout)
+
+    c, size = (np.asarray(part["box"][k], float) for k in ("center_mm", "size_mm"))
+    i = "xyz".index(geom["base_axis"])
+    j = 3 - i
+    e_i = np.eye(3)[i]
+    up = -float(geom["base_side"]) * e_i  # from the wall into the plate
+    lo_j = float(c[j] - size[j] / 2.0)
+    u = np.asarray(geom["u"], float)
+    nodes = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design.get("nodes", [])}
+    best = None
+    for m in design.get("members", []):
+        sec = (design.get("sections") or {}).get(m.get("section"), {})
+        dims = sec.get("dims_mm") or {}
+        if sec.get("shape") != "rect_tube" or not {"b", "h", "t"} <= set(dims):
+            continue
+        a, b = nodes.get(m["node_a"]), nodes.get(m["node_b"])
+        if a is None or b is None:
+            continue
+        length = float(np.linalg.norm(b - a))
+        if length <= 0.0:
+            continue
+        d = (b - a) / length
+        if abs(abs(float(d @ u)) - 1.0) > 1e-6:
+            continue
+        s = float((c - a) @ d)
+        if not 0.0 <= s <= length:
+            continue
+        ey, ez = k1_axes(d)
+        bt, ht, t = float(dims["b"]), float(dims["h"]), float(dims["t"])
+        for nrm, out_half, across in ((ey, ht / 2.0, ez), (-ey, ht / 2.0, ez), (ez, bt / 2.0, ey), (-ez, bt / 2.0, ey)):
+            if float(nrm @ up) < 1.0 - 1e-6:
+                continue
+            if abs(float((a + out_half * nrm) @ e_i) - float(geom["base_at"])) > BASE_TOL_MM:
+                continue
+            mid_half = ((bt if across is ez else ht) - t) / 2.0
+            ends = sorted([float((a - mid_half * across) @ np.eye(3)[j]), float((a + mid_half * across) @ np.eye(3)[j])])
+            w0, w1 = max(ends[0], lo_j) - lo_j, min(ends[1], lo_j + float(size[j])) - lo_j
+            if w1 - w0 > 0.0 and (best is None or w1 - w0 > best["L"]):
+                best = {"span": (float(w0), float(w1)), "L": float(w1 - w0), "member": m["id"], "box_b": float(size[j])}
+    return best
+
+
 def mount_points(design: Record, support_id: str) -> dict[str, Record]:
-    """For each mount of the support: {"bracket" (part id or None), "joint", "u", "base", "b", "e" (None without a
-    bracket)}."""
+    """For each mount of the support: {"bracket" (part id or None), "joint", "u", "base", "b" (the welded length,
+    weld_span's L), "e", "box_b", "weld_span" (None without a bracket or without a tube wall under its base: then
+    a clevis on a member's end keeps b = box_b, END_CLEVIS_NOTE)}."""
     hp = _corner(design, support_id)
     nodes = {n["id"]: n["xyz_mm"] for n in design.get("nodes", [])}
     out: dict[str, Record] = {}
@@ -123,11 +181,17 @@ def mount_points(design: Record, support_id: str) -> dict[str, Record]:
         part = find_bracket(design, support_id, m)
         if part is None or not part.get("joint"):
             out[m] = {"bracket": part["id"] if part else None, "joint": dict(fallback), "u": PIN_AXIS.copy(),
-                      "base": np.array([0.0, 1.0, 0.0]), "b": None, "e": None}
+                      "base": np.array([0.0, 1.0, 0.0]), "b": None, "e": None, "box_b": None, "weld_span": None}
             continue
         j = part["joint"]
         carrier = nodes.get((part.get("carried_by") or [None])[0], hp[m])
         g = plate_geometry(part, hp[m], carrier, float(j["bolt_d_mm"]) + lb.HOLE_CLEARANCE_MM)
+        ws = weld_span(design, part, g)
+        g["box_b"] = g["b"]
+        g["weld_span"] = ws
+        # the formulas' b: the welded length; a clevis on a member's end (no tube wall along the pin under its base)
+        # keeps the box's width (its base is the member's end, within the tube's section: END_CLEVIS_NOTE)
+        g["b"] = ws["L"] if ws else g["box_b"]
         out[m] = {"bracket": part["id"], "joint": dict(j), **g}
     return out
 
@@ -176,6 +240,8 @@ def bracket_inputs(design: Record, support_id: str, upstream: dict | None) -> Re
         if not has:
             assumptions.append(f"{support_id}.{m}: no bracket part; the pin's shear and bearing only, the plate and the "
                                f"weld not checked")
+        elif g.get("weld_span") is None:
+            assumptions.append(f"{support_id}.{m}: {g['bracket']}: {END_CLEVIS_NOTE}")
         worst: dict[str, Record] = {}
         for pk in per:
             if m not in pk:
@@ -191,8 +257,10 @@ def bracket_inputs(design: Record, support_id: str, upstream: dict | None) -> Re
                                   "load_case_id": pk[m]["load_case_id"], "analysis_id": pk[m]["analysis_id"],
                                   "t_s": pk[m]["t_s"], "F_N": [float(x) for x in pk[m]["F_N"]]}
         if worst:
+            ws = g.get("weld_span")
             points[m] = {"bracket": g["bracket"], "worst": worst,
-                         "geometry": {"b": g["b"], "e": g["e"], "base_axis": g.get("base_axis"), "joint": j}}
+                         "geometry": {"b": g["b"], "e": g["e"], "base_axis": g.get("base_axis"), "joint": j,
+                                      "box_b": g.get("box_b"), "weld_member": ws["member"] if ws else None}}
     overall: dict[str, tuple[str, float]] = {}
     for m, p in points.items():
         for qty, w in p["worst"].items():
@@ -202,4 +270,4 @@ def bracket_inputs(design: Record, support_id: str, upstream: dict | None) -> Re
 
 
 __all__ = ["ASSUMPTIONS", "MOUNTS", "NoForces", "bracket_inputs", "find_bracket", "mount_points", "plate_geometry",
-           "plate_material"]
+           "plate_material", "weld_span"]
