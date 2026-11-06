@@ -26,7 +26,7 @@ import {
   quantityName,
   ruleOf,
 } from "./labels.js";
-import { kindCountText } from "./meshkind.js";
+import { kindCountText, kindCountsText } from "./meshkind.js";
 import { proposalText } from "./proposals.js";
 
 const RECORDS = ["predictions", "analyses", "comparisons", "causes", "verdicts", "meshes"];
@@ -366,10 +366,12 @@ export function applyEvent(s, ev) {
     case "mesh.created": {
       // A mesh (shells, solids or both) of one design version; fields name it by mesh_id.
       put(s, "meshes", d.mesh_id, d, ev);
-      const els = d.elements ?? [];
-      const kinds = kindCountText({ elements: els, element_kind: d.element_kind });
+      // (a static export's light record: the counts written beside the event, its lists read later)
+      const lite = ev._lite?.kinds ? ev._lite : null;
+      const els = lite ? null : d.elements ?? [];
+      const kinds = lite ? kindCountsText(lite.kinds) : kindCountText({ elements: els, element_kind: d.element_kind });
       const size = d.element_size_mm ? `・要素の大きさ ${fmt(d.element_size_mm, 3)} mm` : "";
-      const txt = `${verLabel(d.design_version)} のメッシュを作った: 節 ${(d.nodes_mm ?? []).length}・要素 ${els.length}${kinds ? ` (${kinds})` : ""}${size}`;
+      const txt = `${verLabel(d.design_version)} のメッシュを作った: 節 ${lite ? lite.nodes : (d.nodes_mm ?? []).length}・要素 ${lite ? lite.elements : els.length}${kinds ? ` (${kinds})` : ""}${size}`;
       logRecord(s, ev, d.mesh_id, "info", `${who(ev)}: ${txt}`);
       setActivity(s, ev, txt);
       break;

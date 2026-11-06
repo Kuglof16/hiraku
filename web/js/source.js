@@ -9,6 +9,22 @@
 
 export const STATIC = typeof document !== "undefined" && document.querySelector('meta[name="hiraku-static"]')?.content === "1";
 
+// An export's files' versions (export_static.py version_site: <script id="hiraku-versions">, path ->
+// a short hash of the file): every file it reads carries ?v=<its version>, so a browser never mixes
+// two exports' files. (The modules and style sheets have theirs written into their addresses.)
+const VERSIONS = (() => {
+  if (!STATIC) return {};
+  try {
+    return JSON.parse(document.getElementById("hiraku-versions")?.textContent || "{}");
+  } catch {
+    return {};
+  }
+})();
+export function versioned(rel) {
+  const v = VERSIONS[rel];
+  return v ? `${rel}?v=${v}` : rel;
+}
+
 // the server's GET route -> the export's file (relative to the page)
 const FIXED = {
   "/api/runs": "data/runs.json",
@@ -33,8 +49,10 @@ export function staticPath(path) {
 
 // What to fetch for a server GET path: the path itself under the server, the export's file in a static page.
 export function getUrl(path) {
-  return STATIC ? staticPath(path) ?? path.replace(/^\//, "") : path;
+  return STATIC ? versioned(staticPath(path) ?? path.replace(/^\//, "")) : path;
 }
 
-// A run's whole record in the export: events.jsonl gzipped (read in the browser, DecompressionStream).
-export const staticEventsPath = (runId) => `data/runs/${encodeURIComponent(runId)}/events.jsonl.gz`;
+// A run's folder in the export, and its light record (export_static.py split_record: every event, the
+// heavy parts left out; heavy.js reads those from the folder when they are drawn).
+export const staticRunDir = (runId) => `data/runs/${encodeURIComponent(runId)}/`;
+export const staticEventsPath = (runId) => versioned(`data/runs/${runId}/light.jsonl.gz`).replace(`data/runs/${runId}/`, staticRunDir(runId));

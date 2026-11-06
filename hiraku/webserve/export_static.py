@@ -13,9 +13,13 @@ from hiraku.webserve, written beforehand by the server's own functions so the an
     data/assets.json                     GET /api/assets (list_assets)
     data/modules.json                    GET /api/modules (modules_info)
     data/formulas.json                   GET /api/formulas (formula_titles)
-    data/runs/<id>/events.jsonl.gz       the run's events.jsonl (its complete lines), gzipped; the page
-                                         reads it whole and unpacks it itself (DecompressionStream), so
-                                         no host compression is needed
+    data/runs/<id>/light.jsonl.gz        the run's events.jsonl (its complete lines), gzipped, with the
+                                         heavy parts taken out (split_record): what the first screen and the
+                                         run's state need. The page reads it first and unpacks it itself
+                                         (DecompressionStream), so no host compression is needed
+    data/runs/<id>/heavy/<sha256 16>.json.gz
+                                         one heavy value (a mesh's nodes, an analysis' fields...), named by
+                                         the hash of its JSON; read when the screen draws it (web/js/heavy.js)
     data/runs/<id>/tools.json            GET /api/runs/<id>/tools (tool_versions)
     data/runs/<id>/tools/<file>          GET /api/runs/<id>/tools/<file>
     data/static.json                     the export's other pages (extras), for the run list, and the
@@ -24,6 +28,12 @@ from hiraku.webserve, written beforehand by the server's own functions so the an
     n10/                                 the saved N10 answers (showcase/n10) and a page that shows them
 
 Every path in the pages is relative, so the folder works under any path of a host (/hiraku/...).
+
+Versions (version_site): every reference to a JS, CSS or data file carries ?v=<short sha256>, so a
+browser never mixes files of two exports. A JS file's version is the hash of everything it imports,
+itself included (its import closure), so a change anywhere below it changes its own address too.
+The pages list the data files' versions in <script type="application/json" id="hiraku-versions">
+(web/js/source.js reads it); a heavy part's name is the hash of what it holds.
 
 At the end the folder is read the way qa.judge_scan reads a branch (Scan.check_line: the private
 words and paths from the private hook, e-mail addresses, home folders, keys) plus any drive path
@@ -34,8 +44,10 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import html
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -139,6 +151,230 @@ def first_run(runs: list[dict[str, Any]], saved_dir: Path) -> dict[str, Any] | N
     return {"run": pick["run_id"], "why": f"{why} whose record has {', '.join(FIRST_NEEDS)}"}
 
 
+# --- the record split in a light part and heavy parts --------------------------------------------
+LIGHT_FILE = "light.jsonl.gz"
+HEAVY_DIR = "heavy"
+# the kinds whose big data values are read only when drawn (a mesh's nodes and elements; an
+# analysis' fields, series, assembly...); a value is heavy when its JSON has HEAVY_MIN_BYTES or more
+HEAVY_KINDS = ("mesh.created", "analysis.finished")
+HEAVY_MIN_BYTES = 16_000
+_KEY_RE = re.compile(r"[A-Za-z0-9_]+")
+# web/js/series.js motionSpan: the channels that make a motion
+_POSE = ("body_x", "body_y", "body_z", "roll", "pitch", "yaw")
+NODE_MOTION_PLAY_S = 4  # web/js/node_motion.js NODE_MOTION_PLAY_S
+# web/js/meshkind.js kindCounts
+_KINDS = ("quad4", "tri3", "hex8", "hex20")
+_KIND_COUNT = {"tri3": 3, "quad4": 4, "hex8": 8, "hex20": 20}
+_BY_COUNT = {3: "tri3", 4: "quad4", 8: "hex8", 20: "hex20"}
+
+
+def short_hash(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def _no_constant(name: str) -> Any:
+    raise ValueError(name)  # NaN / Infinity: JSON.parse refuses them, so such a line is kept as it is
+
+
+def _finite(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _js_truthy(v: Any) -> bool:
+    return v is not None and v is not False and v != "" and not (_finite(v) and v == 0)
+
+
+def motion_span(d: dict[str, Any]) -> float | None:
+    """web/js/series.js motionSpan: seconds of motion in an analysis' series, or None."""
+    ch: dict[Any, dict] = {}
+    for s in d.get("series") or []:
+        if not isinstance(s, dict):
+            continue
+        t, v = s.get("t_s"), s.get("values")
+        if isinstance(t, list) and isinstance(v, list) and t and len(t) == len(v):
+            ch[s.get("channel")] = s
+    if not any(isinstance(n, str) and (n in _POSE or n.startswith("wheel_center_")) for n in ch):
+        return None
+    return max(s["t_s"][-1] for s in ch.values()) - min(s["t_s"][0] for s in ch.values())
+
+
+def has_node_motion(d: dict[str, Any]) -> bool:
+    """web/js/node_motion.js nodeMotionOf: is there a well-formed node_motion field?"""
+    if d.get("status") != "ok":
+        return False
+    field = next((f for f in d.get("fields") or [] if isinstance(f, dict) and f.get("kind") == "node_motion"), None)
+    fr = field.get("frames") if field else None
+    t = fr.get("t_s") if isinstance(fr, dict) else None
+    pos = fr.get("positions_mm") if isinstance(fr, dict) else None
+    if not isinstance(field.get("nodes") if field else None, list) or not isinstance(t, list) or not t \
+            or not isinstance(pos, list) or len(pos) != len(t):
+        return False
+    n = len(field["nodes"])
+    if not all(_finite(x) for x in t) or any(t[i] < t[i - 1] for i in range(1, len(t))):
+        return False
+    return all(isinstance(lst, list) and len(lst) == n
+               and all(isinstance(p, list) and len(p) == 3 and all(_finite(c) for c in p) for p in lst) for lst in pos)
+
+
+def kind_counts(d: dict[str, Any]) -> dict[str, int]:
+    """web/js/meshkind.js kindCounts: elements of each kind ("other" for none known)."""
+    out: dict[str, int] = {}
+    given = d.get("element_kind")
+    for i, e in enumerate(d.get("elements") or []):
+        n = len(e) if isinstance(e, list) else -1
+        g = given[i] if isinstance(given, list) and i < len(given) else None
+        k = g if g in _KINDS and n == _KIND_COUNT[g] else _BY_COUNT.get(n, "other")
+        out[k] = out.get(k, 0) + 1
+    return out
+
+
+def lite_of(kind: str, d: dict[str, Any]) -> dict[str, Any]:
+    """What the screen reads of an event's heavy values before they are there (web/js/state.js's log
+    line of a mesh, app.js's pace after an analysis), computed as the screen computes it."""
+    if kind == "mesh.created":
+        n = lambda v: len(v) if isinstance(v, list) else 0  # noqa: E731
+        return {"nodes": n(d.get("nodes_mm")), "elements": n(d.get("elements")), "kinds": kind_counts(d)}
+    pace = motion_span(d) if _js_truthy(d.get("series")) else None
+    if pace is None and has_node_motion(d):
+        pace = NODE_MOTION_PLAY_S
+    return {"pace": pace}
+
+
+def split_record(data: bytes) -> tuple[bytes, dict[str, bytes]]:
+    """A record's complete lines -> (the light lines, {heavy file name: gzipped JSON}). A line of a
+    HEAVY_KINDS event loses its data values of HEAVY_MIN_BYTES or more; it gets `_heavy` (key ->
+    the part's file under heavy/, named by its hash) and `_lite` (lite_of, and arrays: the length
+    of each value that is a list). Every other line is kept as
+    it is, byte for byte (a line that is not a JSON object too: the screen counts it as before)."""
+    lines: list[bytes] = []
+    parts: dict[str, bytes] = {}
+    for line in data.splitlines():
+        try:
+            ev = json.loads(line, parse_constant=_no_constant)
+        except ValueError:
+            ev = None
+        d = ev.get("data") if isinstance(ev, dict) else None
+        if not isinstance(d, dict) or ev.get("kind") not in HEAVY_KINDS:
+            lines.append(line)
+            continue
+        big = {}
+        for key, value in d.items():
+            if not _KEY_RE.fullmatch(key):
+                continue
+            text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+            if len(text) >= HEAVY_MIN_BYTES:
+                big[key] = text
+        if not big:
+            lines.append(line)
+            continue
+        refs = {}
+        for key, text in big.items():
+            # named by the hash of what it holds: the name is its version, and the same value in two
+            # events (an assembly sent again) is one file
+            raw = text.encode("utf-8")
+            name = f"{hashlib.sha256(raw).hexdigest()[:16]}.json.gz"
+            if name not in parts:
+                parts[name] = gzip.compress(raw, compresslevel=9, mtime=0)
+            refs[key] = f"{HEAVY_DIR}/{name}"
+        # (arrays: the keys whose value is a list and its length; the screen has [] for them until read)
+        lite = {**lite_of(ev["kind"], d), "arrays": {k: len(d[k]) for k in big if isinstance(d[k], list)}}
+        light = {**ev, "data": {k: v for k, v in d.items() if k not in big}, "_heavy": refs, "_lite": lite}
+        lines.append(json.dumps(light, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    return b"".join(line + b"\n" for line in lines), parts
+
+
+def join_record(light: bytes, parts: dict[str, bytes]) -> list[Any]:
+    """The events of a split record with their heavy values back in (for the tests): what the
+    screen has once every part is read."""
+    out = []
+    for line in light.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            out.append(None)
+            continue
+        refs = ev.pop("_heavy", None) if isinstance(ev, dict) else None
+        if refs:
+            ev.pop("_lite", None)
+            for key, ref in refs.items():
+                ev["data"][key] = json.loads(gzip.decompress(parts[ref.split("/", 1)[1]]))
+        out.append(ev)
+    return out
+
+
+# --- versions --------------------------------------------------------------------------------------
+# a relative module specifier: import ... from "./x.js", export ... from "../x.js", import "./x.js",
+# import("./x.js"), new URL("./x.css", import.meta.url)
+_SPEC_RES = (
+    re.compile(r"""(\bfrom\s*)(["'])(\.\.?/[^"'?#\s]+)\2"""),
+    re.compile(r"""(\bimport\s*)(["'])(\.\.?/[^"'?#\s]+)\2"""),
+    re.compile(r"""(\bimport\(\s*)(["'])(\.\.?/[^"'?#\s]+)\2"""),
+    re.compile(r"""(\bnew\s+URL\(\s*)(["'])(\.\.?/[^"'?#\s]+)\2(?=\s*,\s*import\.meta\.url)"""),
+)
+# a page's own references: <script src="js/app.js">, <link rel="stylesheet" href="css/app.css">
+_PAGE_REF_RE = re.compile(r"""(<(?:script|link)\b[^>]*?\b(?:src|href)=)(["'])([^"':?#]+\.(?:js|css))\2""")
+VERSIONS_ID = "hiraku-versions"
+
+
+def _specs(text: str) -> list[str]:
+    return [m.group(3) for r in _SPEC_RES for m in r.finditer(text)]
+
+
+def version_site(out: Path) -> dict[str, str]:
+    """Put ?v=<hash> on every reference to a JS or CSS file (the pages' script and link tags, every
+    relative import of every module, inline modules too) and the data files' versions into the
+    pages (VERSIONS_ID). A module's version is the hash of its import closure (its own text and every
+    module it reaches), so no export's module is ever read with another export's imports. Returns
+    {path: version} of every file but the pages and the heavy parts (theirs are in the light records)."""
+    files = {p.relative_to(out).as_posix(): p for p in sorted(out.rglob("*")) if p.is_file()}
+    text = {rel: p.read_text(encoding="utf-8") for rel, p in files.items() if p.suffix in (".js", ".mjs", ".html")}
+
+    def target(rel: str, spec: str) -> str | None:
+        parts = rel.split("/")[:-1]
+        for seg in spec.split("/"):
+            if seg == "..":
+                if not parts:
+                    return None
+                parts.pop()
+            elif seg not in (".", ""):
+                parts.append(seg)
+        t = "/".join(parts)
+        return t if t in files else None
+
+    deps = {rel: {t for s in _specs(text[rel]) if (t := target(rel, s))} for rel in text if not rel.endswith(".html")}
+    own = {rel: short_hash(p.read_bytes()) for rel, p in files.items()}
+    versions: dict[str, str] = {}
+    for rel in files:
+        if rel.endswith(".html") or rel == MARK_FILE or f"/{HEAVY_DIR}/" in rel:
+            continue
+        seen, todo = set(), [rel]
+        while todo:
+            r = todo.pop()
+            if r not in seen:
+                seen.add(r)
+                todo.extend(deps.get(r, ()))
+        versions[rel] = own[rel] if seen == {rel} else short_hash("\n".join(f"{r} {own[r]}" for r in sorted(seen)).encode("utf-8"))
+
+    def with_v(rel: str, m: re.Match) -> str:
+        t = target(rel, m.group(3))
+        if t is None or t not in versions:
+            return m.group(0)
+        return f"{m.group(1)}{m.group(2)}{m.group(3)}?v={versions[t]}{m.group(2)}"
+
+    data_map = json.dumps(dict(sorted(versions.items())), ensure_ascii=False, separators=(",", ":"))
+    for rel, src in text.items():
+        new = src
+        for r in _SPEC_RES:
+            new = r.sub(lambda m, rel=rel: with_v(rel, m), new)
+        if rel.endswith(".html"):
+            new = _PAGE_REF_RE.sub(lambda m, rel=rel: with_v(rel, m), new)
+            if STATIC_META in new:
+                new = new.replace(STATIC_META, f'{STATIC_META}\n<script type="application/json" id="{VERSIONS_ID}">{data_map}</script>', 1)
+        if new != src:
+            files[rel].write_text(new, encoding="utf-8", newline="")
+    return versions
+
+
 def _prepare_out(out: Path) -> None:
     if out.exists():
         if not out.is_dir():
@@ -228,8 +464,10 @@ def export(
     for r in runs:
         rid = r["run_id"]
         src = SAMPLE_EVENTS if rid == SAMPLE_ID else saved_dir / rid / EVENTS_FILE
-        _write(data / "runs" / rid / "events.jsonl.gz",
-               gzip.compress(complete_lines(src.read_bytes()), compresslevel=9, mtime=0))
+        light, parts = split_record(complete_lines(src.read_bytes()))
+        _write(data / "runs" / rid / LIGHT_FILE, gzip.compress(light, compresslevel=9, mtime=0))
+        for name, gz in parts.items():
+            _write(data / "runs" / rid / HEAVY_DIR / name, gz)
         if rid == SAMPLE_ID:
             continue
         tools = src.parent / TOOLS_DIR
@@ -258,7 +496,8 @@ def export(
         extras.append({"href": f"{N10_DIR}/index.html", "title": "N10: ツールなしの Claude に同じ問いを聞いた答え"})
     first = first_run(runs, saved_dir)
     _write(data / "static.json", _json_bytes({"extras": extras, "first": first}))
-    files = {p.relative_to(out).as_posix(): p.stat().st_size for p in sorted(out.rglob("*")) if p.is_file()}
+    version_site(out)
+    files ={p.relative_to(out).as_posix(): p.stat().st_size for p in sorted(out.rglob("*")) if p.is_file()}
     return {"out": str(out), "runs": [r["run_id"] for r in runs], "first": first, "files": files}
 
 
