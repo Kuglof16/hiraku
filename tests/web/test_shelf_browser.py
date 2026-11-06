@@ -148,6 +148,9 @@ class ShelfBrowserTest(unittest.TestCase):
         self.assertIn("棚を読み込んでいます", first["note"])
         # while the shelf loads, the run's own tools are already there, their formulas by the titles of /api/formulas
         self.assertEqual(self.shown_tools(page), ["rollbar", "roof_crush"])
+        # ... but no count until the shelf is built (only this run's tools are known before)
+        self.assertEqual(page.text_content("#view-shelf .sh-sum"), "棚を確かめています…")
+        self.assertEqual(page.evaluate("document.querySelectorAll('#view-shelf .sh-n, #view-shelf .sh-nok').length"), 0)
         title = {f["formula_id"]: f["title"] for f in formula_titles()["formulas"]}["braking.stopping_distance"]
         page.wait_for_function("(t) => document.querySelector('#view-shelf .sh-tool[data-tool=roof_crush] .sh-k0').textContent === t", arg=title)
 

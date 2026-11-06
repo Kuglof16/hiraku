@@ -41,12 +41,14 @@ export const TAB_JA = {
   A2: { no: "②", name: "確認したいこと", tip: "HIRAKU が足りない情報を聞きます。答えなくても標準の値で進めます", id: "A2" },
   bench: { no: "③", name: "解析", tip: "予測と解析を照らし合わせる様子を 3D で見ます", id: "A3 (bench)" },
   // the grid's tiles: the domains, and assembly (tiles.js TILE_ORDER); the count from DOMAINS
-  grid: { no: "④", name: "全分野の結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての結果を一度に見ます`, id: "A6 (grid)" },
+  grid: { no: "④", name: "解析結果", tip: `${DOMAINS.filter((d) => d !== "assembly").length} つの分野と組み立ての解析結果を一度に見ます。分野を押すと、その分野の解析を再生します`, id: "A6 (grid)" },
   A7: { no: "⑤", name: "組み立て", tip: "組み立ての順番を 3D で確かめます", id: "A7" },
   A4: { no: "", name: "ツールの棚", tip: "Claude が作ったツールと、照合の結果を見ます", id: "A4" },
   A5: { no: "", name: "守るルール", tip: "設計のチェックに使うルールを見ます。ファイルを置くと足せます", id: "A5" },
 };
-export const TAB_EMPTY_JA = "この実行ではまだありません";
+// A design version on the screen: v7 (one wording everywhere; null: v—).
+export const verLabel = (n) => `v${n ?? "—"}`;
+export const TAB_EMPTY_JA ="この実行ではまだありません";
 export const TAB_FLOW_JA = "使う順"; // the flow group's name (read aloud, aria-label)
 export const TAB_SIDE_JA = "脇のツール";
 // A tab's name as the other screens' sentences say it (「① 作りたいもの」).
@@ -811,6 +813,7 @@ export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (A
 
 // How a run is driven, in A1's words for its start buttons: 決まった手順で再現 (scripted) or Claude で実行.
 export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
+export const SCRIPTED_CUT_JA = `${DRIVEN_JA.scripted} (Claude なし)`; // the video cuts' corner tag on a scripted run (cut.js)
 
 // a run that ended at the domain picks (its stop_reason says so; stop_after "picks" in newer records)
 const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
@@ -828,25 +831,25 @@ export function runState(r) {
 // summary (hiraku/webserve/server.py _run_summary: driver, finished, end_status, stop_reason,
 // stop_after, last_version, judged {green, red, pending}) — how it was driven, then how far the design went (last_version) and how it was judged.
 // The state column says 完了 / 途中で止まった, so a stopped row here says only how far it got
-// (and a red domain left over): 「決まった手順で最後まで・5 回目の設計で全部合格」
-// 「Claude の運転・4 回目の設計まで」.
+// (and a red domain left over): 「決まった手順で最後まで・v5 で全部合格」
+// 「Claude の運転・v4 まで」 (the version as verLabel writes it).
 const HOW_JA = { scripted: "決まった手順", agent_sdk: "Claude の運転", claude_code_plugin: "Claude の運転" };
 export function runSummaryJa(r) {
   const how = HOW_JA[r.driver] ?? "";
   const v = Number.isInteger(r.last_version) ? r.last_version : null;
   if (r.stop_after === "picks" || PICKS_ONLY.test(r.stop_reason || "")) return [how, "分野を選ぶところまで"].filter(Boolean).join("・");
-  if (!r.finished) return [how, v ? `いま ${v} 回目の設計` : ""].filter(Boolean).join("・");
+  if (!r.finished) return [how, v ? `いま ${verLabel(v)}` : ""].filter(Boolean).join("・");
   const state = runState(r);
   const j = r.judged;
   let far = "";
   if (state === "done") {
     const head = how ? `${how}で最後まで` : "";
-    if (v && j && j.green > 0 && !j.red && !j.pending) far = `${v} 回目の設計で全部合格`;
-    else if (v && j) far = `${v} 回目の設計で` + [j.green ? `合格 ${j.green}` : "", j.red ? `不合格 ${j.red}` : "", j.pending ? `合否の出ていない分野 ${j.pending}` : ""].filter(Boolean).join("・");
-    else if (v) far = `${v} 回目の設計まで`;
+    if (v && j && j.green > 0 && !j.red && !j.pending) far = `${verLabel(v)} で全部合格`;
+    else if (v && j) far = `${verLabel(v)} で` + [j.green ? `合格 ${j.green}` : "", j.red ? `不合格 ${j.red}` : "", j.pending ? `合否の出ていない分野 ${j.pending}` : ""].filter(Boolean).join("・");
+    else if (v) far = `${verLabel(v)} まで`;
     return [head, far].filter(Boolean).join("・");
   }
-  if (v) far = `${v} 回目の設計まで` + (j?.red ? `・不合格が残った` : "");
+  if (v) far = `${verLabel(v)} まで` + (j?.red ? `・不合格が残った` : "");
   return [how, far].filter(Boolean).join("・");
 }
 
@@ -872,7 +875,7 @@ export const DEMO_LINE_JA = {
   n13: "手元に無い計算を作る — 横転したときの計算のツールを Claude がその場で書き、確かめてから使います",
   n14: "メモを渡して決まりにする — 途中で渡した設計のメモが決まりになり、当てはまる部品について聞き返します",
   video: "小さなオフロード車を試験して直す — 不合格の所を直してもう一度確かめます。限界を超える試験も入っています",
-  demo: "小さなオフロード車の 6 つの試験 — 不合格の所を直して、2 回目で全部合格します",
+  demo: "小さなオフロード車の 11 の試験 — 不合格の所を 4 回直して、v5 で全部合格します",
 };
 // The demo run recommended at the top of the run list when no saved run is there (its scripted run).
 export const PICK_DEMO_ID = "video";
