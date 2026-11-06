@@ -233,6 +233,20 @@ def design_modules(ctx: RunContext) -> dict[str, Record] | None:
     return {m["module_id"]: m for m in mods} if mods else None
 
 
+def module_owner(mods: dict[str, Record] | list[Record] | None, module: str) -> str:
+    """The role that answers for a module: its owner in the design (design.modules, set by the design's generator:
+    one designer role may own several modules), else designer.<module> (package: the packager)."""
+    if isinstance(mods, list):
+        mods = {m["module_id"]: m for m in mods}
+    owner = ((mods or {}).get(module) or {}).get("owner")
+    return owner or ("packager" if module == "package" else f"designer.{module}")
+
+
+def owned_modules(mods: dict[str, Record] | None, agent: str | None) -> list[str]:
+    """The modules of the design whose owner is this agent, in the design's order."""
+    return [mid for mid in (mods or {}) if mid != "package" and module_owner(mods, mid) == agent]
+
+
 def _module_ja(m: str) -> str:
     return f"{contract.MODULE_NAMES_JA.get(m, m)} ({m})"
 
@@ -276,9 +290,10 @@ def check_hk6(ctx: RunContext, tool: str, args: dict[str, Any], agent: str | Non
                                 "パッケージ役に、何をなぜ変えたいかを伝えてください"))
         if module not in mods:
             return Denial(HK6, f"モジュール {module} はこの設計にありません。あるのは {', '.join(mods)} です")
-        if agent is not None and agent != f"designer.{module}":
-            return Denial(HK6, (f"{_module_ja(module)}の提案を出せるのは、そのモジュールの設計役 (designer.{module}) だけです "
-                                f"(呼んだのは {agent})。そのモジュールを変えたいときは、まとめ役から designer.{module} に頼んでください"))
+        owner = module_owner(mods, module)
+        if agent is not None and agent != owner:
+            return Denial(HK6, (f"{_module_ja(module)}の提案を出せるのは、そのモジュールの持ち主の設計役 ({owner}) だけです "
+                                f"(呼んだのは {agent})。そのモジュールを変えたいときは、まとめ役から {owner} に頼んでください"))
         bad = outside_module(mods, module, args)
         if bad:
             return Denial(HK6, "自分のモジュールの外は変えられません: " + "; ".join(bad)
@@ -383,8 +398,23 @@ def unpredictable_cases(ctx: RunContext) -> dict[str, str]:
     return out
 
 
-def _usable_tools(ctx: RunContext, test_id: str) -> list[str]:
+def _covering_tools(ctx: RunContext, test_id: str) -> list[str]:
     return [n for n, s in ctx.specs.items() if s.get("usable") and test_id in (s.get("tests") or [])]
+
+
+def _usable_tools(ctx: RunContext, test_id: str) -> list[str]:
+    """The usable tools of the shelf for the test that apply to the version's design (functions.not_applying)."""
+    from hiraku.tools.functions import not_applying
+
+    return [n for n in _covering_tools(ctx, test_id) if not_applying(ctx, n) is None]
+
+
+def _not_applying_text(ctx: RunContext, test_id: str) -> str:
+    """The usable tools for the test that do not apply to this design, each with its reason ('' when none)."""
+    from hiraku.tools.functions import not_applying
+
+    whys = [w for w in (not_applying(ctx, n) for n in _covering_tools(ctx, test_id)) if w]
+    return ("棚にはあっても、この設計に当てはまらないツール: " + " / ".join(whys) + "。") if whys else ""
 
 
 PICKS_ONLY_REASON = "分野選びまでの運転 (要件のファイルの stop_after: picks)。設計は作っていません"
@@ -470,6 +500,12 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
     if picks_done(ctx):
         return None
     if not ctx.version:
+        from hiraku.tools.functions import archetypes
+
+        if archetypes(ctx) == []:  # no kind of design suits the product's flags: Claude writes the design
+            return ("まだ設計がありません。この製品に合う設計の型 (get_context の archetypes) が無いので、設計役 (designer) に "
+                    "write_design で設計そのもの (節点・部材・断面・材料・部品・支え) を書いて最初の版を作らせてください。"
+                    "版 1 ができると試験の荷重条件が決まります")
         return ("まだ設計がありません。設計役 (designer) に、get_context の archetypes から型を選んで "
                 "propose_design で最初の版を作らせてください。版 1 ができると試験の荷重条件が決まります")
     left = [(d, lcs) for d, lcs in holding(ctx) if domain is None or d == domain]
@@ -494,7 +530,8 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
             first = f"{'・'.join(ups)} を照合で一致させ、" if ups else ""
             if not _usable_tools(ctx, lc["test_id"]):
-                first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、"
+                first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。{_not_applying_text(ctx, lc['test_id'])}"
+                         "get_tool_template でツールの形を見て書き、"
                          f"check_tool で試してから make_tool で棚に入れ、{first}")
             steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")

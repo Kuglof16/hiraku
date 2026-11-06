@@ -58,6 +58,15 @@ class FindTradeoffsToolTest(ToolsTestCase):
         self.assertEqual((q["b"]["name"], q["b"]["now"], q["b"]["after"], q["b"]["unit"]), ("質量", 400.0, 432.0, "kg"))
         self.assertIn("どちらを優先しますか", q["text"])
 
+    def test_the_collectors_variable_labels_name_the_moved_number(self):
+        def collector(ctx, paths, only):
+            return dict(fake_collector(ctx, paths, only), variable_labels={"tower_t": "塔の板厚"})
+
+        with mock.patch.object(tradeoff, "collector", collector):
+            q = call("find_tradeoffs", make_ctx(self.root), variables=["tower_t"])["tradeoffs"][0]
+        self.assertTrue(q["text"].startswith("塔の板厚 (いま 3 mm) を"), q["text"])
+        self.assertEqual(q["variable"], "variables.tower_t")  # the id and the path stay
+
     def test_a_quantity_can_be_left_out(self):
         got = self.run_tool(make_ctx(self.root), variables=["tower_t"], quantities=["mass_kg"])
         self.assertEqual(got["tradeoffs"], [])
@@ -67,6 +76,30 @@ class FindTradeoffsToolTest(ToolsTestCase):
         with mock.patch.object(tradeoff, "collector", None):
             with self.assertRaises(ToolError):
                 call("find_tradeoffs", make_ctx(self.root), variables=["tower_t"])
+
+    def test_without_variables_the_registered_defaults_are_used(self):
+        seen = []
+
+        def collector(ctx, paths, only):
+            seen.append(paths)
+            return fake_collector(ctx, paths, only)
+
+        with mock.patch.object(tradeoff, "collector", collector), mock.patch.object(tradeoff, "default_variables", lambda ctx: ["tower_t", "variables.gear"]):
+            ctx = make_ctx(self.root)
+            call("find_tradeoffs", ctx)
+            call("find_tradeoffs", ctx, variables=["x"])
+        self.assertEqual(seen, [["variables.tower_t", "variables.gear"], ["variables.x"]])
+
+    def test_empty_registered_defaults_ask_for_variables(self):
+        with mock.patch.object(tradeoff, "collector", fake_collector), mock.patch.object(tradeoff, "default_variables", lambda ctx: []):
+            with self.assertRaises(ToolError) as e:
+                call("find_tradeoffs", make_ctx(self.root))
+        self.assertIn("variables", str(e.exception))
+
+    def test_the_registration_sets_the_default(self):
+        with mock.patch.object(tradeoff, "default_variables", None):
+            tradeoff.register_default_variables(len)
+            self.assertIs(tradeoff.default_variables, len)
 
     def test_the_tool_is_in_the_contract(self):
         self.assertIn("find_tradeoffs", tools.TOOLS)

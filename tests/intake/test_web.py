@@ -743,7 +743,7 @@ const after = slots();
 console.log(JSON.stringify({ n: before.length, same: before.every((s, i) => s === after[i]), kept: intake.petSlots.get('handling').children.includes(mine),
   states: Object.fromEntries([...intake.petSlots].map(([d, s]) => [d, s.dataset.state])) }));
 """)
-        self.assertEqual(got["n"], 7)
+        self.assertEqual(got["n"], 8)  # the seven domains' and the lead's, beside the headline
         self.assertTrue(got["same"])
         self.assertTrue(got["kept"])
         self.assertEqual((got["states"]["handling"], got["states"]["thermal"], got["states"]["nvh"]), ("lit", "off", "off"))
@@ -762,6 +762,35 @@ console.log(JSON.stringify({ step: REPLY_STEP_S, a: states(1.0), b: states(1.0 +
         self.assertEqual((got["c"]["powertrain"], got["c"]["crash"]), ("off", "wait"))  # the ones left off come after the picks, in domain order
         self.assertEqual({d: s for d, s in got["z"].items() if d in ("handling", "aero", "thermal", "nvh")},
                          {"handling": "lit", "aero": "lit", "thermal": "off", "nvh": "off"})
+
+    def test_what_claude_added_is_marked_with_its_reason_and_the_review_is_said(self):
+        got = self.run_body("""
+const withAdd = e(2, 2, 'domains.picked', { want: 'w', flags: {}, flag_reasons: { ride: 'x' },
+  picks: [{ domain: 'handling', shown_name: '操安', reason: '悪路を走るので倒れないかを確かめる', test_ids: ['S2'] },
+          { domain: 'nvh', shown_name: '音振', reason: '機械の上に置くので共振を見る', test_ids: ['N1'] }],
+  off: [], assembly_test_ids: [], added_tests: [{ test_id: 'N1', reason: '機械の上に置くので共振を見る' }] });
+events = [picked, withAdd]; intake.update();
+const added = card('nvh').all('p').filter((p) => p.className === 'in-added').map((p) => p.text());
+const none = e(3, 3, 'domains.picked', { want: 'w', flags: {}, flag_reasons: { ride: 'x' }, picks: [], off: [], assembly_test_ids: [], no_addition_reason: '足すものは無い' });
+events = [none]; intake.update();
+console.log(JSON.stringify({ added, review: el.text() }));
+""")
+        self.assertEqual(len(got["added"]), 1)
+        self.assertIn("足した", got["added"][0])
+        self.assertIn("機械の上に置くので共振を見る", got["added"][0])
+        self.assertIn("足すものは無いと確かめました: 足すものは無い", got["review"])
+
+    def test_the_lead_has_its_own_pet_place_beside_the_headline_working_until_the_choice_is_made(self):
+        got = self.run_body("""
+const lead = () => intake.petSlots.get('lead');
+const none = lead().dataset.state;
+events = []; intake.update();
+const thinking = lead().dataset.state;
+console.log(JSON.stringify({ none, thinking, role: lead().dataset.domain, done: [...intake.petSlots.keys()].includes('lead') }));
+""")
+        self.assertEqual(got["role"], "lead")
+        self.assertTrue(got["done"])
+        self.assertEqual(got["none"], "done")  # the picks are in: the lead is not working any more
 
     def test_the_headline_counts_what_was_picked(self):
         got = self.run_body("""console.log(JSON.stringify({ text: el.text() }));""")

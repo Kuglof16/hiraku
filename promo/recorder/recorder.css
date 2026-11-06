@@ -195,3 +195,8 @@ body.recording .prompter { box-shadow: inset 0 0 0 4px var(--miss); background: 
 
 /* the hidden attribute wins over the display of .btn and the like */
 [hidden] { display: none !important; }
+/* waiting for the microphone's permission, or why it cannot be opened */
+.mic-wait { display: none; margin: 14px 0 0; padding: 14px 18px; border-radius: 8px; font-size: 22px; font-weight: 700; line-height: 1.5;
+  background: #fff4d6; color: #5a4520; border: 2px solid #e0b84a; }
+.mic-wait.on { display: block; }
+.mic-wait.bad { background: #fbe3df; color: #7a1f12; border-color: #c8402a; }

@@ -112,7 +112,7 @@ export const DEMOS = {
       "value": "若年女性 5 % 〜 若年男性 95 %",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)"
      },
      {
       "key": "Q33",
@@ -121,7 +121,7 @@ export const DEMOS = {
       "unit": "kg",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)"
      },
      {
       "key": "Q40",
@@ -469,7 +469,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (5)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (6)・音振 (1)・熱 (2)",
+   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -1622,7 +1622,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 10 件あります。まとめて聞きます",
+   "text": "決まっていないことを 10 つ聞きます",
    "data": {
     "questions": [
      {
@@ -1813,7 +1813,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 10 件、答え 7 件、既定値 20 件",
+   "text": "7 つ答えてもらいました。分からない所は標準の値で進めました。設計を始めます",
    "data": {
     "answers": [
      {
@@ -12235,7 +12235,7 @@ export const DEMOS = {
      {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -14456,7 +14456,7 @@ export const DEMOS = {
      {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -15678,7 +15678,7 @@ export const DEMOS = {
      {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -16101,7 +16101,7 @@ export const DEMOS = {
      {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -16747,7 +16747,7 @@ export const DEMOS = {
      {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
        {
         "center_mm": [
@@ -17033,7 +17033,7 @@ export const DEMOS = {
      {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -25042,7 +25042,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "5 分野: 安定 (転倒) (1)・動力 (アクチュエータ) (1)・強度信頼性 (4)・騒音 (0)・熱 (デューティ) (1)",
+   "text": "確かめる分野を 5 つ、試験を 9 個選びました",
    "data": {
     "want": "在宅で使う電動の介護ベッドを作りたい (背上げ・膝上げ・高さ調整つき)",
     "flags": {
@@ -26173,7 +26173,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 11 件あります。まとめて聞きます",
+   "text": "決まっていないことを 11 つ聞きます",
    "data": {
     "questions": [
      {
@@ -26423,7 +26423,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 11 件、答え 3 件、既定値 24 件",
+   "text": "3 つ答えてもらいました。分からない所は標準の値で進めました。設計を始めます",
    "data": {
     "answers": [
      {
@@ -26701,7 +26701,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "2 分野: 強度 (弦の張力) (3)・音振 (1)",
+   "text": "確かめる分野を 2 つ、試験を 7 個選びました",
    "data": {
     "want": "電気ギターを作りたい。弦を張ってもネックが反らず、開放弦の音がデッドスポット無しで鳴る形にしたい",
     "flags": {
@@ -27822,7 +27822,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 4 件あります。まとめて聞きます",
+   "text": "決まっていないことを 4 つ聞きます",
    "data": {
     "questions": [
      {
@@ -27905,7 +27905,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-electric-guitar",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 4 件、答え 0 件、既定値 3 件、答えが無いまま 3 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "答えはなかったので、標準の値で進めました。答えも標準の値も無い 3 つは、要件に入っていません",
    "data": {
     "answers": [
      {
@@ -27913,7 +27913,7 @@ export const DEMOS = {
       "name": "体格の範囲",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository; tried 2026-11-03: AIST; not reachable)",
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)",
       "value": "若年女性 5 % 〜 若年男性 95 %"
      },
      {
@@ -27984,7 +27984,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (3)・動力 (4)・液体のこぼれ (0)・人との接触 (0)・強度信頼性 (3)・音振 (1)・熱 (2)",
+   "text": "確かめる分野を 7 つ、試験を 15 個選びました",
    "data": {
     "want": "飲食店で料理と飲み物を運ぶ配膳ロボを作りたい。お客さんのすぐそばを歩く速さで動き、飲み物をこぼさないようにしたい",
     "flags": {
@@ -29125,7 +29125,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 17 件あります。まとめて聞きます",
+   "text": "決まっていないことを 17 つ聞きます",
    "data": {
     "questions": [
      {
@@ -29416,7 +29416,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 17 件、答え 2 件、既定値 33 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "2 つ答えてもらいました。分からない所は標準の値で進めました。答えも標準の値も無い 4 つは、要件に入っていません",
    "data": {
     "answers": [
      {
@@ -29526,14 +29526,6 @@ export const DEMOS = {
       "basis": "assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115: protective grommets wherever wires cannot be clamped, so that there is at least 3/8 in (= 9.525 mm, computed) clearance from structure at penetrations, read 2026-11-06, https:\/\/www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf. 33 CFR 183.445(a) (boats) asks that a conductor through a bulkhead or other rigid surface is protected from abrasion, with no number, read 2026-11-06 (https:\/\/www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I)",
       "value": 9.525,
       "unit": "mm"
-     },
-     {
-      "key": "Q31",
-      "name": "体格の範囲",
-      "source": "default",
-      "trust": 1,
-      "basis": "ISO 13857 は 14 歳以上 (上肢は 3 歳以上) の体の寸法を扱う, https:\/\/www.iso.org/standard/69569.html. Secondary: the ages were seen only in search summaries on 2026-11-03 (iso.org returned 403); the standard itself not checked in this repository",
-      "value": "子どもを含む"
      },
      {
       "key": "Q39",
@@ -29927,7 +29919,7 @@ export const DEMOS = {
       "value": "若年女性 5 % 〜 若年男性 95 %",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)"
      },
      {
       "key": "Q33",
@@ -29936,7 +29928,7 @@ export const DEMOS = {
       "unit": "kg",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)"
      },
      {
       "key": "Q35",
@@ -30373,7 +30365,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "domains.picked",
    "agent": "lead",
-   "text": "7 分野: 操安 (5)・動力 (4)・空力 (1)・衝突 (1)・強度信頼性 (6)・音振 (1)・熱 (2)",
+   "text": "確かめる分野を 7 つ、試験を 25 個選びました",
    "data": {
     "want": "林道を走れる 2 人乗りの小さなオフロード車両 (4 輪、最高 40 km/h、積載 150 kg)",
     "flags": {
@@ -31526,7 +31518,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-offroad-4w-file",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "要件のファイルのまま進みます (既定値で足した 20 件: Q04・Q21・Q22・Q23・Q24・Q25・Q26・Q27・Q28・Q29・Q35・Q36・Q37・Q38・Q39・Q57・Q59・Q63・Q83・Q84)",
+   "text": "聞くことはありませんでした。分からない所は標準の値で進めました",
    "data": {
     "answers": [
      {
@@ -41890,7 +41882,7 @@ export const DEMOS = {
      {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -44111,7 +44103,7 @@ export const DEMOS = {
      {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -45333,7 +45325,7 @@ export const DEMOS = {
      {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -45756,7 +45748,7 @@ export const DEMOS = {
      {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -46402,7 +46394,7 @@ export const DEMOS = {
      {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
        {
         "center_mm": [
@@ -46688,7 +46680,7 @@ export const DEMOS = {
      {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [

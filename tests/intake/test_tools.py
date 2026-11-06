@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 
 from hiraku import contract
+from unittest import mock
+
 from hiraku.contract.protocols import ToolError
 from hiraku.intake import events as ev
 from hiraku.intake.tools import TOOLS
@@ -42,7 +44,7 @@ class ToolsTestCase(unittest.TestCase):
 
 class DefinitionsTest(unittest.TestCase):
     def test_every_tool_has_a_description_a_schema_and_a_function(self):
-        self.assertEqual(sorted(TOOLS), ["ask_user", "find_tradeoffs", "import_knowledge", "pick_domains", "rule_check"])
+        self.assertEqual(sorted(TOOLS), ["add_tests", "ask_user", "find_tradeoffs", "import_knowledge", "pick_domains", "rule_check"])
         for name, t in TOOLS.items():
             with self.subTest(tool=name):
                 self.assertTrue(t["description"])
@@ -52,7 +54,7 @@ class DefinitionsTest(unittest.TestCase):
 
     def test_the_names_match_the_contract_list(self):
         later = set(contract.MCP_TOOLS_LATER)
-        for name in ("pick_domains", "ask_user", "import_knowledge"):
+        for name in ("pick_domains", "ask_user", "import_knowledge", "add_tests"):
             self.assertIn(name, later)
 
     def test_input_schemas_are_json_schema(self):
@@ -146,6 +148,98 @@ class PickDomainsToolTest(ToolsTestCase):
         self.assertFalse(got["recorded"])
 
 
+class AddTestsToolTest(ToolsTestCase):
+    """Claude reviews the code's choice and adds tests (adding only), or says why it adds none."""
+
+    ARGS = dict(want="机", flags={"standing": True, "cargo": True}, speed_class="static")
+
+    def picked(self, ctx):
+        return [e for e in ctx.store.events() if e["kind"] == ev.DOMAINS_PICKED][-1]["data"]
+
+    def test_it_needs_a_choice_first_and_either_tests_or_a_reason(self):
+        ctx = make_ctx(self.root)
+        with self.assertRaises(ToolError) as e:
+            call("add_tests", ctx, no_addition_reason="見直した")
+        self.assertIn("pick_domains", str(e.exception))
+        call("pick_domains", ctx, **self.ARGS)
+        with self.assertRaises(ToolError):
+            call("add_tests", ctx)
+
+    def test_a_test_is_added_with_its_reason_and_the_codes_choice_stays(self):
+        ctx = make_ctx(self.root)
+        before = call("pick_domains", ctx, **self.ARGS)
+        have = {t for p in before["picks"] for t in p["test_ids"]} | set(before["assembly_test_ids"])
+        left = next(t for t in ("N1", "T1", "F1", "C1", "S2") if t not in have)
+        got = call("add_tests", ctx, tests=[{"test_id": left, "reason": "この机は振動する機械の上に置くため"}])
+        self.assertTrue(got["recorded"], got.get("not_recorded"))
+        rec = self.picked(ctx)
+        self.assertEqual(rec["added_tests"], [{"test_id": left, "reason": "この机は振動する機械の上に置くため"}])
+        after = {t for p in rec["picks"] for t in p["test_ids"]} | set(rec["assembly_test_ids"])
+        self.assertEqual(after, have | {left})  # nothing taken out
+        self.assertEqual(contract.errors("domains_picked", rec), [])
+
+    def test_a_domain_the_code_left_off_is_lit_by_the_added_test_and_leaves_the_off_list(self):
+        ctx = make_ctx(self.root)
+        before = call("pick_domains", ctx, **self.ARGS)
+        off = before["off"][0]["domain"]
+        from hiraku.catalog import load_catalog
+
+        tid = next(t["id"] for t in load_catalog().tests if t["domain"] == off)
+        call("add_tests", ctx, tests=[{"test_id": tid, "reason": "見直したら要る"}])
+        rec = self.picked(ctx)
+        self.assertIn(off, [p["domain"] for p in rec["picks"]])
+        self.assertNotIn(off, [o["domain"] for o in rec["off"]])
+        lit = next(p for p in rec["picks"] if p["domain"] == off)
+        self.assertEqual((lit["test_ids"], lit["reason"]), ([tid], "見直したら要る"))
+        self.assertEqual([p["domain"] for p in rec["picks"]], sorted((p["domain"] for p in rec["picks"]), key=contract.DOMAINS.index))
+
+    def test_a_test_already_in_the_choice_is_not_added_twice_and_an_unknown_one_is_refused(self):
+        ctx = make_ctx(self.root)
+        before = call("pick_domains", ctx, **self.ARGS)
+        mine = before["picks"][0]["test_ids"][0]
+        got = call("add_tests", ctx, tests=[{"test_id": mine, "reason": "もう入っている"}], no_addition_reason="足すものは無い")
+        self.assertEqual(got["ignored"], [mine])
+        self.assertEqual(self.picked(ctx).get("added_tests"), None)
+        self.assertEqual(self.picked(ctx)["no_addition_reason"], "足すものは無い")
+        with self.assertRaises(ToolError) as e:
+            call("add_tests", ctx, tests=[{"test_id": "Z9", "reason": "x"}])
+        self.assertIn("カタログ", str(e.exception))
+        with self.assertRaises(ToolError):
+            call("add_tests", ctx, tests=[{"test_id": mine, "reason": "  "}])
+
+    def test_a_second_review_keeps_what_was_added_before(self):
+        ctx = make_ctx(self.root)
+        before = call("pick_domains", ctx, **self.ARGS)
+        have = {t for p in before["picks"] for t in p["test_ids"]}
+        left = [t for t in ("N1", "T1", "F1", "C1", "S2") if t not in have][:2]
+        call("add_tests", ctx, tests=[{"test_id": left[0], "reason": "一つ目"}])
+        call("add_tests", ctx, tests=[{"test_id": left[1], "reason": "二つ目"}])
+        self.assertEqual([a["test_id"] for a in self.picked(ctx)["added_tests"]], left)
+
+    def test_a_test_no_builder_makes_a_case_for_is_added_and_the_tool_says_where_to_go(self):
+        ctx = make_ctx(self.root)
+        call("pick_domains", ctx, **self.ARGS)
+        from hiraku.intake import domains as dom
+
+        with mock.patch.object(dom, "has_builder", lambda c, t, p=None: False):
+            got = call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
+        self.assertEqual(got["no_builder"], ["F1"])
+        self.assertIn("write_load_case", got["next"])
+
+
+    def test_no_builder_is_said_whether_or_not_a_load_case_writer_is_registered(self):
+        from hiraku.intake import domains as dom
+
+        for writer in (None, lambda *a: None):  # write_load_case registered (as hiraku.tools does) or not
+            with self.subTest(writer=writer is not None):
+                ctx = make_ctx(Path(tempfile.mkdtemp(dir=self.root)))
+                call("pick_domains", ctx, **AddTestsToolTest.ARGS)
+                with mock.patch.object(dom, "load_case_writer", writer), mock.patch.object(dom, "has_builder", lambda c, t, p=None: False):
+                    got = call("add_tests", ctx, tests=[{"test_id": "F1", "reason": "風が当たる"}])
+                self.assertEqual(got["no_builder"], ["F1"])
+                self.assertIn("write_load_case", got["next"])
+
+
 class AskUserToolTest(ToolsTestCase):
     def test_a_product_the_run_knows_gets_its_own_values_as_defaults(self):
         ctx = make_ctx(self.root, product="care-bed")
@@ -207,14 +301,15 @@ class AskUserToolTest(ToolsTestCase):
         asked = next(e for e in ctx.store.events() if e["kind"] == ev.HEARING_ASKED)
         self.assertEqual(contract.errors("hearing_asked", asked["data"]), [])
         self.assertTrue(asked["data"]["questions"] and asked["data"]["rule_questions"])  # one asking for both
-        self.assertIn("当たった規則", asked["text"])
+        self.assertIn("決まっていないこと", asked["text"])
+        self.assertIn(self.HIT["text"].rstrip("。"), asked["text"])  # the rule question's own sentence says what was hit
 
     def test_only_rule_hits_leave_out_the_empty_questions(self):
         event = ev.asked_event({"questions": [], "rule_questions": [self.known_rule()]})
         self.assertNotIn("questions", event["data"])
         self.assertEqual(contract.errors("hearing_asked", event["data"]), [])
-        self.assertIn("当たった規則の相談が 1 件", event["text"])
-        self.assertNotIn("足りない要件", event["text"])
+        self.assertEqual(event["text"], self.HIT["text"].rstrip("。"))
+        self.assertNotIn("決まっていないこと", event["text"])
         both = ev.asked_event({"questions": [{"req_key": "Q30"}], "rule_questions": []})
         self.assertNotIn("rule_questions", both["data"])  # nothing to say about rules: the contract's old shape
 
@@ -379,7 +474,7 @@ class AskUserToolTest(ToolsTestCase):
     def test_a_product_nobody_knows_has_only_the_items_defaults(self):
         ctx = make_ctx(self.root, product="made-up-thing", flags={"standing": True})
         got = call("ask_user", ctx)
-        self.assertEqual([q["req_key"] for q in got["questions"]], ["Q03", "Q11", "Q34", "Q61", "Q80"])
+        self.assertEqual([q["req_key"] for q in got["questions"]], ["Q03", "Q11", "Q61", "Q80"])
         self.assertTrue(got["ready"])
 
 

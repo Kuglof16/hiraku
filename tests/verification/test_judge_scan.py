@@ -171,6 +171,18 @@ class JudgeScan(unittest.TestCase):
                                   "| E | `data/materials/m.json` |\n| 寸法 | `hiraku/designgen/g.py` |\n\n## License\n"})
         self.assertEqual([f.where for f in self.scan() if f.rule == "unverified"], [])
 
+    def test_the_list_is_read_from_its_heading_past_an_earlier_mention(self):
+        # a sentence before the list uses the same word; the list under the heading still names the file
+        self.commit({"data/materials/m.json": '{"source": "handbook", "verified": false}\n',
+                     "README.md": "# x\n\n出典を確かめていない値は、下の表に書きます。\n\n## 使い方\n\n...\n\n"
+                                  "### 確かめていない値\n\n| 値 | 場所 |\n|---|---|\n| E | `data/materials/m.json` |\n\n"
+                                  "## License\n"})
+        self.assertEqual([f.where for f in self.scan() if f.rule == "unverified"], [])
+
+    def test_without_a_heading_the_first_line_with_the_word_starts_the_list(self):
+        self.assertEqual(js._unchecked_list("# x\n\n確かめていない: `a.json`\n\n## y\n`b.json`\n"),
+                         "確かめていない: `a.json`\n")
+
     def test_unverified_named_outside_the_list_still_counts(self):
         self.commit({"data/materials/m.json": '{"source": "handbook", "verified": false}\n',
                      "README.md": "# x\n\n`data/materials/m.json` holds the materials.\n\n## 確かめていない値\n\nなし\n"})

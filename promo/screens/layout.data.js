@@ -1059,13 +1059,13 @@ window.PROMO_LAYOUT = {
       }
     },
     "times": {
-      "burst_s": 1.25,
-      "tiles_s": 1.35,
+      "burst_s": 1.8,
+      "tiles_s": 1.9,
       "tile_in_s": 0.6,
       "tile_stagger_s": 0.05,
-      "name_s": 1.75,
-      "tag_s": 2.3,
-      "gloss_s": 2.4,
+      "name_s": 2.3,
+      "tag_s": 2.85,
+      "gloss_s": 2.95,
       "_gloss_note": "added 2026-11-03: the small line under the tag (title.gloss) fades up over 0.6 s, 0.1 s after the tag starts",
       "door_open_s": 0.55,
       "latch_s": 0.38,
@@ -1078,7 +1078,7 @@ window.PROMO_LAYOUT = {
       "_note": "burst: flash of light as the door has swung out; tiles: first tile starts to fly in; tile_in: flight of one tile; tile_stagger: between tiles, nearest to fly_from first; door_open: the closed door starts to part (door.crack_*). burst, tiles, name and tag were 0.3 s earlier until 2026-11-03; they moved to leave the door closed a while first. latch: the bolt slides back and the leaves jolt (door.latch_*), the seam light flickers; mesh_in: the triangle mesh starts to show over the vehicle (hero_mesh.in_dur_s); mesh_out: its first elements come apart (hero_mesh.*)"
     },
     "door": {
-      "crack_dur_s": 0.2,
+      "crack_dur_s": 0.3,
       "crack_deg": 12,
       "crack_ease": [
         0.25,
@@ -1086,8 +1086,8 @@ window.PROMO_LAYOUT = {
         0.3,
         1
       ],
-      "hold_dur_s": 0.12,
-      "open_dur_s": 0.38,
+      "hold_dur_s": 0.2,
+      "open_dur_s": 0.75,
       "angle_deg": 105,
       "perspective_px": 2400,
       "ease": [
@@ -1407,6 +1407,16 @@ window.PROMO_LAYOUT = {
       "wind"
     ],
     "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
+    "runup": {
+      "tile": "step_stuck",
+      "order": [
+        "stops",
+        "climbs"
+      ],
+      "gap_px": 12,
+      "lead_share": 0.75,
+      "_note": "added by the screens department (2026-11-06), for the promo department to move: the tile that shows the step test's run 2 (rolling at the step at the load case's speed) as two panes stacked in order, the step it stops at (stops) over the step it climbs (climbs), gap_px apart; lead_share: the share of the tile's play given to the stretch both records have (the approach, the hit and the climb), the rest to the stopped run's later tries and standstill. Used only when the run holds such records (web/js/cut_n06.js)"
+    },
     "tile": {
       "border_px": 2,
       "radius_px": 12,
@@ -1813,13 +1823,13 @@ window.PROMO_LAYOUT = {
       "_note": "column widths, left to right; they add up to table.w"
     },
     "text": {
-      "head_px": 24,
-      "head_small_px": 20,
-      "q_px": 36,
-      "q_sub_px": 24,
-      "value_px": 44,
-      "value_small_px": 32,
-      "note_px": 22,
+      "head_px": 30,
+      "head_small_px": 26,
+      "q_px": 42,
+      "q_sub_px": 30,
+      "value_px": 52,
+      "value_small_px": 38,
+      "note_px": 28,
       "_note": "note_px was 20 in the first stills; raised to 22 so the stress row's 'one of three runs' reads at a glance (value_small_px 34 -> 32 to keep the two hand values with their notes in the row)",
       "diff_px": 36,
       "tick_px": 64
@@ -2871,7 +2881,7 @@ window.PROMO_LAYOUT = {
       "n04": {
         "num": "04",
         "text": "衝突・振動・組み立て",
-        "_voice": "衝突も、振動も、組み立ての順番も。"
+        "_voice": "衝突も、振動も、組み立て手順も。"
       }
     }
   },
@@ -2931,8 +2941,8 @@ window.PROMO_LAYOUT = {
       "n06": {
         "message": "作ってみると、うまくいかない",
         "limits": {
-          "label": 6,
-          "why": "six failures, one tag each, no figures"
+          "label": 7,
+          "why": "six failures, one tag each, no figures; the step tile (n06.runup) shows two runs, each with its tag, whose step height and speed are the record's (7, 2026-11-06)"
         }
       },
       "n07": {
@@ -2981,7 +2991,7 @@ window.PROMO_LAYOUT = {
         }
       },
       "n13": {
-        "message": "ツールが無ければ、Claude がその場で作り、照合してから使う",
+        "message": "ツールが無ければ、Claude がその場で作り、判定してから使う",
         "limits": {
           "label": 4,
           "why": "the three known-answer checks and the new tool's name; the shelf's other cards go without names"
@@ -2999,7 +3009,7 @@ window.PROMO_LAYOUT = {
         }
       },
       "n16": {
-        "message": "組み立ての順番まで、3D で確かめる"
+        "message": "組み立て手順まで、3D で確かめる"
       },
       "n17": {
         "message": "結果だけでなく、次に何を変えればよいかを示す"

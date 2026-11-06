@@ -1,11 +1,13 @@
 """Roles as SDK subagents, and the mapping between SDK agent names and contract agent ids.
 
-Contract ids use a dot (cae.strength, designer.frame); SDK agent names use a hyphen
-(cae-strength, designer-frame).
+Contract ids use a dot (cae.strength, designer.structure); SDK agent names use a hyphen
+(cae-strength, designer-structure).
 
-Designs with modules (docs/contract.md モジュールに分けた設計): one designer per module of the
-design (designer.<module>) instead of the single designer, and the packager also builds the
-round's proposals into a version (build_version). route_reds says which role answers which red.
+Designs with modules (docs/contract.md モジュールに分けた設計): the design roles (contract.MODULE_DESIGNERS:
+structure, mechanism, electric, whatever is made) instead of the single designer, each answering for the modules
+whose owner it is in design.modules (one role may own several), and the packager also builds the round's proposals
+into a version (build_version). route_reds says which role answers which red. A design written before the roles
+(owners designer.<module>, contract.LEGACY_MODULE_DESIGNERS) still routes to its own owners.
 """
 
 from __future__ import annotations
@@ -22,11 +24,13 @@ from hiraku.tools.context import RunContext
 Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
-             "get_tool_template", "check_tool", "make_tool")
+             "get_tool_template", "check_tool", "make_tool", "write_load_case")  # write_load_case: tests without a builder
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 # designs with modules: the packager also builds each round's version
 MODULE_PACKAGER_TOOLS = (*PACKAGER_TOOLS, *contract.MCP_TOOLS_PACKAGER)
-DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design")
+# write_design, edit_design and check_design: a design Claude writes (docs/contract.md Claude が書く設計)
+DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design", "write_design", "edit_design",
+                  "check_design")
 MODULE_DESIGNER_TOOLS = ("get_context", "list_tools", *contract.MCP_TOOLS_DESIGNER)  # revise_design with module
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
 # compare); the designer chooses changes, like the lead (whose effort is the run's).
@@ -37,9 +41,14 @@ PLUGIN_NAME = "hiraku"
 PLUGIN_DIR = REPO_ROOT / "plugins" / PLUGIN_NAME
 # Skills only the module designers load (not listed for the CAE roles and the packager)
 MODULE_DESIGNER_SKILLS = ("revise-a-module",)
+# Skills only the single designer loads (writing a design: write_design, check_design)
+DESIGNER_SKILLS = ("write-a-design",)
 
 # H1 (interference): the test whose reds are split by the modules of the overlapping parts
 INTERFERENCE_TEST = "H1"
+# Every designer of a design with modules, in the order the lead starts them: the design roles, then the
+# per-module designers of a design written before them
+DESIGNER_IDS = (*contract.MODULE_DESIGNERS, *contract.LEGACY_MODULE_DESIGNERS)
 
 
 def all_plugin_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
@@ -48,15 +57,24 @@ def all_plugin_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
 
 
 def plugin_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
-    """The skills of the CAE roles and the packager: every skill but MODULE_DESIGNER_SKILLS."""
-    only = {f"{PLUGIN_NAME}:{s}" for s in MODULE_DESIGNER_SKILLS}
+    """The skills of the CAE roles and the packager: every skill but MODULE_DESIGNER_SKILLS and DESIGNER_SKILLS."""
+    only = {f"{PLUGIN_NAME}:{s}" for s in (*MODULE_DESIGNER_SKILLS, *DESIGNER_SKILLS)}
     return [s for s in all_plugin_skills(plugin_dir) if s not in only]
+
+
+def _existing(names: tuple[str, ...], plugin_dir: Path) -> list[str]:
+    have = set(all_plugin_skills(plugin_dir))
+    return [f"{PLUGIN_NAME}:{s}" for s in names if f"{PLUGIN_NAME}:{s}" in have]
 
 
 def module_designer_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
     """The skills of the module designers (MODULE_DESIGNER_SKILLS that exist)."""
-    have = set(all_plugin_skills(plugin_dir))
-    return [f"{PLUGIN_NAME}:{s}" for s in MODULE_DESIGNER_SKILLS if f"{PLUGIN_NAME}:{s}" in have]
+    return _existing(MODULE_DESIGNER_SKILLS, plugin_dir)
+
+
+def designer_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
+    """The skills of the single designer (DESIGNER_SKILLS that exist)."""
+    return _existing(DESIGNER_SKILLS, plugin_dir)
 
 
 def sdk_name(agent_id: str) -> str:
@@ -71,7 +89,7 @@ def agent_id_from_sdk(agent_type: str | None) -> str | None:
     agent_type = agent_type.removeprefix(f"{PLUGIN_NAME}:")
     if agent_type.startswith("cae-") and agent_type[4:] in contract.DOMAINS and agent_type[4:] != "assembly":
         return "cae." + agent_type[4:]
-    if agent_type.startswith("designer-") and "designer." + agent_type[9:] in contract.MODULE_DESIGNERS:
+    if agent_type.startswith("designer-") and "designer." + agent_type[9:] in DESIGNER_IDS:
         return "designer." + agent_type[9:]
     if agent_type in ("designer", "packager"):
         return agent_type
@@ -105,12 +123,30 @@ def module_agent(module_id: str, design: Record | None = None) -> str:
     return "packager" if module_id == "package" else f"designer.{module_id}"
 
 
+def designer_owners(design: Record | None) -> list[str]:
+    """The designers that own a module of the design (DESIGNER_IDS order; package is the packager's)."""
+    owners = {module_agent(m["module_id"], design) for m in design_modules(design) if m["module_id"] != "package"}
+    order = {a: i for i, a in enumerate(DESIGNER_IDS)}
+    return sorted(owners - {"packager"}, key=lambda a: (order.get(a, len(order)), a))
+
+
+def owned_modules(design: Record | None, agent_id: str) -> list[str]:
+    """The design's modules this designer answers for (their owner), in the design's order."""
+    return [m["module_id"] for m in design_modules(design)
+            if m["module_id"] != "package" and module_agent(m["module_id"], design) == agent_id]
+
+
 def module_designer_agents(design: Record | None, prop: str) -> list[Record]:
-    """A project agent per module designer of the design (contract.MODULE_DESIGNERS order), each
-    with its own pet (prop: the designer's)."""
-    present = {m["module_id"] for m in design_modules(design)}
-    return [{"agent_id": a, "role": "designer", "module": a.split(".", 1)[1], "prop": prop}
-            for a in contract.MODULE_DESIGNERS if a.split(".", 1)[1] in present]
+    """A project agent per designer that owns a module of the design (designer_owners), each with its own
+    pet (prop: the designer's). A per-module designer of an older design keeps its module; a design role
+    (it may own several) has none."""
+    out = []
+    for a in designer_owners(design):
+        rec = {"agent_id": a, "role": "designer", "prop": prop}
+        if a in contract.LEGACY_MODULE_DESIGNERS:
+            rec["module"] = a.split(".", 1)[1]
+        out.append(rec)
+    return out
 
 
 def agents_with_modules(agents: list[Record], design: Record | None, prop_of: Any) -> list[Record]:
@@ -174,6 +210,18 @@ def route_red(design: Record, load_case: Record, analysis: Record | None = None)
     module -> that module's designer; when no pair's modules are known, the load case's modules.
     A load case without modules, or a module the design does not have, goes to the packager
     (it lays out the modules)."""
+    out: list[str] = []
+    for m in route_red_modules(design, load_case, analysis):
+        who = module_agent(m, design)
+        if who not in out:
+            out.append(who)
+    return out
+
+
+def route_red_modules(design: Record, load_case: Record, analysis: Record | None = None) -> list[str]:
+    """The modules one red load case is for (route_red gives their owners): its `modules`; for H1 the module of
+    the overlapping parts when both are in one module, else package (the packager lays out the modules); a load
+    case without modules, or a module the design does not have, package."""
     present = {m["module_id"] for m in design_modules(design)}
     out: list[str] = []
     if load_case.get("test_id") == INTERFERENCE_TEST:
@@ -182,16 +230,30 @@ def route_red(design: Record, load_case: Record, analysis: Record | None = None)
             ma, mb = mods.get(a), mods.get(b)
             if ma is None or mb is None:
                 continue
-            who = module_agent(ma, design) if ma == mb else "packager"
-            if who not in out:
-                out.append(who)
+            m = ma if ma == mb else "package"
+            if m not in out:
+                out.append(m)
         if out:
             return out
     for m in load_case.get("modules") or ["package"]:
-        who = module_agent(m, design) if m in present or m == "package" else "packager"
-        if who not in out:
-            out.append(who)
+        m = m if m in present or m == "package" else "package"
+        if m not in out:
+            out.append(m)
     return out
+
+
+def red_modules(ctx: RunContext, version: int | None = None) -> dict[str, list[str]]:
+    """module_id -> the red load case ids of a version it is for (route_red_modules; package for the packager)."""
+    v = version or ctx.version
+    if not v:
+        return {}
+    design = ctx.store.design(v)
+    got: dict[str, list[str]] = {}
+    for lc, verdict in red_load_cases(ctx, v):
+        analysis = ctx.store.get("analysis", verdict["analysis_id"]) if verdict.get("analysis_id") else None
+        for m in route_red_modules(design, lc, analysis):
+            got.setdefault(m, []).append(lc["load_case_id"])
+    return got
 
 
 def red_load_cases(ctx: RunContext, version: int) -> list[tuple[Record, Record]]:
@@ -221,7 +283,7 @@ def route_reds(ctx: RunContext, version: int | None = None) -> dict[str, list[st
         analysis = ctx.store.get("analysis", verdict["analysis_id"]) if verdict.get("analysis_id") else None
         for who in route_red(design, lc, analysis):
             got.setdefault(who, []).append(lc["load_case_id"])
-    order = {a: i for i, a in enumerate((*contract.MODULE_DESIGNERS, "packager"))}
+    order = {a: i for i, a in enumerate((*DESIGNER_IDS, "packager"))}
     return {a: got[a] for a in sorted(got, key=lambda a: order.get(a, len(order)))}
 
 
@@ -300,10 +362,9 @@ def subagents(ctx: RunContext, mix: Mix | None = None) -> dict:
                 background=False,
             )
         elif a["role"] == "designer" and a["agent_id"].startswith("designer."):
-            module = a["agent_id"].split(".", 1)[1]
             out[sdk_name(a["agent_id"])] = AgentDefinition(
-                description=prompts.module_designer_description(module),
-                prompt=prompts.module_designer_prompt(module),
+                description=prompts.designer_role_description(a["agent_id"]),
+                prompt=prompts.designer_role_prompt(a["agent_id"]),
                 tools=[contract.mcp_name(t) for t in MODULE_DESIGNER_TOOLS],
                 skills=module_designer_skills(),
                 model=model,
@@ -315,6 +376,7 @@ def subagents(ctx: RunContext, mix: Mix | None = None) -> dict:
                 description=prompts.DESIGNER_DESCRIPTION,
                 prompt=prompts.DESIGNER_PROMPT,
                 tools=[contract.mcp_name(t) for t in DESIGNER_TOOLS],
+                skills=designer_skills(),
                 model=model,
                 effort=effort,
                 background=False,

@@ -138,6 +138,9 @@ OWNERS = {
         "LICENSE",
         "showcase/",  # saved runs committed as examples (the screen opens the newest)
         "tests/contract/",
+        "hiraku/cad/",  # CAD in and out through STEP (stands alone: imports only contract)
+        "hiraku/tools/cad_tools.py",  # the one adapter that registers the CAD tools
+        "tests/cad/",
         "docs/",
         "README.md",
         "HIRAKU.cmd",  # double-click launcher of the screen
@@ -168,7 +171,9 @@ OWNERS = {
         "data/parts/",  # real components with their sources (sizes, masses, ratings)
         "data/materials/",
         "data/tyres/",  # tyre model coefficients (K2 team)
+        "viewer/",  # the result viewer: one page per run, a data script per performance field
         "tests/solvers/",
+        "tests/viewer/",
     ],
     "screen": [  # 画面部: three.js screens and replay
         "web/",

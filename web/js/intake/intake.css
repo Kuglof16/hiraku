@@ -97,6 +97,9 @@
 .in-card.off { opacity: 0.8; }
 .in-mark { margin-left: auto; font-size: 13px; font-weight: 700; background: var(--i-yellow); border-radius: 999px; padding: 0 10px; white-space: nowrap; }
 .in-plain { color: var(--i-muted); font-size: 13px; }
+.in-added { margin: 2px 0 0; font-size: 14px; line-height: 1.35; }
+.in-add-mark { display: inline-block; margin-right: 6px; padding: 0 8px; border-radius: 999px; background: var(--i-yellow); font-size: 12px; font-weight: 700; }
+.in-review { margin: 0 0 8px; font-size: 14px; color: var(--i-muted); }
 .in-full { margin: 4px 0 0; font-size: 13px; color: var(--i-muted); flex-basis: 100%; }
 .in-card header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .in-was { color: var(--i-muted); font-size: 13px; }
@@ -109,6 +112,13 @@
 @keyframes in-light { from { box-shadow: 0 0 0 6px var(--i-yellow); } to { box-shadow: 0 0 0 0 transparent; } }
 .in-block.limits { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .in-pill { border: 1.5px solid var(--i-ink); border-radius: 999px; padding: 2px 18px; background: var(--i-panel); font-size: 15px; }
+
+.in-headrow { display: flex; align-items: center; gap: 12px; }
+.in-headtext { flex: 1; min-width: 0; }
+.in-headrow .in-pet { width: 72px; height: 88px; }
+.in-headrow .in-pet canvas { width: 72px; height: 72px; }
+.in-headrow .in-pet::before { width: 44px; height: 44px; }
+.in-headrow .in-pet[data-state="idle"] { opacity: 0.5; }
 
 /* ---- A2 ---- */
 .in-q { border: 1.5px solid var(--i-line); border-radius: 12px; padding: 10px 14px; background: var(--i-card); }
@@ -226,6 +236,9 @@
 .in-ask-head h2 { margin: 0; }
 .in-ask-head .in-actions { margin: 0; }
 .in-ask-top { max-height: 58vh; }
+body.video .in-pane.a1 .in-added { font-size: 22px; }
+body.video .in-pane.a1 .in-add-mark { font-size: 18px; }
+body.video .in-pane.a1 .in-review { font-size: 22px; margin: 0 0 6px; }
 
 /* ---- A1 in the video (?video=1: 1920 x 1080, the bottom 170 px are for the subtitles): the request on top, the domains' pets
    and their bubbles in two columns (4 + 3), letters of 24 px and more; nothing else of A1 ---- */

@@ -302,14 +302,14 @@ items:
 
   - key: Q31
     name: 体格の範囲
-    applies_if: ride or lean or near_people or handheld
+    applies_if: ride or lean or handheld
     ask: default
     default:
       value: 若年女性 5 % 〜 若年男性 95 %
       trust: 1
       basis: >-
-        AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html
-        (not checked in this repository; tried 2026-11-03: AIST; not reachable)
+        AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm
+        から 95 % の男性 1819.6 mm, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)
 
   - key: Q32
     name: 体重 (法令の計算用)
@@ -332,13 +332,12 @@ items:
       unit: kg
       trust: 1
       basis: >-
-        AIST 人体寸法データベース 1991-92, 体重, 若年男性 95 パーセンタイル,
-        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository;
-        tried 2026-11-03: AIST; not reachable)
+        AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 (young adults, M) 95 パーセンタイル 76.6 kg,
+        https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)
 
   - key: Q34
     name: 弱い人がいるか
-    applies_if: always
+    applies_if: ride or lean or handheld or near_people
     ask: confirm
     why: いる場合は、はさまれや倒れかかりをより厳しく見るためです。
     example: いない / 子ども
