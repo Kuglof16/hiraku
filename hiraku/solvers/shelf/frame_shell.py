@@ -139,7 +139,7 @@ HOT_SPOT_ASSUMPTION = (
     "for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (このリポジトリでは確かめていない)。"
     "ガセットの脚の溶接線は読んでいない。IIW ではこれは疲労のための構造応力で、ここでは静的な強さの判定に、溶接の止端の構造応力 "
     "(膜と曲げ) を使う。局所の降伏を許さない、安全側の扱い")
-JUDGED_ASSUMPTION = ("判定に使う量: 荷重条件の基準の量が max_stress のとき、この道具で判定に使うのは max_hot_spot_stress "
+JUDGED_ASSUMPTION = ("判定に使う量: 荷重条件の基準の量が max_stress のとき、このツールで判定に使うのは max_hot_spot_stress "
                      "(溶接の止端の構造応力)。要素の最大 max_stress は記録に出すが、判定には使わない (契約)")
 PEAK_ASSUMPTION = ("max_stress はつなぎ目の鋭い入隅の角の要素の値で、シェルではそこで応力が特異になる (角の要素を細かくするほど"
                    "大きくなる)。角の要素は溶接線の帯の t×t の要素で、要素の大きさ (element_size) を変えても変わらないので、"
