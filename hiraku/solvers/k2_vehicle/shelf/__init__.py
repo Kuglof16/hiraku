@@ -30,11 +30,12 @@ from .launch import LaunchTool, launch_run
 from .offroad import OffroadRollTool
 from .step import StepClimbTool, step_push
 from .tilt import TiltTool, tilt_closed_form
+from .turning import TurningCircleTool
 
 TOOLS = {t.name: t for t in (TiltTool(), CrosswindTool(), BrakingTool(), LaunchTool(), LaneChangeTool(),
-                             OffroadRollTool(), StepClimbTool(), KcBenchTool())}
+                             OffroadRollTool(), StepClimbTool(), KcBenchTool(), TurningCircleTool())}
 
 __all__ = ["TOOLS", "K2Tool", "P", "Pair", "LOADING", "MU", "RHO", "CD", "FRONT_AREA", "SIDE_AREA", "SIDE_CP_HEIGHT",
            "MOTOR", "TIPPED_ROLL", "TiltTool", "CrosswindTool", "BrakingTool", "LaunchTool", "LaneChangeTool",
-           "OffroadRollTool", "StepClimbTool", "KcBenchTool", "tilt_closed_form", "wind_ramp", "brake_stop", "launch_run",
+           "OffroadRollTool", "StepClimbTool", "KcBenchTool", "TurningCircleTool", "tilt_closed_form", "wind_ramp", "brake_stop", "launch_run",
            "path_run", "dlc_path", "dlc_scene", "step_push", "DLC_SECTIONS", "DLC_OFFSET", "DLC_LANE_WIDTH"]
