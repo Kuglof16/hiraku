@@ -403,11 +403,12 @@ class BrowserReplayTest(unittest.TestCase):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
-            for look in ("zu", "real"):
+            # the diagram (?look=plain) and the real look, the workbench's default (no ?look=)
+            for look, query in (("zu", "&look=plain"), ("real", "")):
                 page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
                 errors = []
                 page.on("pageerror", lambda e: errors.append(str(e)))
-                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}", wait_until="domcontentloaded")
+                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6{query}", wait_until="domcontentloaded")
                 page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
                 page.evaluate("window.hiraku.ready")
                 page.click('#tests button[data-lc="P1-step100"]')

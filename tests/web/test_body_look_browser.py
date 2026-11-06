@@ -296,7 +296,7 @@ class BodyLookBrowserTest(unittest.TestCase):
         design = body_design()
         size = {p["id"]: p["box"]["size_mm"] for p in design["parts"]}
         real = self.look_of("real", design)["parts"]
-        zu = self.look_of("zu", design)["parts"]
+        zu = self.look_of("plain", design)["parts"]  # ?look=plain: the diagram (the default is the real look)
         boxes = ["hood", "fender_FL", "side_panel_R", "bulkhead", "floor", "seat_R_back", "seat_L_cushion", "bracket_column", "bracket_seat_R_F", "rollbar", "reducer"]
         for pid in boxes:
             (r,) = real[pid]
@@ -312,7 +312,9 @@ class BodyLookBrowserTest(unittest.TestCase):
         src = [json.loads(line) for line in SAMPLE_EVENTS.read_text(encoding="utf-8").splitlines()]
         for name, want in ZU_PRINT.items():
             design = json.loads((ZU_DESIGNS / f"{name}.json").read_text(encoding="utf-8"))
-            page, errors = self.open("zu")
+            # ?look=plain: the diagram, asked for by name now that the workbench opens in the real look
+            # (the fingerprints are unchanged: the diagram is drawn as before)
+            page, errors = self.open("plain")
             got = page.evaluate(ZU_FINGERPRINT, [src[0], {**src[1], "data": design}])
             page.close()
             self.assertEqual(errors, [], name)

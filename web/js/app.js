@@ -43,11 +43,12 @@ import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
+import { TileViews } from "./tile3d.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
-import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, judgedResult, referenceResults } from "./judged.js";
@@ -188,10 +189,22 @@ function fitStage() {
 
 // ---- 3D -------------------------------------------------------------------
 const viewport = $("viewport");
-const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
+const look = lookFromParams(params); // the photograph-like look by default; ?look=plain: the diagram
 document.body.classList.add(`look-${look}`);
-const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
-const bench = new Workbench3D(viewport, look, { quality });
+// joints: the real look opens with the joint marks off (they make the parts see-through, joints.js
+// partLook), so the vehicle is seen as it is; ?on=joints or the 接合 button shows them
+if (look === "real" && !(params.get("on") ?? "").split(",").includes("joints")) ui.toggles.joints = false;
+// a software renderer (the WebGL driver's name, agent_pets.js): the real look's cheapest quality
+// unless ?quality= says otherwise (look.js qualityFromParams)
+function softwareGL() {
+  const gl = document.createElement("canvas").getContext("webgl2");
+  const name = glRendererName(gl);
+  gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  return isSoftwareRenderer(name);
+}
+const quality = qualityFromParams(params, softwareGL()); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
+// sky: the real look shows the sky with its horizon behind the vehicle (look.js Look.sky)
+const bench = new Workbench3D(viewport, look, { quality, sky: true });
 const modLayer = new ModuleLayer(bench); // modules:
 const grip = new GripView(bench, viewport); // grip:
 const heat = new EnergyFlow(bench, viewport, { dev: DEV }); // heat: ids in its legend only with ?dev=1
@@ -1662,20 +1675,38 @@ function animSeekFromPointer(ev) {
 }
 
 const board = new TileBoard($("grid-head"), $("tiles"));
+// ④'s 3D pictures (tile3d.js): one renderer for the tiles, always in the real look (black rubber
+// tyres, opaque parts) whichever look the workbench has
+const tileViews = new TileViews("real", () => (drawn.rev = -2));
+const TILE_PIC_WAIT_MS = 150;
+let tilePicTimer = null;
 
 // A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
   const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
+  // the pictures kept are copied at once; new ones are drawn once the grid has settled and the
+  // page has loaded, one a task (a record loading renders the grid at each event, and a picture
+  // costs frames of the software renderer)
+  clearTimeout(tilePicTimer);
+  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 0)) {
+    const step = () => {
+      const loaded = document.readyState === "complete";
+      tilePicTimer = loaded && board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 1) ? null : setTimeout(step, loaded ? 0 : TILE_PIC_WAIT_MS);
+    };
+    tilePicTimer = setTimeout(step, TILE_PIC_WAIT_MS);
+  }
   agentPets?.mount($("view-grid"), "grid");
-  // a tile whose domain has analysed something by now can replay it in the tab (pressed: openDomain)
+  // a tile (or a chip of a domain not picked) whose domain has analysed something by now can
+  // replay it in the tab (pressed: openDomain)
   const spans = spansNow();
-  for (const el of $("tiles").querySelectorAll(".tile[data-domain]")) {
+  for (const el of $("tiles").querySelectorAll(".tile[data-domain], .offchip[data-domain]")) {
     const sp = spans[el.dataset.domain];
     const ok = !!sp && sp.t0 <= player.playhead + 1e-6;
     el.classList.toggle("can-replay", ok);
     if (ok) {
       el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 比べる → 判定) をここで再生します`;
-      el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
+      if (el.classList.contains("offchip")) el.insertAdjacentHTML("beforeend", ` <span class="replay-tag" data-role="replay">▶</span>`);
+      else el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
     }
   }
   const banner = $("grid-banner");
@@ -2095,7 +2126,7 @@ $("tests").addEventListener("click", (ev) => {
 });
 // ④: a tile with analyses in the record replays its domain in the tab; 格子に戻る closes it
 $("tiles").addEventListener("click", (ev) => {
-  const tile = ev.target.closest(".tile.can-replay[data-domain]");
+  const tile = ev.target.closest(".tile.can-replay[data-domain], .offchip.can-replay[data-domain]");
   if (!tile || ev.target.closest("a, details, summary")) return;
   openDomain(tile.dataset.domain);
 });

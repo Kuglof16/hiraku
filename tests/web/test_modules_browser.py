@@ -359,8 +359,11 @@ class ModulesLookBrowserTest(_ModulesPage):
         page = self.open(f"run={RUN_ID}&tab=grid&pace=0&t=1e6")
         if page.evaluate("document.documentElement.dataset.agentPets") != "on":
             self.skipTest("no pets on this server")
-        # the packager in the assembly tile's corner, the module designers in the head
-        self.assertEqual(page.locator('.tile[data-domain="assembly"] [data-pet-slot="packager"]').count(), 1)
+        # the packager in the assembly tile's corner (assembly not picked in this run: no tile, so
+        # in the head, tiles.js), the module designers (this record's six) in the head
+        where = '.tile[data-domain="assembly"]' if page.locator('.tile[data-domain="assembly"]').count() else "#grid-head"
+        self.assertEqual(page.locator(f'{where} [data-pet-slot="packager"]').count(), 1)
+        self.assertEqual(page.locator('#view-grid [data-pet-slot="packager"]').count(), 1)  # once on the grid
         for a in SIX:
             self.assertEqual(page.locator(f'#grid-head [data-pet-slot="{a}"]').count(), 1, a)
 
