@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from hiraku import contract
-from hiraku.catalog import REPO_ROOT
+from hiraku.catalog import REPO_ROOT, load_catalog
 from hiraku.intake import facts
 from hiraku.intake import hearing
 from hiraku.intake.domains import ANALYSIS_DOMAINS
@@ -40,6 +40,7 @@ def tables() -> dict:
         "FLAGS": [{"name": n, "symbol": s, "label": FLAG_LABELS[n], "question": q} for n, (s, q) in FLAGS.items()],
         "SPEED_CLASSES": [{"name": n, "symbol": s, "meaning": m} for n, (s, m) in SPEED_CLASSES.items()],
         "DOMAINS": [{"name": d, "ja": contract.DOMAIN_NAMES_JA[d]} for d in ANALYSIS_DOMAINS],
+        "TESTS": {t["id"]: {"domain": t["domain"], "title": t["title"]} for t in load_catalog().tests},
         "CATEGORIES": [{"name": n, "ja": ja} for n, ja in CATEGORIES.items()],
         "ITEM_HELP": {it["key"]: {"why": it["why"], "example": str(it["example"])} for it in hearing.load_items() if it.get("why")},
         "ITEM_CHOICES_ALT": {it["key"]: {"labels": {str(k): v for k, v in it["choices_if"]["labels"].items()}, **_flag_terms(it["choices_if"]["when"])}

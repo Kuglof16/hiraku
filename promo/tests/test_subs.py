@@ -47,6 +47,14 @@ class Chunks(unittest.TestCase):
         self.assertEqual(subs.em_width("CAE"), 1.5)
         self.assertEqual(subs.em_width("解析"), 2.0)
 
+    def test_shown_without_maru(self):
+        # the subtitles show no 「。」: one at the end goes, one inside becomes a full-width space
+        self.assertEqual(subs.shown_ja("段差を越えられるか。"), "段差を越えられるか")
+        self.assertEqual(subs.shown_ja("分析する技術。それが CAE です。"), "分析する技術　それが CAE です")
+        self.assertEqual(subs.shown_ja("構想は 10 万行"), "構想は 10 万行")
+        cues = subs.build_cues([{"ja": "一文目。二文目。", "en": "x", "at": 0.0, "seconds": 2.0}], [[0.0]])
+        self.assertEqual([c.ja for c in cues], ["一文目　二文目"])
+
     def test_short_sentence_is_one_chunk(self):
         self.assertEqual(subs.chunk_sentence("段差を越えられるか。"), ["段差を越えられるか。"])
 
@@ -158,6 +166,18 @@ class Ass(unittest.TestCase):
         self.assertTrue(vf.startswith("drawbox=x=0:y=ih*910/1080:w=iw:h=ih*170/1080"))
         self.assertTrue(vf.endswith(",ass=subs.ass"))
         self.assertIn("-shortest", cmd)
+
+    def test_band_only_while_a_line_is_up(self):
+        from pathlib import Path
+        ass = ("Dialogue: 0,0:00:01.30,0:00:03.35,JA,,0,0,0,,a\n"
+               "Dialogue: 0,0:00:03.70,0:00:06.65,JA,,0,0,0,,b\n"   # 0.35 s gap: one span
+               "Dialogue: 0,0:00:01.30,0:00:03.35,EN,,0,0,0,,a\n"
+               "Dialogue: 0,0:00:10.00,0:00:12.00,JA,,0,0,0,,c\n")  # 3 s gap: a new span
+        spans = subs.band_spans(ass)
+        self.assertEqual(spans, [(1.15, 6.8), (9.85, 12.15)])
+        cmd = subs.burn_command(Path("v.mp4"), Path("subs.ass"), Path("o.mp4"), None, spans=spans)
+        vf = cmd[cmd.index("-vf") + 1]
+        self.assertIn(":enable='between(t,1.15,6.8)+between(t,9.85,12.15)'", vf)
 
 
 if __name__ == "__main__":
