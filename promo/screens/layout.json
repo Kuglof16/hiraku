@@ -358,7 +358,9 @@
               "_note": "five tests and the legend over the full width (right edge 1824); bottom 886, above the subtitle band" },
     "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
     "pane": { "border_px": 2, "radius_px": 12, "label": { "x": 16, "y": 12, "size_px": 26 }, "rate": { "size_px": 18 },
-              "verdict": { "of_label": 2, "_note": "問題なし / 直しが要る: at most this many times the pane name's size, and no wider than the pane" } },
+              "verdict": { "of_label": 2, "_note": "問題なし / 直しが要る: at most this many times the pane name's size, and no wider than the pane" },
+              "pet": { "w": 96, "h": 96, "right": 12, "bottom": 12,
+                       "_note": "added by the screens department (2026-11-06): the box at the pane's bottom right where the 3D pet of the agent that ran the pane's test stands (promo/pets/pet3d.js). It works while its pane plays, then reacts to the verdict. Posed from the cut time t only; not counted as moving (as n04's)" } },
     "times": { "lead_s": 0.3 },
     "overlay": { "color": "#c8402a", "opacity": 0.22, "_note": "the condition past the limit, translucent red" },
     "colors": { "bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6" }
@@ -575,7 +577,7 @@
   "n08": {
     "duration_s": 6.4,
     "_duration_note": "6.4 s is N08's slot. Voice from 0.3 s to 6.29 s; parts measured from its pauses: ただ、 about 0.3-0.9 s; CAE のツールは気軽に買えるものではなく、 about 0.9-3.5 s; 使いこなすのも about 3.6-4.8 s; 簡単ではありません。 about 4.9-6.0 s",
-    "_note": "an ordinary CAE tool, not HIRAKU: a cool grey business application on a dark ground, tilted a little. The licence windows pile up while the voice says it is not easy to buy, the settings windows while it says 使いこなすのも, the warnings and the stack of manuals while it says 簡単ではありません. No product names, logos or figures (no prices, no counts in the warnings). Every box below is in stage px before the camera's rotation and scale",
+    "_note": "an ordinary CAE tool, not HIRAKU: a cool grey business application on a dark ground, tilted a little. The licence windows pile up while the voice says it is not easy to buy, the settings windows while it says 使いこなすのも, the warnings and the stack of manuals while it says 簡単ではありません. No product names, logos or figures in the application (no prices, no counts in the warnings); the one price example the voice gives (2026-11-06, script v9) has its source in a small line under the window (n08.src). Every box below is in stage px before the camera's rotation and scale",
     "camera": { "rotate_from_deg": -1.4, "rotate_to_deg": -2.4, "from_scale": 0.96, "to_scale": 1.0, "move_dur_s": 6.4,
                 "ease": [0.3, 0, 0.6, 1],
                 "_note": "the application (main window and its dialogs) turns and grows slowly about the centre of the area above the subtitle band (960, 455) over the whole cut. At from_scale 0.96 the smallest text (19 px) is drawn at 18.2 px" },

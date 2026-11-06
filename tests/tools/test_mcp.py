@@ -21,7 +21,7 @@ class SchemaTest(unittest.TestCase):
     def test_every_run_tool_has_a_standalone_schema(self):
         self.assertEqual(set(INPUT_SCHEMAS), {*contract.MCP_TOOLS_MVP, "revise_design", "build_version", "propose_design",
                                               "make_tool", "check_tool", "get_tool_template", "write_report",
-                                              "pick_domains", "ask_user", "import_knowledge", "rule_check"})
+                                              "pick_domains", "ask_user", "import_knowledge", "rule_check", "find_tradeoffs"})
         self.assertEqual(set(INPUT_SCHEMAS), set(RUN_TOOLS))
         for name, schema in INPUT_SCHEMAS.items():
             with self.subTest(name=name):
@@ -29,6 +29,13 @@ class SchemaTest(unittest.TestCase):
                 self.assertEqual(schema["type"], "object")
         units = INPUT_SCHEMAS["record_prediction"]["properties"]["inputs"]["additionalProperties"]["properties"]["unit"]
         self.assertIn("MPa", units["enum"])
+
+    def test_the_tools_register_find_tradeoffs_collector(self):
+        """hiraku.intake cannot import hiraku.tools: importing the MCP tools registers the collector it calls."""
+        from hiraku.intake import tradeoff
+        from hiraku.tools import tradeoff_data
+
+        self.assertIs(tradeoff.collector, tradeoff_data.collect)
 
 
 class HandlerTest(RunCase, unittest.TestCase):

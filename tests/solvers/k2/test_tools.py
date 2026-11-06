@@ -71,7 +71,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -380,7 +380,8 @@ class Runs(unittest.TestCase):
         self.assertEqual(res["tip_slope_angle"]["unit"], "deg")
         self.assertLess(res["tip_slope_angle"]["value"], 55.0)
         series = {s["channel"]: s for s in rec["series"]}
-        self.assertEqual(len({len(s["values"]) for s in rec["series"]}), 1)
+        # the series against time share one time base (the tyre curves are against slip: their own x)
+        self.assertEqual(len({len(s["values"]) for s in rec["series"] if "t_s" in s}), 1)
         self.assertEqual(series["slope_angle"]["values"][0] < 5.0, True)  # the record starts level
         self.assertLess(max(abs(v) for v in series["roll"]["values"]), 61.0)  # and stops once tipped
         self.assertEqual(rec["scene"][1]["angle_channel"], "slope_angle")

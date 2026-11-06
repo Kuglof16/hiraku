@@ -14,8 +14,11 @@ computed here from the shapes. Browser tests: python -m tests.web.browser (needs
 
 import copy
 import json
+import shutil
+import tempfile
 import threading
 import unittest
+from pathlib import Path
 
 from hiraku import contract
 from hiraku.solvers.k2_vehicle.shelf.lane_change import dlc_scene
@@ -110,7 +113,8 @@ class FixturesFitTheContract(unittest.TestCase):
 class ReviewFixesBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -122,13 +126,14 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, events=None, query="run=sample&pace=0&t=0"):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         if events is not None:
@@ -288,9 +293,7 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         page.close()
 
     def test_the_run_list_says_what_drove_each_run(self):
-        import shutil
-        import tempfile
-        from pathlib import Path
+        from hiraku.webserve.launch import Launcher
 
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp)
@@ -301,14 +304,15 @@ class ReviewFixesBrowserTest(unittest.TestCase):
             (runs / rid).mkdir(parents=True)
             data = {"want": rid, **({"driver": drv} if drv else {})}
             (runs / rid / "events.jsonl").write_text(json.dumps({"seq": 0, "t": 0, "kind": "run.started", "data": data}) + "\n", encoding="utf-8")
-        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None)
+        # the list's launcher without an API key, whatever the window running the test has (nothing is started)
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=Launcher(runs, env={}))
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://127.0.0.1:{server.server_address[1]}/?list=1")
+        page.goto(f"http://127.0.0.1:{server.server_address[1]}/?list=1", wait_until="domcontentloaded")
         page.wait_for_selector("#runlist table")
         got = page.evaluate(
             """() => Object.fromEntries([...document.querySelectorAll("#runlist tr[data-run]")]
@@ -327,7 +331,8 @@ class ReviewFixesBrowserTest(unittest.TestCase):
         calls = page.evaluate(
             """async () => { const { EventFeed } = await import('/js/player.js'); const real = window.fetch; let calls = 0;
               // a line still being written: the server's next_offset stays at 5 of 100 bytes
-              window.fetch = async () => { calls += 1; return new Response(JSON.stringify({ events: [], next_offset: 5, size: 100, reset: false, bad_lines: 0 })); };
+              // (the ndjson form: no lines, where to read next in the headers)
+              window.fetch = async () => { calls += 1; return new Response('', { headers: { 'X-Hiraku-Next-Offset': '5', 'X-Hiraku-Size': '100', 'X-Hiraku-Reset': '0', 'X-Hiraku-Bad-Lines': '0' } }); };
               try { const feed = new EventFeed('x', () => {}); await feed.readAll(); } finally { window.fetch = real; }
               return calls; }"""
         )

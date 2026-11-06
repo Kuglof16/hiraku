@@ -368,6 +368,28 @@ class ScriptedUnsafeSideTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "pending")
         self.assert_events_fit()
 
+    def test_a_reader_is_given_the_upstream_analyses_whole(self):
+        """R9's reader (解析部 3b06ab93) reads K2's mount series off the analyses that feed its load case: given_inputs
+        puts them, read whole (series included even inside reading()), into load_case['upstream_analyses']."""
+        from hiraku.tools import judge
+        from hiraku.tools.plan import given_inputs
+
+        ana, _, _ = self.run_p1()  # P1 feeds R1 and matched
+        seen = {}
+
+        def reader(design, load_case):
+            seen.update(load_case.get("upstream_analyses") or {})
+            return {}
+
+        with judge.reading(self.ctx):
+            given_inputs(self.ctx, {"inputs_from": reader, "formula_id": "x"}, self.ctx.load_case("R1-step100"))
+        self.assertEqual(list(seen), ["P1-step100"])
+        self.assertEqual(seen["P1-step100"]["analysis_id"], ana["analysis_id"])
+        self.assertEqual(seen["P1-step100"], self.ctx.store.get_whole("analysis", ana["analysis_id"]))
+        seen.clear()
+        given_inputs(self.ctx, {"inputs_from": reader, "formula_id": "x"}, self.ctx.load_case("P1-step100"))
+        self.assertEqual(seen, {})  # nothing feeds P1
+
     def test_resolve_refs(self):
         lc = self.ctx.load_case("P1-step100")
         frame = (4 * 464 * 900 + 3 * 304 * 800) * 7850e-9  # the example's frame members, steel

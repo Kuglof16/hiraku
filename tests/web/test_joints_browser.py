@@ -27,7 +27,7 @@ from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 from tests.web.test_assembly_browser import assembly_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -362,7 +362,7 @@ class JointsBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/{query}")
+        page.goto(f"{self.base}/{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")

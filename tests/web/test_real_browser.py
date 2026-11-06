@@ -18,7 +18,7 @@ from hiraku.webserve.server import SAMPLE_EVENTS, list_assets, make_server
 from tests.web.shell_fixture import shell_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -147,7 +147,7 @@ class RealLookBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{base or self.base}/?{query}")
+        page.goto(f"{base or self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -269,6 +269,37 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertLess(max(got["shadow"]["w"], got["shadow"]["h"]), 1.6 * (longest + 0.4))
         self.assertEqual(got["shadow"]["type"], 2)  # THREE.PCFSoftShadowMap
         self.assertEqual((got["post"], got["ao"], got["samples"]), (True, True, 4))
+        page.close()
+
+    def test_the_sun_stays_put_when_the_view_is_turned(self):
+        """Turning the workbench's 3D view by dragging moves the camera, not the sun: its
+        direction (light - target, unit) and the sky's turn are the same before and after."""
+        page, errors = self.open("run=sample&pace=0&t=9&look=real")
+        state = """() => {
+          const b = window.hiraku.bench;
+          b.render();
+          const lights = []; b.scene.traverse((o) => o.isDirectionalLight && lights.push(o));
+          const sun = lights.find((l) => l.castShadow);
+          const d = sun.position.clone().sub(sun.target.position).normalize();
+          const r = b.renderer.domElement.getBoundingClientRect();
+          return { sun: d.toArray(), env: b.scene.environmentRotation.toArray().slice(0, 3), cam: b.camera.position.toArray(),
+                   box: [r.left, r.top, r.width, r.height] };
+        }"""
+        before = page.evaluate(state)
+        x, y, w, h = before["box"]
+        page.mouse.move(x + w / 2, y + h / 2)
+        page.mouse.down()
+        for k in range(1, 11):
+            page.mouse.move(x + w / 2 + 30 * k, y + h / 2 + 4 * k)
+        page.mouse.up()
+        page.wait_for_timeout(300)
+        after = page.evaluate(state)
+        self.assertEqual(errors, [])
+        moved = sum((a - b) ** 2 for a, b in zip(after["cam"], before["cam"])) ** 0.5
+        self.assertGreater(moved, 0.1)  # the camera went round (m)
+        for a, b in zip(after["sun"], before["sun"]):
+            self.assertAlmostEqual(a, b, places=6)
+        self.assertEqual(after["env"], before["env"])
         page.close()
 
 

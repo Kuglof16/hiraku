@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -244,6 +245,65 @@ class SuiteQueue(unittest.TestCase):
         finally:
             procs.kill_tree(p)
             p.wait()
+
+    def _first_note(self, pid):
+        note = rt.LOCK_DIR / f"suite.first-{pid}.json"
+        note.write_text(json.dumps({"pid": pid, "root": "elsewhere", "what": "qa.run_tests", "since": "09:00"}),
+                        encoding="utf-8")
+        return note
+
+    def _waiter(self):
+        """A live process that stands in for a first run waiting for the lock (it holds nothing)."""
+        p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        self.addCleanup(p.wait)
+        self.addCleanup(procs.kill_tree, p)
+        return p
+
+    def test_a_run_without_first_leaves_a_free_lock_to_a_waiting_first_run(self):
+        self._first_note(self._waiter().pid)
+        self.assertIsNotNone(rt._first_waiting("suite"))
+        self.assertIsNone(rt.take_queue(8, wait=False), "took the lock before the first run")
+        b = rt.take_queue(4, wait=False, queue="browser")  # the note is for its own lock only
+        self.assertIsNotNone(b)
+        b.close()
+
+    def test_a_first_run_takes_a_free_lock_past_another_first_note(self):
+        self._first_note(self._waiter().pid)
+        f = rt.take_queue(8, wait=False, first=True)
+        self.assertIsNotNone(f)
+        f.close()
+
+    def test_a_waiting_run_says_it_waits_for_the_first_run_and_then_runs(self):
+        w = self._waiter()
+        self._first_note(w.pid)
+        said = []
+        saved, rt.POLL_S = rt.POLL_S, 0.2
+        try:
+            threading.Timer(1.0, lambda: (procs.kill_tree(w), w.wait())).start()
+            f = rt.take_queue(8, say=lambda *a, **k: said.append(" ".join(map(str, a))))
+        finally:
+            rt.POLL_S = saved
+        self.assertIsNotNone(f)
+        f.close()
+        self.assertEqual(len(said), 1, said)
+        self.assertIn("first in line", said[0])
+
+    def test_a_note_of_an_ended_process_is_dropped(self):
+        p = subprocess.Popen([sys.executable, "-c", "pass"])
+        p.wait()
+        note = self._first_note(p.pid)
+        self.assertIsNone(rt._first_waiting("suite"))
+        self.assertFalse(note.exists())
+        f = rt.take_queue(8, wait=False)
+        self.assertIsNotNone(f)
+        f.close()
+
+    def test_a_first_run_leaves_no_note_once_it_holds_the_lock(self):
+        f = rt.take_queue(8, first=True)
+        try:
+            self.assertEqual(list(rt.LOCK_DIR.glob("suite.first-*.json")), [])
+        finally:
+            f.close()
 
     def test_a_mapping_worker_lists_the_repository_files_its_test_used(self):
         # PY_MAP=1: the worker's audit hook collects the repository files opened or imported (qa.browser_pick's input)
