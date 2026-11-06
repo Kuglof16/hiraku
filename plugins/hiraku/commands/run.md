@@ -11,7 +11,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 1. MCP のツール mcp__plugin_hiraku_hiraku__start_run を requirements_file="$ARGUMENTS" で 1 回呼びます (ツールの棚を確かめるので、しばらくかかります)。断られたら、その文をそのまま人に伝えて終わります。
 2. 返った task が、まとめ役の最初の仕事です。下の「まとめ役の決まり」に従って進めます。
    - HIRAKU のツールは mcp__plugin_hiraku_hiraku__<名前> です (決まりの中では <名前> だけで書いています)。
-   - 役のサブエージェントは hiraku:designer・hiraku:packager・hiraku:cae-<分野> です。設計がモジュールに分かれているときは、hiraku:designer の代わりに、モジュールの設計役 hiraku:designer-<モジュール> (frame・suspension・steering・occupant・powertrain・body) を使います。
+   - 役のサブエージェントは hiraku:designer・hiraku:packager・hiraku:cae-<分野> です。設計がモジュールに分かれているときは、hiraku:designer の代わりに、設計役 hiraku:designer-structure (構造の設計役)・hiraku:designer-mechanism (機構の設計役)・hiraku:designer-electric (電気の設計役) を使います。どの役がどのモジュールを持つかは、設計の modules の owner にあります。
    - Skill の hiraku:<名前> は、このプラグインの skill です。
    - 役を裏で動かしたまま番を終えません (Claude Code が役を打ち切ることがあります)。役の結果を待つときは mcp__plugin_hiraku_hiraku__wait_for_roles を呼びます。
    - ツールが断り、その理由をツールの入力で直せないとき (ツールの誤り・棚に無いツールや式・足りない値など) は、HIRAKU のコード (hiraku/*.py) を読んで原因を探しません。何が・どこで・記録の ID を issues に書いて write_report を呼び、終えます (設計の版がまだ無くても、summary と issues で書けます)。
@@ -47,8 +47,8 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 
 モジュールに分けた設計 (設計に modules がある) のとき、4. の設計の直しは次のとおりにする (1 人の設計役 designer はいない):
 - 赤が出そろうと、HIRAKU が「HIRAKU の振り分け (版 N の赤の荷重条件 …)」の文を届ける。誰がどの赤に答えるかは、その文のとおりにする (荷重条件の modules と、干渉の重なった部品のモジュールから、コードが出したもの)。自分で推し量って振り分けを変えない。
-- 振り分けにあるモジュールの設計役 (designer-<モジュール>) を、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。渡す文には、その役が答える赤の荷重条件の ID と、その合否の記録 (ver-…) の ID を書く。
+- 振り分けにある設計役 (構造・機構・電気の designer-structure・designer-mechanism・designer-electric のうち、赤のモジュールの owner。1 つの役がいくつものモジュールを持つことがある) を、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。渡す文には、その役が答える赤の荷重条件の ID と、その合否の記録 (ver-…) の ID を書く。
 - 全部の設計役の報告が返ったら、パッケージ役 (packager) に build_version で次の版を作らせる (振り分けでパッケージ役に来た赤も、そのとき渡す)。設計役が「パッケージ役へ」と書いたこと (空間・取付点・ぶつかり) も、そのまま渡す。
 - 1 回の直し (round) は build_version 1 回 (round_limit はこの回数)。新しい版ができたら、段 0 から全部の荷重条件をやり直す。
 - build_version が設計の生成の文で断り、名指された変数を変えても文の数が変わらないときは、「直せない」と決める前に、その変数を持つモジュールの設計役に、範囲の端の値で 1 回出し直すよう頼む (出し直した提案は前の提案に置き換わる)。端の値でも断られたら、文と試した値を report の issues に書く。
-- 4. の、判定なしで終わった荷重条件の直し (赤ではないので振り分けの文は来ない) は、原因の直し方 (fix) が名指す変数か選択を持つモジュール (設計の modules の variables と choices) の設計役に渡し、そのあとパッケージ役に build_version で版を作らせる。
+- 4. の、判定なしで終わった荷重条件の直し (赤ではないので振り分けの文は来ない) は、原因の直し方 (fix) が名指す変数か選択を持つモジュール (設計の modules の variables と choices) の owner の設計役に渡し、そのあとパッケージ役に build_version で版を作らせる。
