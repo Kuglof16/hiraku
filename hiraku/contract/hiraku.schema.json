@@ -298,6 +298,13 @@
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
         },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a load case recording the drive at speed (id ending -drive, no criterion, feeding nothing; P1: step_climb_dynamic with record_run speed), for showing the vehicle driving over at 1x."
+        },
         "stop_after": {
           "enum": [
             "picks"
@@ -3904,6 +3911,13 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a load case recording the drive at speed (id ending -drive, no criterion, feeding nothing; P1: step_climb_dynamic with record_run speed), for showing the vehicle driving over at 1x."
         },
         "stop_after": {
           "enum": [
