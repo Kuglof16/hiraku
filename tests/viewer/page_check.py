@@ -12,8 +12,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-def check(viewer: Path, field: str, shot: str | None = None, t: int | None = None, mode: int | None = None) -> dict:
-    url = (Path(viewer).resolve() / "index.html").as_uri() + "#" + field
+def check(viewer: Path | str, field: str, shot: str | None = None, t: int | None = None, mode: int | None = None) -> dict:
+    # viewer: a folder, or a page URL (http://.../index.html?data=..., the JSON data of viewer.src.build)
+    url = (str(viewer) if str(viewer).startswith("http") else (Path(viewer).resolve() / "index.html").as_uri()) + "#" + field
     errors: list[str] = []
     out: dict = {"field": field}
     with sync_playwright() as p:
@@ -111,7 +112,7 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    r = check(Path(a[0]), a[1], a[2] or None if len(a) > 2 else None, int(a[3]) if len(a) > 3 else None,
+    r = check(a[0] if a[0].startswith("http") else Path(a[0]), a[1], a[2] or None if len(a) > 2 else None, int(a[3]) if len(a) > 3 else None,
               int(a[4]) if len(a) > 4 else None)
     sys.stdout.reconfigure(encoding="utf-8")
     print(json.dumps(r, indent=1, ensure_ascii=False))

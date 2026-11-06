@@ -40,6 +40,7 @@ window.HV = window.HV || {};
   function loadData(field) {
     return new Promise(resolve => {
       if (window.VIEW_DATA && window.VIEW_DATA[field]) return resolve(window.VIEW_DATA[field]);
+      if (HV.dataFromUrl) return resolve(null);   // ?data=: only the given data, no data/<field>.js
       const s = document.createElement('script');
       s.src = `data/${field}.js`;
       s.onload = () => resolve((window.VIEW_DATA || {})[field] || null);
@@ -48,7 +49,28 @@ window.HV = window.HV || {};
     });
   }
 
+  // index.html?data=<url>#<field>: the JSON of viewer.src.build ({field, data, title, source}, or {field: null,
+  // reason}) or a bare data object, put where VIEW_DATA[field] is read (field: the hash, else the JSON's field)
+  async function loadUrlData(url, hash) {
+    let j;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      j = await r.json();
+    } catch (e) {
+      return { field: hash || null, reason: `データを読めない (${url}: ${e.message})` };
+    }
+    const wrapped = j && typeof j === 'object' && ('data' in j || 'reason' in j) && 'field' in j;
+    if (wrapped && !j.field) return { field: hash || null, reason: j.reason || 'この解析は見せられない' };
+    const field = hash || (j && j.field) || null;
+    if (field) { window.VIEW_DATA = window.VIEW_DATA || {}; window.VIEW_DATA[field] = wrapped ? j.data : j; }
+    return { field, reason: null };
+  }
+
   HV.main = async function () {
+    const dataUrl = new URLSearchParams(location.search).get('data');
+    const fromUrl = dataUrl ? await loadUrlData(dataUrl, (location.hash || '').slice(1)) : null;
+    HV.dataFromUrl = !!fromUrl;
     const view = new HV.View($('view'));
     const T = window.THREE;
     const st = { field: null, ctl: null, t: 0, playing: false, timer: null, ctx: null };
@@ -258,10 +280,11 @@ window.HV = window.HV || {};
     }
     HV.open = open;
 
-    const first = (location.hash || '').slice(1);
+    const first = (location.hash || '').slice(1) || (fromUrl && fromUrl.field) || '';
     $('loading').style.display = 'none';
     const byVariant = HV.FIELD_ORDER.find(f => ((HV.fields[f] || {}).variants || []).some(v => v.key === first));
     await open(HV.FIELD_ORDER.includes(first) ? first : byVariant || HV.FIELD_ORDER[0], byVariant ? first : undefined);
+    if (fromUrl && fromUrl.reason) { $('title').textContent = '見せられない解析'; $('source').textContent = fromUrl.reason; }
     window.__ready = true;
   };
 
