@@ -184,6 +184,8 @@ def write_data(field: str, obj: Record, out_dir: Path) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{field}.js"
+    from viewer.src import ja   # the page's texts in Japanese (imported here: ja imports this module)
+    obj = ja.translate(obj)
     path.write_text(data_js(field, obj), encoding="ascii")
     return path
 
@@ -246,6 +248,28 @@ def scene_of(record: Record) -> list[Record]:
     return out
 
 
+def ground_of(design: Record) -> Record | None:
+    """The ground under the tyres at the static ride height, from the design's supports: each support's tyre
+    touches at its wheel centre z less its radius (or its loaded radius, `loaded_radius_mm`, when the design gives
+    one); the ground plane is the lowest of those, and each support's own gap to it is kept (0 when the supports
+    stand level). None without supports."""
+    out = []
+    for s in design.get("supports", []) or []:
+        p, r = s.get("position_mm"), s.get("loaded_radius_mm", s.get("radius_mm"))
+        if not p or r is None:
+            continue
+        out.append({"id": s.get("id", ""), "c": [float(v) for v in p], "r": float(r),
+                    "width": float(s.get("width_mm", 0.0) or 0.0), "contact_z": float(p[2]) - float(r),
+                    "loaded": "loaded_radius_mm" in s})
+    if not out:
+        return None
+    z = min(w["contact_z"] for w in out)
+    for w in out:
+        w["gap_mm"] = w["contact_z"] - z
+    return {"z": z, "wheels": out,
+            "from": "設計の支持点: 車輪の中心の高さ − " + ("負荷時の半径" if any(w["loaded"] for w in out) else "半径")}
+
+
 def vectors_of(record: Record) -> list[Record]:
     return [{"kind": v.get("kind", ""), "at": v.get("at", ""), "o": [float(x) for x in v["origin_mm"]],
              "f": [float(x) for x in v["vector_N"]]} for v in record.get("vectors", []) or []]
@@ -295,6 +319,7 @@ def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, d
         "frame": frame_of(design),
         "parts": parts_of(design),
         "scene": scene_of(record),
+        "ground": ground_of(design),
         "vectors": vectors_of(record),
         "results": results_of(record),
         "assumptions": list(record.get("assumptions", []) or []),

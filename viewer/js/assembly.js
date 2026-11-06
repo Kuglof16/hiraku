@@ -11,8 +11,8 @@ HV.fields.assembly = {
     const steps = D.steps, nS = steps.length, FR = 8;          // FR animation frames per step
     const stepOf = D.parts.map(() => -1);
     steps.forEach((s, k) => { if (s.pi >= 0) stepOf[s.pi] = k; });
-    const STATUS = { ok: [[0.35, 0.65, 0.4], 'OK'], blocked: [[0.85, 0.1, 0.1], 'NG: 途中で干渉'],
-                     no_tool: [[0.95, 0.6, 0.1], 'NG: 工具が入らない'], no_reach: [[0.55, 0.2, 0.75], 'NG: 手が届かない'] };
+    const STATUS = { ok: [[0.35, 0.65, 0.4], 'OK'], blocked: [[0.784, 0.251, 0.165], 'NG: 途中で干渉'],
+                     no_tool: [[0.914, 0.537, 0.227], 'NG: 工具が入らない'], no_reach: [[0.557, 0.42, 0.749], 'NG: 手が届かない'] };
     const GREY = [0.75, 0.75, 0.78];
     // interference depth per part and member (largest pair)
     const depthPart = D.parts.map(() => 0), depthMember = D.frame.member_ids.map(() => 0);
@@ -92,7 +92,7 @@ HV.fields.assembly = {
       contour: spec,
       plot() {
         const x = steps.map((s, k) => k + 1), cur = S.i >= nS * FR ? null : curStep() + 1;
-        const marks = steps.map((s, k) => s.status === 'ok' ? null : { x: k + 1, col: s.status === 'no_tool' ? '#e90' : '#c00', dash: [1, 2] }).filter(Boolean);
+        const marks = steps.map((s, k) => s.status === 'ok' ? null : { x: k + 1, col: s.status === 'no_tool' ? '#e9893a' : s.status === 'no_reach' ? '#8e6bbf' : '#c8402a', dash: [1, 2] }).filter(Boolean);
         return [{ title: '締結の工具のすき間 最小 (クリックでその手へ、点線 = NG の手)', unit: 'mm', xlabel: '手',
                   x, ys: [{ v: steps.map(s => s.gap_min === null ? 0 : s.gap_min), col: '#1f4e9c' }], marks, cursor: cur }];
       },
@@ -118,7 +118,7 @@ HV.fields.assembly = {
                c.results.map(r => `<tr><td>${HV.esc(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where)}</td></tr>`).join('') + '</table>';
         }
         if (D.interferences.length) {
-          h += `<div class="h" style="margin-top:6px">Interference pairs</div><table>` +
+          h += `<div class="h" style="margin-top:6px">干渉の組</div><table>` +
                D.interferences.map(it => `<tr><td>${HV.esc(it.a)} / ${HV.esc(it.b)}</td><td>${it.depth.toFixed(1)} mm</td><td class="muted">${HV.esc(it.state)} ${HV.esc(it.condition)}</td></tr>`).join('') + '</table>';
         }
         return h;

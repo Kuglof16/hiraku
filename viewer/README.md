@@ -54,6 +54,12 @@ Every part of the design is drawn as its box (with rpy), and `src/common.py` `pa
 
 Categories (legend, click info): mass on frame nodes / unsprung / modelled with stiffness / mass only / shape only / not in this calculation (left off by the loading). The mass table compares the per-category sums and the members' mass with the record's own mass (crash `vehicle_mass`, `frame_mass`; crash_beam's mass assumption per support); NVH and assembly records state none.
 
+## Surroundings and look
+
+Every field draws the vehicle where it is (`js/look.js`, `src/ground.py` with the same rules, tested in `tests/viewer/test_viewer_tfs.py` GroundTest and the page checks): the ground plane at `ground.z` (`src/common.py` `ground_of`: the design's supports, wheel centre z less radius, or `loaded_radius_mm`), in data made before that key at the record's own wheels (c z less r) or the design's wheel part boxes, or a crash wall's foot; the K2 replays on K2's road z = 0 over the run's path (`body_x`, `body_y`), with the record's scene on it (step, tilt table with a fixed floor under it, the road strip, gates and cones, the road profile as the ground); fatigue the road profile's two tracks set in the ground; aero the wind's direction as streaks upwind. Each field lists them in the closed panel 「周りの物と出どころ」. `python -m viewer.src.ground` prints the tyres' gaps at t = 0 for viewer/data (K2: how deep the tyre's circle is in the drawn road less its deflection under the record's wheel load at K2's 150 N/mm).
+
+The look is HIRAKU's screen: the CSS variables of `web/css/app.css` (copied into `index.html`), the contour colours of `web/js/colormap.js` (without its last stop, red: red is only for a criterion's NG), and the real look's ground, concrete, step paint, plate, light and sun shadow of `web/js/look.js` and `web/js/scene.js` written again in `js/look.js` (Poly Haven files are not read; the drawn textures are what the screen shows without them).
+
 ## Screen rules (keep for new fields)
 
 - No file paths on screen or in the data: `source.run` is the run folder's name.

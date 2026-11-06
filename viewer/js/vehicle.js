@@ -6,7 +6,6 @@ window.HV = window.HV || {};
 (function (HV) {
   'use strict';
   const K2 = HV.K2 = {};
-  const SCENE_COL = { tilt_table: 0x9a8f7a, slope: 0x9aa07a, ground: 0xb8b8b0, step: 0x8c8c96 };
 
   // the case shown: D.cases[sel] copied onto D (main.js reads D.title, D.source, D.inputs, D.ledger after init)
   K2.useCase = function (name, D) {
@@ -67,7 +66,8 @@ window.HV = window.HV || {};
         const sp = new T.Mesh(new T.BoxGeometry(c.r * 1.9, Math.max(c.width, 40) * 1.02, c.r * 0.12), ctx.view.material(new T.MeshLambertMaterial({ color: 0xdddddd })));
         m.add(sp);
       }
-      this.arrows = ctx.addArrows(); this.arr = M.corners.map(() => ({ n: this.arrows.add('#0a6b2a'), g: this.arrows.add('#c0392b') }));
+      // normal force (web/css/app.css --green) and friction force (--blue); red is kept for a criterion's NG
+      this.arrows = ctx.addArrows(); this.arr = M.corners.map(() => ({ n: this.arrows.add('#2f7d4f'), g: this.arrows.add('#2b59c3') }));
       this.sceneGroup();
       // the camera box: the parts at the first pose
       const o = this.origin(0);
@@ -88,46 +88,59 @@ window.HV = window.HV || {};
       return s.v[j];
     }
     near(tv) { let b = 0, bd = Infinity; for (let i = 0; i < this.nT; i++) { const d = Math.abs(this.t[i] - tv); if (d < bd) { bd = d; b = i; } } return b; }
+    // The record's scene in the screen's look=real (js/look.js), and the ground: K2's road is the plane z = 0
+    // (k2_vehicle.road: flat / step / the random road's tracks) under the whole run (the vehicle's path from the
+    // record's body_x / body_y, 4 m round it), the tilt table's floor at the table's foot, or the road profile itself.
     sceneGroup() {
-      const T = window.THREE, ctx = this.ctx, view = ctx.view, g = new T.Group();
-      for (const s of this.D.scene || []) {
-        if (s.kind === 'gate') {
-          const w = s.s[1] || 1500, x = s.c[0], y = s.c[1], mat = view.material(new T.MeshLambertMaterial({ color: 0xd04020 }));
-          for (const sy of [-1, 1]) { const p = new T.Mesh(new T.CylinderGeometry(15, 15, 900, 8), mat); p.rotation.x = Math.PI / 2; p.position.set(x, y + sy * w / 2, 450); g.add(p); }
-          const bar = new T.Mesh(new T.BoxGeometry(20, w, 20), mat); bar.position.set(x, y, 900); g.add(bar);
-        } else if (s.kind === 'cone') {
-          const c = new T.Mesh(new T.ConeGeometry(120, 450, 16), view.material(new T.MeshLambertMaterial({ color: 0xff7a00 })));
-          c.rotation.x = Math.PI / 2; c.position.set(s.c[0], s.c[1], 225); g.add(c);
-        } else if (s.kind === 'road_profile' && s.profile) {
-          this.profile(g, s.profile);
+      const T = window.THREE, ctx = this.ctx, view = ctx.view, g = new T.Group(), D = this.D;
+      this.surround = [];
+      let profile = false;
+      for (const s of D.scene || []) {
+        if (s.kind === 'gate') g.add(HV.Look.gate(s));
+        else if (s.kind === 'cone') g.add(HV.Look.cone(s));
+        else if (s.kind === 'road_profile' && s.profile) { this.profile(g, s.profile); profile = true; }
+        else if (s.kind === 'ground') {
+          // the road strip of the record (its friction): concrete laid on the ground, its top at the item's z
+          const m = new T.Mesh(new T.PlaneGeometry(Math.max(s.s[0], 1), Math.max(s.s[1], 1)), HV.Look.concreteMaterial([s.s[0], s.s[1]]));
+          m.material.polygonOffset = true; m.material.polygonOffsetFactor = -1; m.material.polygonOffsetUnits = -1;
+          m.position.set(s.c[0], s.c[1], s.c[2]); m.receiveShadow = true; m.userData = { kind: 'scene', item: s }; g.add(m);
         } else if (s.s && (s.s[0] > 0 || s.s[1] > 0)) {
-          const sz = [Math.max(s.s[0], 1), Math.max(s.s[1], 1), Math.max(s.s[2], 10)];
-          const geo = new T.BoxGeometry(...sz);
-          const m = new T.Mesh(geo, view.material(new T.MeshLambertMaterial({ color: SCENE_COL[s.kind] || 0x8c8c96, transparent: true, opacity: s.kind === 'step' ? 0.6 : 0.35, depthWrite: false })));
           // the slope and the tilt table are the road frame: drawn flat, the whole road turned by its angle
-          const z = s.s[2] > 0 ? s.c[2] : s.c[2] - 5;
-          m.position.set(s.c[0], s.c[1], z); m.userData = { kind: 'scene', item: s };
-          const e = new T.LineSegments(new T.EdgesGeometry(geo), view.material(new T.LineBasicMaterial({ color: 0x404050 })));
-          e.position.copy(m.position); g.add(m, e);
+          g.add(HV.Look.box(s, view));
           if (s.angle_channel) this.turn = s;
         }
       }
       ctx.sceneGroup = g; ctx.root.add(g); ctx.has.scene = true;
-      if (this.turn) {   // a fixed level floor under the turned road, so the angle reads
-        const s = this.turn, fl = new T.Mesh(new T.PlaneGeometry(s.s[0] + 4000, s.s[1] + 6000), view.material(new T.MeshBasicMaterial({ color: 0xd8d8d0, transparent: true, opacity: 0.5, depthWrite: false, side: T.DoubleSide })));
-        fl.position.set(s.c[0], s.c[1], s.c[2] - Math.max(s.s[2], 10) / 2 - 2); ctx.fixed = new T.Group(); ctx.fixed.add(fl); view.scene.add(ctx.fixed);
+      ctx.surround = this.surround;
+      // the ground (main.js draws ctx.groundOverride): the path's box
+      const P = this.pose, lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+      for (let k = 0; k < this.nT; k++) for (let a = 0; a < 2; a++) { lo[a] = Math.min(lo[a], P[6 * k + a]); hi[a] = Math.max(hi[a], P[6 * k + a]); }
+      for (const s of D.scene || []) for (let a = 0; a < 2; a++) { lo[a] = Math.min(lo[a], s.c[a] - (s.s ? s.s[a] / 2 : 0)); hi[a] = Math.max(hi[a], s.c[a] + (s.s ? s.s[a] / 2 : 0)); }
+      const x = [Math.floor((lo[0] - 6000) / 1000) * 1000, Math.ceil((hi[0] + 6000) / 1000) * 1000], y = [Math.floor((lo[1] - 5000) / 1000) * 1000, Math.ceil((hi[1] + 5000) / 1000) * 1000];
+      if (this.turn) {
+        const s = this.turn;   // a fixed level floor under the turned table, so the angle reads
+        this.groundSpec = { z: s.c[2] - Math.max(s.s[2], 10) / 2 - 2, from: '傾斜台の下の床 (台の大きさと高さは記録の scene、床は台の下面の 2 mm 下に置いた)', fixed: true,
+                            x: [s.c[0] - s.s[0] / 2 - 3000, s.c[0] + s.s[0] / 2 + 3000], y: [s.c[1] - s.s[1] / 2 - 4000, s.c[1] + s.s[1] / 2 + 4000] };
+        this.surround.push(['傾斜台のちょうつがい', '台の低い側の縁 (傾く向きの側)', '台の大きさと位置は記録の scene、角度は記録の ' + s.angle_channel]);
+      } else if (profile) {
+        this.groundSpec = null;   // the road profile is the ground (drawn wide, see profile())
+      } else {
+        this.groundSpec = { z: 0, from: 'K2 の路面 (z = 0 の平面)。走った範囲は記録の車体の位置 (body_x, body_y) から', x, y };
       }
+      ctx.groundOverride = this.groundSpec;
     }
+    // the road profile (two wheel tracks, the record's scene): earth, linear across between the tracks, flat beyond
     async profile(g, p) {
       const T = window.THREE, [x, l, r] = await Promise.all([p.x, p.left, p.right].map(HV.unpack)), ht = p.half_track || 600;
-      const n = x.length, pos = new Float32Array(n * 4 * 3), idx = [];
+      const n = x.length, pos = new Float32Array(n * 4 * 3), uv = new Float32Array(n * 4 * 2), idx = [], W = 5000;
       for (let i = 0; i < n; i++) {   // a ribbon: outside left, left track, right track, outside right
-        const ys = [ht + 700, ht, -ht, -ht - 700], zs = [l[i], l[i], r[i], r[i]];
-        for (let j = 0; j < 4; j++) pos.set([x[i], ys[j], zs[j]], 3 * (4 * i + j));
+        const ys = [ht + W, ht, -ht, -ht - W], zs = [l[i], l[i], r[i], r[i]];
+        for (let j = 0; j < 4; j++) { pos.set([x[i], ys[j], zs[j]], 3 * (4 * i + j)); uv.set([x[i] / HV.Look.DRAWN_SIDE_MM, ys[j] / HV.Look.DRAWN_SIDE_MM], 2 * (4 * i + j)); }
         if (i) for (let j = 0; j < 3; j++) { const a = 4 * (i - 1) + j, b = 4 * i + j; idx.push(a, b, a + 1, b, b + 1, a + 1); }
       }
-      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
-      g.add(new T.Mesh(geo, this.ctx.view.material(new T.MeshLambertMaterial({ color: 0x9c8f72, side: T.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false }))));
+      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('uv', new T.BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+      const mat = HV.Look.earthMaterial([HV.Look.DRAWN_SIDE_MM, HV.Look.DRAWN_SIDE_MM]); mat.side = T.DoubleSide;
+      const m = new T.Mesh(geo, mat); m.receiveShadow = true; g.add(m);
       HV.view.render();
     }
     // the road frame's turn (tilt table / slope): about the x axis through the low edge of the item
@@ -185,6 +198,9 @@ window.HV = window.HV || {};
         view.controls.target.add(d); view.camera.position.add(d); view.controls.update();
       }
       this.last = w;
+      // the sun's shadow box follows the vehicle (the parts' box at the first pose, moved by the origin)
+      const o0 = this.origin(0), dv = [0, 1, 2].map(a => o[a] - o0[a]);
+      HV.Look.aimSun(view, this.ctx.lo.map((v, a) => v + dv[a]), this.ctx.hi.map((v, a) => v + dv[a]));
     }
     tyreInfo(i) {
       const k = this.k, c = this.M.corners[i], f = n => HV.fmt(this.w(k, i, n));
@@ -216,20 +232,20 @@ window.HV = window.HV || {};
     // plot helpers
     line(ch, col, name) { const s = this.plots[ch]; return s ? { name, v: s.v, col } : null; }
     wheelPanel(prefix, title, unit, cursor) {
-      const cols = ['#1f4e9c', '#a03000', '#0a6b2a', '#8e44ad', '#555'], ids = this.M.corners.map(c => c.id);
+      const cols = ['#2b59c3', '#e9893a', '#2f7d4f', '#8e6bbf', '#6b665c'], ids = this.M.corners.map(c => c.id);
       const ys = ids.map((id, i) => this.line(`${prefix}.${id}`, cols[i % cols.length], id)).filter(Boolean);
       const s = this.plots[`${prefix}.${ids[0]}`];
       return s ? { title, unit, xlabel: 't [s]', x: s.t, ys, marks: [], cursor } : null;
     }
     panelOf(chs, title, unit, cursor) {
-      const cols = ['#1f4e9c', '#a03000', '#0a6b2a'];
+      const cols = ['#2b59c3', '#e9893a', '#2f7d4f'];   // web/css/app.css --blue, colormap orange, --green
       const ys = chs.map(([ch, name], i) => this.line(ch, cols[i], name)).filter(Boolean);
       const s = this.plots[chs[0][0]];
       return s && ys.length ? { title, unit: unit || s.unit, xlabel: 't [s]', x: s.t, ys, marks: [], cursor } : null;
     }
     pathPanel() {
       const x = this.plots.body_x, y = this.plots.body_y; if (!x || !y) return null;
-      return { title: '走った線 (横の位置 / 前の位置)', unit: 'm', xlabel: 'x [m]', x: x.v, ys: [{ v: y.v, col: '#1f4e9c' }], marks: [], cursor: this.pose[6 * this.k] / 1000, path: true };
+      return { title: '走った線 (横の位置 / 前の位置)', unit: 'm', xlabel: 'x [m]', x: x.v, ys: [{ v: y.v, col: '#2b59c3' }], marks: [], cursor: this.pose[6 * this.k] / 1000, path: true };
     }
     plotClick(panel, xv) {
       if (panel && panel.path) { let b = 0, bd = Infinity; for (let i = 0; i < this.nT; i++) { const d = Math.abs(this.pose[6 * i] / 1000 - xv); if (d < bd) { bd = d; b = i; } } return b; }

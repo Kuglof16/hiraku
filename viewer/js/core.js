@@ -65,13 +65,13 @@ window.HV = window.HV || {};
   };
 
   // ---------------------------------------------------------------- colour
-  // Turbo colour map, polynomial approximation (Mikhailov 2019, Google AI blog "Turbo").
-  HV.turbo = function (x) {
-    x = Math.min(1, Math.max(0, x));
-    const r = 0.13572138 + x * (4.61539260 + x * (-42.66032258 + x * (132.13108234 + x * (-152.94239396 + x * 59.28637943))));
-    const g = 0.09140261 + x * (2.19418839 + x * (4.84296658 + x * (-14.18503333 + x * (4.27729857 + x * 2.82956604))));
-    const b = 0.10667330 + x * (12.64194608 + x * (-60.58204836 + x * (110.36276771 + x * (-89.90310912 + x * 27.34824973))));
-    return [Math.min(1, Math.max(0, r)), Math.min(1, Math.max(0, g)), Math.min(1, Math.max(0, b))];
+  // The contour colours of HIRAKU's screen (web/js/colormap.js STOPS: blue, sky, green, yellow, orange), continuous;
+  // the screen's last stop (#c8402a, its red) is left out here: red is kept for a criterion's NG.
+  const STOPS = ['#2b59c3', '#2fa7d6', '#4cbf7a', '#e8c547', '#e9893a'].map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255));
+  HV.turbo = function (x) {   // (the name kept for the fields that call it)
+    x = Math.min(1, Math.max(0, x)) * (STOPS.length - 1);
+    const i = Math.min(STOPS.length - 2, Math.floor(x)), f = x - i, a = STOPS[i], b = STOPS[i + 1];
+    return [0, 1, 2].map(k => a[k] + (b[k] - a[k]) * f);
   };
   // contour spec {min, max, log, unit, title, marks: [{v, label}]} -> position 0..1
   HV.norm = function (c, v) {
@@ -88,13 +88,13 @@ window.HV = window.HV || {};
     g.clearRect(0, 0, W, H);
     if (!c) { cv.style.display = 'none'; return; }
     cv.style.display = 'block';
-    g.fillStyle = 'rgba(255,255,255,.88)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(251,249,244,.93)'; g.fillRect(0, 0, W, H);   // web/css/app.css .legend background
     const x0 = 10, w = 16, y0 = 30, h = H - 70;
-    g.fillStyle = '#000'; g.font = 'bold 11px system-ui, sans-serif';
+    g.fillStyle = '#1d1d1f'; g.font = 'bold 11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     wrap(g, c.title + (c.unit ? ` [${c.unit}]` : ''), 4, 12, W - 8, 12);
     for (let i = 0; i < h; i++) { const k = HV.turbo(1 - i / h); g.fillStyle = `rgb(${k.map(v => Math.round(255 * v)).join(',')})`; g.fillRect(x0, y0 + i, w, 1); }
-    g.strokeStyle = '#000'; g.lineWidth = 1; g.strokeRect(x0, y0, w, h);
-    g.font = '11px system-ui, sans-serif';
+    g.strokeStyle = '#1d1d1f'; g.lineWidth = 1; g.strokeRect(x0, y0, w, h);
+    g.font = '11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     const ticks = [];
     if (c.log) {
       for (let e = Math.floor(Math.log10(c.min)); e <= Math.ceil(Math.log10(c.max)); e++) { const v = Math.pow(10, e); if (v >= c.min * 0.999 && v <= c.max * 1.001) ticks.push(v); }
@@ -106,15 +106,15 @@ window.HV = window.HV || {};
     for (const v of ticks) {
       const y = y0 + h * (1 - HV.norm(c, v));
       g.beginPath(); g.moveTo(x0 + w, y); g.lineTo(x0 + w + 4, y); g.stroke();
-      g.fillStyle = '#000'; g.fillText(HV.fmt(v), x0 + w + 7, y + 4);
+      g.fillStyle = '#1d1d1f'; g.fillText(HV.fmt(v), x0 + w + 7, y + 4);
     }
     for (const m of c.marks || []) {
       if (m.v < c.min || m.v > c.max) continue;
       const y = y0 + h * (1 - HV.norm(c, m.v));
       g.lineWidth = 2; g.beginPath(); g.moveTo(x0 - 4, y); g.lineTo(x0 + w + 4, y); g.stroke(); g.lineWidth = 1;
-      g.font = 'bold 10px system-ui, sans-serif'; g.fillText(m.label, x0 + w + 7, y - 4); g.font = '11px system-ui, sans-serif';
+      g.font = 'bold 10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif'; g.fillText(m.label, x0 + w + 7, y - 4); g.font = '11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     }
-    g.fillStyle = '#444'; g.font = '10px system-ui, sans-serif';
+    g.fillStyle = '#6b665c'; g.font = '10px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     wrap(g, (c.log ? '対数目盛' : '線形目盛') + (c.note ? '、' + c.note : ''), 4, y0 + h + 14, W - 8, 11);
   };
   function wrap(g, text, x, y, maxW, lh) {
@@ -142,6 +142,7 @@ window.HV = window.HV || {};
       this.scene.add(this.camera);
       this.scene.add(new T.AmbientLight(0xffffff, 1.6));
       const dl = new T.DirectionalLight(0xffffff, 1.3); dl.position.set(0.3, 0.6, 1); this.camera.add(dl);
+      if (HV.Look) HV.Look.setUp(this);   // js/look.js: the screen's look=real light, paper background, sun shadow
       this.controls = new window.OrbitControls(this.camera, this.renderer.domElement);
       this.controls.addEventListener('change', () => this.render());
       this.clip = [];          // active planes; the same array is given to every material
@@ -406,16 +407,11 @@ window.HV = window.HV || {};
     }
   };
 
-  // scene boxes (wall, step, table): translucent, with edges
+  // scene boxes (wall, step, table) of the record's scene, in the screen's look=real (js/look.js: concrete, the
+  // step's painted edge, the table's plate)
   HV.sceneBoxes = function (view, list) {
     const T = window.THREE, g = new T.Group();
-    for (const s of list) {
-      const geo = new T.BoxGeometry(s.s[0], s.s[1], s.s[2]);
-      const m = new T.Mesh(geo, view.material(new T.MeshLambertMaterial({ color: 0x8c8c96, transparent: true, opacity: 0.35, depthWrite: false })));
-      const e = new T.LineSegments(new T.EdgesGeometry(geo), view.material(new T.LineBasicMaterial({ color: 0x404050 })));
-      m.position.set(...s.c); e.position.set(...s.c); m.userData = { kind: 'scene', item: s };
-      g.add(m, e);
-    }
+    for (const s of list) g.add(HV.Look.box(s, view));
     return g;
   };
 

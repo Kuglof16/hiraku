@@ -2,54 +2,76 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>HIRAKU result viewer</title>
+<title>HIRAKU 解析の結果</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; font: 12px/1.35 system-ui, "Segoe UI", sans-serif; background: #f4f4f2; color: #222; }
-  #view { position: absolute; left: 0; top: 66px; right: 330px; bottom: 230px; }
+  /* HIRAKU's screen: the colours and fonts are web/css/app.css :root (copied here; the page opens from disk and
+     does not load web/). "Unbleached paper and black ink"; red only for a criterion's NG. */
+  :root {
+    --ink: #1d1d1f; --paper: #f4f1ea; --panel: #fbf9f4; --card: #fffdf8; --muted: #6b665c; --rule: #e2dccf; --line: #c9c3b6;
+    --green: #2f7d4f; --red: #c8402a; --red-pale: #fbebe5; --blue: #2b59c3; --purple: #8e6bbf; --yellow: #e8c547; --orange-pale: #fcefdc;
+    --font: "BIZ UDPGothic", "BIZ UDGothic", "Yu Gothic", Meiryo, sans-serif;
+    --mono: "BIZ UDGothic", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font: 13px/1.45 var(--font); background: var(--paper); color: var(--ink); }
+  #view { position: absolute; left: 0; top: 86px; right: 340px; bottom: 236px; }
   #view canvas { display: block; }
-  #panel { position: absolute; top: 0; right: 0; width: 330px; bottom: 0; overflow-y: auto; background: #fff; border-left: 1px solid #ccc; box-sizing: border-box; padding: 6px 8px 40px; }
-  #panel h3 { margin: 10px 0 3px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #555; border-bottom: 1px solid #ddd; }
-  .row { display: flex; align-items: center; gap: 4px; margin: 2px 0; flex-wrap: wrap; }
-  .row input[type=range] { flex: 1; min-width: 80px; }
-  .row input[type=number] { width: 64px; }
-  .val { width: 58px; font-size: 11px; }
-  button { font: inherit; padding: 1px 6px; cursor: pointer; }
-  button.on { background: #2a6; color: #fff; }
-  #switch button { margin: 1px; }
+  /* the side panel: web/css/app.css .panel (panel colour, 1.5px line, rounded) */
+  #panel { position: absolute; top: 0; right: 0; width: 340px; bottom: 0; overflow-y: auto; background: var(--panel); border-left: 1.5px solid var(--line); padding: 8px 14px 40px; }
+  #panel h3 { margin: 14px 0 5px; font-size: 14px; font-weight: 600; color: var(--ink); border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+  .row input[type=range] { flex: 1; min-width: 80px; accent-color: var(--ink); }
+  .row input[type=number] { width: 70px; font: inherit; border: 1.5px solid var(--line); border-radius: 6px; background: var(--card); padding: 1px 4px; }
+  input[type=checkbox], input[type=radio] { accent-color: var(--ink); }
+  select { font: inherit; border: 1.5px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); padding: 1px 4px; }
+  .val { width: 62px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  /* buttons: web/css/app.css .tab / .pill (1.5px border, rounded, the chosen one in ink on the panel colour) */
+  button { font: inherit; color: var(--ink); background: var(--card); border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 12px; cursor: pointer; }
+  button:hover { border-color: var(--ink); }
+  button.on { border-color: var(--ink); background: var(--ink); color: var(--panel); font-weight: 600; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #switch { display: flex; flex-wrap: wrap; gap: 4px; }
+  #switch button { font-size: 14px; padding: 3px 12px; }
   /* nothing is drawn over the 3D view: the header sits above it, the rest in the side panel and the bottom pane */
-  #hud { position: absolute; left: 0; top: 0; right: 330px; height: 66px; overflow: hidden; padding: 2px 8px; box-sizing: border-box; background: #fff; border-bottom: 1px solid #ccc; }
-  #head1 { display: flex; gap: 10px; align-items: baseline; white-space: nowrap; overflow: hidden; }
-  #title { font-size: 13px; font-weight: 600; flex: none; }
-  #source { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; }
-  #tline { font-size: 12px; font-weight: 600; color: #a40; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #hudlines div { font-size: 11.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hud { position: absolute; left: 0; top: 0; right: 340px; height: 86px; overflow: hidden; padding: 4px 16px; background: var(--paper); border-bottom: 1px solid var(--rule); }
+  #head1 { display: flex; gap: 14px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+  #title { font-size: 17px; font-weight: 600; flex: none; }
+  #source { font-size: 13px; color: var(--muted); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; }
+  #tline { font-size: 13.5px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hudlines div { font-size: 12.5px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #legend { display: block; margin: 4px 0; }
-  #notes { font-size: 11.5px; color: #444; }
-  #info { background: #fffbe8; border: 1px solid #ccb; padding: 4px 6px; display: none; font-size: 12px; }
-  .sw { display: inline-block; width: 11px; height: 11px; border: 1px solid #666; margin-right: 4px; vertical-align: -1px; }
-  .lg, .pl { font-size: 11.5px; margin: 1px 0; }
-  table.mt { border-collapse: collapse; width: 100%; font-size: 11px; margin-top: 4px; }
-  table.mt td, table.mt th { border-bottom: 1px solid #eee; padding: 1px 3px; text-align: left; }
-  table.mt tr.tot td { font-weight: 600; border-top: 1px solid #999; }
-  .ok { color: #0a6b2a; font-weight: 600; } .ng { color: #b00; font-weight: 600; }
+  #notes { font-size: 12.5px; color: var(--muted); }
+  /* the click info: web/css/app.css .card */
+  #info { background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 10px; display: none; font-size: 13px; }
+  .sw { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--ink); border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .lg, .pl { font-size: 12.5px; margin: 2px 0; }
+  table.mt { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 4px; }
+  table.mt td, table.mt th { border-bottom: 1px solid var(--rule); padding: 2px 3px; text-align: left; }
+  table.mt th { color: var(--muted); font-weight: 600; }
+  table.mt tr.tot td { font-weight: 600; border-top: 1.5px solid var(--line); }
+  /* OK / NG: web/css/app.css .verdict.ok / .verdict.bad */
+  .ok { color: var(--green); font-weight: 600; } .ng { color: var(--red); font-weight: 600; }
+  details { margin: 3px 0; }
+  details > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+  details[open] > summary { color: var(--ink); }
+  hr { border: 0; border-top: 1px solid var(--rule); }
   /* the bottom pane: plots and inputs side by side, each in its own box (the canvas sized by its box, so its
      drawing size never pushes the inputs or the 3D view) */
-  #bottom { position: absolute; left: 0; right: 330px; bottom: 0; height: 230px; border-top: 1px solid #ccc; background: #fff; display: flex; overflow: hidden; }
+  #bottom { position: absolute; left: 0; right: 340px; bottom: 0; height: 236px; border-top: 1.5px solid var(--line); background: var(--panel); display: flex; overflow: hidden; }
   #plotwrap { flex: 1 1 0; min-width: 0; position: relative; overflow: hidden; }
   #plot { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
-  #inputs { flex: 0 0 380px; border-left: 1px solid #ddd; padding: 4px 8px; box-sizing: border-box; overflow: auto; font-size: 11.5px; }
+  #inputs { flex: 0 0 400px; border-left: 1px solid var(--rule); padding: 6px 12px; overflow: auto; font-size: 12.5px; }
   #inputs td { overflow-wrap: anywhere; }
   #inputs td:first-child { white-space: nowrap; overflow-wrap: normal; }
-  #speedrow select { font: inherit; }
-  #inputs .h { font-weight: 600; text-transform: uppercase; font-size: 11px; color: #555; letter-spacing: .04em; }
+  #inputs .h { font-weight: 600; font-size: 14px; color: var(--ink); margin-bottom: 2px; }
   #inputs table { border-collapse: collapse; width: 100%; }
-  #inputs td { vertical-align: top; padding: 1px 4px 1px 0; border-bottom: 1px solid #f0f0f0; }
-  .muted { color: #777; font-size: 11px; }
-  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #f4f4f2; z-index: 10; }
+  #inputs td { vertical-align: top; padding: 2px 6px 2px 0; border-bottom: 1px solid var(--rule); }
+  .muted { color: var(--muted); font-size: 12px; }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; background: var(--paper); z-index: 10; }
   label { user-select: none; }
-  #fieldpanel .list { max-height: 260px; overflow-y: auto; border: 1px solid #eee; }
-  #fieldpanel .list div { padding: 1px 4px; cursor: pointer; }
-  #fieldpanel .list div.on { background: #2a6; color: #fff; }
+  #fieldpanel .list { max-height: 260px; overflow-y: auto; border: 1.5px solid var(--line); border-radius: 8px; background: var(--card); }
+  #fieldpanel .list div { padding: 1px 6px; cursor: pointer; }
+  #fieldpanel .list div.on { background: var(--ink); color: var(--panel); }
 </style>
 <!-- three.js r170 (0.170.0) from jsDelivr, the same version and URL form as web/index.html. -->
 <script type="importmap">
@@ -58,6 +80,7 @@
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
 } }
 </script>
+<script src="js/look.js"></script>
 <script src="js/core.js"></script>
 <script src="js/plot.js"></script>
 <script src="js/main.js"></script>
@@ -119,7 +142,7 @@
   <h3>表示</h3>
   <div class="row"><label><input type="checkbox" id="lyFrame"> フレーム</label>
     <label><input type="checkbox" id="lyGhost"> 変形前</label>
-    <label><input type="checkbox" id="lyScene"> 壁・台・路面</label>
+    <label><input type="checkbox" id="lyScene"> 地面・壁・台・路面</label>
     <label><input type="checkbox" id="lyArrows"> 力の矢印</label></div>
 
   <h3>断面</h3>
@@ -130,8 +153,10 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 window.THREE = THREE;
 window.OrbitControls = OrbitControls;
+window.RoomEnvironment = RoomEnvironment;   // the sky light of web/js/look.js's real look without its HDRI
 await HV.main();
 </script>
 </body>

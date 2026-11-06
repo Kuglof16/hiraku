@@ -45,7 +45,7 @@ HV.strengthBeam = async function (D, ctx) {
   const n0 = beams.nodes0, disp = await HV.unpack(D.disp.per_node), cur = new Float32Array(n0.length);
   const [pc, pt, pw] = await Promise.all(['c', 't', 'w'].map(k => HV.unpack(D.part_motion[k])));
   const pm = D.stress.per_member, S = { scale: 100, log: false };
-  const COL = { load: '#c0392b', inertia: '#6a1b9a', reaction: '#0a6b2a', grip: '#a05a00' };
+  const COL = { load: '#e9893a', inertia: '#8e6bbf', reaction: '#2f7d4f', grip: '#6b665c' };
   const arr = D.vectors.map(v => ({ v, a: arrows.add(COL[v.kind] || '#333') }));
   const MM_PER_N = 0.1;   // 1 kN = 100 mm
   const spec = () => ({ min: S.log ? Math.max(0.1, D.stress.max * 1e-3) : 0, max: Math.max(D.stress.max, 1e-9), log: S.log, unit: D.stress.unit,
@@ -79,7 +79,7 @@ HV.strengthBeam = async function (D, ctx) {
     plot() {
       const order = pm.map((v, m) => [v ?? 0, m]).sort((a, b) => b[0] - a[0]).slice(0, 20);
       return [{ title: '応力の大きい部材 (上位 20、横軸 = 順位)', unit: D.stress.unit, xlabel: '順位', x: order.map((_, i) => i + 1),
-                ys: [{ v: order.map(o => o[0]), col: '#c0392b' }], marks: [], cursor: null }];
+                ys: [{ v: order.map(o => o[0]), col: '#2b59c3' }], marks: [], cursor: null }];
     },
     plotClick() { return null; },
     pickables: () => [beams.mesh],
@@ -114,12 +114,12 @@ HV.strengthShell = async function (D, ctx) {
   const paths = [];
   for (const m of D.mounts) paths.push({ m, xyz: await HV.unpackTyped(m.xyz), f: await HV.unpackTyped(m.f) });
   const pp = new Float32Array(paths.reduce((a, p) => a + p.xyz.length, 0)), pc = new Float32Array(pp.length);
-  const MCOL = { FL: [0.85, 0.15, 0.1], FR: [0.1, 0.35, 0.85], RL: [0.1, 0.6, 0.2], RR: [0.6, 0.2, 0.7] };
+  const MCOL = { FL: [0.914, 0.537, 0.227], FR: [0.1, 0.35, 0.85], RL: [0.1, 0.6, 0.2], RR: [0.6, 0.2, 0.7] };
   let o = 0; for (const p of paths) { pp.set(p.xyz, o); const c = MCOL[p.m.support] || [0.2, 0.2, 0.2]; for (let i = 0; i < p.xyz.length; i += 3) pc.set(c, o + i); p.o = o; o += p.xyz.length; }
   const pg = new T.BufferGeometry(); pg.setAttribute('position', new T.BufferAttribute(pp, 3)); pg.setAttribute('color', new T.BufferAttribute(pc, 3));
   const pts = new T.Points(pg, view.material(new T.PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true, depthTest: false })));
   pts.renderOrder = 7; arrows.group.add(pts);
-  const arr = paths.map(p => ({ p, a: arrows.add('#c0392b') }));
+  const arr = paths.map(p => ({ p, a: arrows.add('#e9893a') }));
   for (const o of arr) arrows.set(o.a, o.p.m.hp, o.p.m.F, 0.1);
   // hot spot marker
   const hotM = new T.Mesh(new T.SphereGeometry(12, 16, 12), new T.MeshBasicMaterial({ color: 0xff00ff, depthTest: false, transparent: true, opacity: 0.85 }));
@@ -167,8 +167,8 @@ HV.strengthShell = async function (D, ctx) {
     contour: spec,
     plot() {
       const tx = D.t, c = D.t[S.k];
-      return [{ title: 'ホットスポットの応力 (IIW)', unit: 'MPa', xlabel: 't [s]', x: tx, ys: [{ v: D.hot.map(h => h ? Math.abs(h.value) : NaN), col: '#8e44ad' }], marks: [], cursor: c },
-              { title: '要素の最大 (除外を除く)', unit: 'MPa', xlabel: 't [s]', x: tx, ys: [{ v: D.el_max.map(m => m[0]), col: '#c0392b' }], marks: [], cursor: c }];
+      return [{ title: 'ホットスポットの応力 (IIW)', unit: 'MPa', xlabel: 't [s]', x: tx, ys: [{ v: D.hot.map(h => h ? Math.abs(h.value) : NaN), col: '#8e6bbf' }], marks: [], cursor: c },
+              { title: '要素の最大 (除外を除く)', unit: 'MPa', xlabel: 't [s]', x: tx, ys: [{ v: D.el_max.map(m => m[0]), col: '#e9893a' }], marks: [], cursor: c }];
     },
     plotClick(_, tv) { let b = 0, bd = Infinity; D.t.forEach((v, i) => { const d = Math.abs(v - tv); if (d < bd) { bd = d; b = i; } }); return b; },
     pickables: () => [mesh],

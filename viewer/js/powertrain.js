@@ -13,7 +13,7 @@ HV.fields.powertrain = {
     const [tq, sl] = await Promise.all([HV.unpack(dr.torque), HV.unpack(dr.slip)]);
     const nw = D.motion.corners.length, ids = D.motion.corners.map(c => c.id), tt = Array.from(R.t);
     const per = (a, i) => tt.map((_, k) => a[k * nw + i]);
-    const cols = ['#1f4e9c', '#a03000', '#0a6b2a', '#8e44ad'];
+    const cols = ['#2b59c3', '#e9893a', '#2f7d4f', '#8e6bbf'];
     // wheel power = sum over wheels of torque x spin rate (from the slip's own omega is not kept: d spin / dt here)
     const omega = (k, i) => { const a = Math.max(0, k - 1), b = Math.min(R.nT - 1, k + 1); return (R.w(b, i, 'wheel_spin') - R.w(a, i, 'wheel_spin')) * Math.PI / 180 / Math.max(1e-9, R.t[b] - R.t[a]); };
     const power = tt.map((_, k) => ids.reduce((s, _i, i) => s + tq[k * nw + i] * omega(k, i), 0) / 1000);
@@ -27,7 +27,7 @@ HV.fields.powertrain = {
         return [R.panelOf([['speed', '速さ']], '速さ', 'km/h', c),
                 { title: '輪のトルク (駆動輪で等分)', unit: 'N·m', xlabel: 't [s]', x: tt, ys: ids.map((id, i) => ({ name: id, v: per(tq, i), col: cols[i % 4] })), marks: [], cursor: c },
                 { title: 'すべり (ωr − v) / v', unit: '', xlabel: 't [s]', x: tt, ys: ids.map((id, i) => ({ name: id, v: per(sl, i), col: cols[i % 4] })), marks: [], cursor: c },
-                { title: '輪の出力 (トルク × 回転の速さ)', unit: 'kW', xlabel: 't [s]', x: tt, ys: [{ v: power, col: '#a03000' }], marks: [], cursor: c }];
+                { title: '輪の出力 (トルク × 回転の速さ)', unit: 'kW', xlabel: 't [s]', x: tt, ys: [{ v: power, col: '#e9893a' }], marks: [], cursor: c }];
       },
     });
   },
@@ -51,7 +51,7 @@ HV.energyField = async function (C, ctx) {
     timeText: k => `t = ${HV.fmt(t[k])} s   速さ ${HV.fmt(v[k])} km/h   坂 ${HV.fmt(g[k])} %   電池の出力 ${HV.fmt(p[k])} kW   残り ${HV.fmt(soc[k])} %`,
     hud: () => [HV.K2.judgeText(C.judge) || C.title, `色: 電池 (${B.part || '-'}) = この時刻までに使った容量の割合、ほかの部品は灰色 (部品の扱いの色は切替で)`],
     contour: spec,
-    plot: () => [P('速さ', 'km/h', v, '#1f4e9c'), P('坂', '%', g, '#0a6b2a'), P('電池の出力', 'kW', p, '#a03000'), P('電池の電流', 'A', i, '#8e44ad'), P('電池の残り', '%', soc, '#1f4e9c')],
+    plot: () => [P('速さ', 'km/h', v, '#1f4e9c'), P('坂', '%', g, '#0a6b2a'), P('電池の出力', 'kW', p, '#e9893a'), P('電池の電流', 'A', i, '#8e44ad'), P('電池の残り', '%', soc, '#1f4e9c')],
     plotClick(_, x) { let b = 0, bd = Infinity; t.forEach((tv, j) => { const d = Math.abs(tv - x); if (d < bd) { bd = d; b = j; } }); return b; },
     pickables: () => [boxes.mesh],
     info(hit) { const j = hit.instanceId, pp = C.parts[j]; return `<b>${HV.esc(pp.id)}</b> ${HV.esc(pp.name)}` + (j === B.index ? `<br>電池: 使った容量 ${HV.fmt(used(st.k))} % (終わり ${HV.fmt(usedEnd)} %)` : ''); },

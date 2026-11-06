@@ -24,7 +24,7 @@ HV.crashA = async function (D, ctx) {
   const cur = new Float32Array(nodes0.length);
   const pm = D.stress.per_member;
   for (let i = 0; i < D.parts.length; i++) boxes.colour(i, [0.72, 0.72, 0.75]);
-  const COL = { load: '#c0392b', inertia: '#6a1b9a', reaction: '#0a6b2a' };
+  const COL = { load: '#e9893a', inertia: '#8e6bbf', reaction: '#2f7d4f' };
   const arr = D.vectors.map(v => ({ v, a: arrows.add(COL[v.kind] || '#333') }));
   const MM_PER_N = 0.005;   // 1 kN = 5 mm
   const ratio = () => Math.max(0, a[S.k]) / amax;
@@ -59,7 +59,7 @@ HV.crashA = async function (D, ctx) {
       const c = t[S.k], mk = [{ x: t[kPeak], label: 'ピーク', col: '#c0c' }];
       return [
         { title: '減速度', unit: D.units.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(a), col: '#1f4e9c' }], marks: mk, cursor: c },
-        { title: 'つぶれ (1次元)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(x), col: '#a03000' }], marks: mk, cursor: c },
+        { title: 'つぶれ (1次元)', unit: D.units.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(x), col: '#e9893a' }], marks: mk, cursor: c },
         { title: '壁の力', unit: D.units.wall_force, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(F), col: '#0a6b2a' }], marks: mk, cursor: c },
       ];
     },
@@ -71,8 +71,8 @@ HV.crashA = async function (D, ctx) {
       const m = beams.memberOf(hit), s = pm[m], [na, nb] = D.frame.members[m], ids = D.frame.node_ids;
       const d = n => Math.hypot(disp[3 * n], disp[3 * n + 1], disp[3 * n + 2]);
       return `<b>${HV.esc(D.frame.member_ids[m])}</b> ${HV.esc(D.frame.member_names[m])}<br>` +
-             (s === null ? 'no stress in the record' : `von Mises ${HV.fmt(s * r)} ${HV.esc(D.stress.unit)} now (stored peak ${HV.fmt(s)} x ${r.toFixed(3)})`) +
-             `<br>elastic deflection now: ${HV.esc(ids[na])} ${HV.fmt(d(na) * r)} mm, ${HV.esc(ids[nb])} ${HV.fmt(d(nb) * r)} mm (real, before the scale)`;
+             (s === null ? '記録に応力の値がない' : `相当応力 (von Mises) いま ${HV.fmt(s * r)} ${HV.esc(D.stress.unit)} (記録のピーク ${HV.fmt(s)} × ${r.toFixed(3)})`) +
+             `<br>いまの弾性たわみ: ${HV.esc(ids[na])} ${HV.fmt(d(na) * r)} mm、${HV.esc(ids[nb])} ${HV.fmt(d(nb) * r)} mm (実寸、倍率をかける前)`;
     },
   };
 };
@@ -176,11 +176,11 @@ HV.crashB = async function (D, ctx) {
     contour: spec,
     plot() {
       const c = tf[S.k], mk = [{ x: ts[kPeak], label: 'ピーク', col: '#c0c' }];
-      if (sm.margin && sm.margin.t_s !== null && sm.margin.t_s !== undefined) mk.push({ x: sm.margin.t_s, label: '最小のすき間', col: '#c00' });
+      if (sm.margin && sm.margin.t_s !== null && sm.margin.t_s !== undefined) mk.push({ x: sm.margin.t_s, label: '最小のすき間', col: sm.margin.ok === false ? '#c8402a' : '#2b59c3' });
       for (const p of (sm.split && sm.split.pieces) || []) mk.push({ x: p.t_s, label: `塊 ${p.pct} %`, col: '#777' });
       const P = [
         { title: '減速度', unit: u.deceleration, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(dec), col: '#1f4e9c' }], marks: mk, bands, cursor: c },
-        { title: 'つぶれ (前端から座席の取付まで)', unit: u.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#a03000' }], marks: mk, bands, cursor: c },
+        { title: 'つぶれ (前端から座席の取付まで)', unit: u.crush, xlabel: 't [s]', x: tx, ys: [{ v: Array.from(cr), col: '#e9893a' }], marks: mk, bands, cursor: c },
       ];
       if (S.sel && force[S.sel]) P.push({ title: `軸力 ${S.sel} (部材をクリックで切替)`, unit: 'kN', xlabel: 't [s]', x: tfx, ys: [{ v: Array.from(force[S.sel], v => v / 1000), col: '#0a6b2a' }], marks: [], bands, cursor: c });
       return P;

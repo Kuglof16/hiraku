@@ -5,8 +5,8 @@
 // the network as the tool builds it (each node: C, R to the air).
 window.HV = window.HV || {};
 HV.fields = HV.fields || {};
-HV.LEDGER_COL.heat_node = [0.85, 0.2, 0.15];
-HV.LEDGER_COL.power_stage = [0.95, 0.65, 0.1];
+HV.LEDGER_COL.heat_node = [0.914, 0.537, 0.227];
+HV.LEDGER_COL.power_stage = [0.91, 0.773, 0.278];
 HV.interpAt = function (xs, ys, x) {   // linear, clamped; xs ascending
   if (x <= xs[0]) return ys[0];
   const n = xs.length; if (x >= xs[n - 1]) return ys[n - 1];
@@ -44,7 +44,7 @@ HV.fields.thermal = {
     }
     const okng = v => v === null || v === undefined ? '' : (v ? 'OK' : 'NG');
     const at = (s, x) => HV.interpAt(s.tv, s.vv, x);
-    const PCOL = { battery: '#c0392b', motor: '#1f4e9c', controller: '#0a6b2a', reducer: '#8e44ad', wheel: '#a05a00' };
+    const PCOL = { battery: '#e9893a', motor: '#2b59c3', controller: '#2f7d4f', reducer: '#8e6bbf', wheel: '#6b665c' };
     const ctl = {
       nT, t0: nT - 1, playMs: 30, partMode: 'field', viewDir: [0.9, -1.05, 0.75],
       timeNote: `記録の ${nT} 時刻 (走行 ${HV.fmt(tx[nT - 1] / 60)} 分)。再生は 1 こま 1 時刻`,
@@ -68,7 +68,7 @@ HV.fields.thermal = {
         if (loss.length) {
           const sum = kind => tx.map(x => loss.filter(s => s.kind === kind).reduce((a, s) => a + at(s, x), 0));
           P.push({ title: `${ja(S.sel)}: 損失と空気への放熱`, unit: 'W', xlabel: 't [s]', x: tx,
-                   ys: [{ name: '損失', v: sum('loss'), col: '#c0392b' }, { name: '放熱', v: sum('heat_to_air'), col: '#1f4e9c' }], marks: [], cursor: c });
+                   ys: [{ name: '損失', v: sum('loss'), col: '#e9893a' }, { name: '放熱', v: sum('heat_to_air'), col: '#1f4e9c' }], marks: [], cursor: c });
         }
         const pw = ['controller', 'motor', 'reducer', 'wheel'].map(st => ({ st, ss: chain.filter(s => s.kind === 'power' && s.stage === st) })).filter(o => o.ss.length);
         if (pw.length) P.push({ title: '電力の流れ (各段の入力)', unit: 'kW', xlabel: 't [s]', x: tx,

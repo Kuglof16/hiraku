@@ -39,7 +39,7 @@ window.HV = window.HV || {};
     for (const k of ['x', 'y', 'z']) {
       const d = document.createElement('div'); d.className = 'row';
       d.innerHTML = `<label><input type="checkbox" id="c${k}on"> ${k.toUpperCase()}</label>
-        <input type="range" id="c${k}" step="1"><span id="c${k}val" class="val"></span><button id="c${k}flip" title="keep the other side">flip</button>`;
+        <input type="range" id="c${k}" step="1"><span id="c${k}val" class="val"></span><button id="c${k}flip" title="切った反対側を残す">反対側</button>`;
       $('clips').appendChild(d);
       const c = view.clipState[k];
       $(`c${k}on`).onchange = e => { c.on = e.target.checked; view.updateClip(); };
@@ -139,7 +139,7 @@ window.HV = window.HV || {};
       st.variant = cur ? cur.key : null;
       if (!D) {
         $('title').textContent = `${(HV.fields[field] || { label: field }).label}: データがない`;
-        $('source').textContent = `python -m viewer.src.${field} で作る`;
+        $('source').textContent = 'この分野の結果はまだ書き出されていない';
         $('tline').textContent = ''; for (const id of ['hudlines', 'inputs', 'fieldpanel', 'ledgerLegend', 'ledgerLists', 'ledgerTable']) $(id).replaceChildren();
         HV.drawContourBar($('legend'), null); plot.draw([]); view.render();
         return;
@@ -170,6 +170,19 @@ window.HV = window.HV || {};
       // this field's calculation (D.ledger)
       if (!ctx.boxes) ctx.addParts(D.parts, { opacity: 0.2 });
       ctx.layers.parts = true;
+      // the ground under the vehicle (js/look.js): the field's own (ctl.ground {z, from, x, y, holes, fixed}; null: the
+      // field draws its road itself) or, by default, from the design's supports (HV.groundOf)
+      const gs = ctl.ground !== undefined ? ctl.ground : ctx.groundOverride !== undefined ? ctx.groundOverride : HV.groundOf(D);
+      ctx.groundSpec = gs || null;
+      if (gs) {
+        const m = gs.margin ?? 2500, gx = gs.x || [ctx.lo[0] - m, ctx.hi[0] + m], gy = gs.y || [ctx.lo[1] - m, ctx.hi[1] + m];
+        ctx.ground = HV.Look.ground(gx[0], gx[1], gy[0], gy[1], gs.z, gs.holes || []);
+        if (gs.fixed) { ctx.fixed = ctx.fixed || new T.Group(); ctx.fixed.add(ctx.ground); view.scene.add(ctx.fixed); } else root(ctx).add(ctx.ground);
+        ctx.has.scene = true;
+      }
+      // the sun's shadow: the opaque members, tyres and scene items cast it (see-through part boxes do not)
+      ctx.root.traverse(o => { if (o.isMesh && !o.material.transparent && o.userData.kind !== 'ground' && !(ctx.ground && isIn(o, ctx.ground))) o.castShadow = true; });
+      HV.Look.aimSun(view, ctx.lo, ctx.hi);
       ctx.ledger = new HV.Ledger(D);
       ctx.partMode = ctl.partMode || 'category';
       $('ledgerMode').value = ctx.partMode;
@@ -187,7 +200,7 @@ window.HV = window.HV || {};
       const res = (D.results || []).map(r => `<tr><td>${HV.esc(r.q)}</td><td>${HV.fmt(r.v)} ${HV.esc(r.u)}</td><td class="muted">${HV.esc(r.where || '')}</td></tr>`).join('');
       const asm = (D.assumptions || []).map(a => `<li>${HV.esc(a)}</li>`).join('');
       $('inputs').innerHTML = `<div class="h">入力 (条件と出どころ)</div><table>${rows}</table>` +
-        (ctl.extraInputs ? ctl.extraInputs() : '') +
+        (ctl.extraInputs ? ctl.extraInputs() : '') + surroundHtml(D, ctx, ctl) +
         `<details id="notesBox"><summary>説明 (${(D.notes || []).length})</summary><div id="notes">${(D.notes || []).map(t => `<div>${HV.esc(t)}</div>`).join('')}</div></details>` +
         `<details><summary>記録の結果 (${(D.results || []).length})</summary><table>${res}</table></details>` +
         (asm ? `<details><summary>記録の前提 (${D.assumptions.length})</summary><ul>${asm}</ul></details>` : '');
@@ -225,6 +238,25 @@ window.HV = window.HV || {};
     window.__ready = true;
   };
 
+  const root = ctx => ctx.root;
+  const isIn = (o, g) => { for (let p = o; p; p = p.parent) if (p === g) return true; return false; };
+
+  // the surroundings and where each comes from (a closed panel in the inputs pane)
+  function surroundHtml(D, ctx, ctl) {
+    const rows = [], mm = v => `${HV.fmt(v)} mm`;
+    const gs = ctx.groundSpec;
+    if (gs) rows.push(['地面', `高さ z = ${mm(gs.z)}`, gs.from || '']);
+    for (const s of D.scene || []) {
+      const what = { wall: '壁', step: '段差', tilt_table: '傾斜台', ground: '路面', gate: '門', cone: 'コーン', road_profile: '路面の凹凸', slope: '斜面' }[s.kind] || s.kind;
+      const size = s.s && (s.s[0] || s.s[1] || s.s[2]) ? `、大きさ ${s.s.map(v => HV.fmt(v)).join(' × ')} mm` : '';
+      rows.push([what, s.c ? `中心 (${s.c.map(v => HV.fmt(v)).join(', ')}) mm${size}` : '', `記録の scene: ${s.label || s.kind}`]);
+    }
+    for (const r of (ctl.surround || ctx.surround || [])) rows.push(r);
+    if (!rows.length) return '';
+    return `<details id="surroundBox"><summary>周りの物と出どころ (${rows.length})</summary><table>` +
+      rows.map(r => `<tr><td><b>${HV.esc(r[0])}</b></td><td>${HV.esc(r[1])}</td><td class="muted">${HV.esc(r[2])}</td></tr>`).join('') + '</table></details>';
+  }
+
   // The shared scene objects of one field: frame beams, part boxes, scene boxes, arrows.
   function makeCtx(view, D) {
     const T = window.THREE;
@@ -254,6 +286,7 @@ window.HV = window.HV || {};
       if (ctx.beams) { ctx.beams.mesh.visible = ctx.layers.frame; ctx.beams.ghost.visible = ctx.layers.ghost; }
       if (ctx.boxes) ctx.boxes.group.visible = ctx.layers.parts;
       if (ctx.sceneGroup) ctx.sceneGroup.visible = ctx.layers.scene;
+      if (ctx.ground) ctx.ground.visible = ctx.layers.scene;
       if (ctx.arrows) ctx.arrows.group.visible = ctx.layers.arrows;
       view.render();
     };

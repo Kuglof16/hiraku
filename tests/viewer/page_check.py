@@ -56,6 +56,15 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
         out["speed_shown"] = page.evaluate("getComputedStyle(document.getElementById('speedrow')).display !== 'none'")
         out["boxes_moved"] = page.evaluate("(() => { const b = HV.state.ctx && HV.state.ctx.boxes; return b ? b.off.filter(o => Math.hypot(o[0], o[1], o[2]) > 1e-3).length : 0; })()")
         out["tyres"] = page.evaluate("(() => { let n = 0; HV.state.ctx.root.traverse(o => { if (o.geometry && o.geometry.type === 'CylinderGeometry') n++; }); return n; })()")
+        # the ground drawn (js/look.js) and, at t = 0, the lowest point of each drawn tyre (its world box) above it
+        out["ground"] = page.evaluate("""() => { const T = window.THREE, ctx = HV.state.ctx, g = ctx && ctx.groundSpec;
+            if (!g || !ctx.ground) return null; const tyres = [];
+            HV.state.ctl.setTime(0); ctx.root.updateMatrixWorld(true);
+            ctx.root.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'CylinderGeometry' && o.geometry.parameters.radiusTop > 150) {
+              const b = new T.Box3().setFromObject(o, true); tyres.push(b.min.z - g.z); } });
+            HV.state.ctl.setTime(HV.state.t);
+            return { z: g.z, from: g.from, visible: ctx.ground.visible, tyre_gaps: tyres }; }""")
+        out["surround"] = page.evaluate("(() => { const b = document.getElementById('surroundBox'); return b ? { open: b.open, text: b.textContent } : null; })()")
         out["inputs"] = page.text_content("#inputs")[:2000]
         out["legend_shown"] = page.evaluate("getComputedStyle(document.getElementById('legend')).display !== 'none'")
         # coloured pixels in the 3D view (not the background)

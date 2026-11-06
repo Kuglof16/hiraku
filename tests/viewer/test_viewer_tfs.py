@@ -194,6 +194,71 @@ class TfsDataTest(unittest.TestCase):
             self.assertIn(f"'{f}'", main)
 
 
+class GroundTest(unittest.TestCase):
+    """The surroundings under the vehicle (viewer/src/ground.py, the same rules as js/look.js HV.groundOf and
+    js/vehicle.js): in every field, at t = 0, the tyres touch the ground or road drawn under them."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tests.viewer import test_vehicle_fields as tv
+        from tests.viewer import test_viewer as t1
+        cls.obj = {"thermal": make("thermal"), "fatigue": make("fatigue"), "strength_beam": make("strength_beam"),
+                   "strength_shell": make("strength_shell"), "nvh": t1.make("nvh"), "nvh_shell": t1.make_shell(),
+                   "assembly": t1.make("assembly"), "crash_a": t1.make("crash"), "crash_b": t1.make("crash", "crash_b"),
+                   "crash_contact": t1.make("crash", "crash_contact"), "handling": tv.make("handling"),
+                   "aero": tv.make("aero"), "powertrain": tv.make("powertrain", also=("powertrain_energy",))}
+
+    def test_ground_of_the_supports(self):
+        from viewer.src import ground
+        for k, o in self.obj.items():
+            with self.subTest(field=k):
+                z, src = ground.static_ground(o)
+                self.assertIsNotNone(z)
+                g = o.get("ground") or (o.get("cases") or [{}])[0].get("ground")
+                if g:   # data made now carry the supports' ground (common.ground_of)
+                    self.assertEqual(src, "supports" if o.get("ground") else src)
+                    self.assertAlmostEqual(g["z"], min(w["c"][2] - w["r"] for w in g["wheels"]), places=9)
+
+    def test_ground_of_rules(self):
+        d = {"supports": [{"id": "F", "position_mm": [0, 0, 300.0], "radius_mm": 300.0},
+                          {"id": "R", "position_mm": [-2000, 0, 310.0], "radius_mm": 300.0, "loaded_radius_mm": 290.0}]}
+        g = common.ground_of(d)
+        self.assertEqual(g["z"], 0.0)
+        self.assertEqual([w["gap_mm"] for w in g["wheels"]], [0.0, 20.0])
+        self.assertIn("負荷時の半径", g["from"])
+        self.assertIsNone(common.ground_of({"supports": []}))
+
+    def test_step_edge_distance(self):
+        from viewer.src import ground
+        step = [{"kind": "step", "c": [1000.0, 0.0, 50.0], "s": [1000.0, 2000.0, 100.0]}]
+        # a wheel centre 300 mm up, 200 mm before the step's face (x = 500): the edge (500, 100) is nearer than the road
+        self.assertAlmostEqual(ground.k2_distance(step, 300.0, 0.0, 300.0), math.hypot(200.0, 200.0), places=9)
+        self.assertAlmostEqual(ground.k2_distance(step, -500.0, 0.0, 300.0), 300.0, places=9)
+        self.assertAlmostEqual(ground.k2_surface(step, 800.0, 0.0), 100.0, places=9)
+
+    def test_tyres_on_the_ground_at_t0(self):
+        from viewer.src import ground
+        worst = {}
+        for k, o in self.obj.items():
+            gaps = ground.contact_gaps(o)
+            with self.subTest(field=k):
+                if not gaps and not any(str(p.get("kind")).lower() == "wheel" for p in o.get("parts") or []) and not o.get("wheels"):
+                    continue   # a trimmed fixture with no wheels: no tyres drawn (the ground from the wall's foot)
+                self.assertTrue(gaps, k)
+                for g in gaps:
+                    if "penetration_mm" in g:   # K2: the tyre sinks by its own deflection (wheel load / tyre stiffness)
+                        self.assertLessEqual(abs(g["tyre_bottom_gap_mm"]), 2.0, g)
+                        self.assertLess(g["penetration_mm"], 0.1 * 300.0, g)   # never visibly deep (< 10 % of r)
+                    elif k == "fatigue":
+                        # the tyres stand on the ground plane; the road profile's own height passes under them
+                        w = next(w for w in o["wheels"] if w["support"] == g["id"])
+                        self.assertLessEqual(abs(w["c"][2] - w["r"] - o["road"]["ground_z_mm"]), 2.0)
+                    else:
+                        self.assertLessEqual(abs(g["tyre_bottom_gap_mm"]), 2.0, g)
+                worst[k] = ground.largest(gaps)[0]
+        self.assertTrue(worst)
+
+
 class TfsPageTest(unittest.TestCase):
     """The three fields' pages from disk in headless Chromium: no console errors, drawn, nothing over the 3D view."""
 
@@ -227,6 +292,14 @@ class TfsPageTest(unittest.TestCase):
         self.assertFalse(out["notes_open"])
         self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
         self.assertIn("部品と計算での扱い", out["panel"])
+        # the ground is drawn and the tyres stand on it (their lowest point within 2 mm of it)
+        self.assertIsNotNone(out["ground"])
+        self.assertTrue(out["ground"]["visible"])
+        for g in out["ground"]["tyre_gaps"]:
+            self.assertLessEqual(abs(g), 2.0, out["ground"])
+        self.assertIsNotNone(out["surround"])   # where the surroundings come from, in a closed panel
+        self.assertFalse(out["surround"]["open"])
+        self.assertIn("地面", out["surround"]["text"])
         return out
 
     def test_thermal_page(self):

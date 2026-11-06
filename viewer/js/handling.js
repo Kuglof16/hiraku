@@ -42,7 +42,7 @@ HV.K2.controller = function (name, D, R, opt) {
     },
     hud() {
       return [HV.K2.judgeText(D.judge) || D.title,
-              (opt.hud ? opt.hud(R) + '   ' : '') + `色: タイヤ = ${COLS[S.col][0]}、部品 = 計算での扱い   矢印: 緑 垂直力、赤 摩擦力   動き ×1 (実寸)`];
+              (opt.hud ? opt.hud(R) + '   ' : '') + `色: タイヤ = ${COLS[S.col][0]}、部品 = 計算での扱い   矢印: 緑 垂直力、青 摩擦力   動き ×1 (実寸)`];
     },
     contour: () => COLS[S.col][1],
     plot() { panels = opt.plots(R, R.t[R.k]).filter(Boolean); if (opt.morePlots) panels.push(...opt.morePlots(R, R.t[R.k])); return panels; },

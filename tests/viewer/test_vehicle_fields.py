@@ -188,6 +188,21 @@ class VehiclePageTest(unittest.TestCase):
         self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
         self.assertIn(out["part_pick"].get("cat"), set(common.CATEGORIES), out["part_pick"])
         self.assertIn("判定", out["hud"])
+        # the road under the vehicle: drawn, and the tyres on it (K2's road z = 0: each tyre's lowest point at most
+        # 2 mm above it and sunk by less than 10 % of its radius, its own deflection; a tilt table's floor lies
+        # below the table, the tyres stand on the table)
+        g = out["ground"]
+        self.assertIsNotNone(g)
+        self.assertTrue(g["visible"])
+        self.assertTrue(g["tyre_gaps"])
+        for d in g["tyre_gaps"]:
+            if g["z"] == 0:
+                self.assertTrue(-30.0 < d <= 2.0, g)
+            else:
+                self.assertGreater(d, 0.0, g)
+        self.assertIsNotNone(out["surround"])   # where the surroundings come from, in a closed panel
+        self.assertFalse(out["surround"]["open"])
+        self.assertIn("地面", out["surround"]["text"])
         return out
 
     def test_handling(self):
