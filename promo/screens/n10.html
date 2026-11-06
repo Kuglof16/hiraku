@@ -98,6 +98,9 @@
   /* who ran the analysis (team K1/K2) stays in DATA and the README; the cell
      shows only the value, so each row reads answer -> analysis -> difference */
   .cae .note { display: none; }
+  /* where Claude without tools fell short: runs that gave no figure */
+  .claude .in.miss { outline: calc(4 * var(--u)) solid var(--miss); outline-offset: calc(10 * var(--u)); border-radius: calc(6 * var(--u)); }
+  .miss-note { color: var(--miss); font-weight: 700; }
   /* the difference is the one figure each row is about */
   .diff .v { font-weight: 700; }
 
@@ -219,7 +222,8 @@
   const diffs = (r) => r.claude.map((c) => (100 * (r.cae.v - c)) / c);
   // The answer farthest from the analysis (signed).
   const worst = (r) => diffs(r).reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
-  const ok = (r) => diffs(r).every((d) => Math.abs(d) <= r.tol_pct);
+  // a row is ticked only when every run gave a figure and each is within the width
+  const ok = (r) => r.claude.length === DATA.asked && diffs(r).every((d) => Math.abs(d) <= r.tol_pct);
 
   const num = (v, dp) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   const unit = (u) => (u === "°" ? `<span class="deg">°</span>` : `<span class="unit">${u}</span>`);
@@ -232,12 +236,14 @@
     let v, note;
     if (distinct(r.claude).length === 1) {
       v = `約 ${num(r.claude[0], 0)}${unit(r.unit)}`;
-      note = n === DATA.asked ? `${n} 回とも` : `数字を出したのは ${DATA.asked} 回のうち ${n} 回`;
+      note = n === DATA.asked ? `${n} 回とも`
+        : `<span class="miss-note">${DATA.asked} 回のうち ${DATA.asked - n} 回は数字が出ない</span>`;
     } else {
       v = `約 ${r.claude.map((c) => num(c, 0) + unit(r.unit)).join("・")}`;
       note = `${n} 回の答え`;
     }
-    return `<div class="in"><div class="v">${v}</div><div class="note" data-kind="note">${note}</div></div>`;
+    const miss = n < DATA.asked ? " miss" : "";
+    return `<div class="in${miss}"><div class="v">${v}</div><div class="note" data-kind="note">${note}</div></div>`;
   }
 
   function handCell(r) {
