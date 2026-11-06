@@ -15,6 +15,7 @@ import math
 
 from hiraku.catalog.builders.common import BuildError, Record, design_var, entry, loading, number, q, text, tolerance
 from hiraku.catalog.loading import LOADING_JA
+from hiraku.solvers.k0_handcalc.scene_inputs import TYRE_STIFFNESS_NOTE
 
 # ---------------------------------------------------------------- C1 crash
 
@@ -347,7 +348,8 @@ _LEG_ASSUME = ["はしごがねじれると左右のレールが上下逆に曲�
 _DAMAGE_ASSUME = ["4 輪それぞれ 1/4 車。溶接の応力は 4 輪の力のゆれに比例する", "左右の道は別、後輪は前輪と同じ道を後から通る",
                   "繰り返しはレイリー分布 (狭い帯域。広い帯域の実際より損傷を大きめに出す)",
                   "S-N の曲がり点より下は傾き 2m − 1 (IIW-1823-07 (2008) 4.3.1 節 p.110、振幅の変わる繰り返しの Miner の和)。"
-                  "設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので使わない"]
+                  "設計の変数 fatigue_slope_after_knee_constant_amplitude は一定の振幅のときの傾きなので使わない",
+                  TYRE_STIFFNESS_NOTE]
 
 
 # A known bias, not worked on (the analysis department's comparisons, 2026-11-03): on the revised version and
