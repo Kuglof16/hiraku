@@ -219,7 +219,7 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
         ver = verdicts.get(lc["load_case_id"])
         cmp, ana = verdict_sources(ctx, ver)
         if cmp is None or ana is None or ana["tool"] not in ctx.tools:  # a verdict with no comparison has no margin to move
-            raise ToolError(f"{lc['load_case_id']} には版 {ctx.version} の合否がまだ無いので、感度は出せません "
+            raise ToolError(f"{lc['load_case_id']} には v{ctx.version} の合否がまだ無いので、感度は出せません "
                             f"(感度は合否の元になった解析のツールで出します)")
         upstream = {}
         for u in ctx.upstream_of(lc["load_case_id"]):
@@ -332,7 +332,7 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
     bad = sorted({b for t in texts for b in unknown_numbers(t, allowed)})
     if bad:
         problems.append("報告の文に、記録に無い数があります: " + "、".join(bad)
-                        + "。数は記録 (予測・解析・照合・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
+                        + "。数は記録 (予測・解析・比べた結果・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
     claimed = unanswered_choices(ctx, texts)
     if claimed:
         problems.append(f"報告の文が、人に聞いていない規則 {', '.join(claimed)} について「人が選んだ」と書いています。"
@@ -343,7 +343,7 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
     hit = rule_hits(ctx)
     not_hit = [n["rule_id"] for n in args.get("next") or [] if n.get("rule_id") and n["rule_id"] not in hit]
     if not_hit:
-        problems.append(f"next の rule_id {not_hit} は、版 {ctx.version} の最後の rule_check で当たった規則ではありません"
+        problems.append(f"next の rule_id {not_hit} は、v{ctx.version} の最後の rule_check で当たった規則ではありません"
                         f" (当たった規則: {', '.join(hit) or 'なし'})。前の版で当たって直した規則は next に入れず、"
                         "summary に、どの版で直したかを書いてください")
     wrong = [n.get("domain") for n in args.get("next") or [] if n.get("domain") not in domains and not n.get("rule_id")]

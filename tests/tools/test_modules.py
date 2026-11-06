@@ -47,7 +47,7 @@ class ProposalTest(ModuleCase, unittest.TestCase):
         verdicts = {**RED_R1, "P1-step100": {"verdict_id": "ver-0002", "load_case_id": "P1-step100", "pass": True}}
         for ids, named in ((["R1-step100", "P1-step100"], "P1-step100"), (["H1-interference"], "H1-interference")):
             with self.subTest(ids=ids), mock.patch.object(judge, "latest_verdicts", return_value=verdicts), \
-                    self.assertRaisesRegex(ToolError, f"版 1 で赤.*赤でないもの: {named}。.*reason に書いて"):
+                    self.assertRaisesRegex(ToolError, f"v1 で NG.*NG でないもの: {named}。.*reason に書いて"):
                 self.propose("occupant", changes={"seat_x": self.mm(-1000)}, load_case_ids=ids)
         self.assertEqual(self.ctx.store.pending_proposals(), [])  # nothing recorded
         with mock.patch.object(judge, "latest_verdicts", return_value=verdicts):

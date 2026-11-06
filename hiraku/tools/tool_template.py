@@ -167,7 +167,7 @@ ANALYSE_ARGS = {
     "load_case": ("荷重条件 (load_case_id・test_id・params・criterion・tolerance_rel)。params は load_case_params で"
                   "宣言した名前だけ読める (宣言の default が入る)。量は param_value(load_case, 名前, 単位) で単位を換算して、"
                   "文字は param_text で読む"),
-    "params": ("analyze の params。上流の荷重条件の解析は params[\"upstream_analyses\"] (荷重条件の ID → 照合で一致した "
+    "params": ("analyze の params。上流の荷重条件の解析は params[\"upstream_analyses\"] (荷重条件の ID → 予測と比べて予想通りだった "
                "analysis)。run_params で宣言した設定は run_param で読む"),
     "predictions": ("analyze に渡した予測 (record_prediction の記録)。run() が受け取り、ID を記録に入れる。"
                     "analyse() には渡らない"),

@@ -200,14 +200,14 @@ class Hooks:
                 return f"解析 {a['analysis_id']} は失敗しました。error の文を読み、設計か入力を見直してください"
             names = ", ".join(r["quantity"] for r in a["results"])
             return (f"解析 {a['analysis_id']} の結果 ({names}) が出ました。"
-                    f"次は compare(prediction_id=..., analysis_id=\"{a['analysis_id']}\") で、同じ名前の予測と照合してください")
+                    f"次は compare(prediction_id=..., analysis_id=\"{a['analysis_id']}\") で、同じ名前の予測と比べてください")
         if short == "compare":
             hits = [c for c in s.records("comparison") if c["prediction_id"] == args.get("prediction_id")
                     and c["analysis_id"] == args.get("analysis_id")]
             if not hits or hits[-1]["status"] == "match":
                 return None
             c = hits[-1]
-            return (f"食い違いです (差 {c['diff_rel'] * 100:.1f} %、許す幅 {c['tolerance_rel'] * 100:.0f} %)。"
+            return (f"予測と比べた結果は不一致です (差 {c['diff_rel'] * 100:.1f} %、許す幅 {c['tolerance_rel'] * 100:.0f} %)。"
                     f"record_cause(comparison_id=\"{c['comparison_id']}\", cause=..., fix=...) を書くまで、"
                     f"この分野の analyze と compare は止まります")
         if short == "revise_design" and rules.design_modules(self.ctx) is not None:
@@ -215,9 +215,9 @@ class Hooks:
             if not mine:
                 return None
             return (f"提案 {mine[-1]['change_id']} を記録しました (版はまだ作っていません)。パッケージ役が build_version で、"
-                    f"その回の提案をまとめて版 {v + 1} を作ります")
+                    f"その回の提案をまとめて v{v + 1} を作ります")
         if short in ("revise_design", "build_version", "write_design", "edit_design") and v > 1 and s.design(v).get("parent_version") == v - 1:
-            return (f"設計の版 {v} ができました。判定は版ごとなので、まとめ役は全部の荷重条件を版 {v} で"
+            return (f"設計の v{v} ができました。判定は版ごとなので、まとめ役は全部の荷重条件を v{v} で"
                     f"やり直すよう各役に頼んでください")
         return None
 

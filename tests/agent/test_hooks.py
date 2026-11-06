@@ -161,7 +161,7 @@ class HooksTest(RunCase, unittest.TestCase):
         self.assert_events_fit()
 
     def test_a_result_beyond_the_limit_after_a_pass_blocks_the_stop(self):
-        """docs/contract.md 分野が緑になる条件: a later analysis beyond the criterion holds the passed
+        """docs/contract.md 分野が OK になる条件: a later analysis beyond the criterion holds the passed
         load case back; HK4 treats it as pending, and a run stopped at the cap is not_judged."""
         from hiraku.agent.runner import end_status
 
@@ -199,14 +199,14 @@ class HooksTest(RunCase, unittest.TestCase):
         self.ctx.project["round_limit"] = 0  # version 1 is the last
         red_lc = {"load_case_id": "H1-steer", "domain": "assembly"}
         with mock.patch.object(rules, "load_case_stage", return_value=1), \
-                mock.patch.object(rules, "lower_stage_left", return_value=[(0, red_lc, "赤、ver-0009")]):
+                mock.patch.object(rules, "lower_stage_left", return_value=[(0, red_lc, "NG、ver-0009")]):
             blocked = rules.stage_blocked(self.ctx)
             self.assertEqual(list(blocked), ["R1-step100"])
             self.assertIn("H1-steer", blocked["R1-step100"])
             self.assertEqual(run(self.hooks.stop({"stop_hook_active": False}, None, None)), {})
             status, reason, code = end_status(self.ctx)
         self.assertEqual((status, code), ("stopped", "round_limit"))
-        self.assertIn("低い段の赤が残るので判定していない", reason)
+        self.assertIn("低い段の NGが残るので判定していない", reason)
         self.assertIn("H1-steer", reason)
 
     def test_red_with_no_revision_left_may_stop(self):
@@ -423,7 +423,7 @@ class ModuleScopeHookTest(ModuleCase, unittest.TestCase):
         self.assertIn("build_version", hint)
         self.assertEqual(self.pre("build_version", {"reason": "まとめ"}, "packager"), {})
         build_version(self.ctx, {"reason": "まとめ"}, "packager")
-        self.assertIn("版 2", self.hooks.next_step("build_version", {"reason": "まとめ"}))
+        self.assertIn("v2", self.hooks.next_step("build_version", {"reason": "まとめ"}))
 
 
 if __name__ == "__main__":

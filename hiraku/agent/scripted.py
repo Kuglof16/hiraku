@@ -145,7 +145,7 @@ def room_for(previous: Record, merged: Record) -> dict[str, list[Record]]:
     return {m: fresh[m] for m in contract.MODULES if m in out_mods and m in fresh}
 
 
-REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・食い違いと原因・確かめていない値は、記録からツールが入れました"
+REPORT_SUMMARY ="台本の運転の報告です。分野ごとの結果・効いている項・前提・不一致と原因・確かめていない値は、記録からツールが入れました"
 
 
 def scripted_summary(ctx: RunContext) -> str:
@@ -160,10 +160,10 @@ def scripted_summary(ctx: RunContext) -> str:
     green = [d for d in ctx.picked if tiles.get(d) == "green"]
     red = [d for d in ctx.picked if tiles.get(d) == "red"]
     rest = [d for d in ctx.picked if d not in green and d not in red]
-    head = f"台本の運転で、設計の版 {ctx.version} は"
+    head = f"台本の運転で、設計の v{ctx.version} は"
     if green and not red and not rest:
-        return f"{head}選んだ {len(green)} 分野 ({names(green)}) がすべて合格"
-    parts = ([f"{names(green)} が合格"] if green else []) + ([f"{names(red)} が不合格"] if red else []) \
+        return f"{head}選んだ {len(green)} 分野 ({names(green)}) がすべて OK"
+    parts = ([f"{names(green)} が OK"] if green else []) + ([f"{names(red)} が NG"] if red else []) \
         + ([f"{names(rest)} は判定が付いていない"] if rest else [])
     return head + "、".join(parts)
 
@@ -248,8 +248,8 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         raise Stop(f"analysis {ana['analysis_id']} failed")
     decided = [v for v in ctx.store.records("verdict", ctx.version) if v.get("analysis_id") == ana["analysis_id"]]
     if decided:  # the analysis judged the load case itself (unsupported_load: a load with no path): nothing to compare
-        _say(ctx, agent, lc, f"{lc['load_case_id']} は、荷重の通り道が無いので不合格です ({decided[-1]['verdict_id']})。"
-                             f"予測との照合はしません")
+        _say(ctx, agent, lc, f"{lc['load_case_id']} は、荷重の通り道が無いので NG です ({decided[-1]['verdict_id']})。"
+                             f"予測とは比べません")
         return None
     names = {r["quantity"] for r in ana["results"]}
     hit = None
@@ -268,8 +268,8 @@ def _analyze_and_compare(ctx: RunContext, lc: Record, agent: str, tool: str, pre
         if hit is None and expected_for(expected, cmp) is not None:
             hit = cmp
             continue
-        _say(ctx, agent, lc, f"{cmp['quantity']} が食い違いました (差 {cmp['diff_rel'] * 100:.1f} %)。"
-                             f"台本にこの食い違いの原因は書かれていないので、ここで止めます")
+        _say(ctx, agent, lc, f"{cmp['quantity']} を予測と比べると不一致でした (差 {cmp['diff_rel'] * 100:.1f} %)。"
+                             f"台本にこの不一致の原因は書かれていないので、ここで止めます")
         raise Stop(f"mismatch {cmp['comparison_id']} needs a cause (the plan has none for it)")
     return hit
 
@@ -304,7 +304,7 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
     if hit is None:
         return  # matched; the plan's retry is not needed
     expected = expected_for(expected, hit)  # the plan's entry for this mismatch (its quantity and its side)
-    _say(ctx, agent, lc, f"{hit['quantity']} が食い違いました (差 {hit['diff_rel'] * 100:+.1f} %、"
+    _say(ctx, agent, lc, f"{hit['quantity']} を予測と比べると不一致でした (差 {hit['diff_rel'] * 100:+.1f} %、"
                          f"許す幅 {hit['tolerance_rel'] * 100:.0f} %)。台本に書いてある原因を記録します")
     args = {"comparison_id": hit["comparison_id"], "cause": expected["cause"], "fix": expected["fix"]}
     if expected.get("safe_side"):
@@ -320,8 +320,8 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
         if retry is not None:
             raise ScriptError(f"the plan gives {hit['comparison_id']} both safe_side and a retry")
         how = ("手計算は値に届かないが、力の道は手計算で確かめてあるので、ツールの値で" if expected.get("tool_decides")
-               else "安全側の食い違いとして、不利な方の値 (予測) で")
-        _say(ctx, agent, lc, f"{how}合否を出しました: {'合格' if ver['pass'] else '不合格'} — {verdict_line(ver)}")
+               else "安全側の不一致として、不利な方の値 (予測) で")
+        _say(ctx, agent, lc, f"{how}基準の判定を出しました: {'OK' if ver['pass'] else 'NG'} — {verdict_line(ver)}")
         return
     if expected.get("end"):
         if retry is not None:
@@ -477,7 +477,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             s.emit("agent.stopped", agent="lead", data=stopped_data("lead", "not_judged"))
             s.finish("stopped", stop_reason=f"propose_design refused: {e}", stop_code="not_judged")
             return "stopped"
-        s.emit("agent.said", agent="designer", text=f"版 1 ができました。試験: "
+        s.emit("agent.said", agent="designer", text=f"v1 ができました。試験: "
                                                     + "、".join(lc["load_case_id"] for lc in out["load_cases"]))
         s.emit("agent.stopped", agent="designer", data=stopped_data("designer"))
     plan = compose_plan(ctx, plan)
@@ -530,8 +530,8 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         at = next_revision() if index is None else index
         put_off = [r for r in revisions[:at] if not r.get("answers_ended")] if index is None else []
         if put_off:  # earlier entries for reds this version does not have (fewer tests than the plan's): kept
-            s.emit("agent.said", agent="lead", text=f"台本の次の直し {len(put_off)} つは、版 {ctx.version} の赤に当たらないので"
-                   "後に回し、赤に当たる直しを使います: " + "、".join(r.get("say") or r["reason"][:40] for r in put_off))
+            s.emit("agent.said", agent="lead", text=f"台本の次の直し {len(put_off)} つは、v{ctx.version} の NG に当たらないので"
+                   "後に回し、NG に当たる直しを使います: " + "、".join(r.get("say") or r["reason"][:40] for r in put_off))
         rev = revisions.pop(at)
         start("designer")
         s.emit("agent.said", agent="designer", text=rev.get("say") or text)
@@ -552,7 +552,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             except ToolError as e:
                 s.emit("agent.said", agent="designer", text=f"設計を直せませんでした: {e}")
                 raise Stop(f"revise_design refused: {e}") from None
-        s.emit("agent.said", agent="lead", text=f"設計の版 {out['design_version']} で、段 0 から全部の荷重条件をやり直します")
+        s.emit("agent.said", agent="lead", text=f"設計の v{out['design_version']} で、段 0 から全部の荷重条件をやり直します")
 
     def revise_modules(rev: Record, changes: Record, choices: Record, reason: str) -> Record:
         """One round on a design with modules (HK6): each module designer proposes its own variables and choices
@@ -582,17 +582,17 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         if not by and not package:
             names = "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped) or "なし"
             s.emit("agent.said", agent="lead",
-                   text=f"台本の次の直し ({names}) は、版 {ctx.version} の赤 ({'、'.join(reds)}) を直すモジュールのものではないので、使いません")
-            raise Stop(f"版 {ctx.version} の赤 ({'、'.join(reds)}) を直す直しが台本にありません (次の直しは {names} のもの)。"
-                       f"その赤のまま終えます。それより重い段の荷重条件は、低い段の赤が残るので判定していない (HK5)")
+                   text=f"台本の次の直し ({names}) は、v{ctx.version} の NG ({'、'.join(reds)}) を直すモジュールのものではないので、使いません")
+            raise Stop(f"v{ctx.version} の NG ({'、'.join(reds)}) を直す直しが台本にありません (次の直しは {names} のもの)。"
+                       f"その NG のまま終えます。それより重い段の荷重条件は、低い段の NGが残るので判定していない (HK5)")
         if skipped:
-            s.emit("agent.said", agent="lead", text="台本の直しのうち、この版の赤に関わらないモジュールの分は使いません: "
+            s.emit("agent.said", agent="lead", text="台本の直しのうち、この版の NG に関わらないモジュールの分は使いません: "
                    + "、".join(contract.MODULE_NAMES_JA.get(m, m) for m in skipped))
             merged_keep = {k: q for m in by for k, q in (by[m].get("changes") or {}).items()}
             changes = {**merged_keep, **package}
             choices = {k: c for m in by for k, c in (by[m].get("choices") or {}).items()}
         ids = []
-        s.emit("agent.said", agent="lead", text="赤の荷重条件を、直せるモジュールの設計役に渡します: "
+        s.emit("agent.said", agent="lead", text="NG の荷重条件を、直せるモジュールの設計役に渡します: "
                + "、".join(f"{contract.MODULE_NAMES_JA.get(m, m)}" for m in by)
                + ("、パッケージ役" if package else "") + "。版はパッケージ役がまとめます")
         for m, part in by.items():
@@ -646,7 +646,7 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
             revised, held_back = False, None
             for stage, group in stage_groups(ctx, plan["steps"]):
                 _check_stop(ctx)
-                s.emit("agent.said", agent="lead", text=f"版 {ctx.version}、{_stage_ja(stage)}の荷重条件を確かめます: "
+                s.emit("agent.said", agent="lead", text=f"v{ctx.version}、{_stage_ja(stage)}の荷重条件を確かめます: "
                        + "、".join(dict.fromkeys(st["load_case"] for st in group)))
                 for step in group:
                     _check_stop(ctx)
@@ -671,17 +671,17 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                     continue
                 named = "、".join(f"{v['test_id']} ({v['load_case_id']}、{v['verdict_id']})" for v in reds)
                 if can_revise():
-                    s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。"
+                    s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で NG が出ました: {named}。"
                                                             f"重い段に進む前に、設計役が直します")
                     names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
                     check_rules()  # this version's rules before it is left behind (the stamp card reads every version)
-                    revise(f"{names}が赤なので、設計を直します")
+                    revise(f"{names}が NG なので、設計を直します")
                     revised = True
                     break
                 held_back = (stage, reds)
-                left = ("台本に残る直しはどれもこの赤に当たらない (この要件では計画の直しが当たらない) ので" if none_hit()
+                left = ("台本に残る直しはどれもこの NG に当たらない (この要件では計画の直しが当たらない) ので" if none_hit()
                         else "設計を直す手が残っていないので")
-                s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で赤が出ました: {named}。{left}、"
+                s.emit("agent.said", agent="lead", text=f"{_stage_ja(stage)}で NG が出ました: {named}。{left}、"
                                                         f"重い段には進みません (HK5)")
                 break
             if revised:
@@ -700,13 +700,13 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
                     break
                 names = "、".join(sorted(set(revisions[at]["answers_ended"]) & ended))
                 s.emit("agent.said", agent="lead",
-                       text=f"版 {ctx.version} に赤はありません。{names} は判定なしで終わりました (食い違いの原因の記録)。"
+                       text=f"v{ctx.version} に NG はありません。{names} は判定なしで終わりました (不一致の原因の記録)。"
                             "原因の直し方にある設計の変更を、設計役に頼みます")
                 revise(f"{names} を判定できるようにするため、設計を直します", at)
                 continue
             if not can_revise():
                 break
-            revise(f"{'、'.join(contract.DOMAIN_NAMES_JA[j['domain']] for j in reds)}が赤なので、設計を直します")
+            revise(f"{'、'.join(contract.DOMAIN_NAMES_JA[j['domain']] for j in reds)}が NG なので、設計を直します")
     except StopRequested:
         s.emit("agent.said", agent="lead", text="止めるボタンが押されたので、ここで止めます")
         status, reason, code = "stopped", STOPPED_BY_BUTTON, "user_stop"
@@ -720,11 +720,11 @@ def run_scripted(ctx: RunContext, plan: Record | None = None) -> str:
         used_up = ctx.version - 1 >= ctx.project["round_limit"]
         names = "、".join(dict.fromkeys(contract.DOMAIN_NAMES_JA[v["domain"]] for v in reds))
         why = (f"設計の直しの回数 (round_limit {ctx.project['round_limit']}) を使い切りました" if used_up
-               else "この要件では計画の直しが当たらない (台本に残る直しは、どれもこの版の赤を直すモジュールのものではありません)"
+               else "この要件では計画の直しが当たらない (台本に残る直しは、どれもこの版の NG を直すモジュールのものではありません)"
                if none_hit() else "台本に設計の直しが残っていません")
         status, code = "stopped", "round_limit" if used_up else "not_judged"
-        reason = (f"{names}が赤のまま ({_stage_ja(stage)})、{why} (版 {ctx.version})。それより重い段の荷重条件は、"
-                  f"低い段の赤が残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)
+        reason = (f"{names}が NG のまま ({_stage_ja(stage)})、{why} (v{ctx.version})。それより重い段の荷重条件は、"
+                  f"低い段の NGが残るので判定していない (HK5)")  # the contract's words (HK5, check_run looks for them)
     if status == "done" and not rules.unjudged_reason(ctx):  # every picked domain judged: the lead's report
         rep = plan.get("report") or {}
         nxt, computed = list(rep.get("next") or []), []

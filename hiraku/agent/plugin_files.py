@@ -97,7 +97,7 @@ HIRAKU の実行を、この会話で進めます。あなたはまとめ役で�
 def command_files() -> dict[str, str]:
     tools = [plugin_tool(n) for n in ("start_run", "open_run", "get_context", "write_report", "pick_domains", "ask_user",
                                       "import_knowledge", "rule_check", "find_tradeoffs", "add_tests", "wait_for_roles")]
-    fields = {"description": "要件のファイルから HIRAKU の実行を始め、まとめ役として予測・解析・照合・合否まで進める",
+    fields = {"description": "要件のファイルから HIRAKU の実行を始め、まとめ役として予測 → 解析 → 比べる → 判定まで進める",
               "argument-hint": "<要件のファイル (例 data/requirements/offroad-4w.yaml)>",
               "allowed-tools": ", ".join(tools)}
     # the module rules say they hold for a design with modules, so the one command serves both kinds of design

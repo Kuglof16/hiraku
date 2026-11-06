@@ -107,7 +107,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual(self.ctx.store.judgements()[0]["state"], "green")
         self.assertIsNone(self.ctx.project.get("stop_reason"))
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertTrue(any(t.startswith("安全側の食い違いとして") and "合格" in t for t in said))
+        self.assertTrue(any(t.startswith("安全側の不一致として") and "基準の判定を出しました: OK" in t for t in said))
         self.assert_events_fit()
 
     def test_with_rule_check_every_version_gets_its_rules_once(self):
@@ -229,7 +229,7 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertIsNone(scripted._analyze_and_compare(self.ctx, lc, "cae.strength", "frame_static", [r1["prediction_id"]]))
         self.assertEqual(len(self.ctx.store.records("comparison")), before)
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertTrue(any("荷重の通り道が無いので不合格" in t for t in said))
+        self.assertTrue(any("荷重の通り道が無いので NG" in t for t in said))
 
     def test_expected_mismatches_by_side(self):
         """One step, two entries for one quantity: the prediction below the analysis ends the step, above it is
@@ -340,9 +340,9 @@ class ScriptedRunTest(RunCase, unittest.TestCase):
         self.assertEqual([e["data"]["design_version"] for e in designs], [1, 2])
         self.assertIn("R1: 判定なしで終わった (試験)", designs[1]["data"]["change_reason"])
         said = [e["text"] for e in self.ctx.store.events() if e["kind"] == "agent.said"]
-        self.assertTrue(any("版 1 に赤はありません。R1-step100 は判定なしで終わりました" in t for t in said))
+        self.assertTrue(any("v1 に NG はありません。R1-step100 は判定なしで終わりました" in t for t in said))
         self.assertIn("R1 が判定なしで終わったので直します (試験)", said)
-        self.assertEqual(len([t for t in said if "判定なしで終わりました (食い違いの原因の記録)" in t]), 1)  # used once
+        self.assertEqual(len([t for t in said if "判定なしで終わりました (不一致の原因の記録)" in t]), 1)  # used once
         self.assert_events_fit()
 
     def test_end_and_retry_together_are_a_plan_error(self):
