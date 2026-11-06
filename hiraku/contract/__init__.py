@@ -158,7 +158,8 @@ MODULE_NAMES_JA = {
     "body": "車体",
 }
 MODULE_DESIGNERS = tuple(f"designer.{m}" for m in MODULES if m != "package")
-MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "import_knowledge", "rule_check", "write_report", "find_tradeoffs")
+MCP_TOOLS_LATER = ("pick_domains", "ask_user", "check_package", "import_knowledge", "rule_check", "write_report", "find_tradeoffs",
+                   "write_design", "edit_design", "check_design", "write_load_case")
 MCP_TOOLS_TOOLMAKER = ("make_tool", "check_tool")  # Claude writes a tool in the run and checks it (in RUN_TOOLS)
 
 
