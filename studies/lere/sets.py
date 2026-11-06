@@ -82,6 +82,17 @@ SETS = {
     "REC45": _s({**B50, **CH60F, "rail_b": 45}, "REC at tyre 45 N/mm", 45),
     "RECP2": _s({**B50, **CH60F, "rail_b": 45, **P2}, "REC + roll bar tube 48.6 x 3.2 (raises the roll bar mode)"),
     "RECP2t90": _s({**B50, **CH60F, "rail_b": 45, **P2}, "RECP2 at tyre 90 N/mm", 90),
+    # the front tower post LA2 at tyre 90 (REC90 147.6 MPa) and the roll bar mode (7.2 Hz) on REC
+    "RECt6": _s({**B50, **CH60F, "rail_b": 45, "tower_t": 6.0}, "REC + tower posts 6 mm wall"),
+    "RECt6t90": _s({**B50, **CH60F, "rail_b": 45, "tower_t": 6.0}, "RECt6 at tyre 90 N/mm", 90),
+    "RECc32": _s({**B50, **CH60F, "rail_b": 45, **C32}, "REC + cross members 3.2 mm wall"),
+    "RECc32t90": _s({**B50, **CH60F, "rail_b": 45, **C32}, "RECc32 at tyre 90 N/mm", 90),
+    "RECc45": _s({**B50, **CH60F, "rail_b": 45, **C45}, "REC + cross members 4.5 mm wall"),
+    "RECc45t90": _s({**B50, **CH60F, "rail_b": 45, **C45}, "RECc45 at tyre 90 N/mm", 90),
+    # why the roll bar tube 48.6 raises the roll bar mode on A (7.11 -> 9.33 Hz) and lowers it on REC (7.24 -> 6.56):
+    # REC's cross members 60 tall come with roll bar feet 70 tall (Ch60f); these two split the cause
+    "Ch60fP2": _s({**CH60F, **P2}, "Ch60f + roll bar tube 48.6 x 3.2"),
+    "B50r45P2": _s({**B50, "rail_b": 45, **P2}, "B50 + rails 45 + roll bar tube 48.6 x 3.2 (REC without Ch60f)"),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
              "N1 upper bound: B50 + C45 + S2g0 (stays 48.6 x 3.2, gussets off) + roll bar 48.6 x 3.2"),
 }
