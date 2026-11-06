@@ -94,11 +94,12 @@ def compile_ptx(source: str) -> str:
     return buf.value.decode()
 
 
-def build_ptx() -> Path:
-    """Rebuild kernels.ptx from kernels.cu."""
-    ptx = compile_ptx(KERNELS_CU.read_text(encoding="utf-8"))
-    KERNELS_PTX.write_text(f"{STAMP}{source_hash()}\n{ptx}", encoding="utf-8", newline="\n")
-    return KERNELS_PTX
+def build_ptx(name: str = "kernels") -> Path:
+    """Rebuild <name>.ptx from <name>.cu."""
+    path = HERE / f"{name}.ptx"
+    ptx = compile_ptx((HERE / f"{name}.cu").read_text(encoding="utf-8"))
+    path.write_text(f"{STAMP}{source_hash(name)}\n{ptx}", encoding="utf-8", newline="\n")
+    return path
 
 
 def kernels_ptx(name: str = "kernels") -> str:

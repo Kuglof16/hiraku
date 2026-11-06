@@ -28,7 +28,7 @@ class MemoryBudgetError(RuntimeError):
 class GridStruct(ct.Structure):
     _fields_ = [("nx", ct.c_int), ("ny", ct.c_int), ("nz", ct.c_int), ("X", ct.c_int), ("Y", ct.c_int), ("N", ct.c_int),
                 ("tau0", ct.c_float), ("cs2", ct.c_float), ("ux", ct.c_float), ("uy", ct.c_float), ("uz", ct.c_float),
-                ("ug", ct.c_float), ("vg", ct.c_float), ("ramp", ct.c_float)]
+                ("ug", ct.c_float), ("vg", ct.c_float), ("ramp", ct.c_float), ("cf", ct.c_float)]
 
 
 @dataclass
@@ -44,6 +44,7 @@ class Flow:
     ramp_steps: int = 0
     sponge_cells: tuple[int, int, int, int, int, int] = (12, 24, 12, 12, 0, 12)  # -x +x -y +y -z +z
     sponge_strength: float = 0.1
+    ground_roughness_m: float = 1e-3  # z0 of the log law at the ground; a paved road's order of size, 確かめていない
 
 
 @dataclass
@@ -112,6 +113,11 @@ def check_memory(need_bytes: int, reserve_mib: int = 600) -> dict[str, Any]:
     return {"need_mib": need, "free_mib": mem["free"], "total_mib": mem["total"]}
 
 
+def ground_cf(dx: float, z0: float, kappa: float = 0.41) -> float:
+    """Friction coefficient at the first row (height dx/2) by the rough-wall log law: u / u_tau = ln(z / z0) / kappa."""
+    return float(2.0 * (kappa / np.log(max(0.5 * dx / z0, 1.5))) ** 2)
+
+
 def sponge_profile(n: int, low: int, high: int, strength: float) -> np.ndarray:
     """Quadratic absorbing layers at both ends of an axis of n nodes."""
     s = np.zeros(n, np.float32)
@@ -140,7 +146,7 @@ class Simulation:
         scale = flow.u_lattice / flow.speed_ms
         self.links: LinkArrays = link_arrays(vox, np.asarray(ref_point, float), scale, interpolate)
         self.g = GridStruct(grid.nx, grid.ny, grid.nz, grid.nx + 2, grid.ny + 2, grid.n_total, self.units.tau0,
-                            flow.smagorinsky ** 2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                            flow.smagorinsky ** 2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ground_cf(grid.dx, flow.ground_roughness_m))
         self.ground = flow.ground_velocity_ms is not None
         self.buf: dict[str, Any] = {}
         total = grid.n_total
@@ -209,7 +215,7 @@ class Simulation:
                     (int(np.ceil(self.nchunks / 128)), 1, 1), (128, 1, 1))
                 self.l_write[src_a] = gpu.launch("links_write", [self._p(src), self._p("slot_d"), self._p("v"), ct.c_uint(self.nlinks)],
                                                  (int(np.ceil(self.nlinks / 256)), 1, 1), (256, 1, 1))
-            self.l_ground[src_a] = gpu.launch("ground_fill", [self._p(src), self.g], (int(np.ceil((g.nx + 2) / BLOCK_X)), g.ny + 2, 1), block)
+            self.l_ground[src_a] = gpu.launch("ground_fill", [self._p(src), self.g], (int(np.ceil(g.nx / BLOCK_X)), g.ny, 1), block)
             # threads cover all nodes: x-blocks of 256 times 65536 per y-block
             total_blocks = int(np.ceil(g.n_total / BLOCK_X))
             gx = min(total_blocks, 65536)

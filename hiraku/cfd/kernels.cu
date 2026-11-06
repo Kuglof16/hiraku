@@ -25,11 +25,13 @@ struct Grid {
     float ux, uy, uz;  // far-field velocity at this step
     float ug, vg;    // ground velocity at this step
     float ramp;      // factor on the wall velocities of the links at this step
+    float cf;        // ground friction coefficient at the first row
 };
 
 #define W0 (1.0f / 3.0f)
 #define W1 (1.0f / 18.0f)
 #define W2 (1.0f / 36.0f)
+#define H(q) h[(q) * N + n]
 
 #define PAIR(wt, cu, Qpi, a, b)                                   \
     {                                                             \
@@ -185,26 +187,30 @@ extern "C" __global__ void links_write(float* __restrict__ h, const u32* __restr
     h[slot_d[l]] = v[l];
 }
 
-// Moving ground halfway below the first row (k = 0). Each up-going slot of the ghost plane is what the
-// node it streams to sent down, plus the moving wall term 6 w (c . u_ground).
+// The ground, halfway below the first row (k = 0): a specular wall with the stress of a wall function.
+// A no-slip wall moving at the air's speed grew a numerical instability at relaxation times near 1/2: from an
+// exact uniform flow, within hundreds of steps, into a reversed layer many cells thick. The specular wall
+// has no such mode. The stress tau = 1/2 cf |du| du, with du = ground - first row, goes in as +-tau/2 on the
+// diagonal slots: no mass, momentum tau per node and step.
 extern "C" __global__ void ground_fill(float* __restrict__ h, Grid g) {
-    const int i = blockIdx.x * blockDim.x + threadIdx.x - 1;  // -1 .. nx
-    if (i > g.nx) return;
-    const int j = blockIdx.y - 1;  // -1 .. ny
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= g.nx) return;
+    const int j = blockIdx.y;
     const int X = g.X, XY = g.X * g.Y, N = g.N;
     const int gh = (i + 1) + (j + 1) * X;  // ghost node (i, j, -1)
-    const float ug = g.ug * 6.0f, vg = g.vg * 6.0f;
-    const bool in_i = i >= 0 && i < g.nx, in_j = j >= 0 && j < g.ny;
-    // (0,0,1) <- (0,0,-1)
-    if (in_i && in_j) h[5 * N + gh] = h[6 * N + gh + XY];
-    // (1,0,1) <- (-1,0,-1) of the node at i+1
-    if (i + 1 >= 0 && i + 1 < g.nx && in_j) h[11 * N + gh] = h[12 * N + gh + XY + 1] + W2 * ug;
-    // (-1,0,1) <- (1,0,-1) of the node at i-1
-    if (i - 1 >= 0 && i - 1 < g.nx && in_j) h[14 * N + gh] = h[13 * N + gh + XY - 1] - W2 * ug;
-    // (0,1,1) <- (0,-1,-1) of the node at j+1
-    if (in_i && j + 1 >= 0 && j + 1 < g.ny) h[15 * N + gh] = h[16 * N + gh + XY + X] + W2 * vg;
-    // (0,-1,1) <- (0,1,-1) of the node at j-1
-    if (in_i && j - 1 >= 0 && j - 1 < g.ny) h[18 * N + gh] = h[17 * N + gh + XY - X] - W2 * vg;
+    const int n = gh + XY;                 // the node above it
+    float dr = 0.0f;
+    for (int q = 0; q < 19; q++) dr += h[q * N + n];
+    const float rho = 1.0f + dr;
+    const float ux = (H(1) - H(2) + H(7) - H(8) + H(9) - H(10) + H(11) - H(12) + H(13) - H(14)) / rho;
+    const float uy = (H(3) - H(4) + H(7) - H(8) - H(9) + H(10) + H(15) - H(16) + H(17) - H(18)) / rho;
+    const float dux = g.ug - ux, duy = g.vg - uy;
+    const float s = 0.25f * g.cf * sqrtf(dux * dux + duy * duy);
+    h[5 * N + gh] = H(6);
+    h[11 * N + gh] = H(13) + s * dux;
+    h[14 * N + gh] = H(12) - s * dux;
+    h[15 * N + gh] = H(17) + s * duy;
+    h[18 * N + gh] = H(16) - s * duy;
 }
 
 // The whole ghost layer at the far-field equilibrium (density one). The ground overwrites its slots.
@@ -235,7 +241,6 @@ extern "C" __global__ void mean_sample(const float* __restrict__ h, const u8* __
     float dr = 0.0f;
     for (int q = 0; q < 19; q++) dr += h[q * N + n];
     const float rho = 1.0f + dr;
-#define H(q) h[(q) * N + n]
     const float jx = H(1) - H(2) + H(7) - H(8) + H(9) - H(10) + H(11) - H(12) + H(13) - H(14);
     const float jy = H(3) - H(4) + H(7) - H(8) - H(9) + H(10) + H(15) - H(16) + H(17) - H(18);
     const float jz = H(5) - H(6) + H(11) - H(12) - H(13) + H(14) + H(15) - H(16) - H(17) + H(18);
