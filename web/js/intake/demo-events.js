@@ -112,7 +112,7 @@ export const DEMOS = {
       "value": "若年女性 5 % 〜 若年男性 95 %",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)"
      },
      {
       "key": "Q33",
@@ -121,7 +121,7 @@ export const DEMOS = {
       "unit": "kg",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)"
      },
      {
       "key": "Q40",
@@ -3975,7 +3975,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "RS1",
        "RS2"
@@ -4046,7 +4046,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "LS1",
        "LS2"
@@ -4212,6 +4212,170 @@ export const DEMOS = {
        }
       ],
       "module": "body"
+     },
+     {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        -300.0,
+        881.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        897.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "floor",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -70.0,
+         433.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        -300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         -300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        300.0,
+        881.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        897.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "floor",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         70.0,
+         433.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
      },
      {
       "id": "occupant_R.neck",
@@ -11932,6 +12096,32 @@ export const DEMOS = {
        {
         "id": "if-091",
         "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         -150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-092",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
          "frame",
          "suspension"
         ],
@@ -11943,7 +12133,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-092",
+        "id": "if-094",
         "between": [
          "frame",
          "suspension"
@@ -11956,7 +12146,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-093",
+        "id": "if-095",
         "between": [
          "frame",
          "suspension"
@@ -11969,7 +12159,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-094",
+        "id": "if-096",
         "between": [
          "frame",
          "suspension"
@@ -11982,7 +12172,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-095",
+        "id": "if-097",
         "between": [
          "frame",
          "suspension"
@@ -11995,7 +12185,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-096",
+        "id": "if-098",
         "between": [
          "frame",
          "suspension"
@@ -12008,7 +12198,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-097",
+        "id": "if-099",
         "between": [
          "frame",
          "suspension"
@@ -12021,7 +12211,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-098",
+        "id": "if-100",
         "between": [
          "frame",
          "suspension"
@@ -12034,7 +12224,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-099",
+        "id": "if-101",
         "between": [
          "frame",
          "suspension"
@@ -12047,7 +12237,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-100",
+        "id": "if-102",
         "between": [
          "frame",
          "suspension"
@@ -12060,7 +12250,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-101",
+        "id": "if-103",
         "between": [
          "frame",
          "suspension"
@@ -12073,7 +12263,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-102",
+        "id": "if-104",
         "between": [
          "frame",
          "suspension"
@@ -12086,7 +12276,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-103",
+        "id": "if-105",
         "between": [
          "frame",
          "suspension"
@@ -12099,7 +12289,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-104",
+        "id": "if-106",
         "between": [
          "frame",
          "suspension"
@@ -12112,7 +12302,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-105",
+        "id": "if-107",
         "between": [
          "frame",
          "suspension"
@@ -12125,7 +12315,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-106",
+        "id": "if-108",
         "between": [
          "frame",
          "suspension"
@@ -12138,7 +12328,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-107",
+        "id": "if-109",
         "between": [
          "frame",
          "suspension"
@@ -12151,7 +12341,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-108",
+        "id": "if-110",
         "between": [
          "frame",
          "suspension"
@@ -12164,7 +12354,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-109",
+        "id": "if-111",
         "between": [
          "frame",
          "suspension"
@@ -12177,7 +12367,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-110",
+        "id": "if-112",
         "between": [
          "frame",
          "suspension"
@@ -12190,7 +12380,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-111",
+        "id": "if-113",
         "between": [
          "frame",
          "suspension"
@@ -12203,7 +12393,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-112",
+        "id": "if-114",
         "between": [
          "frame",
          "suspension"
@@ -12235,7 +12425,7 @@ export const DEMOS = {
      {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -14142,7 +14332,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-091",
+        "id": "if-093",
         "between": [
          "frame",
          "suspension"
@@ -14155,7 +14345,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-092",
+        "id": "if-094",
         "between": [
          "frame",
          "suspension"
@@ -14168,7 +14358,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-093",
+        "id": "if-095",
         "between": [
          "frame",
          "suspension"
@@ -14181,7 +14371,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-094",
+        "id": "if-096",
         "between": [
          "frame",
          "suspension"
@@ -14194,7 +14384,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-095",
+        "id": "if-097",
         "between": [
          "frame",
          "suspension"
@@ -14207,7 +14397,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-096",
+        "id": "if-098",
         "between": [
          "frame",
          "suspension"
@@ -14220,7 +14410,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-097",
+        "id": "if-099",
         "between": [
          "frame",
          "suspension"
@@ -14233,7 +14423,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-098",
+        "id": "if-100",
         "between": [
          "frame",
          "suspension"
@@ -14246,7 +14436,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-099",
+        "id": "if-101",
         "between": [
          "frame",
          "suspension"
@@ -14259,7 +14449,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-100",
+        "id": "if-102",
         "between": [
          "frame",
          "suspension"
@@ -14272,7 +14462,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-101",
+        "id": "if-103",
         "between": [
          "frame",
          "suspension"
@@ -14285,7 +14475,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-102",
+        "id": "if-104",
         "between": [
          "frame",
          "suspension"
@@ -14298,7 +14488,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-103",
+        "id": "if-105",
         "between": [
          "frame",
          "suspension"
@@ -14311,7 +14501,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-104",
+        "id": "if-106",
         "between": [
          "frame",
          "suspension"
@@ -14324,7 +14514,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-105",
+        "id": "if-107",
         "between": [
          "frame",
          "suspension"
@@ -14337,7 +14527,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-106",
+        "id": "if-108",
         "between": [
          "frame",
          "suspension"
@@ -14350,7 +14540,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-107",
+        "id": "if-109",
         "between": [
          "frame",
          "suspension"
@@ -14363,7 +14553,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-108",
+        "id": "if-110",
         "between": [
          "frame",
          "suspension"
@@ -14376,7 +14566,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-109",
+        "id": "if-111",
         "between": [
          "frame",
          "suspension"
@@ -14389,7 +14579,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-110",
+        "id": "if-112",
         "between": [
          "frame",
          "suspension"
@@ -14402,7 +14592,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-111",
+        "id": "if-113",
         "between": [
          "frame",
          "suspension"
@@ -14415,7 +14605,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-112",
+        "id": "if-114",
         "between": [
          "frame",
          "suspension"
@@ -14456,7 +14646,7 @@ export const DEMOS = {
      {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -15377,7 +15567,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-091",
+        "id": "if-093",
         "between": [
          "frame",
          "suspension"
@@ -15390,7 +15580,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-092",
+        "id": "if-094",
         "between": [
          "frame",
          "suspension"
@@ -15403,7 +15593,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-093",
+        "id": "if-095",
         "between": [
          "frame",
          "suspension"
@@ -15416,7 +15606,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-094",
+        "id": "if-096",
         "between": [
          "frame",
          "suspension"
@@ -15429,7 +15619,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-095",
+        "id": "if-097",
         "between": [
          "frame",
          "suspension"
@@ -15442,7 +15632,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-096",
+        "id": "if-098",
         "between": [
          "frame",
          "suspension"
@@ -15455,7 +15645,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-097",
+        "id": "if-099",
         "between": [
          "frame",
          "suspension"
@@ -15468,7 +15658,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-098",
+        "id": "if-100",
         "between": [
          "frame",
          "suspension"
@@ -15481,7 +15671,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-099",
+        "id": "if-101",
         "between": [
          "frame",
          "suspension"
@@ -15494,7 +15684,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-100",
+        "id": "if-102",
         "between": [
          "frame",
          "suspension"
@@ -15507,7 +15697,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-101",
+        "id": "if-103",
         "between": [
          "frame",
          "suspension"
@@ -15520,7 +15710,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-102",
+        "id": "if-104",
         "between": [
          "frame",
          "suspension"
@@ -15533,7 +15723,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-103",
+        "id": "if-105",
         "between": [
          "frame",
          "suspension"
@@ -15546,7 +15736,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-104",
+        "id": "if-106",
         "between": [
          "frame",
          "suspension"
@@ -15559,7 +15749,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-105",
+        "id": "if-107",
         "between": [
          "frame",
          "suspension"
@@ -15572,7 +15762,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-106",
+        "id": "if-108",
         "between": [
          "frame",
          "suspension"
@@ -15585,7 +15775,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-107",
+        "id": "if-109",
         "between": [
          "frame",
          "suspension"
@@ -15598,7 +15788,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-108",
+        "id": "if-110",
         "between": [
          "frame",
          "suspension"
@@ -15611,7 +15801,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-109",
+        "id": "if-111",
         "between": [
          "frame",
          "suspension"
@@ -15624,7 +15814,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-110",
+        "id": "if-112",
         "between": [
          "frame",
          "suspension"
@@ -15637,7 +15827,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-111",
+        "id": "if-113",
         "between": [
          "frame",
          "suspension"
@@ -15650,7 +15840,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-112",
+        "id": "if-114",
         "between": [
          "frame",
          "suspension"
@@ -15678,7 +15868,7 @@ export const DEMOS = {
      {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -16101,7 +16291,7 @@ export const DEMOS = {
      {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -16233,6 +16423,54 @@ export const DEMOS = {
          342.0,
          545.3,
          764.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         -300.0,
+         881.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         947.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         -300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         300.0,
+         881.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         947.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
         ]
        },
        {
@@ -16700,6 +16938,32 @@ export const DEMOS = {
          150.0,
          497.40000000000003
         ]
+       },
+       {
+        "id": "if-091",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         -150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-092",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         150.0,
+         656.7750000000001
+        ]
        }
       ],
       "variables": [
@@ -16707,6 +16971,8 @@ export const DEMOS = {
        "grab_bar_d",
        "grab_bar_gap",
        "grab_bar_t",
+       "headrest_gap",
+       "headrest_height",
        "rollbar",
        "rollbar_b",
        "rollbar_d",
@@ -16747,7 +17013,7 @@ export const DEMOS = {
      {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
        {
         "center_mm": [
@@ -17033,7 +17299,7 @@ export const DEMOS = {
      {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -17391,6 +17657,32 @@ export const DEMOS = {
          150.0,
          497.40000000000003
         ]
+       },
+       {
+        "id": "if-091",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         -150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-092",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         150.0,
+         656.7750000000001
+        ]
        }
       ],
       "variables": [
@@ -17458,6 +17750,8 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
+     "headrest_gap": "頭とヘッドレストの前後のすき間",
+     "headrest_height": "ヘッドレストの上端の高さ (座面から)",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -22634,13 +22928,13 @@ export const DEMOS = {
      {
       "part_id": "seat_R",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
       "part_id": "seat_L",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
@@ -22712,6 +23006,10 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L",
      "occupant_R.neck",
      "occupant_R.head",
      "occupant_R.thigh_L",
@@ -23007,6 +23305,30 @@ export const DEMOS = {
       "part_id": "cargo",
       "values": {
        "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seatback_R",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_R",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "seatback_L",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_L",
+      "values": {
+       "bottom_z_mm": 1330.7
       }
      },
      {
@@ -24668,7 +24990,11 @@ export const DEMOS = {
     "rule_id": "SY-04",
     "targets": [
      "seat_R",
-     "seat_L"
+     "seat_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -24814,6 +25140,10 @@ export const DEMOS = {
      "seat_belt_R",
      "seat_L",
      "seat_belt_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L",
      "wheel_FL",
      "wheel_FR",
      "wheel_RL",
@@ -29927,7 +30257,7 @@ export const DEMOS = {
       "value": "若年女性 5 % 〜 若年男性 95 %",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)"
      },
      {
       "key": "Q33",
@@ -29936,7 +30266,7 @@ export const DEMOS = {
       "unit": "kg",
       "source": "default",
       "trust": 1,
-      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)"
+      "basis": "AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル, https:\/\/www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)"
      },
      {
       "key": "Q35",
@@ -33630,7 +33960,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "RS1",
        "RS2"
@@ -33701,7 +34031,7 @@ export const DEMOS = {
         260.0
        ]
       },
-      "mass_kg": 11.0,
+      "mass_kg": 7.3297025,
       "carried_by": [
        "LS1",
        "LS2"
@@ -33867,6 +34197,170 @@ export const DEMOS = {
        }
       ],
       "module": "body"
+     },
+     {
+      "id": "seatback_R",
+      "name": "運転席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        -300.0,
+        881.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        897.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "floor",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         -70.0,
+         433.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_R",
+      "name": "運転席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        -300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "RS1",
+       "RS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_R",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         -300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "seatback_L",
+      "name": "助手席の背もたれ (鋼板と樹脂の殻)",
+      "kind": "seatback",
+      "box": {
+       "center_mm": [
+        -1325.0,
+        300.0,
+        881.95
+       ],
+       "size_mm": [
+        60.0,
+        460.0,
+        897.5
+       ]
+      },
+      "mass_kg": 3.1377750000000004,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seat_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         300.0,
+         563.2
+        ]
+       },
+       {
+        "to": "floor",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1295.0,
+         70.0,
+         433.2
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
+     },
+     {
+      "id": "head_restraint_L",
+      "name": "助手席の頭部後傾抑止装置 (ヘッドレスト)",
+      "kind": "head_restraint",
+      "box": {
+       "center_mm": [
+        -1375.0,
+        300.0,
+        1441.95
+       ],
+       "size_mm": [
+        80.0,
+        250.0,
+        222.5
+       ]
+      },
+      "mass_kg": 0.5325225,
+      "carried_by": [
+       "LS1",
+       "LS2"
+      ],
+      "connects_to": [
+       {
+        "to": "seatback_L",
+        "via": "bolt",
+        "carries": "load",
+        "at_mm": [
+         -1335.0,
+         300.0,
+         1330.7
+        ]
+       }
+      ],
+      "system": "seat",
+      "module": "occupant"
      },
      {
       "id": "occupant_R.neck",
@@ -41587,6 +42081,32 @@ export const DEMOS = {
        {
         "id": "if-091",
         "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         -150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-092",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-093",
+        "between": [
          "frame",
          "suspension"
         ],
@@ -41598,7 +42118,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-092",
+        "id": "if-094",
         "between": [
          "frame",
          "suspension"
@@ -41611,7 +42131,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-093",
+        "id": "if-095",
         "between": [
          "frame",
          "suspension"
@@ -41624,7 +42144,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-094",
+        "id": "if-096",
         "between": [
          "frame",
          "suspension"
@@ -41637,7 +42157,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-095",
+        "id": "if-097",
         "between": [
          "frame",
          "suspension"
@@ -41650,7 +42170,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-096",
+        "id": "if-098",
         "between": [
          "frame",
          "suspension"
@@ -41663,7 +42183,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-097",
+        "id": "if-099",
         "between": [
          "frame",
          "suspension"
@@ -41676,7 +42196,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-098",
+        "id": "if-100",
         "between": [
          "frame",
          "suspension"
@@ -41689,7 +42209,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-099",
+        "id": "if-101",
         "between": [
          "frame",
          "suspension"
@@ -41702,7 +42222,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-100",
+        "id": "if-102",
         "between": [
          "frame",
          "suspension"
@@ -41715,7 +42235,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-101",
+        "id": "if-103",
         "between": [
          "frame",
          "suspension"
@@ -41728,7 +42248,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-102",
+        "id": "if-104",
         "between": [
          "frame",
          "suspension"
@@ -41741,7 +42261,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-103",
+        "id": "if-105",
         "between": [
          "frame",
          "suspension"
@@ -41754,7 +42274,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-104",
+        "id": "if-106",
         "between": [
          "frame",
          "suspension"
@@ -41767,7 +42287,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-105",
+        "id": "if-107",
         "between": [
          "frame",
          "suspension"
@@ -41780,7 +42300,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-106",
+        "id": "if-108",
         "between": [
          "frame",
          "suspension"
@@ -41793,7 +42313,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-107",
+        "id": "if-109",
         "between": [
          "frame",
          "suspension"
@@ -41806,7 +42326,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-108",
+        "id": "if-110",
         "between": [
          "frame",
          "suspension"
@@ -41819,7 +42339,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-109",
+        "id": "if-111",
         "between": [
          "frame",
          "suspension"
@@ -41832,7 +42352,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-110",
+        "id": "if-112",
         "between": [
          "frame",
          "suspension"
@@ -41845,7 +42365,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-111",
+        "id": "if-113",
         "between": [
          "frame",
          "suspension"
@@ -41858,7 +42378,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-112",
+        "id": "if-114",
         "between": [
          "frame",
          "suspension"
@@ -41890,7 +42410,7 @@ export const DEMOS = {
      {
       "module_id": "frame",
       "title": "枠",
-      "owner": "designer.frame",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -43797,7 +44317,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-091",
+        "id": "if-093",
         "between": [
          "frame",
          "suspension"
@@ -43810,7 +44330,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-092",
+        "id": "if-094",
         "between": [
          "frame",
          "suspension"
@@ -43823,7 +44343,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-093",
+        "id": "if-095",
         "between": [
          "frame",
          "suspension"
@@ -43836,7 +44356,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-094",
+        "id": "if-096",
         "between": [
          "frame",
          "suspension"
@@ -43849,7 +44369,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-095",
+        "id": "if-097",
         "between": [
          "frame",
          "suspension"
@@ -43862,7 +44382,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-096",
+        "id": "if-098",
         "between": [
          "frame",
          "suspension"
@@ -43875,7 +44395,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-097",
+        "id": "if-099",
         "between": [
          "frame",
          "suspension"
@@ -43888,7 +44408,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-098",
+        "id": "if-100",
         "between": [
          "frame",
          "suspension"
@@ -43901,7 +44421,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-099",
+        "id": "if-101",
         "between": [
          "frame",
          "suspension"
@@ -43914,7 +44434,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-100",
+        "id": "if-102",
         "between": [
          "frame",
          "suspension"
@@ -43927,7 +44447,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-101",
+        "id": "if-103",
         "between": [
          "frame",
          "suspension"
@@ -43940,7 +44460,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-102",
+        "id": "if-104",
         "between": [
          "frame",
          "suspension"
@@ -43953,7 +44473,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-103",
+        "id": "if-105",
         "between": [
          "frame",
          "suspension"
@@ -43966,7 +44486,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-104",
+        "id": "if-106",
         "between": [
          "frame",
          "suspension"
@@ -43979,7 +44499,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-105",
+        "id": "if-107",
         "between": [
          "frame",
          "suspension"
@@ -43992,7 +44512,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-106",
+        "id": "if-108",
         "between": [
          "frame",
          "suspension"
@@ -44005,7 +44525,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-107",
+        "id": "if-109",
         "between": [
          "frame",
          "suspension"
@@ -44018,7 +44538,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-108",
+        "id": "if-110",
         "between": [
          "frame",
          "suspension"
@@ -44031,7 +44551,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-109",
+        "id": "if-111",
         "between": [
          "frame",
          "suspension"
@@ -44044,7 +44564,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-110",
+        "id": "if-112",
         "between": [
          "frame",
          "suspension"
@@ -44057,7 +44577,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-111",
+        "id": "if-113",
         "between": [
          "frame",
          "suspension"
@@ -44070,7 +44590,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-112",
+        "id": "if-114",
         "between": [
          "frame",
          "suspension"
@@ -44111,7 +44631,7 @@ export const DEMOS = {
      {
       "module_id": "suspension",
       "title": "足まわり",
-      "owner": "designer.suspension",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -45032,7 +45552,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-091",
+        "id": "if-093",
         "between": [
          "frame",
          "suspension"
@@ -45045,7 +45565,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-092",
+        "id": "if-094",
         "between": [
          "frame",
          "suspension"
@@ -45058,7 +45578,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-093",
+        "id": "if-095",
         "between": [
          "frame",
          "suspension"
@@ -45071,7 +45591,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-094",
+        "id": "if-096",
         "between": [
          "frame",
          "suspension"
@@ -45084,7 +45604,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-095",
+        "id": "if-097",
         "between": [
          "frame",
          "suspension"
@@ -45097,7 +45617,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-096",
+        "id": "if-098",
         "between": [
          "frame",
          "suspension"
@@ -45110,7 +45630,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-097",
+        "id": "if-099",
         "between": [
          "frame",
          "suspension"
@@ -45123,7 +45643,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-098",
+        "id": "if-100",
         "between": [
          "frame",
          "suspension"
@@ -45136,7 +45656,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-099",
+        "id": "if-101",
         "between": [
          "frame",
          "suspension"
@@ -45149,7 +45669,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-100",
+        "id": "if-102",
         "between": [
          "frame",
          "suspension"
@@ -45162,7 +45682,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-101",
+        "id": "if-103",
         "between": [
          "frame",
          "suspension"
@@ -45175,7 +45695,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-102",
+        "id": "if-104",
         "between": [
          "frame",
          "suspension"
@@ -45188,7 +45708,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-103",
+        "id": "if-105",
         "between": [
          "frame",
          "suspension"
@@ -45201,7 +45721,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-104",
+        "id": "if-106",
         "between": [
          "frame",
          "suspension"
@@ -45214,7 +45734,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-105",
+        "id": "if-107",
         "between": [
          "frame",
          "suspension"
@@ -45227,7 +45747,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-106",
+        "id": "if-108",
         "between": [
          "frame",
          "suspension"
@@ -45240,7 +45760,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-107",
+        "id": "if-109",
         "between": [
          "frame",
          "suspension"
@@ -45253,7 +45773,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-108",
+        "id": "if-110",
         "between": [
          "frame",
          "suspension"
@@ -45266,7 +45786,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-109",
+        "id": "if-111",
         "between": [
          "frame",
          "suspension"
@@ -45279,7 +45799,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-110",
+        "id": "if-112",
         "between": [
          "frame",
          "suspension"
@@ -45292,7 +45812,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-111",
+        "id": "if-113",
         "between": [
          "frame",
          "suspension"
@@ -45305,7 +45825,7 @@ export const DEMOS = {
         ]
        },
        {
-        "id": "if-112",
+        "id": "if-114",
         "between": [
          "frame",
          "suspension"
@@ -45333,7 +45853,7 @@ export const DEMOS = {
      {
       "module_id": "steering",
       "title": "操作系",
-      "owner": "designer.steering",
+      "owner": "designer.mechanism",
       "envelope": [
        {
         "center_mm": [
@@ -45756,7 +46276,7 @@ export const DEMOS = {
      {
       "module_id": "occupant",
       "title": "乗員まわり",
-      "owner": "designer.occupant",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -45888,6 +46408,54 @@ export const DEMOS = {
          342.0,
          545.3,
          764.0
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         -300.0,
+         881.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         947.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         -300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1325.0,
+         300.0,
+         881.95
+        ],
+        "size_mm": [
+         110.0,
+         510.0,
+         947.5
+        ]
+       },
+       {
+        "center_mm": [
+         -1375.0,
+         300.0,
+         1441.95
+        ],
+        "size_mm": [
+         130.0,
+         300.0,
+         272.5
         ]
        },
        {
@@ -46355,6 +46923,32 @@ export const DEMOS = {
          150.0,
          497.40000000000003
         ]
+       },
+       {
+        "id": "if-091",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         -150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-092",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         150.0,
+         656.7750000000001
+        ]
        }
       ],
       "variables": [
@@ -46362,6 +46956,8 @@ export const DEMOS = {
        "grab_bar_d",
        "grab_bar_gap",
        "grab_bar_t",
+       "headrest_gap",
+       "headrest_height",
        "rollbar",
        "rollbar_b",
        "rollbar_d",
@@ -46402,7 +46998,7 @@ export const DEMOS = {
      {
       "module_id": "powertrain",
       "title": "動力",
-      "owner": "designer.powertrain",
+      "owner": "designer.electric",
       "envelope": [
        {
         "center_mm": [
@@ -46688,7 +47284,7 @@ export const DEMOS = {
      {
       "module_id": "body",
       "title": "車体",
-      "owner": "designer.body",
+      "owner": "designer.structure",
       "envelope": [
        {
         "center_mm": [
@@ -47046,6 +47642,32 @@ export const DEMOS = {
          150.0,
          497.40000000000003
         ]
+       },
+       {
+        "id": "if-091",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         -150.0,
+         656.7750000000001
+        ]
+       },
+       {
+        "id": "if-092",
+        "between": [
+         "body",
+         "occupant"
+        ],
+        "via": "bolt",
+        "point_mm": [
+         -1185.0,
+         150.0,
+         656.7750000000001
+        ]
        }
       ],
       "variables": [
@@ -47113,6 +47735,8 @@ export const DEMOS = {
      "grab_bar_d": "握り棒の太さ",
      "grab_bar_gap": "握り棒と柱の間 (手の入る隙間)",
      "grab_bar_t": "握り棒の管の厚さ",
+     "headrest_gap": "頭とヘッドレストの前後のすき間",
+     "headrest_height": "ヘッドレストの上端の高さ (座面から)",
      "rollbar": "ロールバー (あり・なし)",
      "rollbar_b": "ロールバーの角管の幅",
      "rollbar_d": "ロールバーの丸管の太さ",
@@ -52289,13 +52913,13 @@ export const DEMOS = {
      {
       "part_id": "seat_R",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
       "part_id": "seat_L",
       "values": {
-       "mass_kg": 11.0
+       "mass_kg": 7.3297025
       }
      },
      {
@@ -52367,6 +52991,10 @@ export const DEMOS = {
      "occupant_R",
      "occupant_L",
      "cargo",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L",
      "occupant_R.neck",
      "occupant_R.head",
      "occupant_R.thigh_L",
@@ -52662,6 +53290,30 @@ export const DEMOS = {
       "part_id": "cargo",
       "values": {
        "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "seatback_R",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_R",
+      "values": {
+       "bottom_z_mm": 1330.7
+      }
+     },
+     {
+      "part_id": "seatback_L",
+      "values": {
+       "bottom_z_mm": 433.20000000000005
+      }
+     },
+     {
+      "part_id": "head_restraint_L",
+      "values": {
+       "bottom_z_mm": 1330.7
       }
      },
      {
@@ -54323,7 +54975,11 @@ export const DEMOS = {
     "rule_id": "SY-04",
     "targets": [
      "seat_R",
-     "seat_L"
+     "seat_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L"
     ],
     "hits": [],
     "not_evaluable": [],
@@ -54469,6 +55125,10 @@ export const DEMOS = {
      "seat_belt_R",
      "seat_L",
      "seat_belt_L",
+     "seatback_R",
+     "head_restraint_R",
+     "seatback_L",
+     "head_restraint_L",
      "wheel_FL",
      "wheel_FR",
      "wheel_RL",
