@@ -36,7 +36,8 @@ PASS_S = 2.7  # agent_pets.js: a pass is 3 hops of n00.motion.hop_period_s (0.9 
 STAGE_BOTTOM = 1080 - 170  # the video's subtitle band under it
 REPLY_STEP_S = 0.5  # js/intake/a1.js: with a playback time A1's picked domains answer this far apart, in the cards' order
 A1_TURN = {d: PICKED_T + REPLY_STEP_S * k for k, d in enumerate(["handling", "powertrain", "aero", "crash", "strength", "nvh"])}
-CANVAS_SIZE = "(() => { const c = document.querySelector('.in-pet canvas'); const r = c.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })()"
+LEAD_DONE_FILM = PICKED_T + REPLY_STEP_S * 6  # the seventh answer (thermal, off) is the last card's turn
+CANVAS_SIZE = "(sel) => { const c = document.querySelector(sel || '.in-cards .in-pet canvas'); const r = c.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }"
 
 
 def _sample():
@@ -87,9 +88,12 @@ READ = """async ({ t, tab }) => {
   const slot = document.querySelector(".a2-pets");
   const a2 = [...document.querySelectorAll(".a2-pets .ipet")].filter(shown).map((el) => ({
     agent: el.dataset.agent, name: el.querySelector(".ipet-name").textContent, mark: el.dataset.petState, ...look(el.querySelector("canvas")) }));
-  const a1 = [...document.querySelectorAll(".in-pet")].filter(shown).map((s) => ({ domain: s.dataset.domain, card: s.dataset.state, ...look(s.querySelector("canvas")) }));
+  const pet = (s) => ({ domain: s.dataset.domain, card: s.dataset.state, ...look(s.querySelector("canvas")) });
+  const a1 = [...document.querySelectorAll(".in-pet:not([data-domain='lead'])")].filter(shown).map(pet);
+  const leadEl = document.querySelector(".in-pet[data-domain='lead']");
+  const lead = leadEl && shown(leadEl) ? pet(leadEl) : null;
   const rect = (sel) => { const e = document.querySelector(sel); if (!e || !shown(e)) return null; const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: r.height }; };
-  return { loaded: document.documentElement.dataset.agentPets ?? null, a2, a1,
+  return { loaded: document.documentElement.dataset.agentPets ?? null, a2, a1, lead,
            slot: slot ? { display: getComputedStyle(slot).display, children: slot.childElementCount } : null,
            pets: rect(".a2-pets"), left: rect(".in-pane.a2 .in-left"), right: rect(".in-pane.a2 .in-right") };
 }"""
@@ -224,12 +228,37 @@ class IntakePetsTest(unittest.TestCase):
         page, errors = self.open("tab=A1&t=0")
         got = {p["domain"]: p for p in self.read(page, max(A1_TURN.values()) - 0.05)["a1"]}
         for d in A1_TURN:
-            self.assertEqual(got[d]["card"], "lit", d)
+            self.assertEqual((got[d]["card"], got[d]["state"]), ("lit", "pass"), d)  # all hop from the record's pick
         w, h = page.evaluate(CANVAS_SIZE)  # 88 wide; the place also holds the name
         self.assertEqual(w, 88)
         self.assertTrue(80 <= h <= 88, h)
         self.assertEqual(errors, [])
         page.close()
+
+    def test_a1_lead_pet_beside_the_headline(self):
+        """A1's place "lead" holds the lead's pet (72 x 72): working while the choice is being made (wait),
+        a pass hop for PASS_S seconds from the moment it is made (done), then idle. In the film layout the
+        choice is made when the last card has answered (LEAD_DONE_FILM), outside it at the record's pick."""
+        for query, done in (("video=1", LEAD_DONE_FILM), ("", PICKED_T)):
+            page, errors = self.open(f"tab=A1&t=0&{query}")
+            before = self.read(page, PICKED_T - 0.2)["lead"]
+            self.assertEqual(before["role"], "lead")
+            self.assertEqual(before["state"], "working" if before["card"] == "wait" else "idle", before["card"])
+            steps = [(done + 0.3, "done", "pass"), (done + PASS_S + 0.3, "done", "idle"), (1e6, "done", "idle")]
+            if done > PICKED_T:
+                steps.insert(0, (done - 0.05, "wait", "working"))
+            for t, card, pose in steps:
+                got = self.read(page, t)["lead"]
+                self.assertEqual((got["card"], got["state"]), (card, pose), f"{query} at {t}")
+                self.assertGreater(got["ink"], 0)
+                if pose != "idle":
+                    self.assertEqual(got["look"], pose)
+            if not query:  # (with video=1 the intake's video rule for A1's pets, 104 px, also takes this place)
+                w, h = page.evaluate(CANVAS_SIZE, ".in-headrow .in-pet canvas")  # 72 wide; the name under it may take a few px off
+                self.assertEqual(w, 72)
+                self.assertTrue(64 <= h <= 72, h)
+            self.assertEqual(errors, [])
+            page.close()
 
     def test_a1_video_pets_fill_the_bigger_place_without_the_present_card(self):
         """present=1 and video=1: the intake's CSS makes A1's pet canvas 104 px wide and the pet is drawn at
@@ -241,7 +270,7 @@ class IntakePetsTest(unittest.TestCase):
         self.assertEqual(w, 104)
         self.assertTrue(96 <= h <= 104, h)
         # drawn at the size it is shown (canvas px over CSS px the same both ways: the pet is not stretched)
-        cw, ch, sw, sh = page.evaluate("(() => { const c = document.querySelector('.in-pet canvas'); return [c.width, c.height, c.clientWidth, c.clientHeight]; })()")
+        cw, ch, sw, sh = page.evaluate("(() => { const c = document.querySelector('.in-cards .in-pet canvas'); return [c.width, c.height, c.clientWidth, c.clientHeight]; })()")
         self.assertAlmostEqual(cw / sw, ch / sh, delta=0.02)
         self.assertGreaterEqual(cw, sw)
         rail = "getComputedStyle(document.getElementById('present-rail')).display"

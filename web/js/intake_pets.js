@@ -4,7 +4,8 @@
 //       cae.<domain>, as big as the intake's CSS makes the canvas (88 x 88; 104 x 104 with ?video=1).
 //       Its pose follows the card's state (slot.dataset.state): wait (thinking), off and draft idle;
 //       lit working, with pet3d's pass hop for MOTIONS.pass.react seconds from the time the card
-//       answers (the record's pick, then REPLY_STEP_S apart: a1LitTimes). Off is grey by the intake's CSS.
+//       answers (the record's pick; in the video layout then REPLY_STEP_S apart: a1Times). Off is grey by
+//       the intake's CSS. The place "lead" beside the headline holds the lead's pet (leadMotionAt).
 //   A2: the row at the top of the left column (intake.petsSlot): one pet per CAE agent of the record
 //       (an event's agent or data.agent_id cae.<domain>, <domain> one of labels.js DOMAINS), in the
 //       order of their first analysis.started, each with its domain's name under it. Idle before
@@ -17,18 +18,32 @@
 
 import { DOMAINS, DOMAIN_JA } from "./labels.js";
 import { MOTIONS, PET_FPS, petPose } from "./agent_pets.js";
-import { inTurn } from "./intake/a1.js";
+import { inTurn, REPLY_STEP_S } from "./intake/a1.js";
 import { domainCards } from "./intake/model.js";
 
-// A1's card order (js/intake/a1.js renderA1 sorts the cards so before inTurn): the time each picked
-// domain answers at t, as the card shows it (with a playback time, REPLY_STEP_S apart).
+// A1's card order (js/intake/a1.js renderA1 sorts the cards so before inTurn). As the cards show them at
+// t: lit, the time each picked domain answers (in turn, REPLY_STEP_S apart, only when the intake answers
+// in turn: the video layout, as js/intake/index.js replyInTurn); doneAt, the time the choice is made
+// (the last card's turn in turn, else the record's pick), null when the record has no pick time.
 const CARD_ORDER = { lit: 0, draft: 0, off: 1, wait: 2 };
-export function a1LitTimes(model, t) {
-  const out = new Map();
-  if (!model) return out;
-  const cards = inTurn(domainCards(model).sort((a, b) => CARD_ORDER[a.state] - CARD_ORDER[b.state]), t);
-  for (const c of cards) if (c.state === "lit") out.set(c.domain, c.litAt ?? null);
-  return out;
+export function a1Times(model, t, turn) {
+  const lit = new Map();
+  if (!model) return { lit, doneAt: null };
+  const sorted = domainCards(model).sort((a, b) => CARD_ORDER[a.state] - CARD_ORDER[b.state]);
+  for (const c of inTurn(sorted, turn ? t : null)) if (c.state === "lit") lit.set(c.domain, c.litAt ?? null);
+  const picked = [...(model.litAt?.values?.() ?? [])];
+  const base = picked.length ? Math.min(...picked) : null;
+  const answers = sorted.filter((c) => c.state === "lit" || c.state === "off").length;
+  return { lit, doneAt: base === null ? null : turn ? base + REPLY_STEP_S * Math.max(0, answers - 1) : base };
+}
+const replyInTurn = () => document.body.classList.contains("video");
+
+// The lead's pet beside A1's headline (petSlots "lead", its data-state): wait (the choice is being made)
+// working; done a pass hop from doneAt, then idle; idle (no request yet) the still idle pose.
+export function leadMotionAt(state, doneAt, t, hop) {
+  if (state === "wait") return { motion: "working", since: 0 };
+  if (state === "done" && doneAt !== null && t >= doneAt && t - doneAt < MOTIONS.pass.react(hop)) return { motion: "pass", since: doneAt };
+  return { motion: "idle", since: 0 };
 }
 
 const CAE = new Set(DOMAINS.filter((d) => d !== "assembly").map((d) => `cae.${d}`));
@@ -114,8 +129,8 @@ export class IntakePets {
   // A1: a canvas in each domain's place (the place is kept across the intake's redraws, so is the canvas)
   mountA1(slots) {
     for (const [domain, slot] of slots ?? []) {
-      const id = `cae.${domain}`;
-      if (!isCaeAgent(id) || !this.pets.has(id)) continue;
+      const id = domain === "lead" ? "lead" : `cae.${domain}`; // "lead": the lead's place beside the headline
+      if ((id !== "lead" && !isCaeAgent(id)) || !this.pets.has(id)) continue;
       let b = this.a1.get(domain);
       if (!b) {
         const canvas = this.canvas(id);
@@ -168,11 +183,12 @@ export class IntakePets {
       const b = this.a2.boxes.find((x) => x.id === a.id);
       if (b) todo.push({ b, m: a2MotionAt(a.startAt, t), mark: b.el, k });
     });
-    const litAt = this.a1.size ? a1LitTimes(intake.model, t) : null;
+    const times = this.a1.size ? a1Times(intake.model, t, replyInTurn()) : null;
     for (const [domain, b] of this.a1) {
       const slot = b.canvas.parentElement;
       if (!slot) continue;
-      todo.push({ b, m: a1MotionAt(slot.dataset.state, litAt.get(domain) ?? null, t, hop), mark: null });
+      const m = domain === "lead" ? leadMotionAt(slot.dataset.state, times.doneAt, t, hop) : a1MotionAt(slot.dataset.state, times.lit.get(domain) ?? null, t, hop);
+      todo.push({ b, m, mark: null });
     }
     this.frame += 1;
     const n = this.pets.HP.ROLES.length;
