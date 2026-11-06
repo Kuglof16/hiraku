@@ -65,7 +65,7 @@ def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Recor
     hand = [p for p in ctx.store.records("prediction", version) if p.get("formula_id") == PATH_FORMULA
             and (p["load_case_id"] == lc_id or p["quantity"] == "free_parts")]
     if not hand:
-        return (f"版 {version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
+        return (f"v{version} に道の確かめの手計算 ({PATH_FORMULA}: 部品から部材まで触れている所の道) がまだ"
                 "記録されていない")
     if not any(p["value"] == 0 for p in hand):
         p = hand[-1]
@@ -73,7 +73,7 @@ def path_check(ctx: RunContext, load_case: Record, version: int, analysis: Recor
     seen = [a for a in ctx.store.records("analysis", version) if a["load_case_id"] == lc_id and a["status"] == "ok"
             and any(r.get("quantity") == UNSUPPORTED_LOAD for r in a.get("results") or [])]
     if not seen:
-        return (f"版 {version} で {lc_id} の力の道をたどるツールの解析 (unsupported_load を出すもの、load_path など) が"
+        return (f"v{version} で {lc_id} の力の道をたどるツールの解析 (unsupported_load を出すもの、load_path など) が"
                 "まだ回っていない")
     for a in [seen[-1]] + ([analysis] if analysis is not None and analysis is not seen[-1] else []):
         res = a.get("results") or []
@@ -196,7 +196,7 @@ def hot_spot_verdict(verdict_id: str, analysis: Record, load_case: Record, row: 
 
 
 def latest_verdicts(ctx: RunContext, version: int) -> dict[str, Record]:
-    """The verdict that stands for each load case in one design version (docs/contract.md 分野が緑になる条件 (a)):
+    """The verdict that stands for each load case in one design version (docs/contract.md 分野が OK になる条件 (a)):
     per load case, verdict quantity and place (the compared result's where, from a per-place prediction
     `<quantity>.<place>`), the newest verdict replaces the earlier ones; of what is left, the newest failing one
     when any fails (a failing place is not hidden by a newer pass at another place or of another quantity), else
@@ -264,7 +264,7 @@ STAND_IN_BELOW = 1e-6  # contract 9017d93: below this fraction of the limit, a j
 
 
 def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> list[tuple[Record, Record | None]]:
-    """(comparison, cause or None) holding the load case back (docs/contract.md 分野が緑になる条件 (b)):
+    """(comparison, cause or None) holding the load case back (docs/contract.md 分野が OK になる条件 (b)):
     per judged quantity of the load case (the criterion's, the one a tool is judged on, judged_quantity,
     or a result named by result_quantity for a prediction of the criterion's quantity), the version's
     latest comparison, when it is a mismatch whose cause is missing or neither resolved nor safe side.
@@ -317,7 +317,7 @@ def unresolved_mismatches(ctx: RunContext, load_case: Record, version: int) -> l
 
 
 def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
-    """Why a load case without a failing verdict may not count as passed (docs/contract.md, 分野が緑に
+    """Why a load case without a failing verdict may not count as passed (docs/contract.md, 分野が OK に
     なる条件): an unresolved mismatch, or an analysis result beyond the criterion (which also voids an
     earlier safe-side verdict). Empty when nothing holds it back."""
     out = []
@@ -330,7 +330,7 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
             why = f"原因 {cause['cause_id']} に合う合否がまだ無い"
         else:
             why = f"原因 {cause['cause_id']} がまだ解けていない"
-        out.append(f"照合 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
+        out.append(f"予測と比べた結果 {c['comparison_id']} の不一致 ({c['diff_rel'] * 100:+.0f} %) の{why}")
     crit = load_case.get("criterion")
     for a, r in beyond_results(ctx, load_case, version):
         out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"
@@ -342,7 +342,7 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
 
 
 def unchecked_since_beyond(ctx: RunContext, load_case: Record, version: int) -> str | None:
-    """docs/contract.md 分野が緑になる条件 (d): when an earlier version of the run had an analysis of the load case
+    """docs/contract.md 分野が OK になる条件 (d): when an earlier version of the run had an analysis of the load case
     beyond its criterion, this version needs an ok analysis that gives the judged quantity from a tool of the same
     or a heavier stage than the heaviest tool that was beyond; a lighter tool's pass does not clear it. The reason,
     or None when nothing earlier was beyond or such an analysis is there."""
@@ -364,8 +364,8 @@ def unchecked_since_beyond(ctx: RunContext, load_case: Record, version: int) -> 
         return None
     failed = [a["analysis_id"] for a in mine if a["status"] != "ok"]
     now = f"この版の解析 {'、'.join(failed)} は失敗した" if failed else "この版ではまだ回していない"
-    return (f"版 {w} で解析 {worst['analysis_id']} ({worst['tool']}) が基準を超えた。同じか重い段のツールで "
-            f"{crit['quantity']} を出す解析が要るが、{now} (軽い段のツールの合格では消えない)")
+    return (f"v{w} で解析 {worst['analysis_id']} ({worst['tool']}) が基準を超えた。同じか重い段のツールで "
+            f"{crit['quantity']} を出す解析が要るが、{now} (軽い段のツールで基準の判定が OK でも消えない)")
 
 
 def beyond_text(ctx: RunContext, load_case: Record, version: int) -> str | None:
@@ -504,9 +504,9 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
     if held:  # a result past the limit on a case no formula predicts: said, not hidden (it gets no verdict)
         cannot = no_formula_cases(ctx)
         held = {k: why + [NO_FORMULA_NOTE] if k in cannot else why for k, why in held.items()}
-    held_line = "まだ合格にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
+    held_line = "まだ OK にできない試験: " + " / ".join(f"{lc_id} ({'、'.join(why)})" for lc_id, why in held.items())
     if reds or misses:  # red even with tests left without a verdict; they are counted in the line
-        lines = ([f"不合格 {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
+        lines = ([f"NG {len(reds)} 件: " + "、".join(verdict_line(x) for x in reds)] if reds else []) + \
                 ([f"系の欠け {len(misses)} 件: " + "、".join(miss_line(r, c) for r, c in misses)] if misses else [])
         state, summary = "red", "。".join(lines + hot_spot_asks(ctx, reds, v))
         if missing:
@@ -519,7 +519,7 @@ def compute_judgement(ctx: RunContext, domain: str, version: int | None = None) 
         if rest:
             summary += "。まだ判定していない試験: " + "、".join(rest)
     elif got and not missing:
-        state, summary = "green", "合格: " + "、".join(verdict_line(x) for x in got)
+        state, summary = "green", "OK: " + "、".join(verdict_line(x) for x in got)
     else:
         state, summary = "pending", "まだ判定していない試験: " + ("、".join(missing) or "なし")
     return {

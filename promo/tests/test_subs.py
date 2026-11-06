@@ -47,6 +47,14 @@ class Chunks(unittest.TestCase):
         self.assertEqual(subs.em_width("CAE"), 1.5)
         self.assertEqual(subs.em_width("解析"), 2.0)
 
+    def test_shown_without_maru(self):
+        # the subtitles show no 「。」: one at the end goes, one inside becomes a full-width space
+        self.assertEqual(subs.shown_ja("段差を越えられるか。"), "段差を越えられるか")
+        self.assertEqual(subs.shown_ja("分析する技術。それが CAE です。"), "分析する技術　それが CAE です")
+        self.assertEqual(subs.shown_ja("構想は 10 万行"), "構想は 10 万行")
+        cues = subs.build_cues([{"ja": "一文目。二文目。", "en": "x", "at": 0.0, "seconds": 2.0}], [[0.0]])
+        self.assertEqual([c.ja for c in cues], ["一文目　二文目"])
+
     def test_short_sentence_is_one_chunk(self):
         self.assertEqual(subs.chunk_sentence("段差を越えられるか。"), ["段差を越えられるか。"])
 

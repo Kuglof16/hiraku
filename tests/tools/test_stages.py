@@ -87,7 +87,7 @@ class StageTest(RunCase, unittest.TestCase):
             d = rules.check_analyze(self.ctx, {"tool": "step_climb", "load_case_id": "P1-step100",
                                                "prediction_ids": []})
         self.assertEqual(d.rule, rules.HK5)
-        self.assertIn("赤、ver-0009", d.reason)
+        self.assertIn("NG、ver-0009", d.reason)
         self.assertIn("revise_design", d.reason)
 
     def test_hk5_a_lighter_tools_red_on_the_same_case_holds_the_heavier_tool(self):
@@ -103,7 +103,7 @@ class StageTest(RunCase, unittest.TestCase):
             with mock.patch.object(rules, "_verdict_tool", return_value="frame_static"):  # red on the beam (stage 1)
                 d = rules.check_analyze(self.ctx, args)
                 self.assertEqual(d.rule, rules.HK5)
-                self.assertIn("R1-step100 (段 1 (軽い計算)、赤、ver-0009)", d.reason)
+                self.assertIn("R1-step100 (段 1 (軽い計算)、NG、ver-0009)", d.reason)
                 self.assertIn("revise_design", d.reason)
             with mock.patch.object(rules, "_verdict_tool", return_value="shell_x"):  # red from the heavy tool itself
                 self.assertEqual(rules.check_analyze(self.ctx, args).rule, rules.HK1)

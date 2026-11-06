@@ -2,7 +2,7 @@
 
 The run checks only the tools its tests can use (tools_for_tests). A check is reused from an
 earlier run in the same runs folder while the hiraku package's source is unchanged
-(docs/contract.md 照合の使い回し: source_hash over every .py, kept per tool in a TOOL_CHECK_FILE;
+(docs/contract.md 確かめの使い回し: source_hash over every .py, kept per tool in a TOOL_CHECK_FILE;
 each check then says code_hash and cached_from). Tools made in a run, and tools whose code is not
 in the hiraku package (the hash would not cover it), are always checked again. (The analysis
 department's K2 checks also keep a disk cache for the tests only, HIRAKU_CHECK_CACHE=1 in
@@ -179,21 +179,21 @@ STAGE_NAMES_JA = {0: "レイアウトと規則", 1: "軽い計算", 2: "車の�
 
 def load_case_stage(ctx: RunContext, load_case: Record) -> int | None:
     """The lowest stage among the usable tools on the shelf whose tests cover the load case's test
-    (test_family), that apply to the version's kind of design (applies_to), and that give the quantity its criterion judges (_gives; all covering tools when
+    (test_family), that apply to the version's design (functions.not_applying), and that give the quantity its criterion judges (_gives; all covering tools when
     none says so). None when no usable tool covers it (no tool checks it, so HK5 does not wait for
     it). Without the tools (the plugin's hook command) the run's server worked it out (ctx.stages)."""
     kept = ((getattr(ctx, "stages", None) or {}).get("cases") or {})
     if not ctx.tools and load_case["load_case_id"] in kept:
         got = kept[load_case["load_case_id"]]
         return None if got is None else int(got)
-    from hiraku.tools.functions import design_kind
+    from hiraku.tools.functions import not_applying
 
     fam = test_family(load_case["test_id"])
-    kind = design_kind(ctx)
-    # a tool for other kinds of design (tool_spec.applies_to, e.g. the care bed's use_fatigue) does not check this one
+    # a tool that does not apply to this design (its applies(design), else tool_spec.applies_to, e.g. the care
+    # bed's use_fatigue) does not check it; rules.stop_reason names such tools and why
     covering = [n for n, s in ctx.specs.items()
                 if s.get("usable") and any(test_family(t) == fam for t in s.get("tests") or [])
-                and (not s.get("applies_to") or kind in s["applies_to"])]
+                and not_applying(ctx, n) is None]
     q = (load_case.get("criterion") or {}).get("quantity")
     if q:
         giving = [n for n in covering if _gives(ctx.tools.get(n), q) is not False]
@@ -272,7 +272,7 @@ def keep_check(folder: Path, code: str, name: str, run_id: str, spec: Record) ->
 
 
 NOT_YET = "試験がまだ決まっていないので、まだ確かめていない"
-DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、ツールは版 1 の試験が決まってから、その試験に使う分だけ確かめます"
+DEFERRED_TEXT = "この実行の試験はまだ決まっていないので、ツールは v1 の試験が決まってから、その試験に使う分だけ確かめます"
 
 
 def defer_shelf(ctx: RunContext) -> None:
@@ -313,10 +313,10 @@ def check_shelf(ctx: RunContext, test_ids: list[str] | None = None, *, skip_chec
                 keep_check(folder, code, name, ctx.project["run_id"], spec)
         ctx.specs[name] = spec
         ok = "使えます" if spec["usable"] else "使えません (答えの分かっている例に通らない)"
-        how = f" (ソースが同じ前の実行 {got[1]} の照合を使いました)" if got is not None else ""
+        how = f" (ソースが同じ前の実行 {got[1]} の確かめを使いました)" if got is not None else ""
         ctx.store.emit("tool.checked", agent="system", domain=spec["domain"],
                        text=f"ツール {name} を確かめました: {ok}{how}", data=spec)
         if getattr(tool, "checks_from_cache", False):  # the tests' disk cache (HIRAKU_CHECK_CACHE=1), never a real run
             ctx.store.emit("agent.said", agent="system",
-                           text=f"ツール {name} の照合は、試験のために覚えておいた前の結果を使いました")
+                           text=f"ツール {name} の確かめは、試験のために覚えておいた前の結果を使いました")
     return ctx.specs

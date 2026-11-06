@@ -51,7 +51,8 @@ def _none_allowed(crit: Record) -> bool:
 def collect(ctx: Any, paths: list[str], only: set[str]) -> Record:
     """{sens: {quantity: [term]}, meta: {quantity: {label, unit, lower_is_better}}, bases: {quantity: {value,
     record_id}}, skipped: [why]} for the current version's load cases with a criterion (only: those quantities,
-    when given). One load case per quantity: the first in the run's order. Without `only`, so that a call with no
+    when given). Every load case is looked at: a quantity two load cases judge is keyed <quantity>@<load case> for
+    the second (its K5 terms renamed to match). Without `only`, so that a call with no
     quantities stays short: counts that must be 0 are left out (_none_allowed); a load case judged by a heavy tool
     (HEAVY_STAGE) or by one that measures the parts' shapes (SHAPE_STAGE) is skipped and named; at most
     DEFAULT_CASES_MAX load cases are looked at, the rest named."""
@@ -63,7 +64,7 @@ def collect(ctx: Any, paths: list[str], only: set[str]) -> Record:
     rebuilds = k5_rebuilds()
     for lc in ctx.load_cases:
         crit = lc.get("criterion")
-        if not crit or (only and crit["quantity"] not in only) or crit["quantity"] in sens:
+        if not crit or (only and crit["quantity"] not in only):
             continue
         if not only and _none_allowed(crit):
             continue  # a count that must be 0 (interferences, free parts): no elasticity to trade, and each costs a rerun
@@ -93,7 +94,15 @@ def collect(ctx: Any, paths: list[str], only: set[str]) -> Record:
             skipped.append(f"{lc['load_case_id']}: {e}")
             continue
         q = crit["quantity"]
-        sens[q] = got["terms"]
+        terms = got["terms"]
+        if q in sens:
+            # a second load case judging the same quantity (P2's top speed on the 14 % grade, held by the power, and on
+            # the flat, held by the motor's speed limit): its own key, and its K5 terms named after it
+            key = f"{q}@{lc['load_case_id']}"
+            terms = [dict(t, name=f"{key} to {str(t.get('name', '')).partition(' to ')[2]}") if " to " in str(t.get("name", ""))
+                     else t for t in terms]
+            q = key
+        sens[q] = terms
         meta[q] = {"label": lc.get("title") or q, "unit": value.get("unit") or "1",
                    "lower_is_better": crit["op"] in ("<=", "<")}
         bases[q] = {"value": float(value["value"]), "record_id": ana["analysis_id"]}

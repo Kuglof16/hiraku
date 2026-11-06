@@ -23,7 +23,7 @@ import yaml
 from hiraku import contract
 from hiraku.intake import events as ev
 from hiraku.intake import hearing, knowledge
-from hiraku.intake.domains import IntakeError, pick_domains
+from hiraku.intake.domains import IntakeError, add_tests, pick_domains
 from hiraku.intake.products import load_product, product_files
 
 Record = dict[str, Any]
@@ -68,6 +68,8 @@ def intake(
     from_file: bool = False,
     slug: str | None = None,
     hearing_mode: str = "code",
+    added_tests: list[Record] | None = None,
+    no_addition_reason: str | None = None,
 ) -> IntakeResult:
     """Pick the domains, settle the hearing, and list the events. `requirements`: what the request already says.
 
@@ -76,6 +78,8 @@ def intake(
     it lacks and has one for. Without it (a request typed in A1) every missing `must` and `confirm` item is asked.
     The merged requirements are `result.requirements_file["requirements"]`: use them as project.requirements.
     slug: what the requirements file calls the product (default: `product`, else a name made of the sentence).
+    added_tests, no_addition_reason: Claude's review of the code's choice (add_tests): tests it adds, each with its reason,
+    or why it adds none; they are put into the picks after the code has chosen (adding only).
     hearing_mode: the requirements file's `hearing` (contract). "code" (default): the hearing is settled here, from the
     file and the defaults. "claude" (with from_file): nothing is settled or asked here; the requirements stay as the file has
     them and the events are the domains and the knowledge only: the lead asks with ask_user, which asks the `must` and the
@@ -85,6 +89,8 @@ def intake(
         raise IntakeError(f"hearing は code か claude です ({hearing_mode!r} は使えません)")
     domains = pick_domains(want, flags, speed_class, flag_reasons=flag_reasons, reasons=reasons, shown_names=shown_names,
                            exclude=exclude, product=product)
+    if added_tests or no_addition_reason:
+        domains = add_tests(domains, added_tests, no_addition_reason, product=product)[0]
     slug = slug or product or slug_for(want)  # slug: the file's name for the product when no file of its own lends values
     own: dict[str, Record] = {}
     if product and product in product_files():

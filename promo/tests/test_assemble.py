@@ -92,7 +92,7 @@ class Table(unittest.TestCase):
             planned(three_segments(s1=5.0), THREE)
 
     def test_repo_table(self):
-        """The sample table covers the 23 cuts of flow v7 in order with the planned joins and looks."""
+        """The repository's table is the submitted video's: script v10's 20 cuts in order, with the planned joins and looks."""
         data = json.loads(REPO_TABLE.read_text(encoding="utf-8"))
         self.assertTrue(data["script"].startswith("${WORK}/"), data["script"])
         for seg in data["segments"]:   # inputs come through ${WORK}, never a fixed folder
@@ -101,27 +101,20 @@ class Table(unittest.TestCase):
                 self.assertTrue(p.startswith("${WORK}/"), p)
         table = assemble.load_table(data, {"WORK": "/w"})
         cuts = [c for s in table.segments for c in s.cuts]
-        self.assertEqual(len(cuts), 23)
-        # flow v7: N14 right after N09; N13 split into N13a-c (the loop from version 1 to 3)
-        self.assertEqual(cuts[9:], ["N08b", "N09", "N14", "N10", "N11", "N12", "N13a", "N13b", "N13c",
-                                    "N15", "N16", "N17", "N17b", "N18"])
-        self.assertNotIn("N13", cuts)
+        # script v10 (2026-11-06): the pain first, then N05; N01-N04 moved into N09b; N12b added; N16 gone
+        self.assertEqual(cuts, ["N00", "N06", "N07", "N08", "N08b", "N05", "N09", "N09b", "N14", "N10", "N11", "N12",
+                                "N12b", "N13a", "N13b", "N13c", "N15", "N17", "N17b", "N18"])
+        self.assertTrue(data["script"].endswith("narration_v10_timed.tsv"), data["script"])
         joins = {s.cuts[-1]: (s.join.kind, s.join.seconds) for s in table.segments}
-        self.assertEqual(joins["N04"], ("grain", 0.5))
         self.assertEqual(joins["N05"], ("light", 0.5))
         self.assertEqual(joins["N08"], ("dissolve", 0.4))
         self.assertEqual(joins["N08b"], ("light", 0.4))
         self.assertEqual(joins["N17"], ("grain", 0.5))
         self.assertEqual(joins["N17b"], ("light", 0.6))
-        self.assertEqual(joins["N10"], ("dissolve", 0.25))
         looked = sorted(s.cuts[0] for s in table.segments if s.grain and s.bloom > 0)
-        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b"])  # the dark cuts (N08: the plain CAE tool on night; N18 ends on paper)
-        # the numbered labels lie over N01-N04, each from the start of its own cut
-        for seg in data["segments"]:
-            for ov in seg.get("overlay", []):
-                self.assertTrue(ov["frames"].startswith("${WORK}/"), ov)
-        laid = {ov.cut or s.cuts[0]: Path(ov.frames).name for s in table.segments for ov in s.overlays}
-        self.assertEqual(laid, {"N01": "labels_n01", "N02": "labels_n02", "N03": "labels_n03", "N04": "labels_n04"})
+        self.assertEqual(looked, ["N05", "N08", "N08b", "N17b"])  # the dark cuts (N08: words on night; N18 ends on paper)
+        # no overlays any more (the numbered labels of N01-N04 went with them)
+        self.assertEqual([ov for s in table.segments for ov in s.overlays], [])
         # tiles a script with these cuts, whatever the slot lengths
         slots, t = [], 0.0
         for c in cuts:

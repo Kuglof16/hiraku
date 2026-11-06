@@ -356,8 +356,8 @@ class SharedShape(unittest.TestCase):
         # shafts, motes and the flood are gone by 2.0 s: after that ?layer=fg
         # holds only the name and the tiles' glows
         for k in ("rays", "dust"):
-            self.assertLessEqual(t["burst_s"] + n[k]["out_dur_s"], 2.0, k)
-        self.assertLessEqual(t["burst_s"] + n["bloom"]["fall_dur_s"], 2.0)
+            self.assertLessEqual(t["burst_s"] + n[k]["out_dur_s"], 2.55, k)
+        self.assertLessEqual(t["burst_s"] + n["bloom"]["fall_dur_s"], 2.55)
         self.assertGreater(n["rays"]["count"], 0)
         self.assertGreater(n["dust"]["count"], 0)
 
@@ -450,9 +450,9 @@ class ReferenceLook(unittest.TestCase):
     def test_n05_points_before_the_picture(self):
         n = self.rules["n05"]
         t, p = n["times"], n["hero_points"]
-        # the door's and the title's times stay as they were
-        for k, v in (("latch_s", 0.38), ("door_open_s", 0.55), ("burst_s", 1.25), ("tiles_s", 1.35),
-                     ("name_s", 1.75), ("tag_s", 2.3), ("mesh_in_s", 0.2), ("mesh_out_s", 0.78)):
+        # the door's and the title's times (2026-11-06: the door opens 0.55 s slower, the maker found it too fast)
+        for k, v in (("latch_s", 0.38), ("door_open_s", 0.55), ("burst_s", 1.8), ("tiles_s", 1.9),
+                     ("name_s", 2.3), ("tag_s", 2.85), ("mesh_in_s", 0.2), ("mesh_out_s", 0.78)):
             self.assertEqual(t[k], v, k)
         # every point is in before the picture fades in; it is in by about 0.45 s;
         # the points are gone before the mesh comes apart

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>HIRAKU result viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; font: 12px/1.35 system-ui, "Segoe UI", sans-serif; background: #f4f4f2; color: #222; }
+  #view { position: absolute; left: 0; top: 66px; right: 330px; bottom: 230px; }
+  #view canvas { display: block; }
+  #panel { position: absolute; top: 0; right: 0; width: 330px; bottom: 0; overflow-y: auto; background: #fff; border-left: 1px solid #ccc; box-sizing: border-box; padding: 6px 8px 40px; }
+  #panel h3 { margin: 10px 0 3px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #555; border-bottom: 1px solid #ddd; }
+  .row { display: flex; align-items: center; gap: 4px; margin: 2px 0; flex-wrap: wrap; }
+  .row input[type=range] { flex: 1; min-width: 80px; }
+  .row input[type=number] { width: 64px; }
+  .val { width: 58px; font-size: 11px; }
+  button { font: inherit; padding: 1px 6px; cursor: pointer; }
+  button.on { background: #2a6; color: #fff; }
+  #switch button { margin: 1px; }
+  /* nothing is drawn over the 3D view: the header sits above it, the rest in the side panel and the bottom pane */
+  #hud { position: absolute; left: 0; top: 0; right: 330px; height: 66px; overflow: hidden; padding: 2px 8px; box-sizing: border-box; background: #fff; border-bottom: 1px solid #ccc; }
+  #head1 { display: flex; gap: 10px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+  #title { font-size: 13px; font-weight: 600; flex: none; }
+  #source { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; }
+  #tline { font-size: 12px; font-weight: 600; color: #a40; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hudlines div { font-size: 11.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #legend { display: block; margin: 4px 0; }
+  #notes { font-size: 11.5px; color: #444; }
+  #info { background: #fffbe8; border: 1px solid #ccb; padding: 4px 6px; display: none; font-size: 12px; }
+  .sw { display: inline-block; width: 11px; height: 11px; border: 1px solid #666; margin-right: 4px; vertical-align: -1px; }
+  .lg, .pl { font-size: 11.5px; margin: 1px 0; }
+  table.mt { border-collapse: collapse; width: 100%; font-size: 11px; margin-top: 4px; }
+  table.mt td, table.mt th { border-bottom: 1px solid #eee; padding: 1px 3px; text-align: left; }
+  table.mt tr.tot td { font-weight: 600; border-top: 1px solid #999; }
+  .ok { color: #0a6b2a; font-weight: 600; } .ng { color: #b00; font-weight: 600; }
+  /* the bottom pane: plots and inputs side by side, each in its own box (the canvas sized by its box, so its
+     drawing size never pushes the inputs or the 3D view) */
+  #bottom { position: absolute; left: 0; right: 330px; bottom: 0; height: 230px; border-top: 1px solid #ccc; background: #fff; display: flex; overflow: hidden; }
+  #plotwrap { flex: 1 1 0; min-width: 0; position: relative; overflow: hidden; }
+  #plot { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #inputs { flex: 0 0 380px; border-left: 1px solid #ddd; padding: 4px 8px; box-sizing: border-box; overflow: auto; font-size: 11.5px; }
+  #inputs td { overflow-wrap: anywhere; }
+  #inputs td:first-child { white-space: nowrap; overflow-wrap: normal; }
+  #speedrow select { font: inherit; }
+  #inputs .h { font-weight: 600; text-transform: uppercase; font-size: 11px; color: #555; letter-spacing: .04em; }
+  #inputs table { border-collapse: collapse; width: 100%; }
+  #inputs td { vertical-align: top; padding: 1px 4px 1px 0; border-bottom: 1px solid #f0f0f0; }
+  .muted { color: #777; font-size: 11px; }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #f4f4f2; z-index: 10; }
+  label { user-select: none; }
+  #fieldpanel .list { max-height: 260px; overflow-y: auto; border: 1px solid #eee; }
+  #fieldpanel .list div { padding: 1px 4px; cursor: pointer; }
+  #fieldpanel .list div.on { background: #2a6; color: #fff; }
+</style>
+<!-- three.js r170 (0.170.0) from jsDelivr, the same version and URL form as web/index.html. -->
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script src="js/core.js"></script>
+<script src="js/plot.js"></script>
+<script src="js/main.js"></script>
+<script src="js/nvh.js"></script>
+<script src="js/crash.js"></script>
+<script src="js/assembly.js"></script>
+</head>
+<body>
+<div id="loading">読み込み中…</div>
+<div id="view"></div>
+<div id="hud">
+  <div id="head1"><span id="title"></span><span id="source"></span></div>
+  <div id="tline"></div>
+  <div id="hudlines"></div>
+</div>
+<div id="bottom"><div id="plotwrap"><canvas id="plot"></canvas></div><div id="inputs"></div></div>
+
+<div id="panel">
+  <h3>分野</h3>
+  <div id="switch"></div>
+
+  <h3>選択</h3>
+  <div id="info"></div>
+  <div class="muted" id="infohint">部材か部品をクリック</div>
+
+  <h3>色</h3>
+  <canvas id="legend" width="300" height="250"></canvas>
+  <div class="row" id="logrow"><label><input type="checkbox" id="logc"> 対数目盛</label></div>
+
+  <h3>部品と計算での扱い</h3>
+  <div class="row"><label><input type="checkbox" id="lyParts"> 部品をすべて表示</label>
+    <select id="ledgerMode"><option value="category">扱いで色分け</option><option value="grey">薄い灰色</option><option value="field">この分野の色</option></select></div>
+  <div id="ledgerLegend"></div>
+  <div id="ledgerLists"></div>
+  <details id="ledgerTableBox"><summary>質量の内訳と照合</summary><div id="ledgerTable"></div></details>
+
+  <div id="fieldpanel"></div>
+
+  <h3 id="scaleLabel">倍率</h3>
+  <div class="row"><input type="range" id="scale"><input type="number" id="scaleNum"></div>
+  <div class="muted" id="scaleNote"></div>
+
+  <h3>時間</h3>
+  <div class="row"><button id="play">▶ 再生</button><button id="prev">◀</button><button id="next">▶</button></div>
+  <div class="row"><input type="range" id="time" min="0" max="0" step="1" value="0"></div>
+  <div class="row" id="speedrow"><label>再生の速さ (実時間の)
+    <select id="speed"><option value="0.005">0.005 倍</option><option value="0.01" selected>0.01 倍</option><option value="0.02">0.02 倍</option>
+      <option value="0.05">0.05 倍</option><option value="0.1">0.1 倍</option><option value="0.25">0.25 倍</option><option value="0.5">0.5 倍</option><option value="1">1 倍</option></select></label></div>
+  <div class="muted" id="timeNote"></div>
+
+  <h3>表示</h3>
+  <div class="row"><label><input type="checkbox" id="lyFrame"> フレーム</label>
+    <label><input type="checkbox" id="lyGhost"> 変形前</label>
+    <label><input type="checkbox" id="lyScene"> 壁・台</label>
+    <label><input type="checkbox" id="lyArrows"> 力の矢印</label></div>
+
+  <h3>断面</h3>
+  <div id="clips"></div>
+  <div class="muted" style="margin-top:8px">+x 前、+y 左、+z 上 (mm)。左ドラッグ 回転、右ドラッグ 移動、ホイール 拡大。</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+window.THREE = THREE;
+window.OrbitControls = OrbitControls;
+await HV.main();
+</script>
+</body>
+</html>

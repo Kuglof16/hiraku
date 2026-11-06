@@ -1,4 +1,4 @@
-"""Shelf checks reused across runs while the hiraku source is unchanged (docs/contract.md 照合の使い回し)."""
+"""Shelf checks reused across runs while the hiraku source is unchanged (docs/contract.md 確かめの使い回し)."""
 
 import json
 import tempfile
