@@ -26,7 +26,31 @@
 // turns faster than 90 deg/s on the screen (a tip-over plays slower, the rest faster). So
 // three things move at most: the large picture, its tile in the list and a tile coming in.
 //
-// Positions, sizes, times and colours come only from layout.json n06 (N06_KEYS).
+// The step tile driven at the step (layout.json n06.runup, optional): when the run holds
+// step_climb_dynamic records of run 2 (rolling at the load case's speed from before the step:
+// the record says record_run = speed in its assumptions, or the load case gives it in its
+// params) for the tile's tests, one that does not climb (its result climbed 0) and one that
+// does (climbed 1), in the same design version, the tile runup.tile is split into two panes
+// stacked in runup.order ("stops", "climbs"; runup.gap_px apart), in the list and in the large
+// box. Each pane plays its own record; both on one clock (the two runs start the same distance
+// before their steps at the same speed, so they meet them together), under one camera from the
+// side that holds still over both runs. The stop is the highest step that is not climbed, the
+// climb the lowest that is (the newest version with both; the newest record of each case). The
+// pace: the stretch both records have (from the start to the shorter record's end: the
+// approach, the hit and the climb) gets runup.lead_share of the play, the rest (the stopped
+// run's tries after it and its standstill to the record's end) what is left, each stretch at an
+// even rate, and no step faster than pace.js's turn limit (pacer's weight; the limit comes
+// first, so the stopped run's rebounds may take some of the lead's share). Each pane's tag is
+// read from its record: the height from the scene's step (else the load case's step_height),
+// the speed from the load case's params: "✕ 段差 330 mm で止まる (10 km/h で向かう)",
+// "○ 段差 100 mm は越える" in the large box, the height only in the list's small panes ("✕ 330 mm
+// で止まる", one line). Red only for a judgement that fails (answerOf: the newest verdict on
+// the load case, else its result against the criterion): the ✕ of a stop judged NG is in the
+// overlay's red, a stop not judged in ink, the climb in ink; the pair's border while it is in
+// the large box is in ink, and no lifted-wheel ring is drawn (on a step the wheels leave the
+// road to climb). Without such records the tile is as above.
+//
+// Positions, sizes, times and colours come only from layout.json n06 (N06_KEYS, RUNUP_KEYS).
 
 import * as THREE from "three";
 import { clearOfBand, cubicBezier, squeeze } from "./compose.js";
@@ -34,9 +58,10 @@ import { fieldsOf, overOf } from "./fields.js";
 import { LENGTH, motionOf } from "./series.js";
 import { AssemblyStage } from "./assembly.js";
 import { VIEWS, cutView } from "./workbench3d.js";
-import { FEATURE_KEYS, listRects, requireKeys, storyOf } from "./cut_n03.js";
+import { FEATURE_KEYS, answerOf, listRects, requireKeys, storyOf } from "./cut_n03.js";
 import { tileContour } from "./cut_grid.js";
 import { PACE_LIMIT_DEG_S, pacer } from "./pace.js";
+import { fmt, fmtQ } from "./labels.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,6 +74,14 @@ export const N06_KEYS = [
   "colors.bg", "colors.panel", "colors.rule",
   "overlay.color", "overlay.opacity",
 ];
+
+// layout.json n06.runup's keys, when it is there (the pair of runs at the step, see the top).
+export const RUNUP_KEYS = ["runup.tile", "runup.order", "runup.gap_px", "runup.lead_share"];
+const RUNUP_ORDER = ["stops", "climbs"];
+
+// A record of run 2 of the step test (driving at the step at the load case's speed).
+const RUN2 = /record_run = speed/;
+const secondRun = (a, lc) => lc?.params?.record_run === "speed" || (a?.assumptions ?? []).some((x) => RUN2.test(String(x)));
 
 // Not in layout.json (written here until the promo department gives keys for them):
 // how a tile comes in, from this scale to 1 along this CSS cubic-bezier over times.tile_in_s.
@@ -102,6 +135,15 @@ const resultOf = (ana, q) => (ana?.results ?? []).find((r) => r.quantity === q) 
 // "member rail_L_AS1" / "part:wheel_FL" -> the id in the design.
 const bareId = (ref) => String(ref ?? "").replace(/^(member|part|node)[: ]\s*/, "");
 
+// The step's height (mm) a record met: its scene's step (size_mm along z), else the load
+// case's step_height; null without either.
+function stepHeightOf(ana, lc) {
+  const o = (ana?.scene ?? []).find((x) => x?.kind === "step" && Array.isArray(x.size_mm));
+  if (o && Number.isFinite(o.size_mm[2])) return o.size_mm[2];
+  const q = lc?.params?.step_height;
+  return q && LENGTH[q.unit] && Number.isFinite(q.value) ? q.value * LENGTH[q.unit] : null;
+}
+
 // Whether a recorded result meets a criterion ({quantity, op, limit}); null when it cannot say.
 function meets(criterion, ana) {
   const r = resultOf(ana, criterion?.quantity);
@@ -117,6 +159,13 @@ const easeIn = cubicBezier(...N06_APPEAR.ease);
 export class CutN06 {
   constructor(layout, s) {
     this.spec = requireKeys(layout, "n06", N06_KEYS);
+    if (this.spec.runup !== undefined) {
+      requireKeys(layout, "n06", RUNUP_KEYS);
+      const bad = [].concat(this.spec.runup.order).filter((k) => !RUNUP_ORDER.includes(k));
+      if (bad.length || !Array.isArray(this.spec.runup.order) || !this.spec.runup.order.length) {
+        throw new Error(`layout.json の n06 の runup.order が分からない: ${bad.join(", ") || JSON.stringify(this.spec.runup.order)} (${RUNUP_ORDER.join(" / ")})`);
+      }
+    }
     this.layout = layout;
     this.story = storyOf(layout, "n06");
     this.s = s;
@@ -160,6 +209,131 @@ export class CutN06 {
       }
     }
     return found.find((c) => this.outcome(c, def).length) ?? found[0] ?? null;
+  }
+
+  // The pair of run-2 records the runup tile shows (see the top): { version, runs: [{ lc, ana,
+  // climbs, h }] in runup.order }, or null when the run has no such pair.
+  runupOf(def) {
+    const tests = def?.tests ?? [];
+    const cases = (this.s.project?.load_cases ?? []).filter((c) => tests.includes(c.test_id));
+    const all = this.s.order.analyses.map((id) => this.s.analyses[id]).filter(ok);
+    const runs = [];
+    for (const lc of cases) {
+      for (const a of all.filter((x) => x.load_case_id === lc.load_case_id)) {
+        const climbed = resultOf(a, "climbed");
+        const h = stepHeightOf(a, lc);
+        if (!secondRun(a, lc) || !climbed || h === null || !motionOf(a)) continue;
+        runs.push({ lc, ana: a, version: a.design_version, climbs: climbed.value >= 1, h });
+      }
+    }
+    for (const v of [...new Set(runs.map((r) => r.version))].sort((a, b) => b - a)) {
+      const newest = new Map();
+      for (const r of runs.filter((x) => x.version === v)) newest.set(r.lc.load_case_id, r); // the later record of a case wins
+      const list = [...newest.values()];
+      const stops = list.filter((r) => !r.climbs).sort((a, b) => b.h - a.h)[0];
+      const climbs = list.filter((r) => r.climbs).sort((a, b) => a.h - b.h)[0];
+      if (stops && climbs) return { version: v, runs: this.spec.runup.order.map((k) => (k === "stops" ? stops : climbs)) };
+    }
+    return null;
+  }
+
+  // The runup tile's two panes in a box (the list's slot or the large box), stacked in order
+  // runup.gap_px apart, each with its record's view and tag; one camera for both.
+  makePair(box, pair, px, full) {
+    const R = this.spec.runup;
+    const n = pair.runs.length;
+    const h = (box.inner.h - (n - 1) * R.gap_px) / n;
+    box.canvas.remove();
+    box.canvas = null;
+    box.el.dataset.runup = "1";
+    box.subs = pair.runs.map((r, i) => {
+      const el = document.createElement("div");
+      el.className = "n06-sub";
+      el.dataset.box = `${box.el.dataset.box}.${r.climbs ? "climbs" : "stops"}`;
+      Object.assign(el.style, { left: "0px", top: `${Math.round(i * (h + R.gap_px))}px`, width: `${box.inner.w}px`, height: `${Math.floor(h)}px` });
+      el.innerHTML = "<canvas></canvas>";
+      box.el.append(el);
+      const sub = { el, rect: { w: box.inner.w, h: Math.floor(h) }, inner: { w: box.inner.w, h: Math.floor(h) }, canvas: el.querySelector("canvas"), run: r };
+      const ng = !r.climbs && answerOf(this.s, { lc: r.lc, ana: r.ana }) === false;
+      el.dataset.case = r.lc.load_case_id;
+      el.dataset.version = String(r.ana.design_version);
+      el.dataset.climbs = r.climbs ? "1" : "0";
+      el.dataset.ng = ng ? "1" : "0";
+      el.dataset.heightMm = String(r.h);
+      sub.label = this.labelRun(sub, r, ng, Math.max(this.story.bodyPx, Math.round((px * h) / box.inner.h)), full);
+      this.makeRunView(sub, r);
+      return sub;
+    });
+    // one camera over both runs: each vehicle where it starts and where its record ends, and
+    // the near top edge of each step
+    const pts = [];
+    for (const sub of box.subs) {
+      const { view: v, motion: m } = sub;
+      for (const t of [m.t0, m.t1]) {
+        const b = m.frame(t).body;
+        pts.push(...v.contentPoints().map((p) => p.add(new THREE.Vector3(b[0], b[1], b[2]))));
+      }
+      for (const o of v.sceneDesc?.objects ?? []) {
+        if (o.kind !== "step") continue;
+        const x0 = o.position_mm[0] - o.size_mm[0] / 2;
+        for (const s of [-1, 1]) pts.push(new THREE.Vector3(x0, o.position_mm[1] + (s * o.size_mm[1]) / 4, o.position_mm[2] + o.size_mm[2] / 2));
+      }
+    }
+    for (const sub of box.subs) {
+      sub.view.fitPoints(pts, VIEWS.side, 1.06);
+      sub.view.noFollow = true;
+    }
+  }
+
+  makeRunView(sub, r) {
+    const v = cutView(this, "n06");
+    v.setDesign(this.s.designs[r.ana.design_version] ?? this.s.designs[this.s.currentVersion]);
+    v.setLoading(r.lc.params?.loading ?? null);
+    const motion = motionOf(r.ana);
+    v.setMotion(motion);
+    v.setScene(r.lc, r.ana);
+    v.setContour(null);
+    v.setVectors(null);
+    v.setToggles({ parts: true, contour: false, arrows: false, cg: true, names: false, limit: false });
+    v.resize(sub.inner.w, sub.inner.h);
+    v.setFrame(motion.frame(motion.t0));
+    sub.view = v;
+    sub.motion = motion;
+  }
+
+  // A run's tag: ✕ / ○ and what the record says, with the step's height and the speed.
+  labelRun(sub, r, ng, px, full) {
+    const L = this.spec.tile.label;
+    const ink = this.layout.colors?.ink ?? "#1b1a17";
+    const color = ng ? this.spec.overlay.color : ink;
+    const b = document.createElement("b");
+    b.dataset.box = `${sub.el.dataset.box}.label`;
+    b.dataset.kind = "label";
+    Object.assign(b.style, { left: `${L.x}px`, top: `${L.y}px`, fontSize: `${px}px` });
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.dataset.box = `${sub.el.dataset.box}.mark`;
+    mark.style.color = color;
+    mark.textContent = r.climbs ? "○" : "✕";
+    const why = document.createElement("span");
+    why.className = "why";
+    why.style.color = color;
+    // in full in the large box; in the list's small panes the height only (one line)
+    const height = full ? `段差 ${fmt(Math.round(r.h))} mm` : `${fmt(Math.round(r.h))} mm`;
+    const speed = full && r.lc.params?.speed ? fmtQ(r.lc.params.speed) : null;
+    // a line breaks only between phrases
+    const parts = r.climbs ? [`${height} は`, "越える"] : [`${height} で`, "止まる", ...(speed ? [` (${speed} で向かう)`] : [])];
+    for (const part of parts) {
+      const ph = document.createElement("span");
+      ph.style.display = "inline-block";
+      ph.style.whiteSpace = "pre";
+      ph.textContent = part;
+      why.append(ph);
+    }
+    b.append(mark, " ", why);
+    sub.el.append(b);
+    this.fitLabel(sub, b);
+    return b;
   }
 
   // The allowable stress criterion of the run (a load case judged on max_stress in the unit).
@@ -251,6 +425,19 @@ export class CutN06 {
       tile.land = tile.start + T.tile_in_s;
       tile.turn = { from: T.tiles_s + i * turn, to: i === n - 1 ? sp.duration_s : T.tiles_s + (i + 1) * turn };
       tile.play = { from: tile.turn.from + T.tile_in_s, to: T.tiles_s + (i + 1) * turn };
+      const L0 = st.label;
+      const px0 = Math.max(L0.size_px, this.story.bodyPx);
+      const pair = def && !def.assembly && sp.runup?.tile === key ? this.runupOf(def) : null;
+      if (pair) {
+        tile.pair = pair;
+        tile.miss = true;
+        small.el.dataset.miss = "1";
+        this.makePair(small, pair, px0, false);
+        this.makePair(big, pair, Math.round(px0 * (fr.big.h / slots[0].h)), true);
+        small.label = null;
+        big.label = null;
+        return tile;
+      }
       let words = [];
       let c = null;
       let clash = null;
@@ -332,7 +519,13 @@ export class CutN06 {
     const n = document.createElement("span");
     n.className = "none";
     Object.assign(n.style, { left: `${this.spec.tile.label.x}px`, bottom: `${this.spec.tile.label.y}px`, fontSize: `${this.layout.min_text_px}px` });
-    n.textContent = text;
+    // a line breaks only before the parenthesis, never inside it or inside a word
+    for (const part of String(text).split(/(?= \()/)) {
+      const ph = document.createElement("span");
+      Object.assign(ph.style, { display: "inline-block", whiteSpace: "nowrap" });
+      ph.textContent = part.trim();
+      n.append(ph, " ");
+    }
     tile.el.append(n);
   }
 
@@ -498,15 +691,38 @@ export class CutN06 {
     this.scale = scale;
     this.renderer.setSize(Math.ceil(this.big.w * scale), Math.ceil(this.big.h * scale), false);
     for (const t of this.tiles) {
-      for (const pane of [t.small, t.big]) {
+      for (const pane of [t.small, t.big].flatMap((b) => b.subs ?? [b])) {
         pane.canvas.width = Math.round(pane.inner.w * scale);
         pane.canvas.height = Math.round(pane.inner.h * scale);
       }
     }
   }
 
+  // The runup pair's panes at share u of the play: both records on one clock (see the top).
+  posePair(box, u) {
+    const subs = box.subs;
+    if (box.playS && !box.pace) {
+      const lead = Math.min(...subs.map((s) => s.motion.duration));
+      const span = Math.max(...subs.map((s) => s.motion.duration));
+      const f = this.spec.runup.lead_share;
+      const weight = span - lead > 1e-6 && lead > 0 ? (x) => (x < lead ? f / lead : (1 - f) / (span - lead)) : null;
+      box.pace = pacer(subs.map((s) => ({ motion: s.motion, view: s.view })), box.playS, PACE_LIMIT_DEG_S, undefined, weight);
+    }
+    const along = box.pace ? box.pace(u) : Math.max(...subs.map((s) => s.motion.duration)) * u;
+    for (const sub of subs) {
+      const m = sub.motion;
+      const tau = Math.min(m.t1, m.t0 + along);
+      sub.el.dataset.tau = String(tau);
+      sub.view.setFrame(m.frame(tau));
+      // on a step the wheels leave the road to climb: no lifted-wheel ring (red is for a limit)
+      for (const o of Object.values(sub.view.wheelObjs ?? {})) o.ring.visible = false;
+      sub.view.renderInto(sub.canvas.getContext("2d"), sub.canvas.width, sub.canvas.height, this.scale);
+    }
+  }
+
   // A pane's record at its share u of the play (0: its first pose, 1: its last).
   pose(pane, u) {
+    if (pane.subs) return this.posePair(pane, u);
     if (!pane.view) return;
     if (pane.motion) {
       const m = pane.motion;
@@ -549,21 +765,25 @@ export class CutN06 {
       const now = t >= tile.turn.from && t < tile.turn.to;
       small.playS = big.playS = tile.play.to - tile.play.from;
       const u = share(tile.play.from, tile.play.to);
-      const plays = !!(big.motion || big.asm?.stage);
+      const plays = !!(big.motion || big.asm?.stage || big.subs);
       // the list's tile plays along with the large box in its turn
       const along = now && plays && t >= tile.play.from && u < 1;
-      if ((p > 0 && p < 1) || along) small.canvas.dataset.kind = "moving";
-      else delete small.canvas.dataset.kind;
+      // what moves: a box's canvas, or the pair's box as one thing (its two runs move together)
+      const smallMover = small.canvas ?? small.el;
+      const bigMover = big.canvas ?? big.el;
+      if ((p > 0 && p < 1) || along) smallMover.dataset.kind = "moving";
+      else delete smallMover.dataset.kind;
       small.el.dataset.featured = now ? "1" : "";
-      small.el.style.borderColor = now ? sp.overlay.color : sp.colors.rule;
-      small.label.style.visibility = now ? "hidden" : "";
+      // the pair holds a run that climbs: its border in ink, not the red of a limit
+      small.el.style.borderColor = now ? (tile.pair ? this.layout.colors?.ink ?? sp.colors.rule : sp.overlay.color) : sp.colors.rule;
+      for (const lb of small.subs ? small.subs.map((x) => x.label) : [small.label]) lb.style.visibility = now ? "hidden" : "";
       if (p > 0) this.pose(small, t >= tile.turn.to ? 1 : now ? u : 0);
       // the large box: in its turn, the record plays, then holds its end
       big.el.style.visibility = now ? "visible" : "hidden";
       const q = easeIn(share(tile.turn.from, tile.turn.from + sp.times.tile_in_s));
       big.el.style.opacity = String(Math.min(1, q));
-      if (now && (q < 1 || (plays && u < 1))) big.canvas.dataset.kind = "moving";
-      else delete big.canvas.dataset.kind;
+      if (now && (q < 1 || (plays && u < 1))) bigMover.dataset.kind = "moving";
+      else delete bigMover.dataset.kind;
       if (now) this.pose(big, u);
     }
   }

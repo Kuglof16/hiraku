@@ -101,6 +101,24 @@ STATE = """() => {
 }"""
 
 
+# The sun of each view after drawing time t: its direction (light - target, unit), and for the
+# first view the camera's azimuth and its "away" one (camera to target), both in degrees.
+SUN = """async (t) => {
+  await window.hiraku.seek(t);
+  const deg = (x, z) => Math.atan2(z, x) * 180 / Math.PI;
+  const views = window.hiraku.cut.cases.map((c) => {
+    const s = c.view.sun;
+    if (!s) return { look: c.view.look.name, sun: null };
+    const d = s.position.clone().sub(s.target.position).normalize();
+    return { look: c.view.look.name, sun: [d.x, d.y, d.z] };
+  });
+  const v = window.hiraku.cut.cases[0].view;
+  const off = v.camera.position.clone().sub(v.controls.target);
+  const s = views[0].sun;
+  return { views, camAz: deg(off.x, off.z), awayAz: deg(-off.x, -off.z), sunAz: s ? deg(s[0], s[2]) : null };
+}"""
+
+
 @unittest.skipUnless(ENABLED, "set HIRAKU_WEB_BROWSER=1 with Playwright installed")
 class CutN07Test(unittest.TestCase):
     @classmethod
@@ -199,6 +217,48 @@ class CutN07Test(unittest.TestCase):
         # after added) and the legend
         self.assertEqual(sorted(s.strip() for s in late["text"].split("\n") if s.strip()),
                          sorted(["補強の前", "補強の後 ✓ OK", "足した部品 2", "応力 [MPa]", self.allowable()]))
+
+    def sun_at(self, times, start=0.0):
+        """Per time: each view's sun direction (light position - its target, unit), the
+        camera's azimuth (deg, about the vertical) and its look ("real" has a sun)."""
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{self.base}/cut.html?cut=n07&run={self.run_id}&t={start}")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
+        page.evaluate("window.hiraku.ready")
+        out = {}
+        for t in times:
+            out[t] = page.evaluate(SUN, t)
+        self.assertEqual(errors, [])
+        page.close()
+        return out
+
+    def test_the_sun_stays_put_while_the_camera_moves(self):
+        """The sun (and its shadows) is fixed to the world from the cut's first camera: at the
+        start of the turn, in its middle and after the zoom it points the same way on both
+        sides, though the camera has gone round; at t=0 it stands SUN_ASIDE (40 deg) from
+        straight behind the vehicle as the first camera sees it (the first picture as before);
+        a page opened in the middle of the cut has the same sun."""
+        T = self.layout["n07"]["times"]
+        times = [0.0, (T["lead_s"] + T["turn_to_s"]) / 2, T["turn_to_s"], T["zoom_to_s"]]
+        seen = self.sun_at(times)
+        first = seen[0.0]
+        self.assertEqual([v["look"] for v in first["views"]], ["real", "real"])
+        ref = first["views"][0]["sun"]
+        for t, got in seen.items():
+            for i, v in enumerate(got["views"]):
+                for a, b in zip(v["sun"], ref):
+                    self.assertAlmostEqual(a, b, places=6, msg=(t, i))
+        # the camera did go round
+        turned = abs((seen[T["turn_to_s"]]["camAz"] - first["camAz"] + 180) % 360 - 180)
+        self.assertGreater(turned, 10)
+        # 40 deg from the first camera's "away" azimuth, as the sun was put before
+        self.assertAlmostEqual((first["sunAz"] - first["awayAz"] - 40 + 180) % 360 - 180, 0, places=6)
+        # opened in the middle of the turn: the same sun
+        mid = self.sun_at([times[1]], start=times[1])[times[1]]
+        for a, b in zip(mid["views"][0]["sun"], ref):
+            self.assertAlmostEqual(a, b, places=6)
 
     def test_paint_in_the_url_is_not_read(self):
         """The colours are the element stress whatever the URL says (paint=member is gone)."""

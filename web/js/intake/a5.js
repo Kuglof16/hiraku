@@ -9,9 +9,10 @@ const FILTERS = [["all", "すべて"], ["builtin", "最初から入っている�
 const ORIGIN_JA = { builtin: "最初から入っているルール", dropped: "あなたが読み込んだもの" };
 const BY_JA = { code: "文の型からコード", claude: "Claude" }; // no check_by: the formula came with the data
 
-function status(state, off) {
+function status(state, off, finished = false) {
   if (off) return h("span", { class: "in-st off" }, "使わない");
-  if (!state.checked) return h("span", { class: "in-st none" }, "まだ調べていません");
+  if (!state.checked) return h("span", { class: "in-st none" }, finished ? "この実行では調べていません" : "まだ調べていません");
+  if (state.isAdvice) return h("span", { class: "in-st adv", title: "合否には数えません" }, state.advice.length ? `助言 ${state.advice.length}` : "助言のルール (いまは当たりなし)");
   if (state.hits.length) return h("span", { class: "in-st hit" }, `引っかかった ${state.hits.length}`);
   if (!state.targets) return h("span", { class: "in-st none" }, "当てはまる部品なし");
   if (state.notEvaluable.length === state.targets) return h("span", { class: "in-st unk" }, "判定できません");
@@ -19,7 +20,7 @@ function status(state, off) {
   return h("span", { class: "in-st ok" }, "問題なし");
 }
 
-function leaf(n, ui, api) {
+function leaf(n, ui, api, finished) {
   const r = n.rule;
   return h("li", { class: `in-rule${ui.selected === r.rule_id ? " sel" : ""}${n.off ? " is-off" : ""}`, dataset: { rule: r.rule_id },
       onclick: () => { ui.selected = r.rule_id; ui.rerender(); } },
@@ -28,18 +29,18 @@ function leaf(n, ui, api) {
       onchange: (e) => { if (e.target.checked) ui.disabled.delete(r.rule_id); else ui.disabled.add(r.rule_id); api.toggleRule?.(r.rule_id, e.target.checked); ui.rerender(); } }),
     h("code", { class: "in-id" }, r.rule_id),
     h("span", { class: "in-rtext" }, r.text),
-    status(n.state, n.off));
+    status(n.state, n.off, finished));
 }
 
-function branch(n, ui, api, depth = 0) {
-  if (n.rule) return leaf(n, ui, api);
+function branch(n, ui, api, depth = 0, finished = false) {
+  if (n.rule) return leaf(n, ui, api, finished);
   const key = `${depth}:${n.key}`;
   const closed = ui.collapsed.has(key);
   return h("li", { class: `in-node d${depth}` },
     h("button", { class: "in-nodehead", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); ui.rerender(); } },
       h("span", { class: "in-caret" }, closed ? "▸" : "▾"), h("b", {}, n.label),
       h("span", { class: "in-n" }, `${n.count}`), n.hitCount ? h("span", { class: "in-st hit" }, `引っかかった ${n.hitCount}`) : null),
-    closed ? null : h("ul", {}, n.children.map((c) => branch(c, ui, api, depth + 1))));
+    closed ? null : h("ul", {}, n.children.map((c) => branch(c, ui, api, depth + 1, finished))));
 }
 
 function partChip(kind, id, text) {
@@ -51,11 +52,12 @@ function detail(m, rule, ui) {
   const st = ruleState(m, rule);
   const cat = CATEGORIES.find((c) => c.name === rule.category)?.ja || rule.category;
   const hitIds = new Set(st.hits.map((x) => x.part_id));
+  const adviceIds = new Set(st.advice.map((x) => x.part_id));
   const neIds = new Map(st.notEvaluable.map((x) => [x.part_id, x.missing]));
   const c = m.checks.get(rule.rule_id);
   const needs = ruleNeeds(rule, FACTS);
   return h("div", { class: "in-detail" },
-    h("header", {}, h("code", {}, rule.rule_id), h("h3", {}, rule.text), status(st, ui.disabled.has(rule.rule_id))),
+    h("header", {}, h("code", {}, rule.rule_id), h("h3", {}, rule.text), status(st, ui.disabled.has(rule.rule_id), m.finished)),
     h("dl", {},
       h("dt", {}, "種類"), h("dd", {}, cat),
       h("dt", {}, "どこから来たか"), h("dd", {}, rule.origin === "builtin" ? "最初から入っているルール" : `あなたが読み込んだファイル (${rule.docName})`),
@@ -66,15 +68,18 @@ function detail(m, rule, ui) {
       h("dt", {}, "根拠"), h("dd", {}, h("span", { class: `in-dot t${rule.trust}`, title: TRUST_JA[rule.trust] }, rule.trust), " ", rule.basis)),
     h("h4", {}, "今の設計での結果", st.checked ? h("small", {}, ` (設計の ${st.designVersion} 回目)`) : null),
     !st.checked
-      ? h("p", { class: "in-empty" }, m.designVersion ? "まだ調べていません" : "設計がまだ無いので調べていません")
+      ? h("p", { class: "in-empty" }, m.finished ? "この実行の記録には、規則を当てた結果がありません" : m.designVersion ? "まだ調べていません" : "設計がまだ無いので調べていません")
       : h("div", {},
           h("div", { class: "in-parts" },
             (c.targets || []).map((id) => hitIds.has(id) ? partChip("hit", id, st.hits.find((x) => x.part_id === id).message)
+              : adviceIds.has(id) ? partChip("adv", id, st.advice.find((x) => x.part_id === id).message)
               : neIds.has(id) ? partChip("unk", id, `判定できません。設計に「${neIds.get(id).map((n) => FACTS[n]?.label || n).join("・")}」の情報がありません`)
               : partChip("ok", id, "問題なし")),
             !c.targets?.length ? h("span", { class: "in-empty" }, "この設計に、当てはまる部品がありません") : null),
           measured(m, rule),
           st.hits.length ? h("ul", { class: "in-hits" }, st.hits.map((x) => h("li", {}, h("code", {}, x.part_id), " ", x.message))) : null,
+          st.advice.length ? [h("p", { class: "in-foot" }, "助言です。合否には数えず、設計も止めません。"),
+            h("ul", { class: "in-hits adv" }, st.advice.map((x) => h("li", {}, h("code", {}, x.part_id), " ", x.message)))] : null,
           st.notEvaluable.length
             ? h("p", { class: "in-foot" }, "判定に必要なデータが設計に無いので、判定していません: ",
                 [...new Set(st.notEvaluable.flatMap((x) => x.missing))].map((n) => h("code", {}, FACTS[n]?.label ? `${FACTS[n].label} (${n})` : n)))
@@ -91,7 +96,7 @@ function measured(m, rule) {
     h("h4", {}, "判定に使った値", rows.some((r) => r.unchecked) ? h("small", { class: "in-miss" }, " 確かめていない値を使っています") : null),
     h("table", {},
       h("tbody", {}, rows.map((r) => h("tr", { class: r.hit ? "hit" : "ok" },
-        h("td", {}, h("code", {}, r.part_id), r.hit ? h("span", { class: "in-st hit" }, "引っかかった") : null),
+        h("td", {}, h("code", {}, r.part_id), r.hit ? h("span", { class: "in-st hit" }, "引っかかった") : r.advice ? h("span", { class: "in-st adv" }, "助言") : null),
         h("td", {}, r.values.map((v) => h("span", { class: `in-val${v.unchecked ? " unchecked" : ""}`, title: v.unchecked ? "確かめていない値です" : "" },
           `${label(v.name)} ${showValue(v.value, unit(v.name))}`, v.unchecked ? " (確かめていない値)" : "", " "))),
         h("td", {}, r.need && r.hit ? `今 ${showValue(r.need.now, unit(r.need.name))} → 要る ${showValue(r.need.limit, unit(r.need.name))} ${r.need.opJa}` : r.need ? `要る ${showValue(r.need.limit, unit(r.need.name))} ${r.need.opJa}` : ""))))));
@@ -137,6 +142,6 @@ export function renderA5(el, m, api, ui) {
       h("section", { class: "in-tree" },
         dropzone(api, ui),
         h("ul", { class: "in-root", dataset: { keepScroll: "a5-tree" } },
-          tree.length ? tree.map((n) => branch(n, ui, api)) : h("li", { class: "in-empty" }, rules.length ? "条件に合うルールがありません" : "ルールはまだありません。ファイルを置くと、ここに並びます"))),
+          tree.length ? tree.map((n) => branch(n, ui, api, 0, m.finished)) : h("li", { class: "in-empty" }, rules.length ? "条件に合うルールがありません" : "ルールはまだありません。ファイルを置くと、ここに並びます"))),
       h("section", { class: "in-right" }, detail(m, selected, ui))));
 }

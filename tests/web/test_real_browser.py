@@ -271,6 +271,37 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertEqual((got["post"], got["ao"], got["samples"]), (True, True, 4))
         page.close()
 
+    def test_the_sun_stays_put_when_the_view_is_turned(self):
+        """Turning the workbench's 3D view by dragging moves the camera, not the sun: its
+        direction (light - target, unit) and the sky's turn are the same before and after."""
+        page, errors = self.open("run=sample&pace=0&t=9&look=real")
+        state = """() => {
+          const b = window.hiraku.bench;
+          b.render();
+          const lights = []; b.scene.traverse((o) => o.isDirectionalLight && lights.push(o));
+          const sun = lights.find((l) => l.castShadow);
+          const d = sun.position.clone().sub(sun.target.position).normalize();
+          const r = b.renderer.domElement.getBoundingClientRect();
+          return { sun: d.toArray(), env: b.scene.environmentRotation.toArray().slice(0, 3), cam: b.camera.position.toArray(),
+                   box: [r.left, r.top, r.width, r.height] };
+        }"""
+        before = page.evaluate(state)
+        x, y, w, h = before["box"]
+        page.mouse.move(x + w / 2, y + h / 2)
+        page.mouse.down()
+        for k in range(1, 11):
+            page.mouse.move(x + w / 2 + 30 * k, y + h / 2 + 4 * k)
+        page.mouse.up()
+        page.wait_for_timeout(300)
+        after = page.evaluate(state)
+        self.assertEqual(errors, [])
+        moved = sum((a - b) ** 2 for a, b in zip(after["cam"], before["cam"])) ** 0.5
+        self.assertGreater(moved, 0.1)  # the camera went round (m)
+        for a, b in zip(after["sun"], before["sun"]):
+            self.assertAlmostEqual(a, b, places=6)
+        self.assertEqual(after["env"], before["env"])
+        page.close()
+
 
 class AssetListTest(unittest.TestCase):
     def test_lists_only_asset_files_under_polyhaven(self):

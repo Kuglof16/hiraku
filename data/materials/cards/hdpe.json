@@ -1,0 +1,42 @@
+{
+  "id": "hdpe",
+  "name": "HDPE (high-density polyethylene), molded",
+  "name_ja": "高密度ポリエチレン (成形品)",
+  "category": "polymer",
+  "condition": "generic molded HDPE at room temperature (the fender of the demo vehicle); E_MPa, nu and yield_MPa are the values hiraku/designgen/ladder_4w.py (HDPE) uses; density and specific heat are a supplier's generic HDPE values; the grade of the fender is not chosen",
+  "properties": {
+    "E_MPa": {
+      "value": 1000.0,
+      "kind": "assumption",
+      "source": "hiraku/designgen/ladder_4w.py (HDPE): a round value of the order of HDPE's; lies inside the tensile modulus range 0.5-1.2 GPa listed for generic HDPE by Goodfellow (product page 'HDPE Granules', code ET32-GL-000110, secondary, no test method), which does not give one value",
+      "checked": false
+    },
+    "nu": {
+      "value": 0.46,
+      "kind": "typical",
+      "source": "secondary: Goodfellow product page 'HDPE Granules' (code ET32-GL-000110), property list, Poisson's ratio 0.46 for generic HDPE; the same as hiraku/designgen/ladder_4w.py (HDPE) since the analysis department's change",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "density_kg_m3": {
+      "value": 950.0,
+      "kind": "typical",
+      "source": "secondary: Goodfellow product page 'HDPE Granules' (code ET32-GL-000110), property list, 0.95 g/cm3 for generic HDPE; the same as hiraku/designgen/ladder_4w.py (HDPE)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "yield_MPa": {
+      "value": 25.0,
+      "kind": "assumption",
+      "source": "hiraku/designgen/ladder_4w.py (HDPE): a round value of the order of HDPE's; lies inside the tensile strength range 15-40 MPa Goodfellow lists for generic HDPE (a range of tensile strength, not a yield value); not read as such in a source",
+      "checked": false
+    },
+    "specific_heat_J_kgK": {
+      "value": 1900.0,
+      "kind": "typical",
+      "source": "secondary: Goodfellow product page 'HDPE Granules' (code ET32-GL-000110), property list, specific heat 1900 J/(K kg) for generic HDPE, no test method",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

@@ -115,9 +115,10 @@ class DriveEnergy(BuiltinTool):
         series = [
             _series("speed", "km/h", r.t, r.v * 3.6),
             _series("grade", "%", r.t, r.grade * 100.0),
-            _series("power.battery", "kW", r.t, _step_series(r.t, r.P_batt) / 1000.0),
+            *battery_power_series(design, r),
             _series("current.battery", "A", r.t, _step_series(r.t, r.I_batt)),
             _series("soc", "%", r.t, r.soc * 100.0),
+            *chain_series(design, r),
         ]
         out = {"results": results, "effects": effects, "series": series}
         bat = _part_of(design, "battery")
@@ -187,9 +188,68 @@ class Thermal(BuiltinTool):
                             "value": (float(T[k, i]) - T_amb) / steady if steady > 0 else 0.0, "unit": "1"})
         results.append(result("drive_time", float(r.t[-1]), "s"))
         series = [_series(f"temp.{p}", "degC", t, T[:, i]) for i, p in enumerate(net.names)]
+        series += chain_series(design, r)
+        for i, p in enumerate(net.names):  # heat to the air G_amb (T - T_amb) at the grid points, drive and charge
+            q_air = float(net.G_amb[i]) * (T[:, i] - T_amb)
+            ids = _parts_of(design, p)
+            series += (_per_part(f"heat_to_air.{p}", "W", t, q_air, ids, W_DIGITS) if ids
+                       else [_series(f"heat_to_air.{p}", "W", t, q_air)])
         return {"results": results,
                 "fields": [{"kind": "temperature", "label": "highest temperature in the run", "unit": "degC", "per_part": per_part}],
                 "series": series, "effects": effects}
+
+
+def _parts_of(design: Record, kind: str) -> list[str]:
+    """The ids of the parts of a kind; for wheels only those on a driven support (a wheel part's connects_to names
+    its support)."""
+    ids = [p for p in design.get("parts", []) if p["kind"] == kind]
+    if kind == "wheel":
+        driven = {s["id"] for s in design.get("supports", []) if s["actuation"]["drive"]}
+        ids = [p for p in ids if any(c.get("to") in driven for c in p.get("connects_to", []))]
+    return [p["id"] for p in ids]
+
+
+def _per_part(channel: str, unit: str, t: np.ndarray, values: np.ndarray, ids: list[str],
+              digits: int | None = None) -> list[Record]:
+    """One series per part, the value shared equally between the parts of the kind (K3 has one battery, motor,
+    controller, reducer and one wheel force: two battery packs in series carry the same current at half the
+    voltage each, so half the power and, with half the resistance each (assumption: the two packs alike, as
+    designgen ladder_4w battery_split cuts them), half the loss; driven wheels share the one wheel force, as K3
+    uses one mean wheel radius). Without a part of the kind: no series. digits: values rounded to that many decimals
+    (None: as they are)."""
+    out = []
+    for pid in ids:
+        s = _series(channel, unit, t, values / len(ids))
+        if digits is not None:
+            s["values"] = [round(x, digits) + 0.0 for x in s["values"]]
+        out.append(dict(s, part_id=pid))
+    return out
+
+
+W_DIGITS = 1  # the power, loss and heat series in W are written to 0.1 W (keeps the record small)
+
+
+def chain_series(design: Record, r) -> list[Record]:
+    """power.<stage> (W) through the controller, motor, reducer and driven wheels and loss.<part> (W) of the battery,
+    controller, motor and reducer, each with the part_id of its design part; a stage or loss whose kind has no part
+    in the design is left out."""
+    out = []
+    for stage in ("controller", "motor", "reducer", "wheel"):
+        out += _per_part(f"power.{stage}", "W", r.t, _step_series(r.t, r.flow[stage]), _parts_of(design, stage),
+                         W_DIGITS)
+    losses = {"battery": r.heat["battery"], "controller": r.heat["controller"], "motor": r.heat["motor"],
+              "reducer": r.gear_loss}
+    for kind, per_step in losses.items():
+        out += _per_part(f"loss.{kind}", "W", r.t, _step_series(r.t, per_step), _parts_of(design, kind), W_DIGITS)
+    return out
+
+
+def battery_power_series(design: Record, r) -> list[Record]:
+    """power.battery (kW, terminal power): one series per battery part with its part_id (two packs in series:
+    half each), or one without part_id when the design has no battery part."""
+    values = _step_series(r.t, r.P_batt) / 1000.0
+    ids = _parts_of(design, "battery")
+    return _per_part("power.battery", "kW", r.t, values, ids) if ids else [_series("power.battery", "kW", r.t, values)]
 
 
 def _part_of(design: Record, kind: str) -> str | None:
@@ -217,19 +277,27 @@ def drive_known_answers() -> list[Record]:
     expected = 600.0 * STANDARD_GRAVITY * 0.02 * d / 3600.0
     out.append(check_record("flat 5 km, lossless drive chain with full regeneration", "energy_used",
                             expected, r.energy["battery"], "Wh", 1e-6,
-                            "rolling resistance work m g C_rr d; acceleration energy comes back when stopping"))
+                            "rolling resistance work m g C_rr d; acceleration energy comes back when stopping",
+                            case_ja=(f"平らな道を {d / 1000.0:g} km、駆動の損失なし、ブレーキのエネルギーはすべて電池に"
+                                     "戻す"),
+                            source_ja="転がり抵抗の仕事 m g C_rr d。加速に使ったエネルギーは止まるときに戻る"))
     pt = _test_powertrain(R_batt=0.1)
     I = pt.battery_current(1000.0)
     out.append(check_record("battery 50 V, 0.1 ohm, 1 kW at the terminals", "current",
                             (50.0 - math.sqrt(2500.0 - 400.0)) / 0.2, I, "A", 1e-12,
-                            "equivalent circuit: (OCV - R I) I = P, smaller root"))
+                            "equivalent circuit: (OCV - R I) I = P, smaller root",
+                            case_ja=f"電池 {pt.V_batt:g} V、内部抵抗 {pt.R_batt:g} Ω、端子から 1 kW を取り出す",
+                            source_ja="電池の等価回路: (開放電圧 - R I) I = P の、小さいほうの解"))
     pt = _test_powertrain(T_max=1000.0 * 0.3 / 10.0)  # 1000 N at the wheels, 1.67 m/s^2 for 600 kg
     prof = speed_profile([Segment(200.0, 0.0, 10.0), Segment(200.0, 0.0, 10.0)], pt, dx=0.05)
     k = int(np.argmax(prof["v"] >= 10.0 - 1e-9))
     t = float(np.sum(np.diff(prof["x"][:k + 1]) / ((prof["v"][1:k + 1] + prof["v"][:k]) / 2.0)))
     out.append(check_record("0 to 10 m/s with 1000 N at the wheels, 600 kg, rolling resistance 0.02",
                             "time_to_speed", 600.0 * 10.0 / (1000.0 - 600.0 * STANDARD_GRAVITY * 0.02), t, "s", 2e-3,
-                            "constant net force: t = m v / (F - m g C_rr)"))
+                            "constant net force: t = m v / (F - m g C_rr)",
+                            case_ja=(f"0 から 10 m/s まで、車輪で 1000 N の力、{pt.mass:g} kg、転がり抵抗の係数 "
+                                     f"{pt.Crr:g}"),
+                            source_ja="差し引きの力が一定: t = m v / (F - m g C_rr)"))
     return out
 
 
@@ -239,13 +307,20 @@ def thermal_known_answers() -> list[Record]:
     n = 1000
     T = net.simulate(np.full((n, 1), 100.0), 1.0, 0.0)
     src = "first-order RC: dT = P R (1 - exp(-t / R C)); P 100 W, R 0.5 K/W, C 2000 J/K, tau 1000 s"
-    out.append(check_record("one part, 100 W step", "rise_at_tau", 50.0 * (1.0 - math.exp(-1.0)), float(T[n, 0]), "K", 1e-9, src))
-    out.append(check_record("one part, 100 W step", "steady_rise", 50.0, float(net.steady([100.0])[0]), "K", 1e-12, src))
+    src_ja = (f"1 次の RC 回路: dT = P R (1 - exp(-t / R C))。P 100 W、R 0.5 K/W、C {net.C[0]:g} J/K、"
+              f"時定数 {n:g} s")
+    one_ja = "部品 1 つに 100 W を急に入れる"
+    out.append(check_record("one part, 100 W step", "rise_at_tau", 50.0 * (1.0 - math.exp(-1.0)), float(T[n, 0]), "K", 1e-9, src,
+                            case_ja=one_ja, source_ja=src_ja))
+    out.append(check_record("one part, 100 W step", "steady_rise", 50.0, float(net.steady([100.0])[0]), "K", 1e-12, src,
+                            case_ja=one_ja, source_ja=src_ja))
     G = np.array([[0.0, 1.0 / 0.3], [1.0 / 0.3, 0.0]])
     net2 = ThermalNetwork(["inner", "outer"], np.array([500.0, 800.0]), np.array([0.0, 1.0 / 0.7]), G)
     out.append(check_record("two parts in series to the air (0.3 + 0.7 K/W), 40 W into the inner", "steady_rise",
                             40.0 * (0.3 + 0.7), float(net2.steady([40.0, 0.0])[0]), "K", 1e-12,
-                            "series thermal resistances add"))
+                            "series thermal resistances add",
+                            case_ja="2 つの部品を直列にして空気へ (0.3 + 0.7 K/W)、内側に 40 W を入れる",
+                            source_ja="直列の熱抵抗は足し算になる"))
     P = np.zeros((3000, 2))
     P[:1000, 0] = 40.0
     P[1000:, 1] = 25.0
@@ -255,5 +330,7 @@ def thermal_known_answers() -> list[Record]:
     put_in = 40.0 * 1000 + 25.0 * 2000
     out.append(check_record("energy ledger of the two-part network", "heat_in",
                             put_in, stored + lost, "J", 1e-3,
-                            "heat put in = heat stored + heat lost to the air (outflow integrated by trapezoids)"))
+                            "heat put in = heat stored + heat lost to the air (outflow integrated by trapezoids)",
+                            case_ja="2 つの部品の熱の出入りの帳簿",
+                            source_ja="入れた熱 = たまった熱 + 空気へ逃げた熱 (逃げた分は台形で足し合わせる)"))
     return out

@@ -728,6 +728,13 @@ window.PROMO_LAYOUT = {
       "verdict": {
         "of_label": 2,
         "_note": "問題なし / 直しが要る: at most this many times the pane name's size, and no wider than the pane"
+      },
+      "pet": {
+        "w": 96,
+        "h": 96,
+        "right": 12,
+        "bottom": 12,
+        "_note": "added by the screens department (2026-11-06): the box at the pane's bottom right where the 3D pet of the agent that ran the pane's test stands (promo/pets/pet3d.js). It works while its pane plays, then reacts to the verdict. Posed from the cut time t only; not counted as moving (as n04's)"
       }
     },
     "times": {
@@ -1400,6 +1407,16 @@ window.PROMO_LAYOUT = {
       "wind"
     ],
     "_tests_note": "wind (F1-gust58-beyond) in place of rollover: the video run 20261103-153914 has no S3 case past the limit, and the voice does not name the tile. Order: the tile in the large box while the voice says 動くか is stuck at the step, while it says 壊れないか the frame breaks (recorded voice)",
+    "runup": {
+      "tile": "step_stuck",
+      "order": [
+        "stops",
+        "climbs"
+      ],
+      "gap_px": 12,
+      "lead_share": 0.75,
+      "_note": "added by the screens department (2026-11-06), for the promo department to move: the tile that shows the step test's run 2 (rolling at the step at the load case's speed) as two panes stacked in order, the step it stops at (stops) over the step it climbs (climbs), gap_px apart; lead_share: the share of the tile's play given to the stretch both records have (the approach, the hit and the climb), the rest to the stopped run's later tries and standstill. Used only when the run holds such records (web/js/cut_n06.js)"
+    },
     "tile": {
       "border_px": 2,
       "radius_px": 12,
@@ -1484,7 +1501,7 @@ window.PROMO_LAYOUT = {
   "n08": {
     "duration_s": 6.4,
     "_duration_note": "6.4 s is N08's slot. Voice from 0.3 s to 6.29 s; parts measured from its pauses: ただ、 about 0.3-0.9 s; CAE のツールは気軽に買えるものではなく、 about 0.9-3.5 s; 使いこなすのも about 3.6-4.8 s; 簡単ではありません。 about 4.9-6.0 s",
-    "_note": "an ordinary CAE tool, not HIRAKU: a cool grey business application on a dark ground, tilted a little. The licence windows pile up while the voice says it is not easy to buy, the settings windows while it says 使いこなすのも, the warnings and the stack of manuals while it says 簡単ではありません. No product names, logos or figures (no prices, no counts in the warnings). Every box below is in stage px before the camera's rotation and scale",
+    "_note": "an ordinary CAE tool, not HIRAKU: a cool grey business application on a dark ground, tilted a little. The licence windows pile up while the voice says it is not easy to buy, the settings windows while it says 使いこなすのも, the warnings and the stack of manuals while it says 簡単ではありません. No product names, logos or figures in the application (no prices, no counts in the warnings); the one price example the voice gives (2026-11-06, script v9) has its source in a small line under the window (n08.src). Every box below is in stage px before the camera's rotation and scale",
     "camera": {
       "rotate_from_deg": -1.4,
       "rotate_to_deg": -2.4,
@@ -2924,8 +2941,8 @@ window.PROMO_LAYOUT = {
       "n06": {
         "message": "作ってみると、うまくいかない",
         "limits": {
-          "label": 6,
-          "why": "six failures, one tag each, no figures"
+          "label": 7,
+          "why": "six failures, one tag each, no figures; the step tile (n06.runup) shows two runs, each with its tag, whose step height and speed are the record's (7, 2026-11-06)"
         }
       },
       "n07": {

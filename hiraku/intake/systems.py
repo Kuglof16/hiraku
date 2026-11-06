@@ -192,7 +192,12 @@ def seat_attach(net: Net) -> Result:
     hits = [_hit(s, f"座席 {s} が骨組みにつながっていません。座席の側でつながっているのは {_ends(net.reach([s], avoid=belts))} です。"
                     "骨組み (member・node・kind が frame の部品) まで connects_to でつないでください", attached=0)
             for s in seats if not net.reaches_frame(s, belts)]
-    return seats, hits, []
+    # the seat back and the head restraint are part of the seat: each must be held, through the seat or on its own, by the frame
+    backs = net.of_kind("seatback", "head_restraint")
+    hits += [_hit(b, f"座席の背もたれか頭を受け止める部品 {b} が骨組みにつながっていません。つながっているのは {_ends(net.reach([b], avoid=belts))} です。"
+                     "座席か骨組みまで connects_to でつないでください", attached=0)
+             for b in backs if not net.reaches_frame(b, belts)]
+    return [*seats, *backs], hits, []
 
 
 def restraint(net: Net) -> Result:

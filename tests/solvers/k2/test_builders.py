@@ -24,9 +24,9 @@ import json
 # The requirement values the builders read, as the requirements file would carry them
 # (test values here; the requirements file gives the real ones with their sources).
 EXTRA = {"Q11": ("1", 0.6), "Q12": (None, "C"), "Q13": ("%", 14.0), "Q14": ("deg", 15.0), "Q18": ("m/s", 30.0),
-         "Q51": ("s", 6.0), "Q52": ("m", 14.0), "Q53": ("%", 20.0), "Q60": ("deg", 24.0)}
+         "Q51": ("s", 6.0), "Q52": ("m", 14.0), "Q53": ("%", 20.0), "Q60": ("deg", 24.0), "Q58": ("m", 12.0)}
 TOOL_OF = {"S1": "tilt", "S1'": "tilt", "F1": "crosswind", "S3": "lane_change", "S4": "braking", "S4b": "braking",
-           "S5": "offroad_roll", "P2": "launch", "P3": "launch"}
+           "S5": "offroad_roll", "P2": "launch", "P3": "launch", "S6": "turning_circle"}
 
 
 def predictions(step):

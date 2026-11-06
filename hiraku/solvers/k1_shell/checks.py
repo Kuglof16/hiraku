@@ -39,6 +39,18 @@ SRC_HEYWOOD = ("finite-width plate with a central hole in tension: Kt_net = 2 + 
                "Kt_net / (1 - d/W); limit d/W -> 0 is Kirsch's 3. Formula as quoted in Peterson's Stress Concentration "
                "Factors (Pilkey & Pilkey, 3rd ed., Wiley 2008), chapter 4 (holes); not checked against the book here")
 
+# the same sources in plain Japanese for the screen (case_ja / source_ja)
+SRC_MH_JA = ("MacNeal & Harder (1985)、有限要素の精度を試す標準問題 (Finite Elements in Analysis and Design 1, 3-20) の"
+             "パッチテストの形。内側の節点はよく引かれる値 (MacNeal & Harder (1985) の座標、確かめていない)")
+SRC_BEAM_JA = ("片持ち梁の先に荷重: P L³ / (3 E I) + P L / (G A_s) (曲げのたわみに Timoshenko のせん断のたわみを足す。"
+               "A_s は荷重と同じ向きの 2 枚の壁の 2 t (壁の中心線の長さ) とした近似)。I は k0_handcalc.sections.rect_tube から")
+SRC_BREDT_JA = "閉じた薄肉断面 (Bredt の式): ねじれの割合 T / (G J)、J = 4 Am² t / 周の長さ。せん断応力 T / (2 Am t)"
+SRC_NAVIER_JA = ("四辺を単純支持した正方形の板に一様な圧力: 真ん中のたわみを Navier の二重級数で出し、ここで足し合わせる "
+                 "(Timoshenko & Woinowsky-Krieger, Theory of Plates and Shells, 2nd ed. 1959)")
+SRC_HEYWOOD_JA = ("真ん中に穴のある幅の決まった板を引っぱる: Kt_net = 2 + (1 - d/W)³ (Heywood)、Kt_gross = Kt_net / (1 - d/W)。"
+                  "d/W → 0 で Kirsch の 3 になる。式は Peterson's Stress Concentration Factors (Pilkey & Pilkey, 3rd ed., "
+                  "Wiley 2008) の 4 章 (穴) に引かれている形 (Peterson's Stress Concentration Factors、確かめていない)")
+
 
 # ------------------------------------------------------------------ flat helpers
 
@@ -108,7 +120,9 @@ def patch_tests() -> tuple[list[Record], dict]:
     for k, name in enumerate(("sxx", "syy", "sxy")):
         worst = s[np.argmax(np.abs(s[:, k] - expect[k])), k]
         out.append(check_record("membrane patch test, distorted 5-element patch", f"{name} (worst element)",
-                                expect[k], worst, "MPa", 1e-6, SRC_MH + "; expected D * constant strain"))
+                                expect[k], worst, "MPa", 1e-6, SRC_MH + "; expected D * constant strain",
+                                case_ja=f"面内のパッチテスト (ゆがんだ {len(PATCH_QUADS)} 要素のパッチ)",
+                                source_ja=SRC_MH_JA + "。期待値は D × 一定のひずみ"))
     # bending: w = 1e-3 (x^2 + x y + y^2) / 2, rx = dw/dy, ry = -dw/dx
     U = _prescribed(model, fixed, field_values(
         lambda x, y: [0, 0, 1e-3 * (x * x + x * y + y * y) / 2, 1e-3 * (y + x / 2), -1e-3 * (x + y / 2), 0]))
@@ -120,7 +134,9 @@ def patch_tests() -> tuple[list[Record], dict]:
         s = detail["bending_top"][:, k]
         worst = s[np.argmax(np.abs(s - expect[k]))]
         out.append(check_record("bending patch test, distorted 5-element patch", f"top {name} (worst element)",
-                                expect[k], worst, "MPa", 1e-6, SRC_MH + "; expected D * constant curvature * t/2"))
+                                expect[k], worst, "MPa", 1e-6, SRC_MH + "; expected D * constant curvature * t/2",
+                                case_ja=f"曲げのパッチテスト (ゆがんだ {len(PATCH_QUADS)} 要素のパッチ)",
+                                source_ja=SRC_MH_JA + "。期待値は D × 一定の曲率 × t/2"))
     return out, detail
 
 
@@ -236,28 +252,37 @@ def tube_cantilever_records(res: dict) -> list[Record]:
     L, b, h, t, P, T = (res[k] for k in ("L", "b", "h", "t", "P", "T"))
     sec = res["section"]
     case = f"cantilever {b:g}x{h:g}x{t:g} tube, L {L:g} mm, mesh {ms.element_size_mm:g} mm"
+    case_ja = f"片持ちの角パイプ {b:g}x{h:g}x{t:g}、長さ {L:g} mm、要素の大きさ {ms.element_size_mm:g} mm"
+    down_ja = case_ja + f"、先に {P / 1e3:g} kN を下向きに"
+    side_ja = case_ja + f"、先に {P / 1e3:g} kN を横 (+y) 向きに"
     out = []
     # vertical: strong axis (h), shear on the two h walls
     d_exp = P * L**3 / (3 * E_ST * sec["Iz"]) + P * L / (G_ST * 2 * t * (h - t))
     out.append(check_record(case + ", 1 kN down at the tip", "tip_deflection", d_exp, -U[6 * tip + 2, 0], "mm",
-                            0.03, SRC_BEAM + "; tip ring tied rigidly to the load node"))
+                            0.03, SRC_BEAM + "; tip ring tied rigidly to the load node",
+                            case_ja=down_ja, source_ja=SRC_BEAM_JA + "。先の端の輪は荷重をかける節点に剛につないだ"))
     st = element_stresses(model, U[:, 0])
     e = _wall_element(ms, L / 2, y=(h - t) / 2, z=None)
     s_c = ms.station_s_mm[e]
     out.append(check_record(case + ", 1 kN down at the tip", f"top wall outer axial stress at s = {s_c:.1f} mm",
                             P * (L - s_c) * (h / 2) / sec["Iz"], st.in_plane((1.0, 0.0, 0.0), "top")[e, 0], "MPa",
                             0.03, "M c / I with M = P (L - s), c = h/2 (outer surface), I from sections.rect_tube; "
-                                  "element at the middle of the top wall"))
+                                  "element at the middle of the top wall",
+                            case_ja=down_ja,
+                            source_ja="M c / I、M = P (L - s)、c = h/2 (外の面)、I は sections.rect_tube から。"
+                                      "上の壁の真ん中の要素で"))
     # sideways (+y): weak axis (b); local z of the member is -y, so the +y side is local z = -(b-t)/2
     d_exp = P * L**3 / (3 * E_ST * sec["Iy"]) + P * L / (G_ST * 2 * t * (b - t))
     out.append(check_record(case + ", 1 kN sideways (+y) at the tip", "tip_deflection", d_exp, U[6 * tip + 1, 1],
-                            "mm", 0.03, SRC_BEAM + "; weak axis"))
+                            "mm", 0.03, SRC_BEAM + "; weak axis",
+                            case_ja=side_ja, source_ja=SRC_BEAM_JA + "。曲がりやすい向きの軸で"))
     st = element_stresses(model, U[:, 1])
     e = _wall_element(ms, L / 2, y=None, z=(b - t) / 2)  # the -y side wall: tension
     s_c = ms.station_s_mm[e]
     out.append(check_record(case + ", 1 kN sideways (+y) at the tip", f"-y wall outer axial stress at s = {s_c:.1f} mm",
                             P * (L - s_c) * (b / 2) / sec["Iy"], st.in_plane((1.0, 0.0, 0.0), "top")[e, 0], "MPa",
-                            0.03, "M c / I with c = b/2, I = Iy from sections.rect_tube"))
+                            0.03, "M c / I with c = b/2, I = Iy from sections.rect_tube",
+                            case_ja=side_ja, source_ja="M c / I、c = b/2、I = Iy は sections.rect_tube から"))
     if "U_torsion" not in res:
         return out
     # torsion (free warping at both ends)
@@ -265,11 +290,16 @@ def tube_cantilever_records(res: dict) -> list[Record]:
     x0, x1 = 0.3 * L, 0.7 * L
     twist = _ring_twist(mt, Ut, x1) - _ring_twist(mt, Ut, x0)
     src_t = SRC_BREDT + "; torque applied as the uniform shear flow on the tip ring, both ends free to warp"
+    src_t_ja = SRC_BREDT_JA + "。トルクは先の端の輪に一様なせん断流としてかけ、両端とも断面の反りは止めない"
+    torque_ja = case_ja + f"、先に {T / 1e6:g} kN·m のねじり"
     j_open = 2.0 * ((b - t) + (h - t)) * t**3 / 3.0  # the walls' own (open-section) torsion, which the shell has
     out.append(check_record(case + f", {T / 1e6:g} kN*m torque at the tip", f"twist between {x0:g} and {x1:g} mm",
                             T * (x1 - x0) / (G_ST * (sec["J"] + j_open)), twist, "rad", 0.005,
                             src_t + "; twist = rate * length; J from sections.rect_tube plus the walls' own "
-                                    "torsion as plates, mid-line perimeter x t^3 / 3"))
+                                    "torsion as plates, mid-line perimeter x t^3 / 3",
+                            case_ja=torque_ja,
+                            source_ja=src_t_ja + "。ねじれ角 = 割合 × 長さ。J は sections.rect_tube の値に、壁そのものの"
+                                                 "板としてのねじり (中心線の周の長さ × t³ / 3) を足す"))
     st = element_stresses(mt, Ut)
     Am = (b - t) * (h - t)
     for label, e in (("h wall", _wall_element(ms, L / 2, y=None, z=(b - t) / 2)),
@@ -277,7 +307,7 @@ def tube_cantilever_records(res: dict) -> list[Record]:
         tau = abs(st.in_plane((1.0, 0.0, 0.0), "mid")[e, 2])
         out.append(check_record(case + f", {T / 1e6:g} kN*m torque at the tip",
                                 f"shear stress, middle of the {label} at s = {ms.station_s_mm[e]:.1f} mm",
-                                T / (2 * Am * t), tau, "MPa", 0.03, src_t))
+                                T / (2 * Am * t), tau, "MPa", 0.03, src_t, case_ja=torque_ja, source_ja=src_t_ja))
     return out
 
 
@@ -409,6 +439,9 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
     fr = ShellFrame.build(lad, element_size_mm)
     res = analyze_shell(lad, frame=fr)
     case = f"symmetric ladder at rest on four rigid wheels, shell mesh {element_size_mm:g} mm"
+    case_ja = (f"左右対称のはしご形のフレームが {len(lad['supports'])} つの変形しない車輪の上で止まっている "
+               f"(シェルの要素の大きさ {element_size_mm:g} mm)")
+    held_ja = "6 つの押さえ (拘束) は何も受けない"
     out = []
     total = float(sum(g["force_N"][2] for g in res["ground"].values()))
     # the shell's own weight (lumped element masses and the parts it carries as point loads) against the
@@ -417,10 +450,15 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
     out.append(check_record(case, "shell_weight", total, float(res["weight_N"]), "N", 0.01,
                             "the shell's weight (element masses lumped to the nodes, parts) equals the sum of the "
                             "ground forces it is loaded with (K0 rigid-body statics of the design's masses); the "
-                            "difference is the mid-surface tubes overlapping at the joints"))
+                            "difference is the mid-surface tubes overlapping at the joints",
+                            case_ja=case_ja,
+                            source_ja="シェルの重さ (要素の質量を節点に集めたものと部品) が、荷重として入れた地面の力 "
+                                      "(K0 の剛体の力のつり合いで設計の質量から出したもの) の合計に等しい。差は継ぎ目で"
+                                      "管の中心面が重なる分"))
     out.append(check_record(case, "hold_reaction", 0.0, res["residual_ratio"], "1", 1e-6,
                             "loads balanced by inertia relief: the six holding restraints carry nothing "
-                            "(reaction / weight)"))
+                            "(reaction / weight)",
+                            case_ja=case_ja, source_ja=f"荷重は慣性リリーフでつり合う: {held_ja} (反力 / 重さ)"))
     # rail L ahead of the middle cross member, 500 mm behind the front joint: beam bending M c / I
     sec = lad["sections"]["rt"]["dims_mm"]
     b, h, t = sec["b"], sec["h"], sec["t"]
@@ -439,7 +477,13 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
                             "(free body of the rail ahead of the cut; symmetric, so the cross member puts no "
                             "vertical moment into the rail), c = h/2, I from sections.rect_tube; W_FL from the "
                             "K0 ground forces; element next to the middle of the upper wall (normal stress from the "
-                            "restrained twist of the rail, which the formula leaves out, is not zero there)"))
+                            "restrained twist of the rail, which the formula leaves out, is not zero there)",
+                            case_ja=case_ja,
+                            source_ja="梁の曲げ -M c / I。M = (W_FL - 前の横の部材の重さの半分) s - w s² / 2 (切り口より"
+                                      "前のレールだけを取り出して。左右対称なので、横の部材はレールに上下の向きの"
+                                      "モーメントを入れない)、c = h/2、I は sections.rect_tube から。W_FL は K0 の地面の力"
+                                      "から。上の壁の真ん中の隣の要素で (レールのねじれが止められて出る垂直応力は式に"
+                                      "入っておらず、そこでも 0 ではない)"))
     # braking: each wheel's grip 0.5 x its load backwards; the pitch is left to the angular acceleration
     m = res["mass"]["mass_kg"]
     gf = {sid: [("reaction", g["point_mm"], g["force_N"]),
@@ -447,13 +491,20 @@ def ladder_frame_checks(element_size_mm: float = 20.0) -> list[Record]:
           for sid, g in res["ground"].items()}
     brk = analyze_shell(lad, ground_forces=gf, inertia_N=np.array([0.5 * m * STANDARD_GRAVITY, 0.0, 0.0]), frame=fr)
     case = f"symmetric ladder braking, grip 0.5 x each wheel load, shell mesh {element_size_mm:g} mm"
+    case_ja = (f"左右対称のはしご形のフレームがブレーキをかけている (どの車輪も荷重の 0.5 倍の力で地面をつかむ。"
+               f"シェルの要素の大きさ {element_size_mm:g} mm)")
     out.append(check_record(case, "inertia_acceleration", 0.5 * STANDARD_GRAVITY,
                             float(np.linalg.norm(brk["inertia_accel"])), "m/s^2", 0.01,
                             "d'Alembert: a = (ground forces + weight) / m = 0.5 g; within 1 % because the shell's "
-                            "tube mass (rho t area) differs slightly from the beam bookkeeping the forces were made with"))
+                            "tube mass (rho t area) differs slightly from the beam bookkeeping the forces were made with",
+                            case_ja=case_ja,
+                            source_ja="ダランベールの原理: a = (地面の力 + 重さ) / m = 0.5 g。許容が 1 % なのは、シェルの"
+                                      "管の質量 (密度 × 厚さ × 面積) が、力を作ったときの梁での計算とわずかに違うため"))
     out.append(check_record(case, "hold_reaction", 0.0, brk["residual_ratio"], "1", 1e-6,
                             "inertia relief with an angular acceleration (the grip at the ground pitches the "
-                            "vehicle): the six holding restraints carry nothing"))
+                            "vehicle): the six holding restraints carry nothing",
+                            case_ja=case_ja,
+                            source_ja=f"角加速度も入れた慣性リリーフ (地面でつかむ力が車を前のめりに回す): {held_ja}"))
     return out
 
 
@@ -467,6 +518,13 @@ SRC_WILLIAMS = ("re-entrant corner of 270 degrees in plane stress: the stress gr
                 "smallest root of lambda sin(2 alpha) + sin(2 alpha lambda) = 0, 2 alpha = 3 pi / 2 (symmetric mode; "
                 "M. L. Williams, J. Appl. Mech. 19 (1952) 526-528, not checked here; the root is found here), so the "
                 "corner element's value grows by 2^(1 - lambda) each time the elements halve")
+SRC_NAVIER_M_JA = ("四辺を単純支持した正方形の板に一様な圧力: 真ん中の曲げモーメントを Navier の二重級数で出す。"
+                   "M_x = D Σ a_mn ((m π/a)² + ν (n π/a)²) sin(m π/2) sin(n π/2)、a_mn = 16 q / (π⁶ D m n "
+                   "(m²/a² + n²/a²)²)。級数はここで足し合わせる (Timoshenko & Woinowsky-Krieger, Theory of Plates "
+                   "and Shells, 2nd ed. 1959 の表、確かめていない)。表面の応力は 6 M_x / t²")
+SRC_WILLIAMS_JA = ("平面応力で 270° の入り隅: 応力は r^(λ - 1) で大きくなる。λ は λ sin(2α) + sin(2α λ) = 0、2α = 3π/2 の"
+                   "いちばん小さい根 (対称のモード。根はここで求める。M. L. Williams, J. Appl. Mech. 19 (1952) 526-528、"
+                   "確かめていない)。なので要素を半分にするたびに、角の要素の値は 2^(1 - λ) 倍になる")
 
 
 def navier_centre_moment(a: float, q: float, nu: float, terms: int = 2001) -> float:
@@ -555,7 +613,7 @@ def l_plate_corner(n: int, a: float = 100.0, t: float = 1.0, sigma: float = 10.0
 def convergence_checks(plate_n=(4, 8, 16), l_n=(8, 16, 32)) -> list[Record]:
     """Known answers of k1_shell.convergence: Richardson on the plate centre stress against Navier, the error
     estimate falling as the plate mesh is refined, and the singular verdict at the L plate's re-entrant corner."""
-    from .convergence import REFINE_RATIO, SINGULAR_ORDER, convergence_record
+    from .convergence import LIMIT_PCT, REFINE_RATIO, SINGULAR_ORDER, convergence_record
 
     out = []
     a, t, q = 100.0, 1.0, 0.01
@@ -566,36 +624,59 @@ def convergence_checks(plate_n=(4, 8, 16), l_n=(8, 16, 32)) -> list[Record]:
     rec = convergence_record("sigma_xx at the centre", "MPa", levels)
     case = (f"simply supported square plate {a:g} x {a:g} x {t:g}, uniform {q:g} MPa, meshes "
             f"{' / '.join(f'{n} x {n}' for n in plate_n)}")
+    case_ja = (f"四辺を単純支持した正方形の板 {a:g} x {a:g} x {t:g}、一様な圧力 {q:g} MPa、メッシュ "
+               f"{' / '.join(f'{n} x {n}' for n in plate_n)}")
     out.append(check_record(case, "Richardson extrapolated centre stress (bottom surface)", exact,
                             rec.get("extrapolated"), "MPa", 0.005,
                             SRC_NAVIER_M + "; FE: mean of the four element centres around the plate centre; "
-                                           "Richardson with the observed order (k1_shell.convergence)"))
+                                           "Richardson with the observed order (k1_shell.convergence)",
+                            case_ja=case_ja,
+                            source_ja=SRC_NAVIER_M_JA + "。有限要素の値: 板の真ん中を囲む 4 つの要素の中心の平均。"
+                                                        "見えた次数で Richardson の外挿 (k1_shell.convergence)"))
     out.append(check_record(case, "observed order of the centre stress", 2.0, rec.get("observed_order"), "1", 0.05,
                             "the centre stress of bilinear plate elements converges as h^2 (element-centre values "
-                            "around a symmetry point); HIRAKU's expectation, no source"))
+                            "around a symmetry point); HIRAKU's expectation, no source",
+                            case_ja=case_ja,
+                            source_ja="四角の板の要素 (双一次) の真ん中の応力は h² で答えに近づく (対称な点を囲む要素の"
+                                      "中心の値)。HIRAKU の見込みで、出典はない"))
     out.append(check_record(case, "verdict converged (1 = yes)", 1.0, float(rec["verdict"] == "converged"), "1", 0.0,
-                            "change between the two finest levels below the 5 % limit and not singular"))
+                            "change between the two finest levels below the 5 % limit and not singular",
+                            case_ja=case_ja,
+                            source_ja=f"いちばん細かい 2 段のあいだの変化が限度の {LIMIT_PCT:g} % より小さく、"
+                                      "応力が限りなく大きくなる点 (特異点) でもない"))
     zz = [p["zz_global"] for p in plates]
     out.append(check_record(case, "error estimate falls with each refinement (finest / coarsest, global %)",
                             (1.0 / REFINE_RATIO) ** (len(plate_n) - 1), zz[-1] / zz[0], "1", 0.15,
                             "the Zienkiewicz-Zhu estimate of constant-stress elements on a smooth field falls as h^1 "
                             f"(halves per halving); got {' / '.join(f'{z:.1f}' for z in zz)} %. Expectation from the "
-                            "element's order, tolerance HIRAKU's choice"))
+                            "element's order, tolerance HIRAKU's choice",
+                            case_ja=case_ja,
+                            source_ja="応力が一定の要素の Zienkiewicz-Zhu の誤差の見積もりは、なめらかな場では h¹ で"
+                                      "下がる (要素を半分にするたびに半分)。結果は "
+                                      f"{' / '.join(f'{z:.1f}' for z in zz)} %。見込みは要素の次数から、許容は HIRAKU が"
+                                      "決めた"))
     # L plate: the re-entrant corner
     lp = [l_plate_corner(n) for n in l_n]
     lev = [{"element_size_mm": 100.0 / n, "value": r["max"]} for n, r in zip(l_n, lp)]
     lrec = convergence_record("largest element von Mises", "MPa", lev)
     lcase = (f"L-shaped plate 200 x 200 without a 100 x 100 corner, tension on both arms, meshes "
              f"{' / '.join(f'{n}' for n in l_n)} elements per 100 mm")
+    lcase_ja = (f"L 字の板 (200 x 200 から 100 x 100 の角を切り取った形)、両方の腕を引っぱる、メッシュは 100 mm あたり "
+                f"{' / '.join(f'{n}' for n in l_n)} 要素")
     out.append(check_record(lcase, "peak at the re-entrant corner element on every mesh (1 = yes)", 1.0,
-                            float(all(r["at_corner"] for r in lp)), "1", 0.0, "the singular point is the corner"))
+                            float(all(r["at_corner"] for r in lp)), "1", 0.0, "the singular point is the corner",
+                            case_ja=lcase_ja, source_ja="応力が限りなく大きくなる点 (特異点) は入り隅の角"))
     out.append(check_record(lcase, "verdict singular (1 = yes)", 1.0, float(lrec["verdict"] == "singular"), "1", 0.0,
                             f"values growing with d2/d1 at or above 2^-{SINGULAR_ORDER:g} are singular "
-                            "(k1_shell.convergence); the corner has no finite stress"))
+                            "(k1_shell.convergence); the corner has no finite stress",
+                            case_ja=lcase_ja,
+                            source_ja=f"細かくするたびの増え方 d2/d1 が 2^-{SINGULAR_ORDER:g} 以上なら特異点 "
+                                      "(k1_shell.convergence)。角の応力は有限の値にならない"))
     lam = williams_lambda()
     d = [lp[i + 1]["max"] - lp[i]["max"] for i in range(len(lp) - 1)]
     out.append(check_record(lcase, "growth of the corner peak per halving (d2 / d1)", REFINE_RATIO ** (1.0 - lam),
-                            d[-1] / d[-2], "1", 0.05, SRC_WILLIAMS + f"; lambda {lam:.4f}"))
+                            d[-1] / d[-2], "1", 0.05, SRC_WILLIAMS + f"; lambda {lam:.4f}",
+                            case_ja=lcase_ja, source_ja=SRC_WILLIAMS_JA + f"。λ = {lam:.4f}"))
     return out
 
 
@@ -613,21 +694,33 @@ def _known_answers() -> list[Record]:
     got, exp = inplane_cantilever(8, 2)
     out.append(check_record("in-plane cantilever strip 100 x 10 x 1, 8 x 2 elements, end moment", "tip_deflection",
                             exp, got, "mm", 1e-6, "pure bending M L^2 / (2 E I) (exact plane-stress solution); "
-                                                  "incompatible membrane modes reproduce it on rectangles"))
+                                                  "incompatible membrane modes reproduce it on rectangles",
+                            case_ja="面内で曲げる片持ちの帯板 100 x 10 x 1 (8 x 2 要素)、先の端に曲げモーメント",
+                            source_ja="曲げモーメントだけのときの M L² / (2 E I) (平面応力の厳密な解)。長方形の要素なら、"
+                                      "非適合の膜のモードでこれがそのまま出る"))
     res = tube_cantilever(size=10.0)
     out += tube_cantilever_records(res)
     soft = tube_cantilever(size=10.0, drill_factor=element.DRILL_FACTOR * 1e-3)
     out.append(check_record("cantilever 40x80x2.3 tube, 1 kN down: drilling stiffness 1e-3 vs 1e-6",
                             "tip_deflection", -soft["U"][6 * soft["tip"] + 2, 0], -res["U"][6 * res["tip"] + 2, 0],
-                            "mm", 1e-3, "the fictitious drilling stiffness must not change the answer"))
+                            "mm", 1e-3, "the fictitious drilling stiffness must not change the answer",
+                            case_ja=(f"片持ちの角パイプ {res['b']:g}x{res['h']:g}x{res['t']:g}、先に {res['P'] / 1e3:g} kN を"
+                                     f"下向きに: 面の中の回転 (ドリリング) の剛性 {element.DRILL_FACTOR:g} と "
+                                     f"{element.DRILL_FACTOR * 1e-3:g} で比べる"),
+                            source_ja="計算のために足した仮の回転の剛性 (ドリリング) が、答えを変えてはいけない"))
     got, exp = square_plate(16)
     out.append(check_record("simply supported square plate 100 x 100 x 1, uniform 0.01 MPa, 16 x 16", "centre_deflection",
-                            exp, got, "mm", 0.01, SRC_NAVIER))
+                            exp, got, "mm", 0.01, SRC_NAVIER,
+                            case_ja="四辺を単純支持した正方形の板 100 x 100 x 1、一様な圧力 0.01 MPa、16 x 16 要素",
+                            source_ja=SRC_NAVIER_JA))
     kt = holed_plate_kt()
     out.append(check_record("plate W 100 x 300, central hole d 25 (d/W 0.25), tension 100 MPa", "Kt_gross",
                             kt["kt_heywood_gross"], kt["kt"], "1", 0.03,
                             SRC_HEYWOOD + "; FE value: element-centre sigma_yy of the two rings next to the hole "
-                                          "on the x axis, extrapolated linearly in r to the edge"))
+                                          "on the x axis, extrapolated linearly in r to the edge",
+                            case_ja="幅 W 100 x 長さ 300 の板、真ん中に直径 25 の穴 (d/W 0.25)、100 MPa で引っぱる",
+                            source_ja=SRC_HEYWOOD_JA + "。有限要素の値: x 軸の上で穴のすぐ外の 2 列の要素の中心の "
+                                                       "sigma_yy を、r について直線で穴の縁まで延ばした"))
     out += ladder_frame_checks()
     out += convergence_checks()
     return out

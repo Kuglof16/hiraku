@@ -102,7 +102,7 @@ requirements:
     value: 若年女性 5 % 〜 若年男性 95 %
     source: default
     trust: 1
-    basis: AIST 人体寸法データベース 1991-92, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (not checked in this repository)
+    basis: AIST 人体寸法データベース 1991-92, 項目 B1 身長, 若年 (young adults), パーセンタイル 5 % の女性 1511.2 mm から 95 % の男性 1819.6 mm, https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (B1 table read 2026-11-06)
   - key: Q33
     name: 体重 (強さの不利側)
     value: 76.6
@@ -111,7 +111,7 @@ requirements:
     trust: 1
     basis: >-
       AIST 人体寸法データベース 1991-92, 項目 N1 体重, 若年男性 95 パーセンタイル,
-      https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (read against the table, 2026-11-03)
+      https://www.airc.aist.go.jp/dhrt/91-92/data/list.html (N1 table read 2026-11-06)
   - key: Q40
     name: 積載
     value: 150
@@ -170,6 +170,19 @@ requirements:
     source: default
     trust: 3
     basis: assumption
+  - key: Q58
+    name: 最小回転半径の上限
+    value: 12
+    unit: m
+    source: default
+    trust: 3
+    basis: 'assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a
+      vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read
+      2026-11-05 in the e-Gov law text (https://laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知
+      平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上),
+      read 2026-11-05 (https://www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程
+      (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A
+      (https://www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked'
   - key: Q60
     name: 倒れない角度 (Q30 の組で)
     value: 24

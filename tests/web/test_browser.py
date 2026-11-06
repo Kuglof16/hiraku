@@ -102,6 +102,8 @@ def n05_layout():
         "subtitle_band": {"y": 910, "h": 170},
         "min_text_px": 18,
         "colors": {"night": "#131311", "tile_bg": "#f7f4ec", "tile_border": "#3b3934"},
+        # N02's pets: n00's camera and motion (as promo/screens/layout.json)
+        "n00": {"camera": {"fov_deg": 24, "azimuth_deg": 24, "elevation_deg": 12}, "motion": {"pass_dur_s": 0.9, "hop_period_s": 0.9, "idle_shift_s": 1.3}},
         "n05": {
             "duration_s": 5.0,
             "grid": {"x": 96, "y": 280, "cols": 4, "rows": 3, "tile_w": 408, "tile_h": 180, "gap_x": 32, "gap_y": 26},
@@ -127,7 +129,8 @@ def n05_layout():
             "duration_s": 7.0,
             "grid": {"x": 96, "y": 96, "cols": 3, "rows": 2, "tile_w": 560, "tile_h": 383, "gap_x": 24, "gap_y": 24},
             "panes": ["tilt", "wind", "rough", "dlc", "brake", "legend"],
-            "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}, "verdict": {"of_label": 2}},
+            "pane": {"border_px": 2, "radius_px": 12, "label": {"x": 16, "y": 12, "size_px": 26}, "rate": {"size_px": 18}, "verdict": {"of_label": 2},
+                     "pet": {"w": 96, "h": 96, "right": 12, "bottom": 12}},
             "times": {"lead_s": 0.3},
             "overlay": {"color": "#c8402a", "opacity": 0.22},
             "colors": {"bg": "#f4f1ea", "panel": "#fbf9f4", "rule": "#c9c3b6"},
@@ -231,7 +234,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(got["causeId"], "cause-0001")
         self.assertEqual(got["cmpOrder"], ["cmp-0001"])
-        self.assertIn("bad", got["cmpCard"])
+        self.assertIn("warn", got["cmpCard"])  # a mismatch: attention (orange), not red
         self.assertIn("unit mix-up", got["causeBox"])
         self.assertEqual(got["hookLines"], 2)
         # the comparison sent again with its cause_id rewrites its own line
@@ -263,7 +266,7 @@ class BrowserReplayTest(unittest.TestCase):
         # two predictions went into the analysis; the card follows the one that was compared
         self.assertIn("最大応力", first["pred"])
         self.assertNotIn("最大変位", first["pred"])
-        self.assertIn("bad", first["cmpCard"])
+        self.assertIn("warn", first["cmpCard"])
         self.assertIn("90", first["cmp"])
         end = page.evaluate(
             """async () => {
@@ -280,7 +283,7 @@ class BrowserReplayTest(unittest.TestCase):
               };
             }"""
         )
-        self.assertIn("bad", end["cmpCard"])  # the comparison stays a mismatch
+        self.assertIn("warn", end["cmpCard"])  # the comparison stays a mismatch
         self.assertIn("食い違い", end["badge"])
         self.assertEqual(end["mark"], "安全側で判定")
         self.assertIn("one rail, so it stays above", end["why"])
