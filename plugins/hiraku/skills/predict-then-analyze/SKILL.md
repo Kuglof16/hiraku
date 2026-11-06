@@ -23,6 +23,22 @@ description: 荷重条件 1 つを、手計算の予測 → 解析 → 比べる
   - `design_summary.loadings.<loading>.rail_joint`: 式 `frame_static.rail_joint_stress` の入力のうち F と W 以外 (設計から読んだもの)。`support` は W にどの車輪の荷重を使うか (上流の解析の `wheel_load_<support>`)
   - ホイールベース・前輪の数・トレッド・部材の長さ (`member_length`)。断面の寸法は `design.sections`
 
+## 1a. 荷重条件が無い試験 (カタログに作り方が無い)
+
+渡された試験の荷重条件が `load_cases` に無く、カタログに作り方 (builder) が無いときは、`write_load_case` で書く。限度は数を書かず、式 `limit_from` で書く。`refs` の名前は要件の key (`Q61` など) か設計の道 (`materials.<key>.yield_MPa`・`sections.<key>.dims_mm.t`・`variables.<名前>` など)。限度の値・`tolerance_rel`・`load_case_id` はツールが付ける。例 (衝撃を 3 g の静的な荷重とみる):
+
+```json
+{"test_id": "R2", "domain": "strength", "title": "段差の衝撃を 3 g の静的な荷重とみる",
+ "params": {"g_factor": {"value": 3, "unit": "1"}, "loading": "empty"},
+ "criterion": {"quantity": "max_stress", "op": "<=",
+               "limit_from": {"expr": "yield / Q61", "unit": "MPa",
+                              "refs": {"yield": "materials.steel.yield_MPa", "Q61": "Q61"}}},
+ "basis": "3 g は前提 (出典なし)。段差を越える衝撃を、重さに 3 倍の縦の力をかけた静的な荷重とみる"}
+```
+
+- `params` の名前は、使うツールが読む名前 (`list_tools(tool=...)` の params) にする
+- 返った `load_case_id` で 1b から進める。断られたら文に従って直す (道が無い・単位が合わない・要件が無い・builder がある試験)
+
 ## 1b. 式の入力を読む (record_prediction の前に必ず)
 
 - `get_context(sections=["formula_inputs"], load_case_id=...)`: 荷重条件ごとに、計画の式 (`formulas`) と、その入力を、台本の運転と同じコードがこの版の設計・荷重条件・記録から出した値と単位で返す。入力ごとの `from` は値の出どころ (読み手の関数・design_summary・荷重条件の params・上流の、予測と比べて予想通りだった解析など)

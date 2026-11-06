@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>N08 Words</title>
+<link rel="stylesheet" href="common.css">
+<script src="layout.data.js"></script>
+<script src="layout.js" data-cut="n08"></script>
+<style>
+  /* N08 (script v10): a break between the story's parts, words only, no made-up software screen.
+     The three phrases are the voice's own words and come in as the voice says them
+     (the maker's take N08_1, 6.1 s, starting 0.5 s into the 7.1 s slot):
+     専門家にしか扱えず ~0.5 s, ライセンスは何百万円 ~2.7 s, 計算準備で数週間 ~4.8 s.
+     The figures are the maker's own working experience (README: 作者の実務の経験); no product or price is shown. */
+  .stage { background: var(--night); color: var(--on-night); }
+  .head {
+    position: absolute; left: 160px; top: 150px;
+    font: 700 52px / 1.2 var(--font-ja); color: var(--on-night-soft); letter-spacing: 0.04em;
+    animation: fade 0.6s ease-out both; animation-delay: 0.2s;
+  }
+  .rows { position: absolute; left: 160px; top: 270px; right: 160px; }
+  .row {
+    display: flex; align-items: baseline; gap: 48px; padding: 26px 0;
+    border-top: 2px solid rgba(241, 236, 224, 0.18);
+    animation: rise 0.7s cubic-bezier(.2, .7, .2, 1) both;
+  }
+  .row:last-child { border-bottom: 2px solid rgba(241, 236, 224, 0.18); }
+  .row .k { width: 420px; font: 500 46px / 1.2 var(--font-ja); color: var(--on-night-soft); }
+  .row .v { font: 700 92px / 1.1 var(--font-ja); color: var(--on-night); letter-spacing: 0.02em; }
+  .row.r1 { animation-delay: 0.5s; }
+  .row.r2 { animation-delay: 2.7s; }
+  .row.r3 { animation-delay: 4.8s; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body data-duration="7.1" data-cut="n08">
+<div class="stage">
+  <div class="head" data-box="n08.head" data-kind="label">CAE</div>
+  <div class="rows">
+    <div class="row r1"><span class="k">扱える人</span><span class="v" data-kind="label">専門家だけ</span></div>
+    <div class="row r2"><span class="k">ライセンス</span><span class="v" data-kind="label">何百万円</span></div>
+    <div class="row r3"><span class="k">計算準備</span><span class="v" data-kind="label">数週間</span></div>
+  </div>
+  <div class="guide-band"></div>
+  <div class="clock"></div>
+</div>
+<script src="timeline.js"></script>
+</body>
+</html>

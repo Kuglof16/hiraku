@@ -272,7 +272,7 @@
         sub: "1 台の車を、分野をまたいで判断" },
       { key: "tools", lab: "解析のツール", v: Dv.tools, unit: "本",
         sub: `答えの分かっている例 <b>${fmt(Dv.known_cases)}</b> 件で確認` },
-      { key: "comparisons", lab: "手計算と解析の照合", v: Dv.comparisons, unit: "回",
+      { key: "comparisons", lab: "手計算と解析の判定", v: Dv.comparisons, unit: "回",
         sub: Dv.explained === Dv.mismatches ? `食い違い <b>${Dv.mismatches}</b> 件は原因を特定`
           : `食い違い <b>${Dv.mismatches}</b> 件、原因を特定 <b>${Dv.explained}</b> 件` },
       { key: "passed", lab: "直して、合格", v: Dv.passed, unit: `/ ${Dv.areas}`,

@@ -39,6 +39,15 @@ class FindTest(unittest.TestCase):
                      "質量は約 8 % 悪くなり (400 → 432 kg)", "どちらを優先しますか"):
             self.assertIn(part, text)
 
+    def test_a_variable_is_named_for_the_person_and_a_ratio_has_no_unit(self):
+        sens = {q: [dict(t, name=t["name"].replace("sections.tower.dims_mm.t", "variables.gear_ratio"), unit="1", value=10.0)
+                    for t in terms] for q, terms in SENS.items()}
+        named = tradeoff.find(sens, META, BASES, labels={"gear_ratio": "減速比"})[0]["text"]
+        self.assertTrue(named.startswith("減速比 (いま 10) を 10 % 上げると"), named)
+        plain = tradeoff.find(sens, META, BASES)[0]["text"]
+        self.assertTrue(plain.startswith("gear_ratio (いま 10) を"), plain)  # no name known: the variable's own name, not the path
+        self.assertNotIn("variables.", plain)
+
     def test_without_base_values_the_text_gives_the_percentages_only(self):
         text = tradeoff.find(SENS, META)[0]["text"]
         self.assertIn("質量は約 8 % 悪くなり", text)

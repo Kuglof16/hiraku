@@ -26,6 +26,7 @@ from hiraku.tools import tradeoff_data  # noqa: F401 (registers find_tradeoffs' 
 from hiraku.tools.attribution import Attribution
 from hiraku.tools.context import RunContext, ToolError
 from hiraku.tools.functions import CONTEXT_SECTIONS, DESIGN_PAGE, DESIGN_PARTS, FUNCTIONS, RECORD_KINDS, RUN_TOOLS, rule_check
+from hiraku.tools.load_case_writer import write_load_case
 
 Record = dict[str, Any]
 
@@ -119,9 +120,13 @@ INPUT_SCHEMAS: dict[str, Record] = {
     "revise_design": contract_input_schema("revise_design"),
     "build_version": contract_input_schema("build_version"),
     "propose_design": contract_input_schema("propose_design"),
+    "write_design": contract_input_schema("write_design"),
+    "edit_design": contract_input_schema("edit_design"),
+    "check_design": contract_input_schema("check_design"),
     "make_tool": contract_input_schema("make_tool"),
     "check_tool": check_tool_input_schema(),
     "write_report": contract_input_schema("write_report"),
+    "write_load_case": contract_input_schema("write_load_case"),
 }
 
 DESCRIPTIONS = {
@@ -200,6 +205,27 @@ DESCRIPTIONS = {
         "最初の版を作る。座標はツールが出し、乗員・荷・最高速度は要件から入る。型と変数は get_context の archetypes。"
         "v1 ができると試験の荷重条件と担当の役が決まる"
     ),
+    "write_design": (
+        "設計役だけが使う。合う型が無い製品や、型では作れない形のときに、設計そのもの (nodes・members・sections・"
+        "materials・parts・supports、variables は無ければ {}) を書いて版にする。1 回目はv1、2 回目からは次の版 "
+        "(回数は round_limit まで、新しい版では全部の荷重条件をやり直す)。design_version・parent_version・change_reason は"
+        "ツールが付ける。型を下書きに使ったら based_on にその型を書く。ツールが check_design で確かめ、通らない設計は"
+        "問題を全部挙げて断る。モジュールに分かれた設計では使わない"
+    ),
+    "edit_design": (
+        "設計役だけが使う。Claude が書いた設計 (write_design の版) の次の版を、全体を書き直さずに edits (変える所だけ) で"
+        "作る。edits は今の版に上から順に当てる: add_node・move_node・remove_node・add_member・remove_member・"
+        "split_member (at_node で 2 本に。無い節点なら中点に作る。新しい部材は <id>_a と <id>_b)・set_section・"
+        "assign_section・add_part・set_part・remove_part・add_support・set_support (fields の null はその欄を外す)・remove_support・set_material・"
+        "set_variable。無い id や、参照を切る edit は、何番目かを言って断る (何も当てない)。当てたあとは write_design と同じに "
+        "check_design で確かめて次の版にする (回数は round_limit まで、全部の荷重条件をやり直す)。型の設計は revise_design"
+    ),
+    "check_design": (
+        "書いた設計を、版にせずに確かめる。契約の形、参照 (部材の節点・断面・材料、部品の carried_by・connects_to、支えの "
+        "frame_node)、全部の部材と部品を載せる節点が支えまでつながるか、長さが mm として変でないか、干渉 (K4) の数、"
+        "部品の質量の和と要件 Q40 (積載) との比べ。数はコードが出す。ok が false なら problems を直す。design を付けなければ"
+        "今の版"
+    ),
     "write_report": (
         "まとめ役が最後に 1 回呼ぶ。summary (分野ごとの結果を記録の ID と一緒に) と next (次に変えるなら: 分野・変更・理由) "
         "だけを書く。分野ごとの結果・効いている項・前提・不一致と原因・確かめていない値はツールが記録から入れる。"
@@ -218,6 +244,13 @@ DESCRIPTIONS = {
         "教科書の値と比べる例と出典、analyse() は {\"results\": [...]})。使える import は math・numpy・scipy の一部と"
         "hiraku.solvers の一部だけ"
     ),
+    "write_load_case": (
+        "その試験の分野の役 (組み立ては packager) かまとめ役が使う。カタログに作り方 (builder) の無い試験の荷重条件を書いて、"
+        "今の版に足す。条件 (params)・判定の量と向き・限度の作り方 (limit_from: 式 expr、単位 unit、名前ごとの refs = 要件の key "
+        "か設計の道、例 {\"expr\": \"yield / Q61\", \"unit\": \"MPa\", \"refs\": {\"yield\": \"materials.steel.yield_MPa\", "
+        "\"Q61\": \"Q61\"}}) と根拠 (basis) を書く。限度の数は書かない: コードが式から計算し、tolerance_rel と ID も付ける。"
+        "次の版でも残り、限度はその版の設計で計算し直す"
+    ),
 }
 
 # The intake department's tools (pick_domains, ask_user, import_knowledge, rule_check) bring their
@@ -228,6 +261,8 @@ for _name, _t in INTAKE_TOOLS.items():
     DESCRIPTIONS[_name] = _t["description"]
     HANDLERS[_name] = _t["function"]
 HANDLERS["rule_check"] = rule_check  # the intake's, then the assembly tile again (system rules)
+HANDLERS["write_load_case"] = write_load_case  # hiraku.tools.load_case_writer
+from hiraku.tools import cad_tools  # noqa: E402,F401 (adds export_step, import_step, edit_step to the tables above)
 
 
 def _text(obj: Any) -> str:
@@ -250,7 +285,8 @@ def for_agent(name: str, result: Any) -> Any:
 # Tools only one role may call; the functions check the caller's agent id. Through MCP the caller is
 # known only from the PreToolUse hook's record (Attribution), so a call without one is refused
 # instead of reaching the function with agent None (which it would take as the allowed role).
-ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_report")
+ROLE_LIMITED_TOOLS = ("propose_design", "revise_design", "build_version", "write_design", "edit_design", "write_report",
+                      "write_load_case")
 NO_CALLER = ("{tool} は、どの役が呼んだのかを確かめられなかったので断りました (この入力の呼び出しの記録が"
              "見つかりません)。同じ入力でもう一度呼んでください")
 
