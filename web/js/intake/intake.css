@@ -161,6 +161,8 @@
 .in-st.ok { border-color: var(--i-green); color: var(--i-green); }
 .in-st.unk { border-color: var(--i-yellow); background: var(--i-orange-pale); }
 .in-st.none, .in-st.off { color: var(--i-muted); }
+.in-st.adv { border-color: var(--i-yellow); background: var(--i-orange-pale); }
+.in-part.adv { border-color: var(--i-yellow); background: var(--i-orange-pale); }
 .in-drop { border: 2px dashed var(--i-line); border-radius: 12px; padding: 12px 18px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; background: var(--i-panel); }
 .in-drop:hover { border-color: var(--i-blue); }
 .in-drop span { color: var(--i-muted); font-size: 14px; }

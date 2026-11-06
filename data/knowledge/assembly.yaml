@@ -23,3 +23,116 @@ rules:
     check: bottom_z_mm >= 0
     trust: 3
     basis: a check of the geometry (the origin is on the ground), not taken from a source (assumption)
+  # needs NEW: topover_count, lashing_pretension_N, lashing_angle_sin
+  - id: CS-01
+    text: 上から押さえる固定 (荷の上を越える帯) の張りと床の摩擦で、荷が横へ滑らない
+    kinds: [cargo]
+    check: 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q75 - req_Q59 * 1) * 1.1
+    trust: 3
+    basis: >-
+      EN 12195-1:2010 equation 10 (top-over lashing against sliding, m = n · 2 · μ · sin α · FT / (g · (cx,y − μ ·
+      cz) · fs)), as quoted in the European Best Practice Guidelines on Cargo Securing for Road Transport (2014)
+      6.1.2, read 2026-11-06 (secondary, PDF p. 46,
+      https://www.hsa.ie/eng/Vehicles_at_Work/Load_Securing/Guidance_and_Publications/2014_European_Best_Practice.pdf);
+      EN 12195-1 itself not checked (paid). The same balance without a safety factor is the CTU Code
+      (MSC.1/Circ.1497) Annex 7 4.2.7-4.2.8, read 2026-11-06 (p. 113-114). Borrowed from goods road vehicles
+      (assumption). The guidelines (top-over lashing section, PDF p. 43) take FT as the STF and say the tension
+      can fall to 50 % on deformable goods
+  # needs NEW: cargo_blocked_forward, topover_count, lashing_pretension_N, lashing_angle_sin
+  - id: CS-02
+    text: 荷が前へ滑らない (荷台の前の壁で止まるか、上から押さえる固定と摩擦で止まる)
+    kinds: [cargo]
+    check: cargo_blocked_forward >= 1 or 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.25
+    trust: 3
+    basis: >-
+      EN 12195-1:2010 equation 10 with fs = 1.25 forward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2,
+      read 2026-11-06 (secondary, PDF p. 46); blocking counts as securing (guidelines 1.4, PDF p. 14; CTU Code
+      Annex 7 4.2.8, read 2026-11-06). Whether the front wall itself is strong enough is not checked by this rule
+      (the CTU Code 6.6 gives front wall strengths for goods vehicles only). Borrowed (assumption)
+  # needs NEW: topover_count, lashing_pretension_N, lashing_angle_sin
+  - id: CS-03
+    text: 上から押さえる固定の張りと床の摩擦で、荷が後ろへ滑らない
+    kinds: [cargo]
+    check: 2 * topover_count * req_Q59 * lashing_angle_sin * lashing_pretension_N >= mass_kg * 9.80665 * (req_Q76 - req_Q59 * 1) * 1.1
+    trust: 3
+    basis: >-
+      EN 12195-1:2010 equation 10 with fs = 1.1 rearward, as quoted in the EU Best Practice Guidelines (2014) 6.1.2,
+      read 2026-11-06 (secondary, PDF p. 46). A rear gate that blocks the load is not counted here. Borrowed
+      (assumption)
+  # needs NEW: lashing_count, cargo_blocked_forward
+  - id: CS-04
+    text: 摩擦が十分でも、荷は少なくとも 1 本の固定で止め、前で止まらない 1.52 m を超えるか 500 kg を超える荷は 2 本以上で止める
+    kinds: [cargo]
+    check: lashing_count >= 1 and (lashing_count >= 2 or cargo_blocked_forward >= 1 or (size_x_mm <= 1520 and mass_kg <= 500))
+    trust: 3
+    basis: >-
+      49 CFR 393.110(b)-(c) (not blocked forward: 1 tiedown for an article of 1.52 m or less and 500 kg or less,
+      2 for a heavier one or one up to 3.04 m; blocked: 1 per 3.04 m), read 2026-11-06 in the Cornell LII copy
+      (https://www.law.cornell.edu/cfr/text/49/393.110); CTU Code (MSC.1/Circ.1497) 5.4 and Annex 7 4.2.8 (mass and
+      friction alone do not secure a load against vibration; a minimum number of top-over lashings is needed, no
+      number given), read 2026-11-06 (p. 21, p. 114). The check covers loads up to 3.04 m long only (a longer one
+      needs more). For commercial motor vehicles on public roads, borrowed (assumption)
+  # needs NEW: lashing_wll_sum_N
+  - id: CS-05
+    text: 固定の使ってよい力の合計 (荷の向こう側へ回すものは全部、そうでないものは半分で数える) が、荷の重さの決めた割合以上
+    kinds: [cargo]
+    check: lashing_wll_sum_N >= 0.5 * mass_kg * 9.80665
+    trust: 3
+    basis: >-
+      49 CFR 393.106(d) (aggregate working load limit at least one-half the weight; counting by (d)(1)-(3)) and
+      393.108(a) (a tiedown's WLL is the lowest of its parts and its anchor points), read 2026-11-06 in the Cornell
+      LII copy (https://www.law.cornell.edu/cfr/text/49/393.106). For commercial motor vehicles on public roads,
+      borrowed (assumption)
+  # needs NEW: topover_count, lashing_pretension_N, lashing_angle_sin
+  - id: CS-06
+    text: 固定が荷を床へ押さえつける力が、荷の重さの決めた割合以上 (でこぼこ道で荷が浮かない)
+    kinds: [cargo]
+    check: 2 * topover_count * lashing_pretension_N * lashing_angle_sin >= 0.2 * mass_kg * 9.80665
+    trust: 3
+    basis: >-
+      49 CFR 393.102(b) (downward force at least 20 percent of the weight when the article is not fully contained),
+      read 2026-11-06 (LII copy); the vertical force of a top-over lashing 2 · FT · sin α from EN 12195-1 equation 10
+      as quoted in the EU Best Practice Guidelines (2014) 6.1.2, read 2026-11-06 (secondary). The CTU Code Annex 7
+      4.2.7 takes 1.8 times the pre-tension for a vertical lashing instead of 2, read 2026-11-06 (p. 113). Borrowed
+      from road vehicles (assumption); no rough-road value was found
+  # needs NEW: lashing_pretension_N, lashing_wll_min_N
+  - id: CS-07
+    text: 固定の最初の張りは、その固定の使ってよい力の半分以下
+    kinds: [cargo]
+    check: lashing_pretension_N <= 0.5 * lashing_wll_min_N
+    trust: 3
+    basis: >-
+      CTU Code (MSC.1/Circ.1497) Annex 7 2.4.4 (initial pre-tension never more than 50 % of the MSL) and 2.4.1 (the
+      LC of national standards corresponds to the MSL), read 2026-11-06 (p. 99-100). For lashings in cargo transport
+      units; taking the US WLL as the MSL is an assumption
+  # needs NEW: anchor_strength_min_N
+  - id: CS-08
+    text: 荷台の固定点は、どの 1 か所も決めた力に耐える
+    kinds: [cargo]
+    check: anchor_strength_min_N >= req_Q21
+    trust: 3
+    basis: >-
+      EN 12640 as quoted in the EU Best Practice Guidelines (2014) 2.6, Table 3 (3.5 to 7.5 t: 800 daN per lashing
+      point), read 2026-11-06 (secondary, PDF p. 23); EN 12640 not checked. 49 CFR 393.104(c) asks anchor points to
+      meet the 393.102 criteria and gives no number, read 2026-11-06. Borrowed for a lighter vehicle (assumption)
+  # needs NEW: topover_count (and the box of the cargo part)
+  - id: CS-09
+    text: 横へ倒れやすい荷 (重心の高さが幅の半分に比べて高い荷) は、上から押さえる固定で止める
+    kinds: [cargo]
+    check: 0.6 * (center_z_mm - bottom_z_mm) < 1 * size_y_mm / 2 or topover_count >= 1
+    trust: 3
+    basis: >-
+      CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1: securing against tipping is needed when cx,y · d ≥ cz · b, read
+      2026-11-06 (p. 114); the box centre is taken as the centre of gravity (assumption). Only that tipping is
+      addressed is checked, not the size of the lashing (the EN 12195-1 tipping equation was not read). Borrowed
+      (assumption)
+  # needs NEW: cargo_blocked_forward, topover_count (and the box of the cargo part)
+  - id: CS-10
+    text: 前へ倒れやすい荷は、荷台の前の壁で止めるか、上から押さえる固定で止める
+    kinds: [cargo]
+    check: req_Q76 * (center_z_mm - bottom_z_mm) < 1 * size_x_mm / 2 or cargo_blocked_forward >= 1 or topover_count >= 1
+    trust: 3
+    basis: >-
+      CTU Code (MSC.1/Circ.1497) Annex 7 4.3.1 (tipping when cx,y · d ≥ cz · b), read 2026-11-06 (p. 114); box centre
+      taken as the centre of gravity, and a front wall at least as high as the centre of gravity is assumed when
+      cargo_blocked_forward is 1 (assumption)
