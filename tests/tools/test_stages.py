@@ -140,7 +140,9 @@ class StageTest(RunCase, unittest.TestCase):
         # R1 is fed by P1: it never goes before its upstream step, though its own tool is lighter
         self.assertEqual([(k, [s["load_case"] for s in g]) for k, g in stage_groups(self.ctx, steps)],
                          [(2, ["P1-step100", "R1-step100"])])
-        self.assertEqual([k for k, _ in stage_groups(self.ctx, list(reversed(steps)))], [1, 2])
+        # with R1's step first in the plan as well (R9 is composed before S1 to P3, which feed it)
+        self.assertEqual([(k, [s["load_case"] for s in g]) for k, g in stage_groups(self.ctx, list(reversed(steps)))],
+                         [(2, ["P1-step100", "R1-step100"])])
 
 
 if __name__ == "__main__":

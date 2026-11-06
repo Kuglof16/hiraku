@@ -340,15 +340,29 @@ def _run_step(ctx: RunContext, lc: Record, agent: str, tool: str, step: Record) 
 def stage_groups(ctx: RunContext, steps: list[Record]) -> list[tuple[int, list[Record]]]:
     """The steps grouped by stage, lowest first (HK5). A step's stage is its tool's (shelf.tool_stage), or
     the plan's `stage` on the step when it puts a check later (never earlier: HK5 still checks the call),
-    and never lower than that of an earlier step of a load case feeding it, so upstream goes first;
-    within a stage the steps keep their order (compose_plan: upstream first)."""
-    keyed: list[tuple[int, Record]] = []
-    for step in steps:
-        ups = {u["load_case_id"] for u in ctx.upstream_of(step["load_case"])}
-        own = tool_stage(ctx, step["tool"])
-        k = max([own, int(step.get("stage", own))] + [kk for kk, st in keyed if st["load_case"] in ups])
-        keyed.append((k, step))
-    return [(k, [st for kk, st in keyed if kk == k]) for k in sorted({kk for kk, _ in keyed})]
+    and never lower than that of a step of a load case feeding it, wherever that step is in the plan (R9 on
+    frame_static, stage 1, reads K2's mount forces of S1 to P3, stage 2: shelf.load_case_stage says the same);
+    within a stage the steps keep their order (compose_plan: upstream first), and a step goes after the steps of
+    the load cases feeding it."""
+    ups = [{u["load_case_id"] for u in ctx.upstream_of(step["load_case"])} for step in steps]
+    ks = [max(tool_stage(ctx, s["tool"]), int(s.get("stage", tool_stage(ctx, s["tool"])))) for s in steps]
+    changed = True
+    while changed:  # the feeds have no loop (a load case is fed by the ones it reads), so this ends
+        changed = False
+        for i, step in enumerate(steps):
+            k = max([ks[i]] + [ks[j] for j, other in enumerate(steps) if other["load_case"] in ups[i]])
+            if k != ks[i]:
+                ks[i], changed = k, True
+    out = []
+    for k in sorted(set(ks)):
+        left = [i for i in range(len(steps)) if ks[i] == k]
+        ordered: list[int] = []
+        while left:  # the plan's order, each step after the steps (of this stage) of the cases feeding it
+            i = next((i for i in left if not any(steps[j]["load_case"] in ups[i] for j in left if j != i)), left[0])
+            ordered.append(i)
+            left.remove(i)
+        out.append((k, [steps[i] for i in ordered]))
+    return out
 
 
 def stage_reds(ctx: RunContext, group: list[Record]) -> list[Record]:
