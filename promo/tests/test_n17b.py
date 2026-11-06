@@ -663,7 +663,7 @@ class Rules3D(unittest.TestCase):
         self.assertEqual(words(self.html), words(self.orig))
         for kind in ("label", "number", "note"):
             self.assertEqual(self.html.count(f'data-kind="{kind}"'), self.orig.count(f'data-kind="{kind}"'), kind)
-        for part in ('lab: "見る分野"', 'lab: "解析のツール"', 'lab: "手計算と解析の照合"', 'lab: "直して、合格"',
+        for part in ('lab: "見る分野"', 'lab: "解析のツール"', 'lab: "手計算と解析の判定"', 'lab: "直して、合格"',
                      "自動の試験", "数えた日時", "運転の記録"):
             self.assertIn(part, self.html)
 
