@@ -77,7 +77,8 @@ SCREENS = (
     Screen("一覧 (dev)", "?list=1&dev=1", wait="document.querySelector('#launch .lreq') && document.querySelector('#runlist table')", root="#runlist"),
     Screen("作業台", f"?run={DOMAINS}&tab=bench&pace=0&t=1e6"),
     Screen("解析結果", f"?run={DOMAINS}&tab=grid&pace=0&t=1e6"),
-    Screen("解析結果 (分野の再生)", f"?run={DOMAINS}&tab=grid&domain=strength&pace=0&t=4.5"),
+    # (④'s domain replay is the video's only: elsewhere ④ is the run as it ended)
+    Screen("解析結果 (分野の再生・動画)", f"?run={DOMAINS}&tab=grid&domain=strength&pace=0&t=4.5&video=1"),
     # the agents' pets with their bubbles out (js/agent_pets.js): 空力's judgement at 17.0 s, the lead's line at 17.5 s
     Screen("作業台 (吹き出し)", f"?run={DOMAINS}&tab=bench&pace=0&t=17.6"),
     Screen("解析結果 (吹き出し)", f"?run={DOMAINS}&tab=grid&pace=0&t=17.6"),
