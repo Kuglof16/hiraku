@@ -84,17 +84,24 @@
         </div>
         <div class="playbar" id="playbar">
           <button class="pb-play" id="pb-play" title="再生 / 一時停止 (Space)">▶</button>
+          <button class="pb-step" id="pb-prev" title="前のイベント (←)">⏮</button>
+          <button class="pb-step" id="pb-next" title="次のイベント (→)">⏭</button>
+          <!-- the track on the playhead's clock (the event clock: the events in their order); the marks above it by kind -->
           <div class="pb-track" id="pb-track">
+            <div class="pb-marks" id="pb-marks"></div>
             <div class="pb-fill" id="pb-fill"></div>
             <div class="pb-ticks" id="pb-ticks"></div>
             <div class="pb-knob" id="pb-knob"></div>
           </div>
-          <span class="pb-time" id="pb-time">0.0 / 0.0 秒</span>
+          <span class="pb-times"><span class="pb-time" id="pb-time">0.0 / 0.0 秒</span><small class="pb-rec" id="pb-rec"></small></span>
+          <button class="pb-jump" id="pb-next-verdict" title="次の判定 (OK / NG) へ">次の判定へ</button>
+          <button class="pb-jump" id="pb-next-mismatch" title="次の不一致 (予測と解析の比べ) へ">次の不一致へ</button>
+          <button class="pb-clock" id="pb-clock" title="時計: イベントごと (各イベントを短く順に) ⇄ 実時間 (記録の時刻のまま)"></button>
           <button class="pb-speed" id="pb-speed" title="速さ">1×</button>
           <button class="pb-live" id="pb-live" title="実行中の最新に戻る">LIVE</button>
         </div>
       </div>
-      <p class="hint" id="hint">カメラ: ドラッグで回す・右ドラッグで動かす・ホイールで寄る ／ Space 再生・← → 前後の記録</p>
+      <p class="hint" id="hint">カメラ: ドラッグで回す・右ドラッグで動かす・ホイールで寄る ／ Space 再生・← → 前後のイベント</p>
       <!-- the workbench's notes (js/app.js): what the real look's dummy is drawn from -->
       <details class="more bench-more" id="bench-more" hidden><summary>くわしく</summary><div class="sub" id="bench-dummy-note" data-role="dummy-note"></div></details>
     </section>
@@ -103,10 +110,17 @@
     <section class="col-center intake-view" id="view-intake" hidden></section>
 
     <!-- A4 the tool shelf: js/shelf.js, mounted by js/app.js -->
-    <section class="col-center shelf-view" id="view-shelf" hidden></section>
+    <!-- (each of these tabs: its first lines on top, いま / 大事 / 次 and a くわしく, js/app.js renderTabHead) -->
+    <section class="col-center shelf-view" id="view-shelf" hidden>
+      <div class="tab-head" id="tab-head-A4"></div>
+      <div class="shelf-host" id="shelf-host"></div>
+    </section>
 
     <!-- A7 the assembly order: js/assembly.js, mounted by js/app.js -->
-    <section class="col-center asm-view" id="view-asm" hidden></section>
+    <section class="col-center asm-wrap" id="view-asm" hidden>
+      <div class="tab-head" id="tab-head-A7"></div>
+      <div class="asm-view" id="asm-host"></div>
+    </section>
 
     <section class="col-center grid-view" id="view-grid" hidden>
       <div class="grid-head" id="grid-head"></div>
@@ -119,10 +133,16 @@
     <section class="col-right">
       <div class="panel chain">
         <h2>予測 → 解析 → 比べる → 判定</h2>
-        <div class="card" id="card-pred"></div>
-        <div class="card" id="card-ana"></div>
-        <div class="card" id="card-cmp"></div>
-        <p class="foot">不一致のときは、原因が書かれるまでその分野は先に進めない (hooks)</p>
+        <!-- what shows first: what is going on, the verdict, what comes next (one line each);
+             the four steps' contents (formulas, inputs, sources, rules, ids) are folded under くわしく -->
+        <div class="chain-head" id="chain-head"></div>
+        <details class="chain-more" id="chain-more" data-keep="chain-more">
+          <summary>くわしく (予測・解析・比べる・判定の中身)</summary>
+          <div class="card" id="card-pred"></div>
+          <div class="card" id="card-ana"></div>
+          <div class="card" id="card-cmp"></div>
+          <p class="foot">不一致のときは、原因が書かれるまでその分野は先に進めない (hooks)</p>
+        </details>
       </div>
     </section>
   </main>

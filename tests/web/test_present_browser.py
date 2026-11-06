@@ -194,7 +194,9 @@ class PresentBrowserTest(unittest.TestCase):
     def test_only_the_picked_wheel_has_words_on_the_workbench(self):
         events, _ = tilt_events()
         finished_t = next(e["t"] for e in events if e["kind"] == "analysis.finished")
-        page, errors = self.open("run=sample&pace=0&t=0")
+        # words=1: the words where nothing is chosen (the largest wheel), as the present mode has them
+        # (by default an arrow has words only where chosen: test_declutter_browser)
+        page, errors = self.open("run=sample&pace=0&t=0&words=1")
         page.evaluate("async ([ev, t]) => { await window.hiraku.load(ev, t); }", [events, finished_t + 3])
         words = """() => {
           const b = window.hiraku.bench;

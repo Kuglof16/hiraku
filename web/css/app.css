@@ -667,15 +667,29 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
   display: grid;
   place-items: center;
 }
-.pb-track { position: relative; flex: 1; height: 30px; cursor: pointer; }
-.pb-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; background: var(--rule); border-radius: 2px; }
-.pb-fill { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; background: var(--ink); border-radius: 2px; }
-.pb-knob { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--ink); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--ink); }
-.pb-ticks { position: absolute; inset: 0; pointer-events: none; }
-.pb-ticks i { position: absolute; top: 3px; width: 2px; height: 7px; margin-left: -1px; background: var(--line); }
-.pb-ticks i.hook { background: var(--orange); height: 9px; top: 1px; }
-.pb-ticks i.ok { background: var(--green); }
-.pb-time { font-size: 16px; font-variant-numeric: tabular-nums; min-width: 128px; text-align: right; }
+/* the track: its line near the bottom, the event marks above it (one row a kind) */
+.pb-track { position: relative; flex: 1; min-width: 160px; height: 40px; cursor: pointer; }
+.pb-track::before { content: ""; position: absolute; left: 0; right: 0; top: 31px; height: 4px; background: var(--rule); border-radius: 2px; }
+.pb-fill { position: absolute; left: 0; top: 31px; height: 4px; background: var(--ink); border-radius: 2px; }
+.pb-knob { position: absolute; top: 33px; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--ink); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--ink); }
+.pb-ticks, .pb-marks { position: absolute; inset: 0; pointer-events: none; }
+.pb-ticks i { position: absolute; top: 25px; width: 2px; height: 6px; margin-left: -1px; background: var(--orange); }
+.pb-marks i { position: absolute; width: 2px; margin-left: -1px; }
+.pb-marks .m-ana { top: 25px; height: 4px; background: var(--rule); }
+.pb-marks .m-cmp { top: 21px; height: 4px; background: var(--line); }
+.pb-marks .m-ok { top: 17px; height: 4px; background: var(--green); }
+.pb-marks .m-mis { top: 10px; height: 8px; background: #b26b00; }
+.pb-marks .m-ng { top: 10px; height: 8px; background: var(--red); }
+.pb-marks .m-cause { top: 5px; height: 5px; background: #8e6bbf; }
+.pb-marks .m-v { top: 0; height: 29px; width: 1.5px; background: var(--ink); }
+.pb-marks .m-vl { position: absolute; top: 0; font-size: 10px; line-height: 1; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.pb-times { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; min-width: 110px; }
+.pb-time { font-size: 16px; font-variant-numeric: tabular-nums; text-align: right; }
+.pb-rec { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pb-step { width: 24px; height: 24px; margin: 0 -4px; border-radius: 50%; border: 1.5px solid var(--line); font-size: 11px; line-height: 1; display: grid; place-items: center; }
+.pb-jump, .pb-clock { border: 1.5px solid var(--line); border-radius: 999px; padding: 1px 7px; font-size: 12px; white-space: nowrap; margin: 0 -4px; }
+.pb-jump:disabled { opacity: 0.4; cursor: default; }
+.pb-clock { color: var(--muted); }
 .pb-speed { border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 12px; font-size: 15px; min-width: 52px; }
 .pb-live { display: none; border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 12px; font-size: 14px; color: var(--muted); }
 .pb-live.show { display: inline-block; }
@@ -701,6 +715,49 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 }
 #card-pred { flex: 0 1 auto; }
 #card-ana, #card-cmp { flex: 0 0 auto; }
+/* the first lines: いま / 判定 / 次 (the cards folded under くわしく below) */
+.chain-head { display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 17px; line-height: 1.4; }
+.ch-row small { display: inline-block; min-width: 40px; margin-right: 8px; font-size: 13px; color: var(--muted); }
+.clamp1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-judged { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
+.ch-judged small { align-self: center; }
+.ch-q { font-weight: 600; }
+.ch-v { font-variant-numeric: tabular-nums; }
+.ch-verdict { margin-left: auto; font-size: 24px; line-height: 1; }
+.ch-verdict.ok { color: var(--green); }
+.ch-verdict.bad { color: var(--red); }
+/* the other tabs' first lines (js/app.js renderTabHead): いま / 大事 / 次 and a くわしく */
+.tab-head { position: relative; flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; margin: 10px 14px 0; padding: 8px 120px 8px 14px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; font-size: 16px; line-height: 1.4; }
+.tab-head:empty { display: none; }
+.tab-head .th-key { font-weight: 600; }
+.tab-head .th-key.ok { color: var(--green); }
+.tab-head .th-key.warn { color: #b26b00; }
+.th-more { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 14px; font-size: 14px; color: var(--muted); background: var(--panel); }
+.shelf-view, .asm-wrap { display: flex; flex-direction: column; }
+.shelf-host { flex: 1 1 auto; min-height: 0; }
+.asm-wrap > .asm-view { flex: 1 1 auto; }
+.asm-wrap > .tab-head { margin: 0; }
+/* folded (the くわしく shut): the rest of each tab out of the way; opened, all of it as before */
+#view-intake.folded[data-tab="A1"] .in-side > .in-block:first-child,
+#view-intake.folded[data-tab="A1"] .in-msgs > .in-note,
+#view-intake.folded[data-tab="A2"] .in-right,
+#view-intake.folded[data-tab="A2"] .in-left > .in-foot,
+#view-intake.folded[data-tab="A5"] .in-drop,
+#view-intake.folded[data-tab="A5"] .in-bar,
+.shelf-view.folded .sh-tests,
+.shelf-view.folded .sh-k0 > .sh-f:nth-child(n + 2),
+.shelf-view.folded .sh-applies,
+.asm-wrap.folded .asm-steps li:not(.cur) > .tx,
+.asm-wrap.folded .asm-steps li > .fz,
+.asm-wrap.folded .asm-head { display: none !important; }
+/* (the tests' column folded: the formula takes its room) */
+.shelf-view.folded .sh-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 150px) max-content; }
+#view-intake.folded[data-tab="A2"] .in-pane.a2 { grid-template-columns: minmax(0, 1fr); }
+.chain-more { min-height: 0; overflow: auto; }
+.chain-more > summary { cursor: pointer; font-size: 15px; color: var(--muted); padding: 2px 4px; }
+.chain-more[open] { flex: 1 1 auto; }
+.chain-more > .card { margin-top: 10px; }
+.chain-more > .foot { margin-top: 10px; }
 /* 4. 判定: the verdict's own step under 3. 比べる, in the same card */
 #card-cmp .step4 { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
 .chain .foot { margin-top: auto; font-size: 16px; color: var(--muted); padding: 0 4px; }
