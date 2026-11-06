@@ -29,14 +29,17 @@ from .kc_bench import KcBenchTool
 from .lane_change import DLC_LANE_WIDTH, DLC_OFFSET, DLC_SECTIONS, LaneChangeTool, dlc_path, dlc_scene, path_run
 from .launch import LaunchTool, launch_run
 from .offroad import OffroadRollTool
+from .rollover import RolloverTiltTool
 from .step import StepClimbTool, step_push
 from .tilt import TiltTool, tilt_closed_form
 from .turning import TurningCircleTool
 
+# rollover_tilt is planned_only (base.K2Tool): checked in a run with S1, named only by the plan of S1's drive record
 TOOLS = {t.name: t for t in (TiltTool(), CrosswindTool(), BrakingTool(), LaunchTool(), LaneChangeTool(),
-                             OffroadRollTool(), StepClimbTool(), KcBenchTool(), TurningCircleTool(), CrashBeamTool())}
+                             OffroadRollTool(), StepClimbTool(), KcBenchTool(), TurningCircleTool(), CrashBeamTool(),
+                             RolloverTiltTool())}
 
 __all__ = ["TOOLS", "K2Tool", "P", "Pair", "LOADING", "MU", "RHO", "CD", "FRONT_AREA", "SIDE_AREA", "SIDE_CP_HEIGHT",
            "MOTOR", "TIPPED_ROLL", "TiltTool", "CrosswindTool", "BrakingTool", "LaunchTool", "LaneChangeTool",
-           "OffroadRollTool", "StepClimbTool", "KcBenchTool", "TurningCircleTool", "tilt_closed_form", "wind_ramp", "brake_stop", "launch_run",
+           "OffroadRollTool", "StepClimbTool", "KcBenchTool", "TurningCircleTool", "RolloverTiltTool", "tilt_closed_form", "wind_ramp", "brake_stop", "launch_run",
            "path_run", "dlc_path", "dlc_scene", "step_push", "DLC_SECTIONS", "DLC_OFFSET", "DLC_LANE_WIDTH"]

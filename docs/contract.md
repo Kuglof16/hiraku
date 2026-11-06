@@ -19,7 +19,7 @@ contract.EVENT_KINDS, contract.DOMAINS, contract.UNITS
 |---|---|
 | 統括部 | `hiraku/contract/`、`tests/contract/`、`docs/`、`showcase/` (見本の実行)、`README.md`、`CLAUDE.md`、`LICENSE`、`requirements.txt`、`.gitignore`、`hiraku/__init__.py`、`tests/__init__.py` |
 | 設計部 | `hiraku/agent/` (ループ・hooks・役の定義)、`hiraku/tools/` (MCP のツール)、`hiraku/store/` (runs の読み書き)、`hiraku/export/` (結果の書き出し: CSV・VTK・報告)、`hiraku/catalog/`、`hiraku/__main__.py`、`data/catalog/`、`data/requirements/`、`plugins/` (skills)、`tests/agent/`・`tests/tools/`・`tests/store/` |
-| 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`tests/solvers/` |
+| 解析部 | `hiraku/solvers/` (`k0_handcalc`・`k1_frame`・`k2_vehicle`・`k3_power_thermal`・`k4_geometry`・`k5_sensitivity`)、`hiraku/catalog/builders/` (試験ごとの荷重条件の作り方。K2 班は `k2_*.py`)、`hiraku/designgen/` (設計の変数から設計を組む)、`data/designs/`、`data/materials/`、`viewer/` (結果のビューア。分野ごとのデータのスクリプトと 1 つのページ)、`tests/solvers/`、`tests/viewer/` |
 | 画面部 | `web/`、`hiraku/webserve/`、`tests/web/` |
 | 品質保証部 | `tests/verification/`、`qa/` (Rapier の照合は `qa/rapier/`、Node はここだけ) |
 | 広報部 | `promo/` |
@@ -118,6 +118,7 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 - 記録の見せ方の約束: vectors の `origin_mm` は力が作用する点。モードの形 (field の kind が `mode_shape`) の `per_node` は、いちばん大きい所を 1 とした相対の変位 (vec3)。試験の場面 (段差・凸凹の路面・坂・傾斜台・パイロン・壁) は analysis の `scene` にツールが書き、画面が手で置かない。`scene` の `position_mm` は箱の中心、`size_mm` は辺の長さ、`rpy_deg` は中心のまわりの回転 (パイロンは点、門は [0, 幅, 0] の線。地面に描く円 `circle` は、`position_mm` が中心で `size_mm` が [直径, 直径, 0]。例: 小回りの試験の、外側の前輪の円と車体のいちばん外の円)。形が変わる模型の動き (柔らかい体の衝突など) は、field の kind `node_motion` に、節の id の並び `nodes` (300 まで)、線で描く梁 `members` ([節, 節, 部材の id])、コマごとの `frames.t_s` と `frames.positions_mm` (節の並びどおりの位置、mm) と `frames.broken` (そのコマまでに折れた梁) を入れる。コマは 150 まで。等しい間隔のコマに、最初と最後・減速が最大・初めて降伏・初めて折れたコマを足して間引く。減速の波形は series の `deceleration` (A と同じ名前)
 - 実行の終わり (`run.finished` の data): `status` と、画面が言い換えるための `stop_code` (`done`・`not_judged`・`round_limit`・`red_left`・`cost_limit`・`turn_limit`・`user_stop`・`error`。`red_left` は、直す回数が残っているのに赤の分野を残したまま、終わりを止める hooks の上限に達して終わったとき)。`stop_reason` は人向けの文。対応: `done` ⇔ status `done`、`error` ⇔ `failed`、ほか (`not_judged`・`round_limit`・`red_left`・`cost_limit`・`turn_limit`・`user_stop`) は `stopped`
 - 役が手を止めたとき (`agent.stopped` の data): `agent_id` と、任意の `stop_code` (`done` 自分の仕事を終えた・`run_ended` 役がまだ動いている間に実行が終わった (実行の理由は `run.finished` の `stop_code`)・`user_stop` 止めるボタン・`error` 役がエラーで終わった) と `stop_reason` (人向けの文)。書くのは役を閉じるコード (`hiraku/agent/`)、画面はペットの欄で `stop_code` を言い換える。無ければ画面は理由を出さない
+- 走って向かう記録: 要件のファイルの任意の欄 `drive` (試験 id の並び)。その試験に、記録だけの荷重条件を足す (id の終わりが `-drive`、判定なし、どこにも feeds しない)。P1 は step_climb_dynamic を `record_run = speed` で (段差を 1 倍で走って越える)、S3 は車線変更を速さ 1.25 倍で (タイヤの限界に近い)、S1 は rollover_tilt で傾斜台を限界の 1° 先まで (計算で横転する)。画面と動画で見せるため。実行を始めるとき、project の同じ名前の欄 `drive` に写す
 - 早めに終わる運転: 要件のファイルの任意の欄 `stop_after` (`picks`)。`picks` は分野を選んでヒアリングを終えたら終わる運転 (分野選びだけの記録。設計は作らない)。HK4 はそのあとの分野を待たずに止めを通し、`run.finished` は status `done`・stop_code `done`、stop_reason に「分野選びまでの運転」と書く。実行を始めるとき、project の同じ名前の欄 `stop_after` に写す (hook のプロセスなど、実行を開き直すものもそこから読む)
 - 聞き返すのは誰か: 要件のファイルの任意の欄 `hearing` (`code` か `claude`、無ければ `code`)。`code` は今までどおり、実行を始めるとき足りない項目をファイルと既定値で埋める。`claude` は埋めずに残し、まとめ役が `ask_user` (`wait_seconds` つき) で人に聞く (画面の A2 か、それに代わる答えのファイル)。実行を始めるとき project の同じ名前の欄に写す
 - 規則の当たりを人に聞く: 人の判断が要る当たり (設計を直すか、この実行ではその規則を外すか) は、まとめ役が `ask_user` の `rule_hits` (rule_id・当たった部品・人に向けた文) で聞く。`hearing.asked` の `rule_questions` に出し、答えは `hearing.answered` の `rule_answers` (`revise_design` か `drop_rule`)。要件の質問 (`questions`) と同じ 1 回の聞き返しに入れてよい
@@ -137,6 +138,8 @@ hooks が守らせること (`hiraku/contract/protocols.py` の `HOOK_RULES`。�
 MCP のツール (サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>`): MVP は `get_context`・`list_formulas`・`list_tools`・`record_prediction`・`analyze`・`compare`・`record_cause`。設計役だけが `revise_design` (変数の変更 `changes`、generator の選択 `choices` (例 `part_mounts: brackets`、選べる値は `get_context` の `design_choices`)、少なくとも一方と理由。`hiraku.designgen` が次の版を組む)。入力の形は schema の `tool_input.*`。結果は JSON の文字列で、`record_prediction`・`analyze` は記録そのもの、`compare` と `record_cause` は記録と、作ったときは `verdict`、`revise_design` は新しい版のまとめ。
 
 ## モジュールに分けた設計 (2026-11-04 の方針)
+
+設計役は 構造・機構・電気 の 3 つ (`designer.structure`・`designer.mechanism`・`designer.electric`。`contract.MODULE_DESIGNERS`、日本語の名前は `DESIGNER_ROLES_JA`、2026-11-06 から)。何を作るかによらない分け方で、モジュールは設計の型 (designgen) が決める内部の分け方。各モジュールの `owner` が 3 つのどれか (`package` はパッケージ役)。車の型では、枠・車体・乗員まわりが構造、足まわり・操作系が機構、動力が電気。モジュールに分けない型は設計役 `designer` 1 つのまま。モジュールごとの古い役 (`designer.frame` など、`LEGACY_MODULE_DESIGNERS`) は、前に記録した実行を読むためだけに残す。`revise_design` は、`design.modules` で自分が `owner` のモジュールの中だけを変える (HK6)。
 
 設計を 1 人の設計役が一度に直すのではなく、モジュールに分けて、モジュールごとの設計役が並べて直し、パッケージ役が空間を配ってまとめる。実際の車の開発と同じ分け方。版 5 で、強度のために足したガセットが電池に 34.4 mm めり込んだのに誰も気づかなかったことから。
 
@@ -166,6 +169,7 @@ event が 5 つ。どれも `run.started` のあと (seq 0 はいつも `run.sta
 - ヒアリングで決まった要件は `project.requirements` にも入る。実行の途中で要件が変わったときは `project.updated` で出し直す
 - 規則 (`rule`) の `check` は部品の値に当てる式 (Python の bool の部分集合) で、当てるのはコード。モデルは当てた結果を書かない。文から式を作ったのが誰かは `check_by`: `code` (文の型からコードが作った)・`claude` (Claude が書き、コードが検査した)。式が規則と一緒に書いてあったもの (最初から入っている規則、式つきの表) には付けない。出典は `basis`、確かめていないものは `not checked`
 - `rule_check` の `pass` は `hits` が空のときだけ true (schema で縛る)。式に要る値が設計に無い部品は `not_evaluable` に、足りない値の名前つきで入れ、当てていない扱い。`hits` と `not_evaluable` の `part_id` はどれも `targets` に入れる (品質保証部の記録の点検が確かめる)。設計の全体に当たる規則 (系の点検で部品が欠けている など) は `part_id` を `design` にし、`targets` にも `design` を入れる
+- 規則の強さ: 規則の任意の欄 `level` (`rule`・`advice`、無ければ `rule`)。`advice` の規則の当たりは、助言として記録して画面に出すが、合否に数えず、人に聞かず (`rule_hits` にしない)、設計を止めない。`advice` の規則で評価できない部品 (`not_evaluable`) は、画面の指摘に出さない。`rule_check` にも同じ `level` を写す。`pass` の意味は変わらない (`hits` が空のときだけ true) ので、読む側が `level` を見て分ける
 - 規則の束は event にだけ持ち、ファイルにはしない。`doc_id` ごとに最後の `knowledge.imported` が正 (同じファイルをもう一度渡して式が足されたときは、束を丸ごと出し直す)。渡されたファイルそのものを残すなら `knowledge/<filename>` (`layout.KNOWLEDGE_DIR`)
 - 実行の途中で人の答えを待つ形は後で: 実行のフォルダに `hearing.request.json` (質問) を置き、画面が `hearing.answer.json` (答え) を置く (`layout.HEARING_REQUEST_FILE`・`HEARING_ANSWER_FILE`。`stop.request` と同じ作り)
 - 系の点検: 部品は任意で `system` (駆動・操舵・制動・サス・座席・拘束・ROPS・灯火など) と `connects_to` ({`to`, `via`, `carries`}。`to` は部品・部材・フレームの節 (`nodes` の id、部品がフレームのつなぎ目に付くとき)・支持・`<支持>.<取付点>` の id) を持ち、設計を作るコードが書く。製品のフラグから要る系を決める規則 (分類 `system`) を、コードがつながりの鎖で当てる (例: 駆動輪のある製品は、モーターから駆動輪まで torque の鎖が切れずにつながる)。結果は `rule_check` の記録で、欠けた所が `hits`

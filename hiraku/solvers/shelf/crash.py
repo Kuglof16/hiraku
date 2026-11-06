@@ -202,28 +202,44 @@ class Crash(BuiltinTool):
         got = library_crash.tube_mean_crush_force(sec, {"yield_MPa": 300.0})
         out.append(check_record("50x50x2 square tube, flow stress 300 MPa", "mean_crush_force",
                                 9.56 * 300.0 * 2.0 * 2.0 ** (2.0 / 3.0) * 50.0 ** (1.0 / 3.0), got, "N", 1e-9,
-                                library_crash.SOURCE_RECT))
+                                library_crash.SOURCE_RECT,
+                                case_ja="50×50×2 mm の角管 (流れ応力 300 MPa) が軸の向きにつぶれるときの平均の力",
+                                source_ja="Wierzbicki と Abramowicz (1983) の式: P_m = 9.56 σ₀ t^(5/3) C^(1/3)、"
+                                          "C = (b + h) / 2 (出典は確かめていない)"))
         r = plastic_impact(500.0, 10.0, 0.0, 0.0, 50e3, 10.0, 1e9)
         src = "rigid-plastic stop at a constant force: s = m v^2 / (2 F), t = m v / F; 500 kg, 10 m/s, 50 kN"
-        out.append(check_record("500 kg at 10 m/s on a 50 kN crushing force", "max_crush", 0.5, r["x_max"], "m", 1e-9, src))
-        out.append(check_record("500 kg at 10 m/s on a 50 kN crushing force", "stop_time", 0.1, r["t_stop"], "s", 1e-9, src))
+        plastic_ja = "500 kg が 10 m/s で、50 kN の一定の力でつぶれる部分に当たる"
+        src_ja = "一定の力で止まる剛塑性の衝突: つぶれ s = m v² / (2 F)、止まるまでの時間 t = m v / F"
+        out.append(check_record("500 kg at 10 m/s on a 50 kN crushing force", "max_crush", 0.5, r["x_max"], "m", 1e-9, src,
+                                case_ja=plastic_ja, source_ja=src_ja))
+        out.append(check_record("500 kg at 10 m/s on a 50 kN crushing force", "stop_time", 0.1, r["t_stop"], "s", 1e-9, src,
+                                case_ja=plastic_ja, source_ja=src_ja))
         r = plastic_impact(600.0, 10.0, 100e3, 0.08, 60e3, 10.0, 1e9)
         out.append(check_record("bumper then crush zone, 600 kg at 10 m/s", "energy_absorbed",
                                 r["E_kinetic"], r["E_absorbed"], "J", 1e-9,
-                                "work-energy: bumper energy + F_m c take m v^2 / 2 at the stop"))
+                                "work-energy: bumper energy + F_m c take m v^2 / 2 at the stop",
+                                case_ja="バンパーのあとにつぶれる部分、600 kg が 10 m/s で当たる",
+                                source_ja="仕事とエネルギー: 止まるまでに、バンパーのエネルギーと F_m × つぶれ が m v² / 2 を受け取る"))
         r = plastic_impact(500.0, 10.0, 0.0, 0.0, 50e3, 0.3, 1e8)
         d = (-50e3 + math.sqrt(50e3 ** 2 + 1e8 * 500.0 * (100.0 - 2 * 100.0 * 0.3))) / 1e8
         out.append(check_record("crush zone bottoms out at 0.3 m, then a 100 kN/mm hard stop", "max_crush",
                                 0.3 + d, r["x_max"], "m", 1e-9,
-                                "work-energy: m v^2/2 = F c_max + F d + k d^2/2"))
+                                "work-energy: m v^2/2 = F c_max + F d + k d^2/2",
+                                case_ja="つぶれる部分が 0.3 m でつぶれ切り、そのあと 100 kN/mm の固い当たりで止まる",
+                                source_ja="仕事とエネルギー: m v²/2 = F × つぶれ切る長さ + F d + k d²/2"))
         lad = fixtures.ladder_design()
-        res = crash_frame(lad, 20.0 * STANDARD_GRAVITY)
+        a_g = 20.0
+        res = crash_frame(lad, a_g * STANDARD_GRAVITY)
+        wall_ja = f"左右対称のはしご形のフレームが壁で {a_g:g} g の減速で止められる"
         out.append(check_record("symmetric ladder stopped by a wall at 20 g", "hold_reaction",
                                 0.0, res["residual_ratio"], "1", 1e-6,
-                                "inertia relief: wall force and d'Alembert loads balance, the holding restraints carry nothing"))
+                                "inertia relief: wall force and d'Alembert loads balance, the holding restraints carry nothing",
+                                case_ja=wall_ja,
+                                source_ja="慣性リリーフ: 壁の力とダランベールの慣性力がつり合い、押さえ (拘束) は何も受けない"))
         out.append(check_record("symmetric ladder stopped by a wall at 20 g", "deceleration",
-                                20.0 * STANDARD_GRAVITY, -float(res["inertia_accel"][0]), "m/s^2", 1e-9,
-                                "rigid-body acceleration from the wall force: a = F / m"))
+                                a_g * STANDARD_GRAVITY, -float(res["inertia_accel"][0]), "m/s^2", 1e-9,
+                                "rigid-body acceleration from the wall force: a = F / m",
+                                case_ja=wall_ja, source_ja="壁の力から出す剛体の加速度: a = F / m"))
         return out
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:

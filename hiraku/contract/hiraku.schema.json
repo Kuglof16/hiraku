@@ -116,7 +116,7 @@
     "agent_id": {
       "description": "lead = まとめ役, designer = 設計役, packager = パッケージ役, cae.<domain> = 分野ごとの CAE 役, system = HIRAKU itself (hooks, store), user = the person. designer.<module> = モジュールごとの設計役 (designs with modules).",
       "type": "string",
-      "pattern": "^(lead|designer|packager|system|user|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
+      "pattern": "^(lead|designer|packager|system|user|designer\\.(structure|mechanism|electric)|designer\\.(frame|suspension|steering|occupant|powertrain|body)|cae\\.(handling|powertrain|aero|crash|strength|nvh|thermal))$"
     },
     "base": {
       "description": "Solver base. K0 hand calculation, K1 3D beam FE, K2 3D vehicle physics, K3 power and thermal circuit, K4 geometry, interference and people, K5 contribution and sensitivity.",
@@ -297,6 +297,13 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a record-only load case (id ending -drive, no criterion, feeding nothing) for the screen and the video: P1 step_climb_dynamic with record_run speed (driving over the step at 1x); S3 the lane change at 1.25 times its speed (near the tyres' limit); S1 rollover_tilt, the tilt table 1 deg past its limit (a computed rollover)."
         },
         "stop_after": {
           "enum": [
@@ -3509,6 +3516,13 @@
           ],
           "description": "builtin: shipped with HIRAKU; dropped: from a file the person gave."
         },
+        "level": {
+          "enum": [
+            "rule",
+            "advice"
+          ],
+          "description": "Missing: rule. advice: its hits are recorded and shown as advice; they never fail a design, are not asked of the person and do not stop the run. A part it cannot evaluate is not listed as a finding on the screen."
+        },
         "check_by": {
           "enum": [
             "code",
@@ -3646,6 +3660,13 @@
             }
           },
           "description": "Parts that break the rule."
+        },
+        "level": {
+          "enum": [
+            "rule",
+            "advice"
+          ],
+          "description": "The rule's level, copied here. Missing: rule. With advice, pass still says whether hits is empty, and the hits do not count in any judgement."
         },
         "not_evaluable": {
           "type": "array",
@@ -3890,6 +3911,13 @@
             "$ref": "#/$defs/test_id"
           },
           "description": "Tests that also get a load case beyond their limit (id ending -beyond, title starting 限界の外), for showing the failing side."
+        },
+        "drive": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test_id"
+          },
+          "description": "Tests that also get a record-only load case (id ending -drive, no criterion, feeding nothing) for the screen and the video: P1 step_climb_dynamic with record_run speed (driving over the step at 1x); S3 the lane change at 1.25 times its speed (near the tyres' limit); S1 rollover_tilt, the tilt table 1 deg past its limit (a computed rollover)."
         },
         "stop_after": {
           "enum": [

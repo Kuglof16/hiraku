@@ -131,6 +131,10 @@ class K2Tool(ABC):
     domain = "handling"
     stage = 2  # contract tool_spec.stage (HK5 light first): 2 for K2's time simulations of the vehicle
     tests: list[str] = []
+    # A tool only a plan names (the scripted run's step for one load case): a run with one of its `tests` checks it
+    # (hiraku.tools.shelf.tools_for_tests reads the attribute), but its spec and describe() name no test, so it
+    # covers none (shelf.load_case_stage, list_tools(test_id)) and the stage and the tool of those tests stay as they are
+    planned_only = False
     params: tuple[P, ...] = ()
     pairs: tuple[Pair, ...] = ()
 
@@ -152,9 +156,13 @@ class K2Tool(ABC):
 
     def spec(self) -> dict:
         checks = self.check()
-        return {"name": self.name, "title": self.title, "domain": self.domain, "base": "K2", "tests": list(self.tests),
+        return {"name": self.name, "title": self.title, "domain": self.domain, "base": "K2", "tests": self.covers(),
                 "origin": "builtin", "usable": all(c["pass"] for c in checks), "checks": checks,
                 "formulas": self.formula_ids(), "stage": self.stage}
+
+    def covers(self) -> list[str]:
+        """The tests the spec and describe() name: `tests`, none for a planned_only tool."""
+        return [] if self.planned_only else list(self.tests)
 
     def formula_ids(self) -> list[str]:
         return list(dict.fromkeys(p.formula_id for p in self.pairs))
@@ -163,7 +171,7 @@ class K2Tool(ABC):
         """What a load case for this tool needs (params) and which K0 formula outputs predict
         which results in the same unit (predicts); the shape of the analysis department's
         BuiltinTool.describe()."""
-        return {"name": self.name, "title": self.title, "domain": self.domain, "tests": list(self.tests),
+        return {"name": self.name, "title": self.title, "domain": self.domain, "tests": self.covers(),
                 "params": [p.describe() for p in (LOADING,) + self.params],
                 "predicts": [p.describe() for p in self.pairs], "formulas": self.formula_ids(), "stage": self.stage}
 

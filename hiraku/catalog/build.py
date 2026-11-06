@@ -7,8 +7,10 @@ sets a limit or a tolerance.
 
 from __future__ import annotations
 
+import copy
 import importlib
 import math
+import sys
 from typing import Any, Callable
 
 from hiraku.catalog.loader import Catalog
@@ -242,11 +244,27 @@ def _r1_joint(spec: Record, req: Record, design: Record) -> Record:
 Builder = Callable[[Record, Record, Record], Record]
 
 # Builders named by `build:` in data/catalog/tests.yaml (this module's own).
+def _builders_modules() -> Any:
+    """hiraku/catalog/builders/modules.py (it imports nothing of HIRAKU), loaded from its file under a name of
+    its own: importing it as hiraku.catalog.builders.modules would run the builders package's __init__ (the
+    formulas, sympy and numpy), which this module's importers (the plugin's hook command, twice per tool call)
+    would pay for on every start; and it must not depend on what sys.modules holds as hiraku.catalog.builders
+    (tests put a stand-in there)."""
+    import importlib.util
+    from pathlib import Path
+
+    name = "hiraku.catalog._builders_modules"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).parent / "builders" / "modules.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
 def _with_modules(build: Builder) -> Builder:
     # load_case.modules on designs split into modules, as the builders package sets it (builders.modules)
-    from hiraku.catalog.builders.modules import with_modules
-
-    return with_modules(build)
+    return _builders_modules().with_modules(build)
 
 
 BUILDERS: dict[str, Builder] = {
@@ -368,15 +386,97 @@ def _build_one(catalog: Catalog, req: Record, design: Record, tid: str, beyond: 
 
 def _feeds(up: Record, down: Record) -> bool:
     """Feeds join load cases of the same kind: past the limit to past the limit, and of the same
-    step height when both have one."""
+    step height when both have one. A case that records the drive at speed (record_run = speed: its record's
+    forces are the drive's, not the push's) feeds nothing."""
+    if up.get("params", {}).get("record_run") == "speed":
+        return False
     a, b = up.get("params", {}).get("step_height"), down.get("params", {}).get("step_height")
     return is_beyond(up) == is_beyond(down) and (a is None or b is None or a == b)
 
 
+DRIVE_SUFFIX = "-drive"
+DRIVE_TITLE = "走って向かう記録 (判定なし)"
+
+
+def _p1_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
+    """P1's drive record: the same step and speed, step_climb_dynamic's record of the run at speed
+    (record_run = speed), no criterion and feeding nothing (for the screen and the video to show the
+    vehicle driving over the step at 1x)."""
+    cases = _build_one(catalog, req, design, "P1", False)
+    out = []
+    for lc in cases:
+        if is_beyond(lc):
+            continue
+        d = copy.deepcopy(lc)
+        d["load_case_id"] = lc["load_case_id"] + DRIVE_SUFFIX
+        d["title"] = f"{DRIVE_TITLE}: {lc['title']}"
+        d["params"] = dict(d["params"], record_run="speed")
+        d.pop("criterion", None)
+        d.pop("feeds", None)
+        out.append(d)
+    return out
+
+
+# S3's drive record: the lane change this much faster than the requirement's speed, near the tyres' limit. K2's
+# choice for the video: on the video run 20261106-124650's version 5, 40 km/h used at most 0.59 of the friction
+# circle, 50 km/h 0.93 with no wheel lifting, 55 km/h lifted a wheel and left the lane (K2's runs, 2026-11-06)
+S3_DRIVE_FACTOR = 1.25
+
+
+def _s3_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
+    """S3's drive record: the double lane change at S3_DRIVE_FACTOR times its speed, near the tyres' limit, no
+    criterion and feeding nothing (for the screen and the video to show the friction circles near the limit)."""
+    out = []
+    for lc in _build_one(catalog, req, design, "S3", False):
+        if is_beyond(lc):
+            continue
+        d = copy.deepcopy(lc)
+        sp = d["params"]["speed"]
+        v = float(sp["value"]) * S3_DRIVE_FACTOR
+        d["params"] = dict(d["params"], speed={"value": v, "unit": sp["unit"]})
+        d["load_case_id"] = f"S3-dlc{v:g}{DRIVE_SUFFIX}"
+        d["title"] = f"{DRIVE_TITLE}: 限界に近い速さ {v:g} {sp['unit']} の車線変更 ({lc['title']})"
+        d.pop("criterion", None)
+        d.pop("feeds", None)
+        out.append(d)
+    return out
+
+
+# S1's drive record: the tilt table turned this far past the angle at which the upper wheels lift, then held, so the
+# vehicle rolls over onto the floor the table is hinged on (rollover_tilt's hold_past; HIRAKU's choice, no source)
+S1_DRIVE_PAST_DEG = 1.0
+S1_DRIVE_INFIX = "-rollover"  # S1-tilt-<loading>-rollover-drive
+
+
+def _s1_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
+    """S1's drive record: the tilt case with the table turned S1_DRIVE_PAST_DEG past the tip and held (rollover_tilt:
+    the body's contact with the table and the floor it is hinged on at its low edge, the run on until the body rests),
+    no criterion and feeding nothing (for the screen and the video to show the vehicle rolling over). The plan of
+    hiraku.catalog.builders.k2_tests PLANS_DRIVE names the tool."""
+    out = []
+    for lc in _build_one(catalog, req, design, "S1", False):
+        if is_beyond(lc):
+            continue
+        d = copy.deepcopy(lc)
+        d["load_case_id"] = lc["load_case_id"] + S1_DRIVE_INFIX + DRIVE_SUFFIX
+        d["title"] = (f"{DRIVE_TITLE}: 傾斜台を倒れる角度より {S1_DRIVE_PAST_DEG:g}° 先まで傾けて止め、床へ横転する "
+                      f"({lc['title']})")
+        d["params"] = dict(d["params"], hold_past={"value": S1_DRIVE_PAST_DEG, "unit": "deg"})
+        d.pop("criterion", None)
+        d.pop("feeds", None)
+        out.append(d)
+    return out
+
+
+DRIVE_BUILDERS = {"P1": _p1_drive, "S3": _s3_drive, "S1": _s1_drive}
+
+
 def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],
-                     skipped: list[tuple[str, str]] | None = None, beyond: list[str] = ()) -> list[Record]:
+                     skipped: list[tuple[str, str]] | None = None, beyond: list[str] = (),
+                     drive: list[str] = ()) -> list[Record]:
     """One load case per test, then the ones past the limit for each test in `beyond` (the
-    catalog spec with variant "beyond"; P1 gives two). A test without a builder, or whose
+    catalog spec with variant "beyond"; P1 gives two), then the drive records of each test in `drive`
+    (DRIVE_BUILDERS: id ending -drive, no criterion, feeding nothing). A test without a builder, or whose
     builder cannot build from these requirements and this design (CatalogError, or the
     builders' BuildError: both ValueError), raises; with `skipped` given it is
     left out and (test id, reason) is appended there. Two load cases with one id
@@ -391,6 +491,19 @@ def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: li
             if skipped is None:
                 raise
             skipped.append((tid, f"{BEYOND_TITLE}: {e}" if past else str(e)))
+    for tid in drive:
+        if tid not in DRIVE_BUILDERS:
+            msg = f"test {tid} has no drive record (only " + ", ".join(DRIVE_BUILDERS) + ")"
+            if skipped is None:
+                raise CatalogError(msg)
+            skipped.append((tid, msg))
+            continue
+        try:
+            out.extend(DRIVE_BUILDERS[tid](catalog, req, design))
+        except ValueError as e:
+            if skipped is None:
+                raise
+            skipped.append((tid, f"{DRIVE_TITLE}: {e}"))
     seen: dict[str, str] = {}
     for lc in out:
         if lc["load_case_id"] in seen:

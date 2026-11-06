@@ -71,7 +71,7 @@ class EntryPoint(unittest.TestCase):
         names = [t.name for t in tools()]
         self.assertLess(time.perf_counter() - t0, 2.0)
         self.assertEqual(names, ["tilt", "crosswind", "braking", "launch", "lane_change", "offroad_roll",
-                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam"])
+                                 "step_climb_dynamic", "kc_bench", "turning_circle", "crash_beam", "rollover_tilt"])
         self.assertNotIn("step_climb", names)  # the analysis department's hand-calculation tool keeps that name
         for t in tools():
             self.assertIsInstance(t, AnalysisTool)
@@ -143,7 +143,9 @@ class Declarations(unittest.TestCase):
             with self.subTest(tool=name):
                 desc = tool.describe()
                 self.assertEqual(desc["name"], name)
-                self.assertEqual(desc["tests"], tool.tests)
+                # a planned_only tool (rollover_tilt) names no test: it covers none, only a plan names it
+                self.assertEqual(desc["tests"], [] if tool.planned_only else tool.tests)
+                self.assertEqual(tool.planned_only, name == "rollover_tilt")
                 recs = desc["params"]
                 names = [p["name"] for p in recs]
                 self.assertEqual(len(names), len(set(names)))
@@ -158,6 +160,17 @@ class Declarations(unittest.TestCase):
                             self.assertEqual(contract.errors("quantity", p["default"]), [])
                             self.assertEqual(p["default"]["unit"], p["unit"])
                 json.dumps(desc)
+
+    def test_rollover_tilt_is_checked_with_s1_and_covers_no_test(self):
+        from hiraku.tools.shelf import tools_for_tests
+        self.assertIn("rollover_tilt", tools_for_tests(TOOLS, ["S1", "S3"]))
+        self.assertNotIn("rollover_tilt", tools_for_tests(TOOLS, ["S3", "P1"]))
+        # shelf.load_case_stage and list_tools(test_id) read the spec's tests: S1 keeps the tilt tool alone
+        desc = TOOLS["rollover_tilt"].describe()
+        self.assertEqual(desc["tests"], [])
+        self.assertEqual([n for n, t in TOOLS.items() if "S1" in t.describe()["tests"]], ["tilt"])
+        self.assertEqual([(p["quantity"], p["formula_id"], p["output"]) for p in desc["predicts"]],
+                         [("tip_angle", "tilt.spring_roll_angle", "theta")])
 
     def test_predicts_name_k0_outputs_and_declared_params(self):
         formulas = k0_formulas()
@@ -513,7 +526,19 @@ class StepRecordRun(unittest.TestCase):
         self.assertLess(t[0], 0.05)
         self.assertGreater(t[-1], res["climb_time"])
         self.assertTrue(any("record_run = speed" in a for a in rec["assumptions"]))
-        self.assertTrue(any("tyre's vertical stiffness" in a and "without a source" in a for a in rec["assumptions"]))
+        note = next(a for a in rec["assumptions"] if "tyre's vertical stiffness" in a)
+        # box_design gives neither variable: both are K2's defaults
+        self.assertIn("tyre_stiffness K2's default", note)
+        self.assertIn("bump_stop_factor K2's default", note)
+
+    def test_the_stiffness_note_gives_each_variable_its_basis(self):
+        from hiraku.solvers.k2_vehicle.shelf.step import stiffness_sources
+        d = box_design(variables={"tyre_stiffness": {"value": 80.0, "unit": "N/mm", "basis": "a shop page (not checked)"},
+                                  "bump_stop_factor": {"value": 10.0, "unit": "1"}})
+        got = stiffness_sources(d)
+        self.assertIn("tyre_stiffness a shop page (not checked)", got)
+        self.assertIn("bump_stop_factor from the design without a source (no basis)", got)
+        self.assertEqual(contract.errors("design", d), [])
 
     def test_the_vectors_at_the_peak_balance_the_weight_and_carry_the_mount_loads(self):
         from hiraku.solvers.k2_vehicle.units import G0

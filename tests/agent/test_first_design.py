@@ -123,6 +123,12 @@ class ReviseWithChoicesTest(FirstDesignCase, unittest.TestCase):
         super().setUp()
         propose_design(self.ctx, {"archetype": "ladder_4w", "reason": "要件から"}, "designer")
 
+    def owner(self, module):
+        """The designer that owns a module of the design (design.modules owner: a design role)."""
+        from hiraku.tools import rules
+
+        return rules.module_owner(rules.design_modules(self.ctx), module)
+
     def test_a_choice_sets_its_variables(self):
         from hiraku.tools.functions import build_version, revise_design
 
@@ -130,7 +136,7 @@ class ReviseWithChoicesTest(FirstDesignCase, unittest.TestCase):
         self.assertIn("bulkhead", got["choices"]["pedal_mount"])
         # ladder_4w is split into modules (contract d9631a5): pedal_mount is the steering module's choice
         prop = revise_design(self.ctx, {"module": "steering", "choices": {"pedal_mount": "bulkhead"},
-                                        "reason": "R7: ペダルの力を隔壁へ"}, "designer.steering")
+                                        "reason": "R7: ペダルの力を隔壁へ"}, self.owner("steering"))
         self.assertEqual(self.ctx.version, 1)  # a proposal, not a version
         with self.assertRaisesRegex(ToolError, "stand_pedal_accel"):  # the post leaves the steering module's space
             build_version(self.ctx, {"reason": "R7 の提案をまとめる"}, "packager")
@@ -148,10 +154,10 @@ class ReviseWithChoicesTest(FirstDesignCase, unittest.TestCase):
 
         with self.assertRaisesRegex(ToolError, "no_such"):
             revise_design(self.ctx, {"module": "steering", "choices": {"no_such": "x"}, "reason": "r"},
-                          "designer.steering")
+                          self.owner("steering"))
         with self.assertRaisesRegex(ToolError, "bulkhead"):
             revise_design(self.ctx, {"module": "steering", "choices": {"pedal_mount": "roof"}, "reason": "r"},
-                          "designer.steering")
+                          self.owner("steering"))
         with self.assertRaisesRegex(ToolError, "module"):  # the single designer's revise_design: HK6
             revise_design(self.ctx, {"choices": {"pedal_mount": "bulkhead"}, "reason": "r"}, "designer")
         self.assertEqual(self.ctx.version, 1)

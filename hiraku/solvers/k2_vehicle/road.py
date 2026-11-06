@@ -133,6 +133,54 @@ def flat() -> BlockRoad:
     return BlockRoad()
 
 
+class Planes(Road):
+    """Infinite planes whose solid sides together are the ground (the free space is above every
+    plane): a concave ground such as a tilt table meeting the level floor at its hinge. Each plane is
+    (a point on it, its unit normal pointing to the free side), road frame."""
+
+    name = "planes"
+
+    def __init__(self, planes):
+        self.planes = [(tuple(float(x) for x in p), tuple(float(x) for x in n)) for p, n in planes]
+        for _, n in self.planes:
+            if abs(math.sqrt(sum(x * x for x in n)) - 1.0) > 1e-9:
+                raise ValueError("plane normals must be unit vectors")
+
+    def height(self, x: float, y: float) -> float:
+        """The highest plane at (x, y) (planes with a normal having an upward part)."""
+        best = -math.inf
+        for (px, py, pz), (nx, ny, nz) in self.planes:
+            if nz > 1e-12:
+                best = max(best, pz - (nx * (x - px) + ny * (y - py)) / nz)
+        return best
+
+    def contacts(self, centres, radii):
+        out = []
+        for (cx, cy, cz), r in zip(centres, radii):
+            cl = []
+            for (px, py, pz), (nx, ny, nz) in self.planes:
+                d = (cx - px) * nx + (cy - py) * ny + (cz - pz) * nz
+                cl.append((cx - d * nx, cy - d * ny, cz - d * nz, nx, ny, nz, r - d))
+            out.append(cl)
+        return out
+
+    def contact(self, c, r):
+        cl = self.contacts(np.asarray(c, dtype=float).tolist(), np.asarray(r, dtype=float).tolist())
+        arr = np.array(cl, dtype=float)
+        return arr[:, :, 0:3], arr[:, :, 3:6], arr[:, :, 6]
+
+    def describe(self) -> dict:
+        return {"kind": self.name, "planes": [{"point_m": list(p), "normal": list(n)} for p, n in self.planes]}
+
+
+def table_with_floor(theta: float, y_hinge: float) -> Planes:
+    """A tilt table in its own frame (z = 0, gravity turned by side_gravity(theta): theta > 0 the left
+    side up) hinged at its low edge y = y_hinge on the level floor: the floor is the plane through the
+    hinge line whose normal is the world's up, (0, sin theta, cos theta) in the table frame."""
+    return Planes([((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+                   ((0.0, y_hinge, 0.0), (0.0, math.sin(theta), math.cos(theta)))])
+
+
 def step(x_step: float, height: float, y_range=None) -> BlockRoad:
     return BlockRoad([x_step], [0.0, height], y_range)
 

@@ -268,10 +268,20 @@ def _records_section(ctx: RunContext, args: Record) -> Record:
     shape = {"prediction": ("predictions", _compact_prediction), "analysis": ("analyses", _compact_analysis),
              "comparison": ("comparisons", None), "cause": ("causes", None), "verdict": ("verdicts", None)}
     out: Record = {}
-    for k in kinds:
-        key, fn = shape[k]
-        out[key] = [fn(x) if fn else x for x in s.records(k) if of_case(x)]
+    # in reading(): a record file is parsed once and kept while its stat stays the same (a long run's 1468 records
+    # took 1.3 s on every call without it); the compact analyses use none of the fields reading() leaves out, and
+    # the other kinds are only copied out (json.dumps by the tool's wrapper)
+    with s.reading():
+        for k in kinds:
+            key, fn = shape[k]
+            out[key] = [fn(x) if fn else dict(x) for x in s.records(k) if of_case(x)]
     return out
+
+
+def _record_counts(s: Any) -> Record:
+    """How many records of each kind the run has (read in reading(): files kept while unchanged)."""
+    with s.reading():
+        return {k: len(s.records(k)) for k in RECORD_KINDS}
 
 
 def context_overview(ctx: RunContext) -> Record:
@@ -284,7 +294,7 @@ def context_overview(ctx: RunContext) -> Record:
                         "stage": load_case_stage(ctx, lc), **({"feeds": lc["feeds"]} if lc.get("feeds") else {})}
                        for lc in ctx.load_cases],
         "judgements": {j["domain"]: j["state"] for j in s.judgements()} if ctx.version else {},
-        "records": {k: len(s.records(k)) for k in RECORD_KINDS},
+        "records": _record_counts(s),
         "sections_available": dict(SECTION_HINTS),
     }
 
@@ -369,13 +379,13 @@ MODULES_HOW = ("モジュールの設計役は revise_design に module を付�
 
 
 def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
-    """For a design with modules: the caller's module (designer.<module>) or every module (others), each with
-    its variables (current values), choices (the values the generator offers), envelope and interfaces, and the
-    round's pending proposals. None for a design without modules."""
+    """For a design with modules: the caller's modules (those whose owner it is: a design role may own several) or
+    every module (others), each with its variables (current values), choices (the values the generator offers),
+    envelope and interfaces, and the round's pending proposals. None for a design without modules."""
     mods = rules.design_modules(ctx)
     if mods is None:
         return None
-    mine = agent.split(".", 1)[1] if agent and agent.startswith("designer.") else None
+    mine = rules.owned_modules(mods, agent)
     values = {x["name"]: x["value"] for x in design_variables(ctx) or []}
     offered = (design_choices(ctx) or {}).get("choices") or {}
 
@@ -389,8 +399,8 @@ def modules_section(ctx: RunContext, agent: str | None = None) -> Record | None:
             out["interfaces"] = _interface_groups(m["interfaces"])
         return out
 
-    whole = mine in mods
-    shown = [mods[mine]] if whole else list(mods.values())
+    whole = bool(mine)
+    shown = [mods[m] for m in mine] if whole else list(mods.values())
     out = {"design_version": ctx.version, "how": MODULES_HOW, "modules": [one(m, whole) for m in shown],
            "pending": [_proposal_line(c) for c in ctx.store.pending_proposals()]}
     if not whole:
@@ -1303,7 +1313,7 @@ def propose_design(ctx: RunContext, args: dict[str, Any], agent: str | None = No
             no_builder = [t for t in wanted if not _has_builder(catalog, t)]
             skipped = []
             load_cases = build_load_cases(catalog, req, design, [t for t in wanted if t not in no_builder], skipped,
-                                          beyond=req.get("beyond", []))
+                                          beyond=req.get("beyond", []), drive=req.get("drive", []))
             if not load_cases:
                 raise ValueError("no test Claude picked could be built: "
                                  + "; ".join(f"{t}: {why}" for t, why in skipped) if skipped else
@@ -1350,11 +1360,13 @@ def rebuild_load_cases(ctx: RunContext, design: Record) -> list[Record]:
 
     v = design["design_version"]
     before = ctx.store.version_load_cases(v - 1)
-    tests = list(dict.fromkeys(lc["test_id"] for lc in before if not lc["load_case_id"].endswith("-beyond")))
+    tests = list(dict.fromkeys(lc["test_id"] for lc in before
+                               if not lc["load_case_id"].endswith(("-beyond", "-drive"))))
     req = requirements_now(ctx)
     skipped: list = []
     try:
-        built = build_load_cases(load_catalog(), req, design, tests, skipped, beyond=req.get("beyond", []))
+        built = build_load_cases(load_catalog(), req, design, tests, skipped, beyond=req.get("beyond", []),
+                                 drive=req.get("drive", []))
     except ValueError as e:
         built, skipped = [], [("*", str(e))]
     by_id = {lc["load_case_id"]: lc for lc in built}
@@ -1435,7 +1447,7 @@ def _who_changes(design: Record, said: str, tool: str) -> str:
         if mid == "package":
             steps.append(f"{'・'.join(keys)} はレイアウトの変数: パッケージ役が build_version の changes で変える")
         else:
-            steps.append(f"{'・'.join(keys)} は{contract.MODULE_NAMES_JA.get(mid, mid)}の変数: designer.{mid} が "
+            steps.append(f"{'・'.join(keys)} は{contract.MODULE_NAMES_JA.get(mid, mid)}の変数: {rules.module_owner(mods, mid)} が "
                          f"revise_design (module={mid}) で出し直す (前の提案は置き換わる。パッケージ役はまとめ役に返す)")
     return "次にすること: " + "。".join(steps) + f"。そのあと {tool} を呼び直す"
 
@@ -1564,10 +1576,11 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
     The scripted run's `fit: driver` (scripted.fit_driver) runs before this call and puts the fitted values
     into `changes`, so a fit that moves a variable outside the module is refused here like any other."""
     module = args.get("module")
-    agent = agent or (f"designer.{module}" if module else None)
+    owner = rules.module_owner(rules.design_modules(ctx), module) if module else None
+    agent = agent or owner
     v = ctx.version
     _gate(ctx, "revise_design", args, agent)
-    if not module or agent != f"designer.{module}":  # _gate's HK6 denies these; kept so a skipped check cannot pass
+    if not module or agent != owner:  # _gate's HK6 denies these; kept so a skipped check cannot pass
         raise ToolError("この設計はモジュールに分かれているので、revise_design は module を付けて、そのモジュールの設計役が呼びます")
     reason = args["reason"].strip()
     if not reason:
