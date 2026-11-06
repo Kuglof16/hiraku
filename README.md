@@ -50,11 +50,15 @@ Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作ってい
 
 ## 保存した実行を見る
 
-画面は、開くとまず、リポジトリの `showcase/` に保存した実行を再生します。何も計算せず、無料です。
+画面を開くと、まず一覧「HIRAKU でできること」が出ます (`?list=1` も同じ一覧)。「まずはこれ」の「見る」を押すと、リポジトリの `showcase/` に保存した実行のうちいちばん新しいもの (Claude Code のプラグインで回し、v7 で終わった `20261105-160725-offroad-4w`) を再生します。何も計算せず、無料です。
 
-- `showcase/` には 4 つの実行と、動画の N10 の場面の記録 (`n10/`) があります。何も選ばないと、いちばん新しい実行 (Claude Code のプラグインで回し、v7 で終わった `20261105-160725-offroad-4w`) が開きます。
-- ほかの実行は、URL に `?run=<実行の名前>` を付けて開きます。一覧は `?list=1` です。最初のページ「HIRAKU でできること」の「まずはこれ」の「見る」でも開けます。
-- それぞれの実行の中身と、見る順のおすすめは [showcase/README.md](showcase/README.md) にあります。
+- 再生は長いので、下の時間の棒を右端まで送ると、終わったときの判定 (④ 解析結果) と組み立て (⑤ 組み立て) が見られます。棒の横の「1×」を押すと、速さが 0.5× から 8× まで変わります。
+- `showcase/` には 4 つの実行と、動画の N10 の場面の記録 (`n10/`) があります。ほかの実行は、一覧の「記録を見る」か、URL の `?run=<実行の名前>` で開きます。実行ごとの中身と見る順のおすすめは [showcase/README.md](showcase/README.md)。
+- 終わった実行で、食い違って見える所:
+  - 記録の最後の「まだ確かめていない 45」は、要件の値のうち出典を確かめていない (仮定を含む) ものの数です。
+  - この実行で選んだ分野は、強度信頼性と組み立てだけです。P1 (段差越え) は R1 に力を渡すために回した「参考 (判定しない)」なので、④ の動力は「選んでいない」と出ます。
+  - ⑤ の手順ごとの「工具」「手」の × は、見せるだけで判定に入りません (手と工具の通り道の決まりに出典が無いため。`hiraku/catalog/builders/analysis.py` の `H5_HANDS_NOTE`)。
+  - 上の「費用 不明」は、プラグインの実行では使った額が HIRAKU に届かないためです (下の「Claude Code のプラグインで回す」)。
 
 ## 台本の運転
 
@@ -62,19 +66,19 @@ Built with Claude: Japan 2026 (2026-11-02 〜 11-08) の期間中に作ってい
 
 1. 画面の最初のページ「HIRAKU でできること」を開きます。
 2. まず短いもの: 「デモ」の「要件の書き間違いを見つける」の行の「再現する」を押します (cm と mm の書き間違いを、手計算と解析の食い違いから見つけて直す流れです)。本格的なものは、「小さなオフロード車の 11 の試験」の行の「再現する」です。
-3. 押すと、ボタンが押せなくなり、画面が作業台に変わるまで **数十秒 (長くて 1 分ほど)** 何も変わりません。使うツールの確認をしている時間で、止まっているわけではありません。その間にもう一度押さないでください。
-4. 作業台に変わると、実行が進みます。かかった時間 (この PC で測った値。PC やほかの仕事で変わります):
-   - 「要件の書き間違いを見つける」: 約 40 秒
+3. 押すと、ボタンが押せなくなり、画面が「③ 解析」に変わるまで **十数秒から 1 分ほど** 何も変わりません。使うツールの確認をしている時間で、止まっているわけではありません。その間にもう一度押さないでください。
+4. 「③ 解析」に変わると、実行が進みます。かかった時間 (この PC で測った値。PC やほかの仕事で変わります):
+   - 「要件の書き間違いを見つける」: 約 50 秒 (押してから 1 分ほど)
    - 「小さなオフロード車の 11 の試験」: 約 9 分 (526 秒。試験を同時に回していたときの値)
 
    途中で止めたいときは、上の「■ 止める」を押します。
 5. 見る所:
    - 画面の上の「vN・繰り返し a / b 回」: 設計の v (v1、v2 …) と、直して確かめ直した回数 (b は上限) です。
-   - 作業台の右のカード: いま確かめている試験の、手計算の予測・CAE の結果・その差と判定です。
+   - 「③ 解析」の右のカード: いま確かめている試験の、手計算の予測・CAE の結果・その差と判定です。
    - 左の「記録」: 実行の中で起きたことが、順に並びます。
    - 画面の下の「hooks」の並び: 実行の途中で、順番を守らせるために止めた回数が出ます (たとえば「HK1 予測が先」)。
    - ④「解析結果」のタブ: 分野ごとの判定のタイルが並びます。タイルを押すと、その分野の解析をタブの中で再生します。
-   - 右上の「見せる / 作業台」: 「見せる」は 3D を大きく見せる表示、「作業台」は作業の様子を見る表示です。
+   - 3D の右上の「大きく見る」のボタン: 3D を画面いっぱいにします。もう一度押すか Esc で戻ります (URL の `?present=1` でも同じ)。
 
    「小さなオフロード車の 11 の試験」は、NG の所を 4 回直して、v5 で全部 OK になります (画面の行の説明)。
 6. 終わった実行は、一覧の「記録を見る」に並び、「見る」でいつでも再生できます (古いものは「この PC の記録」を開くと出ます)。
@@ -122,9 +126,9 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
 
 ### Claude Code のプラグインで回す
 
-自分の Claude Code (自分のサインインの枠) で回す道です。API キーは要りません。リポジトリのフォルダで、次のようにします。
+自分の Claude Code (自分のサインインの枠) で回す道です。API キーは要りません。コマンドはリポジトリのフォルダで打ちます (Claude Code だけは、どのフォルダから起こしてもかまいません)。
 
-1. 「動かし方」の手順 3 まで済ませます (`.venv` が要ります)。
+1. 「動かし方」の手順 3 まで済ませます (`.venv` が要ります)。そのうえで、窓で `python --version` が動くことを確かめます。プラグインの MCP サーバーと hooks は PATH の `python` で起き、そこから HIRAKU の Python に切り替えます。切り替え先は、環境変数 `HIRAKU_PYTHON` があればそれ、無ければリポジトリの `.venv` です (`plugins/hiraku/scripts/hiraku_cli.py` の冒頭)。PATH に `python` が無いと、`/mcp` でつながりません。
 2. 先にキー無しで確かめます (40 秒ほど。Claude を呼ばない台本の運転です)。
 
    ```
@@ -137,7 +141,7 @@ Claude で新しく実行するには、Anthropic の API キーが要ります�
    claude --plugin-dir <リポジトリ>/plugins/hiraku --allowedTools "mcp__plugin_hiraku_hiraku"
    ```
 
-4. Claude Code の中で `/mcp` を打ち、hiraku のサーバーがつながっているか見ます。つながっていたら、`/hiraku:run offroad-4w-n12.yaml` を打ちます (最初の `start_run` は 30〜60 秒かかります)。
+4. Claude Code の中で `/mcp` を打ち、hiraku のサーバーがつながっているか見ます。つながっていたら、`/hiraku:run offroad-4w-n12.yaml` を打ちます (ファイル名だけなら `data/requirements/` から探します。最初の `start_run` は 30〜60 秒かかります)。
 5. 実行の様子は、同じリポジトリのフォルダで `.venv\Scripts\python -m hiraku.webserve` を起こして、画面で見ます (画面は `./runs` を見るので、リポジトリのフォルダから起こします)。
 
 プラグインはコピーせず、リポジトリの中から読ませます。くわしくは [plugins/hiraku/README.md](plugins/hiraku/README.md)。この道で回して v7 で終わった実行が `showcase/20261105-160725-offroad-4w` です。
@@ -170,7 +174,7 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 .venv\Scripts\python -m unittest
 ```
 
-`tests/` の下の `def test_` は 248 ファイルに 2,882 行あります (2026-11-06 の grep の数。回った数ではありません)。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照らし合わせ・重い試験)。
+試験の数は、下の「試験の数」にあります。全部にかかる時間は測っていません。飛ばされるものもあります (ブラウザの試験・Rapier との照らし合わせ・重い試験)。
 
 板とソリッドの大きなモデルを速く解く道 (任意。Windows と Linux だけ。無ければ SciPy の SuperLU で解く):
 
@@ -189,9 +193,9 @@ HIRAKU を使うだけなら要りません。コードを直したり確かめ�
 
 - デモの車両 (林道を走る 2 人乗りの 4 輪) で、要件のファイルに並べた 11 の試験 (段差越え P1・強度 R1・レールの継ぎ目の局所の応力 R1s・振動 N1・荷重の通り道 R8・操作部の荷重 R7・干渉とハンドルの切れ角 H1・乗員の体格 H3・泥のはね H6・乗り降り H7・発進 P3) を「手計算で予測 → 解析 → 判定」で回す流れ。基準のある試験は OK か NG かまで出す (P1 は基準が無く、予測との照らし合わせまで)。予測の無い解析は hooks が止め、食い違いは原因を書くまで先へ進めない。説明できて安全側と判断できる食い違いは、不利な方の値で OK か NG かを出す
 - 設計役が設計の変数を変えて次の設計を作る (`revise_design`)。v ごとに何が赤で、次の v で何を変えたかは、保存した実行ごとに [showcase/README.md](showcase/README.md) にある
-- 解析のツール 26 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 17 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 9 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`))。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 17 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 9 つには付かない)。感度の試験があるのは frame_static だけ
+- 解析のツール 27 個 (梁と板 (シェル) の有限要素・3D の車両の物理・電力と熱・幾何と干渉。棚の 17 (`hiraku/solvers/shelf/__init__.py` の `BUILTIN_TOOLS`) と K2 の 10 (`hiraku/solvers/k2_vehicle/shelf/__init__.py` の `TOOLS`)。数は `hiraku.solvers.builtin_tools()` の長さ、2026-11-06)。どれも答えの分かっている例と照らし合わせてから使う。手計算の式 (`k0_handcalc.library.all_formulas()`) は単体の試験で確かめている (実行の中での照らし合わせは無い)。感度 (K5) は棚の 17 のツールのどれにも `params.sensitivity` で付く (`hiraku/solvers/shelf/base.py` の `BuiltinTool.run`。K2 の 10 には付かない)。感度の試験があるのは frame_static だけ
 - 試験ごとの荷重条件の作り方は、P1・R1 を含めて 20 試験ぶんある (衝突・疲労・電力・熱・組み立て・傾斜台・横風・レーンチェンジ・制動・発進・凸凹の横の坂 など)。要件のファイルに並べれば実行に乗る
-- 実行の記録 (`runs/<id>/events.jsonl`) を再生する作業台の画面 (3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
+- 実行の記録 (`runs/<id>/events.jsonl`) を再生する画面「③ 解析」(3D の応力の色・矢印・試験の場面・走行の再生) と、分野ごとの判定のタイル
 - 画面から実行を始める口。一覧「HIRAKU でできること」の行ごとに、走らせ方を選ぶ: 「見る」(記録を再生する。無料)、「再現する」(決まった手順の運転。無料、Claude を呼ばない)、「実行する」(Claude で新しく実行する。Anthropic の API キーが要り、行ごとの費用の上限で止まる)。「試す」は、その依頼の文を入れた依頼の画面を開く。「自分で頼む」で書いた依頼は、ヒアリングで要件がそろえば、そこから始められる。「実行する」は、HIRAKU を起こした窓に `ANTHROPIC_API_KEY` があるときだけ押せて、費用の上限を見せて確かめてから始まる。画面から始めた実行は画面から止められる (`web/js/app.js`、`hiraku/webserve/launch.py`)
 
 まだのもの: 20 試験ぶんを全部まとめて回すこと、実行の最後の報告 (`write_report`) を読む画面。
@@ -257,7 +261,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
 
 ### MCP のツール (`hiraku/tools/`)
 
-サーバーの名前は `hiraku`、ツールの名前は `mcp__hiraku__<名前>` (`hiraku/tools/mcp.py`、`docs/contract.md`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。
+サーバーの名前は `hiraku`。ツールの名前は、API キーの道では `mcp__hiraku__<名前>`、プラグインの道では `mcp__plugin_hiraku_hiraku__<名前>` (`hiraku/agent/hooks.py` の `PREFIX`・`PLUGIN_PREFIX`)。並びは `hiraku/tools/functions.py` の `RUN_TOOLS`、説明は `mcp.py` の `DESCRIPTIONS` と `hiraku/intake/tools.py` の `TOOLS` にある。プラグインの道には、ほかに `start_run` (実行を始める)・`open_run` (走っている実行を開き直す)・`wait_for_roles` (役が終わるのを待つ) がある (`hiraku/agent/plugin.py` の `OWN_TOOLS`)。
 
 - 読むツール
   - `get_context`: 実行の今の様子。要る部分だけを `sections` で選ぶ。
@@ -283,6 +287,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - `ask_user`: 足りない要件をまとめて 1 回聞く。
   - `import_knowledge`: 渡されたファイルを規則にする。
   - `rule_check`: 規則を設計の部品に当てる。
+  - `find_tradeoffs`: 設計の変数を動かすと、1 つの結果は良くなり別の結果は悪くなる組を、感度の記録 (K5) から探す。
 
 ### Skills と plugin (`plugins/hiraku/`)
 
@@ -348,7 +353,7 @@ hooks の規則は HK1〜HK6 の 6 つ (`hiraku/contract/protocols.py` の `HOOK
   - 入ったコミット: c099143「Merge claude/dept-qa-ba0596: qa.run_tests runs the suite in parallel processes」、a25d42e「qa.run_tests (from QA), CLAUDE.md allows it」。
 - 重い試験は `HIRAKU_SLOW_TESTS` を付けたときだけ回る。merge の前には、台本の運転を 1 回回す (550b5e8「one scripted run before every merge, the rest behind HIRAKU_SLOW_TESTS」)。
 - 試験の数
-  - `tests/` の下の `def test_` は、248 ファイルに 2,882 行ある (2026-11-06 の grep の数。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
+  - `git grep "def test_" -- "tests/**/*.py"` は 2,969 行、`git grep -c` で 255 ファイル (2026-11-06。`tests/verification/test_run_tests.py` が一時の試験を書くための見本の行も入る)。
   - この数には、条件を付けたときだけ回るものも入っている。例: ブラウザの試験は `python -m tests.web.browser` のときだけ回る。
   - 実際に回る数は、`python -m unittest` か `python -m qa.run_tests` が出す `Ran N tests` で数える。
 
