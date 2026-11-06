@@ -24,6 +24,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+for _name in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_name, "4")  # numpy's matrix products would otherwise take every core
+
 import numpy as np
 
 try:
@@ -362,6 +365,37 @@ def find_blender(given: str | None = None) -> str:
     raise FileNotFoundError("Blender is not found: give --blender or set HIRAKU_BLENDER")
 
 
+def free_ram_gb() -> float | None:
+    """Free physical memory in GB; None where it cannot be read."""
+    import ctypes
+
+    class Status(ctypes.Structure):
+        _fields_ = [("length", ctypes.c_uint32), ("load", ctypes.c_uint32), ("total", ctypes.c_uint64), ("free", ctypes.c_uint64), ("page_total", ctypes.c_uint64), ("page_free", ctypes.c_uint64),
+                    ("virtual_total", ctypes.c_uint64), ("virtual_free", ctypes.c_uint64), ("extended", ctypes.c_uint64)]
+
+    try:
+        s = Status()
+        s.length = ctypes.sizeof(Status)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s)):
+            return s.free / 1024.0 ** 3
+    except AttributeError:  # not Windows
+        pass
+    try:
+        return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 1024.0 ** 3
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
+def wait_for_ram(min_gb: float, poll_s: float = 30.0) -> None:
+    """Rendering shares the PC with other jobs: wait until this much memory is free before starting."""
+    while True:
+        free = free_ram_gb()
+        if free is None or free >= min_gb:
+            return
+        print(f"waiting: {free:.1f} GB free, {min_gb:g} GB wanted", flush=True)
+        time.sleep(poll_s)
+
+
 def run_blender(blender: str, scene_file: Path, png: Path, log: Path | None = None) -> None:
     """Blender in background mode with factory settings, as its own process; no open scene is touched."""
     cmd = [blender, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(Path(__file__).resolve()), "--", str(scene_file), str(png)]
@@ -459,6 +493,7 @@ def add_arguments(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--lens", type=float, default=42.0)
     ap.add_argument("--status", default="精度は確かめていない")
     ap.add_argument("--keep-scene", action="store_true")
+    ap.add_argument("--min-free-gb", type=float, default=15.0, help="wait until this much memory is free before rendering")
 
 
 def prepare(a: argparse.Namespace) -> dict[str, Any]:
@@ -487,6 +522,7 @@ def prepare(a: argparse.Namespace) -> dict[str, Any]:
 
 def render(a: argparse.Namespace, p: dict[str, Any], png: Path, line_strength: float = 1.0) -> None:
     """The still picture in Blender, without its caption; beside it <png stem>.camera.json, the camera Blender used."""
+    wait_for_ram(a.min_free_gb)
     per_point = max(1, int(round(0.06 / (p["field"].dx / 4.0))))
     arrays = scene_arrays(p["design"], p["summary"], p["lines"], p["vmax"], a.radius, per_point, p["shapes"])
     options = {"resolution": list(a.resolution), "samples": a.samples, "threads": a.threads, "background": [0.0035, 0.004, 0.0065], "line_strength": line_strength, "camera": list(a.camera),
