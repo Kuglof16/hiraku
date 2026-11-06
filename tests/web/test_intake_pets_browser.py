@@ -217,19 +217,25 @@ class IntakePetsTest(unittest.TestCase):
             self.assertEqual(p["role"], f"cae.{d}")
             self.assertGreater(p["ink"], 0, d)
             self.assertEqual((p["card"], p["state"]), ("off", "idle") if d == "thermal" else ("lit", "working"), d)
-        size = page.evaluate(CANVAS_SIZE)
-        self.assertEqual(size, [88, 88])
+        w, h = page.evaluate(CANVAS_SIZE)  # 88 wide; the place (88 x 104) also holds the name, the flex column may take a few px off
+        self.assertEqual(w, 88)
+        self.assertTrue(80 <= h <= 88, h)
         self.assertEqual(errors, [])
         page.close()
 
     def test_a1_video_pets_fill_the_bigger_place_without_the_present_card(self):
-        """present=1 and video=1: the intake's CSS makes A1's pet place 104 x 104 and the canvas follows it
-        (drawn at that size); the present mode's card is not over A1 or A2."""
+        """present=1 and video=1: the intake's CSS makes A1's pet canvas 104 px wide and the pet is drawn at
+        the size the canvas is shown; the present mode's card is not over A1 or A2."""
         page, errors = self.open("present=1&video=1&tab=A1&t=1e6")
         self.read(page, 1e6)
-        self.assertEqual(page.evaluate(CANVAS_SIZE), [104, 104])
-        drawn = page.evaluate("(() => { const c = document.querySelector('.in-pet canvas'); return [c.width, c.clientWidth]; })()")
-        self.assertGreaterEqual(drawn[0], drawn[1])  # (drawn at least at its shown size: stage scale x device pixel ratio)
+        # 104 wide; the place (104 x 128) also holds the name under the pet, so the flex column may take a few px off its height
+        w, h = page.evaluate(CANVAS_SIZE)
+        self.assertEqual(w, 104)
+        self.assertTrue(96 <= h <= 104, h)
+        # drawn at the size it is shown (canvas px over CSS px the same both ways: the pet is not stretched)
+        cw, ch, sw, sh = page.evaluate("(() => { const c = document.querySelector('.in-pet canvas'); return [c.width, c.height, c.clientWidth, c.clientHeight]; })()")
+        self.assertAlmostEqual(cw / sw, ch / sh, delta=0.02)
+        self.assertGreaterEqual(cw, sw)
         rail = "getComputedStyle(document.getElementById('present-rail')).display"
         self.assertEqual(page.evaluate(rail), "none")
         self.read(page, 1e6, tab="A2")

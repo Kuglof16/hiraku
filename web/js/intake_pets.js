@@ -72,9 +72,7 @@ const CSS = `
 .ipet .ipet-box { position: relative; width: 100%; height: 92px; }
 .ipet .ipet-box canvas.pet3d { position: absolute; inset: 0; width: 100%; height: 100%; }
 .ipet .ipet-name { max-width: 100%; font-size: 14px; font-weight: 700; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ipet[data-pet-state="idle"] { opacity: 0.55; }
-.in-pet canvas.pet3d { flex: none; } /* A1: the canvas keeps the size the intake's CSS gives it (the name under it does not squeeze it) */
-`;
+.ipet[data-pet-state="idle"] { opacity: 0.55; }`;
 function ensureStyle() {
   if (document.getElementById("intake-pets-css")) return;
   const s = document.createElement("style");

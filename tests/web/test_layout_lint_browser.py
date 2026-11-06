@@ -77,6 +77,13 @@ SCREENS = (
     Screen("A1", "?new=1", wait="document.querySelector('#view-intake textarea')"),
     Screen("A2", f"?run={HEARING}&tab=A2&live=0&pace=0&t=1e6"),
     Screen("A5", f"?run={HEARING}&tab=A5&live=0&pace=0&t=1e6"),
+    # the CAE agents' pets on the intake screens (js/intake_pets.js): A2's row of every domain's agent, and the video's A1 and A2
+    Screen("A2 (ペット)", f"?run={DOMAINS}&tab=A2&live=0&pace=0&t=1e6", wait=f"{READY} && document.querySelector('.a2-pets .ipet canvas')"),
+    # Known (found when this row was added; the intake's name under the pet, not the pet): the fixture's shown_name is
+    # the id "powertrain", 18 px bold in the video, wider than the 104 px place (overflow by 4-9 px).
+    Screen("A1 (ペット・動画)", f"?run={DOMAINS}&tab=A1&live=0&pace=0&t=1e6&present=1&video=1", wait=f"{READY} && document.querySelector('.in-pet canvas')",
+           known=('.in-pet[data-domain="powertrain"]',)),
+    Screen("A2 (ペット・動画)", f"?run={DOMAINS}&tab=A2&live=0&pace=0&t=1e6&present=1&video=1", wait=f"{READY} && document.querySelector('.a2-pets .ipet canvas')"),
     Screen("報告", f"cut.html?cut=n17&run={REPORT_RUN}&t=8.7"),
     Screen("ツールの棚", f"?run={DOMAINS}&tab=A4&pace=0&t=1e6"),
     Screen("組み立て", f"?run={ASSEMBLY}&tab=A7&pace=0&t=1e6"),
