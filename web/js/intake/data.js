@@ -166,6 +166,177 @@ export const DOMAINS = [
   }
 ];
 
+export const TESTS = {
+  "S1": {
+    "domain": "handling",
+    "title": "静的な転倒 (傾斜台・縁の荷重)"
+  },
+  "S2": {
+    "domain": "handling",
+    "title": "旋回での転倒 (J ターン・定常円)"
+  },
+  "S3": {
+    "domain": "handling",
+    "title": "回避 (ダブルレーンチェンジ)"
+  },
+  "S4": {
+    "domain": "handling",
+    "title": "制動と前のめり"
+  },
+  "S5": {
+    "domain": "handling",
+    "title": "凸凹の横斜面"
+  },
+  "S6": {
+    "domain": "handling",
+    "title": "小回り (最小回転半径)"
+  },
+  "F1": {
+    "domain": "aero",
+    "title": "横風"
+  },
+  "F2": {
+    "domain": "aero",
+    "title": "空気抵抗"
+  },
+  "F3": {
+    "domain": "aero",
+    "title": "液体のこぼれ"
+  },
+  "P1": {
+    "domain": "powertrain",
+    "title": "段差を越える"
+  },
+  "P2": {
+    "domain": "powertrain",
+    "title": "坂を登る・坂で発進する"
+  },
+  "P3": {
+    "domain": "powertrain",
+    "title": "加速・最高速度"
+  },
+  "P4": {
+    "domain": "powertrain",
+    "title": "航続・稼働時間"
+  },
+  "P5": {
+    "domain": "powertrain",
+    "title": "アクチュエータの力と速さ"
+  },
+  "C1": {
+    "domain": "crash",
+    "title": "壁への正面衝突"
+  },
+  "C2": {
+    "domain": "crash",
+    "title": "人との接触"
+  },
+  "C3": {
+    "domain": "crash",
+    "title": "横転したときの乗員の空間 (横・後ろ・上から押す)"
+  },
+  "R1": {
+    "domain": "strength",
+    "title": "静的強度"
+  },
+  "R1s": {
+    "domain": "strength",
+    "title": "静的強度 (管のつなぎ目の壁)"
+  },
+  "R2": {
+    "domain": "strength",
+    "title": "衝撃 (落錘・落下・段差)"
+  },
+  "R3": {
+    "domain": "strength",
+    "title": "疲労・耐久"
+  },
+  "R4": {
+    "domain": "strength",
+    "title": "横転時の保護枠 (ROPS)"
+  },
+  "R5": {
+    "domain": "strength",
+    "title": "たわみ・ゆがみ"
+  },
+  "R6": {
+    "domain": "strength",
+    "title": "電池の取付の振動"
+  },
+  "R7": {
+    "domain": "strength",
+    "title": "操作部の荷重 (手と足の力を枠まで伝え、動かない)"
+  },
+  "R8": {
+    "domain": "strength",
+    "title": "荷重の通り道 (部品と乗員の重さと加速度を枠まで伝える)"
+  },
+  "R9": {
+    "domain": "strength",
+    "title": "サスペンション取付"
+  },
+  "N1": {
+    "domain": "nvh",
+    "title": "固有振動数と加振"
+  },
+  "N2": {
+    "domain": "nvh",
+    "title": "乗り心地"
+  },
+  "N3": {
+    "domain": "nvh",
+    "title": "騒音"
+  },
+  "T1": {
+    "domain": "thermal",
+    "title": "電池の温度"
+  },
+  "T2": {
+    "domain": "thermal",
+    "title": "モーター・制御器の温度"
+  },
+  "T3": {
+    "domain": "thermal",
+    "title": "使い方とデューティ"
+  },
+  "H1": {
+    "domain": "assembly",
+    "title": "干渉"
+  },
+  "H2": {
+    "domain": "assembly",
+    "title": "手と工具が入るか"
+  },
+  "H3": {
+    "domain": "assembly",
+    "title": "体格・手が届くか"
+  },
+  "H4": {
+    "domain": "assembly",
+    "title": "挟み込み"
+  },
+  "H5": {
+    "domain": "assembly",
+    "title": "組み立ての順番"
+  },
+  "H6": {
+    "domain": "assembly",
+    "title": "泥のはね (車輪が巻き上げた物が乗員に届かない)"
+  },
+  "H7": {
+    "domain": "assembly",
+    "title": "乗り降り (座席の横の開口・最初の足場・手がかり)"
+  },
+  "G1": {
+    "domain": "assembly",
+    "title": "区分・寸法 (法令)"
+  },
+  "G2": {
+    "domain": "assembly",
+    "title": "規格の項目に当てる"
+  }
+};
+
 export const CATEGORIES = [
   {
     "name": "sheet_metal",

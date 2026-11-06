@@ -94,12 +94,12 @@ def check_passes(c: Record) -> bool:
 def _miss_text(c: Record) -> str:
     got = c.get("got")
     if not isinstance(got, (int, float)) or isinstance(got, bool) or not math.isfinite(got):
-        return f"照合「{c['case']}」が通りません: {c['quantity']} の値が出ていません (got = {got!r})。出典: {c['source']}"
+        return f"確かめ「{c['case']}」が通りません: {c['quantity']} の値が出ていません (got = {got!r})。出典: {c['source']}"
     exp = c["expected"]
     rel = (got - exp) / abs(exp) if exp != 0 else got - exp
     diff = f"差 {rel * 100:+.2f} %、許す幅 {c['tolerance_rel'] * 100:.2f} %" if exp != 0 else \
         f"差 {rel:+.4g} {c['unit']}、許す幅 {c['tolerance_rel']:.4g} {c['unit']}"
-    return (f"照合「{c['case']}」が通りません: {c['quantity']} が {got:.6g} {c['unit']} で、答えは {exp:.6g} {c['unit']} "
+    return (f"確かめ「{c['case']}」が通りません: {c['quantity']} が {got:.6g} {c['unit']} で、答えは {exp:.6g} {c['unit']} "
             f"({diff})。出典: {c['source']}")
 
 
@@ -155,7 +155,7 @@ def make_tool(code: str, *, taken: tuple[str, ...] = (), timeout_s: float = CHEC
             continue
         real = check_passes(c)
         if c["pass"] != real:
-            made.problems.append(f"照合「{c['case']}」の pass は {c['pass']} と書かれていますが、expected・got・"
+            made.problems.append(f"確かめ「{c['case']}」の pass は {c['pass']} と書かれていますが、expected・got・"
                                  f"tolerance_rel から計算すると {real} です。HIRAKU は計算した方を使います")
             c = dict(c, **{"pass": real})
         if not real:
