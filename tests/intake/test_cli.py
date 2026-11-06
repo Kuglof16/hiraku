@@ -44,7 +44,7 @@ class HearingCliTest(unittest.TestCase):
     def test_with_the_sample_answers(self):
         code, out, _ = run("hearing", "--product", "care-bed")
         self.assertEqual(code, 0)
-        self.assertIn("質問 3 件", out)
+        self.assertIn("質問 4 件", out)
 
     def test_bare_without_answers_cannot_proceed(self):
         code, out, _ = run("hearing", "--product", "care-bed", "--bare", "--no-answers")
@@ -83,7 +83,7 @@ class RulesCliTest(unittest.TestCase):
     def test_the_demo_design(self):
         code, out, _ = run("rules", "--design", "data/designs/offroad-4w-v1.json", "--product", "offroad-4w")
         self.assertEqual(code, 0)
-        self.assertIn("29 規則", out)  # the demo design's numbers belong to the analysis department: no hit is asserted
+        self.assertIn("60 規則", out)  # the demo design's numbers belong to the analysis department: no hit is asserted
 
 
 class WebDataTest(unittest.TestCase):

@@ -320,6 +320,14 @@ class SchemaTest(unittest.TestCase):
         a["prediction_ids"] = []
         self.assertNotEqual(contract.errors("analysis", a), [])
 
+    def test_design_roles_do_not_depend_on_the_product(self):
+        self.assertEqual(contract.MODULE_DESIGNERS, ("designer.structure", "designer.mechanism", "designer.electric"))
+        self.assertEqual({f"designer.{k}" for k in contract.DESIGNER_ROLES_JA}, set(contract.MODULE_DESIGNERS))
+        agent = contract.schema()["$defs"]["agent_id"]["pattern"]
+        for a in (*contract.MODULE_DESIGNERS, *contract.LEGACY_MODULE_DESIGNERS, "packager", "designer"):
+            self.assertRegex(a, agent)  # saved records with the old roles still fit
+        self.assertNotRegex("designer.chassis", agent)
+
     def test_design_variable_may_name_its_basis(self):
         d = load("design.json")
         d["variables"]["tire_vertical_stiffness"] = {"value": 150.0, "unit": "N/mm", "basis": "assumption"}
@@ -389,6 +397,12 @@ class IntakeTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("rule_check", {**r, "pass": True}), [])
         self.assertNotEqual(contract.errors("rule_check", {**r, "hits": [], "pass": False}), [])
         self.assertEqual(contract.errors("rule_check", {**r, "hits": [], "pass": True}), [])
+
+    def test_advice_rule_keeps_pass_as_it_is(self):
+        r = load("rule_check.json")
+        self.assertEqual(contract.errors("rule_check", {**r, "level": "advice"}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**r, "level": "advice", "pass": True}), [])
+        self.assertNotEqual(contract.errors("rule_check", {**r, "level": "note"}), [])
 
     def test_mesh_event_and_field(self):
         m = load("mesh.json")

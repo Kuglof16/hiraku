@@ -16,7 +16,7 @@ from hiraku import contract
 from hiraku.webserve.server import SAMPLE_EVENTS, make_server
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -126,7 +126,7 @@ class AssemblyBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/{path}")
+        page.goto(f"{self.base}/{path}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors

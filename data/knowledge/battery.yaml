@@ -29,3 +29,140 @@ rules:
       read 2026-11-03. This text says "High Voltage", not "voltage class B". R100 Part I itself covers
       M and N1 vehicles above 25 km/h; the rule uses its 60 V DC line as the threshold for high-voltage
       handling on any vehicle
+  # needs: wire_current_A, wire_rated_current_A, wire_bundle_count (new); req_Q23
+  - id: WR-01
+    text: 電線に続けて流す電流は、その電線が流してよい電流 (束ねてあれば束の割合をかけたもの) 以下
+    kinds: [electrical]
+    check: (wire_bundle_count <= 1 and wire_current_A <= wire_rated_current_A) or wire_current_A <= req_Q23 * wire_rated_current_A
+    trust: 2
+    basis: >-
+      Anixter catalogue, page 02•43 "Current Ratings for Automotive Cables": approximate current by conductor size for a
+      single cable isolated in free air at 40 degC ambient, 90 degC and 105 degC conductor temperature, and rating factors
+      for grouped touching cables (2: 0.80 .. 8: 0.50), https://objects.eanixter.com/PD379251-AN.PDF, read 2026-11-06
+      (secondary: a distributor's technical page). wire_rated_current_A is the single-wire value of the cable maker's
+      table at the ambient of R4-01 and the cable's temperature class; the code that gives it names the table in the
+      declared basis. A table for another class (DIN VDE 0298-4 via Lapp T12, 33 CFR 183 Table 5 for boats) is borrowed
+      and makes the hit trust 3
+
+  # needs: wire_fuse_rating_A, wire_rated_current_A, wire_bundle_count (new); req_Q23, req_Q24
+  - id: WR-02
+    text: 回路を守る器具 (ヒューズ・ブレーカ) の定格電流は、守る電線が流してよい電流を超えない
+    kinds: [electrical]
+    check: wire_fuse_rating_A <= req_Q24 * wire_rated_current_A and (wire_bundle_count <= 1 or wire_fuse_rating_A <= req_Q24 * req_Q23 * wire_rated_current_A)
+    trust: 3
+    basis: >-
+      assumption: borrowed from aircraft and boats. FAA AC 43.13-1B with Change 1, par. 11-48 (a breaker opens before the
+      current rating of the wire attached to it is exceeded), https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf,
+      read 2026-11-06. 33 CFR 183.455(c) (boats: not above 150 % of Table 5 under 50 V, not above 100 % at 50 V or more),
+      https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read 2026-11-06. ISO 8820 and
+      ISO 6469-3:2021 clauses 7.1 / 7.2 (overload and short-circuit protection, seen only as titles in the table of
+      contents) not checked
+
+  # needs: wire_fuse_rating_A, wire_current_A (new)
+  - id: WR-03
+    text: 回路を守る器具の定格電流は、ふだん流れる電流以上 (ふだんの使い方で切れない)
+    kinds: [electrical]
+    check: wire_fuse_rating_A >= wire_current_A
+    trust: 3
+    basis: >-
+      assumption: HIRAKU's minimum (a device rated below the continuous current opens in normal use and the consumer gets
+      no electricity); not taken from a standard. The time-current curve of the device (start-up and motor peaks) is not
+      judged here
+
+  # needs: wire_insulation_max_degC, wire_place_max_degC (new)
+  - id: WR-04
+    text: 電線の被覆の温度クラスの上限は、電線が通る場所のいちばん高い周りの温度以上
+    kinds: [electrical]
+    check: wire_insulation_max_degC >= wire_place_max_degC
+    trust: 3
+    basis: >-
+      The classes: IS/ISO 6722:2006 (identical with ISO 6722:2006) Table 1, A -40 to 85 degC, B -40 to 100 degC, C -40 to
+      125 degC, D -40 to 150 degC, E -40 to 175 degC, F -40 to 200 degC, G -40 to 225 degC, H -40 to 250 degC,
+      https://archive.org/details/gov.in.is.iso.6722.2011, read 2026-11-06 (ISO 6722-1:2011 not checked). The rule is
+      borrowed (assumption): FAA AC 43.13-1B with Change 1, par. 11-124, wires rated so that the conductor stays within the
+      wire specification maximum when the ambient and the heat rise of the current are counted, read 2026-11-06. This
+      check counts the ambient only; the heat rise is in WR-01 (the rated current at that ambient). No clearance in mm
+      from a motor, brake or hot cells was read
+
+  # needs: wire_voltage_rating_V (new); var_battery_voltage (existing, as in BT-02)
+  - id: WR-05
+    text: 電線の定格の電圧は、電池のいちばん高い電圧以上 (60 V の電線は 60 V 以下の系だけ)
+    kinds: [electrical]
+    check: wire_voltage_rating_V >= var_battery_voltage
+    trust: 1
+    basis: >-
+      IS/ISO 6722:2006 (identical with ISO 6722:2006) 3.1: a 60 V cable is for road vehicle systems whose nominal system
+      voltage is equal to or less than 60 V d.c. or 25 V a.c.; 3.2: a 600 V cable above that, up to 600 V; 4.1: above
+      60 V d.c. special care against mechanical stress, https://archive.org/details/gov.in.is.iso.6722.2011, read
+      2026-11-06. ISO 6722 says nominal system voltage; this check uses var_battery_voltage, the full-charge voltage of
+      BT-02, which is the stricter. For the demo battery 16 x 3.65 V = 58.4 V (cell cut-off from the EVE LF50K
+      specification, the source of BT-01), below 60 V
+
+  # needs: wire_bend_radius_mm, wire_outer_diameter_mm, wire_bundle_count (new); req_Q25
+  - id: WR-06
+    text: 1 本で通す電線の曲げの内側の半径は、外径の 3 倍以上 (動かない所)
+    kinds: [electrical]
+    check: wire_bundle_count > 1 or wire_bend_radius_mm >= req_Q25 * wire_outer_diameter_mm
+    trust: 2
+    basis: >-
+      Coficab data sheet FLRY / FLRY sn, rev. AM 09.03.2022, page 1: min. bending radius 3 x D (static),
+      https://media.iewc.com/PublicAssets/SpecificationSheets/COF-2010-01-AM-FLRY---FLRY-sn.pdf, read 2026-11-06 (a
+      manufacturer's data sheet, 60 V automotive cable). Static installation only; a wire that moves with the steering
+      or the suspension is not covered by this value
+
+  # needs: wire_bend_radius_mm, wire_outer_diameter_mm, wire_bundle_count (new); req_Q26
+  - id: WR-07
+    text: 束ねた電線の曲げの内側の半径は、束の中でいちばん太い電線の外径の 10 倍以上
+    kinds: [electrical]
+    check: wire_bundle_count <= 1 or wire_bend_radius_mm >= req_Q26 * wire_outer_diameter_mm
+    trust: 3
+    basis: >-
+      assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 aa and 11-117 (bundles not less
+      than 10 times the outside diameter of the largest wire), https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf,
+      read 2026-11-06
+
+  # needs: wire_support_spacing_mm (new); req_Q27
+  - id: WR-08
+    text: 配線を支える点どうしの間隔は 609.6 mm 以下 (管やダクトの中は除く)
+    kinds: [electrical]
+    check: wire_support_spacing_mm <= req_Q27
+    trust: 3
+    basis: >-
+      assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 a and 11-146 (intervals not
+      more than 24 in = 609.6 mm, computed, except in troughs, ducts or conduits),
+      https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06. No public
+      road-vehicle value was found
+
+  # needs: wire_penetration_clearance_mm (new); req_Q28
+  - id: WR-09
+    text: 板や縁を通り抜ける所で留めていない配線は、縁から 9.525 mm 以上離す (守りの輪を付ける)
+    kinds: [electrical]
+    check: wire_penetration_clearance_mm >= req_Q28
+    trust: 3
+    basis: >-
+      assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-115 (grommets where wires cannot
+      be clamped, at least 3/8 in = 9.525 mm, computed, from structure at penetrations),
+      https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06; 33 CFR
+      183.445(a) (boats: protected from abrasion through a bulkhead or rigid surface, no number), read 2026-11-06
+
+  # needs: wire_control_clearance_mm (new); req_Q29
+  - id: WR-10
+    text: 配線と、動かして操作する仕組みの隙間は 12.7 mm 以上
+    kinds: [electrical]
+    check: wire_control_clearance_mm >= req_Q29
+    trust: 3
+    basis: >-
+      assumption: borrowed from aircraft wiring. FAA AC 43.13-1B with Change 1, par. 11-96 dd and 11-125 (at least 1/2 in
+      = 12.7 mm, computed, from controls under light hand pressure),
+      https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_43.13-1B_w-chg1.pdf, read 2026-11-06
+
+  # needs: battery_fuse_length_mm (new); req_Q39
+  - id: WR-11
+    text: 電池の端子から最初に回路を守る器具までの電線は 1828.8 mm 以下
+    kinds: [battery]
+    check: battery_fuse_length_mm <= req_Q39
+    trust: 3
+    basis: >-
+      assumption: borrowed from boats. 33 CFR 183.460(a) (within 72 in = 1828.8 mm, computed, of the battery, measured
+      along the conductor), https://www.ecfr.gov/current/title-33/chapter-I/subchapter-S/part-183/subpart-I, read
+      2026-11-06

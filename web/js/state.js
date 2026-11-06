@@ -413,7 +413,7 @@ export function applyEvent(s, ev) {
         ? `照合: 差 ${fmtSigned(d.diff_rel)} (許す幅 ${fmtPct(d.tolerance_rel, 0)}) で一致`
         : `照合: 差 ${fmtSigned(d.diff_rel)} が許す幅 ${fmtPct(d.tolerance_rel, 0)} を超えた。` +
           (d.cause_id ? `原因は ${d.cause_id}` : "原因を書くまで先に進めない");
-      logRecord(s, ev, d.comparison_id, ok ? "ok" : "bad", `${who(ev)}: ${txt}`);
+      logRecord(s, ev, d.comparison_id, ok ? "ok" : "warn", `${who(ev)}: ${txt}`); // a mismatch: attention, not NG
       if (!again) {
         if (agent) agent.status = ok ? "照合した" : "食い違い";
         setActivity(s, ev, txt);

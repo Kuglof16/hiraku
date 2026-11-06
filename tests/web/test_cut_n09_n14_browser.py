@@ -206,7 +206,7 @@ class CutN09N14Test(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/cut.html?cut={cut}&{query}&t=0")
+        page.goto(f"{self.base}/cut.html?cut={cut}&{query}&t=0", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=120000)
         page.evaluate("window.hiraku.ready")
         out = {}

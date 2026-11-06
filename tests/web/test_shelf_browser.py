@@ -92,6 +92,10 @@ class ShelfBrowserTest(unittest.TestCase):
         tools_dir.mkdir(parents=True)
         (tools_dir / "rollbar-1.py").write_bytes(CODE_1.encode("utf-8"))
         (tools_dir / "rollbar-2.py").write_bytes(CODE_2.encode("utf-8"))
+        # the same events as a run on disk, for a page opened at ?run=<id>&t=
+        cls.events = shelf_events()
+        (tools_dir.parent / "events.jsonl").write_bytes(
+            "".join(json.dumps(ev, ensure_ascii=False) + "\n" for ev in cls.events).encode("utf-8"))
         cls.release = threading.Event()
 
         def load():
@@ -124,7 +128,7 @@ class ShelfBrowserTest(unittest.TestCase):
         page.not_found = []
         page.on("response", lambda r: r.status == 404 and page.not_found.append(r.url.split("/api/", 1)[-1]))
         page.on("console", lambda m: m.type == "error" and "status of 404" not in m.text and errors.append(m.text))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0{extra}")
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0{extra}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("async (events) => { await window.hiraku.load(events, 1e6); }", events)
@@ -344,6 +348,42 @@ class ShelfBrowserTest(unittest.TestCase):
         page.click('#view-shelf .sh-detail header .sh-more summary')
         page.click('#view-shelf .sh-mode button[data-mode="domain"]')
         self.assertTrue(page.evaluate("document.querySelector('#view-shelf .sh-detail header .sh-more').open"))
+        self.assertEqual(errors, [])
+        page.close()
+
+    def test_url_picks_filter_and_tool(self):
+        """A page opened at ?t= with &tab=A4&shelf=claude&tool=rollbar: when ready, the filter is
+        Claude が作った, rollbar's card is open with its checks and its code, and nothing is still being
+        read (the frame does not change afterwards). (Named to run after test_the_shelf.)"""
+        self.release.set()
+        page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        t = self.events[-1]["t"] + 1
+        page.goto(f"{self.base}/?run={self.run_id}&pace=0&present=1&video=1&tab=A4&t={t}&shelf=claude&tool=rollbar")
+        page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
+        page.evaluate("window.hiraku.ready")
+        got = page.evaluate("""() => { const v = document.getElementById('view-shelf');
+            return { shown: !v.hidden, filter: v.querySelector('.sh-filter button.on')?.dataset.filter,
+                     tools: [...v.querySelectorAll('.sh-tool')].map((r) => r.dataset.tool),
+                     sel: v.querySelector('.sh-tool.sel')?.dataset.tool, card: v.querySelector('.sh-detail')?.dataset.tool,
+                     rows: [...v.querySelectorAll('.sh-checks tbody tr')].map((tr) => tr.className),
+                     code: v.querySelector('.sh-code')?.textContent ?? null, note: v.querySelector('.sh-note').hidden,
+                     sum: v.querySelector('.sh-sum').textContent, text: v.textContent }; }""")
+        self.assertTrue(got["shown"])
+        self.assertEqual(got["filter"], "claude")
+        self.assertEqual(got["tools"], ["rollbar", "roof_crush"])
+        self.assertEqual((got["sel"], got["card"]), ("rollbar", "rollbar"))
+        self.assertEqual(got["rows"], ["ok"])
+        self.assertEqual(got["code"], CODE_2)
+        self.assertTrue(got["note"])
+        self.assertEqual(got["sum"], "5 ツール・OK 3")
+        self.assertNotIn("読んでいます", got["text"])
+        # the card is scrolled to its checks (as far as it scrolls)
+        top = page.evaluate("""() => { const box = document.querySelector('#view-shelf .sh-right');
+            const at = Math.round(box.querySelector('.sh-detail h4').getBoundingClientRect().top - box.getBoundingClientRect().top);
+            return { at, scrolled: box.scrollTop, end: box.scrollTop + box.clientHeight >= box.scrollHeight - 1 }; }""")
+        self.assertTrue(abs(top["at"]) <= 2 or top["end"], top)
         self.assertEqual(errors, [])
         page.close()
 
