@@ -10,6 +10,10 @@ From the repository root:
 python -m viewer.src.nvh      <run dir>   # modal record      -> viewer/data/nvh.js
 python -m viewer.src.crash    <run dir>   # crash record      -> viewer/data/crash.js
 python -m viewer.src.assembly <run dir>   # assembly record   -> viewer/data/assembly.js
+python -m viewer.src.thermal  <run dir> [--energy <run dir>]          # thermal (+ drive_energy) -> viewer/data/thermal.js
+python -m viewer.src.fatigue  <run dir>                               # fatigue record           -> viewer/data/fatigue.js
+python -m viewer.src.strength <run dir>                               # frame_static record      -> viewer/data/strength.js
+python -m viewer.src.strength <version dir> --frames <dir> [--name N] [--every n]   # saved shell frames (the step hit)
 ```
 
 `<run dir>` is a run folder (`runs/<id>`, with `v001/`, ...) or one version folder. By default each script takes the newest version that has the tool's record. `--version v003` or `--analysis ana-0038` picks another one, and `--out` sets the output folder. Then open `viewer/index.html` in a browser; `index.html#crash` opens one field. `viewer/data/` is not committed.
@@ -22,6 +26,12 @@ python -m viewer.src.assembly <run dir>   # assembly record   -> viewer/data/ass
   - **A** (`crash`, 1-D mass and spring): "A is a 1-D model: no deformed shape is drawn". The vehicle stands still (never moved into the wall); colour = the stored peak stress × a(t)/a_max; the elastic deflection solved at the peak is off by default (scale 0). Plots: deceleration, crush and wall force over t.
 - **Assembly** (`assembly`, H1/H3; `entry_opening` H7 and `spray_reach` H6 as numbers): part boxes coloured by step order, by status, or by interference depth. The parts move along `path_mm` in step order. A plot shows the tool gap per step.
 
+- **Strength** (R1 / R1s), two kinds of data:
+  - **beam** (`frame_static` record): the beams coloured by each member's von Mises (the record's per_member), deformed by the record's per_node displacement × scale; the record's vectors as arrows; 判定 from the load case's criterion; the yield marks are the frame members' materials. Part boxes move with the nodes the tool loads them on (`nvh.part_motion`).
+  - **shell** (`--frames`: frames.npz, frames_meta.pkl and load_paths.json saved by a frame_shell step-hit run with K2's mount loads; nothing is solved): the shell mesh coloured by the element von Mises (max of the two surfaces, at the element centre) at each saved instant, deformed × scale (the displacement less the wheel mounts' rigid motion); the excluded wheel-mount patch grey; the IIW hot spot of each instant marked (purple ball) and plotted; colour up to the frame's yield (or the run's / this instant's largest); jumps to the joints (weld-line ends) and to the hot spot; the mount forces as arrows (at the one instant load_paths.json holds them) and the mesh nodes each force is spread on (the load path; click a mount in the list). The parts layer uses the version's design regenerated with the variables named in load_paths.json (those this generator does not know are listed, not applied); a part whose id is among the saved mesh's element labels is meshed (stiffness), the wheel kinds are left out (the mount forces carry them, `k1_frame.analyze.sprung_items`), the others are point masses on their joints; the boxes move with the mean displacement of the mesh nodes at their design nodes. Data: about 23 MB for 50 instants of a 110k-element mesh (`--every` keeps fewer).
+- **Fatigue** (`fatigue`, R3): the beams coloured by each member's Miner damage over the distance (the largest weld point of the member; log scale, 1 = the life); 判定 against the case's criterion; the road profile of the record's scene passes under the tyres at the case's speed (road point x drawn at x_front + x − v t, as `shelf.fatigue.road_wheel_forces` meets it). Plots: the worst point's stress and the wheel loads over the simulated road, and the S-N curve with the stress ranges counted at the worst point (log-log). The frame does not move (the stresses come from influence coefficients).
+- **Thermal** (`thermal`, T1–T3; `drive_energy` for the battery): the part boxes of each RC-network node's kind (battery, motor, controller: `k3_tools._parts_of`) coloured by that node's temperature (`temp.<node>`) at the time of the slider, from the air temperature to the run's highest; the network as `network_from_design` builds it drawn in the side panel (C, R to the air, τ); plots: the temperatures with their limits (design variables `<node>_max_temperature`, or the case's criterion), the selected node's loss and heat to the air, the power through the chain (power.* with part_id), and the battery's charge when the run (or `--energy`) has a drive_energy record. The thermal network has no shape: nothing moves.
+
 Every field lists its inputs (and where each one comes from).
 
 ## Parts in the calculation (every field)
@@ -32,6 +42,9 @@ Every part of the design is drawn as its box (with rpy), and `src/common.py` `pa
 - Crash A (`shelf.crash`): every part on board in the one rigid mass; only the crush zone's rails crush (`library_crash.crush_zone`); K1 at the peak loads the parts on the same nodes.
 - Crash B (`k2_vehicle.crash_beam.mesh._lump_parts`, branch claude/k2-crash-beam-b, rule copied): point masses on carried_by nodes (a node no member uses: the nearest frame node), unsprung parts at their support's frame node; no part stiffness, no contact of parts with the wall. Part boxes move with those nodes.
 - Assembly (`k4_geometry.model.bodies`): every part on board is a body (shape only, masses not used).
+- Strength beam and fatigue (`src/ledgers.py` `k1_ledger`; `k1_frame.model.FrameModel.add_body_loads`): parts with carried_by as mass items on those nodes (their weight, or in fatigue their inertia relief), parts without at the support's wheel centre node; the record's vehicle_mass and frame_mass compared (frame_static).
+- Strength shell (`shell_ledger`, `k1_shell.frame.analyze_shell`): see Strength above.
+- Thermal (`thermal_ledger`): the RC network's nodes (熱回路の節点), the power chain's stages (電力の段), every other part in the vehicle mass of the drive only; the two thermal categories are coloured by `js/thermal.js`.
 
 Categories (legend, click info): mass on frame nodes / unsprung / modelled with stiffness / mass only / shape only / not in this calculation (left off by the loading). The mass table compares the per-category sums and the members' mass with the record's own mass (crash `vehicle_mass`, `frame_mass`; crash_beam's mass assumption per support); NVH and assembly records state none.
 
@@ -51,4 +64,4 @@ Categories (legend, click info): mass on frame nodes / unsprung / modelled with 
 - `js/main.js`: the page: switch, time and scale, layers, inputs, and the info shown on a click.
 - `js/<field>.js`: one file per field.
 
-Tests: `python -m unittest tests.viewer.test_viewer`. The browser test needs Playwright for the system Python (`py`) and is skipped without it.
+Tests: `python -m unittest tests.viewer.test_viewer tests.viewer.test_viewer_tfs`. The browser test needs Playwright for the system Python (`py`) and is skipped without it.

@@ -1,0 +1,43 @@
+{
+"load_case_id": "R3-5000km-C",
+"test_id": "R3",
+"domain": "strength",
+"title": "ISO 8608 の C 級の悪路を 40 km/h で 5000 km 走ったときの溶接の疲労 (2 人 + 荷)",
+"params": {
+"distance": {
+"value": 5000.0,
+"unit": "km"
+},
+"road_class": "C",
+"speed": {
+"value": 40.0,
+"unit": "km/h"
+},
+"loading": "two_cargo"
+},
+"requirement_keys": [
+"Q90",
+"Q12",
+"Q50",
+"Q30",
+"Q33",
+"Q40"
+],
+"criterion": {
+"quantity": "fatigue_damage",
+"op": "<",
+"limit": {
+"value": 1.0,
+"unit": "1"
+},
+"basis": "Miner's rule: the welds last Q90 5000 km while the damage stays below 1",
+"requirement_keys": [
+"Q90"
+]
+},
+"tolerance_rel": 0.5,
+"modules": [
+"frame",
+"steering"
+]
+}

@@ -331,7 +331,7 @@ window.HV = window.HV || {};
       const L = this.L, m = L.members || {};
       let h = '<table class="mt"><tr><th>内訳</th><th>個数</th><th>質量</th></tr>';
       for (const r of L.table) h += `<tr><td>${HV.esc(L.categories[r.cat])}</td><td>${r.count}</td><td>${L.tool === 'assembly' ? '-' : kg(r.mass_kg)}</td></tr>`;
-      h += `<tr><td>フレームの部材 (剛性あり)</td><td>${m.count ?? '-'}</td><td>${kg(m.mass_kg)}</td></tr>`;
+      h += `<tr><td>${HV.esc(m.label || 'フレームの部材 (剛性あり)')}</td><td>${m.count ?? '-'}</td><td>${kg(m.mass_kg)}</td></tr>`;
       if (L.total_kg !== null && L.total_kg !== undefined) h += `<tr class="tot"><td>計算に入る合計</td><td></td><td>${kg(L.total_kg)}</td></tr>`;
       h += '</table>';
       if ((L.stated || []).length) {

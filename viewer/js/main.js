@@ -8,7 +8,7 @@ window.HV = window.HV || {};
 (function (HV) {
   'use strict';
   HV.fields = HV.fields || {};
-  HV.FIELD_ORDER = ['nvh', 'crash', 'assembly'];
+  HV.FIELD_ORDER = ['nvh', 'crash', 'assembly', 'strength', 'fatigue', 'thermal'];
   const $ = id => document.getElementById(id);
 
   function loadData(field) {
