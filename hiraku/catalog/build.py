@@ -442,7 +442,33 @@ def _s3_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
     return out
 
 
-DRIVE_BUILDERS = {"P1": _p1_drive, "S3": _s3_drive}
+# S1's drive record: the tilt table turned this far past the angle at which the upper wheels lift, then held, so the
+# vehicle rolls over onto the floor the table is hinged on (rollover_tilt's hold_past; HIRAKU's choice, no source)
+S1_DRIVE_PAST_DEG = 1.0
+S1_DRIVE_INFIX = "-rollover"  # S1-tilt-<loading>-rollover-drive
+
+
+def _s1_drive(catalog: Catalog, req: Record, design: Record) -> list[Record]:
+    """S1's drive record: the tilt case with the table turned S1_DRIVE_PAST_DEG past the tip and held (rollover_tilt:
+    the body's contact with the table and the floor it is hinged on at its low edge, the run on until the body rests),
+    no criterion and feeding nothing (for the screen and the video to show the vehicle rolling over). The plan of
+    hiraku.catalog.builders.k2_tests PLANS_DRIVE names the tool."""
+    out = []
+    for lc in _build_one(catalog, req, design, "S1", False):
+        if is_beyond(lc):
+            continue
+        d = copy.deepcopy(lc)
+        d["load_case_id"] = lc["load_case_id"] + S1_DRIVE_INFIX + DRIVE_SUFFIX
+        d["title"] = (f"{DRIVE_TITLE}: 傾斜台を倒れる角度より {S1_DRIVE_PAST_DEG:g}° 先まで傾けて止め、床へ横転する "
+                      f"({lc['title']})")
+        d["params"] = dict(d["params"], hold_past={"value": S1_DRIVE_PAST_DEG, "unit": "deg"})
+        d.pop("criterion", None)
+        d.pop("feeds", None)
+        out.append(d)
+    return out
+
+
+DRIVE_BUILDERS = {"P1": _p1_drive, "S3": _s3_drive, "S1": _s1_drive}
 
 
 def build_load_cases(catalog: Catalog, req: Record, design: Record, test_ids: list[str],

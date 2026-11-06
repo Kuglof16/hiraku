@@ -91,7 +91,7 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
                slow_rate: float = math.radians(0.25), slow_span: float = math.radians(2.0),
                max_angle: float = math.radians(80.0), settle_s: float = 2.0, record_hz: float = 0.0,
                after_s: float = 1.5, slow_hz: float = 2.0, after_hz: float = 25.0,
-               checkpoint_every: float = math.radians(0.25), load_log=None) -> dict:
+               checkpoint_every: float = math.radians(0.25), load_log=None, make_recorder=None) -> dict:
     """Turn gravity slowly (a tilt table) until the upper-side wheels carry no load.
 
     Coarse to fine: the table first turns at fast_rate until the upper wheels lift,
@@ -113,9 +113,11 @@ def tilt_sweep(veh: Vehicle, left_up: bool = True, dt: float = 1e-3, fast_rate: 
     step of the turn up to the tip (not after it), keep() at the tip, and rewind(t) when the sweep goes back to a
     checkpoint; returned as "log", with "t_slow" (s, where the last slow turn started) and
     "t_tip" (s).
+
+    make_recorder(sim, hz): makes the recorder instead of Recorder (e.g. one that adds channels).
     """
     sim = new_sim(veh, dt=dt, settle_s=settle_s)
-    rec = Recorder(sim, record_hz) if record_hz > 0 else None
+    rec = (make_recorder or Recorder)(sim, record_hz) if record_hz > 0 else None
     log = load_log(sim) if load_log is not None else None
     t_slow = None
     slow_hz = min(record_hz, slow_hz)
