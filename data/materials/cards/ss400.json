@@ -1,0 +1,49 @@
+{
+  "id": "ss400",
+  "name": "JIS G 3101 SS400 (rolled steel for general structure, thickness up to 16 mm)",
+  "name_ja": "一般構造用圧延鋼材 SS400 (厚さ 16 mm 以下)",
+  "category": "steel",
+  "standard": "JIS G 3101 (2024 edition as cited by the secondary source)",
+  "condition": "SS400 plate, strip, flat bar and sections, thickness up to 16 mm, room temperature; elongation for 5 mm < t <= 16 mm with No. 1A test piece (t <= 5 mm: 21 % with No. 5 test piece); E, nu and density are common carbon-steel design values not read in a source",
+  "properties": {
+    "E_MPa": {
+      "value": 205000.0,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "nu": {
+      "value": 0.3,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "density_kg_m3": {
+      "value": 7850.0,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "yield_MPa": {
+      "value": 245.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Tokyo Metropolitan Government, Bureau of Construction, materials specification (000063094.pdf), section 201 'ippan kozo-yo atsuen kozai (SS)', following JIS G 3101:2024, table 201-3(2), p. 57: SS400 yield point or proof stress min 245 N/mm2 for t <= 16 mm",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "tensile_MPa": {
+      "value": 400.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Tokyo Metropolitan Government, Bureau of Construction, materials specification (000063094.pdf), table 201-3(2), p. 57: SS400 tensile strength 400 to 510 N/mm2; the lower bound is the value here",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "elongation_pct": {
+      "value": 17.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Tokyo Metropolitan Government, Bureau of Construction, materials specification (000063094.pdf), table 201-3(2), p. 57: SS400 elongation min 17 % for 5 mm < t <= 16 mm, No. 1A test piece (21 % for t <= 5 mm, No. 5 test piece)",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

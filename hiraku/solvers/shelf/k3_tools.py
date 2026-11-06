@@ -115,9 +115,10 @@ class DriveEnergy(BuiltinTool):
         series = [
             _series("speed", "km/h", r.t, r.v * 3.6),
             _series("grade", "%", r.t, r.grade * 100.0),
-            _series("power.battery", "kW", r.t, _step_series(r.t, r.P_batt) / 1000.0),
+            *battery_power_series(design, r),
             _series("current.battery", "A", r.t, _step_series(r.t, r.I_batt)),
             _series("soc", "%", r.t, r.soc * 100.0),
+            *chain_series(design, r),
         ]
         out = {"results": results, "effects": effects, "series": series}
         bat = _part_of(design, "battery")
@@ -187,9 +188,68 @@ class Thermal(BuiltinTool):
                             "value": (float(T[k, i]) - T_amb) / steady if steady > 0 else 0.0, "unit": "1"})
         results.append(result("drive_time", float(r.t[-1]), "s"))
         series = [_series(f"temp.{p}", "degC", t, T[:, i]) for i, p in enumerate(net.names)]
+        series += chain_series(design, r)
+        for i, p in enumerate(net.names):  # heat to the air G_amb (T - T_amb) at the grid points, drive and charge
+            q_air = float(net.G_amb[i]) * (T[:, i] - T_amb)
+            ids = _parts_of(design, p)
+            series += (_per_part(f"heat_to_air.{p}", "W", t, q_air, ids, W_DIGITS) if ids
+                       else [_series(f"heat_to_air.{p}", "W", t, q_air)])
         return {"results": results,
                 "fields": [{"kind": "temperature", "label": "highest temperature in the run", "unit": "degC", "per_part": per_part}],
                 "series": series, "effects": effects}
+
+
+def _parts_of(design: Record, kind: str) -> list[str]:
+    """The ids of the parts of a kind; for wheels only those on a driven support (a wheel part's connects_to names
+    its support)."""
+    ids = [p for p in design.get("parts", []) if p["kind"] == kind]
+    if kind == "wheel":
+        driven = {s["id"] for s in design.get("supports", []) if s["actuation"]["drive"]}
+        ids = [p for p in ids if any(c.get("to") in driven for c in p.get("connects_to", []))]
+    return [p["id"] for p in ids]
+
+
+def _per_part(channel: str, unit: str, t: np.ndarray, values: np.ndarray, ids: list[str],
+              digits: int | None = None) -> list[Record]:
+    """One series per part, the value shared equally between the parts of the kind (K3 has one battery, motor,
+    controller, reducer and one wheel force: two battery packs in series carry the same current at half the
+    voltage each, so half the power and, with half the resistance each (assumption: the two packs alike, as
+    designgen ladder_4w battery_split cuts them), half the loss; driven wheels share the one wheel force, as K3
+    uses one mean wheel radius). Without a part of the kind: no series. digits: values rounded to that many decimals
+    (None: as they are)."""
+    out = []
+    for pid in ids:
+        s = _series(channel, unit, t, values / len(ids))
+        if digits is not None:
+            s["values"] = [round(x, digits) + 0.0 for x in s["values"]]
+        out.append(dict(s, part_id=pid))
+    return out
+
+
+W_DIGITS = 1  # the power, loss and heat series in W are written to 0.1 W (keeps the record small)
+
+
+def chain_series(design: Record, r) -> list[Record]:
+    """power.<stage> (W) through the controller, motor, reducer and driven wheels and loss.<part> (W) of the battery,
+    controller, motor and reducer, each with the part_id of its design part; a stage or loss whose kind has no part
+    in the design is left out."""
+    out = []
+    for stage in ("controller", "motor", "reducer", "wheel"):
+        out += _per_part(f"power.{stage}", "W", r.t, _step_series(r.t, r.flow[stage]), _parts_of(design, stage),
+                         W_DIGITS)
+    losses = {"battery": r.heat["battery"], "controller": r.heat["controller"], "motor": r.heat["motor"],
+              "reducer": r.gear_loss}
+    for kind, per_step in losses.items():
+        out += _per_part(f"loss.{kind}", "W", r.t, _step_series(r.t, per_step), _parts_of(design, kind), W_DIGITS)
+    return out
+
+
+def battery_power_series(design: Record, r) -> list[Record]:
+    """power.battery (kW, terminal power): one series per battery part with its part_id (two packs in series:
+    half each), or one without part_id when the design has no battery part."""
+    values = _step_series(r.t, r.P_batt) / 1000.0
+    ids = _parts_of(design, "battery")
+    return _per_part("power.battery", "kW", r.t, values, ids) if ids else [_series("power.battery", "kW", r.t, values)]
 
 
 def _part_of(design: Record, kind: str) -> str | None:
