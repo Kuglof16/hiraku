@@ -61,9 +61,11 @@ class StepClimb(BuiltinTool):
     def known_answers(self) -> list[Record]:
         out = []
         src = "rigid wheel on a step corner: d = sqrt(2 r h - h^2), F/W = d / (r - h)"
+        src_ja = "変形しない車輪が段の角に当たる: d = √(2 r h - h²)、F/W = d / (r - h)"
         for h, expected in ((100.0, 1.118), (150.0, 1.732), (250.0, 5.92)):
             out.append(check_record(f"wheel r = 300 mm on a {h:g} mm step", "force_ratio",
-                                    expected, step_geometry(300.0, h)[1], "1", 1e-3, src))
+                                    expected, step_geometry(300.0, h)[1], "1", 1e-3, src,
+                                    case_ja=f"半径 300 mm の車輪が高さ {h:g} mm の段に当たる", source_ja=src_ja))
 
         lad = fixtures.ladder_design()
         summ = mass_summary(lad)
@@ -77,7 +79,10 @@ class StepClimb(BuiltinTool):
         out.append(check_record("symmetric ladder, both front wheels on a 100 mm step, pushed by the rear",
                                 "front_axle_load", front_expected, got, "N", 1e-9,
                                 "moment balance with the push at axle height and traction at the ground: "
-                                "W_f = m g (L - a) / L / (1 + k r / L)"))
+                                "W_f = m g (L - a) / L / (1 + k r / L)",
+                                case_ja=f"左右対称のはしご形のフレーム、前の左右の車輪とも高さ {h:g} mm の段に当たり、後ろの車輪が押す",
+                                source_ja="押す力は車軸の高さ、駆動の力は地面にかかるとして、力のモーメントのつり合いから: "
+                                          "W_f = m g (L - a) / L / (1 + k r / L)"))
         forces = [(v["point_mm"], v["force_N"]) for v in sl["supports"].values()]
         forces += [(it.cg_mm, np.array([0.0, 0.0, -it.mass_kg * STANDARD_GRAVITY])) for it in summ["items"]]
         sl1 = support_loads(lad, 1.0, h, ["FL"], summary=summ)
@@ -86,11 +91,15 @@ class StepClimb(BuiltinTool):
         F, M = resultant(forces1)
         out.append(check_record("symmetric ladder, front left wheel alone on a 100 mm step", "force_imbalance",
                                 0.0, float(np.linalg.norm(F) + np.linalg.norm(M) / L) / wt, "1", 1e-9,
-                                "rigid-body equilibrium: forces and moments of ground and weight sum to zero"))
+                                "rigid-body equilibrium: forces and moments of ground and weight sum to zero",
+                                case_ja=f"左右対称のはしご形のフレーム、左前の車輪だけが高さ {h:g} mm の段に当たる",
+                                source_ja="剛体のつり合い: 地面の力と重さの、力とモーメントを足すと 0"))
         res = analyze(lad, step_mm=h, step_supports=["FL"])
         out.append(check_record("symmetric ladder, front left wheel alone on a 100 mm step", "hold_reaction",
                                 0.0, res["residual_ratio"], "1", 1e-6,
-                                "self-balanced loads on the K1 frame: the six holding restraints carry nothing"))
+                                "self-balanced loads on the K1 frame: the six holding restraints carry nothing",
+                                case_ja=f"左右対称のはしご形のフレーム、左前の車輪だけが高さ {h:g} mm の段に当たる",
+                                source_ja="K1 のフレームにかけた荷重はそれだけでつり合う: 6 つの押さえ (拘束) は何も受けない"))
         return out + frame_known_answers()
 
     def analyse(self, design: Record, load_case: Record, params: dict) -> Record:
