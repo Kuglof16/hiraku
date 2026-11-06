@@ -888,8 +888,10 @@ CHOICE_SIZES = ("gusset_leg",)  # set by a choice, but may be given as a value w
 
 
 def applies(flags: dict) -> bool:
-    """For products that move by themselves and carry people or cargo."""
-    return bool(flags.get("self_propelled")) and bool(flags.get("ride") or flags.get("cargo"))
+    """For products that move by themselves and carry people (ride, or lean on it): the type always seats its
+    occupants (requirement Q33), so a product that carries only cargo (a serving robot) gets no type and its design is
+    written (write_design)."""
+    return bool(flags.get("self_propelled")) and bool(flags.get("ride") or flags.get("lean"))
 
 
 # Part list order of v1 (the rest after them as placed: each wheel, then its suspension)

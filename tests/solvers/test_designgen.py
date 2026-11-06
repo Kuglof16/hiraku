@@ -123,6 +123,11 @@ class DesignGenTest(unittest.TestCase):
         self.assertEqual(kinds[0]["choices"]["joints"], ["butt", "gusset", "through"])
         self.assertEqual(kinds[0]["choices"]["part_mounts"], ["none", "brackets"])  # test_designgen_options
         self.assertEqual(designgen.archetypes({"self_propelled": False, "ride": True}), [])
+        # a product that carries only cargo (the serving robot's flags of run 20261107-081436): no seated type, the
+        # design is written (write_design)
+        robot = {"self_propelled": True, "battery": True, "electric": True, "cargo": True, "standing": True,
+                 "near_people": True, "liquid": True, "vibration": True, "continuous": True, "assembly": True}
+        self.assertEqual([k["name"] for k in designgen.archetypes(robot)], [])
         d = designgen.propose("ladder_4w", {}, {}, req)
         assert_same_design(self, {k: v for k, v in d.items() if k != "change_reason"},
                            {k: v for k, v in V1.items() if k != "change_reason"})  # the demo requirements give v1
