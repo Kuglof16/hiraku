@@ -343,6 +343,8 @@ def project_picks(record: Record) -> list[Record]:
 
 
 def summary_line(record: Record) -> str:
-    """"7 分野: 操安 (5)・動力 (4)…" for logs and the chat reply."""
-    names = "・".join(f"{p['shown_name']} ({len(p['test_ids'])})" for p in record["picks"])
-    return f"{len(record['picks'])} 分野: {names}"
+    """One line for logs and the chat: "確かめる分野を 7 つ、試験を 18 個選びました" (the tests Claude added are counted, and said)."""
+    tests = {t for p in record["picks"] for t in p["test_ids"]} | set(record.get("assembly_test_ids") or [])
+    line = f"確かめる分野を {len(record['picks'])} つ、試験を {len(tests)} 個選びました"
+    added = len(record.get("added_tests") or [])
+    return f"{line} (Claude が足した {added} 個を含む)" if added else line

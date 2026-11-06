@@ -113,6 +113,13 @@
 .in-block.limits { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .in-pill { border: 1.5px solid var(--i-ink); border-radius: 999px; padding: 2px 18px; background: var(--i-panel); font-size: 15px; }
 
+.in-headrow { display: flex; align-items: center; gap: 12px; }
+.in-headtext { flex: 1; min-width: 0; }
+.in-headrow .in-pet { width: 72px; height: 88px; }
+.in-headrow .in-pet canvas { width: 72px; height: 72px; }
+.in-headrow .in-pet::before { width: 44px; height: 44px; }
+.in-headrow .in-pet[data-state="idle"] { opacity: 0.5; }
+
 /* ---- A2 ---- */
 .in-q { border: 1.5px solid var(--i-line); border-radius: 12px; padding: 10px 14px; background: var(--i-card); }
 .in-q.answered { border-color: var(--i-green); }
