@@ -124,24 +124,32 @@ def bed_static_known_answers() -> list[Record]:
     res = solve_at_rest(_table_design(), "Q", (0.0, 0.0, -P))
     g = {k: float(v["force_N"][2]) for k, v in res["ground"].items()}
     src = "three supports, a load on the line AB a quarter of the way from A: lever rule R_A = 3/4 P, R_B = 1/4 P, R_C = 0"
+    src_ja = "3 点で支え、荷重は線 AB の上で A から 4 分の 1 の所: てこの比で R_A = 3/4 P、R_B = 1/4 P、R_C = 0"
+    tri_ja = f"3 点で支えた三角形、線 AB の 4 分の 1 の所に {P / 1e3:g} kN"
     out.append(check_record("triangle on three supports, 1 kN at a quarter of AB", "support_load_A", 0.75 * P, g["SA"],
-                            "N", 1e-6, src))
+                            "N", 1e-6, src, case_ja=tri_ja, source_ja=src_ja))
     out.append(check_record("triangle on three supports, 1 kN at a quarter of AB", "support_load_B", 0.25 * P, g["SB"],
-                            "N", 1e-6, src))
+                            "N", 1e-6, src, case_ja=tri_ja, source_ja=src_ja))
     # the same load put 200 mm to the side of Q (toward C) through the offset: R_C = P 200 / 800
     res = solve_at_rest(_table_design(), "Q", (0.0, 0.0, -P), point=(-250.0, 200.0, 300.0))
     g = {k: float(v["force_N"][2]) for k, v in res["ground"].items()}
     out.append(check_record("the load 200 mm off the line AB toward C, carried into Q with its moment",
                             "support_load_C", P * 200.0 / 800.0, g["SC"], "N", 1e-6,
-                            "moment balance about the line AB: R_C 800 = P 200"))
+                            "moment balance about the line AB: R_C 800 = P 200",
+                            case_ja="同じ荷重を線 AB から C の側へ 200 mm ずらし、そのモーメントごと Q に伝える",
+                            source_ja="線 AB まわりのモーメントのつり合い: R_C 800 = P 200"))
     # a level push toward C at Q, 300 mm above the floor (the wheel centres are 50 mm up): the floor takes it at the
     # contact points, so the lever about the line AB on the floor is 300 mm, not 250 mm
     res = solve_at_rest(_table_design(), "Q", (0.0, P, 0.0))
     g = {k: float(v["force_N"][2]) for k, v in res["ground"].items()}
     out.append(check_record("1 kN level at Q toward C, 300 mm above the floor", "support_load_C", P * 300.0 / 800.0,
-                            g["SC"], "N", 1e-6, "moment balance about the line AB on the floor: R_C 800 = P 300"))
+                            g["SC"], "N", 1e-6, "moment balance about the line AB on the floor: R_C 800 = P 300",
+                            case_ja=f"Q で C の向きに水平に {P / 1e3:g} kN、床から 300 mm の高さ",
+                            source_ja="床の上の線 AB まわりのモーメントのつり合い: R_C 800 = P 300"))
     out.append(check_record("the same push", "support_load_A_plus_B", -P * 300.0 / 800.0, g["SA"] + g["SB"], "N", 1e-6,
-                            "vertical balance: R_A + R_B = -R_C (weightless members)"))
+                            "vertical balance: R_A + R_B = -R_C (weightless members)",
+                            case_ja="同じ水平の押し",
+                            source_ja="上下の力のつり合い: R_A + R_B = -R_C (部材の重さはなしにしてある)"))
     return out
 
 
@@ -280,12 +288,22 @@ def actuator_known_answers() -> list[Record]:
     expected = M0 * math.cos(th) * e / (r * (r * math.sin(th) + ax * math.cos(th)))
     src = ("lever r below the hinge, anchor (-a, -r): moment arm of the actuator's line d = r (r sin t + a cos t) / |e|, "
            "F = M0 cos t / d")
+    src_ja = ("てこの先は回転の中心 (ヒンジ) の r 下、もう一方の留め具は (-a, -r): アクチュエーターの線までの腕の長さ "
+              "d = r (r sin t + a cos t) / |e|、F = M0 cos t / d")
+    deg = math.degrees(th)
     out.append(check_record("lever 100 mm, anchor 400 mm away level with the tip, raised 45 deg", "force_at_45deg",
-                            expected, float(res["F"][-1]), "N", 1e-6, src))
+                            expected, float(res["F"][-1]), "N", 1e-6, src,
+                            case_ja=(f"てこの長さ {r:g} mm、留め具はてこの先と同じ高さで {ax:g} mm 離れた所、"
+                                     f"{deg:g}° 起こす"),
+                            source_ja=src_ja))
     out.append(check_record("the same lever flat", "force_flat", M0 / r, res["F_flat"], "N", 1e-6,
-                            "flat: the actuator is at right angles to the lever, F = M0 / r"))
+                            "flat: the actuator is at right angles to the lever, F = M0 / r",
+                            case_ja="同じてこを寝かせたまま",
+                            source_ja="寝かせたとき、アクチュエーターはてこと直角: F = M0 / r"))
     out.append(check_record("the same lever raised 45 deg", "stroke", e - ax, res["stroke"], "mm", 1e-9,
-                            "stroke = |tip(45 deg) - anchor| - a"))
+                            "stroke = |tip(45 deg) - anchor| - a",
+                            case_ja=f"同じてこを {deg:g}° 起こす",
+                            source_ja=f"伸び縮みの長さ = |{deg:g}° のときのてこの先 - 留め具| - a"))
     return out
 
 
