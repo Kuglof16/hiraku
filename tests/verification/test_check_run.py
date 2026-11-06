@@ -474,9 +474,12 @@ class CheckRun(unittest.TestCase):
             ev[0]["data"]["stop_reason"] = reason
             by_kind(ev, "run.finished")["data"]["stop_reason"] = reason
             return ev
-        said = stopped("R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない")
-        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
-        self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
+        for reason in ("R1 が NG のまま直しの回数を使い切った。R3-qa は低い段の NG が残るので判定していない",
+                       "R1 が赤のまま直しの回数を使い切った。R3-qa は低い段の赤が残るので判定していない"):  # before 98669325
+            with self.subTest(reason):
+                said = stopped(reason)
+                self.assertNotIn("HK4_no_stop_before_judged", self.rules(said))
+                self.assertNotIn("HK4_no_stop_before_judged", self.rules(said, "warn"))
         silent = stopped("R1 が赤のまま直しの回数を使い切った")
         self.assertNotIn("HK4_no_stop_before_judged", self.rules(silent))
         self.assertIn("HK4_no_stop_before_judged", self.rules(silent, "warn"))
@@ -876,7 +879,7 @@ class CheckRun(unittest.TestCase):
         return renumber(ev)
 
     def test_d_a_lighter_pass_does_not_clear_a_heavier_tool_s_exceedance(self):
-        # docs/contract.md 分野が緑になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
+        # docs/contract.md 分野が OK になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
         # limit, v2 green on frame_static alone
         said = lambda ev: [m for m in self.messages(ev, "judgement.state") if "contract (d)" in m]
         self.assertTrue(said(self._heavier_beyond_then_lighter_pass()))
