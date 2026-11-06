@@ -1529,6 +1529,11 @@
         "where": {
           "type": "string",
           "description": "Member, node, support or part id where the value occurs."
+        },
+        "field_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index in the same analysis's fields of the field this value was read from (e.g. the mode shape whose frequency is first_frame_mode)."
         }
       }
     },
@@ -2127,6 +2132,10 @@
         "channel": {
           "type": "string",
           "description": "e.g. speed, soc, temp.battery, wheel_load.FL."
+        },
+        "part_id": {
+          "type": "string",
+          "description": "The design part the series belongs to (e.g. each battery's temperature, power or loss)."
         },
         "unit": {
           "$ref": "#/$defs/unit"

@@ -289,6 +289,18 @@ class SchemaTest(unittest.TestCase):
         self.assertNotEqual(contract.errors("series", base), [])
         self.assertNotEqual(contract.errors("series", {**base, "t_s": [0.0, 1.0], "x": x}), [])
 
+    def test_series_of_one_part(self):
+        s = {"channel": "loss.motor", "unit": "W", "t_s": [0.0, 1.0], "values": [560.0, 570.0]}
+        self.assertEqual(contract.errors("series", {**s, "part_id": "motor_RL"}), [])
+        self.assertNotEqual(contract.errors("series", {**s, "part_id": 3}), [])
+
+    def test_result_names_the_field_it_was_read_from(self):
+        r = {"quantity": "first_frame_mode", "value": 8.5, "unit": "Hz"}
+        self.assertEqual(contract.errors("result", {**r, "field_index": 0}), [])
+        self.assertEqual(contract.errors("result", {**r, "field_index": 4}), [])
+        self.assertNotEqual(contract.errors("result", {**r, "field_index": -1}), [])
+        self.assertNotEqual(contract.errors("result", {**r, "field_index": 1.5}), [])
+
     def test_analysis_needs_a_prediction(self):
         a = load("analysis.json")
         a["prediction_ids"] = []
