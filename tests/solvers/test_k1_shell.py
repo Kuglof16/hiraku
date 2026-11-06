@@ -517,7 +517,12 @@ class GussetMeshTest(unittest.TestCase):
         with self.assertRaisesRegex(DesignError, "not the centroid"):
             build_mesh(d, 10.0)
         p["box"]["center_mm"][0] -= 5.0
-        p["carried_by"] = ["LF"]  # an L joint
+        p["carried_by"] = ["LF"]  # an L joint takes gussets at its own corner, not this one
+        with self.assertRaisesRegex(DesignError, "not the centroid"):
+            build_mesh(d, 10.0)
+        at = {n["id"]: [m["id"] for m in d["members"] if n["id"] in (m["node_a"], m["node_b"])] for n in d["nodes"]}
+        inside = [n for n, ms in at.items() if len(ms) == 2 and all(m.startswith("rail_") for m in ms)]
+        p["carried_by"] = [inside[0]]  # a node inside a rail: no tube ends on its side
         with self.assertRaisesRegex(DesignError, "no T joint"):
             build_mesh(d, 10.0)
 

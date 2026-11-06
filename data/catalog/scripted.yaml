@@ -112,9 +112,14 @@ offroad-4w:
       changes:
         motor_peak_power: {value: 17, unit: kW}
       reason: >-
-        P3: 40 km/h までが 7.33 s で 6 s を超えるので、モーターの最大出力を 10 kW から上げる。
+        P3: 40 km/h までの時間が 6 s を超える (値は版 3 の P3 の合否の記録) ので、モーターの最大出力を 10 kW から上げる。
         このあと補強で重くなる見込みがあるので、余裕を見て 17 kW にする
       source: >-
+        With tyre_stiffness 60 N/mm (the analysis department's claude/analysis-tyre60 b1356513): the demo scripted run
+        20261106-180216-offroad-4w-scripted gave P3 time_to_speed 7.187 s on version 3 (NG), 5.314 s on version 4 with this
+        change and 5.499 s on version 5 (the video and N15 scripted runs 181440 and 183330 the same). With 80 N/mm
+        (aed92d35), run 20261106-125316: 7.267, 5.479 and 5.674 s; with 150 N/mm, run 20261106-081501: 7.386, 5.724 and
+        5.937 s. Before, with 150 N/mm:
         the N15 scripted run 20261104-181845-offroad-4w-scripted, version 3: P3 ver-0043 (time_to_speed 7.332 s against 6 s); version 4 with this change
         (17 kW): P3 ver-0065 (5.690 s); version 5 (the next revision's rails, gussets and cross members): P3 ver-0089 (5.907 s).
         With 15 kW, version 5 of the N15 scripted run 20261104-175910-offroad-4w-scripted gave P3 ver-0089 6.082 s; on that design
@@ -260,6 +265,29 @@ offroad-4w:
       # (frame_shell) and R9 read their upstream mount forces from that record's vectors and series, so R1s-step100
       # moved by +15 % (QA's trial 6b, cmp-0139). The drive for the screen needs a record that feeds no load case.
       predictions: *p1_pushed
+      # P1-step100 has no criterion: a mismatch of the force ends the step with its cause (tool_decides is only for a
+      # judged quantity, functions._check_on_criterion). P1-step250-beyond (<<: *p1_dynamic) gives its own entry.
+      expected_mismatch:
+        quantity: front_wheel_force
+        when: high
+        source: >-
+          the analysis department's step_climb_dynamic runs on version 4 of the demo scripted run
+          20261106-171449-offroad-4w-scripted (claude/analysis-tyre60 b1356513), P1-step100 with only the tyre
+          changed, 2026-11-06: tyre_stiffness 45 / 60 / 80 / 90 / 150 N/mm gives the push force 988.7 / 1039.6 /
+          1087.4 / 1106.0 / 1154.5 N against the formula's 1163.8 N (-15.0 / -10.7 / -6.6 / -5.0 / -0.8 %); the front
+          wheel load stays within 1.5 % (1034.9 to 1050.0 N); the rigid wheel's F/W is
+          sqrt(2rh - h^2)/(r - h) = 1.118 for r 300 mm, h 100 mm
+        cause: >-
+          式は固い車輪で、段の角が前輪の車軸の高さへまっすぐ押すとみる。K2 の step_climb_dynamic はタイヤを縦のばね
+          (tyre_stiffness) で持ち、柔らかいほどタイヤが沈んで角への当たりが浅くなり、押す力と荷重の比 F/W が下がる。
+          荷重 W は変わらない (タイヤ 45〜150 N/mm で 1.5 % の中)
+        fix: >-
+          設計の変更は要らない。手計算は固い車輪の上限として残す。R1 と R1s は、上流の P1 の解析の輪の反力 (step_climb
+          か step_climb_dynamic) と、K2 の記録があればその取付の力の時系列 (タイヤのばねつき、時刻ごと) で解くので、
+          押す力の違いはそこに入っている (frame_static.upstream_ground_forces・upstream_mount_series)
+        end: true
+        end_say: >-
+          原因を記録しました。P1 には合否の基準が無く、R1 と R1s は上流の解析の力で解くので、K2 の段差の手順はここで終えます
     # Past the limit (requirements `beyond`): the same steps at the 250 mm step. On the demo vehicle the
     # lever rule is off by -51 % there and the couple formula matches, as at 100 mm; the beam formula is
     # +34 % off (the same cause) and rail_joint_stress -20 %, whose parts are written in the cause below.
