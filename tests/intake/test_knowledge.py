@@ -23,8 +23,8 @@ class BuiltinTest(unittest.TestCase):
 
     def test_ten_categories_one_document_each(self):
         self.assertEqual([r["rules"][0]["category"] for r in self.docs], list(CATEGORIES))
-        self.assertEqual(len(self.rules), 29)  # 19 formulas and 10 system checks
-        self.assertEqual(len({r["rule_id"] for r in self.rules}), 29)
+        self.assertEqual(len(self.rules), 58)  # 19 formulas and 10 system checks, then steering joints (4), head restraint (4), cargo securing (10) and wiring (11)
+        self.assertEqual(len({r["rule_id"] for r in self.rules}), 58)
         for rec in self.docs:
             self.assertEqual(rec["doc"]["origin"], "builtin")
 

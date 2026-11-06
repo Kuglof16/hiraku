@@ -85,6 +85,39 @@ class FactsTest(unittest.TestCase):
         self.assertEqual((t["cargo"]["facts"]["bolt_diameter_mm"], t["cargo"]["facts"]["weld_throat_mm"]), (10.0, 3.5))
         self.assertNotIn("bolt_diameter_mm", t["seat"]["facts"])
 
+    def test_the_names_of_the_four_holes_are_read_in_their_own_units_and_the_computed_ones_follow(self):
+        design = mini_design()
+        design["parts"][2]["declared"] = {  # the floor stands in for the steering part here: the facts are read from any part
+            "uj_count": {"value": 1, "unit": "1", "basis": "drawing"},
+            "uj_angle_max_deg": {"value": 35, "unit": "deg", "basis": "assumption"},
+            "headrest_height_mm": {"value": 820, "basis": "drawing"},
+            "headrest_gap_mm": {"value": 20, "unit": "deg", "basis": "x"},  # not its unit: not read
+            "lashing_angle_deg": {"value": 30, "unit": "deg", "basis": "label"},
+            "lashing_pretension_N": {"value": 3000, "unit": "N", "basis": "label"},
+        }
+        f = by_id(facts.targets(design))["floor"]["facts"]
+        self.assertEqual((f["uj_count"], f["uj_angle_max_deg"], f["headrest_height_mm"]), (1.0, 35.0, 820.0))
+        self.assertNotIn("headrest_gap_mm", f)
+        self.assertAlmostEqual(f["lashing_angle_sin"], 0.5, places=9)
+        self.assertAlmostEqual(f["steer_speed_variation_pct"], 100 * (1 / math.cos(math.radians(35)) - 1), places=9)  # about 22 %
+        design["parts"][2]["declared"]["uj_count"]["value"] = 2  # two joints: the variation is not worked out here
+        self.assertNotIn("steer_speed_variation_pct", by_id(facts.targets(design))["floor"]["facts"])
+
+    def test_the_rated_parts_joined_to_a_part_give_the_smallest_and_the_sum_and_the_weakest_anchor(self):
+        design = mini_design()
+        cargo = next(p for p in design["parts"] if p["id"] == "cargo")
+        base = {"mass_kg": 1.0, "box": box([0, 0, 0], [10, 10, 10]), "material": "steel"}
+        cargo["connects_to"] = [{"to": "belt1", "via": "wire"}]
+        design["parts"] += [
+            {**base, "id": "belt1", "name": "strap 1", "kind": "strap", "rating": {"working_load_N": 2500, "basis": "label"}},
+            {**base, "id": "belt2", "name": "strap 2", "kind": "strap", "rating": {"working_load_N": 1500, "basis": "label"},
+             "connects_to": [{"to": "cargo", "via": "rest"}, {"to": "ring", "via": "pin"}]},
+            {**base, "id": "ring", "name": "anchor", "kind": "anchor", "rating": {"working_load_N": 4000, "basis": "assumption"}},
+        ]
+        f = by_id(facts.targets(design))["cargo"]["facts"]
+        self.assertEqual((f["lashing_wll_min_N"], f["lashing_wll_sum_N"], f["anchor_strength_min_N"]), (1500.0, 4000.0, 4000.0))
+        self.assertNotIn("lashing_wll_min_N", by_id(facts.targets(design))["seat"]["facts"])  # nothing rated is joined to it
+
     def test_support_facts(self):
         total = 50 + 12 + 8 + 150
         fl, fr = self.t["support:FL"]["facts"], self.t["support:FR"]["facts"]
@@ -215,10 +248,10 @@ class CheckAllTest(unittest.TestCase):
         rules = knowledge.all_rules(knowledge.load_builtin())
         checks = rulecheck.check_all(rules, mini_design(), requirements(Q15=100, Q19=40))
         s = rulecheck.summarize(checks)
-        self.assertEqual(s["rules"], 29)
+        self.assertEqual(s["rules"], len(rules))  # every built-in rule has a record (the count is the data's)
         self.assertEqual(s["hits"], sum(len(c["hits"]) for c in checks))
         line = rulecheck.summary_line(checks, rules)
-        self.assertIn("29 規則", line)
+        self.assertIn(f"{len(rules)} 規則", line)
         self.assertIn("AS-01", line)
 
 
