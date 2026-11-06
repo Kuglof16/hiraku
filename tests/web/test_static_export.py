@@ -38,7 +38,8 @@ RUN_ID = "20261102-203000-static-fixture"
 STATIC_PORT, SERVER_PORT = 8826, 8827
 CODE_1 = "def run():\n    return 1\n"
 CHECK_1 = json.dumps({"tool": "rollbar", "checks": []})
-README_START = "https://github.com/Kuglof16/hiraku#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB%E5%8B%95%E3%81%8B%E3%81%99"
+# the README's section 動かし方 (app.js README_RUN): the static run list's line points there
+README_START = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"
 
 
 def fake_shelf() -> Shelf:
@@ -165,7 +166,7 @@ class ExportTest(unittest.TestCase):
 
     def test_readme_link_is_a_heading(self):
         app = (REPO / "web" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn(f'const README_START = "{README_START}"', app)
+        self.assertIn(f'const README_RUN = "{README_START}"', app)
         heading = unquote(README_START.split("#", 1)[1])
         readme = (REPO / "README.md").read_text(encoding="utf-8")
         self.assertRegex(readme, rf"(?m)^#+ {re.escape(heading)}$")

@@ -11,9 +11,8 @@ from hiraku.contract.protocols import HOOK_RULES
 WEB = Path(__file__).resolve().parents[2] / "web"
 JS = WEB / "js"
 # the one page outside the CDN the screen links to: the repository's README, section 動かし方
+# (A1's くわしく and, in a static export's run list, the line in place of the run buttons)
 README_RUN_URL = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"
-# and, in a static export's run list, its section はじめに動かす (the line in place of the run buttons)
-README_START_URL = "https://github.com/Kuglof16/hiraku#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB%E5%8B%95%E3%81%8B%E3%81%99"
 
 
 def read(p):
@@ -81,8 +80,6 @@ class FilesTest(unittest.TestCase):
                 elif p.name == "app.js" and url == README_RUN_URL:
                     # the run list's link to the README (a page the person opens; nothing is loaded from it)
                     self.assertIn(f'const README_RUN = "{url}"', read(p))
-                elif p.name == "app.js" and url == README_START_URL:
-                    self.assertIn(f'const README_START = "{url}"', read(p))
                 else:
                     self.fail(f"{p.name}: external URL outside the pinned CDN: {url}")
 

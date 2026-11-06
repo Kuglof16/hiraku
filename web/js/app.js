@@ -2399,10 +2399,9 @@ function demoSection(info, busy) {
 const README_RUN = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"; // README の「動かし方」 (A1's くわしく)
 const NEEDS_KEY_JA = "Claude のキーが要ります";
 // A static export (source.js STATIC) only replays: in place of the buttons that start, stop or send
-// something, one line to the README's section on running HIRAKU (heading 「はじめに動かす」).
-const README_START = "https://github.com/Kuglof16/hiraku#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB%E5%8B%95%E3%81%8B%E3%81%99";
+// something, one line to the README's section on running HIRAKU (heading 「動かし方」, README_RUN).
 const LOCAL_RUN_HTML =
-  `<p class="local-run">手元で動かすには (再現する・実行する・新しく依頼する): <a class="readme" href="${README_START}" target="_blank" rel="noopener">README の「はじめに動かす」</a></p>`;
+  `<p class="local-run">手元で動かすには (再現する・実行する・新しく依頼する): <a class="readme" href="${README_RUN}" target="_blank" rel="noopener">README の「動かし方」</a></p>`;
 // The export's other pages (data/static.json extras: [{href, title}], e.g. N10's answers), one line each.
 async function staticExtrasHtml() {
   try {
