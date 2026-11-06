@@ -135,6 +135,13 @@ body.video .viewport.has-anim > .modlegend { bottom: 60px; }
 /* nothing in this run: faint, still pressable (its screen says what would be there) */
 .tab.empty { opacity: 0.5; }
 .tab.empty:hover, .tab.empty.on { opacity: 0.75; }
+/* a static export: the run list's tab is a link (js/app.js STATIC) */
+a.tab.tab-list { text-decoration: none; }
+/* a static export on ① / ②: the record's request and 「この記録を再生する」 */
+.replaybar .rb-want { flex: 1 1 auto; min-width: 0; }
+.replaybar .rb-want b { margin-right: 8px; }
+/* ... and no box to write or send in (① 's request box, ② 's note and answers): nothing is sent there */
+.static-export #view-intake .in-composer { display: none; }
 .tab-arrow { flex: none; width: 14px; height: 14px; color: var(--line); }
 .tabtip {
   position: absolute;
@@ -688,6 +695,8 @@ body.video .legend .tk { line-height: 13px; transform: translateY(-6.5px); }
 }
 #card-pred { flex: 0 1 auto; }
 #card-ana, #card-cmp { flex: 0 0 auto; }
+/* 4. 判定: the verdict's own step under 3. 比べる, in the same card */
+#card-cmp .step4 { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--rule); }
 .chain .foot { margin-top: auto; font-size: 16px; color: var(--muted); padding: 0 4px; }
 .card h3 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
 .card h3 small { font-weight: 400; color: var(--muted); font-size: 16px; margin-left: 6px; }

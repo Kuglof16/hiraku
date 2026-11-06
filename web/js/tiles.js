@@ -5,7 +5,7 @@
 // interferences in red, and a small chart of its first series group. Every
 // number printed is a recorded value.
 
-import { DOMAINS, DOMAIN_JA, JUDGED_JA, esc, fmt, fmtQ, fmtVU, keepAsides, opLabel, quantityName, unitLabel, verLabel } from "./labels.js";
+import { DOMAINS, DOMAIN_JA, JUDGED_JA, esc, fmt, fmtQ, fmtVU, judgedWords, keepAsides, opLabel, quantityName, unitLabel, verLabel } from "./labels.js";
 import { OVER_COLOR, colorOf } from "./colormap.js";
 import { FIELD_JA, atFrame, contourOf, fieldsOf, frameIndex, overOf } from "./fields.js";
 import { abscissa, channelsOf, chartGroups, extent, seriesName, xSeriesOf } from "./series.js";
@@ -20,7 +20,7 @@ const H = 150;
 const PAD = 14;
 const SPARK = { w: 300, h: 64 };
 const LINE_COLORS = ["#2b59c3", "#8e6bbf", "#2f7d4f", "#e9893a", "#c8402a", "#2fa7d6"];
-const STATE_WORD = { green: "緑 ✓", red: "赤", pending: "まだ", off: "選んでいない" };
+const STATE_WORD = { green: "OK ✓", red: "NG", pending: "まだ", off: "選んでいない" };
 // Top row: domains drawn as contours; bottom row: as charts, then assembly (interference).
 export const TILE_ORDER = ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"];
 
@@ -259,9 +259,9 @@ export class TileBoard {
         const now = redCases(ver);
         const fixed = before ? [...before].filter((x) => !now.has(x)) : [];
         const kept = before ? [...now].filter((x) => before.has(x)) : [];
-        const tip = [now.size ? `赤の試験: ${[...now].join("・")}` : "赤の試験なし", fixed.length ? `前の版から直った: ${fixed.join("・")}` : "", kept.length ? `前の版から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
+        const tip = [now.size ? `NG の試験: ${[...now].join("・")}` : "NG の試験なし", fixed.length ? `1 つ前の設計から直った: ${fixed.join("・")}` : "", kept.length ? `1 つ前の設計から残った: ${kept.join("・")}` : ""].filter(Boolean).join("\n");
         before = now;
-        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">${verLabel(ver)} 赤 ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
+        return `<span class="vbox ${r ? "red" : "green"} ${ver === v ? "cur" : ""}" title="${esc(tip)}">${verLabel(ver)} NG ${r}${now.size ? `<small class="vred">${esc([...now].join("・"))}</small>` : ""}</span>`;
       })
       .join(`<span class="varrow">→</span>`);
     const design = v != null ? s.designs[v] : null;
@@ -269,11 +269,11 @@ export class TileBoard {
     const built = design ? builtLine(s, v) : "";
     const change = built
       ? `<span class="change" data-built="${v}">${built}</span>`
-      : design && design.parent_version != null && design.change_reason ? `<span class="change long" title="${esc(design.change_reason)}">${verLabel(design.parent_version)} → ${verLabel(v)} で変えたこと: ${keepAsides(design.change_reason)}</span>` : "";
+      : design && design.parent_version != null && design.change_reason ? `<span class="change long" title="${esc(judgedWords(design.change_reason))}">${verLabel(design.parent_version)} → ${verLabel(v)} で変えたこと: ${keepAsides(judgedWords(design.change_reason))}</span>` : "";
     const headIds = pets ? pets.order.filter((id) => gridPlaceOf(id) === "head" && pets.has(id)) : [];
     const headN = headIds.length;
     this.head.innerHTML =
-      `<h2>${verLabel(v)} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・赤 ${reds.length}</span>` +
+      `<h2>${verLabel(v)} の判定</h2><span class="muted">繰り返し ${roundsUsed(s)} / ${s.project?.round_limit ?? "—"} 回・NG ${reds.length}</span>` +
       `<span class="flow">${flow}</span>${change}` +
       (pets ? `<div class="headpets${headN > 3 ? " many" : ""}">${headIds.map((id) => petRowHtml(id, s.agents[id]?.status, { tag: "div", why: s.agents[id]?.stopWhy })).join("")}</div>` : "");
     this.head.classList.toggle("wrap", headN > 3); // modules: the module designers' pets on their own row
@@ -289,7 +289,7 @@ export class TileBoard {
       if (design && (j.state !== "off" || info.ana)) {
         const { body, ct } = tileSvg(s, d, design, info);
         drawing = body;
-        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.reference ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
+        if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.role !== "judged" ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
         for (const x of info.ana?.interferences ?? []) {
           caption += `${caption ? "・" : ""}${thingName(design, x.a)} × ${thingName(design, x.b)} ${fmt(x.depth_mm, 3)} mm 干渉${x.state === "motion" ? ` (${x.condition ?? "動いたとき"})` : ""}`;
         }
@@ -301,20 +301,20 @@ export class TileBoard {
       const failed = verdicts.filter((x) => x.pass === false);
       // named by the quantity compared (frame_shell: the hot-spot stress for a max_stress criterion)
       const vline = (x) => `${x.test_id ?? x.load_case_id} ${quantityName(s.comparisons[x.comparison_id]?.quantity ?? x.quantity)} ${fmtQ(x.value)} ${opLabel(x.op)} ${fmtQ(x.limit)}${x.pass === false ? " ✕" : ""}`;
-      const recorded = j.judgement?.summary ?? picks[d]?.reason ?? "";
+      const recorded = j.judgement?.summary != null ? judgedWords(j.judgement.summary) : picks[d]?.reason ?? "";
       // a tile still まだ with no word from the record: why, as far as the record tells
       const why = j.state === "pending" && !j.judgement?.summary
-        ? info.ana ? "この版の解析は記録にあるが、判定がまだ記録に無い" : "この版の解析がまだ記録に無い"
+        ? info.ana ? `${verLabel(v)} の解析は記録にあるが、判定がまだ記録に無い` : `${verLabel(v)} の解析がまだ記録に無い`
         : "";
       // (a tile still まだ with some verdicts: those are the ones judged so far, not the tile's pass)
-      const lead = failed.length ? `不合格 ${failed.length} 件: ` : j.state === "green" ? "合格: " : "判定のある分: ";
+      const lead = failed.length ? `NG ${failed.length} 件: ` : j.state === "green" ? "OK: " : "判定のある分: ";
       const only = j.state === "off" && !info.ana ? onlyTestsLine(s) : null;
       const summary = verdicts.length ? `${lead}${(failed.length ? failed : verdicts).map(vline).join("、")}` : recorded || why || only || "";
       const nv = j.judgement?.verdict_ids?.length ?? 0;
       const badge = j.state === "green" ? `<span class="tb ok">✓</span>` : j.state === "red" ? `<span class="tb fix">直す</span>` : "";
       // Tests judged from an explained safe-side mismatch (not from a match) get a small mark.
       const ns = v != null ? domainVerdicts(s, d, v).filter(isSafeSide).length : 0;
-      const safe = ns ? `<span class="tb safe" title="一致ではなく、説明された安全側の食い違いから判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
+      const safe = ns ? `<span class="tb safe" title="予想通りではなく、説明された安全側の不一致から判定した試験 ${ns} 件">安全側 ${ns}</span>` : "";
       // a load case without a criterion whose count is not 0: a 保留 band over the tile's colour (held.js)
       const held = heldCases(s, d, v);
       // the other quantities without a criterion (渡すだけ・比べるだけ・参考): rows not coloured (held.js)
@@ -324,9 +324,9 @@ export class TileBoard {
       const failedIds = [...new Set(failed.map((x) => x.test_id ?? x.load_case_id))];
       const word =
         j.state === "green" && held.length
-          ? `緑 (判定のある分だけ)・保留 ${held.length}`
+          ? `OK (判定のある分だけ)・保留 ${held.length}`
           : j.state === "red" && failedIds.length
-            ? `赤・${failedIds.join("・")}`
+            ? `NG・${failedIds.join("・")}`
             : STATE_WORD[j.state];
       const wordTitle = j.state === "red" && failed.length ? ` title="${esc(failed.map((x) => `${x.load_case_id}: ${caseTitle(s, x.load_case_id)}`).join("\n"))}"` : "";
       return (

@@ -22,6 +22,7 @@
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { getUrl } from "./source.js";
 
 export const PETS_URL = "/pets/pet3d.js";
 
@@ -39,7 +40,7 @@ export function loadPets() {
   if (window.HirakuPets) return Promise.resolve(window.HirakuPets);
   loading ??= new Promise((resolve) => {
     const s = document.createElement("script");
-    s.src = PETS_URL;
+    s.src = getUrl(PETS_URL);
     s.onload = () => resolve(window.HirakuPets ?? null);
     s.onerror = () => resolve(null);
     document.head.append(s);

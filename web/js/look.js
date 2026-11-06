@@ -25,6 +25,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GRAY } from "./colormap.js";
+import { getUrl } from "./source.js";
 
 // ---- assets ----------------------------------------------------------------
 // The Poly Haven assets the real look reads, by role: id, the file of each map, and
@@ -67,7 +68,7 @@ export function assetPath(role, file) {
 // The asset files there are (paths under web/assets/polyhaven/), asked once per page.
 let presentFiles = null;
 export function assetsPresent() {
-  presentFiles ??= fetch("api/assets")
+  presentFiles ??= fetch(getUrl("/api/assets"))
     .then((r) => (r.ok ? r.json() : { files: [] }))
     .then((d) => new Set((d.files ?? []).map((f) => `${ASSET_DIR}/${f}`)))
     .catch(() => new Set());
