@@ -464,6 +464,23 @@ class IntakeTest(unittest.TestCase):
         ev = next(e for e in events() if e["kind"] == "run.started")
         self.assertEqual(contract.errors("project", {**ev["data"], "hearing": "claude"}), [])
 
+    def test_tradeoff_question_in_the_hearing(self):
+        side = {"name": "応力の使用率", "unit": "1", "now": 1.2, "after": 0.9, "record_id": "ana-0007"}
+        q = {"tradeoff_id": "t-0001", "variable": "tower_t", "step_pct": 10.0, "text": "どちらを優先しますか。", "a": side,
+             "b": {**side, "name": "質量", "unit": "kg", "now": 480.0, "after": 486.0}}
+        self.assertEqual(contract.errors("hearing_asked", {"tradeoff_questions": [q]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{**q, "a": {**side, "unit": "furlong"}}]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{k: v for k, v in q.items() if k != "b"}]}), [])
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{**q, "choices": ["both"]}]}), [])
+        no_record = {k: v for k, v in side.items() if k != "record_id"}
+        self.assertNotEqual(contract.errors("hearing_asked", {"tradeoff_questions": [{**q, "a": no_record}]}), [])
+        answer = {"answers": [], "tradeoff_answers": [{"tradeoff_id": "t-0001", "choice": "favor_a", "note": "安全を優先"}]}
+        self.assertEqual(contract.errors("hearing_answered", answer), [])
+        self.assertNotEqual(contract.errors("hearing_answered", {"answers": [], "tradeoff_answers": [{"tradeoff_id": "t-0001", "choice": "x"}]}), [])
+        self.assertEqual(contract.errors("tool_input.ask_user", {"tradeoff_ids": ["t-0001"]}), [])
+        self.assertEqual(contract.errors("tool_input.find_tradeoffs", {"design_version": 2, "variables": ["tower_t"]}), [])
+        self.assertIn("find_tradeoffs", contract.MCP_TOOLS_LATER)
+
     def test_rule_questions_in_the_hearing(self):
         q = {"rule_id": "U1-04", "parts": ["battery"], "text": "電池が 30 kg を超えます。設計を直しますか、この規則を外しますか"}
         self.assertEqual(contract.errors("hearing_asked", {"rule_questions": [q]}), [])
