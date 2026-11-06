@@ -238,7 +238,54 @@ function paceAfter(ev) {
   return s;
 }
 player.pacer = paceAfter;
-player.pacing = params.get("pace") !== "0";
+
+// The event clock (the default; js/player.js): each event's seconds on screen, the recorded gaps
+// dropped. key: what the run is about (a new design version, a mismatch, an NG, a cause, a hook,
+// the start and the end), shortened last when a long record is fitted into player.fitS; the
+// routine ones (an analysis that matched, an OK, a prediction) first. An analysis with a motion
+// gets the motion's length (1.5 to 3 s) and its motion plays in that time (animTau).
+// Bookkeeping records (judgement.updated, rule_check.recorded, agent.started/stopped,
+// cost.updated, screen.focus, project.updated) take no time.
+const EVENT_S = {
+  "run.started": [1.5, true],
+  "hearing.asked": [1.0, true],
+  "hearing.answered": [1.0, true],
+  "domains.picked": [1.0, true],
+  "load_cases.created": [0.6, false],
+  "knowledge.imported": [0.2, false],
+  "mesh.created": [0.4, false],
+  "tool.checked": [0.3, false],
+  "design.created": [2.0, true],
+  "design.change_proposed": [0.8, false],
+  "prediction.recorded": [0.1, false],
+  "analysis.started": [0.15, false],
+  "analysis.finished": [0.9, false],
+  "comparison.recorded": [0.35, false],
+  "verdict.recorded": [0.35, false],
+  "cause.recorded": [1.6, true],
+  "hook.denied": [1.5, true],
+  "hook.blocked_stop": [1.2, true],
+  "report.written": [1.5, true],
+  "run.finished": [1.0, true],
+};
+const MOTION_EVENT_S = [1.5, 3]; // an analysis with a motion: its motion's seconds, within these
+function eventDwell(ev) {
+  const [s, key] = EVENT_S[ev.kind] ?? [0, false];
+  if (ev.kind === "comparison.recorded" && ev.data?.status === "mismatch") return { s: 1.0, key: true };
+  if (ev.kind === "verdict.recorded" && ev.data?.pass === false) return { s: 0.9, key: true };
+  if (ev.kind === "agent.said" || ev.kind === "user.said") return { s: Math.min(1.2, 0.3 + (ev.text?.length ?? 0) * 0.01), key: false };
+  if (ev.kind === "analysis.finished") {
+    const span = motionSpanOf(ev);
+    if (span !== null) return { s: Math.min(MOTION_EVENT_S[1], Math.max(MOTION_EVENT_S[0], span)), key: false };
+  }
+  return { s, key };
+}
+player.dweller = eventDwell;
+// ?pace=real (or ?pace=0): the recorded times; ?pace=paced: the gaps stretched and cut (?gapmax=3
+// sets the longest gap), the default before the event clock; else the event clock
+const PACE_PARAM = params.get("pace");
+player.clock = PACE_PARAM === "0" || PACE_PARAM === "real" ? "real" : PACE_PARAM === "paced" ? "paced" : "event";
+if (params.has("fit")) player.fitS = Math.max(5, Number(params.get("fit")) || player.fitS); // ?fit=110: the event clock's length
 if (params.has("gapmax")) player.maxGap = Math.max(0.1, Number(params.get("gapmax")) || 3);
 let feed = null;
 
@@ -1063,20 +1110,24 @@ fetch("/api/formulas", { cache: "no-store" })
   .catch(() => {});
 
 // A "くわしく" (details[data-keep]) stays open or shut across the cards' redraws.
+// ?more=1 opens them all (the right column's くわしく too) until one is shut by hand.
+const MORE_ALL = params.get("more") === "1";
 const openMore = new Set();
+const shutMore = new Set();
 document.addEventListener(
   "toggle",
   (ev) => {
     const d = ev.target;
     if (!(d instanceof HTMLDetailsElement) || !d.dataset.keep) return;
-    if (d.open) openMore.add(d.dataset.keep);
-    else openMore.delete(d.dataset.keep);
+    if (d.open) [openMore.add(d.dataset.keep), shutMore.delete(d.dataset.keep)];
+    else [openMore.delete(d.dataset.keep), shutMore.add(d.dataset.keep)];
   },
   true,
 );
 function keepOpen(el) {
-  for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep);
+  for (const d of el.querySelectorAll("details[data-keep]")) d.open = openMore.has(d.dataset.keep) || (MORE_ALL && !shutMore.has(d.dataset.keep));
 }
+if (MORE_ALL) $("chain-more").open = true;
 
 function renderChain(s, chain) {
   const { loadCase, pred, ana, running, cmp, verdict, cause } = chain;
@@ -1207,7 +1258,46 @@ function renderChain(s, chain) {
     c.innerHTML = `<h3>3. 比べる<small>予測と解析</small></h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>` +
       step4(`<div class="sub">比べたあと、基準で OK / NG を決める</div>`);
   }
+  renderChainHead(s, chain);
 }
+
+// The right column's first lines: what is going on now, the verdict (quantity, value, criterion,
+// OK / NG; before one, the comparison's 予想通り / 不一致), what comes next. One line each; the
+// cards under くわしく hold the rest.
+function nextStep(chain) {
+  const { loadCase, pred, ana, running, cmp, verdict, cause } = chain;
+  if (!loadCase) return "試験が決まるのを待つ";
+  if (!pred) return "手計算で予測を書く (予測の無い解析は hooks が止める)";
+  if (!ana) return running ? "解析が終わるのを待つ" : "解析を走らせる";
+  if (ana.status === "failed") return "解析が通らなかった: 条件を直して走らせ直す";
+  if (!cmp) return "予測と解析を比べる";
+  if (cmp.status !== "match" && !cause) return "不一致の原因を書く (書くまでこの分野は進めない)";
+  if (cmp.status !== "match" && cause && !cause.resolved && cause.fix) return `直し方: ${judgedWords(cause.fix)}`;
+  if (!verdict) return loadCase.criterion ? "基準で OK / NG を決める" : "この試験には基準が無い (判定しない)";
+  return verdict.pass ? "次の試験へ" : "設計を直して次の v へ";
+}
+function renderChainHead(s, chain) {
+  const { loadCase, cmp, verdict } = chain;
+  const now = nowSentence(s, chain, (tool) => toolTitle(s, tool)) || "記録を待っている";
+  let judged;
+  if (verdict) {
+    const q = quantityName(cmp?.quantity ?? verdict.quantity);
+    judged = `<span class="ch-q">${esc(q)}</span> <span class="ch-v">${esc(verdictLine(verdict).replace(/ → (OK|NG)$/, ""))}</span>` +
+      `<b class="ch-verdict ${verdict.pass ? "ok" : "bad"}">${verdict.pass ? "OK" : "NG"}</b>`;
+  } else if (cmp) {
+    const ok = cmp.status === "match";
+    judged = `<span class="ch-q">判定はまだ</span> <span class="badge ${ok ? "ok" : "warn"}">${ok ? "予想通り" : MISMATCH_STATUS}</span>`;
+  } else {
+    const crit = loadCase?.criterion?.limit != null ? `基準: ${quantityName(loadCase.criterion.quantity)} ${opLabel(loadCase.criterion.op)} ${fmtQ(loadCase.criterion.limit)}` : "";
+    judged = `<span class="ch-q">判定はまだ</span>${crit ? ` <span class="ch-v">${esc(crit)}</span>` : ""}`;
+  }
+  const html =
+    `<div class="ch-row ch-now clamp1" title="${esc(now)}"><small>いま</small>${esc(now.replace(/^いま: /, ""))}</div>` +
+    `<div class="ch-row ch-judged" data-role="verdict"><small>判定</small>${judged}</div>` +
+    `<div class="ch-row ch-next clamp1" title="${esc(nextStep(chain))}"><small>次</small>${esc(nextStep(chain))}</div>`;
+  if (chainHeadHtml !== html) $("chain-head").innerHTML = chainHeadHtml = html;
+}
+let chainHeadHtml = "";
 
 const toolTitle = (s, tool) => s.tools[tool]?.title ?? tool;
 // short, as the log says it (state.js toolWord): labels.js's name, else the title up to its bracket, else the name
@@ -1507,7 +1597,26 @@ function motionFor(ana) {
   return motionMemo.motion;
 }
 
-const animRate = (motion) => Math.max(1, motion.duration / ANIM_MAX_S);
+// The display seconds the analysis' own event has (the event clock), by analysis id.
+let dwellMemo = { events: null, n: -1, map: new Map() };
+function analysisDwell(id) {
+  if (dwellMemo.events !== player.events || dwellMemo.n !== player.events.length || dwellMemo.clock !== player.clock) {
+    const map = new Map();
+    for (const e of player.events) if (e.kind === "analysis.finished" && e.data?.analysis_id) map.set(e.data.analysis_id, e.dwell);
+    dwellMemo = { events: player.events, n: player.events.length, clock: player.clock, map };
+  }
+  return dwellMemo.map.get(id) ?? null;
+}
+
+// Series seconds per display second: on the event clock the motion fills its analysis' event;
+// else at most ANIM_MAX_S of display time. (ana: the analysis shown; its own ▶ plays at the same rate)
+function animRate(motion, ana = shownMotion?.ana) {
+  if (player.clock === "event" && ana) {
+    const d = analysisDwell(ana.analysis_id);
+    if (d) return motion.duration / Math.max(0.3, d);
+  }
+  return Math.max(1, motion.duration / ANIM_MAX_S);
+}
 
 // Animation time (the series' own seconds). By default it starts when the
 // analysis arrived in the replay and runs at animRate, so a frozen ?t= frame
@@ -1515,7 +1624,7 @@ const animRate = (motion) => Math.max(1, motion.duration / ANIM_MAX_S);
 function animTau(s, ana, motion) {
   if (ui.anim.local && ui.anim.key === ana.analysis_id) return ui.anim.tau;
   const tf = s.tOf[ana.analysis_id] ?? 0;
-  return motion.t0 + Math.max(0, Math.min(motion.duration, (player.playhead - tf) * animRate(motion)));
+  return motion.t0 + Math.max(0, Math.min(motion.duration, (player.playhead - tf) * animRate(motion, ana)));
 }
 
 const chart = new SeriesChart($("graph"), (key) => {
@@ -1559,7 +1668,8 @@ function renderMotion(s, chain, motion) {
   const limit = liftLimit(motion, chain.loadCase);
   lim.hidden = !limit;
   if (limit) lim.style.left = `${((motion.liftT - motion.t0) / (motion.duration || 1)) * 100}%`;
-  $("ab-time").textContent = `${(tau - motion.t0).toFixed(1)} / ${motion.duration.toFixed(1)} 秒${animRate(motion) > 1 ? ` (×${fmt(animRate(motion), 2)})` : ""}`;
+  const rate = animRate(motion, ana);
+  $("ab-time").textContent = `${(tau - motion.t0).toFixed(1)} / ${motion.duration.toFixed(1)} 秒${Math.abs(rate - 1) > 0.005 ? ` (×${fmt(rate, 2)})` : ""}`;
   $("ab-play").textContent = ui.anim.local && ui.anim.playing ? "❚❚" : "▶";
   const notes = [];
   const table = motion.channels.get("table_angle");
@@ -1737,19 +1847,55 @@ function renderPlaybar(span = null) {
   const live = $("pb-live");
   live.classList.toggle("show", player.live);
   live.classList.toggle("on", player.live && player.liveAttached);
-  const key = `${player.events.length}|${player.duration.toFixed(1)}|${span?.domain ?? ""}`;
+  // the recorded time (from the run's start) of the event on screen, small beside the bar's own
+  const at = player.applied > 0 ? player.events[player.applied - 1] : null;
+  $("pb-rec").textContent = player.clock === "real" || !at ? "" : `実時間 ${clockText(at.t_rec)}`;
+  $("pb-clock").textContent = player.clock === "real" ? "実時間" : player.clock === "paced" ? "間を詰めた" : "イベント";
+  $("pb-clock").dataset.clock = player.clock;
+  $("pb-next-verdict").disabled = !player.nextWhere(isVerdictEv);
+  $("pb-next-mismatch").disabled = !player.nextWhere(isMismatchEv);
+  const key = `${player.events.length}|${player.duration.toFixed(1)}|${span?.domain ?? ""}|${player.clock}`;
   if (key !== tickKey) {
     tickKey = key;
     // (a domain's bar: the marks of its own events only)
     const lcs = span ? new Set(span.marks.map((m) => m.lc)) : null;
+    const inBar = (e) => e.t >= lo - 1e-9 && e.t <= hi + 1e-9 && (!lcs || !e.data?.load_case_id || lcs.has(e.data.load_case_id));
+    const pos = (e) => `left:${(((e.t - lo) / dur) * 100).toFixed(3)}%`;
+    const marks = [];
+    for (const e of player.events) {
+      if (!inBar(e)) continue;
+      const kind = markKind(e);
+      if (!kind) continue;
+      const label = kind === "v" ? `<b>${esc(verLabel(e.data?.design_version ?? ""))}</b>` : "";
+      marks.push(`<i class="m-${kind}" style="${pos(e)}" title="${esc(MARK_JA[kind])}">${label}</i>`);
+    }
+    $("pb-marks").innerHTML = marks.join("");
     $("pb-ticks").innerHTML = player.events
-      .filter((e) => e.kind !== "cost.updated" && e.t >= lo - 1e-9 && e.t <= hi + 1e-9 && (!lcs || lcs.has(e.data?.load_case_id)))
-      .map((e) => {
-        const cls = e.kind.startsWith("hook.") ? "hook" : e.kind === "verdict.recorded" || e.kind === "judgement.updated" ? "ok" : "";
-        return `<i class="${cls}" style="left:${((e.t - lo) / dur) * 100}%"></i>`;
-      })
+      .filter((e) => e.kind.startsWith("hook.") && inBar(e))
+      .map((e) => `<i class="hook" style="${pos(e)}"></i>`)
       .join("");
   }
+}
+
+// The kinds the bar marks (above the track, one row each), in the order a run goes through them.
+const MARK_JA = { ana: "解析", cmp: "比べる (予想通り)", ok: "判定 OK", ng: "判定 NG", mis: "不一致", cause: "原因", v: "次の v" };
+const isVerdictEv = (e) => e.kind === "verdict.recorded";
+const isMismatchEv = (e) => e.kind === "comparison.recorded" && e.data?.status === "mismatch";
+function markKind(e) {
+  if (e.kind === "analysis.finished") return "ana";
+  if (e.kind === "comparison.recorded") return e.data?.status === "mismatch" ? "mis" : "cmp";
+  if (e.kind === "verdict.recorded") return e.data?.pass === false ? "ng" : "ok";
+  if (e.kind === "cause.recorded") return "cause";
+  if (e.kind === "design.created") return "v";
+  return null;
+}
+// seconds from the run's start as h:mm:ss (m:ss under an hour)
+function clockText(s) {
+  const n = Math.max(0, Math.floor(s ?? 0));
+  const h = Math.floor(n / 3600);
+  const mm = String(Math.floor((n % 3600) / 60)).padStart(h ? 2 : 1, "0");
+  const ss = String(n % 60).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function seekFromPointer(ev) {
@@ -1788,6 +1934,7 @@ function applyPresent() {
   exp.setAttribute("aria-pressed", String(on));
   $("detail-btn").textContent = ui.detail ? "たたむ" : "詳しく";
   $("detail-btn").classList.toggle("on", ui.detail);
+  if (on && ui.detail) $("chain-more").open = true; // 詳しく asked for the contents: the cards open
   const url = new URL(location.href);
   if (on) url.searchParams.set("present", "1");
   else url.searchParams.delete("present");
@@ -1996,6 +2143,17 @@ $("pb-play").addEventListener("click", () => {
   } else player.toggle();
 });
 $("pb-speed").addEventListener("click", () => player.cycleSpeed());
+// previous / next event, the next verdict, the next mismatch: the replay stops on it
+const jumpTo = (go) => {
+  ui.frozen = false;
+  player.pause();
+  go();
+};
+$("pb-prev").addEventListener("click", () => jumpTo(() => player.step(-1)));
+$("pb-next").addEventListener("click", () => jumpTo(() => player.step(1)));
+$("pb-next-verdict").addEventListener("click", () => jumpTo(() => player.seekNext(isVerdictEv)));
+$("pb-next-mismatch").addEventListener("click", () => jumpTo(() => player.seekNext(isMismatchEv)));
+$("pb-clock").addEventListener("click", () => setClock(player.clock === "real" ? "event" : "real"));
 $("pb-live").addEventListener("click", () => {
   ui.frozen = false;
   player.attachLive();
@@ -2161,14 +2319,28 @@ function play() {
 
 // Add events to the player; a test's motion lengthens the replay so it can play
 // to its end (in display time: the player's copy of the event).
+// (the event clock gives the motion its own event's time: nothing past the last event)
 function addEvents(events) {
   const from = player.events.length;
   player.append(events);
+  motionEnd(player.events.length < from ? 0 : from);
+}
+function motionEnd(from = 0) {
+  if (from === 0) player.minEnd = 0;
+  if (player.clock === "event") return;
   for (const ev of player.events.slice(from)) {
     if (ev.kind !== "analysis.finished") continue;
     const span = motionSpanOf(ev);
     if (span !== null) player.minEnd = Math.max(player.minEnd, ev.t + Math.min(span, ANIM_MAX_S));
   }
+}
+
+// The clock switch on the play bar (and ?pace=): the event on screen stays on screen.
+function setClock(clock) {
+  player.setClock(clock);
+  motionEnd(0);
+  ui.anim.local = false;
+  tickKey = "";
 }
 
 function loadEvents(events, { live }) {
