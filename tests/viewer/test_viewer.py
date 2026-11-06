@@ -348,6 +348,64 @@ class FieldDataTest(unittest.TestCase):
         self.assertTrue(any("タイヤのばね" in t for t in o["notes"]))
         self.assertTrue(any("乗員への入力" in t and "1 ステップで止まる" not in t for t in o["notes"]))
 
+    def test_crash_colour_flicker_and_hinge_growth(self):
+        # the default colour (end hinge rotation) against the axial stress, on the trimmed contact record: the share
+        # of members turning back by more than 5 % of the colour range per frame, and the hinge only growing
+        o = make("crash", "crash_contact")
+        rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
+        C, ids = o["colour"], o["frame"]["member_ids"]
+        ne, brk = len(ids), [set(b) for b in o["motion"]["broken"]]
+        nF = len(brk)
+        skip = lambda k: {e for e in range(ne) if ids[e] in brk[k] or ids[e] in brk[k - 1] or (k + 1 < nF and ids[e] in brk[k + 1])}
+        mean = lambda v: sum(v) / len(v)
+        raw, avg, hcol = (common.unpack_f32(C[k]) for k in ("stress", "stress_avg", "hinge_colour"))
+        f_raw = mean(crash.flicker_share(raw, nF, ne, 2 * C["stress_absmax"], skip))
+        f_avg = mean(crash.flicker_share(avg, nF, ne, 2 * C["stress_avg_absmax"], skip))
+        f_hng = mean(crash.flicker_share(hcol, nF, ne, C["hinge_max"], skip))
+        # (the fixture keeps 17 frames 4.7 ms apart: the 5 ms window holds one sample, so the average is the raw value
+        # here; the full run's 0.7 ms frames are in test_flicker_share_and_average below)
+        self.assertGreater(f_raw, 0.0)             # the raw axial stress turns back somewhere
+        self.assertLessEqual(f_avg, f_raw)
+        self.assertEqual(f_hng, 0.0)               # the hinge colour never turns back
+        self.assertEqual(C["avg_s"], 0.005)
+        self.assertAlmostEqual(C["dt_s"], (rec["fields"][0]["frames"]["t_s"][-1] - rec["fields"][0]["frames"]["t_s"][0]) / (nF - 1))
+        # the colour of the hinge: the record's rotation, or (when it goes back) its running maximum
+        hinge = common.unpack_f32(C["hinge"])
+        back = crash.decreases(hinge, nF, ne, C["hinge_max"], skip)
+        self.assertEqual(C["hinge_running_max"], back["steps"] > 0)
+        self.assertEqual((back["steps"], C["hinge_running_max"]), (0, False))   # the trimmed record: never back by > 1 %
+        self.assertEqual(hcol, hinge)
+        self.assertEqual(crash.decreases(hcol, nF, ne, C["hinge_max"], skip)["steps"], 0)
+        # the average by hand for one member at a middle frame: the force series' samples within 2.5 ms / area
+        m = sorted(C["force"])[0]   # a member the trimmed record keeps a force series for
+        e, k = ids.index(m), nF // 2
+        s = common.series(rec, f"member_axial_force.{m}")
+        tk = rec["fields"][0]["frames"]["t_s"][k]
+        near = [v for t, v in zip(s["t_s"], s["values"]) if abs(t - tk) <= crash.AVG_S / 2 + 1e-9]
+        self.assertAlmostEqual(avg[k * ne + e], mean(near) / C["area_mm2"][m], delta=1e-3 * C["stress_avg_absmax"])
+        self.assertTrue(any("色の既定はヒンジ回転" in t for t in o["notes"]))
+
+    def test_flicker_share_and_average(self):
+        # two members, 0.7 ms frames: member 0 swings +-10 every frame (a wave sampled at the record's interval),
+        # member 1 grows; range 20 -> both steps 20 > 5 % of 20: member 0 turns back at every inner frame
+        nF, dt = 15, 0.0007
+        t = [k * dt for k in range(nF)]
+        v = [x for k in range(nF) for x in (10.0 if k % 2 else -10.0, float(k))]
+        sh = crash.flicker_share(v, nF, 2, 20.0)
+        self.assertEqual(sh, [0.5] * (nF - 2))
+        self.assertEqual(crash.flicker_share(v, nF, 2, 20.0, skip=lambda k: {0}), [0.0] * (nF - 2))
+        # the 5 ms average (centred, +-2.5 ms: 7 samples of 0.7 ms) of the swing: +-10/7 inside
+        a = crash._avg_at_frames({"t_s": t, "values": [v[2 * k] for k in range(nF)]}, t)
+        self.assertAlmostEqual(a[7], sum(v[2 * k] for k in range(4, 11)) / 7)
+        self.assertAlmostEqual(a[0], sum(v[2 * k] for k in range(0, 4)) / 4)   # cut short at the start
+        self.assertLess(max(abs(x) for x in a[3:-3]), 10.0 / 7 + 1e-9)
+        # going back: member 1 drops by 2 at frame 5 (range 14): one step, one member, one frame; 1 % of 14 is 0.14
+        v2 = list(v)
+        v2[5 * 2 + 1] = 2.0
+        d = crash.decreases([v2[2 * k + 1] for k in range(nF)], nF, 1, 14.0)
+        self.assertEqual(d, {"members": [0], "frames": [5], "steps": 1})
+        self.assertEqual(crash.decreases([float(k) for k in range(nF)], nF, 1, 14.0)["steps"], 0)
+
     def test_rigid_fit(self):
         # one node: its translation, no rotation
         c, t, w = common.rigid_fit([[10, 20, 30]], [[1, -2, 3]])
@@ -495,7 +553,8 @@ class FieldDataTest(unittest.TestCase):
         parts["crash"] = [(crash_js[:cut], self.obj["crash"]), (crash_js[cut:], make("crash", "crash_b"))]
         nvh_js = (VIEWER / "js" / "nvh.js").read_text(encoding="utf-8")
         cut = nvh_js.index("HV.nvhShell = ")
-        parts["nvh"] = [(nvh_js[:cut], self.obj["nvh"]), (nvh_js[cut:], make_shell())]
+        cut2 = nvh_js.index("HV.FRF_COL = ")   # the 接地面の加振 view: tests/viewer/test_viewer_frf.py checks its keys
+        parts["nvh"] = [(nvh_js[:cut], self.obj["nvh"]), (nvh_js[cut:cut2], make_shell())]
         for f, lst in parts.items():
             for js, o in lst:
                 with self.subTest(field=f, model=o.get("model")):
@@ -743,8 +802,13 @@ class PageTest(unittest.TestCase):
         least = common.result(rec, "occupant_space_margin")
         self.assertIn(f"乗員の空間の余裕 {js_fmt(least)} mm", out["hud"])
         self.assertAlmostEqual(self.crash_c["summary"]["margin"]["value"], least)
-        self.assertAlmostEqual(out["contour"]["max"], self.crash_c["colour"]["stress_absmax"], places=3)
+        # the default colour: the end hinge rotation, one hue (no red), the run's largest
+        self.assertAlmostEqual(out["contour"]["max"], self.crash_c["colour"]["hinge_max"], places=3)
+        self.assertEqual(out["contour"].get("scale"), "seq")
+        self.assertIn("ヒンジ回転", out["contour"]["title"])
         self.assertGreater(out["contour"]["max"], 1.0)
+        self.assertIn("軸応力 (5 ms の平均)", out["panel"])
+        self.assertIn("軸応力 (そのまま)", out["panel"])
         self.assertIn("計算全体の最大", out["contour"]["note"])
         # quantity names: the Japanese name, the code name after it (small grey type)
         self.assertIn("(occupant_space_margin)", out["codes"])

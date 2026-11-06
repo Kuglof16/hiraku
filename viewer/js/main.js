@@ -40,6 +40,7 @@ window.HV = window.HV || {};
   function loadData(field) {
     return new Promise(resolve => {
       if (window.VIEW_DATA && window.VIEW_DATA[field]) return resolve(window.VIEW_DATA[field]);
+      if (HV.dataFromUrl) return resolve(null);   // ?data=: only the given data, no data/<field>.js
       const s = document.createElement('script');
       s.src = `data/${field}.js`;
       s.onload = () => resolve((window.VIEW_DATA || {})[field] || null);
@@ -48,7 +49,28 @@ window.HV = window.HV || {};
     });
   }
 
+  // index.html?data=<url>#<field>: the JSON of viewer.src.build ({field, data, title, source}, or {field: null,
+  // reason}) or a bare data object, put where VIEW_DATA[field] is read (field: the hash, else the JSON's field)
+  async function loadUrlData(url, hash) {
+    let j;
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      j = await r.json();
+    } catch (e) {
+      return { field: hash || null, reason: `データを読めない (${url}: ${e.message})` };
+    }
+    const wrapped = j && typeof j === 'object' && ('data' in j || 'reason' in j) && 'field' in j;
+    if (wrapped && !j.field) return { field: hash || null, reason: j.reason || 'この解析は見せられない' };
+    const field = hash || (j && j.field) || null;
+    if (field) { window.VIEW_DATA = window.VIEW_DATA || {}; window.VIEW_DATA[field] = wrapped ? j.data : j; }
+    return { field, reason: null };
+  }
+
   HV.main = async function () {
+    const dataUrl = new URLSearchParams(location.search).get('data');
+    const fromUrl = dataUrl ? await loadUrlData(dataUrl, (location.hash || '').slice(1)) : null;
+    HV.dataFromUrl = !!fromUrl;
     const view = new HV.View($('view'));
     const T = window.THREE;
     const st = { field: null, ctl: null, t: 0, playing: false, timer: null, ctx: null };
@@ -159,8 +181,12 @@ window.HV = window.HV || {};
       view.materials.length = 0; showInfo(null);
       st.field = field; st.ctl = null; st.ctx = null;
       const got = [];
-      for (const v of (HV.fields[field] || {}).variants || [{ key: field }]) { const d = await loadData(v.key); if (d) got.push(Object.assign({ D: d }, v)); }
-      const cur = got.find(g => g.key === want) || got[0];
+      // a lazy variant (another design's record, e.g. sets before / after a fix) is loaded only when asked for
+      for (const v of (HV.fields[field] || {}).variants || [{ key: field }]) {
+        if (v.lazy && v.key !== want) { got.push(Object.assign({ D: null }, v)); continue; }
+        const d = await loadData(v.key); if (d) got.push(Object.assign({ D: d }, v));
+      }
+      const cur = got.find(g => g.key === want && g.D) || got.find(g => g.D);
       const D = cur ? cur.D : null;
       st.variant = cur ? cur.key : null;
       if (!D) {
@@ -177,19 +203,20 @@ window.HV = window.HV || {};
       st.ctl = ctl;
       if (ctl.panel) ctl.panel($('fieldpanel'));
       // two records of one field (beam and shell): a switch above the field's own panel, only for the same design
-      const same = got.length > 1 && got.every(g => g.D.source.design_key && g.D.source.design_key === D.source.design_key);
+      const loaded = got.filter(g => g.D && !g.always && !cur.always);   // a lazy / other-design variant does not count
+      const same = loaded.length > 1 && loaded.every(g => g.D.source.design_key && g.D.source.design_key === D.source.design_key);
       if (got.length > 1) {
         const box = document.createElement('div'); box.id = 'variants';
         const h = document.createElement('h3'); h.textContent = 'モデル'; box.appendChild(h);
         const row = document.createElement('div'); row.className = 'row';
         for (const g of got) {
           const b = document.createElement('button'); b.id = 'var_' + g.key; b.textContent = g.label;
-          b.classList.toggle('on', g === cur); b.disabled = !same && g !== cur;
+          b.classList.toggle('on', g === cur); b.disabled = !same && g !== cur && !g.always && !cur.always;
           b.onclick = () => { if (g !== cur) open(field, g.key); };
           row.appendChild(b);
         }
         box.appendChild(row);
-        if (!same) { const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'ほかの記録は別の設計 (比べられない)'; box.appendChild(m); }
+        if (!same && loaded.length > 1) { const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'ほかの記録は別の設計 (比べられない)'; box.appendChild(m); }
         $('fieldpanel').prepend(box);
       }
       // every part of the design as its box (the field's own boxes, or grey ones added here) and how it enters
@@ -258,10 +285,11 @@ window.HV = window.HV || {};
     }
     HV.open = open;
 
-    const first = (location.hash || '').slice(1);
+    const first = (location.hash || '').slice(1) || (fromUrl && fromUrl.field) || '';
     $('loading').style.display = 'none';
     const byVariant = HV.FIELD_ORDER.find(f => ((HV.fields[f] || {}).variants || []).some(v => v.key === first));
     await open(HV.FIELD_ORDER.includes(first) ? first : byVariant || HV.FIELD_ORDER[0], byVariant ? first : undefined);
+    if (fromUrl && fromUrl.reason) { $('title').textContent = '見せられない解析'; $('source').textContent = fromUrl.reason; }
     window.__ready = true;
   };
 

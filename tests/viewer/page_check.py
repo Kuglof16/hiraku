@@ -12,8 +12,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-def check(viewer: Path, field: str, shot: str | None = None, t: int | None = None, mode: int | None = None) -> dict:
-    url = (Path(viewer).resolve() / "index.html").as_uri() + "#" + field
+def check(viewer: Path | str, field: str, shot: str | None = None, t: int | None = None, mode: int | None = None) -> dict:
+    # viewer: a folder, or a page URL (http://.../index.html?data=..., the JSON data of viewer.src.build)
+    url = (str(viewer) if str(viewer).startswith("http") else (Path(viewer).resolve() / "index.html").as_uri()) + "#" + field
     errors: list[str] = []
     out: dict = {"field": field}
     with sync_playwright() as p:
@@ -70,7 +71,7 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
         out["switch"] = page.evaluate("[...document.querySelectorAll('#switch button')].map(b => b.textContent)")
         # the code names after the Japanese quantity names (small grey type) in the inputs pane
         out["codes"] = page.evaluate("[...document.querySelectorAll('#inputs .code')].map(e => e.textContent)")
-        out["contour"] = page.evaluate("(() => { const c = HV.state.ctl && HV.state.ctl.contour && HV.state.ctl.contour(); return c ? { min: c.min, max: c.max, note: c.note || '' } : null; })()")
+        out["contour"] = page.evaluate("(() => { const c = HV.state.ctl && HV.state.ctl.contour && HV.state.ctl.contour(); return c ? { min: c.min, max: c.max, note: c.note || '', title: c.title || '', scale: c.scale || '' } : null; })()")
         out["legend_shown"] = page.evaluate("getComputedStyle(document.getElementById('legend')).display !== 'none'")
         # coloured pixels in the 3D view (not the background)
         out["drawn_px"] = page.evaluate("""() => { HV.view.draw(); const c = HV.view.renderer.domElement; const g = document.createElement('canvas');
@@ -111,7 +112,7 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    r = check(Path(a[0]), a[1], a[2] or None if len(a) > 2 else None, int(a[3]) if len(a) > 3 else None,
+    r = check(a[0] if a[0].startswith("http") else Path(a[0]), a[1], a[2] or None if len(a) > 2 else None, int(a[3]) if len(a) > 3 else None,
               int(a[4]) if len(a) > 4 else None)
     sys.stdout.reconfigure(encoding="utf-8")
     print(json.dumps(r, indent=1, ensure_ascii=False))
