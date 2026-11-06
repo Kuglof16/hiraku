@@ -27,13 +27,13 @@
    "cuts": [
     "N06"
    ],
-   "video": "${WORK}/clips/n06_wp_1080p.mp4"
+   "video": "${WORK}/clips/n06_w_1080p.mp4"
   },
   {
    "cuts": [
     "N07"
    ],
-   "video": "${WORK}/clips/n07seq_wp_1080p.mp4"
+   "video": "${WORK}/clips/n07_v34_1080p.mp4"
   },
   {
    "cuts": [
@@ -53,7 +53,7 @@
    "cuts": [
     "N08b"
    ],
-   "video": "${WORK}/clips/n08b_v6p_1080p.mp4",
+   "video": "${WORK}/clips/n08b_v7_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
@@ -67,7 +67,7 @@
    "cuts": [
     "N05"
    ],
-   "video": "${WORK}/clips/n05_final_v7_1080p.mp4",
+   "video": "${WORK}/clips/n05_pets_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35
@@ -81,73 +81,73 @@
    "cuts": [
     "N09"
    ],
-   "video": "${WORK}/clips/n09_wp_1080p.mp4"
+   "video": "${WORK}/clips/n09_w_1080p.mp4"
   },
   {
    "cuts": [
     "N09b"
    ],
-   "video": "${WORK}/clips/n09b_wp_1080p.mp4"
+   "video": "${WORK}/clips/n09b_v37_1080p.mp4"
   },
   {
    "cuts": [
     "N14"
    ],
-   "video": "${WORK}/clips/real/n14_real_p_1080p.mp4"
+   "video": "${WORK}/clips/n14_w_1080p.mp4"
   },
   {
    "cuts": [
     "N10"
    ],
-   "video": "${WORK}/clips/n10_v11p_1080p.mp4"
+   "video": "${WORK}/clips/n10_v13_1080p.mp4"
   },
   {
    "cuts": [
     "N11"
    ],
-   "video": "${WORK}/clips/n11_wp_1080p.mp4"
+   "video": "${WORK}/clips/n11_hand_1080p.mp4"
   },
   {
    "cuts": [
     "N12"
    ],
-   "video": "${WORK}/clips/n12_wp_1080p.mp4"
+   "video": "${WORK}/clips/n12_concept_1080p.mp4"
   },
   {
    "cuts": [
     "N12b"
    ],
-   "video": "${WORK}/clips/n12b_wp_1080p.mp4"
+   "video": "${WORK}/clips/n12b_w_1080p.mp4"
   },
   {
    "cuts": [
     "N13a"
    ],
-   "video": "${WORK}/clips/n13a_wp_1080p.mp4"
+   "video": "${WORK}/clips/n13a_marks_1080p.mp4"
   },
   {
    "cuts": [
     "N13b"
    ],
-   "video": "${WORK}/clips/n13b_wp_1080p.mp4"
+   "video": "${WORK}/clips/n13b_marks_1080p.mp4"
   },
   {
    "cuts": [
     "N13c"
    ],
-   "video": "${WORK}/clips/n13c_wp_1080p.mp4"
+   "video": "${WORK}/clips/n13c_w_1080p.mp4"
   },
   {
    "cuts": [
     "N15"
    ],
-   "video": "${WORK}/clips/n15_wp_1080p.mp4"
+   "video": "${WORK}/clips/n15_w_1080p.mp4"
   },
   {
    "cuts": [
     "N17"
    ],
-   "video": "${WORK}/clips/real/n17_next_p_1080p.mp4",
+   "video": "${WORK}/clips/n17_w_1080p.mp4",
    "join": {
     "kind": "grain",
     "seconds": 0.5
@@ -157,7 +157,7 @@
    "cuts": [
     "N17b"
    ],
-   "video": "${WORK}/clips/n17b_v2_1080p.mp4",
+   "video": "${WORK}/clips/n17b_v3_1080p.mp4",
    "look": {
     "grain": true,
     "bloom": 0.35

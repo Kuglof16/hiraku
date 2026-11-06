@@ -167,6 +167,18 @@ class Ass(unittest.TestCase):
         self.assertTrue(vf.endswith(",ass=subs.ass"))
         self.assertIn("-shortest", cmd)
 
+    def test_band_only_while_a_line_is_up(self):
+        from pathlib import Path
+        ass = ("Dialogue: 0,0:00:01.30,0:00:03.35,JA,,0,0,0,,a\n"
+               "Dialogue: 0,0:00:03.70,0:00:06.65,JA,,0,0,0,,b\n"   # 0.35 s gap: one span
+               "Dialogue: 0,0:00:01.30,0:00:03.35,EN,,0,0,0,,a\n"
+               "Dialogue: 0,0:00:10.00,0:00:12.00,JA,,0,0,0,,c\n")  # 3 s gap: a new span
+        spans = subs.band_spans(ass)
+        self.assertEqual(spans, [(1.15, 6.8), (9.85, 12.15)])
+        cmd = subs.burn_command(Path("v.mp4"), Path("subs.ass"), Path("o.mp4"), None, spans=spans)
+        vf = cmd[cmd.index("-vf") + 1]
+        self.assertIn(":enable='between(t,1.15,6.8)+between(t,9.85,12.15)'", vf)
+
 
 if __name__ == "__main__":
     unittest.main()

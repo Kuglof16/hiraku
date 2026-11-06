@@ -100,6 +100,10 @@
   .cae .note { display: none; }
   /* where Claude without tools fell short: runs that gave no figure */
   .claude .in.miss { outline: calc(4 * var(--u)) solid var(--miss); outline-offset: calc(10 * var(--u)); border-radius: calc(6 * var(--u)); }
+  /* once Claude's three answers are in (2.3 s), the row where it fell short (stress: 2 of 3 runs gave no
+     figure) pulses to the end of the cut, so the screen does not stand still while the voice goes on */
+  .row[data-box="n10.row.stress"] { animation: miss-pulse 0.8s ease-in-out 2.4s infinite alternate; }
+  @keyframes miss-pulse { from { background-color: rgba(224, 71, 42, 0); } to { background-color: rgba(224, 71, 42, 0.30); } }
   .miss-note { color: var(--miss); font-weight: 700; }
   /* the difference is the one figure each row is about */
   .diff .v { font-weight: 700; }
