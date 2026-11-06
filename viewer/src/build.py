@@ -52,9 +52,11 @@ TOOL_FIELD = {
     "rops_pushover": "rops",
 }
 
-NOT_HERE = {   # tools whose field needs more than the record (a reason, nothing solved)
-    "rops_pushover": "ROPS の画面は run のツールをもう一度動かして押したときの形を求める (記録に変位がない)。ここでは解かないので見せられない",
-}
+NOT_HERE: dict = {}   # tools whose field needs more than the record (a reason, nothing solved): none at present
+# rops_pushover: its field re-runs the run's own tool (tools/rops_pushover-*.py, seconds for one version); this is the
+# reason when the run does not keep the tool or its events
+ROPS_NOT_HERE = ("ROPS の画面は run のツールをもう一度動かして押したときの形を求める (記録に変位がない)。"
+                 "この run にはツールか events.jsonl がないので見せられない")
 
 
 def _reason(text: str) -> Record:
@@ -206,7 +208,7 @@ def _rops(orig: Path, rec: Record) -> Record | str:
     events.jsonl (seconds for one version)."""
     from viewer.src import rops
     if not (orig / "events.jsonl").is_file() or len(list((orig / "tools").glob(f"{rops.TOOL}-*.py"))) != 1:
-        return NOT_HERE["rops_pushover"] + " (run に events.jsonl と tools/rops_pushover-*.py がない)"
+        return ROPS_NOT_HERE
     args = argparse.Namespace(run=orig, versions=str(rec["design_version"]), tool_file=None, out=common.DEFAULT_OUT)
     try:
         with contextlib.redirect_stdout(io.StringIO()):   # rops.build logs each case's re-run on stdout
@@ -235,14 +237,14 @@ def for_analysis(run_dir, analysis_id: str) -> Record:
     tool = rec.get("tool", "")
     if rec.get("status") != "ok":
         return _reason(f"解析 {analysis_id} は終わっていない (状態 {rec.get('status')})")
-    if tool == "rops_pushover" and run != orig:
+    if tool == "rops_pushover":   # _rops gives the reason when the run lacks its tool or events
         field = "rops"
     elif tool in NOT_HERE:
         return _reason(NOT_HERE[tool])
     else:
         field = TOOL_FIELD.get(tool)
         if field is None or field not in BUILD:
-            return _reason(f"この道具 ({tool}) の記録を見せる画面がない")
+            return _reason(f"このツール ({tool}) の記録を見せる画面がない")
     if not (Path(vdir) / "design.json").is_file():
         return _reason("記録の版のフォルダに設計 (design.json) がない")
     try:
