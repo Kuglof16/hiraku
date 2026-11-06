@@ -481,5 +481,59 @@ class BrakingScene(unittest.TestCase):
         self.assertIn("μ 0.6", got[0]["label"])
 
 
+class StepRecordRun(unittest.TestCase):
+    """step_climb_dynamic's run option record_run = speed: the record shows run 2 (driving at the step)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = box_design(susp="kc_table", wheel_mass=15.0)
+        lc = {"load_case_id": "p1", "params": {"step_height": {"value": 100.0, "unit": "mm"},
+                                                "speed": {"value": 10.0, "unit": "km/h"}}}
+        tool = TOOLS["step_climb_dynamic"]
+        cls.push = tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {})
+        cls.speed = tool.run(cls.d, lc, [{"prediction_id": "pred-0001"}], {"record_run": "speed"})
+        cls.m = build_vehicle(cls.d).m_total
+
+    def test_the_record_is_run_2_with_the_same_results(self):
+        rec = self.speed
+        self.assertEqual(rec["status"], "ok", rec.get("error"))
+        self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
+        self.assertNotIn("effects", rec)  # record_run is read
+        res = {r["quantity"]: r["value"] for r in rec["results"]}
+        base = {r["quantity"]: r["value"] for r in self.push["results"]}
+        for q in ("climbed", "climbable", "peak_wheel_force", "climb_time", "front_wheel_force"):
+            self.assertEqual(res[q], base[q], q)
+        self.assertEqual(res["climbed"], 1.0)
+        # run 2's step stands step_push's run_up (2 m) further than run 1's
+        self.assertAlmostEqual(rec["scene"][0]["position_mm"][0] - self.push["scene"][0]["position_mm"][0], 2000.0,
+                               delta=0.2)
+        self.assertIn("10 km/h", rec["scene"][0]["label"])
+        # the series run from the start of the roll until after the climb
+        t = rec["series"][0]["t_s"]
+        self.assertLess(t[0], 0.05)
+        self.assertGreater(t[-1], res["climb_time"])
+        self.assertTrue(any("record_run = speed" in a for a in rec["assumptions"]))
+        self.assertTrue(any("tyre's vertical stiffness" in a and "without a source" in a for a in rec["assumptions"]))
+
+    def test_the_vectors_at_the_peak_balance_the_weight_and_carry_the_mount_loads(self):
+        from hiraku.solvers.k2_vehicle.units import G0
+        vec = self.speed["vectors"]
+        road = [v for v in vec if v["kind"] in ("reaction", "grip", "inertia")]
+        self.assertEqual(sum(v["kind"] == "inertia" for v in road), 1)
+        tot = [sum(v["vector_N"][k] for v in road) for k in range(3)]
+        tol = 1e-4 * self.m * G0  # the recorder rounds the wheel vectors
+        self.assertAlmostEqual(tot[0], 0.0, delta=tol)
+        self.assertAlmostEqual(tot[1], 0.0, delta=tol)
+        self.assertAlmostEqual(tot[2], self.m * G0, delta=tol)
+        # the largest wheel force of the snapshot is peak_wheel_force
+        peak = max(sum(a * a for a in [x + y for x, y in zip(r["vector_N"], g["vector_N"])]) ** 0.5
+                   for r in vec if r["kind"] == "reaction" for g in vec if g["kind"] == "grip" and g["at"] == r["at"])
+        res = {r["quantity"]: r["value"] for r in self.speed["results"]}
+        self.assertAlmostEqual(peak, res["peak_wheel_force"], delta=1e-3 * res["peak_wheel_force"])
+        self.assertTrue(any(v["kind"] == "joint" for v in vec))
+        self.assertTrue(any(s["channel"].startswith("mount_") for s in self.speed["series"]))
+        self.assertIn("mount_force_peak", res)
+
+
 if __name__ == "__main__":
     unittest.main()
