@@ -46,7 +46,8 @@
     },
     "occupant_mass": {
       "value": 76.6,
-      "unit": "kg"
+      "unit": "kg",
+      "basis": "Q33: AIST anthropometric database 1991-92 item N1 Weight, young adult male 95th percentile (the README lists it as not checked)"
     },
     "cargo_mass": {
       "value": 150.0,
@@ -70,27 +71,33 @@
     },
     "drivetrain_efficiency": {
       "value": 0.95,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "motor_efficiency": {
       "value": 0.88,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "controller_efficiency": {
       "value": 0.96,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "regen_efficiency": {
       "value": 0.5,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "aux_power": {
       "value": 150.0,
-      "unit": "W"
+      "unit": "W",
+      "basis": "assumption"
     },
     "battery_voltage": {
       "value": 51.2,
-      "unit": "V"
+      "unit": "V",
+      "basis": "16 x 3.2 V: cell nominal voltage, EVE LF50K product specification LF50K-73103 Ver. D, section 3 (checked 2026-11-03); 16 in series is HIRAKU's choice"
     },
     "battery_capacity": {
       "value": 100.0,
@@ -98,71 +105,88 @@
     },
     "battery_resistance": {
       "value": 0.02,
-      "unit": "ohm"
+      "unit": "ohm",
+      "basis": "assumption"
     },
     "mass_factor": {
       "value": 1.05,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "rolling_resistance": {
       "value": 0.03,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "battery_heat_capacity": {
       "value": 50000.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
     },
     "battery_thermal_resistance": {
       "value": 0.25,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
     },
     "motor_heat_capacity": {
       "value": 11000.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
     },
     "motor_thermal_resistance": {
       "value": 0.06,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
     },
     "controller_heat_capacity": {
       "value": 3600.0,
-      "unit": "J/K"
+      "unit": "J/K",
+      "basis": "assumption"
     },
     "controller_thermal_resistance": {
       "value": 0.1,
-      "unit": "K/W"
+      "unit": "K/W",
+      "basis": "assumption"
     },
     "drag_coefficient": {
       "value": 0.8,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "frontal_area": {
       "value": 1.6,
-      "unit": "m^2"
+      "unit": "m^2",
+      "basis": "assumption"
     },
     "side_force_coefficient": {
       "value": 1.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "side_area": {
       "value": 2.4,
-      "unit": "m^2"
+      "unit": "m^2",
+      "basis": "assumption"
     },
     "centre_of_pressure_height": {
       "value": 800.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
     },
     "air_density": {
       "value": 1.225,
-      "unit": "kg/m^3"
+      "unit": "kg/m^3",
+      "basis": "ICAO standard atmosphere (ICAO Doc 7488), sea level (not checked)"
     },
     "front_cornering_stiffness": {
       "value": 25000.0,
-      "unit": "N/rad"
+      "unit": "N/rad",
+      "basis": "assumption"
     },
     "rear_cornering_stiffness": {
       "value": 30000.0,
-      "unit": "N/rad"
+      "unit": "N/rad",
+      "basis": "assumption"
     },
     "max_steer_angle": {
       "value": 30.0,
@@ -170,7 +194,8 @@
     },
     "bumper_stiffness": {
       "value": 100.0,
-      "unit": "N/mm"
+      "unit": "N/mm",
+      "basis": "assumption"
     },
     "bumper_stroke": {
       "value": 80.0,
@@ -182,23 +207,28 @@
     },
     "fatigue_fat_class": {
       "value": 71.0,
-      "unit": "MPa"
+      "unit": "MPa",
+      "basis": "assumption"
     },
     "fatigue_slope": {
       "value": 3.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (not checked)"
     },
     "fatigue_knee_cycles": {
       "value": 10000000.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "IIW form: A. F. Hobbacher, Recommendations for Fatigue Design of Welded Joints and Components, 2nd ed., Springer 2016 (not checked)"
     },
     "fatigue_slope_after_knee_constant_amplitude": {
       "value": 22.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "tyre_stiffness": {
-      "value": 150.0,
-      "unit": "N/mm"
+      "value": 80.0,
+      "unit": "N/mm",
+      "basis": "not the maker's value: computed by HIRAKU as the mean stiffness from 0 to the rated load (rated load / (outer diameter / 2 - static loaded radius)) from the rated load and static loaded radius of BKT ATV radials 25x10 R12 (76.1 N/mm) and 26x12 R12 (85.7 N/mm) on a retailer's product page (secondary; it says the data come from the maker), read 2026-11-06; inflation pressure not given; with the maker's +-2 % outer diameter tolerance the range is 44 to 113 N/mm; the page's text not checked"
     },
     "rail_b": {
       "value": 40.0,
@@ -294,35 +324,43 @@
     },
     "battery_max_temperature": {
       "value": 55.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "cell limit, EVE LF50K product specification, section 3 (checked)"
     },
     "controller_max_temperature": {
       "value": 85.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "Curtis 1234/36/38 manual, Appendix D Table D-1 (checked)"
     },
     "motor_max_temperature": {
       "value": 155.0,
-      "unit": "degC"
+      "unit": "degC",
+      "basis": "assumption: insulation class F of IEC 60085 (not checked)"
     },
     "tyre_damping_ratio": {
       "value": 0.05,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "tyre_slip_stiffness_coeff": {
       "value": 10.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "bump_stop_factor": {
       "value": 10.0,
-      "unit": "1"
+      "unit": "1",
+      "basis": "assumption"
     },
     "driveshaft_diameter": {
       "value": 30.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
     },
     "driveshaft_wall": {
       "value": 5.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
     },
     "driveshafts": {
       "value": 1.0,
@@ -366,7 +404,8 @@
     },
     "tyre_relaxation_length": {
       "value": 300.0,
-      "unit": "mm"
+      "unit": "mm",
+      "basis": "assumption"
     },
     "wheel_inertia": {
       "value": 0.63,
