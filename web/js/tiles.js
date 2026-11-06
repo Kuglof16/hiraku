@@ -14,6 +14,7 @@ import { gridPlaceOf, petRowHtml } from "./agent_pets.js";
 import { heldBandHtml, heldCases, referenceCases, referenceRowsHtml } from "./held.js";
 import { builtLine } from "./proposals.js"; // modules:
 import { judgedContour } from "./judged.js";
+import { MATERIAL_JA, pictureOf } from "./tile_pictures.js";
 
 const W = 300;
 const H = 150;
@@ -331,11 +332,18 @@ export class TileBoard {
       let drawing = "";
       let caption = "";
       let ct = null;
+      // the 3D picture: the domain's own material (tile_pictures.js), what was used and not found
+      let picAttrs = "";
+      let picWords = "";
       if (design) {
         const t = tileSvg(s, d, design, info);
         drawing = t.body;
         ct = t.ct;
-        this.pictures.push({ domain: d, design, ct, lc: info.loadCase, ana: info.ana, key: `${v}|${d}|${info.ana?.analysis_id ?? "-"}|${ct?.key ?? "-"}` });
+        const pic = pictureOf(s, d, v, design);
+        this.pictures.push({ ...pic, lc: pic.loadCase });
+        picAttrs = ` data-ana="${esc(pic.ana?.analysis_id ?? "")}" data-used="${pic.used.join(" ")}" data-missing="${pic.missing.join(" ")}"`;
+        picWords = `絵: ${pic.used.length ? pic.used.map((m) => MATERIAL_JA[m]).join("・") : "車体だけ"}${pic.ana ? ` (${esc(pic.loadCase?.test_id ?? pic.ana.load_case_id)})` : ""}` +
+          (pic.missing.length ? `・記録に無い: ${pic.missing.map((m) => MATERIAL_JA[m]).join("・")}` : "");
         if (ct) caption = `${FIELD_JA[ct.kind]}${ct.kind === "mode_shape" && ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}${ct.result ? `・${ct.reference ? `${JUDGED_JA.refTag} ` : ""}最大 ${fmtVU(ct.result.value, ct.result.unit, 4)}` : ""}${ct.frameT !== undefined ? ` (t ${fmt(ct.frameT, 3)} s)` : ""}`;
         for (const x of info.ana?.interferences ?? []) {
           caption += `${caption ? "・" : ""}${thingName(design, x.a)} × ${thingName(design, x.b)} ${fmt(x.depth_mm, 3)} mm 干渉${x.state === "motion" ? ` (${x.condition ?? "動いたとき"})` : ""}`;
@@ -384,7 +392,7 @@ export class TileBoard {
       return (
         `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}">` +
         `<div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
-        `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"></canvas></div>` +
+        `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"${picAttrs}></canvas></div>` +
         `<div class="side">${number}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
         // the words and the small drawings: only when the tile is opened
         `<details class="more"><summary>くわしく</summary>` +
@@ -393,6 +401,7 @@ export class TileBoard {
         referenceRowsHtml(refs) +
         `<span class="sum"${recorded && recorded !== summary ? ` title="${esc(`記録の要約: ${recorded}`)}"` : ""}>${esc(summary)}${nv ? `<small>判定 ${nv} 件${ns ? `・うち安全側 ${ns} 件` : ""}${info.loadCase ? `・${esc(info.loadCase.test_id)}` : ""}</small>` : ""}</span>` +
         `<div class="cap">${esc(caption)}</div>` +
+        (picWords ? `<div class="picwords" data-role="picture">${picWords}</div>` : "") +
         // the strength tile: the mounts are not judged (labels.js JUDGED_JA.mountsNotJudged)
         (d === "strength" && (s.project?.load_cases ?? []).some((c) => c.domain === "strength") ? `<div class="not-judged" data-role="not-judged">${esc(JUDGED_JA.mountsNotJudged)}</div>` : "") +
         `<div class="draw">${drawing}</div>${spark}` +
@@ -401,6 +410,7 @@ export class TileBoard {
     }).join("");
     this.tiles.dataset.n = String(shown.length);
     this.tiles.style.setProperty("--cols", String(gridColumns(shown.length)));
+    this.tiles.classList.toggle("dense", shown.length > 4); // (app.css: smaller words beside the pictures)
     this.tiles.innerHTML = offLine(s, off, design, v) + html;
 
     // Keep what a mode shape needs to swing its lines each frame.
