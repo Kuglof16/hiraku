@@ -75,6 +75,11 @@ SETS = {
     "Ar45": _s({"rail_b": 45}, "the base with rails 45 mm wide"),
     "B50r45": _s({**B50, "rail_b": 45}, "B50 with rails 45 mm wide"),
     "D50c45r45": _s({**B50, **C45, "rail_b": 45}, "D50c45 with rails 45 mm wide"),
+    # the recommendation from the 26 sets: tower brace + cross members 60 tall + rails 45 wide, at both ends of the tyre
+    # range's upper side (60, the decided value, and 90)
+    "REC": _s({**B50, **CH60F, "rail_b": 45}, "B50 + Ch60f + rails 45 mm wide"),
+    "REC90": _s({**B50, **CH60F, "rail_b": 45}, "REC at tyre 90 N/mm", 90),
+    "REC45": _s({**B50, **CH60F, "rail_b": 45}, "REC at tyre 45 N/mm", 45),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
              "N1 upper bound: B50 + C45 + S2g0 (stays 48.6 x 3.2, gussets off) + roll bar 48.6 x 3.2"),
 }
