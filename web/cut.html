@@ -171,7 +171,8 @@
   /* the story check's note (js/cut.js checkStory): position and size set inline from layout.json */
   .story-over { position: absolute; margin: 0; z-index: 10; white-space: nowrap; color: #c8402a; background: rgba(251, 249, 244, 0.92); border-radius: 4px; padding: 0 6px; }
   /* a scripted run's tag (js/cut.js addDriverTag): place and size set inline from layout.json safe / min_text_px */
-  .cut-driver { position: absolute; margin: 0; z-index: 9; white-space: nowrap; line-height: 1.2; color: #3b3934; background: rgba(251, 249, 244, 0.92); border: 1px solid #c9c3b6; border-radius: 4px; padding: 2px 8px; }
+  /* (at least 24 px on a dark ground, so a scripted run is told apart at a glance in the video) */
+  .cut-driver { position: absolute; margin: 0; z-index: 9; white-space: nowrap; line-height: 1.2; color: #fff; background: #3b3934; border: 1px solid #3b3934; border-radius: 4px; padding: 2px 10px; font-weight: 700; }
   /* N06: the ✕ is inside the tile's one tag */
   .n06-tile b .mark, .n06-big b .mark { position: static; background: none; padding: 0; margin: 0; border-radius: 0; }
   .n01-card h3 .num { font-weight: 700; }
