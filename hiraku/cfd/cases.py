@@ -56,7 +56,7 @@ def run_body(gpu: Gpu, shape: Shape, name: str, L: float, area: float, re: float
     steps = int(t_star * cells / u_lattice)
     sim = Simulation(gpu, vox, flow, ref_point=(0.0, 0.0, 0.0), interpolate=interpolate)
     try:
-        res = run(sim, steps, record_every=max(10, cells // 2), stats_every=max(500, steps // 40))
+        res = run(sim, steps, record_every=max(50, cells * 4), stats_every=max(500, steps // 40))
     finally:
         sim.close()
     if res.faulted:

@@ -260,7 +260,7 @@ def run_vehicle(gpu: Gpu, design: dict[str, Any], yaw_deg: float = 0.0, speed_ms
     interpolated_share = sim.links.interpolated_share
     memory = dict(sim.memory)
     try:
-        res = run(sim, warm + average, record_every=max(10, int(steps_per_L / 50)), stats_every=2000, average_from=warm, sample_every=11)
+        res = run(sim, warm + average, record_every=max(50, int(steps_per_L / 8)), stats_every=2000, average_from=warm, sample_every=11)
     finally:
         sim.close()
     if res.faulted:
