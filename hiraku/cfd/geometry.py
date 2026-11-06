@@ -275,6 +275,9 @@ def voxelize(shapes: Sequence[Shape], grid: Grid, ground: bool = False) -> Voxel
     node, q, t, own = node[keep], q[keep], t[keep], own[keep]
     keep = _not_corner_clip(mask, grid, node, q, own, shapes)
     node, q, t, own = node[keep], q[keep], t[keep], own[keep]
+    # a link that only touches a shape at its far end, where rounding left the far node just outside: not a wall, and one-way
+    keep = ~((t >= 1.0 - 1e-9) & (mask[node - C[q] @ np.array(grid.strides, dtype=np.int64)] == 0))
+    node, q, t, own = node[keep], q[keep], t[keep], own[keep]
 
     # a fluid node next to a solid node always has its link (a tangent meeting can miss the clip)
     solid = np.flatnonzero(mask == 1)
