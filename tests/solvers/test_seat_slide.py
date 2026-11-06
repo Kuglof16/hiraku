@@ -209,5 +209,25 @@ class SlideTest(unittest.TestCase):
         self.assertIn("seat_belt_R", moved)
 
 
+class BeltStrutClearOfFloorTest(unittest.TestCase):
+    """A short travel (the scripted run's version 2: seat_slide 56 mm, the floor out to the side posts): the belt's
+    anchor strut ends behind the floor's rear edge, so the floor still goes in (assembly blocked_parts 0)."""
+
+    def test_short_travel_with_side_posts(self):
+        from hiraku.designgen.kit import joints
+        from hiraku.solvers.k4_geometry import assembly
+
+        d = slid(56.0, side_guard="bars_net", track={"value": 1220, "unit": "mm"},
+                 rollbar_width={"value": 1265, "unit": "mm"})
+        parts = {p["id"]: p for p in d["parts"]}
+        strut = parts["fit_seat_belt_R_side_post_RS2_1"]
+        floor = parts["floor"]["box"]
+        floor_rear = floor["center_mm"][0] - floor["size_mm"][0] / 2.0
+        anchor = next(c["at_mm"] for c in parts["seat_belt_R"]["connects_to"] if c["to"] == strut["id"])
+        self.assertLessEqual(anchor[0] + joints.STRUT_D_MM / 2.0,
+                             floor_rear - ladder_4w.BELT_FLOOR_GAP_MM + 1e-9)
+        self.assertEqual(assembly.disassemble(d)["blocked"], {})
+
+
 if __name__ == "__main__":
     unittest.main()
