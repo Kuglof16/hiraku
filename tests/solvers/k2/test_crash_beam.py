@@ -214,9 +214,60 @@ class Tool(unittest.TestCase):
         t0 = time.perf_counter()
         cls.rec = TOOLS["crash_beam"].run(cls.d, load_case(), [{"prediction_id": "pred-0001"}], {})
         cls.wall = time.perf_counter() - t0
+        # no element breaks (hinge_break_angle out of reach): the frame stays one piece and the run goes to the stop
+        cls.whole = TOOLS["crash_beam"].run(cls.d, load_case(hinge_break_angle=q(1000.0, "deg")),
+                                            [{"prediction_id": "pred-0001"}], {})
 
-    def res(self):
-        return {r["quantity"]: r for r in self.rec["results"]}
+    def res(self, rec=None):
+        return {r["quantity"]: r for r in (rec or self.rec)["results"]}
+
+    def test_a_large_piece_breaking_off_stops_the_run(self):
+        """At 40 km/h the side rails break behind the occupants' feet and a piece of 7.9 % of the mass comes apart
+        from the seats' side: with no contact between pieces the rest would pass through it, so the run stops."""
+        r = self.res()
+        self.assertIn("frame_split_time", r)
+        self.assertEqual(r["frame_split_time"]["unit"], "s")
+        self.assertTrue(r["frame_split_time"]["where"])
+        self.assertIn("crush_at_split", r)
+        for name in ("mean_decel", "max_crush", "occupant_space_margin", "occupant_space_left"):
+            self.assertNotIn(name, r)
+        notes = self.rec["assumptions"]
+        self.assertTrue(any("split" in n and "not computed" in n for n in notes), notes)
+        self.assertTrue(any("smaller pieces" in n for n in notes), notes)  # the front cross member, 0.5 %
+        t_split = r["frame_split_time"]["value"]
+        self.assertLessEqual(self.rec["series"][0]["t_s"][-1], t_split + 1e-6)  # the series' t_s are to 1 us
+
+    def test_member_series_at_the_node_motion_frames(self):
+        series = {s["channel"]: s for s in self.whole["series"]}
+        force = [c for c in series if c.startswith("member_axial_force.")]
+        hinge = [c for c in series if c.startswith("member_hinge.")]
+        self.assertEqual(len(force), len(set(build_mesh(self.d).member_of)))
+        self.assertEqual(len(hinge), 2 * len(force))  # each member's two ends
+        self.assertEqual({series[c]["unit"] for c in hinge}, {"deg"})
+        if "fields" in self.whole:
+            frames = self.whole["fields"][0]["frames"]["t_s"]
+            self.assertEqual(len(series[force[0]]["t_s"]), len(frames))
+            for a, b in zip(series[force[0]]["t_s"], frames):
+                self.assertAlmostEqual(a, b, delta=1e-6)
+        # the front rail is pushed first: in its first 3 ms in compression up to its squash load A f_y (no more:
+        # elastic-perfectly plastic)
+        mesh = build_mesh(self.d)
+        n_p = min(mesh.prop[e, 4] for e in range(mesh.ne) if mesh.member_of[e] == "rail_L_FA")
+        f = series["member_axial_force.rail_L_FA"]
+        early = [v for t, v in zip(f["t_s"], f["values"]) if 0.0 < t <= 3e-3]
+        self.assertTrue(early)
+        self.assertLess(min(early), -0.9 * n_p)
+        self.assertGreaterEqual(min(early), -1.001 * n_p)
+
+    def test_hot_spots_give_each_members_room_to_the_occupants(self):
+        lc = load_case(hinge_break_angle=q(1000.0, "deg"))
+        lc["criterion"] = {"quantity": "occupant_space_margin", "op": ">=", "limit": q(0.0, "mm")}
+        rec = TOOLS["crash_beam"].run(self.d, lc, [{"prediction_id": "pred-0001"}], {})
+        hs = [h for h in rec.get("hot_spots", []) if h["quantity"] == "occupant_space_margin"]
+        self.assertTrue(hs)
+        self.assertTrue(all(not h["predicted"] for h in hs))  # places the load case does not judge
+        least = min(h["value"]["value"] for h in hs)
+        self.assertAlmostEqual(least, self.res(rec)["occupant_space_left"]["value"], places=6)
 
     def test_record_fits_the_contract(self):
         self.assertEqual(self.rec["status"], "ok", self.rec.get("error"))
@@ -225,10 +276,11 @@ class Tool(unittest.TestCase):
         self.assertLess(self.wall, 30.0)
 
     def test_results_and_series(self):
-        r = self.res()
+        r = self.res(self.whole)
         for name, unit in (("peak_decel", "g"), ("mean_decel", "g"), ("max_crush", "mm"), ("broken_members", "1"),
                            ("max_plastic_rotation", "deg"), ("occupant_space_left", "mm")):
             self.assertEqual(r[name]["unit"], unit, name)
+        self.assertNotIn("frame_split_time", r)
         self.assertIn(r["battery_mount_force"]["where"], {"LM", "RM", "LB", "RB"})
         self.assertGreater(r["battery_mount_force"]["value"], 0.0)
         self.assertGreater(r["occupant_space_left"]["value"], -1000.0)
@@ -237,7 +289,7 @@ class Tool(unittest.TestCase):
         self.assertGreater(r["mean_decel"]["value"], 0.0)
         self.assertGreater(r["max_crush"]["value"], 0.0)
         series = {s["channel"]: s for s in self.rec["series"]}
-        self.assertEqual(set(series), {"deceleration", "crush"})
+        self.assertEqual({c for c in series if not c.startswith("member_")}, {"deceleration", "crush"})
         t = series["deceleration"]["t_s"]
         self.assertEqual(t[0], 0.0)
         chunk = 1.1e-4  # a record row is one kernel chunk of about 0.1 ms
@@ -272,7 +324,7 @@ class Tool(unittest.TestCase):
         res = {r["quantity"]: r["value"] for r in rec["results"]}
         self.assertEqual(res["broken_members"], 0.0)
         self.assertFalse(any("確かめていない" in n for n in rec["assumptions"]))
-        self.assertLess(res["max_crush"], self.res()["max_crush"]["value"])  # half the speed
+        self.assertLess(res["max_crush"], self.res(self.whole)["max_crush"]["value"])  # half the speed
 
     def test_bad_speed_fails_in_the_record(self):
         rec = TOOLS["crash_beam"].run(self.d, load_case(-5.0), [{"prediction_id": "pred-0001"}], {})
@@ -292,9 +344,17 @@ class DemoDesign(unittest.TestCase):
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         self.assertEqual(contract.errors("analysis", dict(rec, analysis_id="ana-0001")), [])
         res = {r["quantity"]: r for r in rec["results"]}
-        for name in ("peak_decel", "mean_decel", "max_crush", "occupant_space_left", "battery_mount_force",
-                     "broken_members", "max_plastic_rotation"):
+        for name in ("peak_decel", "battery_mount_force", "broken_members", "max_plastic_rotation"):
             self.assertIn(name, res)
+        # at 40 km/h the tower posts break and the towers and the dash (4.6 % of the mass) come apart from the
+        # seats' side at 66 ms: the run stops there (the pieces have no contact with each other)
+        self.assertAlmostEqual(res["frame_split_time"]["value"], 0.066, delta=0.005)
+        self.assertIn("tower_post", res["frame_split_time"]["where"])
+        self.assertNotIn("occupant_space_margin", res)
+        self.assertGreater(res["crush_at_split"]["value"], 0.0)
+        # no part box starts past the wall (it is at the front-most of the frame and the boxes on it)
+        wall = next(a for a in rec["assumptions"] if a.startswith("the wall: a rigid plane"))
+        self.assertIn("x = 415 mm", wall)
         self.assertGreater(res["peak_decel"]["value"], 0.0)
         self.assertIn(res["battery_mount_force"]["where"], {"LS1", "RS1", "LS2", "RS2"})
         self.assertTrue(any(a.startswith("mass 646.2 kg") or "kg: frame" in a for a in rec["assumptions"]))
