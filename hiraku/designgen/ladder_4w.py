@@ -78,6 +78,9 @@ MATERIALS = Path(__file__).resolve().parents[2] / "data" / "materials" / "materi
 MIN_STATION_GAP_MM = 100.0  # stations closer than this would make members shorter than the joints (assumption)
 GUSSET_LEG_MM = 60.0  # gusset leg set by CHOICES joints = gusset unless given (assumption: 1.5 x the cross member width)
 GUSSET_LEG_MIN_MM = 30.0  # a gusset leg that is not 0 is at least this (assumption: smaller plates than the joint)
+POST_FOOTPRINT_SPARE_MM = 1.0  # a post standing on a rail leaves at least this much of the rail's top face on each
+# side of its footprint (design department's decision, room for the fillet weld's toe: assumption, not sized)
+STAY_PREFIXES = ("rops_stay_",)  # braces that end on a rail but are not posts: rail_post_footprints leaves them out
 
 
 class DesignGenError(ValueError):
@@ -1337,6 +1340,7 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
     if x_a - post_x != post_dx:
         _check_rear_legs(design)
     _check_tubes_through(design)
+    _check_post_footprints(design)
     if v["gusset_leg"] > 0:
         _check_gussets_meshable(design)
     from .kit import joints
@@ -1424,6 +1428,81 @@ def _check_tubes_through(design: Record) -> None:
                     " give one of them another section, or move one so they meet at separate nodes")
             raise DesignGenError(f"tubes ({names}) pass straight through each other at node {node!r}: the shell mesh "
                                  f"needs one of them to end there;{hint}")
+
+
+def rail_post_footprints(design: Record) -> list[Record]:
+    """The footprint across the rail (y) of every post that stands on a rail: a member with one end at a node where
+    a rail piece (a member rail_* along x) ends, rising from there at least as steeply as 45 degrees (members named
+    STAY_PREFIXES left out: the roll bar's rear stays are braces ending on the rail's end node, not posts). The
+    footprint is the post's section (K1's section axes, k1_shell.mesh.k1_axes; a round tube's circle) cut by the plane
+    of the rail piece's top face, with the post's lean. One record per post and rail piece at its foot: {"member",
+    "node", "rail", "rail_y", "rail_b", "y_min", "y_max", "spare_mm" (the smaller of the rail's top face left beside
+    the footprint on either side; negative: the footprint reaches past the face by that much), "need_rail_b" (the rail
+    width that leaves POST_FOOTPRINT_SPARE_MM each side, the rail's centre line staying where it is)}."""
+    from hiraku.solvers.k1_shell.mesh import k1_axes
+
+    xyz = {n["id"]: np.asarray(n["xyz_mm"], float) for n in design["nodes"]}
+    secs = design["sections"]
+
+    def d_of(m: Record, start: str) -> np.ndarray:
+        end = m["node_b"] if m["node_a"] == start else m["node_a"]
+        return xyz[end] - xyz[start]
+
+    rails: dict[str, list[Record]] = {}
+    for m in design["members"]:
+        d = xyz[m["node_b"]] - xyz[m["node_a"]]
+        if m["id"].startswith("rail_") and abs(d[1]) <= 1e-9 and abs(d[2]) <= 1e-9:
+            for k in ("node_a", "node_b"):
+                rails.setdefault(m[k], []).append(m)
+    out = []
+    for m in design["members"]:
+        if m["id"].startswith("rail_") or m["id"].startswith(STAY_PREFIXES):
+            continue
+        for k in ("node_a", "node_b"):
+            node = m[k]
+            if node not in rails:
+                continue
+            d = d_of(m, node)
+            if d[2] <= 0.0 or d[2] < max(abs(d[0]), abs(d[1])):
+                continue
+            e = d / float(np.linalg.norm(d))
+            sec = secs[m["section"]]
+            dims = sec["dims_mm"]
+            base = xyz[node]
+            for r in rails[node]:
+                rd = secs[r["section"]]["dims_mm"]
+                z_face = float(base[2]) + float(rd["h"]) / 2.0
+                c = base + (z_face - float(base[2])) / float(e[2]) * e  # the post's axis at the top face
+                if sec.get("shape") == "round_tube":
+                    half = float(dims["d"]) / 2.0 * math.hypot(1.0, float(e[1] / e[2]))
+                    ys = [float(c[1]) - half, float(c[1]) + half]
+                else:
+                    ey, ez = k1_axes(e)
+                    ys = []
+                    for u in (-1.0, 1.0):
+                        for w in (-1.0, 1.0):
+                            p = c + u * float(dims["h"]) / 2.0 * ey + w * float(dims["b"]) / 2.0 * ez
+                            ys.append(float((p + (z_face - float(p[2])) / float(e[2]) * e)[1]))
+                y0, b = float(base[1]), float(rd["b"])
+                lo, hi = min(ys), max(ys)
+                out.append({"member": m["id"], "node": node, "rail": r["id"], "rail_y": y0, "rail_b": b,
+                            "y_min": lo, "y_max": hi, "spare_mm": min(lo - (y0 - b / 2.0), (y0 + b / 2.0) - hi),
+                            "need_rail_b": 2.0 * (max(hi - y0, y0 - lo) + POST_FOOTPRINT_SPARE_MM)})
+    return out
+
+
+def _check_post_footprints(design: Record) -> None:
+    """Every post standing on a rail (rail_post_footprints) leaves POST_FOOTPRINT_SPARE_MM of the rail's top face on
+    each side of its footprint; else DesignGenError naming the post, how far it reaches and the rail_b it needs."""
+    for f in rail_post_footprints(design):
+        if f["spare_mm"] < POST_FOOTPRINT_SPARE_MM - 1e-6:
+            how = (f"reaches {-f['spare_mm']:.1f} mm past the rail's side" if f["spare_mm"] < 0.0 else
+                   f"leaves only {f['spare_mm']:.1f} mm of the top face on one side")
+            raise DesignGenError(
+                f"post {f['member']} on rail {f['rail']} (node {f['node']}): its footprint on the rail's top face, y "
+                f"{f['y_min']:.1f} to {f['y_max']:.1f} mm on a rail {f['rail_b']:g} mm wide centred at y "
+                f"{f['rail_y']:.1f} mm, {how}; at least {POST_FOOTPRINT_SPARE_MM:g} mm each side needs rail_b of at "
+                f"least {f['need_rail_b']:.1f} mm, or a narrower post")
 
 
 BATTERY_IDS = ("battery", "battery2")  # the packs' part ids (battery_split of them)
