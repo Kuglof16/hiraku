@@ -18,10 +18,23 @@ Per step (central differences, the velocities at the half steps):
    hinge_lim breaks: it is removed and carries nothing from then on;
 5. the shear forces from the moments (V = (M_i + M_j) / l), the forces and moments to the nodes through
    the co-rotated frame (they balance exactly: the momentum and angular momentum of the frame are kept);
-6. the wall, a rigid plane x = xw: a node past it gets the penalty force kpen (x - xw) back, and a
-   Coulomb friction force against its sliding velocity, at most mu times that force (and at most the
-   force that stops the sliding in half a step);
-7. the velocities (mass-proportional damping alpha, 0 in a crash) and the positions; the node rotations
+   A wheel link (link[e] = 1) is a pin-ended axial spring: N = EA / l0 (l - l0) along the chord, nothing
+   else (no moments, no yield, never broken);
+6. contact between elements that share no node (pc > 0), frictionless: the closest points of the two
+   axes, P = a + s (b - a) on one and Q = c + t (d - c) on the other (closest()); when |P - Q| is less
+   than the pair's contact distance cdist, the overlap g = cdist - |P - Q| pushes them apart along
+   P - Q with the force k g, k = pc / (dt^2 (wa^2/ma + wb^2/mb + wc^2/mc + wd^2/md)) (the weights
+   wa = 1 - s, wb = s, wc = 1 - t, wd = t; the bracket is the inverse of the contact point's mass,
+   so (omega dt)^2 of the contact spring alone is pc). The force at P goes to a and b by wa, wb and
+   at Q to c and d by wc, wd: equal and opposite on the same line, so the momentum and the angular
+   momentum are kept. The pairs looked at are a list (cpairs, cnp of them) of the pairs whose axes were
+   within cdist + skin when it was made; it is made again when a node has moved more than skin / 2
+   since then (its displacement less the mean displacement of all nodes): then no pair left out can
+   have come within cdist (each axis point moves at most as far as its nodes do);
+7. the wall, a rigid plane x = xw: a node whose x + nrad passes it (nrad: a wheel's radius, else 0)
+   gets the penalty force kpen (x + nrad - xw) back, and a Coulomb friction force against its sliding
+   velocity, at most mu times that force (and at most the force that stops the sliding in half a step);
+8. the velocities (mass-proportional damping alpha, 0 in a crash) and the positions; the node rotations
    R <- exp([w dt]x) R with the spin w in the design frame (isotropic rotational inertia: no gyroscopic term).
 """
 
@@ -34,8 +47,74 @@ import numpy as np
 from ..jit import njit
 
 
+def _clamp01(s):
+    if s < 0.0:
+        return 0.0
+    if s > 1.0:
+        return 1.0
+    return s
+
+
+def _closest(x, a, b, c, d):
+    """(s, t): the closest points a + s (b - a) and c + t (d - c) of two segments (s, t in [0, 1]); Ericson's
+    method (Real-Time Collision Detection, 5.1.9), with parallel segments taking the middle of their overlap."""
+    d1x = x[b, 0] - x[a, 0]
+    d1y = x[b, 1] - x[a, 1]
+    d1z = x[b, 2] - x[a, 2]
+    d2x = x[d, 0] - x[c, 0]
+    d2y = x[d, 1] - x[c, 1]
+    d2z = x[d, 2] - x[c, 2]
+    rx = x[a, 0] - x[c, 0]
+    ry = x[a, 1] - x[c, 1]
+    rz = x[a, 2] - x[c, 2]
+    A = d1x * d1x + d1y * d1y + d1z * d1z
+    E = d2x * d2x + d2y * d2y + d2z * d2z
+    F = d2x * rx + d2y * ry + d2z * rz
+    tiny = 1e-30
+    if A <= tiny and E <= tiny:
+        return 0.0, 0.0
+    if A <= tiny:
+        return 0.0, _clamp01(F / E)
+    C = d1x * rx + d1y * ry + d1z * rz
+    if E <= tiny:
+        return _clamp01(-C / A), 0.0
+    B = d1x * d2x + d1y * d2y + d1z * d2z
+    den = A * E - B * B
+    if den > 1e-12 * A * E:
+        s = _clamp01((B * F - C * E) / den)
+    else:  # parallel: the middle of the overlap of the two along the first
+        sc = -C / A
+        sd = (B - C) / A
+        lo = min(sc, sd)
+        hi = max(sc, sd)
+        if lo < 0.0:
+            lo = 0.0
+        if hi > 1.0:
+            hi = 1.0
+        if lo <= hi:
+            s = 0.5 * (lo + hi)
+        elif hi < 0.0 or (sc < 0.0 and sd < 0.0):
+            s = 0.0
+        else:
+            s = 1.0
+    t = (B * s + F) / E
+    if t < 0.0:
+        t = 0.0
+        s = _clamp01(-C / A)
+    elif t > 1.0:
+        t = 1.0
+        s = _clamp01((B - C) / A)
+    return s, t
+
+
+closest_py = _closest
+closest = njit(_closest)
+_clamp01 = njit(_clamp01)
+
+
 def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive, yielded, fix, vpre, fext,
-             alpha, wall_on, xw, kpen, mu, hinge_lim, fint, imp):
+             alpha, wall_on, xw, kpen, mu, hinge_lim, fint, imp, nrad, link, cdist, cpairs, cnp, xref, skin, pc,
+             fcon, cstat):
     n = x.shape[0]
     ne = con.shape[0]
     Ti = np.empty((3, 3))
@@ -54,6 +133,8 @@ def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive
         for i in range(n):
             for c in range(6):
                 fint[i, c] = 0.0
+            for c in range(3):
+                fcon[i, c] = 0.0
         # -- elements
         for e in range(ne):
             if alive[e] == 0:
@@ -67,6 +148,15 @@ def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive
             r1x = dx / ln
             r1y = dy / ln
             r1z = dz / ln
+            if link[e] != 0:  # a wheel link: axial spring only
+                N = prop[e, 0] / l0[e] * (ln - l0[e])
+                fint[a, 0] -= N * r1x
+                fint[a, 1] -= N * r1y
+                fint[a, 2] -= N * r1z
+                fint[b, 0] += N * r1x
+                fint[b, 1] += N * r1y
+                fint[b, 2] += N * r1z
+                continue
             for p in range(3):
                 for q in range(3):
                     sa = 0.0
@@ -206,13 +296,98 @@ def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive
                 fint[b, c] += Rr[c, 0] * fl[3] + Rr[c, 1] * fl[4] + Rr[c, 2] * fl[5]
                 fint[a, 3 + c] += Rr[c, 0] * ml[0] + Rr[c, 1] * ml[1] + Rr[c, 2] * ml[2]
                 fint[b, 3 + c] += Rr[c, 0] * ml[3] + Rr[c, 1] * ml[4] + Rr[c, 2] * ml[5]
+        # -- contact between elements
+        if pc > 0.0 and ne > 1:
+            sx = 0.0
+            sy = 0.0
+            sz = 0.0
+            for i in range(n):
+                sx += x[i, 0] - xref[i, 0]
+                sy += x[i, 1] - xref[i, 1]
+                sz += x[i, 2] - xref[i, 2]
+            sx /= n
+            sy /= n
+            sz /= n
+            mx = 0.0
+            for i in range(n):
+                ux = x[i, 0] - xref[i, 0] - sx
+                uy = x[i, 1] - xref[i, 1] - sy
+                uz = x[i, 2] - xref[i, 2] - sz
+                u2 = ux * ux + uy * uy + uz * uz
+                if u2 > mx:
+                    mx = u2
+            if cnp[0] < 0 or 4.0 * mx > skin * skin:
+                cnt = 0
+                for ce in range(ne):
+                    if alive[ce] == 0 or link[ce] != 0:
+                        continue
+                    for cf in range(ce + 1, ne):
+                        if cdist[ce, cf] <= 0.0 or alive[cf] == 0:
+                            continue
+                        na = con[ce, 0]
+                        nb = con[ce, 1]
+                        nc = con[cf, 0]
+                        nd = con[cf, 1]
+                        ss, tt = closest(x, na, nb, nc, nd)
+                        px = x[na, 0] + ss * (x[nb, 0] - x[na, 0]) - x[nc, 0] - tt * (x[nd, 0] - x[nc, 0])
+                        py = x[na, 1] + ss * (x[nb, 1] - x[na, 1]) - x[nc, 1] - tt * (x[nd, 1] - x[nc, 1])
+                        pz = x[na, 2] + ss * (x[nb, 2] - x[na, 2]) - x[nc, 2] - tt * (x[nd, 2] - x[nc, 2])
+                        lim = cdist[ce, cf] + skin
+                        if px * px + py * py + pz * pz < lim * lim:
+                            cpairs[cnt, 0] = ce
+                            cpairs[cnt, 1] = cf
+                            cnt += 1
+                cnp[0] = cnt
+                for i in range(n):
+                    for c in range(3):
+                        xref[i, c] = x[i, c]
+                cstat[0] += 1
+                if cnt > cstat[1]:
+                    cstat[1] = cnt
+            for kk in range(cnp[0]):
+                ce = cpairs[kk, 0]
+                cf = cpairs[kk, 1]
+                if alive[ce] == 0 or alive[cf] == 0:
+                    continue
+                na = con[ce, 0]
+                nb = con[ce, 1]
+                nc = con[cf, 0]
+                nd = con[cf, 1]
+                ss, tt = closest(x, na, nb, nc, nd)
+                px = x[na, 0] + ss * (x[nb, 0] - x[na, 0]) - x[nc, 0] - tt * (x[nd, 0] - x[nc, 0])
+                py = x[na, 1] + ss * (x[nb, 1] - x[na, 1]) - x[nc, 1] - tt * (x[nd, 1] - x[nc, 1])
+                pz = x[na, 2] + ss * (x[nb, 2] - x[na, 2]) - x[nc, 2] - tt * (x[nd, 2] - x[nc, 2])
+                dist = math.sqrt(px * px + py * py + pz * pz)
+                ov = cdist[ce, cf] - dist
+                if ov <= 0.0 or dist <= 1e-12:
+                    continue
+                wa = 1.0 - ss
+                wc = 1.0 - tt
+                minv = wa * wa / m[na] + ss * ss / m[nb] + wc * wc / m[nc] + tt * tt / m[nd]
+                fk = pc * ov / (dt * dt * minv)
+                nx = fk * px / dist
+                ny = fk * py / dist
+                nz = fk * pz / dist
+                fcon[na, 0] += wa * nx
+                fcon[na, 1] += wa * ny
+                fcon[na, 2] += wa * nz
+                fcon[nb, 0] += ss * nx
+                fcon[nb, 1] += ss * ny
+                fcon[nb, 2] += ss * nz
+                fcon[nc, 0] -= wc * nx
+                fcon[nc, 1] -= wc * ny
+                fcon[nc, 2] -= wc * nz
+                fcon[nd, 0] -= tt * nx
+                fcon[nd, 1] -= tt * ny
+                fcon[nd, 2] -= tt * nz
+                cstat[2] += 1
         # -- nodes: wall, velocities, positions, rotations
         for i in range(n):
             fc[0] = 0.0
             fc[1] = 0.0
             fc[2] = 0.0
             if wall_on != 0:
-                g = x[i, 0] - xw
+                g = x[i, 0] + nrad[i] - xw
                 if g > 0.0:
                     fn = kpen[i] * g
                     fc[0] = -fn
@@ -230,7 +405,7 @@ def _advance(nsteps, dt, x, v, R, w, m, J, con, l0, e0, prop, up, tp, thp, alive
                 if fix[i, c] != 0:
                     v[i, c] = vpre[i, c]
                 else:
-                    v[i, c] = (damp_a * v[i, c] + dt * (fext[i, c] - fint[i, c] + fc[c]) / m[i]) * damp_b
+                    v[i, c] = (damp_a * v[i, c] + dt * (fext[i, c] - fint[i, c] + fc[c] + fcon[i, c]) / m[i]) * damp_b
                 x[i, c] += dt * v[i, c]
                 if fix[i, 3 + c] != 0:
                     w[i, c] = vpre[i, 3 + c]

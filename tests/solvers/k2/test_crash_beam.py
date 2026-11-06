@@ -65,10 +65,19 @@ def load_case(speed=40.0, **params):
             "params": dict({"speed": q(speed, "km/h"), "loading": "two_cargo"}, **params), "tolerance_rel": 0.15}
 
 
+def small_frame_no_wheels():
+    """small_frame without the wheel parts (no wheel nodes): at 40 km/h the front rails break and, at 76 ms, the
+    side rails behind the dash hoop, which with the hoop and the front cross member come apart from the seats' side
+    (2.7 % of the mass)."""
+    d = small_frame()
+    d["parts"] = [p for p in d["parts"] if p["kind"] != "wheel"]
+    return d
+
+
 class KnownAnswers(unittest.TestCase):
     def test_every_own_check_passes(self):
         checks = TOOLS["crash_beam"].own_checks()
-        self.assertEqual(len(checks), 5)
+        self.assertEqual(len(checks), 11)
         for c in checks:
             with self.subTest(case=c["case"]):
                 self.assertTrue(c["pass"], f"{c['case']}: expected {c['expected']} got {c['got']}")
@@ -88,6 +97,91 @@ class KnownAnswers(unittest.TestCase):
         self.assertAlmostEqual(s["peak_force"] / s["expected_force"], 1.0, delta=3e-2)
         self.assertAlmostEqual(s["contact_time"] / s["expected_time"], 1.0, delta=3e-2)
         np.testing.assert_allclose(s["momentum_change_vec"], s["wall_impulse_vec"], rtol=1e-9, atol=1e-9)
+
+
+class ContactKnownAnswers(unittest.TestCase):
+    """Contact between elements that share no node, and a wheel node at the wall (known.tubes_head_on,
+    known.tube_crosswise, known.wheel_into_wall)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.h = known.tubes_head_on()
+        cls.c = known.tube_crosswise()
+        cls.w = known.wheel_into_wall()
+
+    def test_head_on_tubes_spring_mass_answer(self):
+        """Two elastic 40x40x2.3 steel tubes, L = 0.5 m, on the x axis, not joined: t1 carries M1 = 2000 kg at its
+        rear end and moves at v = 1 m/s; t2 carries M2 = 1000 kg at its far end and rests; no wall.
+
+        Hand calculation (the code computes the same numbers): the touching end nodes B1, A2 meet through the
+        penalty spring k_c = pc / (dt^2 (1/m_B1 + 1/m_A2)) (the contact point at the two end nodes, weights 1; pc =
+        CONTACT_PENALTY); each tube is a spring E A / L = 205000 MPa x 347.16 mm^2 / 500 mm = 142.3 kN/mm. In series:
+        k = 1 / (2 L / (E A) + 1 / k_c). The masses with a third of their tube each (Rayleigh) m_i = M_i + m_t / 3,
+        reduced mass mu = m1 m2 / (m1 + m2) (about 667 kg). An undamped impact through a spring: the force peaks at
+        F = v sqrt(k mu), the contact lasts half a period pi sqrt(mu / k). Elastic (no losses): momentum and energy
+        give v1' = (M1 - M2) / (M1 + M2) v = 1/3 m/s and v2' = 2 M1 / (M1 + M2) v = 4/3 m/s (M_i the tubes'
+        whole masses). Tolerances: 3 % on the force and the time (the tubes' own masses are lumped at 5 nodes
+        each), 1e-3 relative on the speeds after (the tubes keep a little vibration energy). The capsules touch
+        when the end gap is the sum of the contact radii (2 x 20 mm, the ends are rounded): the first touch
+        comes within one step's travel of a 40 mm gap."""
+        h = self.h
+        self.assertTrue(h["separated"])
+        self.assertAlmostEqual(h["peak_force"] / h["expected_force"], 1.0, delta=3e-2)
+        self.assertAlmostEqual(h["contact_time"] / h["expected_time"], 1.0, delta=3e-2)
+        self.assertAlmostEqual(h["v1"] / h["expected_v1"], 1.0, delta=1e-3)
+        self.assertAlmostEqual(h["v2"] / h["expected_v2"], 1.0, delta=1e-3)
+        np.testing.assert_allclose(h["momentum_after"], h["momentum_before"], rtol=1e-12, atol=1e-9)
+        self.assertLessEqual(h["first_touch_gap"], h["contact_distance"] + 1e-12)
+        self.assertGreater(h["first_touch_gap"], h["contact_distance"] - 1.0 * h["dt"] - 1e-12)
+
+    def test_crosswise_tube_rebounds_within_the_penetration_bound(self):
+        """Tube t2 (40x40x2.3, 0.6 m, along y) moves down at v = 2 m/s onto tube t1 (the same, along x, at rest),
+        no gravity; 3 elements each, so the axes cross at the middles of the two middle elements.
+
+        Hand bound: by symmetry the closest points stay at the middles (s = t = 1/2), so the contact point's
+        inverse mass is 4 x (1/2)^2 / m_node (the four middle nodes, each m_t / 3) and the penalty spring is
+        k = pc / (dt^2 x that), constant: the contact force is conservative. All the relative kinetic energy
+        (1/2) mu v^2, mu = m_t / 2 the reduced mass, could at most go into the spring (the tubes' bending takes the
+        rest): (1/2) k d^2 <= (1/2) mu v^2, so the penetration d <= v sqrt(mu / k) (0.34 mm here). The axes must
+        never come closer than 2 x 20 mm - d. The tube rebounds: after the contact t2 moves down slower than t1
+        (they part), at a relative speed no larger than v (energy), and the momentum is kept."""
+        c = self.c
+        self.assertIsNotNone(c["touched"])
+        self.assertIsNotNone(c["released"])
+        self.assertLess(c["least"], c["contact_distance"])  # it did touch
+        self.assertGreaterEqual(c["least"], c["contact_distance"] - c["bound"])
+        self.assertGreater(c["v2"], c["v1"])  # parting: t2 above t1 moves up relative to it
+        self.assertLessEqual(c["v2"] - c["v1"], c["speed"] + 1e-9)
+        np.testing.assert_allclose(c["momentum_after"], c["momentum_before"], rtol=1e-12, atol=1e-12)
+
+    def test_wheel_node_touches_the_wall_at_wall_less_its_radius(self):
+        """A node of radius r = 0.3 m (18 kg) moves at 1 m/s toward the wall at x = 1 m from 2 mm short of touching.
+
+        Hand check: the wall acts on a node when x + r > wall, so from x = wall - r = 0.7 m on: the last step with
+        no wall force starts at x <= 0.7 m and the first with one at 0.7 m < x <= 0.7 m + v dt. The penalty spring
+        m / dt^2 stops the node within about v / omega = v dt of that, and it leaves at the speed it came (an
+        undamped spring; the discrete spring's time steps make it 1e-3 at most)."""
+        w = self.w
+        self.assertLessEqual(w["last_free_x"], w["expected"])
+        self.assertGreater(w["first_touch_x"], w["expected"])
+        self.assertLessEqual(w["first_touch_x"], w["expected"] + w["speed"] * w["dt"] + 1e-12)
+        self.assertLessEqual(w["deepest"] - w["expected"], 2.0 * w["speed"] * w["dt"])
+        self.assertAlmostEqual(w["speed_after"] / -w["speed"], 1.0, delta=1e-3)
+
+    def test_closest_points_of_two_segments(self):
+        from hiraku.solvers.k2_vehicle.crash_beam.kernel import closest, closest_py
+
+        for fn in (closest, closest_py):
+            x = np.array([[0.0, 0, 0], [1.0, 0, 0], [0.25, -1, 1], [0.25, 1, 1]])
+            self.assertEqual(tuple(round(v, 12) for v in fn(x, 0, 1, 2, 3)), (0.25, 0.5))  # crossing
+            x = np.array([[0.0, 0, 0], [1.0, 0, 0], [1.5, 0, 0], [3.0, 0, 0]])
+            self.assertEqual(fn(x, 0, 1, 2, 3), (1.0, 0.0))  # on one line, end to end
+            x = np.array([[0.0, 0, 0], [1.0, 0, 0], [0.5, 0.1, 0], [2.0, 0.1, 0]])
+            s, t = fn(x, 0, 1, 2, 3)  # parallel, overlapping on 0.5 .. 1: its middle
+            self.assertAlmostEqual(s, 0.75)
+            self.assertAlmostEqual(t, 0.25 / 1.5)
+            x = np.array([[0.0, 0, 0], [1.0, 0, 0], [-2.0, 0.1, 0], [-1.0, 0.1, 0]])
+            self.assertEqual(fn(x, 0, 1, 2, 3), (0.0, 1.0))  # parallel, apart
 
 
 class Mesh(unittest.TestCase):
