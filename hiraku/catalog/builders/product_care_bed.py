@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 import re
 
-from hiraku.catalog.builders.common import BuildError, Record, entry, number, q, tolerance
+from hiraku.catalog.builders.common import BuildError, Record, entry, number, q, tolerance, variable_records
 
 PRODUCT = "care-bed"
 # m/s^2, standard gravity, a defined value (3rd CGPM, 1901), as hiraku.solvers.k0_handcalc.units.STANDARD_GRAVITY;
@@ -470,7 +470,8 @@ def t3_inputs(design: Record, load_case: Record) -> Record:
     lever = formula_registry().evaluate("bed.lever_actuator_force", p5_inputs(design, {
         **load_case, "params": {"loading": p["loading"], "actuator": p["actuator"]}}))["outputs"]
     return {"n": q(units.to_unit(p["uses_per_hour"], "1"), "1"), "k": q(units.to_unit(p["strokes_per_use"], "1"), "1"),
-            "s": lever["stroke"], "v": design["variables"]["actuator_speed"]}
+            "s": lever["stroke"],
+            "v": variable_records(design, ["actuator_speed"], "T3 (the actuator duty hand calculation)")["actuator_speed"]}
 
 
 T3_PREDICTIONS = [{"quantity": "actuator_duty", "formula_id": "bed.actuator_duty", "output": "duty",
@@ -533,12 +534,13 @@ def r3_inputs(design: Record, load_case: Record) -> Record:
                                                       "t": q(v["bracket_t"], "mm"), "d": q(v["pin_d"], "mm")})[
             "outputs"]["sigma_root"]["value"]
     n = {k: units.to_unit(p[k], "1") for k, _ in R3_USES}
+    fat = variable_records(design, ["fatigue_fat_class", "fatigue_slope", "fatigue_knee_cycles"],
+                           "R3 (the use fatigue hand calculation)")
     return {"n1": q(n["n_seat"], "1"), "dS1": q(s_user - s_empty, "MPa"),
             "n2": q(n["n_raise"], "1"), "dS2": q(lug["back"], "MPa"),
             "n3": q(n["n_raise"], "1"), "dS3": q(lug["knee"], "MPa"),
             "n4": q(n["n_lift"], "1"), "dS4": q(0.0, "MPa"),
-            "FAT": design["variables"]["fatigue_fat_class"], "m": design["variables"]["fatigue_slope"],
-            "N_knee": design["variables"]["fatigue_knee_cycles"]}
+            "FAT": fat["fatigue_fat_class"], "m": fat["fatigue_slope"], "N_knee": fat["fatigue_knee_cycles"]}
 
 
 # The slope 2 m - 1 below the knee: IIW-1823-07 (2008) sec. 4.3.1, as cited; not checked against that text in this

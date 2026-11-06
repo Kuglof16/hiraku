@@ -167,12 +167,25 @@ class K2Tool(ABC):
                 "params": [p.describe() for p in (LOADING,) + self.params],
                 "predicts": [p.describe() for p in self.pairs], "formulas": self.formula_ids(), "stage": self.stage}
 
+    def applies(self, design: dict) -> str | None:
+        """None when the tool applies to the design, else a short reason (Japanese): what the K2 vehicle model
+        and this scenario read of the design (hiraku.solvers.shelf.applies.SHAPES)."""
+        from hiraku.solvers.shelf.applies import shape_of
+
+        why = shape_of(self.name, design)
+        return f"{self.name} はこの設計に使えません: {why}" if why else None
+
     def run(self, design: dict, load_case: dict, predictions: list[dict], params: dict | None = None) -> dict:
         t0 = time.perf_counter()
         rec = {"tool": self.name, "base": "K2", "design_version": int(design.get("design_version", 1)),
                "load_case_id": load_case.get("load_case_id", ""),
                "prediction_ids": [p["prediction_id"] for p in predictions if "prediction_id" in p],
                "status": "ok", "results": []}
+        why = self.applies(design)
+        if why:  # refused with the reason (the contract's "failed"), before any model is built
+            rec.update(status="failed", error=why, wall_time_s=time.perf_counter() - t0)
+            self.last_assumptions = []
+            return rec
         lp = dict(load_case.get("params") or {})
         self.opts = {k: v for k, v in (params or {}).items() if k != "upstream_analyses"}
         self._vars = design.get("variables") or {}

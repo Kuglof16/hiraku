@@ -49,6 +49,11 @@ def loading_requirement(req: Record) -> str:
     return req.get("default_loading") or DEFAULT_LOADING
 
 
+def carries_people(design: Record) -> bool:
+    """The design has occupant parts (hiraku.contract.loading: one without any carries no people)."""
+    return any(p.get("kind") == "occupant" for p in design.get("parts", []))
+
+
 def check_design_loading(req: Record, design: Record, loading: str) -> None:
     """The design's occupant and cargo parts must carry the requirement values (Q33, Q40).
 
@@ -57,18 +62,25 @@ def check_design_loading(req: Record, design: Record, loading: str) -> None:
     load nobody asked for. A person may be split into body segments
     (hiraku.contract.loading.person_of): the people on board are counted, and
     each person's parts summed must weigh Q33.
+
+    The contract's loading rule (hiraku.contract.loading): a design with no occupant parts at all (a product
+    without seats: a serving robot, a care bed without its rider) carries no people under any loading, so
+    no people are required of it; a design with some occupants but fewer than the loading names does not
+    fit that loading. Cargo is checked as before (Q40 under a loading with cargo).
     """
     try:
         on = parts_on_board(design, loading)
     except ValueError as e:  # occupant parts, but fewer than the loading names
-        raise CatalogError(f"the design does not carry the requirements' load: {e}") from None
+        raise CatalogError(f"the design does not carry the requirements' load: {e} (a design with occupant "
+                           "parts must seat the loading's people; one with none carries no people: "
+                           "hiraku.contract.loading)") from None
     people: dict[str, list[Record]] = {}
     for p in on:
         if p["kind"] == "occupant":
             people.setdefault(person_of(p), []).append(p)
     cargo = [p for p in on if p["kind"] == "cargo"]
     problems = []
-    if len(people) != OCCUPANTS[loading]:
+    if carries_people(design) and len(people) != OCCUPANTS[loading]:  # parts_on_board raised for fewer; kept as a guard
         problems.append(f"loading {loading} needs {OCCUPANTS[loading]} occupant parts (people; a person may be "
                         f"split into body segments), the design has {len(people)}")
     if people:
@@ -90,7 +102,7 @@ def loading_for(req: Record, design: Record) -> tuple[str, list[str]]:
     """The loading to check (Q30), after checking the design carries it; and the requirement keys it uses."""
     loading = loading_requirement(req)
     check_design_loading(req, design, loading)
-    keys = ["Q30", "Q33"] if OCCUPANTS[loading] else ["Q30"]
+    keys = ["Q30", "Q33"] if OCCUPANTS[loading] and carries_people(design) else ["Q30"]
     return loading, keys + (["Q40"] if CARGO[loading] else [])
 
 
