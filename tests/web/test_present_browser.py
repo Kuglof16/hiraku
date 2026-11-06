@@ -121,8 +121,7 @@ class PresentBrowserTest(unittest.TestCase):
         # the reaction on the step (the sample's vector, |F| in kN), the verdict beside its criterion, in one sentence
         self.assertIn("反力 (FL)", got["card"])
         self.assertIn("1.8 kN", got["card"])
-        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → 合格", got["card"])
-        self.assertIn("基準を満たした", got["card"])
+        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → OK", got["card"])
         self.assertIn("実行が終わりました", got["card"])
         page.close()
 
@@ -172,10 +171,10 @@ class PresentBrowserTest(unittest.TestCase):
     def test_four_scenes(self):
         shell, _, _ = shell_events()
         cases = [
-            ("step", "run=sample&pace=0&t=0&present=1", sample_events(), ["反力", "基準を満たした"]),
+            ("step", "run=sample&pace=0&t=0&present=1", sample_events(), ["反力", "→ OK"]),
             ("shell", "run=sample&pace=0&t=0&present=1", shell, ["の最大", "補強の前 (v1)", "補強の後 (v2)", "ガセット"]),
             ("assembly", "run=sample&pace=0&t=0&present=1", assembly_events(focus_a7=True), ["干渉", "1 か所", "手順 3"]),
-            ("grid", "run=sample&pace=0&t=0&present=1&tab=grid", domain_events(), ["判定が合格の分野", " / "]),
+            ("grid", "run=sample&pace=0&t=0&present=1&tab=grid", domain_events(), ["判定が OK の分野", " / "]),
         ]
         for key, query, events, words in cases:
             with self.subTest(scene=key):
@@ -249,8 +248,8 @@ class PresentBrowserTest(unittest.TestCase):
         self.assertIn("解決済み", late["line"])  # the prediction came after the stop
         self.assertTrue(late["done"])
         self.assertIn("解決済み", late["row"])
-        self.assertEqual(late["big"], "基準を満たした")
-        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → 合格", late["vline"])
+        self.assertEqual(late["big"], "OK")
+        self.assertIn("解析 123.6 MPa ≤ 許容 156.7 MPa → OK", late["vline"])
         running = page.evaluate("async () => { await window.hiraku.seek(5.7); return document.getElementById('now').textContent; }")
         self.assertIn("解析しています", running)
         self.assertEqual(errors, [])

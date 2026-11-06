@@ -70,6 +70,10 @@ class HeldBandBrowserTest(unittest.TestCase):
             tile = page.locator('.tile[data-domain="assembly"]')
             self.assertIn("green", tile.get_attribute("class"))  # judged green ...
             self.assertIn("held", tile.get_attribute("class"))  # ... and held
+            # the tile's large mark says it (tiles.js: OK with 保留 N beside it); the band with the
+            # words is under くわしく (the tile's words only when it is opened)
+            self.assertRegex(tile.locator('[data-role="mark"]').inner_text(), r"^OK\s*保留 \d+$")
+            tile.locator("details.more > summary").click()
             band = tile.locator(".heldband")
             self.assertTrue(band.is_visible())
             text = band.inner_text()
@@ -94,6 +98,9 @@ class HeldBandBrowserTest(unittest.TestCase):
             words = {"compare": "比べるだけ", "relay": "渡すだけ", "reference": "参考"}
             for lc_id, _tid, domain, quantity, value, _unit, _extra in REFERENCE_CASES:
                 tile = page.locator(f'.tile[data-domain="{domain}"]')
+                # the rows are under くわしく (tiles.js: the tile's words only when it is opened), so
+                # their words are read as text, shown or not
+                self.assertEqual(tile.locator("details.more .refrows").count(), 1, domain)
                 self.assertNotIn("held", tile.get_attribute("class"), domain)
                 self.assertEqual(tile.locator(".heldband").count(), 0, domain)
                 row = tile.locator(f'.refrows li[data-ref="{lc_id}"]')
@@ -101,9 +108,9 @@ class HeldBandBrowserTest(unittest.TestCase):
                 self.assertEqual(row.get_attribute("data-kind"), REFERENCE_KINDS[lc_id])
                 self.assertEqual(row.get_attribute("data-quantity"), quantity)
                 self.assertEqual(float(row.get_attribute("data-value")), value)
-                self.assertIn(words[REFERENCE_KINDS[lc_id]], row.inner_text())
-                self.assertIn(REFERENCE_TITLES[lc_id], row.inner_text())  # the load case's title, not its id
-                self.assertIn("参考 (判定しない)", tile.locator(".refrows").inner_text())
+                self.assertIn(words[REFERENCE_KINDS[lc_id]], row.text_content())
+                self.assertIn(REFERENCE_TITLES[lc_id], row.text_content())  # the load case's title, not its id
+                self.assertIn("参考 (判定しない)", tile.locator(".refrows").text_content())
                 # not coloured: no orange, green or red background
                 # (the grid draws again as the replay moves: a row read through a locator can be the one
                 # just taken out, whose computed style is ''. Look it up and read it in one step, and

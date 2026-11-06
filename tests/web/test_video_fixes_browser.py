@@ -126,7 +126,7 @@ class VideoFixesBrowserTest(unittest.TestCase):
                 # the cause written: on its card, and stays while no verdict of the load case is OK
                 g = at(t_c1 + 0.01)
                 self.assertTrue(g["shown"])
-                self.assertIn("食い違いの原因", g["text"])
+                self.assertIn("不一致の原因", g["text"])
                 self.assertIn("one rail only (shape example)", g["text"])
                 self.assertIn("v1", g["text"])
                 self.assertGreaterEqual(float(g["size"].rstrip("px")), 18)

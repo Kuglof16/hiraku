@@ -35,7 +35,8 @@ ASSET_FILES = {
     "horizon": ("kloofendal_48d_partly_cloudy", ["kloofendal_48d_partly_cloudy_1k.hdr"]),
     "gravel": ("gravel_road", ["gravel_road_diff_1k.jpg", "gravel_road_nor_gl_1k.jpg", "gravel_road_arm_1k.jpg"]),
 }
-WORKBENCH_ROLES = ("sky", "dirt", "concrete")  # what the workbench's real look reads
+# what the workbench's real look reads (the horizon: the sky behind the vehicle, look.js Look.sky)
+WORKBENCH_ROLES = ("sky", "horizon", "dirt", "concrete")
 
 # The canvas pixel at points of the contour and the legend's swatch for the same value.
 # Members: the middle of the top of each member with one value (a member coloured from its two
@@ -160,27 +161,41 @@ class RealLookBrowserTest(unittest.TestCase):
                 self.assertLessEqual(abs(c["pixel"][ch] - c["legend"][ch]), TOLERANCE, f"{look} {c}")
 
     def test_beam_contour_has_the_legend_colours(self):
-        for look, quality in (("zu", None), ("real", None), ("real", "low")):
-            q = f"&quality={quality}" if quality else ""
+        # the workbench's default is the real look (look.js lookFromParams), at the low quality on
+        # this software renderer (qualityFromParams): no look given is that; ?look=plain the diagram
+        for look, quality in (("plain", None), ("real", "high"), (None, None), ("real", "low")):
+            q = (f"&look={look}" if look else "") + (f"&quality={quality}" if quality else "")
             # off=joints: the members' colours, not the weld beads over them (the joints are on at first)
-            page, errors = self.open(f"run=sample&pace=0&t=9&look={look}{q}&off=joints")
+            page, errors = self.open(f"run=sample&pace=0&t=9{q}&off=joints")
             got = page.evaluate(PIXELS, False)
             self.assertEqual(errors, [], look)
             self.assertEqual(got["bands"], 10)
-            self.assertEqual(got["post"], look == "real" and quality != "low")
+            self.assertEqual(got["post"], quality == "high")  # the post passes (AO, multisampling): high only
             self.assert_legend_colours(got, f"{look} {quality}")
             # every member of the sample has a value
             self.assertEqual(len(got["checks"]), 7)
             page.close()
 
     def test_shell_contour_has_the_legend_colours(self):
-        for look in ("zu", "real"):
+        for look in ("plain", "real"):
             page, errors = self.open(f"run={self.shell_run}&pace=0&t=1e6&look={look}&off=joints")
             page.evaluate("() => window.hiraku.seek(1e6)")
             got = page.evaluate(PIXELS, True)
             self.assertEqual(errors, [], look)
             self.assertGreaterEqual(len(got["checks"]), 20, look)
             self.assert_legend_colours(got, look)
+            page.close()
+
+    def test_the_workbench_opens_in_the_real_look(self):
+        """No ?look=: the real look (at the low quality on a software renderer such as this one);
+        ?look=plain, and its old name ?look=zu, the diagram."""
+        read = "() => ({ look: window.hiraku.bench.look.name, quality: window.hiraku.bench.look.quality, body: document.body.className })"
+        for query, want in (("", ("real", "low")), ("&look=plain", ("zu", "low")), ("&look=zu", ("zu", "low")), ("&quality=high", ("real", "high"))):
+            page, errors = self.open(f"run=sample&pace=0&t=0{query}")
+            got = page.evaluate(read)
+            self.assertEqual((got["look"], got["quality"]), want, query)
+            self.assertIn(f"look-{want[0]}", got["body"].split(), query)
+            self.assertEqual(errors, [], query)
             page.close()
 
     def demo_events(self):
@@ -208,8 +223,11 @@ class RealLookBrowserTest(unittest.TestCase):
         )
         self.assertEqual(errors, [])
         expect = {role: all(f"{a}/{f}" in files for f in names) for role, (a, names) in ASSET_FILES.items() if role in WORKBENCH_ROLES}
+        # one HDRI lights the scene (look.js loadAssets: the horizon first, else the sky)
+        if expect["horizon"]:
+            expect["sky"] = False
         self.assertEqual(got["assets"], expect)
-        if expect["sky"]:
+        if expect["sky"] or expect["horizon"]:
             self.assertEqual(got["intensity"], 0.8)  # look.js: the HDRI's intensity
         if expect["dirt"]:
             self.assertEqual(got["ground"], {"map": 1024, "normal": True, "arm": True})
@@ -217,7 +235,9 @@ class RealLookBrowserTest(unittest.TestCase):
 
     def test_materials_and_fall_backs_without_assets(self):
         events = self.demo_events()
-        page, errors = self.open("run=sample&pace=0&t=0&look=real", self.bare_base)
+        # quality=high: the post passes and the soft shadows checked below (this software renderer
+        # would get the low quality without it: look.js qualityFromParams)
+        page, errors = self.open("run=sample&pace=0&t=0&look=real&quality=high", self.bare_base)
         got = page.evaluate(
             """async (events) => {
               await window.hiraku.load(events, 1);
@@ -252,7 +272,7 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertEqual(errors, [])
         # no Poly Haven file listed: the drawn textures and the room light are used
         self.assertEqual(got["files"], [])
-        self.assertEqual(got["assets"], {"sky": False, "dirt": False, "concrete": False})
+        self.assertEqual(got["assets"], {"sky": False, "horizon": False, "dirt": False, "concrete": False})
         self.assertTrue(got["envIsRoom"])
         # painted steel tubes (the design's STKR400 / STKM13A): clearcoat over the paint
         self.assertEqual(got["member"], {"type": "MeshPhysicalMaterial", "finish": "painted_steel", "clearcoat": 1})
@@ -262,7 +282,8 @@ class RealLookBrowserTest(unittest.TestCase):
         self.assertGreater(got["seat"]["sheen"], 0)
         self.assertEqual(got["motor"]["finish"], "aluminium")
         self.assertEqual(got["battery"]["finish"], "resin")
-        self.assertEqual(got["cargo"]["finish"], "wood")
+        # the design's cargo box is drawn plain (look.js MATERIAL_OF), not as a wooden crate
+        self.assertEqual(got["cargo"]["finish"], "resin")
         # the sun's shadow box is fitted to the vehicle (its longest side + the 100 mm and 0.1 m
         # margins on each side, seen from the sun), not a fixed square
         longest = max(got["vehicle"]) / 1000

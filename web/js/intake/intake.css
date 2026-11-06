@@ -115,7 +115,7 @@
 
 .in-headrow { display: flex; align-items: center; gap: 12px; }
 .in-headtext { flex: 1; min-width: 0; }
-.in-headrow .in-pet { width: 72px; height: 88px; }
+.in-headrow .in-pet { width: 72px; height: 96px; }
 .in-headrow .in-pet canvas { width: 72px; height: 72px; }
 .in-headrow .in-pet::before { width: 44px; height: 44px; }
 .in-headrow .in-pet[data-state="idle"] { opacity: 0.5; }
@@ -264,3 +264,7 @@ body.video .in-pane.a1 .in-reason { font-size: 24px; line-height: 1.3; }
 body.video .in-pane.a1 .in-card.off .in-reason { font-size: 24px; -webkit-line-clamp: 2; }
 body.video .in-pane.a1 .in-tests, body.video .in-pane.a1 .in-bub > .in-btn { display: none; }
 body.video .in-pane.a1 .in-ask-top, body.video .in-pane.a1 .in-ask { display: none; } /* the question bar over A1 is not part of the film */
+
+/* the lead's place beside the headline keeps its size in the video too (its rule comes after the domains') */
+body.video .in-pane.a1 .in-headrow .in-pet { width: 72px; height: 96px; font-size: 16px; }
+body.video .in-pane.a1 .in-headrow .in-pet canvas { width: 72px; height: 72px; }

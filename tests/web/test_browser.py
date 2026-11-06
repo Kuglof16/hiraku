@@ -224,7 +224,7 @@ class BrowserReplayTest(unittest.TestCase):
                 cmpCard: document.getElementById("card-cmp").className,
                 causeBox: document.querySelector("#card-cmp .cause")?.textContent ?? "",
                 hookLines: document.querySelectorAll("#log li.hook").length,
-                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("照合:")).map((li) => li.textContent),
+                cmpLines: [...document.querySelectorAll("#log li")].filter((li) => li.textContent.includes("比べた: 差")).map((li) => li.textContent),
                 logLen: s.log.length,
                 status: s.status,
                 stopReason: s.stopReason,
@@ -246,7 +246,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(got["logLen"], len(events) - 1)  # every event but the re-sent one has a line
         self.assertEqual(got["status"], "stopped")
         self.assertEqual(got["stopReason"], "round_limit")
-        self.assertIn("HK3 食い違いは原因が先", got["hooksRow"])
+        self.assertIn("HK3 不一致は原因が先", got["hooksRow"])
         self.assertIn("×1", got["hooksRow"])
         page.close()
 
@@ -286,13 +286,13 @@ class BrowserReplayTest(unittest.TestCase):
             }"""
         )
         self.assertIn("warn", end["cmpCard"])  # the comparison stays a mismatch
-        self.assertIn("食い違い", end["badge"])
+        self.assertEqual(end["badge"], "不一致 !")
         self.assertEqual(end["mark"], "安全側で判定")
         self.assertIn("one rail, so it stays above", end["why"])
         self.assertIn("予測", end["used"][0])
         self.assertIn("150", end["used"][1])
         self.assertIn("予測の値", end["verdict"])
-        self.assertIn("合格", end["verdict"])
+        self.assertIn("→ OK", end["verdict"])
         self.assertIn("安全側で判定", end["logLine"])
         page.click("button[data-tab=grid]")
         tile = page.evaluate(
@@ -403,11 +403,12 @@ class BrowserReplayTest(unittest.TestCase):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
-            for look in ("zu", "real"):
+            # the diagram (?look=plain) and the real look, the workbench's default (no ?look=)
+            for look, query in (("zu", "&look=plain"), ("real", "")):
                 page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
                 errors = []
                 page.on("pageerror", lambda e: errors.append(str(e)))
-                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}", wait_until="domcontentloaded")
+                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6{query}", wait_until="domcontentloaded")
                 page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
                 page.evaluate("window.hiraku.ready")
                 page.click('#tests button[data-lc="P1-step100"]')
@@ -1678,7 +1679,7 @@ class BrowserReplayTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(got["order"], ["crash", "nvh", "strength", "thermal", "handling", "powertrain", "aero", "assembly"])
         self.assertEqual(sorted(got["red"]), ["assembly", "crash"])
-        self.assertEqual(got["flow"], ["v1 赤 4", "v2 赤 2"])
+        self.assertEqual(got["flow"], ["v1 NG 4", "v2 NG 2"])
         self.assertIn("繰り返しの上限", got["banner"])
         self.assertIn("電池 × cross1 8 mm 干渉", got["assembly"])
         self.assertIn("電池 43 ℃", got["thermal"])

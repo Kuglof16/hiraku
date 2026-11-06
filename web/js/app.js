@@ -12,7 +12,7 @@
 //   ?off=joints     turn overlays off at load (joints: the joint marks, on by default; A7 follows it too)
 //   ?tab=grid       open on ④ 解析結果 (the domains' grid) instead of the workbench (A1, A2, A5: the intake screens; A4: the tool shelf)
 //   ?tab=grid&domain=strength
-//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 照合 cards,
+//                   ④ with that domain's analyses replaying in it (the 3D and the 予測 → 解析 → 比べる → 判定 cards,
 //                   the play bar from its first prediction to its last comparison); a tile pressed does
 //                   the same and sets it, 「格子に戻る」 drops it. With ?t= that frame (t as the whole replay's)
 //   ?tabs=A1:0,A2:44.5,bench:80
@@ -29,7 +29,7 @@
 // window.hiraku.seek(t) returns a promise that resolves once the frame at t is drawn;
 // window.hiraku.load(events, t) shows other events (already parsed) the same way.
 
-import { TAB_JA, tabWord, verLabel, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
+import { TAB_JA, tabWord, verLabel, judgedWords, MISMATCH_STATUS, RED_STATUS, DEMO_LINE_JA, DOMAINS, DOMAIN_JA, DRIVEN_JA, DRIVER_JA, PICK_DEMO_ID, runSummaryJa, isOlderRecord, RUN_STATE_JA, runState, RULES, STOP_CODE_JA, DESIGNER_ROLES, designerRole, agentLongName, agentName, BASE_JA, caseShortNames, esc, keepAsides, fmt, fmtMargin, fmtPct, fmtQ, fmtSigned, fmtTime, fmtUsd, fmtVU, opLabel, formulaInputName, plainToolName, quantityName, unitLabel } from "./labels.js";
 import { BAND_COLORS, BANDS, OVER_COLOR } from "./colormap.js";
 import { EventFeed, Player, parseJsonl } from "./player.js";
 import { chainFor, isSafeSide, judgementState, roundsUsed, valueFromJa } from "./state.js";
@@ -44,15 +44,16 @@ import { mountShelf } from "./shelf.js";
 import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
+import { TileViews } from "./tile3d.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
 import { AssemblyPanel } from "./assembly.js";
 import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
-import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
+import { AgentPets, PET_PAINTS, glRendererName, isSoftwareRenderer, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { IntakePets } from "./intake_pets.js"; // the CAE agents' pets on A1 and A2
 import { reportNextHtml } from "./report_next.js";
 import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
-import { judgedContour, referenceResults } from "./judged.js";
+import { judgedContour, judgedResult, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
 import { ModuleLayer, hasModules, loadModuleNames, renderModuleLegend, renderRoundCard } from "./modules.js"; // modules:
@@ -64,13 +65,39 @@ import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
+import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
 
 const $ = (id) => document.getElementById(id);
-const params = new URLSearchParams(location.search);
+// A static export opened with no parameters starts at ① of the run its export picked (data/static.json
+// first: a saved run whose record has the request, the picked domains and the hearing), stopped at the
+// record's end so ① and ② show all of it; 「この記録を再生する」 plays it (STATIC_REPLAY). Without such a
+// run: the run list, as before.
+async function staticFirst() {
+  try {
+    return (await (await fetch("data/static.json")).json()).first ?? null;
+  } catch {
+    return null;
+  }
+}
+const FIRST = STATIC && !location.search ? await staticFirst() : null;
+const params = new URLSearchParams(FIRST ? `run=${encodeURIComponent(FIRST.run)}&tab=A1&t=1e6` : location.search);
 // ?dev=1: the run list as the developers see it (files, run ids, cut numbers, cost lines); kept on the links
 // (and the tabs' titles add the screens' names inside HIRAKU)
 const DEV = params.get("dev") === "1";
 const tabs = mountTabs($("tabs"), { dev: DEV });
+// A static export: the run list is a tab of its own after the steps (a link to ?list=1; the steps
+// themselves are the record's, from ①)
+if (STATIC) {
+  document.documentElement.classList.add("static-export"); // (app.css: no box to write or send in on ① / ②)
+  const list = document.createElement("a");
+  list.className = "tab tab-list";
+  list.href = DEV ? "?list=1&dev=1" : "?list=1";
+  list.title = "保存した記録の一覧 (ほかの実行を選んで見る)";
+  list.innerHTML =
+    `<svg class="tab-ic" viewBox="0 0 20 20" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 5.5H16M4 10H16M4 14.5H16"/></svg>` +
+    `<span class="tab-name">実行の一覧</span>`;
+  $("tabs").querySelector(".tabside")?.prepend(list);
+}
 const tabContent = new TabContent();
 const withDev = (href) => (DEV ? `${href}${href.includes("?") ? "&" : "?"}dev=1` : href);
 const STAGE_W = 1920;
@@ -118,7 +145,7 @@ const ui = {
   fieldKind: null, // contour field picked in the legend (null: the first one)
   fieldVariant: null, // among the fields of that kind: `${tool}|${variantOf}` (the analysis' tool; the beams, or a mesh and its surface)
   zoomMax: false, // the camera at a shell contour's largest element (legend: 最大の所に寄る)
-  compare: false, // the previous design version beside the current one (legend: 前の版と比べる)
+  compare: false, // the previous design version beside the current one (legend: 1 つ前の設計と比べる)
   meshMode: null, // the mesh's own view in place of a field (quality.js MODE_ORDER), or null
   qualityMetric: null, // the mesh check's metric the elements are coloured by (null: the first)
   stoppable: null, // the run id when this screen started the run being followed
@@ -164,10 +191,22 @@ function fitStage() {
 
 // ---- 3D -------------------------------------------------------------------
 const viewport = $("viewport");
-const look = lookFromParams(params); // ?look=real: the photograph-like look (default: the diagram)
+const look = lookFromParams(params); // the photograph-like look by default; ?look=plain: the diagram
 document.body.classList.add(`look-${look}`);
-const quality = qualityFromParams(params); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
-const bench = new Workbench3D(viewport, look, { quality });
+// joints: the real look opens with the joint marks off (they make the parts see-through, joints.js
+// partLook), so the vehicle is seen as it is; ?on=joints or the 接合 button shows them
+if (look === "real" && !(params.get("on") ?? "").split(",").includes("joints")) ui.toggles.joints = false;
+// a software renderer (the WebGL driver's name, agent_pets.js): the real look's cheapest quality
+// unless ?quality= says otherwise (look.js qualityFromParams)
+function softwareGL() {
+  const gl = document.createElement("canvas").getContext("webgl2");
+  const name = glRendererName(gl);
+  gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  return isSoftwareRenderer(name);
+}
+const quality = qualityFromParams(params, softwareGL()); // ?quality=high / medium / low: the real look's cost (look.js QUALITY)
+// sky: the real look shows the sky with its horizon behind the vehicle (look.js Look.sky)
+const bench = new Workbench3D(viewport, look, { quality, sky: true });
 const modLayer = new ModuleLayer(bench); // modules:
 const grip = new GripView(bench, viewport); // grip:
 const heat = new EnergyFlow(bench, viewport, { dev: DEV }); // heat: ids in its legend only with ?dev=1
@@ -345,7 +384,7 @@ function renderDomainHead(span) {
   if (!span) return;
   const html =
     `<span class="dh-tab">${esc(TAB_JA.grid.no)} ${esc(TAB_JA.grid.name)}</span><span class="dh-sep">›</span>` +
-    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 照合)</span>` +
+    `<b class="dh-dom">${esc(DOMAIN_JA[span.domain] ?? span.domain)}</b><span class="dh-what">の解析を再生 (予測 → 解析 → 比べる → 判定)</span>` +
     `<button class="dh-close" type="button" data-act="close-domain">× 格子に戻る</button>`;
   if (el.dataset.html !== html) {
     el.dataset.html = html;
@@ -396,7 +435,8 @@ const intakeApi = {
 // draft, sent back with the next change. A1 and A2 draw the draft's intake events (with the
 // request as the person's words, and the server's warnings as the lead's). When the hearing is
 // settled the request's files are saved and 始める starts a run on them (--intake-events).
-const draft = params.has("new")
+// (a static export has no server to send a request to: ?new=1 opens the run list there)
+const draft = params.has("new") && !STATIC
   ? { state: null, want: "", events: [], warnings: [], done: null, busy: "", error: "", useClaude: false, excluded: [], confirm: false, prefill: "", demoTitle: "" }
   : null;
 
@@ -689,14 +729,47 @@ async function dropFile(name, text) {
   }
 }
 
+// A static export (STATIC) on ① / ②: the record's request and one button, 「この記録を再生する」, which
+// plays the run on ③ from its first design (the request itself cannot be sent there: no server).
+function renderReplayBar() {
+  const bar = $("replaybar");
+  if (!bar) return;
+  const want = player.state.project?.want ?? "";
+  const html =
+    `<span class="rb-want"><b>この記録の依頼</b> ${want ? esc(want) : "—"}</span>` +
+    `<button class="go" type="button" data-static-replay="1">この記録を再生する</button>`;
+  if (bar.dataset.html !== html) {
+    bar.innerHTML = html;
+    bar.dataset.html = html;
+  }
+}
+
+function staticReplay() {
+  const t0 = player.events.find((e) => e.kind === "design.created")?.t ?? 0;
+  if (ui.gridDomain) closeDomain();
+  ui.pinnedTab = "bench";
+  ui.tabPlan = [];
+  ui.frozen = false;
+  player.seek(t0);
+  player.play();
+  drawn.rev = -1;
+}
+
+$("view-intake").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-static-replay]")) staticReplay();
+});
+
 function renderIntake(tab) {
   if (!intake) {
     // in a new request the bar (renderDraft) sits above the screens
-    $("view-intake").innerHTML = `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}<div class="intake-host" id="intake-host"></div>`;
+    $("view-intake").innerHTML =
+      `${draft ? `<div class="draftbar" id="draftbar"></div>` : ""}${STATIC ? `<div class="draftbar replaybar" id="replaybar"></div>` : ""}` +
+      `<div class="intake-host" id="intake-host"></div>`;
     intake = mountIntake($("intake-host"), intakeApi, { nav: false, screen: tab, onRuleFocus });
     renderDraft();
   }
   if (intake.screen !== tab) intake.show(tab);
+  renderReplayBar();
   syncDraftAsk();
   syncIntakeTime();
   // (and when the run turns out to be going, which offers the answer and the drop)
@@ -852,9 +925,11 @@ function renderTop(s) {
     // a run this screen started can be stopped while it goes
     (ownRunGoing()
       ? `<button class="stop-btn" data-stop="${esc(s.runId)}" ${ui.stopAsked ? "disabled" : ""}>${ui.stopAsked ? "止めています…" : "■ 止める"}</button>`
-      : DEV
-        ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
-        : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
+      : STATIC
+        ? `<a class="launch-link" href="${withDev("?list=1")}" title="ほかの記録を見る">☰ 一覧へ</a>`
+        : DEV
+          ? `<a class="launch-link" href="${withDev("?list=1")}" title="決まった手順か Claude で、新しく走らせる">▶ その場で走らせる</a>`
+          : `<a class="launch-link" href="?list=1" title="ほかのデモを見る・新しく実行する">☰ 一覧へ</a>`);
 }
 
 // lcId: the load case shown on the 3D (null on the screens without it: no chip ringed); openDomain:
@@ -863,7 +938,7 @@ function renderChips(s, lcId, openDomain = null) {
   const focusDomain = openDomain ?? (s.project?.load_cases ?? []).find((c) => c.load_case_id === lcId)?.domain;
   $("chips").innerHTML = DOMAINS.map((d) => {
     const j = judgementState(s, d);
-    const title = j.judgement?.summary ?? (j.picked ? "まだ判定が無い" : onlyTestsLine(s) ?? "この実行では選んでいない");
+    const title = j.judgement?.summary != null ? judgedWords(j.judgement.summary) : (j.picked ? "まだ判定が無い" : onlyTestsLine(s) ?? "この実行では選んでいない");
     const held = heldCases(s, d, s.currentVersion).length ? " held" : ""; // held: a count not judged (held.js)
     return `<span class="chip ${j.state}${held} ${d === focusDomain ? "focus" : ""}" title="${esc(title)}">${esc(DOMAIN_JA[d])}</span>`;
   }).join("");
@@ -888,8 +963,8 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 // the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
 const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
 const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
-const AGENT_ALERT = ["赤", "解析が通らない"];
-const AGENT_HEED = ["止められた", "食い違い"]; // attention (orange), not a NG judgement
+const AGENT_ALERT = [RED_STATUS, "解析が通らない"];
+const AGENT_HEED = ["止められた", MISMATCH_STATUS]; // attention (orange), not a NG judgement
 const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : AGENT_HEED.includes(a.status) ? "heed" : a.active ? "active" : "");
 
 // The list's entries in the agents' order: one agent, or a bundle at its first member's place.
@@ -1057,7 +1132,7 @@ function renderTests(s, lcId, span = null) {
 // The K0 formulas' Japanese titles (GET /api/formulas), once; until then (or without the route)
 // a prediction shows its formula as written.
 const formulaTitles = new Map();
-fetch("/api/formulas", { cache: "no-store" })
+fetch(getUrl("/api/formulas"), { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : { formulas: [] }))
   .then((got) => {
     for (const f of got.formulas ?? []) if (f.title) formulaTitles.set(f.formula_id, f.title);
@@ -1108,7 +1183,7 @@ function renderChain(s, chain) {
           .map((t) => `<span title="${esc(t.name)}">${esc(termName(t))}</span><span class="barw"><i style="width:${Math.max(0, Math.min(1, Math.abs(t.share))) * 100}%"></i></span><span>${elastic ? fmtSigned(t.share, 0) : fmtPct(t.share, 0)}</span>`)
           .join("")}</div>`
       : "";
-    const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(a)}</li>`).join("");
+    const asm = (pred.assumptions ?? []).slice(0, 3).map((a) => `<li>${esc(judgedWords(a))}</li>`).join("");
     p.className = "card";
     // the formula's title in words when the catalogue has one; the formula itself and its inputs
     // folded under くわしく (without a title: as written, as before)
@@ -1139,7 +1214,11 @@ function renderChain(s, chain) {
     const refs = referenceResults(ana, loadCase?.criterion);
     const top = (ana.results ?? []).slice(0, 3);
     const isRef = (r) => refs.includes(r);
-    const res = [...top, ...refs.filter((r) => !top.includes(r))].map((r) => `<tr class="${isRef(r) ? "ref" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
+    // the row of the quantity the criterion is held to says so; the others carry no mark (no OK / NG here)
+    const jr = judgedResult(ana, loadCase?.criterion);
+    const rows = [...top, ...refs.filter((r) => !top.includes(r))];
+    if (jr && !rows.includes(jr)) rows.push(jr);
+    const res = rows.map((r) => `<tr class="${isRef(r) ? "ref" : r === jr ? "judged" : ""}" title="${esc(r.quantity + (r.where ? ` @ ${r.where}` : ""))}"><td>${isRef(r) ? `<small class="ref-tag">${esc(JUDGED_JA.ref)}</small> ` : r === jr ? `<small class="used">${esc(JUDGED_JA.number)}</small> ` : ""}${nameHtml(r.quantity)}${r.where ? ` <span class="sub">@ ${esc(r.where)}</span>` : ""}</td><td>${esc(fmtVU(r.value, r.unit))}</td></tr>`).join("");
     a.className = ana.status === "failed" ? "card bad" : "card";
     a.innerHTML =
       `<h3>2. 解析<small>CAE の段 (${esc(ana.base)} ${esc(BASE_JA[ana.base] ?? "")})</small></h3>` +
@@ -1154,8 +1233,10 @@ function renderChain(s, chain) {
     a.className = "card wait";
     a.innerHTML = `<h3>2. 解析<small>CAE の段</small></h3><div>${pred ? "予測を受けて解析を待っている" : "予測のあとに走る"}</div>`;
   }
-  // 3. comparison (+ verdict)
+  // 3. comparison (the prediction against the analysis: 予想通り / 不一致) and 4. verdict (the
+  // criterion's OK / NG), one card: the verdict is its own step under the comparison
   const c = $("card-cmp");
+  const step4 = (body) => `<div class="step4" data-step="verdict"><h3>4. 判定</h3>${body}</div>`;
   if (cmp) {
     const ok = cmp.status === "match";
     const safe = isSafeSide(verdict);
@@ -1163,7 +1244,7 @@ function renderChain(s, chain) {
     let v = "";
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
-      const how = safe ? `<span class="safe-mark" title="一致ではなく、説明された安全側の食い違いから">安全側で判定</span>` : "";
+      const how = safe ? `<span class="safe-mark" title="予想通りではなく、説明された安全側の不一致から">安全側で判定</span>` : "";
       const big = verdictSentence(verdict);
       // the pass or fail in one sentence, then the value (a prediction or a result) beside its criterion
       v =
@@ -1174,13 +1255,15 @@ function renderChain(s, chain) {
         // the criterion's basis is the record's own words (English): folded
         (loadCase?.criterion?.basis ? `<details class="more" data-keep="cmp-basis"><summary>くわしく (基準の根拠)</summary><div class="sub basis">${esc(loadCase.criterion.basis)}</div></details>` : "") +
         `</div>`;
-    } else if (ok && loadCase?.criterion) {
+    } else if (loadCase?.criterion) {
       v = `<div class="sub">基準: ${esc(quantityName(loadCase.criterion.quantity))} ${esc(opLabel(loadCase.criterion.op))} ${esc(fmtQ(loadCase.criterion.limit))} (判定を待っている)</div>`;
+    } else {
+      v = `<div class="sub">この試験には基準が無い (判定しない)</div>`;
     }
     // Long words are cut to a few lines here; the log keeps them whole.
-    const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(cause.safe_side_reason ?? "")}"><b>安全側で見られている:</b> ${esc(cause.safe_side_reason ?? "")}</div>` : "";
+    const safeWhy = cause?.safe_side ? `<div class="safe-why clamp" title="${esc(judgedWords(cause.safe_side_reason ?? ""))}"><b>安全側で見られている:</b> ${esc(judgedWords(cause.safe_side_reason ?? ""))}</div>` : "";
     const cz = cause
-      ? `<div class="cause"><div class="clamp" title="${esc(cause.cause)}">原因: ${esc(cause.cause)}</div><div class="clamp c2" title="${esc(cause.fix)}">直し方: ${esc(cause.fix)}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
+      ? `<div class="cause"><div class="clamp" title="${esc(judgedWords(cause.cause))}">原因: ${esc(judgedWords(cause.cause))}</div><div class="clamp c2" title="${esc(judgedWords(cause.fix))}">直し方: ${esc(judgedWords(cause.fix))}${cause.resolved ? " (解決)" : ""}</div>${safeWhy}</div>`
       : ok
         ? ""
         : `<div class="cause">原因が書かれるまで、この分野は先に進めない (HK3)</div>`;
@@ -1188,18 +1271,19 @@ function renderChain(s, chain) {
     const used = verdict ? (valueFromJa(verdict) === "予測" ? "pred" : "ana") : null;
     const tag = `<small class="used">判定の値</small>`;
     c.innerHTML =
-      `<h3>3. 照合</h3>` +
+      `<h3>3. 比べる<small>予測と解析</small></h3>` +
       `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
       `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
-      `<span class="badge ${ok ? "ok" : "warn"}">${ok ? "一致 ✓" : "食い違い !"}</span>` +
+      `<span class="badge ${ok ? "ok" : "warn"}">${ok ? "予想通り ✓" : "不一致 !"}</span>` +
       cz +
-      v;
+      step4(v);
     keepOpen(c);
   } else {
     c.className = "card wait";
     const tol = loadCase ? `許す幅 ${fmtPct(loadCase.tolerance_rel, 0)} (荷重条件で決まっている)` : "";
-    c.innerHTML = `<h3>3. 照合</h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>`;
+    c.innerHTML = `<h3>3. 比べる<small>予測と解析</small></h3><div>予測と解析がそろうと照らし合わせる。${tol}</div>` +
+      step4(`<div class="sub">比べたあと、基準で OK / NG を決める</div>`);
   }
 }
 
@@ -1393,7 +1477,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
       : "");
   const acts =
     zoomAct +
-    (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "前の版と比べる"}</button>` : "");
+    (ct.canCompare ? `<button data-act="compare" class="${ct.compare ? "on" : ""}">${ct.compare ? "比べるのをやめる" : "1 つ前の設計と比べる"}</button>` : "");
   const mesh = ct.mesh ? `・${esc(ct.mesh.rec.mesh_id)} (要素 ${ct.mesh.rec.elements.length})` : "";
   const title = relative
     ? `${esc(ct.field.label ?? FIELD_JA[ct.kind])}${ct.frequency ? ` ${fmt(ct.frequency, 4)} Hz` : ""}<br><small>動きの大きさ (相対)・揺れは見せるための速さ</small>`
@@ -1423,7 +1507,7 @@ function renderLegend(ct, s = null, shown = null, motion = null) {
     `<div class="bar">${bandRows(ct, relative)}</div>` +
     over +
     cmp +
-    `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの版の最大値" : "・上端 = 最大値"}</div>`;
+    `<div class="src">色の元: ${esc(ct.analysisId)}・${esc(ct.toolTitle ?? "")}${mesh}${ct.limitKnown ? `・上端 = 許容 (${esc(ct.crit.basis)})` : relative ? "" : ct.compare ? "・上端 = 2 つの設計の最大値" : "・上端 = 最大値"}</div>`;
 }
 
 // ---- before / after (the previous version's same field beside the current one) ----
@@ -1594,20 +1678,38 @@ function animSeekFromPointer(ev) {
 }
 
 const board = new TileBoard($("grid-head"), $("tiles"));
+// ④'s 3D pictures (tile3d.js): one renderer for the tiles, always in the real look (black rubber
+// tyres, opaque parts) whichever look the workbench has
+const tileViews = new TileViews("real", () => (drawn.rev = -2));
+const TILE_PIC_WAIT_MS = 150;
+let tilePicTimer = null;
 
 // A6: the tiles, then a banner when the run stopped at its round limit with reds left.
 function renderGrid(s) {
   const { reds, atLimit } = board.render(s, agentPets ? { has: (id) => agentPets.has(id), order: agentOrder(s) } : null);
+  // the pictures kept are copied at once; new ones are drawn once the grid has settled and the
+  // page has loaded, one a task (a record loading renders the grid at each event, and a picture
+  // costs frames of the software renderer)
+  clearTimeout(tilePicTimer);
+  if (!board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 0)) {
+    const step = () => {
+      const loaded = document.readyState === "complete";
+      tilePicTimer = loaded && board.drawPictures(tileViews, (window.devicePixelRatio || 1) * stageScale, 1) ? null : setTimeout(step, loaded ? 0 : TILE_PIC_WAIT_MS);
+    };
+    tilePicTimer = setTimeout(step, TILE_PIC_WAIT_MS);
+  }
   agentPets?.mount($("view-grid"), "grid");
-  // a tile whose domain has analysed something by now can replay it in the tab (pressed: openDomain)
+  // a tile (or a chip of a domain not picked) whose domain has analysed something by now can
+  // replay it in the tab (pressed: openDomain)
   const spans = spansNow();
-  for (const el of $("tiles").querySelectorAll(".tile[data-domain]")) {
+  for (const el of $("tiles").querySelectorAll(".tile[data-domain], .offchip[data-domain]")) {
     const sp = spans[el.dataset.domain];
     const ok = !!sp && sp.t0 <= player.playhead + 1e-6;
     el.classList.toggle("can-replay", ok);
     if (ok) {
-      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 照合) をここで再生します`;
-      el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
+      el.title = `押すと、${DOMAIN_JA[el.dataset.domain] ?? el.dataset.domain}の解析 (予測 → 解析 → 比べる → 判定) をここで再生します`;
+      if (el.classList.contains("offchip")) el.insertAdjacentHTML("beforeend", ` <span class="replay-tag" data-role="replay">▶</span>`);
+      else el.querySelector(".th h3")?.insertAdjacentHTML("afterend", `<span class="replay-tag" data-role="replay">▶ 解析を再生</span>`);
     }
   }
   const banner = $("grid-banner");
@@ -1618,7 +1720,7 @@ function renderGrid(s) {
     const code = s.stopCode ?? (/^cost limit\b/.test(s.stopReason ?? "") ? "cost_limit" : /^turn limit\b/.test(s.stopReason ?? "") ? "turn_limit" : s.stopReason);
     const words = code === "round_limit" ? `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回) に達した` : STOP_CODE_JA[code];
     const why = words ?? (s.stopReason ? `止まった理由: ${esc(s.stopReason)}` : `繰り返しの上限 (${s.project?.round_limit ?? "—"} 回)`);
-    banner.innerHTML = `<b>${why}。赤が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
+    banner.innerHTML = `<b>${why}。NG が ${reds.length} つ残っている: ${reds.map((d) => esc(DOMAIN_JA[d])).join("・")}</b><span>新しく走らせるときは、右上の「その場で走らせる」から</span>`;
   }
   // the newest report's next changes (none written yet, or no next: no block)
   const nx = $("report-next");
@@ -2029,7 +2131,7 @@ $("tests").addEventListener("click", (ev) => {
 });
 // ④: a tile with analyses in the record replays its domain in the tab; 格子に戻る closes it
 $("tiles").addEventListener("click", (ev) => {
-  const tile = ev.target.closest(".tile.can-replay[data-domain]");
+  const tile = ev.target.closest(".tile.can-replay[data-domain], .offchip.can-replay[data-domain]");
   if (!tile || ev.target.closest("a, details, summary")) return;
   openDomain(tile.dataset.domain);
 });
@@ -2201,6 +2303,7 @@ function loadFailedWhy(e) {
   if (e?.status === 404) return "この記録は見つかりませんでした。消されたか、名前が違います。";
   if (e?.status) return `サーバーが記録を返せませんでした (${e.status})。`;
   if (e instanceof SyntaxError) return "サーバーの返事が読めませんでした。";
+  if (STATIC) return "記録のファイルを読めませんでした。新しいブラウザで開き直してください。";
   return "サーバーにつながりませんでした。HIRAKU が動いているか確かめてください。";
 }
 
@@ -2230,7 +2333,8 @@ async function openRun(runId) {
   }
   feed.loaded = true;
   loadingNote(null);
-  const follow = !player.finished && params.get("live") !== "0" && !params.has("t");
+  // (a static export holds finished records only: nothing to follow)
+  const follow = !STATIC && !player.finished && params.get("live") !== "0" && !params.has("t");
   player.live = follow;
   ui.followed = follow;
   ui.childGone = false;
@@ -2256,7 +2360,7 @@ async function openRun(runId) {
 const prose = (s) => esc(s).replace(/\(([^()]{1,40})\)/g, '<span class="nw">($1)</span>');
 
 async function fetchRuns() {
-  return (await fetch("/api/runs", { cache: "no-store" })).json();
+  return (await fetch(getUrl("/api/runs"), { cache: "no-store" })).json();
 }
 
 // The list for people on a narrow window (a phone): out of the 1920 x 1080 stage, which would scale it
@@ -2349,9 +2453,14 @@ async function renderLaunch(message = "") {
   if (!box) return;
   let info;
   try {
-    info = await (await fetch("/api/launch", { cache: "no-store" })).json();
+    info = await (await fetch(getUrl("/api/launch"), { cache: "no-store" })).json();
   } catch (e) {
     info = { available: false };
+  }
+  if (STATIC) {
+    // replays only: the recommendation (people's list), then one line to the README for the rest
+    box.innerHTML = (DEV ? "" : pickHtml(info, false)) + LOCAL_RUN_HTML + (await staticExtrasHtml());
+    return;
   }
   if (!DEV) {
     box.innerHTML = plainLaunch(info, message);
@@ -2462,6 +2571,20 @@ function demoSection(info, busy) {
 // row's くわしく, or under ?dev=1; without the key, one short word beside the 実行する that cannot be pressed.
 const README_RUN = "https://github.com/Kuglof16/hiraku#%E5%8B%95%E3%81%8B%E3%81%97%E6%96%B9"; // README の「動かし方」 (A1's くわしく)
 const NEEDS_KEY_JA = "Claude のキーが要ります";
+// A static export (source.js STATIC) only replays: in place of the buttons that start, stop or send
+// something, one line to the README's section on running HIRAKU (heading 「動かし方」, README_RUN).
+const LOCAL_RUN_HTML =
+  `<p class="local-run">手元で動かすには (再現する・実行する・新しく依頼する): <a class="readme" href="${README_RUN}" target="_blank" rel="noopener">README の「動かし方」</a></p>`;
+// The export's other pages (data/static.json extras: [{href, title}], e.g. N10's answers), one line each.
+async function staticExtrasHtml() {
+  try {
+    const got = await (await fetch("data/static.json")).json();
+    const rows = (got.extras ?? []).map((x) => `<p class="extra"><a href="${esc(x.href)}">${esc(x.title)}</a></p>`);
+    return rows.join("");
+  } catch {
+    return "";
+  }
+}
 
 // おすすめ: the server's default saved run (else the newest saved one) as a replay; with no saved run,
 // the scripted run of the demo row PICK_DEMO_ID. Nothing when neither is there.
@@ -2471,13 +2594,13 @@ function pickHtml(info, busy) {
   const head = `<span class="tag">おすすめ</span>`;
   if (run)
     return (
-      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、不合格の所を直すまでを、保存した記録で見ます` +
+      `<div class="pick" data-pick="run" data-run="${esc(run.run_id)}">${head}<div class="pline"><b>まずはこれ</b> — HIRAKU が設計を試験して、NG の所を直すまでを、保存した記録で見ます` +
       `${run.want ? `<div class="sub">依頼: ${esc(run.want)}</div>` : ""}</div><a class="go" href="?run=${encodeURIComponent(run.run_id)}">見る</a></div>`
     );
   const d = (info.demo_runs ?? []).find((r) => r.id === PICK_DEMO_ID && r.file && !r.error && (r.modes ?? []).includes("scripted"));
   if (!d) return "";
   return (
-    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、不合格の所を直すまでを、決まった手順で再現します <span class="nw">(無料・Claude なし)</span>` +
+    `<div class="pick" data-pick="demo" data-demo="${esc(d.id)}">${head}<div class="pline"><b>まずはこれ</b> — 小さなオフロード車を試験して、NG の所を直すまでを、決まった手順で再現します <span class="nw">(無料・Claude なし)</span>` +
     `${d.want ? `<div class="sub">依頼: ${prose(d.want)}</div>` : ""}</div><button class="go" data-launch="scripted" data-req="${esc(d.file)}" ${busy ? "disabled" : ""}>再現する</button></div>`
   );
 }
