@@ -811,6 +811,7 @@ export const DRIVER_JA = { scripted: "決まった手順", agent_sdk: "Claude (A
 
 // How a run is driven, in A1's words for its start buttons: 決まった手順で再現 (scripted) or Claude で実行.
 export const DRIVEN_JA = { scripted: "決まった手順で再現", agent_sdk: "Claude で実行", claude_code_plugin: "Claude で実行" };
+export const SCRIPTED_CUT_JA = `${DRIVEN_JA.scripted} (Claude なし)`; // the video cuts' corner tag on a scripted run (cut.js)
 
 // a run that ended at the domain picks (its stop_reason says so; stop_after "picks" in newer records)
 const PICKS_ONLY = /分野を選ぶところまで|分野選びまで/;
