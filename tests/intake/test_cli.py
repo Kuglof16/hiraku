@@ -107,7 +107,7 @@ class AgentTest(unittest.TestCase):
         run_ = agent.PickRun()
         server = agent.build_server(run_)
         options = agent.build_options(server, model="m", max_budget_usd=0.1, max_turns=3)
-        self.assertEqual(options.allowed_tools, ["mcp__hiraku__pick_domains"])
+        self.assertEqual(options.allowed_tools, ["mcp__hiraku__pick_domains", "mcp__hiraku__add_tests"])
         self.assertEqual(options.tools, [])
         self.assertEqual(options.setting_sources, [])
         self.assertTrue(options.strict_mcp_config)

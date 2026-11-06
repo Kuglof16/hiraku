@@ -247,6 +247,52 @@ class HandlersTest(unittest.TestCase):
         self.assertEqual([p.name for p in (req_path, events_path)], ["requirements.yaml", "intake.json"])
 
 
+class AddedTestsTest(unittest.TestCase):
+    """What Claude adds to the code's choice (add_tests) reaches the draft, the picks and the requirements file's tests."""
+
+    @staticmethod
+    def picker(added, reason=""):
+        def pick(want):
+            return {"flags": ROBOT["flags"], "speed_class": "walk", "flag_reasons": {}, "reasons": {}, "shown_names": {},
+                    "added_tests": added, "no_addition_reason": reason, "cost_usd": 0.1}
+        return pick
+
+    def left_out(self):
+        first = request.begin("飲み物を運ぶロボ", product="free-robot", flags=ROBOT["flags"], speed_class="walk")
+        have = {t for p in first["domains"]["picks"] for t in p["test_ids"]} | set(first["domains"]["assembly_test_ids"])
+        from hiraku.catalog import load_catalog
+
+        return next(t["id"] for t in load_catalog().tests if t["id"] not in have)
+
+    def test_an_added_test_is_in_the_picks_and_the_draft_keeps_it(self):
+        tid = self.left_out()
+        added = [{"test_id": tid, "reason": "運ぶものが倒れないかを見る"}]
+        first = request.begin("飲み物を運ぶロボ", picker=self.picker(added))
+        self.assertEqual(first["draft"]["added_tests"], added)
+        self.assertEqual(first["domains"]["added_tests"], added)
+        self.assertIn(tid, [t for p in first["domains"]["picks"] for t in p["test_ids"]] + first["domains"]["assembly_test_ids"])
+        again = request.revise(first["draft"], exclude=[])
+        self.assertEqual(again["domains"]["added_tests"], added)  # a change of the draft keeps what Claude added
+
+    def test_the_file_of_a_free_request_lists_the_whole_choice_with_the_added_test(self):
+        tid = self.left_out()
+        first = request.begin("飲み物を運ぶロボ", picker=self.picker([{"test_id": tid, "reason": "要る"}]))
+        done = request.finish(first["draft"], None, None)
+        self.assertIn(tid, done["requirements_file"]["tests"])
+        plain = request.begin("飲み物を運ぶロボ", picker=self.picker([], "足すものは無い"))
+        self.assertEqual(plain["domains"]["no_addition_reason"], "足すものは無い")
+        self.assertNotIn("tests", request.finish(plain["draft"], None, None)["requirements_file"])  # nothing added: the catalog chooses
+
+    def test_a_known_products_file_keeps_its_tests_and_gets_the_added_one(self):
+        own = load_product("offroad-4w")["tests"]
+        tid = next(t for t in ("C1", "F1", "T1", "S2", "R4") if t not in own)
+        first = request.begin("x", product="offroad-4w")
+        draft = dict(first["draft"], added_tests=[{"test_id": tid, "reason": "要る"}])
+        tests = request.finish(draft, None, None)["requirements_file"]["tests"]
+        self.assertEqual(tests[:len(own)], own)
+        self.assertIn(tid, tests)
+
+
 class ClaudePickerTest(unittest.TestCase):
     def test_it_takes_the_pick_and_claudes_own_arguments(self):
         record = {"flags": {"liquid": True}, "speed_class": "walk", "picks": []}
@@ -256,7 +302,7 @@ class ClaudePickerTest(unittest.TestCase):
             got = request.claude_picker("x")
         pick.assert_called_once_with("x")
         self.assertEqual(got, {"flags": {"liquid": True}, "speed_class": "walk", "flag_reasons": {"liquid": "f"},
-                               "reasons": {"strength": "r"}, "shown_names": {"strength": "強度"}, "cost_usd": 0.2})
+                               "reasons": {"strength": "r"}, "shown_names": {"strength": "強度"}, "added_tests": [], "no_addition_reason": "", "cost_usd": 0.2})
 
     def test_no_pick_is_an_error(self):
         with mock.patch("hiraku.intake.agent.pick_with_claude", return_value=PickRun(error="budget")):

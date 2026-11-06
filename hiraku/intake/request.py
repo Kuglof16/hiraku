@@ -36,7 +36,7 @@ Picker = Callable[[str], Record]
 CHANGES = ("flags", "speed_class", "exclude", "limits")
 LIMIT_KEYS = ("round_limit", "cost_limit_usd")
 DRAFT_KEYS = ("want", "product", "flags", "speed_class", "exclude", "requirements", "reasons", "shown_names",
-              "flag_reasons", "flags_from", "mode", "limits")
+              "flag_reasons", "flags_from", "mode", "limits", "added_tests", "no_addition_reason")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
@@ -55,6 +55,7 @@ def claude_picker(want: str, **options: Any) -> Record:
         "flags": run.record["flags"], "speed_class": run.record.get("speed_class"),
         "flag_reasons": args.get("flag_reasons") or run.record.get("flag_reasons") or {},
         "reasons": args.get("reasons") or {}, "shown_names": args.get("shown_names") or {},
+        "added_tests": list(run.added_tests), "no_addition_reason": run.no_addition_reason,
         "cost_usd": run.cost_usd,
     }
 
@@ -85,7 +86,8 @@ def begin(
     slug = label if label in product_files() else _product_of_sentence(want)
     draft: Record = {"want": want, "product": label or slug, "flags": {}, "speed_class": speed_class,
                      "exclude": list(exclude or []), "requirements": list(requirements or []), "reasons": {},
-                     "shown_names": {}, "flag_reasons": {}, "flags_from": "", "mode": "code", "limits": _limits(limits)}
+                     "shown_names": {}, "flag_reasons": {}, "flags_from": "", "mode": "code", "limits": _limits(limits),
+                     "added_tests": [], "no_addition_reason": ""}
     warnings: list[str] = []
     cost: float | None = None
     if flags is not None:
@@ -102,7 +104,8 @@ def begin(
         else:
             cost = got.get("cost_usd")
             draft.update(flags=got["flags"], flags_from="claude", mode="claude", reasons=dict(got.get("reasons") or {}),
-                         shown_names=dict(got.get("shown_names") or {}), flag_reasons=dict(got.get("flag_reasons") or {}))
+                         shown_names=dict(got.get("shown_names") or {}), flag_reasons=dict(got.get("flag_reasons") or {}),
+                         added_tests=list(got.get("added_tests") or []), no_addition_reason=got.get("no_addition_reason") or "")
             draft["speed_class"] = speed_class or got.get("speed_class")
     if not draft["flags_from"]:
         guessed, why, guessed_speed = guess_flags(want)
@@ -217,7 +220,7 @@ def _check_draft(draft: Any) -> Record:
         raise IntakeError("draft が違います。最初の答えの draft をそのまま送ってください")
     d = {k: copy.deepcopy(draft[k]) for k in DRAFT_KEYS if k in draft}
     for k, empty in (("exclude", []), ("requirements", []), ("reasons", {}), ("shown_names", {}), ("flag_reasons", {}),
-                     ("limits", {})):
+                     ("limits", {}), ("added_tests", []), ("no_addition_reason", "")):
         d.setdefault(k, empty)
     d.setdefault("product", None)
     d.setdefault("speed_class", None)
@@ -233,7 +236,8 @@ def _known(d: Record) -> str | None:
 def _intake(d: Record, answers: Any = None, note: str | None = None, *, docs: bool = False):
     return intake(d["want"], d["flags"], d["speed_class"], product=_known(d), slug=d["product"], answers=answers, note=note,
                   requirements=d["requirements"], reasons=d["reasons"] or None, shown_names=d["shown_names"] or None,
-                  flag_reasons=d["flag_reasons"] or None, exclude=d["exclude"], docs=docs)
+                  flag_reasons=d["flag_reasons"] or None, exclude=d["exclude"], docs=docs,
+                  added_tests=d.get("added_tests") or None, no_addition_reason=d.get("no_addition_reason") or None)
 
 
 def _look(d: Record, *, warnings: list[str] | None = None, cost_usd: float | None = None) -> Record:
@@ -260,6 +264,8 @@ def _file(d: Record, res: Any) -> Record:
             if k in own:
                 rf[k] = own[k]
         tests = own.get("tests")
+        if tests and d.get("added_tests"):  # what Claude added to the choice joins the file's tests (adding only)
+            tests = [*tests, *[a["test_id"] for a in d["added_tests"] if a["test_id"] not in tests]]
         if "beyond" in own:
             rf["beyond"] = list(own["beyond"])
     rf.update(d["limits"])
@@ -282,6 +288,8 @@ def _file(d: Record, res: Any) -> Record:
             tests = [t for t in tests if stays(t)]
         else:
             tests = kept
+    if not tests and d.get("added_tests"):  # the catalog would choose by the flags and miss them: the file lists the whole choice
+        tests = kept
     if tests:
         rf["tests"] = list(tests)
     if "beyond" in rf and "tests" in rf:
