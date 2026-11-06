@@ -550,21 +550,26 @@ class DemoDesign(unittest.TestCase):
         res = {r["quantity"]: r for r in rec["results"]}
         for name in ("peak_decel", "battery_mount_force", "broken_members", "max_plastic_rotation"):
             self.assertIn(name, res)
-        # at 40 km/h, with the front wheels on their tyres (the design's tyre_stiffness 150 N/mm), the front rails
-        # break and a rail between the front axle and the seats; the other one (rail_R_AS1 or rail_L_AS1) ends at the
-        # break angle's edge (59.987 deg on one computer, past 60 on another, where a piece split off): the count, the
-        # split and the margin's size are not fixed here, the record must say the edge
-        self.assertIn("rail_L_FA", res["broken_members"]["where"])
-        self.assertIn(res["broken_members"]["value"], (3.0, 4.0))
+        # at 40 km/h, with the front wheels on their tyres, the front rails break; on 1afeaedd's demo v1 (tyre 150
+        # N/mm) rail_R_AS1 ended at the break angle's edge (59.987 deg on one computer, past 60 on another, where a
+        # piece split off). Which member sits at the edge moves with the design (its tyre, brackets, seats), so the
+        # count, the split, the margin's size and the members are not fixed here: the record must give the band's
+        # two runs and say what changes between them
+        self.assertGreaterEqual(res["broken_members"]["value"], 1.0)
         edge = next(a for a in rec["assumptions"] if a.startswith(tool_module.EDGE_NOTE))
-        self.assertIn("rail_R_AS1", edge)  # broken only at 60 deg, or a hair under it
+        lim = float(tool_module.HINGE_BREAK_DEG)
+        self.assertIn(f"; {lim + 1.0:g} deg: ", edge)  # the run made again 1 deg higher
+        self.assertTrue("Members that break in one run and not in another" in edge
+                        or "The same members break in every run" in edge, edge)
+        self.assertTrue("C1's verdict changes inside the band" in edge or "C1's verdicts are the same" in edge, edge)
         for name in ("mean_decel", "max_crush", "crush_margin", "occupant_space_margin", "occupant_space_left"):
             self.assertIn(name, res)
         # C1-40kmh is NG whichever way the edge goes: the tower posts come into the foot boxes
         self.assertLess(res["occupant_space_margin"]["value"], 0.0)
         self.assertNotIn("occupant_space_margin >= 0", edge)  # the band's note names no flip of C1-40kmh's verdict
         self.assertTrue(any(a.startswith("run: the vehicle stopped") for a in rec["assumptions"]))
-        self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and "150 N/mm, the design's "
+        k_t = d["variables"]["tyre_stiffness"]["value"]  # the design's own (150 N/mm on 1afeaedd, 60 with tyre60)
+        self.assertTrue(any(a.startswith("tyre radial stiffness for the wall contact") and f"{k_t:g} N/mm, the design's "
                             "tyre_stiffness" in a for a in rec["assumptions"]))
         contact_note = next(a for a in rec["assumptions"] if a.startswith("contact between the frame's elements"))
         self.assertIn("pair-steps in contact", contact_note)
