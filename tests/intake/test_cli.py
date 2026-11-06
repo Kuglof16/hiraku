@@ -83,7 +83,7 @@ class RulesCliTest(unittest.TestCase):
     def test_the_demo_design(self):
         code, out, _ = run("rules", "--design", "data/designs/offroad-4w-v1.json", "--product", "offroad-4w")
         self.assertEqual(code, 0)
-        self.assertIn("58 規則", out)  # the demo design's numbers belong to the analysis department: no hit is asserted
+        self.assertIn("60 規則", out)  # the demo design's numbers belong to the analysis department: no hit is asserted
 
 
 class WebDataTest(unittest.TestCase):

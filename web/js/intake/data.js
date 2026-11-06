@@ -579,6 +579,21 @@ export const FACTS = {
     "unit": "1",
     "inDesigns": true
   },
+  "butt_end_count": {
+    "label": "角形鋼管の端のうち、別の部材の側面や角に突き当たる T・L の継ぎ手の数 (部材ごと。続きの部材が反対側にある端は数えない)",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "butt_end_ungusseted": {
+    "label": "その T・L の継ぎ手のうち、節点にガセット (kind が gusset の部品) が付いていないものの数",
+    "unit": "1",
+    "inDesigns": true
+  },
+  "butt_end_partial_weld": {
+    "label": "その T・L の継ぎ手のうち、溶接が全周でないものの数 (節点の weld_extent が all_round でない。節点に weld_extent が無ければ、この名前は出さない)",
+    "unit": "1",
+    "inDesigns": true
+  },
   "member_count": {
     "label": "部材の数",
     "unit": "1",

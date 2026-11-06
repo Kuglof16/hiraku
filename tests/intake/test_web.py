@@ -94,9 +94,9 @@ console.log(JSON.stringify(out));
         self.assertTrue(all(v["cards"] == 7 for v in got.values()))
         self.assertEqual(got["serving-robot"]["renamed"], ["液体のこぼれ", "人との接触"])
         self.assertEqual(got["care-bed"]["renamed"], ["安定 (転倒)", "動力 (アクチュエータ)", "騒音", "熱 (デューティ)"])
-        self.assertEqual(got["offroad-4w"]["rules"], 60)  # 58 built in + 2 from the sample notes
-        self.assertEqual(got["care-bed"]["rules"], 58)
-        self.assertEqual(got["offroad-4w"]["checks"], 60)
+        self.assertEqual(got["offroad-4w"]["rules"], 62)  # 60 built in + 2 from the sample notes
+        self.assertEqual(got["care-bed"]["rules"], 60)
+        self.assertEqual(got["offroad-4w"]["checks"], 62)
         self.assertEqual(got["care-bed"]["checks"], 0)  # no design yet: nothing applied
         self.assertEqual(got["care-bed"]["top"], ["板金", "締結", "溶接", "公差", "人", "電池", "組み立て", "サス", "製造", "系"])
         self.assertEqual(got["offroad-4w"]["open"], 0)  # the sample answers cover every question
@@ -697,6 +697,27 @@ class StaticTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class AdviceRuleTest(unittest.TestCase):
+    """A5: an advice rule's hits are notes (docs/contract.md 規則の強さ): not hits, and what it cannot judge is not shown."""
+
+    def test_the_hits_of_an_advice_rule_are_advice_and_its_gaps_are_hidden(self):
+        got = node(f"""{FAKE_DOM}
+import {{ ruleState, checkedRows }} from "{url('model.js')}";
+const rule = {{ rule_id: 'WD-05', check: 'butt_end_ungusseted <= 0' }};
+const mk = (level) => ({{ checks: new Map([['WD-05', {{ rule_id: 'WD-05', level, design_version: 1, targets: ['cross', 'rail'],
+  hits: [{{ part_id: 'cross', message: 'ガセットが無い' }}], not_evaluable: [{{ part_id: 'rail', missing: ['x'] }}], pass: false,
+  checked: [{{ part_id: 'cross', values: {{ butt_end_ungusseted: 1 }} }}] }}]]) }});
+const pick = (s) => [s.hits.length, s.advice.length, s.notEvaluable.length, s.isAdvice, s.pass];
+console.log(JSON.stringify({{ advice: pick(ruleState(mk('advice'), rule)), plain: pick(ruleState(mk(undefined), rule)),
+  rows: checkedRows(mk('advice'), rule).map((r) => [r.hit, !!r.advice]), plainRows: checkedRows(mk(undefined), rule).map((r) => [r.hit, !!r.advice]) }}));
+""")
+        self.assertEqual(got["advice"], [0, 1, 0, True, True])
+        self.assertEqual(got["plain"], [1, 0, 1, False, False])
+        self.assertEqual(got["rows"], [[False, True]])
+        self.assertEqual(got["plainRows"], [[True, False]])
 
 
 @unittest.skipUnless(NODE, "node is not installed")
