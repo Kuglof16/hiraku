@@ -876,7 +876,7 @@ class CheckRun(unittest.TestCase):
         return renumber(ev)
 
     def test_d_a_lighter_pass_does_not_clear_a_heavier_tool_s_exceedance(self):
-        # docs/contract.md 分野が緑になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
+        # docs/contract.md 分野が OK になる条件 (d) (460043d; N13 run 094333's R1-step100): v1's shell beyond the
         # limit, v2 green on frame_static alone
         said = lambda ev: [m for m in self.messages(ev, "judgement.state") if "contract (d)" in m]
         self.assertTrue(said(self._heavier_beyond_then_lighter_pass()))

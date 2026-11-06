@@ -1413,7 +1413,7 @@ class RunChecker:
 
     def _held(self, i: int, domain: str, v: int) -> dict[str, list[str]]:
         """Load cases of the domain (with a criterion, without a failing verdict) that may not count as
-        passed at event i (docs/contract.md, 分野が緑になる条件): the latest comparison of the judged
+        passed at event i (docs/contract.md, 分野が OK になる条件): the latest comparison of the judged
         quantity is a mismatch whose cause is not written, or neither resolved nor safe-side (earlier
         mismatches a later comparison of the same load case and quantity replaced do not hold), or a
         tool's newest ok analysis has its judged result beyond the criterion, which also voids a
