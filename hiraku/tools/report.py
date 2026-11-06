@@ -332,7 +332,7 @@ def build_report(ctx: RunContext, args: Record, agent: str, computed: list[Recor
     bad = sorted({b for t in texts for b in unknown_numbers(t, allowed)})
     if bad:
         problems.append("報告の文に、記録に無い数があります: " + "、".join(bad)
-                        + "。数は記録 (予測・解析・予測との判定・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
+                        + "。数は記録 (予測・解析・比べた結果・合否・要件・設計) か感度の値をそのまま引くか、数を書かずに記録の ID で指してください")
     claimed = unanswered_choices(ctx, texts)
     if claimed:
         problems.append(f"報告の文が、人に聞いていない規則 {', '.join(claimed)} について「人が選んだ」と書いています。"

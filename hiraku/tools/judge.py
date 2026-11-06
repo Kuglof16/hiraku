@@ -330,7 +330,7 @@ def blockers(ctx: RunContext, load_case: Record, version: int) -> list[str]:
             why = f"原因 {cause['cause_id']} に合う合否がまだ無い"
         else:
             why = f"原因 {cause['cause_id']} がまだ解けていない"
-        out.append(f"予測との判定 {c['comparison_id']} の食い違い ({c['diff_rel'] * 100:+.0f} %) の{why}")
+        out.append(f"予測と比べた結果 {c['comparison_id']} の不一致 ({c['diff_rel'] * 100:+.0f} %) の{why}")
     crit = load_case.get("criterion")
     for a, r in beyond_results(ctx, load_case, version):
         out.append(f"解析 {a['analysis_id']} ({a['tool']}) の {r['quantity']} が {_amount(r['value'], r['unit'])} で、"

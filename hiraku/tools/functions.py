@@ -69,7 +69,7 @@ def _compact_analysis(a: Record) -> Record:
     if len(results) > RESULTS_SHOWN_MAX:
         out["results"] = _extreme_results(results)
         out["results_note"] = (f"結果 {len(results)} 件のうち、量ごとに大きい方と小さい方の {RESULTS_EACH_END} 件ずつ "
-                               f"({len(out['results'])} 件)。予測との判定 (compare) は全部の結果を読む")
+                               f"({len(out['results'])} 件)。予測と比べる compare は全部の結果を読む")
     return out
 
 
@@ -222,7 +222,7 @@ SECTION_HINTS = {
     "requirements": "要件の全部 (requirement_keys で絞れる)",
     "load_cases": "荷重条件の中身: params・criterion・tolerance_rel・feeds・担当の役 (domain か load_case_id で絞れる)",
     "judgements": "分野ごとの判定の札",
-    "records": "予測・解析・予測との判定・原因・合否の記録 (record_kinds と load_case_id で絞れる)",
+    "records": "予測・解析・比べた結果・原因・合否の記録 (record_kinds と load_case_id で絞れる)",
     "design_summary": "手計算の入力になる設計の値",
     "design": "設計の要約 (design_part・offset・limit で中身を少しずつ)",
     "design_variables": "設計役が変えられる変数 (範囲と今の値)",
@@ -430,7 +430,7 @@ def _interface_groups(interfaces: list[Record]) -> list[Record]:
 
 PAIRS_HOW = ("predicts: ツールのどの結果 (quantity) を、どの式 (formula_id) のどの出力 (output) で予測するかの対。"
              "判定の量を予測するときは、その量と対になった式を選び、note を読む (ばねのあるツールの横に並ぶ剛体の式は、"
-             "初めの見積もりで、解析とは食い違う)")
+             "初めの見積もりで、解析と比べると不一致になる)")
 
 
 def list_formulas(ctx: RunContext, args: dict[str, Any] | None = None, agent: str | None = None) -> list[Record] | Record:
@@ -727,7 +727,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         if a is None:
             raise ToolError(
                 f"{lc['load_case_id']} は {up['load_case_id']} の解析の結果を入力に使います。"
-                f"先に {up['load_case_id']} を予測 → analyze → compare で、予測との判定を OK にしてください"
+                f"先に {up['load_case_id']} を予測 → analyze → compare で比べ、予想通りにしてください"
             )
         upstream[up["load_case_id"]] = a
 
@@ -920,7 +920,7 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         raise ToolError(f"解析 {ana['analysis_id']} は失敗しています: {ana.get('error', '')}。予測と比べられません")
     if pred["prediction_id"] not in ana["prediction_ids"] and not revised_after_cause(ctx, pred, ana):
         same = pred["design_version"] == ana["design_version"] and pred["load_case_id"] == ana["load_case_id"]
-        how = ("この解析との判定の食い違いに record_cause を書いたあとに記録した予測なら、この解析と比べられます。"
+        how = ("この解析と比べて不一致だったものに record_cause を書いたあとに記録した予測なら、この解析と比べられます。"
                if same else f"この予測は {pred['load_case_id']} (v{pred['design_version']}) のものです。")
         raise ToolError(
             f"解析 {ana['analysis_id']} は予測 {', '.join(ana['prediction_ids']) or 'なし'} に対して走らせたもので、"
@@ -975,8 +975,8 @@ def compare(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
     if where is not None:
         out["where"] = where
         if not for_verdict and crit and res["quantity"] == judged:
-            out["note"] = (f"{where} の値は、全部の場所のうち NG に近い方の値ではないので、この予測との判定からは合否を作りません。"
-                           f"合否は where を外した予測との判定 (全部の場所の不利な方) で作ります")
+            out["note"] = (f"{where} の値は、全部の場所のうち NG に近い方の値ではないので、この比べた結果からは合否を作りません。"
+                           f"合否は where を外して比べた結果 (全部の場所の不利な方) で作ります")
     # contract 9017d93: with the criterion's stand_in_quantity, values both below STAND_IN_BELOW x the limit
     # are too small to compare; the verdict still comes from the analysis, and the tile's (b) from the stand-in
     tiny = bool(crit and crit.get("stand_in_quantity")) and \
@@ -1004,7 +1004,7 @@ def _check_on_criterion(ctx: RunContext, cmp: Record, lc: Record | None, tool: s
     if not crit or not on_criterion or crit["limit"]["unit"] != cmp["predicted"]["unit"]:
         what = f"{crit['quantity']} ({crit['limit']['unit']})" if crit else "なし"
         raise ToolError(
-            f"{flag} は合否の基準のある量にだけ付けられます。予測との判定 {cmp['comparison_id']} は {cmp['quantity']} "
+            f"{flag} は合否の基準のある量にだけ付けられます。比べた結果 {cmp['comparison_id']} は {cmp['quantity']} "
             f"({cmp['predicted']['unit']}) で、荷重条件の基準は {what} です。{flag} を外して原因と直し方だけ書いてください"
         )
     return crit
@@ -1050,10 +1050,10 @@ def _cause_of_hot_spot(ctx: RunContext, args: dict[str, Any], agent: str | None)
     v, ver = hit
     if ver.get("basis") != HOT_SPOT:
         raise ToolError(f"合否 {ver['verdict_id']} は basis {ver.get('basis') or 'match'} です。verdict_id で指せるのは、"
-                        "手計算が予測していない場所の NG (basis hot_spot) だけです。食い違いの原因は comparison_id で書いてください")
+                        "手計算が予測していない場所の NG (basis hot_spot) だけです。不一致の原因は comparison_id で書いてください")
     flags = [k for k in ("safe_side", "ends_case", "tool_decides") if args.get(k)]
     if flags:
-        raise ToolError(f"{'・'.join(flags)} は、予測との判定のある食い違いにだけ付けます。手計算が予測していない場所の NG は、"
+        raise ToolError(f"{'・'.join(flags)} は、予測と比べて不一致だったものにだけ付けます。手計算が予測していない場所の NG は、"
                         "直した版でその場所が許しの内になるまで NG のままです。印を外して、原因と直し方だけを書いてください")
     if args.get("where") and args["where"] != ver["where"]:
         raise ToolError(f"合否 {ver['verdict_id']} の場所は {ver['where']} です (where {args['where']!r} と違います)")
@@ -1083,21 +1083,21 @@ def record_cause(ctx: RunContext, args: dict[str, Any], agent: str | None = None
     """
     _check_input("record_cause", args)
     if bool(args.get("comparison_id")) == bool(args.get("verdict_id")):
-        raise ToolError("comparison_id (食い違った予測との判定) か verdict_id (手計算が予測していない場所の NG、basis hot_spot) の、"
+        raise ToolError("comparison_id (予測と比べて不一致だった結果) か verdict_id (手計算が予測していない場所の NG、basis hot_spot) の、"
                         "どちらか一方を付けてください")
     if args.get("verdict_id"):
         return _cause_of_hot_spot(ctx, args, agent)
     hit = ctx.store.find("comparison", args["comparison_id"])
     if hit is None:
-        raise ToolError(f"予測との判定 {args['comparison_id']!r} はありません")
+        raise ToolError(f"比べた結果 {args['comparison_id']!r} はありません")
     v, cmp = hit
     if cmp["status"] != "mismatch":
-        raise ToolError(f"予測との判定 {cmp['comparison_id']} は OK なので、原因を書く必要はありません")
+        raise ToolError(f"比べた結果 {cmp['comparison_id']} は予想通りなので、原因を書く必要はありません")
     existing = ctx.causes_by_comparison().get(cmp["comparison_id"])
     if existing:
-        raise ToolError(f"予測との判定 {cmp['comparison_id']} の原因は {existing['cause_id']} にもう書かれています。原因の記録は"
+        raise ToolError(f"比べた結果 {cmp['comparison_id']} の原因は {existing['cause_id']} にもう書かれています。原因の記録は"
                         "書き換えられないので、書いた原因のまま進めてください (直した式で予測し直して比べれば、"
-                        "あとの予測との判定が前の食い違いを置き換えます)")
+                        "あとの比べた結果が前の不一致を置き換えます)")
     if not args["cause"].strip() or not args["fix"].strip():
         raise ToolError("cause と fix の両方に中身を書いてください")
     pred = ctx.prediction(cmp["prediction_id"])
@@ -1587,7 +1587,7 @@ def propose_module_change(ctx: RunContext, args: dict[str, Any], agent: str | No
         if not_red:
             raise ToolError(
                 f"load_case_ids には、v{v} で NG (合否の記録が NG) の荷重条件だけを書きます。NG でないもの: "
-                f"{', '.join(not_red)}。前に OK だった試験を戻さないための変更や、予測との判定が保留で合否の無いものは、"
+                f"{', '.join(not_red)}。前に OK だった試験を戻さないための変更や、予測と比べた結果が保留で合否の無いものは、"
                 "load_case_ids から外して reason に書いてください")
     change: Record = {"change_id": ctx.store.next_id("module_change"), "module_id": module, "agent_id": agent,
                       "reason": reason, "design_version": v}  # the version it was made on (contract 18c2679)

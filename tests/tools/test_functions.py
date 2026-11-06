@@ -645,7 +645,7 @@ class SafeSideTest(RunCase, unittest.TestCase):
         cmp = self.r1_mismatch(6.0)  # the tool's stress (about 186 MPa) beyond the criterion (156.7 MPa)
         record_cause(self.ctx, self.args(cmp, ends_case=True))
         text = rules.cannot_judge_text(self.ctx)
-        self.assertIn("R1-step100 は、食い違いの原因を記録して判定なしで終えた", text)
+        self.assertIn("R1-step100 は、不一致の原因を記録して判定なしで終えた", text)
         self.assertRegex(text, r"R1-step100: ツール frame_static では .*max_stress が [\d.]+ MPa で、基準 ≤ [\d.]+ MPa を超える")
         self.assertIn("NG にもしていません", text)
         self.assertNotIn("R1-step100", judge.latest_verdicts(self.ctx, 1))  # no red without a prediction

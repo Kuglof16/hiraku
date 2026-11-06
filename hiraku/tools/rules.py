@@ -51,7 +51,7 @@ def _h3(ctx: RunContext, domain: str | None, tool: str) -> Denial | None:
     ids = ", ".join(c["comparison_id"] for c in open_)
     first = open_[0]
     return Denial(HK3, (
-        f"{_ja(domain)}の分野に、原因の書かれていない食い違い ({ids}) があるので {tool} は止めました。"
+        f"{_ja(domain)}の分野に、原因の書かれていない不一致 ({ids}) があるので {tool} は止めました。"
         f"予測 {first['predicted']['value']:.4g} {first['predicted']['unit']} と解析 "
         f"{first['analyzed']['value']:.4g} {first['analyzed']['unit']} の差は {first['diff_rel'] * 100:.1f} % "
         f"(許す幅 {first['tolerance_rel'] * 100:.0f} %)。"
@@ -216,7 +216,7 @@ def check_analyze(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
 
 def check_compare(ctx: RunContext, args: dict[str, Any]) -> Denial | None:
     pred = ctx.prediction(args.get("prediction_id") or "")
-    return _h3(ctx, pred["domain"] if pred else None, "予測との判定")
+    return _h3(ctx, pred["domain"] if pred else None, "予測と比べること")
 
 
 CHECKS = {"analyze": check_analyze, "compare": check_compare}
@@ -504,19 +504,19 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
             at = "" if stage[lc_id] is None else f"{_stage_ja(stage[lc_id])}: "
             if lc_id in held:
                 steps.append(f"{at}{lc_id} ({'、'.join(held[lc_id])}。原因を書き、その結果と一致する予測を記録し直して "
-                             f"compare で予測との判定が OK になると基準の判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
+                             f"compare で比べて予想通りになると基準の判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
                 continue
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
-            first = f"{'・'.join(ups)} の予測との判定を OK にし、" if ups else ""
+            first = f"{'・'.join(ups)} を予測と比べて予想通りにし、" if ups else ""
             if not _usable_tools(ctx, lc["test_id"]):
                 first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、"
                          f"check_tool で試してから make_tool で棚に入れ、{first}")
-            steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で比べ、予測との判定が OK になると基準の判定が付く)")
+            steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で比べ、予想通りになると基準の判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")
     open_ = ctx.open_mismatches(domain)
     tail = ""
     if open_:
-        tail = f" 原因の書かれていない食い違い {', '.join(c['comparison_id'] for c in open_)} も残っています (record_cause)。"
+        tail = f" 原因の書かれていない不一致 {', '.join(c['comparison_id'] for c in open_)} も残っています (record_cause)。"
     order = " 軽い段から順に (段 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算) 確かめ、NG が出たら次の段の前に設計役が直します。" \
         if len({s for s in stage.values() if s is not None}) > 1 else ""
     return (f"まだ判定の無い (OK にできない試験の残る) 分野があるので終われません。{' / '.join(parts)}。{order}{tail}").strip()
@@ -530,9 +530,9 @@ def cannot_judge_text(ctx: RunContext) -> str | None:
     if cannot:
         named = "、".join(f"{lc_id} ({q})" for lc_id, q in cannot.items())
         parts.append(f"{named} は、判定の量を予測する手計算 (K0) の式が式の台帳に無いので、この実行では判定できません "
-                     f"(予測が無いと解析も予測との判定もできない)")
+                     f"(予測が無いと解析も、予測と比べることもできない)")
     if ended:  # contract 110b991: the mismatch's cause was recorded as ending the step without a verdict
-        parts.append(f"{'、'.join(ended)} は、食い違いの原因を記録して判定なしで終えたので、この実行では判定していません")
+        parts.append(f"{'、'.join(ended)} は、不一致の原因を記録して判定なしで終えたので、この実行では判定していません")
         by_id = {lc["load_case_id"]: lc for lc in ctx.load_cases}
         for lc_id in ended:  # the tool's numbers when it found the case beyond its criterion (no red without a prediction)
             said = beyond_text(ctx, by_id[lc_id], ctx.version) if lc_id in by_id and ctx.version else None
@@ -637,7 +637,7 @@ def excused_pending(ctx: RunContext) -> str | None:
 
                 held = unresolved_mismatches(ctx, lc, ctx.version)
                 if held and all(cause is not None for _, cause in held) and not beyond_results(ctx, lc, ctx.version):
-                    written = "; ".join(f"予測との判定 {c['comparison_id']} の食い違いの原因 {cause['cause_id']}: "
+                    written = "; ".join(f"予測と比べた結果 {c['comparison_id']} の不一致の原因 {cause['cause_id']}: "
                                         f"{cause.get('cause', '')}" for c, cause in held)
                     reasons.append(f"{lc_id}: {written}")
                     continue

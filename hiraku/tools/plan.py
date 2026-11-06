@@ -321,7 +321,7 @@ def _where(ctx: RunContext, ref: Any, load_case: Record, given: Record | None, r
         lc_id, quantity = rest.rsplit(".", 1)
         up = _load_case_of(ctx, lc_id, load_case)
         a = _trusted_analysis(ctx, up)
-        return f"{up} の予測との判定が OK だった解析 {a['analysis_id'] if a else '?'} の結果 {quantity}"
+        return f"{up} の、予測と比べて予想通りだった解析 {a['analysis_id'] if a else '?'} の結果 {quantity}"
     return text
 
 
@@ -339,7 +339,7 @@ def _missing(ctx: RunContext, ref: Any, load_case: Record, given: Record | None)
         except IndexError:
             pass
         return (f"まだ値がありません: 上流の {up} の解析の結果 {rest.rsplit('.', 1)[-1]} を使います。先に {up} を"
-                f"予測 → analyze → compare で予測との判定を OK にしてから、get_context をもう一度呼んでください")
+                f"予測 → analyze → compare で比べて予想通りにしてから、get_context をもう一度呼んでください")
     if head == "pred":
         return (f"まだ値がありません: この荷重条件の {rest} の予測を使います。先にその予測を record_prediction "
                 f"してから、get_context をもう一度呼んでください")
@@ -411,7 +411,7 @@ def _specs(step: Record, when: str | None = None) -> list[tuple[Record, str | No
     out = [(p, when) for p in step.get("predictions") or []]
     for exp in expected_entries(step):
         if exp.get("retry"):
-            out += _specs(exp["retry"], f"{exp.get('quantity')} が食い違って原因を書いたあとの予測")
+            out += _specs(exp["retry"], f"{exp.get('quantity')} が不一致で原因を書いたあとの予測")
     return out
 
 
@@ -423,7 +423,7 @@ def _specs_for_roles(step: Record) -> list[tuple[Record, str | None]]:
     if not exp:
         return _specs(step)
     cause = " ".join(str(exp.get("cause") or "").split())
-    missed = f"台本の場面でわざと先に使い、{exp.get('quantity')} が食い違った式 (原因: {cause})"
+    missed = f"台本の場面でわざと先に使い、{exp.get('quantity')} が不一致だった式 (原因: {cause})"
     first = {id(p) for p in step.get("predictions") or []}
     retried = [(p, None) for p, _ in _specs(exp["retry"])]
     return retried + [(p, missed) for p in step.get("predictions") or [] if id(p) in first]

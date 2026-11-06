@@ -40,7 +40,7 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
     comparison it explains."""
     from hiraku.export.tables import in_domains
 
-    rows = [["原因", "版", "予測との判定", "荷重条件", "量", "差", "原因の文", "直し方", "安全側"]]
+    rows = [["原因", "版", "比べた結果", "荷重条件", "量", "差", "原因の文", "直し方", "安全側"]]
     for v in sorted(store.project.get("design_versions") or []):
         cmps = {c["comparison_id"]: c for c in store.records("comparison", v)}
         for c in store.records("cause", v):
@@ -62,7 +62,7 @@ def _causes(store: RunStore, domains: Iterable[str] | None = None) -> list[str |
             rows.append([c["cause_id"], f"v{v}", c["comparison_id"], pred.get("load_case_id", ""), cmp.get("quantity", ""),
                          f"{cmp['diff_rel'] * 100:+.1f} %" if "diff_rel" in cmp else "", " ".join(c["cause"].split()),
                          " ".join(c["fix"].split()), safe])
-    return [rows] if len(rows) > 1 else ["食い違いはありません"]
+    return [rows] if len(rows) > 1 else ["不一致はありません"]
 
 
 def sections(store: RunStore, domains: Iterable[str] | None = None) -> list[Section]:
@@ -93,7 +93,7 @@ def sections(store: RunStore, domains: Iterable[str] | None = None) -> list[Sect
             if d.get("assumptions"):
                 body.append([["前提"]] + [[a] for a in d["assumptions"]])
             if d.get("differences"):
-                rows = [["予測との判定", "差", "原因"]]
+                rows = [["比べた結果", "差", "原因"]]
                 for x in d["differences"]:
                     c = causes.get(x.get("cause_id") or "")
                     rows.append([x["comparison_id"], f"{x['diff_rel'] * 100:+.1f} %",
@@ -105,7 +105,7 @@ def sections(store: RunStore, domains: Iterable[str] | None = None) -> list[Sect
                                                                 for n in rep["next"]]]))
         out.append(("確かめていない値", [[["項目", "出どころ"]] + [[u["item"], u["source"]] for u in rep["unchecked"]]]
                     if rep["unchecked"] else ["なし"]))
-    out.append(("食い違いと原因", _causes(store, domains)))
+    out.append(("不一致と原因", _causes(store, domains)))
     out.append(("要件と出典", [[["番号", "項目", "値", "出どころ", "信頼度", "出典・根拠"]] + [
         [r["key"], r.get("name", ""), f"{r.get('value')}" + (f" {r['unit']}" if r.get("unit") else ""),
          r.get("source", ""), str(r.get("trust", "")), " ".join(str(r.get("basis", "")).split())]
