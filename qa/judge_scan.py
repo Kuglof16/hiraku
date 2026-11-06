@@ -165,10 +165,12 @@ def _yaml_item(lines: list[str], n: int) -> str:
 
 
 def _unchecked_list(readme: str) -> str:
-    """The part of README that lists the values not checked: from the first line with
-    確かめていない to the next heading ("" when there is none)."""
+    """The part of README that lists the values not checked: from the first heading with
+    確かめていない (or, without one, the first line with it) to the next heading ("" when
+    there is none). A sentence before the list may use the same word."""
     lines = readme.splitlines()
-    start = next((k for k, s in enumerate(lines) if "確かめていない" in s), None)
+    has = [k for k, s in enumerate(lines) if "確かめていない" in s]
+    start = next((k for k in has if re.match(r"#{1,6}\s", lines[k])), has[0] if has else None)
     if start is None:
         return ""
     end = next((k for k in range(start + 1, len(lines)) if re.match(r"#{1,6}\s", lines[k])), len(lines))

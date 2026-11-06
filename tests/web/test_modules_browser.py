@@ -30,6 +30,9 @@ except ImportError:  # pragma: no cover
 ENABLED = os.environ.get("HIRAKU_WEB_BROWSER") == "1" and sync_playwright is not None
 
 PLAIN = "20261104-210100-plain"  # the same run without modules
+# the record's six per-module designers: the contract's LEGACY_MODULE_DESIGNERS once it has the three
+# design roles (dabec03f), its MODULE_DESIGNERS before
+SIX = tuple(getattr(contract, "LEGACY_MODULE_DESIGNERS", contract.MODULE_DESIGNERS))
 FALLBACK = {"frame": "#2b6e40", "suspension": "#8db33a", "steering": "#e2759f", "occupant": "#917430", "powertrain": "#8f415b", "body": "#57b8a0"}
 # (powertrain: the pets' #7d2240, made lighter for the 3D by proposals.js readable)
 OUTSIDE = "#e0201a"
@@ -286,7 +289,7 @@ class ModulesBrowserTest(unittest.TestCase):
         self.assertEqual(a.locator("#roundcard").screenshot(), b.locator("#roundcard").screenshot())
 
     def test_six_designers_in_the_agents_list(self):
-        names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in contract.MODULE_DESIGNERS]
+        names = [f"{contract.MODULE_NAMES_JA[a.split('.')[1]]}の設計役" for a in SIX]
         # (the designers are one bundle 「設計役 ×n」 in the list; ?agents=open opens it)
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&pets=0&t=1e6&agents=open")
         text = page.locator("#agents").inner_text()
@@ -296,7 +299,7 @@ class ModulesBrowserTest(unittest.TestCase):
         page = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6&agents=open")
         if page.evaluate("document.documentElement.dataset.agentPets") != "on":
             self.skipTest("no pets on this server")
-        for a in contract.MODULE_DESIGNERS:
+        for a in SIX:
             box = page.locator(f'#agents .petbox[data-agent="{a}"]')
             self.assertEqual(box.count(), 1, a)
             own = page.evaluate(f"window.hiraku.pets().roles.has('{a}')")
@@ -343,7 +346,7 @@ class ModulesBrowserTest(unittest.TestCase):
             self.skipTest("no pets on this server")
         # the packager in the assembly tile's corner, the module designers in the head
         self.assertEqual(page.locator('.tile[data-domain="assembly"] [data-pet-slot="packager"]').count(), 1)
-        for a in contract.MODULE_DESIGNERS:
+        for a in SIX:
             self.assertEqual(page.locator(f'#grid-head [data-pet-slot="{a}"]').count(), 1, a)
 
     def test_assembly_tab_switches(self):

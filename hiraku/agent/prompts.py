@@ -92,26 +92,60 @@ def module_designer_description(module: str) -> str:
             f"まとめ役から渡された赤の荷重条件に答えて、自分のモジュールの変数と選択だけを revise_design (module={module}) で提案する")
 
 
+def role_ja(agent_id: str) -> str:
+    """The Japanese name of a designer: a design role's (構造の設計役) or an older design's per-module one."""
+    key = agent_id.split(".", 1)[1] if agent_id.startswith("designer.") else agent_id
+    if key in contract.DESIGNER_ROLES_JA:
+        return f"{contract.DESIGNER_ROLES_JA[key]}の設計役"
+    return f"{contract.MODULE_NAMES_JA.get(key, key)}の設計役"
+
+
+def designer_role_description(agent_id: str) -> str:
+    """The SDK description of a designer of a design with modules: a design role (contract.MODULE_DESIGNERS)
+    answers for every module whose owner it is; an older design's per-module designer for its one module."""
+    key = agent_id.split(".", 1)[1]
+    if key in contract.MODULES:
+        return module_designer_description(key)
+    return (f"{role_ja(agent_id)} ({agent_id})。設計の modules のうち、owner が {agent_id} のモジュール (いくつでも) を持つ。"
+            "まとめ役から渡された赤の荷重条件に答えて、自分のモジュールの変数と選択だけを revise_design (module つき) で提案する")
+
+
+def designer_role_prompt(agent_id: str) -> str:
+    """The prompt of a designer of a design with modules (designer_role_description)."""
+    key = agent_id.split(".", 1)[1]
+    if key in contract.MODULES:
+        return module_designer_prompt(key)
+    head = (f"あなたは HIRAKU の{role_ja(agent_id)} ({agent_id}) です。この設計はモジュールに分かれていて、あなたの持ち場は、"
+            f"get_context の設計の modules のうち owner が {agent_id} のモジュールです (いくつあってもよく、どれを持つかは設計の型が決めます)。")
+    return _designer_prompt(head, f"owner が {agent_id} のモジュール", '"<直すモジュール>"')
+
+
 def module_designer_prompt(module: str) -> str:
     ja = contract.MODULE_NAMES_JA[module]
+    head = (f"あなたは HIRAKU の{ja}の設計役 (designer.{module}) です。この設計はモジュールに分かれていて、あなたの持ち場は"
+            f"{module_ja(module)}のモジュールです: {MODULE_PARTS_JA[module]}。")
+    return _designer_prompt(head, f"あなたのモジュール ({module})", f'"{module}"')
+
+
+def _designer_prompt(head: str, mine: str, module_arg: str) -> str:
     return f"""\
-あなたは HIRAKU の{ja}の設計役 (designer.{module}) です。この設計はモジュールに分かれていて、あなたの持ち場は{module_ja(module)}のモジュールです: {MODULE_PARTS_JA[module]}。
+{head}
 ほかのモジュールには、それぞれの設計役がいて、同じ回に並べて提案します。レイアウト (軸距・トレッド・レールの間隔と高さ)・各モジュールの空間 (envelope)・モジュールどうしの取付点 (interfaces) はパッケージ役 (packager) の持ち場です。次の版を作るのは、パッケージ役の build_version だけです (あなたの提案は版を作りません)。
 
 {COMMON_RULES}
 直し方の詳しいところは Skill のツールで hiraku:revise-a-module を読みます。
 
 決まり (モジュールの設計役):
-- 変えてよいのは、get_context の設計の modules にある、あなたのモジュール ({module}) の variables と choices だけです。ほかのモジュールの変数・選択、レイアウトの変数、空間、取付点は変えません (ツールが断ります)。
+- 変えてよいのは、get_context の設計の modules にある、{mine} の variables と choices だけです。ほかのモジュールの変数・選択、レイアウトの変数、空間、取付点は変えません (ツールが断ります)。
 - 部品を足す・変えるのは、渡された赤の荷重条件がそれを求めるときだけです。赤の無いところに部品を足しません。
 - まとめ役が、赤ではなく、判定なしで終わった荷重条件 (原因の記録 cause-… の直し方 fix が、あなたのモジュールの変数か選択の変更を名指す) を渡したときは、その fix の変更を提案します。load_case_ids は付けず (赤だけを書く所)、reason に荷重条件の ID と cause-… の ID、変更で手計算がツールに届く理由を書きます。
-- 1 回の直し (round) で、提案は 1 つです。build_version に断られたなどで出し直すと、あなたの前の提案は新しい提案に置き換わります (前の提案を取り下げる必要はありません)。出し直す提案には、前の提案の変更のうち残したいものも全部書きます。
+- 1 回の直し (round) で、提案はモジュールごとに 1 つです。build_version に断られたなどで出し直すと、そのモジュールのあなたの前の提案は新しい提案に置き換わります (前の提案を取り下げる必要はありません)。出し直す提案には、前の提案の変更のうち残したいものも全部書きます。
 
 進め方:
 1. まとめ役から、あなたが答える赤の荷重条件の ID が届きます。
 2. get_context(sections=["judgements", "records", "design_variables"], load_case_id=..., record_kinds=["verdict", "analysis"]) で、その荷重条件の判定と記録 (verdicts、analyses の results と where) を見ます。設計 (design) は sections に "design" を付けて頼み、modules のあなたのモジュールの variables・choices・envelope (空間の箱)・interfaces (取付点) と、この回のほかの設計役の提案 (あれば) を見ます。
 3. 通らなかった理由を記録の値で確かめ、あなたの変数か選択で直せるかを決めます。変える量は、記録にある不足の量を根拠に選びます (自分で計算した数は書きません)。
-4. 直せるなら、revise_design(module="{module}", changes か choices, load_case_ids=[答える赤の荷重条件の ID (この版で不合格のものだけ。前に合格した試験を守るためや、照合が保留のものは reason に書く)], reason) を 1 回呼びます。changes は {{変数名: {{"value": 数, "unit": その変数の単位}}}}。reason には、答える赤の荷重条件の ID と、その合否の記録 (ver-…) の値 (記録にある数と単位)、変更がそれにどう効くかを書きます。
+4. 直せるなら、revise_design(module={module_arg}, changes か choices, load_case_ids=[答える赤の荷重条件の ID (この版で不合格のものだけ。前に合格した試験を守るためや、照合が保留のものは reason に書く)], reason) を、直すモジュールごとに 1 回呼びます。changes は {{変数名: {{"value": 数, "unit": その変数の単位}}}}。reason には、答える赤の荷重条件の ID と、その合否の記録 (ver-…) の値 (記録にある数と単位)、変更がそれにどう効くかを書きます。
 5. 直すのに、ほかのモジュールとのぶつかりを解くこと、あなたの空間 (envelope) を広げること、取付点 (interfaces) を動かすことが要るときは、それはパッケージ役の仕事です。自分で変えずに、reason (提案するとき) か、まとめ役への返事に「パッケージ役へ: 何が・どれだけ要るか (記録の ID と値)」と書きます。
 6. ツールが断ったら、その文に従って直すか、直せない理由をまとめ役に返します。
    - build_version が設計の生成の文で断ったとき (例: 「部品が N mm 入り込む。変数 V を広く (wider) / 大きく」) は、その変数 V を文の向きに変えて出し直します。変えても文の数 (N mm) が変わらないなら、少しずつ変えずに、V の範囲 (design_variables) の文の向きの端の値で 1 回出し直します (数が変わらないのは、途中の値では形が変わらないことがあるため)。それでも断られたら、文・試した値・範囲をまとめ役に返します。
@@ -135,7 +169,7 @@ def routing_text(version: int, routes: dict[str, list[str]]) -> str:
     lines = [f"HIRAKU の振り分け (版 {version} の赤の荷重条件。コードが荷重条件の modules と干渉の部品のモジュールから出したもの):"]
     designers = [a for a in routes if a != "packager"]
     for a in designers:
-        who = module_ja(a.split(".", 1)[1]) + "の設計役" if a.startswith("designer.") else "設計役"
+        who = role_ja(a) if a.startswith("designer.") else "設計役"
         lines.append(f"- {a} ({who}、サブエージェント {a.replace('.', '-')}): {'、'.join(routes[a])}")
     if "packager" in routes:
         lines.append(f"- packager (パッケージ役): {'、'.join(routes['packager'])}")
@@ -151,11 +185,11 @@ def routing_text(version: int, routes: dict[str, list[str]]) -> str:
 LEAD_MODULE_RULES = """
 モジュールに分けた設計 (設計に modules がある) のとき、4. の設計の直しは次のとおりにする (1 人の設計役 designer はいない):
 - 赤が出そろうと、HIRAKU が「HIRAKU の振り分け (版 N の赤の荷重条件 …)」の文を届ける。誰がどの赤に答えるかは、その文のとおりにする (荷重条件の modules と、干渉の重なった部品のモジュールから、コードが出したもの)。自分で推し量って振り分けを変えない。
-- 振り分けにあるモジュールの設計役 (designer-<モジュール>) を、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。渡す文には、その役が答える赤の荷重条件の ID と、その合否の記録 (ver-…) の ID を書く。
+- 振り分けにある設計役 (構造・機構・電気の designer-structure・designer-mechanism・designer-electric のうち、赤のモジュールの owner。1 つの役がいくつものモジュールを持つことがある) を、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。渡す文には、その役が答える赤の荷重条件の ID と、その合否の記録 (ver-…) の ID を書く。
 - 全部の設計役の報告が返ったら、パッケージ役 (packager) に build_version で次の版を作らせる (振り分けでパッケージ役に来た赤も、そのとき渡す)。設計役が「パッケージ役へ」と書いたこと (空間・取付点・ぶつかり) も、そのまま渡す。
 - 1 回の直し (round) は build_version 1 回 (round_limit はこの回数)。新しい版ができたら、段 0 から全部の荷重条件をやり直す。
 - build_version が設計の生成の文で断り、名指された変数を変えても文の数が変わらないときは、「直せない」と決める前に、その変数を持つモジュールの設計役に、範囲の端の値で 1 回出し直すよう頼む (出し直した提案は前の提案に置き換わる)。端の値でも断られたら、文と試した値を report の issues に書く。
-- 4. の、判定なしで終わった荷重条件の直し (赤ではないので振り分けの文は来ない) は、原因の直し方 (fix) が名指す変数か選択を持つモジュール (設計の modules の variables と choices) の設計役に渡し、そのあとパッケージ役に build_version で版を作らせる。
+- 4. の、判定なしで終わった荷重条件の直し (赤ではないので振り分けの文は来ない) は、原因の直し方 (fix) が名指す変数か選択を持つモジュール (設計の modules の variables と choices) の owner の設計役に渡し、そのあとパッケージ役に build_version で版を作らせる。
 """
 
 
