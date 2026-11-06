@@ -14,6 +14,7 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { esc } from "./labels.js";
+import { heavyPending } from "./heavy.js";
 
 // The analysis' whole time (0 .. 94.9 ms in the demo crash) is played over this many seconds of
 // the replay, from when the analysis arrived in the record; after that the last frame stays.
@@ -31,7 +32,12 @@ const memo = new WeakMap();
 export function nodeMotionOf(analysis) {
   if (!analysis || analysis.status !== "ok") return null;
   if (memo.has(analysis)) return memo.get(analysis);
-  memo.set(analysis, null);
+  const nm = readNodeMotion(analysis);
+  if (!heavyPending(analysis)) memo.set(analysis, nm); // (a static export's part not read yet: not kept)
+  return nm;
+}
+
+function readNodeMotion(analysis) {
   const field = (analysis.fields ?? []).find((f) => f.kind === "node_motion");
   const fr = field?.frames;
   const t = fr?.t_s;
@@ -45,9 +51,7 @@ export function nodeMotionOf(analysis) {
     .filter((m) => Array.isArray(m) && index.has(m[0]) && index.has(m[1]))
     .map((m) => ({ a: index.get(m[0]), b: index.get(m[1]), id: String(m[2] ?? "") }));
   const broken = Array.isArray(fr.broken) && fr.broken.length === t.length ? fr.broken.map((b) => (Array.isArray(b) ? b.map(String) : [])) : null;
-  const nm = { analysisId: analysis.analysis_id, field, nodes: field.nodes, members, t_s: t, positions: pos, broken, t0: t[0], t1: t[t.length - 1], span: t[t.length - 1] - t[0] };
-  memo.set(analysis, nm);
-  return nm;
+  return { analysisId: analysis.analysis_id, field, nodes: field.nodes, members, t_s: t, positions: pos, broken, t0: t[0], t1: t[t.length - 1], span: t[t.length - 1] - t[0] };
 }
 
 // The motion at time tau (the analysis' own seconds): every node's position (mm, in nodes order)

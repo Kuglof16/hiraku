@@ -34,8 +34,13 @@ export function hookLineOpacity(dt, showS) {
   return Math.min(1, dt / 0.25, (showS - dt) / 0.6);
 }
 
+export const HOOKLINE_TOP = 150; // the line's top in the stage's px (topbar.css .hookline)
+export const HOOKLINE_GAP = 12; // stage px kept between the line and a box it keeps clear of
+
 // Puts the line's element on the stage and folds the footer's list. Returns { render(s, playhead) }.
-export function mountHookLine(stage, { dev = false, showS = 5 } = {}) {
+// avoid: () => the elements the line must not cover (③'s board of tests): while one of them shows
+// and reaches below the line's usual top, the line goes just under it.
+export function mountHookLine(stage, { dev = false, showS = 5, avoid = () => [] } = {}) {
   const line = document.createElement("div");
   line.className = "hookline";
   line.id = "hookline";
@@ -76,6 +81,23 @@ export function mountHookLine(stage, { dev = false, showS = 5 } = {}) {
       line.dataset.rule = hookWords(den.rule).id;
       line.innerHTML = `<span class="hl-mark" aria-hidden="true">!</span>${esc(hookLineText(den.rule, { dev }))}`;
     }
+    place();
+  }
+  // the line's top: its usual place, or under the lowest box to keep clear of that is on the screen
+  // (the stage is scaled to the window: rects / k are the stage's px)
+  function place() {
+    const sr = stage.getBoundingClientRect();
+    const k = stage.offsetWidth ? sr.width / stage.offsetWidth : 1;
+    let top = HOOKLINE_TOP;
+    for (const el of avoid()) {
+      if (!el || el.hidden || !el.offsetParent) continue;
+      const r = el.getBoundingClientRect();
+      if (r.height <= 0 || r.width <= 0) continue;
+      const bottom = (r.bottom - sr.top) / k;
+      if (bottom + HOOKLINE_GAP > top && (r.top - sr.top) / k < top + 60) top = Math.ceil(bottom + HOOKLINE_GAP);
+    }
+    const want = `${top}px`;
+    if (line.style.top !== want) line.style.top = want;
   }
   return { el: line, more, render };
 }

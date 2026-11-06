@@ -28,7 +28,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GRAY } from "./colormap.js";
-import { getUrl } from "./source.js";
+import { getUrl, versioned } from "./source.js";
 
 // ---- assets ----------------------------------------------------------------
 // The Poly Haven assets the real look reads, by role: id, the file of each map, and
@@ -681,7 +681,7 @@ const HDRI = new WeakMap(); // renderer -> Map(role -> Promise of { tex, el, az,
 const TEX = new Map(); // url -> Promise of the loaded texture (one source per file, shared by every view)
 
 function loadTexture(url) {
-  if (!TEX.has(url)) TEX.set(url, new THREE.TextureLoader().loadAsync(url));
+  if (!TEX.has(url)) TEX.set(url, new THREE.TextureLoader().loadAsync(versioned(url))); // (a static export: with its version)
   return TEX.get(url);
 }
 
@@ -737,7 +737,7 @@ function hdriOf(renderer, role) {
     m.set(
       role,
       new RGBELoader()
-        .loadAsync(assetPath(role, "hdr"))
+        .loadAsync(versioned(assetPath(role, "hdr")))
         .then((hdr) => {
           const read = role === "horizon" ? readHdri(hdr.image) : null;
           const pmrem = new THREE.PMREMGenerator(renderer);

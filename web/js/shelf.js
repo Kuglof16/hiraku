@@ -15,6 +15,7 @@
 
 import { BASE_JA, DOMAINS, DOMAIN_JA, fmt, fmtPct, quantityName, unitLabel } from "./labels.js";
 import { fill, h } from "./intake/dom.js";
+import { domainIconSvg } from "./domain_icons.js";
 import { getUrl } from "./source.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
@@ -232,9 +233,12 @@ export function mountShelf(el, api) {
     const key = `${ui.mode}:${b.key}`;
     const closed = ui.collapsed.has(key);
     const ok = b.tools.filter(allPassed).length;
+    // a domain's head: the domain's icon, from the one definition (domain_icons.js; the same as the
+    // top row's chips and ④'s tiles). The svg is the module's own constant markup, not record text.
+    const icon = ui.mode === "domain" && DOMAINS.includes(b.key) ? h("span", { class: "sh-ic", innerHTML: domainIconSvg(b.key) }) : null;
     return h("li", { class: "sh-node", dataset: { branch: b.key } },
       h("button", { class: "sh-head", type: "button", onclick: () => { if (closed) ui.collapsed.delete(key); else ui.collapsed.add(key); render(); } },
-        h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), h("b", {}, b.label),
+        h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), icon, h("b", {}, b.label),
         // (the counts only once the shelf is built: before, only this run's tools are known)
         shelf.ready ? h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`) : null,
         shelf.ready ? h("span", { class: "sh-nok", title: "確かめを全部通ったツールの数" }, `確かめた ${ok}`) : null),

@@ -1495,8 +1495,10 @@ export class Workbench3D {
   }
 
   // The analysis' vectors (a still: one moment). Hidden while a motion is shown.
-  // A wheel's forces (reaction, grip) carry words only at the picked wheel (pickWheel, else
-  // the one with the largest recorded force); the other wheels show their arrows alone.
+  // Words on an arrow only where it is chosen: the picked one (pickWheel / pickAt: a wheel's id,
+  // or `${kind}#${index}` for another force) or the one the pointer is near (hoverAt). With
+  // autoWords (the present mode, ?words=1) as before: a wheel's forces carry words at the wheel
+  // with the largest recorded force, every other force always.
   setVectors(vectors, keepPick = false) {
     if (vectors === this.keys.vectors) return;
     if (!keepPick && vectors) this.pickedWheel = null; // another analysis: its largest force again
@@ -1511,7 +1513,8 @@ export class Workbench3D {
       if (WHEEL_FORCES.has(v.kind) && v.at && (auto === null || mags[i] > auto.mag)) auto = { at: v.at, mag: mags[i] };
     });
     this.autoWheel = this.motion ? this.autoWheel : auto?.at ?? null;
-    const picked = this.pickedWheel ?? auto?.at ?? null;
+    const chosen = new Set([this.pickedWheel, this.hoverKey].filter((k) => k != null));
+    if (this.autoWords && this.pickedWheel == null && auto) chosen.add(auto.at);
     list.forEach((v, i) => {
       const mag = mags[i];
       if (!(mag > 0)) return;
@@ -1527,8 +1530,9 @@ export class Workbench3D {
       placeArrow(g, start, dir, len);
       this.arrows.add(g);
       const wheelForce = WHEEL_FORCES.has(v.kind) && v.at;
-      if (wheelForce) this.vecTips.push({ id: v.at, at: start.clone().addScaledVector(dir, len / 2) });
-      if (wheelForce && v.at !== picked) return; // the arrow alone
+      const key = wheelForce ? v.at : `${v.kind}#${i}`;
+      this.vecTips.push({ id: key, at: start.clone().addScaledVector(dir, len / 2) });
+      if (!chosen.has(key) && !(this.autoWords && !wheelForce)) return; // the arrow alone
       const text = `${esc(vectorName(v.kind))}${v.at ? ` ${esc(v.at)}` : ""}<small>|F| ${fmt(mag / 1000, 3)} kN</small>`;
       const tag = wheelForce ? keyLabel(text, `lbl-vec lbl-${v.kind}`) : label(text, `lbl-vec lbl-${v.kind}`);
       // a wheel's force: its label is led from the arrow near the contact, a quarter of the way
@@ -1551,14 +1555,14 @@ export class Workbench3D {
     return true;
   }
 
-  // The wheel whose forces carry words now.
+  // The wheel whose forces carry words now (null: none; autoWords: the largest when none is chosen).
   wheelShown() {
-    return this.pickedWheel ?? this.autoWheel ?? null;
+    return this.pickedWheel ?? this.hoverKey ?? (this.autoWords ? this.autoWheel : null) ?? null;
   }
 
-  // The wheel whose arrows are nearest to a point of the view (px from its top left), within
-  // 60 px, picked; returns its id or null.
-  pickAt(x, y) {
+  // The arrow (a wheel's id or `${kind}#${index}`) nearest to a point of the view (px from its
+  // top left), within 60 px, or null.
+  arrowAt(x, y) {
     const cands = this.frame
       ? this.frame.wheels.filter((w) => w.contact && this.motionArrowObjs?.[w.id]).map((w) => ({ id: w.id, at: v3(w.contact) }))
       : this.vecTips ?? [];
@@ -1569,8 +1573,38 @@ export class Workbench3D {
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= 60 && (!best || d < best.d)) best = { id: c.id, d };
     }
-    if (best) this.pickWheel(best.id);
     return best?.id ?? null;
+  }
+
+  // A click: the arrow there picked (its words stay), or, away from every arrow, the pick
+  // dropped. Returns true when the words changed.
+  pickAt(x, y) {
+    return this.pickWheel(this.arrowAt(x, y));
+  }
+
+  // The pointer near an arrow: its words while it stays there. Returns true when they changed.
+  hoverAt(x, y) {
+    const id = x === null ? null : this.arrowAt(x, y);
+    if (id === (this.hoverKey ?? null)) return false;
+    this.hoverKey = id;
+    const v = this.keys.vectors;
+    this.keys.vectors = undefined;
+    this.setVectors(v, true);
+    for (const o of Object.values(this.motionArrowObjs ?? {})) o.text = null;
+    this.placeMotionArrows(this.frame);
+    return true;
+  }
+
+  // The present mode's words (and ?words=1): the largest wheel's forces and every other force
+  // carry words without being chosen.
+  setAutoWords(on) {
+    if (!!on === !!this.autoWords) return;
+    this.autoWords = !!on;
+    const v = this.keys.vectors;
+    this.keys.vectors = undefined;
+    this.setVectors(v, true);
+    for (const o of Object.values(this.motionArrowObjs ?? {})) o.text = null;
+    this.placeMotionArrows(this.frame);
   }
 
   // A point in the vehicle's frame of the iso group (ISO mm) on screen (px), or null behind the camera.

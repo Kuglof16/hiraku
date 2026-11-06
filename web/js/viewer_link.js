@@ -111,8 +111,8 @@ export function viewerUrl(runId, analysisId, field) {
   return `/viewer/index.html?data=${enc(`/api/runs/${runId}/viewer/${analysisId}`)}#${field}`;
 }
 
-// The button with its small notes, as HTML. A place (the workbench card, a tile's list row, the
-// overview's data-role="viewer" cell) puts it where it wants.
+// The button with its small notes, as HTML. A place (the workbench card, a tile's list row) puts it
+// where it wants.
 export function viewerButtonHtml(runId, ana, opts = {}) {
   const t = viewerTarget(ana, runId);
   const id = esc(ana?.analysis_id ?? "");
@@ -130,8 +130,8 @@ export function viewerButtonHtml(runId, ana, opts = {}) {
   );
 }
 
-// Put the button into every [data-role="viewer"] under root that names an analysis (data-ana); the
-// overview's grid leaves such cells. s: the screen's state (runId, analyses).
+// Put the button into every [data-role="viewer"] under root that names an analysis (data-ana) (no
+// screen leaves such cells now: ③'s board has none, its card has the button). s: the screen's state (runId, analyses).
 export function fillViewerCells(root, s) {
   for (const el of root.querySelectorAll('[data-role="viewer"][data-ana]')) {
     el.innerHTML = viewerButtonHtml(viewerRunId(s), s.analyses?.[el.dataset.ana], { compact: true });

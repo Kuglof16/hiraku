@@ -111,7 +111,8 @@ READ = """async ({ t, tab }) => {
   if (tab) document.querySelector(`.tab[data-tab="${tab}"]`).click();
   await window.hiraku.seek(t ?? window.hiraku.player.playhead);
   const shown = (e) => e.offsetParent !== null;
-  const pets = [...document.querySelectorAll(".petbox")].filter(shown).map((b) => {
+  // (the list's and the grid's pets; ③'s board of tests has its own: test_test_board_browser)
+  const pets = [...document.querySelectorAll(".petbox")].filter((b) => shown(b) && !b.closest("#tests")).map((b) => {
     const c = b.querySelector("canvas.pet3d");
     let ink = 0;
     if (c && c.width) { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) ink += d[i] > 0 ? 1 : 0; }

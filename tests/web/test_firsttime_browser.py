@@ -60,20 +60,21 @@ class FirstTimeBrowserTest(unittest.TestCase):
         page.evaluate("window.hiraku.ready")
         return page, errors
 
-    def test_the_chips_scroll_and_shared_ids_are_told_apart(self):
+    def test_every_test_on_the_board_and_shared_ids_are_told_apart(self):
+        # (③'s board, test_board.js: every test in sight, none scrolled out of a row)
         page, errors = self.open(f"run={RUN_ID}&tab=bench&pace=0&t=1e6")
         got = page.evaluate(
             """() => {
               const row = document.getElementById('tests');
               const chip = (lc) => row.querySelector(`button[data-lc="${lc}"] .tid`).textContent;
-              return { many: row.classList.contains('many'), scrolls: row.scrollWidth > row.clientWidth,
+              return { board: row.classList.contains('board'), scrolls: row.scrollWidth > row.clientWidth + 1,
                        r8: ['R8-free', 'R8-stress', 'R8-push'].map(chip), t2: ['T2-motor', 'T2-controller'].map(chip),
                        h3: ['H3-body', 'H3-knee'].map(chip), single: chip('P4-20km') };
             }"""
         )
         self.assertEqual(errors, [])  # no 404 either (the icon is a data: URL)
-        self.assertTrue(got["many"])
-        self.assertTrue(got["scrolls"])
+        self.assertTrue(got["board"])
+        self.assertFalse(got["scrolls"])
         self.assertEqual(got["r8"], ["R8どの部品も", "R8部品と乗員の重さと…", "R8乗員の肩・腰"])
         self.assertEqual(got["t2"], ["T2モーター", "T2制御器"])
         self.assertEqual(len(set(got["h3"])), 2)

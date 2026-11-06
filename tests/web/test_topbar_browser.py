@@ -174,6 +174,12 @@ class TopbarBrowserTest(unittest.TestCase):
         page.evaluate(LINE)
         shot2 = page.screenshot(clip={"x": 0, "y": 0, "width": 1920, "height": 400}, animations="disabled")
         box = page.evaluate("() => { const r = document.getElementById('hookline').getBoundingClientRect(); return { cx: (r.left + r.right) / 2, h: r.height }; }")
+        # ③'s board of tests: the line is not on any of its boxes (it goes under the board)
+        over = page.evaluate("""() => { const l = document.getElementById('hookline').getBoundingClientRect();
+          const cut = (r) => !(r.right <= l.left || l.right <= r.left || r.bottom <= l.top || l.bottom <= r.top);
+          const board = document.getElementById('tests');
+          return { board: board.checkVisibility() && board.querySelectorAll('button.test').length > 0,
+                   hit: [...board.querySelectorAll('.tb-group, .tb-tail')].filter((x) => cut(x.getBoundingClientRect())).map((x) => x.className) }; }""")
         foot = page.evaluate(FOOT)
         # on ④ too
         page.click('.tab[data-tab="grid"]')
@@ -195,6 +201,8 @@ class TopbarBrowserTest(unittest.TestCase):
         self.assertEqual(shot1, shot2)  # the same t, the same picture
         self.assertAlmostEqual(box["cx"], 960, delta=40)  # near the middle
         self.assertLess(box["h"], 60)  # one line
+        self.assertTrue(over["board"])
+        self.assertEqual(over["hit"], [])
         self.assertNotIn("HK", foot["act"])
         self.assertTrue(on_grid["shown"])
         self.assertTrue(dev["text"].startswith("!HK1 "), dev)
