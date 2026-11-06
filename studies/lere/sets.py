@@ -31,6 +31,11 @@ pairs are here, and the cross_h one with each brace):
   D33h60  B33 + Ch60f
   DU      upper bound for N1: B50 + C45 + S2g0 + P2 (the strongest reasonable combination; corner gussets off
           because the rear stays run into gusset_LE_front_upper with them on)
+Rear stays on REC with the feet on the rail (rollbar_stay_at; LE / RE keep their gussets and stay welded joints):
+  RECS35    REC + rear stays 42.7 x 2.3, foot at 0.35 of the way from the roll bar's foot station to E
+  RECS80    the foot at 0.8 (0.45 .. 0.75 run into the rear suspension's upper arms: see SETS)
+  RECS35b   RECS35 with stays 48.6 x 3.2
+  RECS35t90 RECS35 at tyre 90 N/mm
 """
 
 BR = {"tower_brace_b": 35, "tower_brace_t": 4.5}  # the tower's section
@@ -94,6 +99,32 @@ SETS = {
     # REC's cross members 60 tall come with roll bar feet 70 tall (Ch60f); these two split the cause
     "Ch60fP2": _s({**CH60F, **P2}, "Ch60f + roll bar tube 48.6 x 3.2"),
     "B50r45P2": _s({**B50, "rail_b": 45, **P2}, "B50 + rails 45 + roll bar tube 48.6 x 3.2 (REC without Ch60f)"),
+    # N1 on REC: the roll bar rear stays (S1g0 / S2g0 lifted every frame-involving mode above 11.6 Hz) with their feet
+    # on the rail between the roll bar and E (rollbar_stay_at), so that the corner gussets stay on and LE / RE stay
+    # welded L joints in the shell mesh (a joint with a round tube is tied there: no weld line, no hot spot).
+    # Where the foot fits on REC (regenerated at rollbar_stay_at 0.05 .. 0.95 in 0.05 steps): 0.10 .. 0.40 (ahead of
+    # the rear suspension) and 0.80 .. 0.85 (behind it); 0.05 meets the roll bar's foot, 0.45 .. 0.75 run into the
+    # rear upper arms, their brackets or cross_B, 0.90 .. 0.95 the corner gusset at E. The stays 48.6 at 0.4 go 2.8 mm
+    # into bracket_uca_RL1 (the generator's member clearance check), at 0.35 they fit: so 0.35 and 0.8, not 0.5 / 0.7.
+    "RECS35": _s({**B50, **CH60F, "rail_b": 45, "rollbar_stays": 1, "rollbar_stay_at": 0.35},
+                 "REC + rear stays 42.7 x 2.3, foot at 0.35 from the roll bar's foot to E (ahead of the rear arms)"),
+    "RECS80": _s({**B50, **CH60F, "rail_b": 45, "rollbar_stays": 1, "rollbar_stay_at": 0.8},
+                 "REC + rear stays 42.7 x 2.3, foot at 0.8 (behind the rear arms)"),
+    "RECS35b": _s({**B50, **CH60F, "rail_b": 45, **S2, "rollbar_stay_at": 0.35},
+                  "REC + rear stays 48.6 x 3.2, foot at 0.35"),
+    "RECS35t90": _s({**B50, **CH60F, "rail_b": 45, "rollbar_stays": 1, "rollbar_stay_at": 0.35},
+                    "RECS35 at tyre 90 N/mm", 90),
+    # the practitioner's tower tubes 40 (RECb40: the front tower post LA2 at tyre 90 147.6 -> 109.1 MPa) with the stays
+    "RECSb40": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35},
+                  "REC + tower tubes 40 + rear stays 42.7 x 2.3, foot at 0.35"),
+    "RECSb40t45": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35},
+                     "RECSb40 at tyre 45 N/mm", 45),
+    "RECSb40t90": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.35},
+                     "RECSb40 at tyre 90 N/mm", 90),
+    "RECSb40b": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, **S2, "rollbar_stay_at": 0.35},
+                   "RECSb40 with stays 48.6 x 3.2"),
+    "RECSb40f80": _s({**B50, **CH60F, "rail_b": 45, "tower_b": 40, "rollbar_stays": 1, "rollbar_stay_at": 0.8},
+                     "RECSb40 with the foot at 0.8 (behind the rear arms)"),
     "DU": _s({**B50, **C45, **S2, **P2, "gusset_ends": 0},
              "N1 upper bound: B50 + C45 + S2g0 (stays 48.6 x 3.2, gussets off) + roll bar 48.6 x 3.2"),
 }
