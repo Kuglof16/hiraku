@@ -163,7 +163,8 @@ class BodyLookBrowserTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look={look}")
+        # off=joints: the parts' own look (the joints, on at first, make the parts see-through)
+        page.goto(f"{self.base}/?run=sample&pace=0&t=0&look={look}&off=joints")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
         page.evaluate("window.hiraku.ready")
         return page, errors

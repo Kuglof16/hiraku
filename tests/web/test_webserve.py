@@ -629,7 +629,7 @@ class LaunchTest(unittest.TestCase):
         self.servers.append(server)
         return f"http://127.0.0.1:{server.server_address[1]}"
 
-    def post(self, base, body, headers=None):
+    def post_raw(self, base, body, headers=None):
         req = urllib.request.Request(base + "/api/launch", data=json.dumps(body).encode("utf-8"), method="POST",
                                      headers={"Content-Type": "application/json", **(headers or {})})
         try:
@@ -637,6 +637,24 @@ class LaunchTest(unittest.TestCase):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read())
+
+    def post(self, base, body, headers=None):
+        """POST /api/launch as the screen does: the 202 at once, then GET /api/launch's "launch" until
+        it has started (200 and its info, with the run_id) or failed (its error_status and error)."""
+        status, out = self.post_raw(base, body, headers)
+        if status != 202:
+            return status, out
+        self.assertEqual((out["state"], out["run_id"]), ("starting", None))
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+                got = json.loads(r.read())["launch"]
+            if got["state"] == "started":
+                return 200, got
+            if got["state"] == "failed":
+                return got["error_status"], got
+            time.sleep(0.1)
+        self.fail("the start did not settle in 30 s")
 
     def test_status_lists_requirements_and_never_the_key(self):
         base = self.serve({"ANTHROPIC_API_KEY": self.SECRET})
@@ -647,6 +665,32 @@ class LaunchTest(unittest.TestCase):
         self.assertEqual(info["requirements"][0]["cost_limit_usd"], 2.0)
         self.assertTrue(info["claude_ready"])
         self.assertNotIn(self.SECRET, raw)
+
+    def test_the_post_answers_at_once_and_the_status_follows_the_start(self):
+        # a child that takes 2 s before it prints its folder: the POST answers in well under that
+        # (202, no run_id yet); GET /api/launch says starting with the child's last line, then started
+        code = ("import pathlib, sys, time; print('loading the tools', flush=True); time.sleep(2); "
+                f"d = pathlib.Path(sys.argv[1]) / '{self.RUN}'; d.mkdir(parents=True); (d / 'events.jsonl').write_text(''); "
+                "print(f'run folder: {d}', flush=True); time.sleep(3)")
+        base = self.serve({}, command=lambda req, mode, runs: [sys.executable, "-c", code, str(runs)])
+        t0 = time.monotonic()
+        status, out = self.post_raw(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})
+        self.assertLess(time.monotonic() - t0, 1.0)
+        self.assertEqual((status, out["state"], out["run_id"], out["mode"]), (202, "starting", None, "scripted"))
+        time.sleep(1.0)
+        with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+            info = json.loads(r.read())
+        self.assertEqual((info["launch"]["state"], info["launch"]["last_line"]), ("starting", "loading the tools"))
+        self.assertIsNone(info["running"]["run_id"])
+        self.assertEqual(self.post_raw(base, {"requirements": "offroad-4w.yaml", "mode": "scripted"})[0], 409)  # still starting
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            with urllib.request.urlopen(base + "/api/launch", timeout=5) as r:
+                got = json.loads(r.read())["launch"]
+            if got["state"] != "starting":
+                break
+            time.sleep(0.1)
+        self.assertEqual((got["state"], got["run_id"]), ("started", self.RUN))
 
     def test_scripted_run_starts_and_only_one_at_a_time(self):
         base = self.serve({})
@@ -905,7 +949,7 @@ class LaunchTest(unittest.TestCase):
         folder = self.runs / "_requests" / done["request_id"]
         self.assertTrue((folder / "requirements.yaml").is_file() and (folder / "intake.json").is_file())
         self.assertEqual(post("/api/launch", {"request": "../evil", "mode": "scripted"})[0], 400)
-        status, out = post("/api/launch", {"request": done["request_id"], "mode": "scripted"})
+        status, out = self.post(base, {"request": done["request_id"], "mode": "scripted"})  # (202, then followed)
         self.assertEqual((status, out["run_id"], out["requirements"]), (200, self.RUN, f"_requests/{done['request_id']}"))
         self.assertEqual(seen, [(folder / "requirements.yaml", folder / "intake.json")])
         status, bad = post("/api/request", {"want": 7})

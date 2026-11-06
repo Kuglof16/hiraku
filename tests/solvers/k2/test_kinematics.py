@@ -62,5 +62,23 @@ class Bench(unittest.TestCase):
             self.assertAlmostEqual(cam, r["camber_deg"], delta=1e-3)
 
 
+class UpperPivotSpread(unittest.TestCase):
+    """hardpoints_for's upper_pivot_spread_mm (the upper arm's inner pivots apart along x)."""
+
+    def test_the_default_keeps_the_points_and_a_wider_spread_moves_only_the_upper_pivots_apart(self):
+        from hiraku.solvers.k2_vehicle.model import hardpoints_for
+        sup = {"id": "FL", "position_mm": [0.0, 600.0, 300.0], "radius_mm": 300.0,
+               "suspension": {"type": "kc_table", "travel_mm": 150.0}}
+        plain = hardpoints_for(sup, upper_joint_z_mm=470.0)
+        same = hardpoints_for(sup, upper_joint_z_mm=470.0, upper_pivot_spread_mm=200.0)
+        self.assertEqual(plain, same)
+        wide = hardpoints_for(sup, upper_joint_z_mm=470.0, upper_pivot_spread_mm=300.0)
+        self.assertAlmostEqual(wide["uca_front"][0] - wide["uca_rear"][0], 300.0, places=6)
+        for k in ("lca_front", "lca_rear", "lca_outer", "uca_outer", "damper_lower", "damper_upper"):
+            np.testing.assert_allclose(wide[k], plain[k], atol=1e-9, err_msg=k)
+        # the linkage still moves through the travel; the tie rod is placed again
+        self.assertIn("tie_inner", wide)
+
+
 if __name__ == "__main__":
     unittest.main()

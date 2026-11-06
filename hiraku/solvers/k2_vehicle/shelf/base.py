@@ -177,6 +177,8 @@ class K2Tool(ABC):
         self.opts = {k: v for k, v in (params or {}).items() if k != "upstream_analyses"}
         self._vars = design.get("variables") or {}
         self._assumed = []
+        # the load case's criterion, for a tool that draws it in the scene (e.g. braking's stop line)
+        self._criterion = dict(load_case.get("criterion") or {})
         # the run options the analyze call gives (e.g. until = top_speed) override the load case's
         for p in self.params:
             if p.run_option and p.name in self.opts:
