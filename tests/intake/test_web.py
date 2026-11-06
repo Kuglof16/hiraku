@@ -714,7 +714,7 @@ const picked = e(1, 1, 'domains.picked', {{ want: 'w', flags: {{}}, flag_reasons
 let events = [picked];
 const api = {{ events: () => events, onEvent: () => () => {{}}, exclude: () => {{}} }};
 const el = new El('div');
-const intake = mountIntake(el, api, {{ screen: 'A1' }});
+const intake = mountIntake(el, api, {{ screen: 'A1', replyInTurn: true }});
 const card = (d) => el.all('article').find((a) => a.dataset.domain === d);
 {{BODY}}
 """
