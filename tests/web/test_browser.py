@@ -22,7 +22,7 @@ from tests.web.mesh_fixture import mesh_events
 from tests.web.safe_side_fixture import safe_side_events
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover - depends on the machine
     sync_playwright = None
 
@@ -142,7 +142,8 @@ def n05_layout():
 class BrowserReplayTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server("127.0.0.1", 0, "runs-none", quiet=True, saved_dir=None)
+        cls.tmp = Path(tempfile.mkdtemp())  # runs/ is not made: the server has no runs of its own
+        cls.server = make_server("127.0.0.1", 0, cls.tmp / "runs", quiet=True, saved_dir=None, launcher=False)
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         cls.pw = sync_playwright().start()
@@ -154,13 +155,14 @@ class BrowserReplayTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
         cls.server.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def open(self, query):
         page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: m.type == "error" and errors.append(m.text))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
         page.evaluate("window.hiraku.ready")
         return page, errors
@@ -397,7 +399,7 @@ class BrowserReplayTest(unittest.TestCase):
                 if tmp:
                     shutil.rmtree(tmp)
                 self.skipTest(f"the solvers do not import in this Python ({e}); set HIRAKU_WEB_DEV_RUNS")
-        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None)
+        server = make_server("127.0.0.1", 0, runs, quiet=True, saved_dir=None, launcher=False)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
@@ -405,7 +407,7 @@ class BrowserReplayTest(unittest.TestCase):
                 page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
                 errors = []
                 page.on("pageerror", lambda e: errors.append(str(e)))
-                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}")
+                page.goto(f"{base}/?run={run.name}&pace=0&t=1e6&look={look}", wait_until="domcontentloaded")
                 page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
                 page.evaluate("window.hiraku.ready")
                 page.click('#tests button[data-lc="P1-step100"]')
@@ -485,7 +487,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .lreq")
             ask = page.locator("#launch button[data-launch-ask]")
             self.assertIn("$2", ask.text_content())  # the cost limit shows before anything starts
@@ -559,7 +561,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             got = page.evaluate("""() => ({
                 first: document.querySelector('#launch h3').textContent,
@@ -615,7 +617,7 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertEqual(posted, [])
             self.assertFalse(lau.started)
             # the file row's Claude run, confirmed, starts on its file
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch-ask]")
             page.click("#launch .lreq.demo[data-demo='n12'] button[data-launch='claude']")
             page.wait_for_url(f"**/?run={run_id}-claude&dev=1", timeout=30000)
@@ -631,7 +633,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             row = "#launch .lreq.demo[data-demo='n12']"
             self.assertTrue(page.is_disabled(f"{row} button:has-text('Claude で走らせる')"))
@@ -657,7 +659,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             text = page.inner_text("#runlist")
             for w in self.DEV_WORDS:
@@ -684,7 +686,7 @@ class BrowserReplayTest(unittest.TestCase):
                 self.assertIn(w, more)
             # ?dev=1: all there (the demo rows' files and tags inside their closed くわしく: the text, not
             # only what is drawn)
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             text = page.text_content("#runlist")
             for w in self.DEV_WORDS:
@@ -703,7 +705,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .demo-runs")
             text = page.inner_text("#runlist")
             self.assertEqual(page.locator("#runlist .keyless, #runlist .needs-key").count(), 0)
@@ -720,7 +722,7 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertFalse(lau.started)
             page.click(f"{row('n09')} a.demo-a1")
             page.wait_for_url("**/?new=1&demo=n09")
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.click(f"{row('n12')} button[data-launch-ask]")
             page.click(f"{row('n12')} button[data-launch='claude']")
             page.wait_for_url(f"**/?run={run_id}-claude", timeout=30000)
@@ -908,7 +910,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?new=1")
+            page.goto(f"{base}/?new=1", wait_until="domcontentloaded")
             page.wait_for_selector("#draftbar")
             self.assertIn("作りたいものを書いて", page.text_content("#draftbar"))
             page.fill("#view-intake textarea", "林道を走れる 2 人乗りの小さな車両")
@@ -1000,7 +1002,9 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         going = tmp / "going.jsonl"
         going.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
-        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 30.0), reader=fake_reader, wait_s=20,
+        # the child stays until the test kills it (finally below): with other tests beside it, opening
+        # the page took longer than a 30 s hold, the run had ended and the file was refused
+        lau = Launcher(tmp / "runs", tmp / "requirements", env={}, command=fake_command(going, run_id, 300.0), reader=fake_reader, wait_s=20,
                        demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -1010,7 +1014,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?run={run_id}&tab=A5")
+            page.goto(f"{base}/?run={run_id}&tab=A5", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_selector(".stop-btn")  # the screen knows the run is its own
             note = tmp / "曲げの決まり.md"
@@ -1051,7 +1055,21 @@ class BrowserReplayTest(unittest.TestCase):
         events[0]["data"]["run_id"] = run_id
         (run / "events.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in events), encoding="utf-8")
         (run / "project.json").write_text(json.dumps({**events[0]["data"], "status": "running", "driver": "claude_code_plugin"}), encoding="utf-8")
-        (run / PLUGIN_ALIVE_FILE).write_bytes(b"")  # touched now: younger than PLUGIN_ALIVE_S for the test's few seconds
+        # the plugin's session touches plugin.alive while it holds the run (younger than PLUGIN_ALIVE_S):
+        # touched here every second until the test ends, as the session would, so a slow page
+        # (other tests beside it) does not outlast it
+        alive = run / PLUGIN_ALIVE_FILE
+        alive.write_bytes(b"")
+        done = threading.Event()
+
+        def keep_alive():
+            while not done.wait(1.0):
+                try:
+                    os.utime(alive)
+                except OSError:  # the folder is gone (the test's end)
+                    return
+
+        threading.Thread(target=keep_alive, daemon=True).start()
         lau = Launcher(tmp / "runs", tmp / "requirements", env={}, demo_runs_file=tmp / "no-demo-runs.yaml")
         server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=None, launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -1060,7 +1078,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/?run={run_id}&tab=A2")
+            page.goto(f"{base}/?run={run_id}&tab=A2", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             button = "#view-intake .in-pane[data-screen=A2] button.in-btn"
             page.wait_for_function(f"[...document.querySelectorAll('{button}')].some((b) => /標準の値のまま進める/.test(b.textContent) && !b.disabled)")
@@ -1082,7 +1100,7 @@ class BrowserReplayTest(unittest.TestCase):
             page.close()
             # the same run opened as a replay (?live=0) stays read-only
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
-            page.goto(f"{base}/?run={run_id}&tab=A2&live=0&pace=0")
+            page.goto(f"{base}/?run={run_id}&tab=A2&live=0&pace=0", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=30000)
             page.wait_for_selector(button)
             self.assertTrue(all(page.eval_on_selector_all(button, "(bs) => bs.map((b) => b.disabled)")))
@@ -1094,6 +1112,7 @@ class BrowserReplayTest(unittest.TestCase):
             self.assertFalse((run / "knowledge" / "replay.md").exists())
             page.close()
         finally:
+            done.set()
             server.shutdown()
             server.server_close()
             shutil.rmtree(tmp, ignore_errors=True)
@@ -1302,7 +1321,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/cut.html?cut=n05&run={run}&t=0.5")
+            page.goto(f"{base}/cut.html?cut=n05&run={run}&t=0.5", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             js = """async (t) => {
@@ -1354,7 +1373,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=dpr)
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/cut.html?cut=n05&run=sample&{query}")
+            page.goto(f"{base}/cut.html?cut=n05&run=sample&{query}", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             return page, errors
@@ -1424,7 +1443,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n01&run={run}&t=2")
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n01&run={run}&t=2", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             got = page.evaluate(
@@ -1478,7 +1497,7 @@ class BrowserReplayTest(unittest.TestCase):
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3")
+            page.goto(f"http://127.0.0.1:{server.server_address[1]}/cut.html?cut=n02&run={run}&t=3", wait_until="domcontentloaded")
             page.wait_for_function("window.hiraku && window.hiraku.ready", timeout=60000)
             page.evaluate("window.hiraku.ready")
             got = page.evaluate(
@@ -1515,14 +1534,18 @@ class BrowserReplayTest(unittest.TestCase):
         run_id = "20261106-100000-offroad-4w"
         (tmp / "showcase" / run_id).mkdir(parents=True)
         shutil.copyfile(SAMPLE_EVENTS, tmp / "showcase" / run_id / "events.jsonl")
-        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=tmp / "showcase")
+        from hiraku.webserve.launch import Launcher
+
+        # the list's launcher without an API key, whatever the window running the test has (nothing is started)
+        lau = Launcher(tmp / "runs", env={})
+        server = make_server("127.0.0.1", 0, tmp / "runs", quiet=True, saved_dir=tmp / "showcase", launcher=lau)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_address[1]}"
         try:
             page = self.browser.new_page(viewport={"width": 1920, "height": 1080})
             asked = []
             page.on("request", lambda r: asked.append(r.url) if "/events" in r.url else None)
-            page.goto(f"{base}/")
+            page.goto(f"{base}/", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .pick")
             first = page.evaluate("""() => ({ list: !document.getElementById("runlist").hidden,
                                               head: document.querySelector("#runlist h2").textContent })""")
@@ -1537,14 +1560,14 @@ class BrowserReplayTest(unittest.TestCase):
                                              text: document.getElementById("mode").textContent })""")
             self.assertEqual(back["link"], [["☰ 一覧へ", "?list=1"]])
             self.assertNotIn(run_id, back["text"])
-            page.goto(f"{base}/?list=1")
+            page.goto(f"{base}/?list=1", wait_until="domcontentloaded")
             page.wait_for_selector("#launch .pick")
             # the recommendation comes first after 「＋ 新しく依頼する」 (the list's first line, test_runlist_order_browser)
             pick = page.evaluate("""() => { const p = document.querySelector("#launch .pick");
                 return { n: document.querySelectorAll("#launch .pick").length, first: document.querySelector("#runlist .pick") === document.querySelector("#runlist h2 ~ #launch > .fresh-top + *"),
                          run: p.dataset.run, href: p.querySelector("a.go").getAttribute("href"), verb: p.querySelector("a.go").textContent }; }""")
             self.assertEqual(pick, {"n": 1, "first": True, "run": run_id, "href": f"?run={run_id}", "verb": "見る"})
-            page.goto(f"{base}/?list=1&dev=1")
+            page.goto(f"{base}/?list=1&dev=1", wait_until="domcontentloaded")
             page.wait_for_selector("#runlist h3")
             listing = page.evaluate(
                 """() => ({ heads: [...document.querySelectorAll("#runlist > h3")].map((h) => h.textContent),

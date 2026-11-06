@@ -25,7 +25,7 @@ from tests.web.node_motion_fixture import RUN_ID, T_ANALYSIS, node_motion_events
 from tests.web.test_layout_lint_browser import ENABLED, READY, WIDTHS, Screen, describe, lint
 
 try:
-    from playwright.sync_api import sync_playwright
+    from tests.web.pages import sync_playwright
 except ImportError:  # pragma: no cover
     sync_playwright = None
 
@@ -80,7 +80,7 @@ class NodeMotionBrowserTest(unittest.TestCase):
         page = self.browser.new_page(viewport={"width": size[0], "height": size[1]})
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"{self.base}/?{query}")
+        page.goto(f"{self.base}/?{query}", wait_until="domcontentloaded")
         page.wait_for_function(READY, timeout=60000)
         page.evaluate("window.hiraku.ready")
         page.evaluate("document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))")
