@@ -133,7 +133,8 @@ class ContractCoverageTest(unittest.TestCase):
         the list, or a domain with open tests reads as OK on the screen."""
         listed = re.findall(r'"([^"]+)"', re.search(r"const NOT_ALL_JUDGED = \[(.*?)\];", read(JS / "beyond.js"), re.S).group(1))
         judge = read(WEB.parent / "hiraku" / "tools" / "judge.py")
-        phrases = set(re.findall(r"(判定の無い試験|まだ[^\s\"':。、]*?試験)", judge))
+        # (a phrase may hold a space, まだ OK にできない試験; it ends before a quote or a newline)
+        phrases = set(re.findall(r"(判定の無い試験|まだ[^\"':。、\n]*?試験)", judge))
         self.assertTrue(phrases)
         self.assertEqual(sorted(p for p in phrases if p not in listed), [])
         # the phrase design-ok-ng-words writes, and the older ones of saved records
