@@ -131,11 +131,22 @@ offroad-4w:
         gusset_leg: {value: 80, unit: mm}
         gusset_thickness: {value: 3.2, unit: mm}
         cross_h: {value: 50, unit: mm}
+        # R9 (the suspension brackets, stage 3 with R1s): thicker bracket plates and welds, and a wider rail for the
+        # weld's length along it (plan A of the lead, 2026-11-06; rail_b still to be decided with the user)
+        mount_plate_t: {value: 9, unit: mm}
+        mount_weld_leg: {value: 6.3, unit: mm}
+        rail_b: {value: 45, unit: mm}
       reason: >-
         R1s: 横の部材の端がレールの側の壁を板として曲げ、つなぎ目のホットスポットが限界を超えるので、
         レールの肉厚を 2.3 mm から 4.5 mm にし、つなぎ目に脚 80 mm・厚さ 3.2 mm のガセットを足し、横の部材の高さを 40 mm から 50 mm にする
-        (版 4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)
+        (v4 で、つなぎ目のホットスポットは 563 MPa、限界 163 MPa)。
+        R9: 後ろの下のアームの後ろのピンのブラケットの板と溶接が利用率 1 を超えるので、板の厚さを 9 mm、溶接の脚を 6.3 mm にし、
+        溶接の長さを決めるレールの幅を 40 mm から 45 mm にする
       source: >-
+        R9: the analysis department's hand estimates on v4 of the demo scripted run 20261106-185605 (plate 6.16, weld 2.88
+        at RR.lca_rear) and its shell runs (set A) on v5 with the bracket base (claude/analysis-lca-bracket-base cce7565f),
+        mount_plate_t 9 and mount_weld_leg 6.3: plate 0.997 / weld 0.80 at rail_b 40, 0.81 / 0.63 at rail_b 45, 2026-11-06.
+        R1s:
         the N15 scripted run 20261104-181845-offroad-4w-scripted, version 4: R1s ver-0066 (frame_shell ana-0082 max_hot_spot_stress 562.5 MPa
         at rail_R_BE, cmp-0145); version 5 with this change: R1s ver-0090 (frame_shell ana-0113 129.0 MPa at rail_L_BE, cmp-0200).
         The values: the analysis department's sweep (claude/dept-analysis-cf6cf8 b8046ca); cross_h changes every cross member
