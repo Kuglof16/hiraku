@@ -81,7 +81,16 @@ window.HV = window.HV || {};
     }
     return c.max > c.min ? (v - c.min) / (c.max - c.min) : 0;
   };
-  HV.colour = (c, v) => HV.turbo(HV.norm(c, v));
+  // one hue, light to dark (HIRAKU's blue #2b59c3 in the middle), for a quantity that only grows from zero:
+  // a spec with scale: 'seq'
+  const SEQ = ['#d4def2', '#2b59c3', '#0f2557'].map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255));
+  HV.seq = function (x) {
+    x = Math.min(1, Math.max(0, x)) * (SEQ.length - 1);
+    const i = Math.min(SEQ.length - 2, Math.floor(x)), f = x - i, a = SEQ[i], b = SEQ[i + 1];
+    return [0, 1, 2].map(k => a[k] + (b[k] - a[k]) * f);
+  };
+  HV.ramp = c => (c && c.scale === 'seq' ? HV.seq : HV.turbo);
+  HV.colour = (c, v) => HV.ramp(c)(HV.norm(c, v));
 
   HV.drawContourBar = function (cv, c) {
     const g = cv.getContext('2d'), W = cv.width, H = cv.height;
@@ -92,7 +101,8 @@ window.HV = window.HV || {};
     const x0 = 10, w = 16, y0 = 30, h = H - 70;
     g.fillStyle = '#1d1d1f'; g.font = 'bold 11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     wrap(g, c.title + (c.unit ? ` [${c.unit}]` : ''), 4, 12, W - 8, 12);
-    for (let i = 0; i < h; i++) { const k = HV.turbo(1 - i / h); g.fillStyle = `rgb(${k.map(v => Math.round(255 * v)).join(',')})`; g.fillRect(x0, y0 + i, w, 1); }
+    const ramp = HV.ramp(c);
+    for (let i = 0; i < h; i++) { const k = ramp(1 - i / h); g.fillStyle = `rgb(${k.map(v => Math.round(255 * v)).join(',')})`; g.fillRect(x0, y0 + i, w, 1); }
     g.strokeStyle = '#1d1d1f'; g.lineWidth = 1; g.strokeRect(x0, y0, w, h);
     g.font = '11px "BIZ UDPGothic", "Yu Gothic", Meiryo, sans-serif';
     const ticks = [];
