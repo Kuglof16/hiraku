@@ -2,8 +2,8 @@
 known): the tests read them from HIRAKU_CAD_SAMPLES (default C:/tmp/hiraku-cad-samples) and skip
 when the file is not there.
 
-- as1-oc-214.stp: an assembly of 18 solids (nuts, bolts, a rod, plates), every face a B-spline
-  surface (Open CASCADE).
+- as1-oc-214.stp: an assembly of 18 solids (nuts, bolts, a rod, plates); 53 faces, 25 planes and
+  28 rational B-spline surfaces (Open CASCADE).
 - Ventilator.stp: one solid with B-spline, revolution, extrusion, cone, cylinder and torus faces
   (CATIA V5).
 """
