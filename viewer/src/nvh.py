@@ -196,8 +196,9 @@ def build(args) -> dict:
     vdir, rec = common.find_analysis(args.run, "modal", version=args.version, analysis_id=args.analysis)
     design = common.read_json(vdir / "design.json")
     obj = common.base_object("nvh", "NVH: フレームの固有振動と周波数応答", args.run, vdir, rec, design)
+    obj["model"] = "beam"   # the page's NVH field also takes nvh_shell.py's "shell"
     ids = obj["frame"]["node_ids"]
-    lc = common.load_case_of(vdir, rec["load_case_id"])
+    lc =common.load_case_of(vdir, rec["load_case_id"])
     obj["ledger"] = common.parts_ledger("modal", design, lc, rec, obj["parts"])
     effects = {e["name"]: e.get("value") for e in rec.get("effects", [])}
     modes = []

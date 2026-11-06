@@ -22,7 +22,8 @@ Every field's object has these keys (the page's shared parts read them):
     ledger {...}                                (parts_ledger: how each part enters the calculation)
 plus the field's own keys (see each script).
 
-Packed arrays: {"dtype": "f32", "shape": [...], "b64": base64(gzip(little-endian bytes))}.
+Packed arrays: {"dtype": "f32", "shape": [...], "b64": base64(gzip(little-endian bytes))}; "i16" (with "scale":
+value = int * scale) and "i32" the same way (pack_i16, pack_i32). source.design_key: design_key(design).
 """
 
 from __future__ import annotations
@@ -124,6 +125,44 @@ def pack_f32(values: Iterable[float], shape: list[int] | None = None) -> Record:
 def unpack_f32(p: Record) -> list[float]:
     raw = gzip.decompress(base64.b64decode(p["b64"]))
     return list(struct.unpack(f"<{len(raw) // 4}f", raw))
+
+
+def _pack_raw(raw: bytes, dtype: str, shape: list[int], **extra) -> Record:
+    z = gzip.compress(raw, compresslevel=9, mtime=0)
+    return {"dtype": dtype, "shape": shape, "b64": base64.b64encode(z).decode("ascii"), **extra}
+
+
+def pack_i16(values: Iterable[float], scale: float, shape: list[int] | None = None) -> Record:
+    """Values as int16 steps of `scale` (value = int * scale), clipped to +-32767 steps: for values of a known range
+    (relative shapes and fields, |v| <= 32767 scale). The page multiplies back to float32."""
+    q = [max(-32767, min(32767, int(round(float(v) / scale)))) for v in values]
+    return _pack_raw(struct.pack(f"<{len(q)}h", *q), "i16", shape or [len(q)], scale=scale)
+
+
+def pack_i32(values: Iterable[int], shape: list[int] | None = None) -> Record:
+    """Integers (indices) as int32."""
+    q = [int(v) for v in values]
+    return _pack_raw(struct.pack(f"<{len(q)}i", *q), "i32", shape or [len(q)])
+
+
+def unpack(p: Record) -> list[float] | list[int]:
+    """Any packed array (f32, i16 times its scale, i32)."""
+    raw = gzip.decompress(base64.b64decode(p["b64"]))
+    dt = p.get("dtype", "f32")
+    if dt == "i16":
+        return [v * p["scale"] for v in struct.unpack(f"<{len(raw) // 2}h", raw)]
+    if dt == "i32":
+        return list(struct.unpack(f"<{len(raw) // 4}i", raw))
+    return list(struct.unpack(f"<{len(raw) // 4}f", raw))
+
+
+def design_key(design: Record) -> str:
+    """A short fingerprint of what the solvers read (nodes, members, sections, materials, parts, supports), so the
+    page can tell whether two records are of the same design."""
+    import hashlib
+    body = json.dumps([design.get(k) for k in ("nodes", "members", "sections", "materials", "parts", "supports")],
+                      sort_keys=True, separators=(",", ":"))
+    return hashlib.sha1(body.encode("utf-8")).hexdigest()[:12]
 
 
 def data_js(field: str, obj: Record) -> str:
@@ -252,7 +291,7 @@ def base_object(field: str, title: str, run: Path, vdir: Path, record: Record, d
         "source": {"run": run_name(run, vdir), "version": Path(vdir).name,
                    "analysis_id": record.get("analysis_id", ""), "tool": record.get("tool", ""),
                    "load_case_id": record.get("load_case_id", ""), "design_name": design.get("name", ""),
-                   "design_version": design.get("design_version")},
+                   "design_version": design.get("design_version"), "design_key": design_key(design)},
         "frame": frame_of(design),
         "parts": parts_of(design),
         "scene": scene_of(record),

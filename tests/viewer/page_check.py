@@ -1,7 +1,8 @@
 """Open viewer/index.html#<field> from disk in headless Chromium (Python Playwright), wait for the
 page, step the time and pick a member, and print a JSON summary (console errors, what the page shows).
 
-Usage: python tests/viewer/page_check.py <viewer dir> <field> [screenshot.png] [time index]
+Usage: python tests/viewer/page_check.py <viewer dir> <field> [screenshot.png] [time index] [mode index]
+<field> may be a data variant (nvh_shell opens the NVH field on the shell record).
 Playwright is installed for the system Python (py), not the venv."""
 
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 
-def check(viewer: Path, field: str, shot: str | None = None, t: int | None = None) -> dict:
+def check(viewer: Path, field: str, shot: str | None = None, t: int | None = None, mode: int | None = None) -> dict:
     url = (Path(viewer).resolve() / "index.html").as_uri() + "#" + field
     errors: list[str] = []
     out: dict = {"field": field}
@@ -26,6 +27,10 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
         out["shown_field"] = page.evaluate("window.__field")
         out["title"] = page.text_content("#title")
         out["nT"] = page.evaluate("HV.state.ctl ? HV.state.ctl.nT : 0")
+        out["variant"] = page.evaluate("HV.state.variant")
+        if mode is not None:
+            page.evaluate(f"HV.state.ctl.selectMode({mode})")
+            page.wait_for_timeout(200)
         if t is not None:
             page.eval_on_selector("#time", f"e => {{ e.value = {t}; e.dispatchEvent(new Event('input')); }}")
             page.wait_for_timeout(200)
@@ -92,6 +97,7 @@ def check(viewer: Path, field: str, shot: str | None = None, t: int | None = Non
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    r = check(Path(a[0]), a[1], a[2] if len(a) > 2 else None, int(a[3]) if len(a) > 3 else None)
+    r = check(Path(a[0]), a[1], a[2] or None if len(a) > 2 else None, int(a[3]) if len(a) > 3 else None,
+              int(a[4]) if len(a) > 4 else None)
     sys.stdout.reconfigure(encoding="utf-8")
     print(json.dumps(r, indent=1, ensure_ascii=False))
