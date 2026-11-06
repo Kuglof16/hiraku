@@ -472,7 +472,7 @@ class Handler(BaseHTTPRequestHandler):
     assets: bool = True  # /api/assets lists the Poly Haven files (False: none, for the fall-back)
     viewer_dir: Path = viewer_link.VIEWER_DIR
     viewer_data_dir: Path = viewer_link.VIEWER_DATA_DIR
-    viewer_build = None  # the viewer's entry to use (None: viewer.src.build.for_analysis when it exists)
+    viewer_build = None  # the viewer's entry (None: viewer.src.build.for_analysis when it exists; False: provisional)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 (stdlib name)
         if not self.quiet:
@@ -524,7 +524,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_tool_list(m.group(1))
             return
         if path == "/api/viewer":
-            self._send_json(viewer_link.info(self.viewer_data_dir))
+            self._send_json(viewer_link.info(self.viewer_data_dir, self.viewer_build))
             return
         m = _VIEWER_API_RE.match(path)
         if m:
@@ -816,7 +816,8 @@ def make_server(
             "viewer_dir": Path(viewer_dir),
             "viewer_data_dir": Path(viewer_data_dir) if viewer_data_dir is not None else Path(viewer_dir) / "data",
             # (staticmethod: a plain function as a class attribute would be bound to the handler)
-            "viewer_build": staticmethod(viewer_build) if viewer_build else None,
+            # (False: the provisional answers even when the entry exists, for tests)
+            "viewer_build": staticmethod(viewer_build) if callable(viewer_build) else viewer_build,
         },
     )
     return Server((host, port), handler)

@@ -121,9 +121,11 @@ def find_analysis(events_file: Path, analysis_id: str) -> dict[str, Any] | None:
     return found
 
 
-def provisional(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR) -> dict[str, Any]:
-    """The answer without the analysis department's entry: the field's sample, as it is."""
-    ana = find_analysis(events_file, analysis_id)
+def provisional(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR,
+                ana: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The answer without the analysis department's entry: the field's sample, as it is. ana: the
+    analysis' event data when already read."""
+    ana = ana if ana is not None else find_analysis(events_file, analysis_id)
     if ana is None:
         return {"field": None, "reason": NO_ANALYSIS}
     if ana.get("status") == "failed":
@@ -145,12 +147,13 @@ def provisional(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DAT
 
 
 def answer(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR,
-           build: Callable[[Path, str], dict[str, Any]] | None = None) -> dict[str, Any]:
+           build: Callable[[Path, str], dict[str, Any]] | None = None, ana: dict[str, Any] | None = None) -> dict[str, Any]:
     """What GET /api/runs/<run_id>/viewer/<analysis_id> answers. build: the entry to use (by default
-    viewer.src.build.for_analysis when it exists, else the provisional sample)."""
-    build = build or entry()
+    viewer.src.build.for_analysis when it exists, else the provisional sample; False: the provisional
+    sample even when the entry exists). ana: as in provisional."""
+    build = None if build is False else build or entry()
     if build is None:
-        return provisional(events_file, analysis_id, data_dir)
+        return provisional(events_file, analysis_id, data_dir, ana)
     try:
         out = build(Path(events_file).parent, analysis_id)
     except Exception as e:  # noqa: BLE001 (the page gets one line, not a broken answer)
@@ -161,10 +164,10 @@ def answer(events_file: Path, analysis_id: str, data_dir: Path = VIEWER_DATA_DIR
     return out
 
 
-def info(data_dir: Path = VIEWER_DATA_DIR) -> dict[str, Any]:
+def info(data_dir: Path = VIEWER_DATA_DIR, build: Callable[[Path, str], dict[str, Any]] | None = None) -> dict[str, Any]:
     """GET /api/viewer: whether the answers are provisional, the tool table, and (provisional only)
-    the fields with no sample, whose buttons cannot be pressed."""
-    prov = entry() is None
+    the fields with no sample, whose buttons cannot be pressed. build as in answer."""
+    prov = build is False or (build is None and entry() is None)
     fields = sorted(set(TOOL_FIELD.values()))
     missing = [f for f in fields if not sample_file(f, data_dir).is_file()] if prov else []
     return {"provisional": prov, "fields": dict(TOOL_FIELD), "rops_prefix": ROPS_PREFIX, "missing": missing,
@@ -210,9 +213,9 @@ def export(out_dir: Path, runs: dict[str, Path], data_dir: Path = VIEWER_DATA_DI
             if rel.parts[0] in ("src", "data") or f.suffix == ".pyc":
                 continue  # (the Python is not served; the samples go into the answers)
             put(out_dir / "viewer" / rel, f.read_bytes())
-    put(out_dir / "data" / "viewer.json", json.dumps(info(data_dir), ensure_ascii=False).encode("utf-8"))
+    put(out_dir / "data" / "viewer.json", json.dumps(info(data_dir, build), ensure_ascii=False).encode("utf-8"))
     for run_id, events_file in runs.items():
-        ids: list[str] = []
+        found: dict[str, dict[str, Any]] = {}  # (the last event of each id, as find_analysis)
         with open(events_file, encoding="utf-8") as f:
             for line in f:
                 if '"analysis.finished"' not in line:
@@ -221,11 +224,11 @@ def export(out_dir: Path, runs: dict[str, Path], data_dir: Path = VIEWER_DATA_DI
                     ev = json.loads(line)
                 except ValueError:
                     continue
-                aid = (ev.get("data") or {}).get("analysis_id")
-                if ev.get("kind") == "analysis.finished" and aid and aid not in ids:
-                    ids.append(aid)
-        for aid in ids:
-            body = answer(Path(events_file), aid, data_dir, build)
+                d = ev.get("data") or {}
+                if ev.get("kind") == "analysis.finished" and d.get("analysis_id"):
+                    found[d["analysis_id"]] = d
+        for aid, ana in found.items():
+            body = answer(Path(events_file), aid, data_dir, build, ana)
             put(out_dir / "data" / "viewer" / run_id / f"{aid}.json", json.dumps(body, ensure_ascii=False).encode("utf-8"))
     return total
 
