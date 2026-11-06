@@ -18,7 +18,7 @@ import { fill, h } from "./intake/dom.js";
 
 const BASES = ["K0", "K1", "K2", "K3", "K4", "K5"];
 const MODES = [["domain", "分野から"], ["base", "土台から"]];
-const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["notok", "OK でない"], ["unusable", "使えない"]];
+const FILTERS = [["all", "すべて"], ["claude", "Claude が作った"], ["notok", "確かめを通っていない"], ["unusable", "使えない"]];
 const POLL_MS = 2000; // asking again while the server builds the shelf
 
 // A check's got is null when the tool could not give that value (e.g. tilt.py finds no tipping angle);
@@ -26,7 +26,7 @@ const POLL_MS = 2000; // asking again while the server builds the shelf
 const noValue = (c) => c.got === null;
 const isClaude = (t) => t.origin === "claude";
 const hasNoValue = (t) => (t.checks ?? []).some(noValue);
-// OK でない: at least one check that did not pass or gave no value (a tool without checks is not counted)
+// 確かめを通っていない (notok): at least one check that did not pass or gave no value (a tool without checks is not counted)
 const isNotOk = (t) => (t.checks ?? []).some((c) => !c.pass || noValue(c));
 const isUnusable = (t) => t.usable === false;
 const passed = (t) => (t.checks ?? []).filter((c) => c.pass && !noValue(c)).length;
@@ -64,8 +64,8 @@ function checkState(t) {
   const p = passed(t);
   const cls = !n ? "none" : hasNoValue(t) ? "noval" : p === n ? "ok" : "bad";
   const title = !n ? "答えの分かっている問題が無い" : hasNoValue(t) ? "ツールの値が出ない問題がある"
-    : p === n ? "答えの分かっている問題で全部 OK" : "OK でない問題がある";
-  return h("span", { class: `sh-chk ${cls}`, title }, `OK ${p} / ${n}`);
+    : p === n ? "答えの分かっている問題で確かめた" : "確かめを通っていない問題がある";
+  return h("span", { class: `sh-chk ${cls}`, title }, `確かめ ${p} / ${n}`);
 }
 
 // ?dev=1: the ids and the English are shown, folded under くわしく; without it, not at all.
@@ -112,7 +112,7 @@ export function exprNodes(expr) {
 function marks(t) {
   return [
     isClaude(t) ? h("span", { class: "sh-mark claude", title: "実行の中で Claude が作ったツール" }, "Claude が作った") : null,
-    isUnusable(t) ? h("span", { class: "sh-mark off", title: "確かめが OK でないので使えない" }, "使えない") : null,
+    isUnusable(t) ? h("span", { class: "sh-mark off", title: "確かめを通っていないので使えない" }, "使えない") : null,
   ];
 }
 
@@ -236,7 +236,7 @@ export function mountShelf(el, api) {
         h("span", { class: "sh-caret" }, closed ? "▸" : "▾"), h("b", {}, b.label),
         // (the counts only once the shelf is built: before, only this run's tools are known)
         shelf.ready ? h("span", { class: "sh-n", title: "ツールの数" }, `${b.tools.length} ツール`) : null,
-        shelf.ready ? h("span", { class: "sh-nok", title: "確かめが全部 OK のツールの数" }, `OK ${ok}`) : null),
+        shelf.ready ? h("span", { class: "sh-nok", title: "確かめを全部通ったツールの数" }, `確かめた ${ok}`) : null),
       closed ? null : h("ul", {}, b.tools.map(row)));
   }
 
@@ -300,7 +300,7 @@ export function mountShelf(el, api) {
           : "—"),
         h("dt", {}, "CAE の段"), h("dd", {}, `${t.base} ${BASE_JA[t.base] ?? ""}`),
         h("dt", {}, "出どころ"), h("dd", {}, isClaude(t) ? "この実行で Claude が作った" : "標準のツール", t.fromRun ? h("small", { class: "sh-dim" }, " (この実行で確かめた記録)") : null)),
-      h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問、OK ${passed(t)}${checks.length - passed(t) ? `、OK でない ${checks.length - passed(t)}` : ""})`),
+      h("h4", {}, `答えの分かっている問題で確かめた結果 (${checks.length} 問、通った ${passed(t)}${checks.length - passed(t) ? `、通っていない ${checks.length - passed(t)}` : ""})`),
       h("p", { class: "sh-what" }, "ツールを使う前に、式で答えが出る簡単な問題を解かせ、答えと合うかを確かめた結果です。設計を確かめる手計算とは別のものです。"),
       checks.length
         ? h("table", { class: "sh-checks" },
@@ -312,7 +312,7 @@ export function mountShelf(el, api) {
               h("td", { class: "num", title: noValue(c) ? "ツールがこの問題の値を出せなかった" : String(c.got) }, noValue(c) ? "値が出ない" : fmt(c.got, 6)),
               h("td", {}, unitLabel(c.unit)),
               h("td", { class: "num", title: String(c.tolerance_rel) }, fmtPct(c.tolerance_rel, 1)),
-              h("td", {}, c.pass && !noValue(c) ? "OK" : "×"),
+              h("td", {}, c.pass && !noValue(c) ? "✓" : "×"),
               h("td", { class: "src" }, words(c.source_ja, c.source, k(`src:${i}`)))))))
         : h("p", { class: "sh-dim" }, "答えの分かっている問題がありません"),
       isClaude(t) ? codeBlock(t) : null);
@@ -324,7 +324,7 @@ export function mountShelf(el, api) {
     fill(filterSeg, FILTERS.map(([k, label]) => h("button", { type: "button", class: ui.filter === k ? "on" : "", dataset: { filter: k }, onclick: () => { ui.filter = k; render(); } }, label)));
     const ok = tools.filter(allPassed).length;
     // before the shelf is built only this run's tools are known: no count until then
-    sum.textContent = shelf.ready ? `${tools.length} ツール・OK ${ok}` : shelf.error ? "" : "棚を確かめています…";
+    sum.textContent = shelf.ready ? `${tools.length} ツール・確かめた ${ok}` : shelf.error ? "" : "棚を確かめています…";
     // the tools Claude wrote are all in the run's records: under that filter nothing waits for the server
     note.hidden = (shelf.ready || ui.filter === "claude") && !shelf.error && !shelf.failed;
     note.className = `sh-note${shelf.error || shelf.failed ? " sh-err" : ""}`;
