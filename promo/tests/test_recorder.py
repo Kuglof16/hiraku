@@ -239,6 +239,23 @@ class RecorderInBrowser(unittest.TestCase):
         (rate, ch, width), _ = read_wav(Path(dl.value.path()).read_bytes())
         self.assertEqual((rate, ch, width), (44100, 1, 2))
 
+    def test_space_records_with_the_device_list_focused(self):
+        # choosing the microphone leaves the focus on the select; Space must still start the countdown
+        self.page.focus("#device")
+        self.page.dispatch_event("#device", "change")
+        self.page.focus("#device")      # as if the user clicked it again
+        self.page.keyboard.press("Space")
+        try:
+            on = self.page.evaluate("() => document.getElementById('countdown').classList.contains('on')")
+            rec = self.page.evaluate("() => window.hirakuRec.state ? window.hirakuRec.state.recording : null")
+            self.assertTrue(on or rec, "Space with the device list focused did nothing")
+            if on:
+                self.assertTrue(self.page.locator("#countdown").is_visible())
+        finally:
+            self.page.keyboard.press("Space")   # cancel the countdown / stop
+            self.page.wait_for_timeout(200)
+            self.page.evaluate("async () => { if (window.hirakuRec.state && window.hirakuRec.state.recording) await window.hirakuRec.stopRecording(); }")
+
     def test_keys_move_between_sentences(self):
         self.page.keyboard.press("ArrowRight")
         self.assertEqual(self.page.locator("#pKey").inner_text(), "N01_1")

@@ -772,7 +772,7 @@ function wire() {
     if (wavs.length) await loadSynthFiles(wavs);
   });
   $("micBtn").onclick = () => openMic().catch((e) => { $("micBtn").textContent = "マイクが使えません"; console.error(e); });
-  $("device").onchange = () => { lsSet(LS.device, $("device").value); if (mic.stream) openMic(); };
+  $("device").onchange = () => { lsSet(LS.device, $("device").value); $("device").blur(); if (mic.stream) openMic(); };
   $("recBtn").onclick = toggleRecord;
   $("retakeBtn").onclick = () => { if (!state.recording) startRecording(); };
   $("prevBtn").onclick = () => go(state.pos - 1);
@@ -804,7 +804,10 @@ function wire() {
   // Keys: Space record/stop, → next, ← previous, R record again.
   document.addEventListener("keydown", (e) => {
     const tag = (e.target.tagName || "").toLowerCase();
-    if (tag === "select" || (tag === "input" && e.target.type === "text") || e.ctrlKey || e.metaKey || e.altKey) return;
+    // a select keeps its arrow keys (choosing the microphone), but Space still records:
+    // the device list keeps the focus after it is chosen, and Space was lost there
+    if (tag === "select" && e.code !== "Space") return;
+    if ((tag === "input" && e.target.type === "text") || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === "Space") { e.preventDefault(); toggleRecord(); }
     else if (e.key === "ArrowRight") { e.preventDefault(); go(state.pos + 1); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); go(state.pos - 1); }
