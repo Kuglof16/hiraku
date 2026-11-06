@@ -269,6 +269,42 @@ class BuildersTest(unittest.TestCase):
         self.assertEqual(BUILDERS["C1"](spec, REQ, DESIGN)["tolerance_rel"], 0.07)
 
 
+class DragBuilderTest(unittest.TestCase):
+    """F2: the drag force at Q50, the loading of Q30, no criterion; the plan's prediction waits for a tool."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.lc = BUILDERS["F2"](CATALOG.test("F2"), REQ, DESIGN)
+
+    def test_f2_load_case_on_the_demo(self):
+        contract.validate("load_case", self.lc)
+        q50 = next(r["value"] for r in REQ["requirements"] if r["key"] == "Q50")
+        q30 = next(r["value"] for r in REQ["requirements"] if r["key"] == "Q30")
+        self.assertEqual(self.lc["load_case_id"], f"F2-drag{q50:g}kmh")
+        self.assertEqual((self.lc["test_id"], self.lc["domain"]), ("F2", "aero"))
+        self.assertEqual(self.lc["params"]["speed"], {"value": float(q50), "unit": "km/h"})
+        self.assertEqual(self.lc["params"]["loading"], q30)
+        self.assertIn("Q50", self.lc["requirement_keys"])
+        self.assertIn("Q30", self.lc["requirement_keys"])
+        self.assertNotIn("criterion", self.lc)
+
+    def test_f2_plan_predicts_drag_force_on_the_demo(self):
+        from hiraku.catalog.builders.drag import F2_PLAN
+
+        self.assertNotIn("F2", PLANS)  # no tool takes F2 yet
+        self.assertNotIn("tool", F2_PLAN)
+        self.assertNotIn("expected_mismatch", F2_PLAN)
+        (p,) = F2_PLAN["predictions"]
+        self.assertEqual((p["quantity"], p["formula_id"]), ("drag_force", "drag.force"))
+        inputs = {k: resolve(ref, DESIGN, self.lc, {}) for k, ref in p["inputs"].items()}
+        F = FORMULAS.evaluate(p["formula_id"], inputs)["outputs"][p["output"]]
+        var = {k: DESIGN["variables"][k]["value"] for k in ("drag_coefficient", "frontal_area", "air_density")}
+        v = self.lc["params"]["speed"]["value"] / 3.6
+        self.assertEqual(F["unit"], "N")
+        self.assertAlmostEqual(F["value"], 0.5 * var["air_density"] * var["drag_coefficient"] * var["frontal_area"] * v * v,
+                               places=9)
+
+
 class RopsBuilderTest(unittest.TestCase):
     """R4: no tool on the shelf and no plan (HIRAKU's Claude makes the tool in the run); the load case alone."""
 

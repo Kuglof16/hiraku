@@ -1,6 +1,7 @@
 """Load cases for the tests the analysis department's tools take (K1, K3, K4):
 C1 crash, N1 modal, R3 fatigue, P4 drive_energy, T1 and T2 thermal, H1, H3 and
-H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). R7 and R8 (load_path)
+H5 assembly; and R4 (the roll bar), whose tool is not on the shelf (no PLAN). F2 (air drag, no criterion,
+no tool on the shelf: no PLAN yet) is in drag.py. R7 and R8 (load_path)
 are in load_path.py, H6 (spray_reach) in spray.py, joined to BUILDERS and PLANS here.
 
 Next to each builder: its tolerance_rel and why, and PLAN (the scripted way to
@@ -1045,9 +1046,11 @@ from hiraku.catalog.builders.entry import PLANS as _ENTRY_PLANS  # noqa: E402
 from hiraku.catalog.builders.mounts_r9 import BUILDERS as _R9_BUILDERS  # noqa: E402  (R9: mounts_r9.py)
 from hiraku.catalog.builders.mounts_r9 import FEEDS as _R9_FEEDS  # noqa: E402
 from hiraku.catalog.builders.mounts_r9 import PLANS as _R9_PLANS  # noqa: E402
+from hiraku.catalog.builders.drag import BUILDERS as _DRAG_BUILDERS  # noqa: E402  (F2: drag.py, no plan yet)
 
 BUILDERS = {
     **_LOAD_PATH_BUILDERS,
+    **_DRAG_BUILDERS,
     **_SPRAY_BUILDERS,
     **_ENTRY_BUILDERS,
     **_R9_BUILDERS,
