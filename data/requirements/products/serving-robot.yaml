@@ -93,10 +93,14 @@ requirements:
     basis: assumption
   - key: Q41
     name: 荷の位置
-    value: 一番高い段
+    value: 150
+    unit: mm
     source: default
     trust: 3
-    basis: assumption (the unfavourable side for tipping)
+    basis: >-
+      assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity
+      above the shelf it stands on, 150 mm (a cup or a plate on a tray); the demo vehicle's cargo is 150 mm above
+      its deck as well. The shelf's own height is the design's, not this value
   - key: Q54
     name: 稼働時間
     value: 10

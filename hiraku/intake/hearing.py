@@ -152,6 +152,27 @@ def plan_hearing(
     return plan
 
 
+def _numeric_defaults_for_sentences(req: Record) -> list[Record]:
+    """The requirements the file gives as a sentence ("the top shelf") for an item whose default is a number with a unit:
+    a calculation cannot use the sentence, so the item's default takes its place (source default, its own trust and
+    basis, and the sentence the file had, said in the basis). Nobody is asked; the record shows it is a default."""
+    out: list[Record] = []
+    for r in req.get("requirements", []):
+        try:
+            it = item(r["key"])
+        except IntakeError:
+            continue
+        d = it.get("default")
+        if not d or isinstance(d.get("value"), bool) or not isinstance(d.get("value"), (int, float)):
+            continue
+        v = r.get("value")
+        if isinstance(v, str) and v.strip():
+            swapped = _default_requirement(it, d, None)
+            swapped["basis"] = f"{d['basis'].strip()}. The requirements file said \"{v.strip()}\", which a calculation cannot use"
+            out.append(swapped)
+    return out
+
+
 def _default_requirement(it: Record, default: Record, known: Record | None) -> Record:
     out: Record = {"key": it["key"], "name": (known or {}).get("name") or it["name"], "source": "default",
                    "trust": default["trust"], "basis": default["basis"], "value": default["value"]}
@@ -331,6 +352,9 @@ def prepare(
         else:
             unresolved.append(key)
     defaulted = list(plan.defaulted)
+    swapped = _numeric_defaults_for_sentences(req)
+    for r in swapped:  # a sentence where the calculation needs a number: the item's default stands in, and says so
+        defaulted = [d for d in defaulted if d["key"] != r["key"]] + [r]
     ignored: list[str] = []
     for key in list(answers):  # something the person said that was not asked (a `default` item, or a key nobody needed)
         if key in in_file:

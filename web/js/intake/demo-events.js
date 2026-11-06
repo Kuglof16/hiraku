@@ -26423,7 +26423,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-care-bed",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 11 件、答え 3 件、既定値 24 件",
+   "text": "質問 11 件、答え 3 件、既定値 25 件",
    "data": {
     "answers": [
      {
@@ -26514,6 +26514,15 @@ export const DEMOS = {
       "basis": "JIS T 9254 (copy): 利用者の荷重 1350 N (約 135 kg), 9.2.1 a, https:\/\/kikakurui.com/t9/T9254-2009-01.html; read 2026-11-03 in a source check",
       "value": 1350,
       "unit": "N"
+     },
+     {
+      "key": "Q41",
+      "name": "荷の位置",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity above the floor it stands on, taken as 150 mm (a cup or a plate on a tray). The demo vehicle's cargo is also 150 mm above its deck (data/requirements/offroad-4w.yaml, Q41). It stands in when a requirements file gives a sentence (\"the top shelf\") for this item, because the load case needs a number",
+      "value": 150,
+      "unit": "mm"
      },
      {
       "key": "Q60",
@@ -29541,8 +29550,9 @@ export const DEMOS = {
       "name": "荷の位置",
       "source": "default",
       "trust": 3,
-      "basis": "assumption (the unfavourable side for tipping)",
-      "value": "一番高い段"
+      "basis": "assumption: HIRAKU's own default value, not checked in any source. The height of the cargo's centre of gravity above the shelf it stands on, 150 mm (a cup or a plate on a tray); the demo vehicle's cargo is 150 mm above its deck as well. The shelf's own height is the design's, not this value",
+      "value": 150,
+      "unit": "mm"
      },
      {
       "key": "Q55",
