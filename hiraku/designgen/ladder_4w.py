@@ -111,7 +111,12 @@ VARIABLES: dict[str, Var] = {
     "rear_overhang": Var("mm", 400.0, 200.0, 700.0, "frame behind the rear axle"),
     "rail_b": Var("mm", 40.0, 30.0, 80.0, "rail tube width"),
     "rail_h": Var("mm", 80.0, 50.0, 150.0, "rail tube height"),
-    "rail_t": Var("mm", 2.3, 1.6, 4.5, "rail tube wall"),
+    # C1 notes (rail_t, tower_t, seat_x, battery_x): K2's crash_beam (claude/k2-crash-contact 9bffe19c), 40 km/h,
+    # tyre 60 N/mm, on version 7 of the real run 20261105-160725, the least room to the occupant boxes
+    # (C1-40kmh >= 0), 2026-11-06; tool results, not checked against a physical test
+    "rail_t": Var("mm", 2.3, 1.6, 4.5, "rail tube wall. C1 (front crash): a thicker rail behind the towers bends less, so "
+                  "the towers and posts fold less into the feet (v7 of a run: 2.3 -> 4.5 mm took the least room to "
+                  "the feet from -27 to -13 mm)"),
     "cross_b": Var("mm", 40.0, 30.0, 80.0, "cross member tube width"),
     "cross_h": Var("mm", 40.0, 30.0, 120.0, "cross member tube height"),
     "cross_t": Var("mm", 2.3, 1.6, 4.5, "cross member tube wall"),
@@ -120,7 +125,9 @@ VARIABLES: dict[str, Var] = {
     "tower_b": Var("mm", 30.0, 25.0, 60.0, "square tube width of the suspension towers (posts, top beam, the arm "
                    "out to the damper's top), the dash posts and the dash cross member (narrower than the rail, "
                    "so that a post's foot sits inside the rail's top wall)"),
-    "tower_t": Var("mm", 2.3, 1.6, 4.5, "wall of the tower and dash tubes"),
+    "tower_t": Var("mm", 2.3, 1.6, 4.5, "wall of the tower and dash tubes. C1 (front crash): thicker towers carry more of "
+                   "the front's push back into the feet and can make it worse (v7 of a run: 2.3 -> 3.2 mm took the "
+                   "least room to the feet from -27 to -178 mm); do not thicken them for C1"),
     "lower_b": Var("mm", 40.0, 30.0, 60.0, "square tube width of the legs down to the lower arms' pivots and the "
                    "lower cross members joining them (at the default 40 x 2.3 the front legs are R3's worst welds, "
                    "damage 0.29; 50 x 3.2 gives 0.13)"),
@@ -129,12 +136,16 @@ VARIABLES: dict[str, Var] = {
                        "each axle where the motor and the reducer are not in the way); 0: none, each pivot on its leg "
                        "alone"),
     # people and parts
-    "seat_x": Var("mm", -1045.0, -1500.0, -500.0, "seat centre (x); the seat cross members are 275 mm ahead and behind"),
+    "seat_x": Var("mm", -1045.0, -1500.0, -500.0, "seat centre (x); the seat cross members are 275 mm ahead and behind. "
+                  "C1 (front crash): moving the seats back (with battery_x, so the packs still fit between the seat "
+                  "cross members) adds room to the feet and helps most (v7 of a run: seat_x and battery_x -1045 -> "
+                  "-1170 mm took the least room from -27 to +19 mm, +40 mm with rail_t 4.5)"),
     "seat_y": Var("mm", 300.0, 220.0, 400.0, "seat centre off the centre line, each side"),
     "steering_x": Var("mm", -570.0, -900.0, 0.0, "steering position (x): the steering wheel's centre is "
                       "150 mm behind it (where the back of the earlier steering box was)"),
     "battery_x": Var("mm", -1045.0, -1700.0, -300.0, "battery centre (x); it hangs from the cross members either side "
-                     "and must fit between them (seat_x moves the seat cross members)"),
+                     "and must fit between them (seat_x moves the seat cross members). C1 (front crash): move it "
+                     "with seat_x when the seats go back (seat_x alone is refused when the packs no longer fit)"),
     # the driver's place (seat_height, steering_column_angle, steering_wheel_height, pedal_x) are added after
     # the layout constants below: their defaults and ranges come from the AIST body sizes (_DRIVER_V1)
     # chassis
