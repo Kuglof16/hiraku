@@ -1,0 +1,49 @@
+{
+  "id": "stkr400",
+  "name": "JIS G 3466 STKR400 (square and rectangular steel tube for general structure)",
+  "name_ja": "一般構造用角形鋼管 STKR400",
+  "category": "steel",
+  "standard": "JIS G 3466",
+  "condition": "STKR400 as delivered, room temperature; elongation for wall thickness 8 mm and over (below 8 mm the minimum falls by 1.5 % per 1 mm, rounded per JIS Z 8401); E, nu and density are common carbon-steel design values not read in a source",
+  "properties": {
+    "E_MPa": {
+      "value": 205000.0,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "nu": {
+      "value": 0.3,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "density_kg_m3": {
+      "value": 7850.0,
+      "kind": "typical",
+      "source": "data/materials/materials.json; not read in a source (common design value for carbon steel)",
+      "checked": false
+    },
+    "yield_MPa": {
+      "value": 245.0,
+      "kind": "standard_minimum",
+      "source": "secondary: Nippon Steel & Sumikin Metal Products (ns-kenzai) catalogue 'kaku pipe' (a1_4.pdf, no date), table of mechanical properties per JIS G 3466: STKR400 yield point min 245 N/mm2",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "tensile_MPa": {
+      "value": 400.0,
+      "kind": "standard_minimum",
+      "source": "secondary: ns-kenzai catalogue 'kaku pipe' (a1_4.pdf, no date), table of mechanical properties per JIS G 3466: STKR400 tensile strength min 400 N/mm2",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    },
+    "elongation_pct": {
+      "value": 23.0,
+      "kind": "standard_minimum",
+      "source": "secondary: ns-kenzai catalogue 'kaku pipe' (a1_4.pdf, no date), table of mechanical properties per JIS G 3466: STKR400 elongation min 23 %, No. 5 test piece; note under the table: for thickness below 8 mm, 1.5 % less per 1 mm",
+      "checked": true,
+      "checked_on": "2026-11-06"
+    }
+  }
+}

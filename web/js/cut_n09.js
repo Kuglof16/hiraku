@@ -50,6 +50,7 @@ import { DOMAINS, DOMAIN_JA, DOMAIN_PLAIN_JA, esc, plainReason, plainSentence } 
 import { VIEWS, cutView } from "./workbench3d.js";
 import { storyOf } from "./cut_n03.js";
 import { applyEvent, initialState } from "./state.js";
+import { fetchAllEvents } from "./eventread.js";
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -121,18 +122,7 @@ export function chipsOf(picked) {
   return out.filter((c) => DOMAINS.includes(c.domain));
 }
 
-async function eventsOf(runId) {
-  const events = [];
-  let offset = 0;
-  for (;;) {
-    const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/events?offset=${offset}`, { cache: "no-store" });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error ?? res.status);
-    events.push(...body.events);
-    if (body.next_offset >= body.size || body.next_offset === offset) return events;
-    offset = body.next_offset;
-  }
-}
+const eventsOf = fetchAllEvents;
 
 export class CutN09 {
   constructor(layout, s, events) {

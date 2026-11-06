@@ -309,4 +309,4 @@ requirements:
 tests: [P1, R1]
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 1
-cost_limit_usd: 2.0
+cost_limit_usd: 80.0  # as data/requirements/offroad-4w.yaml (the person's choice, 11/6), above the estimate in data/catalog/demo_runs.yaml (n14)
