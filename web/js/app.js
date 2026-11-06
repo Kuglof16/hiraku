@@ -244,11 +244,12 @@ player.pacer = paceAfter;
 
 // The event clock (the default; js/player.js): each event's seconds on screen, the recorded gaps
 // dropped. key: what the run is about (a new design version, a mismatch, an NG, a cause, a hook,
-// the start and the end), shortened last when a long record is fitted into player.fitS; the
-// routine ones (an analysis that matched, an OK, a prediction) first. An analysis with a motion
-// gets the motion's length (1.5 to 3 s) and its motion plays in that time (animTau).
-// Bookkeeping records (judgement.updated, rule_check.recorded, agent.started/stopped,
-// cost.updated, screen.focus, project.updated) take no time.
+// the start and the end, a turn to another screen), shortened last when a long record is fitted
+// into player.fitS; the routine ones (an analysis that matched, an OK, a prediction) first. An
+// analysis with a motion gets the motion's length (1.5 to 3 s) and its motion plays in that time
+// (animTau). The last event keeps its own time too (player.duration). Bookkeeping records
+// (judgement.updated, rule_check.recorded, agent.started/stopped, cost.updated, project.updated)
+// take no time.
 const EVENT_S = {
   "run.started": [1.5, true],
   "hearing.asked": [1.0, true],
@@ -270,6 +271,7 @@ const EVENT_S = {
   "hook.blocked_stop": [1.2, true],
   "report.written": [1.5, true],
   "run.finished": [1.0, true],
+  "screen.focus": [1.5, true], // the run turns to another screen (④ at the end): it is seen
 };
 const MOTION_EVENT_S = [1.5, 3]; // an analysis with a motion: its motion's seconds, within these
 function eventDwell(ev) {

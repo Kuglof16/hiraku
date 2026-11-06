@@ -1665,9 +1665,12 @@ class BrowserReplayTest(unittest.TestCase):
               // the last quarter second is after every event (run.finished waits 0.3 s after screen.focus)
               // the first member runs from the front axle (which does not move in this mode) backward
               const nvhLine = () => document.querySelector('#tiles svg.side[data-domain="nvh"] line[data-a]').getAttribute("y2");
+              // (two moments an eighth of a second apart: the event clock's end can lie on a whole or
+              // half second, where the swing is at rest, so neither of them is taken)
               const p = window.hiraku.player.playhead;
-              const y1a = nvhLine();
               await window.hiraku.seek(p - 0.25);
+              const y1a = nvhLine();
+              await window.hiraku.seek(p - 0.125);
               out.swing = [y1a, nvhLine()];
               return out;
             }""",
@@ -1710,7 +1713,7 @@ class BrowserReplayTest(unittest.TestCase):
         for i, ev in enumerate(events):
             ev["t"] = round(i * 0.02, 3)
         events[-1]["t"] = events[-2]["t"] + 60.0
-        page, errors = self.open("run=sample&t=0")
+        page, errors = self.open("run=sample&t=0&pace=paced")  # the paced clock (the event clock: test_event_play_browser)
         got = page.evaluate(
             """async (events) => {
               await window.hiraku.load(events, 0);

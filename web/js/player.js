@@ -78,7 +78,10 @@ export class Player {
 
   get duration() {
     const last = this.events.at(-1);
-    const end = Math.max(last ? last.t : 0, this.minEnd);
+    // (the event clock: the last event is on screen for its own time too; a run followed live
+    // is not over, its newest event's time is the wait in tick)
+    const hold = this.clock === "event" && last && !this.live ? last.dwell ?? 0 : 0;
+    const end = Math.max(last ? last.t + hold : 0, this.minEnd);
     return this.live && this.liveAttached ? Math.max(end, this.playhead) : end;
   }
 
