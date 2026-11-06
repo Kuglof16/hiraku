@@ -12230,6 +12230,10 @@
         "rail_h",
         "rail_t",
         "tower_b",
+        "tower_brace_at",
+        "tower_brace_b",
+        "tower_brace_t",
+        "tower_brace_y",
         "tower_t"
       ],
       "choices": [
@@ -15149,6 +15153,10 @@
     "rail_h": "レールの管の高さ",
     "rail_t": "レールの管の厚さ",
     "tower_b": "塔とダッシュの管の幅",
+    "tower_brace_at": "斜めの支えの上の端の柱の高さの割合",
+    "tower_brace_b": "後ろの塔の斜めの支えの管の幅 (0 はなし)",
+    "tower_brace_t": "後ろの塔の斜めの支えの管の厚さ",
+    "tower_brace_y": "斜めの支えの下の端のレールからの距離",
     "tower_t": "塔とダッシュの管の厚さ",
     "front_spring_rate": "前のばねの硬さ",
     "mount_bolt_d": "サスペンションの取付の金具のピンの径",
