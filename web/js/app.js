@@ -40,6 +40,7 @@ import { NodeMotionView, nodeMotionAt, nodeMotionOf, nodeMotionPlaySpan, nodeMot
 import { mountIntake } from "./intake/index.js";
 import { lookFromParams, qualityFromParams } from "./look.js";
 import { mountShelf } from "./shelf.js";
+import { parseZoom, zoomTransform } from "./zoom.js";
 import { liftIsLimit } from "./scene.js";
 import { TileBoard, TILE_ORDER, onlyTestsLine } from "./tiles.js";
 import { VIEWS, Workbench3D } from "./workbench3d.js";
@@ -48,7 +49,7 @@ import { renderJointLegend } from "./joints.js"; // joints:
 import { MODE_JA, MODE_ORDER, drawableMetrics, METRIC_JA, modeCardHtml, modeLegendParts, qualityContourOf, qualityOf, setupContourOf, setupOf, thicknessContourOf } from "./quality.js";
 import { AgentPets, PET_PAINTS, petRowHtml, stopWhyHtml } from "./agent_pets.js";
 import { reportNextHtml } from "./report_next.js";
-import { hookWords, nowSentence, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
+import { causeNoteHtml, hookWords, nowSentence, openCause, presentCardHtml, presentScene, resolvedHooks, verdictLine, verdictSentence } from "./present.js";
 import { judgedContour, referenceResults } from "./judged.js";
 import { JUDGED_JA } from "./labels.js";
 import { heldAll, heldBandHtml, heldCases } from "./held.js"; // held: load cases shown, not judged
@@ -138,11 +139,13 @@ if (params.get("status") === "0") document.body.classList.add("no-status");
 // ---- stage scaling -------------------------------------------------------
 const stage = $("stage");
 let stageScale = 1;
+let stageBase = ""; // the stage's fit to the window (?zoom= adds its own part after it, js/zoom.js)
+const ZOOM = parseZoom(params.get("zoom"));
 function fitStage() {
   stageScale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
   const left = (window.innerWidth - STAGE_W * stageScale) / 2;
   const top = (window.innerHeight - STAGE_H * stageScale) / 2;
-  stage.style.transform = `translate(${left}px, ${top}px) scale(${stageScale})`;
+  stage.style.transform = stageBase = `translate(${left}px, ${top}px) scale(${stageScale})`;
   agentPets?.setPixel((window.devicePixelRatio || 1) * stageScale);
   resize3d();
 }
@@ -869,8 +872,9 @@ const agentOrder = (s) => [...s.agentOrder].sort((a, b) => rank(a) - rank(b));
 // the module designers (and the designer) as 設計役, the CAE roles as CAE 役.
 const AGENT_GROUP_JA = { designer: "設計役", cae: "CAE 役" };
 const agentGroupOf = (id) => (id === "designer" || id.startsWith("designer.") ? "designer" : id.startsWith("cae.") ? "cae" : null);
-const AGENT_ALERT = ["止められた", "食い違い", "赤", "解析が通らない"];
-const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : a.active ? "active" : "");
+const AGENT_ALERT = ["赤", "解析が通らない"];
+const AGENT_HEED = ["止められた", "食い違い"]; // attention (orange), not a NG judgement
+const agentCls = (a) => (a.status === "✓" ? "done" : AGENT_ALERT.includes(a.status) ? "alert" : AGENT_HEED.includes(a.status) ? "heed" : a.active ? "active" : "");
 
 // The list's entries in the agents' order: one agent, or a bundle at its first member's place.
 function agentEntries(order) {
@@ -908,9 +912,10 @@ function agentRowHtml(s, id, extra = "") {
 function agentGroupHtml(s, g, ids) {
   const open = ui.openGroups.has(g);
   const as = ids.map((id) => s.agents[id]);
-  const alert = as.find((a) => agentCls(a) === "alert");
+  // (alert: a NG judgement, red; else heed: stopped by hooks or a mismatch, orange)
+  const alert = as.find((a) => agentCls(a) === "alert") ?? as.find((a) => agentCls(a) === "heed");
   const going = ids.filter((id) => agentCls(s.agents[id]) === "active");
-  const cls = alert ? "alert" : going.length ? "active" : as.every((a) => a.status === "✓") ? "done" : "";
+  const cls = alert ? agentCls(alert) : going.length ? "active" : as.every((a) => a.status === "✓") ? "done" : "";
   const st = alert ? alert.status
     : going.length ? `${s.agents[going[0]].status}${going.length > 1 ? ` ほか ${going.length - 1}` : ""}`
     : as.every((a) => a.status === as[0].status) ? as[0].status : "";
@@ -1138,7 +1143,7 @@ function renderChain(s, chain) {
   if (cmp) {
     const ok = cmp.status === "match";
     const safe = isSafeSide(verdict);
-    c.className = `card ${ok ? "ok" : "bad"}`;
+    c.className = `card ${ok ? "ok" : "warn"}`; // a mismatch: attention (orange); red only for a NG verdict
     let v = "";
     if (verdict) {
       // A verdict from a safe-side mismatch carries its own mark and says which value it used.
@@ -1171,7 +1176,7 @@ function renderChain(s, chain) {
       `<table><tr class="${used === "pred" ? "used" : ""}"><td>予測${used === "pred" ? tag : ""}</td><td>${esc(fmtQ(cmp.predicted))}</td></tr>` +
       `<tr class="${used === "ana" ? "used" : ""}"><td>解析${used === "ana" ? tag : ""}</td><td>${esc(fmtQ(cmp.analyzed))}</td></tr>` +
       `<tr><td>差 (許す幅 ${fmtPct(cmp.tolerance_rel, 0)})</td><td>${fmtSigned(cmp.diff_rel)}</td></tr></table>` +
-      `<span class="badge ${ok ? "ok" : "bad"}">${ok ? "一致 ✓" : "食い違い ✗"}</span>` +
+      `<span class="badge ${ok ? "ok" : "warn"}">${ok ? "一致 ✓" : "食い違い !"}</span>` +
       cz +
       v;
     keepOpen(c);
@@ -1653,6 +1658,14 @@ function renderTransient(s, playhead, chain, resolved) {
     const w = hookWords(den.rule);
     h.innerHTML = `<small>hooks (${esc(w.id)} ${esc(w.ja)})${done ? `<span class="resolved">解決済み</span>` : ""}</small><b>${esc(w.what)}</b><span class="next">次に: ${esc(w.next)}</span>`;
   }
+  // the cause of a mismatch Claude wrote, until a verdict of its load case is OK (present.js openCause)
+  const cause = openCause(s);
+  const cn = $("causenote");
+  cn.hidden = !cause;
+  if (cause && cn.dataset.key !== cause.key) {
+    cn.dataset.key = cause.key;
+    cn.innerHTML = causeNoteHtml(cause);
+  }
   const run = chain.running ?? Object.values(s.running)[0] ?? null;
   const r = $("running");
   r.style.opacity = run ? 1 : 0;
@@ -1845,6 +1858,7 @@ function draw() {
   if (contour?.frames && ui.toggles.contour && !heatOn) bench.setContour(framedContour());
   heat.show(heatOn ? heatIn : null, player.playhead); // heat:
   renderTransient(s, player.playhead, chain, resolved);
+  if (ZOOM) zoomTransform(stage, stageBase, ZOOM, player.playhead, STAGE_W, STAGE_H); // ?zoom=
   renderPlaybar(span);
   bench.animate(player.playhead, !!chain.running);
   if (view === "bench") {
@@ -2089,7 +2103,9 @@ function startPlayback() {
 }
 function play() {
   if (params.has("t")) {
-    seekAndDraw(Number(params.get("t")) || 0).then(() => readyResolve(player.playhead));
+    // (A4 shown: ready once the shelf no longer changes by itself, so the frame is the same each time)
+    seekAndDraw(Number(params.get("t")) || 0).then(() => (shelf && !$("view-shelf").hidden ? shelf.settled() : null))
+      .then(() => readyResolve(player.playhead));
     return;
   }
   ui.frozen = false;
