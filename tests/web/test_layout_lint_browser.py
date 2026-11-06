@@ -45,6 +45,7 @@ HELD = "20261104-200000-held"  # held: a load case without a criterion counting 
 MODULES = "20261104-210000-modules"  # modules: tests.web.modules_fixture.RUN_ID
 JOINTS = "20261102-207000-joints"  # joints: the frozen offroad-4w v1 alone (test_joints_browser.joints_events)
 FIRSTTIME = "20261105-200000-firsttime"  # many load cases sharing ids, long log ids, a long change (tests.web.firsttime_fixture)
+RUNUP = "20261106-120000-n06-runup"  # N06's step tile with run 2 at 330 and 100 mm (tests.web.runup_fixture.RUN_ID)
 
 READY = "window.hiraku && window.hiraku.ready"
 
@@ -93,6 +94,9 @@ SCREENS = (
     # the shapes of a real record a first-time viewer opened: the chips' row, the log, the change line
     Screen("作業台 (試験が多い)", f"?run={FIRSTTIME}&tab=bench&pace=0&t=1e6&on=names"),
     Screen("全分野 (変えたことが長い)", f"?run={FIRSTTIME}&tab=grid&pace=0&t=1e6"),
+    # N06's step tile with the two runs at the step (tests.web.runup_fixture): large at 4.2 s, in the list at 6 s
+    Screen("N06 (段差の二つの走り)", f"cut.html?cut=n06&run={RUNUP}&t=4.2"),
+    Screen("N06 (段差の二つの走り・一覧)", f"cut.html?cut=n06&run={RUNUP}&t=6"),
 )
 
 
@@ -141,6 +145,9 @@ def build_runs(tmp: Path, repo: Path = REPO_DIR) -> tuple[Path, Path]:
     from tests.web.firsttime_fixture import firsttime_events
 
     _write_run(runs, FIRSTTIME, firsttime_events())
+    from tests.web.runup_fixture import runup_events
+
+    _write_run(runs, RUNUP, runup_events(RUNUP))
     return runs, saved
 
 
