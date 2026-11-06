@@ -10,7 +10,7 @@
 //   rule_check.recorded  a rule applied to a design; the newest design version wins     (A5)
 //   design.created     the chat ends, rules have a design to be applied to
 
-import { DOMAINS, CATEGORIES } from "./data.js";
+import { DOMAINS, CATEGORIES, TESTS } from "./data.js";
 
 const NOTE_KINDS = new Set(["domains.picked", "hearing.asked", "hearing.answered"]); // what A1's chat tells; the knowledge has A5
 
@@ -128,6 +128,34 @@ export function buildModel(events, options = {}) {
 
 // ----------------------------------------------------------------------------- A1
 
+/** The tests Claude added to the code's choice (domains.picked added_tests), with the test's title and the reason it gave. */
+export function addedTests(m) {
+  return (m.domains?.added_tests || []).map((a) => ({ id: a.test_id, reason: a.reason, title: TESTS[a.test_id]?.title || a.test_id, domain: TESTS[a.test_id]?.domain || null }));
+}
+
+/** The domain in everyday words (what it keeps from going wrong), shown under its name. */
+export const DOMAIN_PLAIN = {
+  handling: "倒れない・よけられる", powertrain: "走る力", aero: "風", crash: "ぶつかったとき",
+  strength: "壊れない", nvh: "揺れ・音", thermal: "熱くなりすぎない",
+};
+
+const TEST_ID = /(^|[^A-Za-z0-9])[A-Z][0-9]{1,2}([^A-Za-z0-9]|$)/;
+
+/** What a domain's pet says. Only words of the record: the reason of domains.picked when it is not the code's own
+ *  sentence (that one lists test ids), else the domain's plain words; a domain left off says so and gives the record's
+ *  reason up to its colon (the rest names tests; a sentence that still names tests is left to the details). `full` is the whole reason, for the details. */
+export function saidOf(c) {
+  const reason = (c.reason || "").trim();
+  const code = TEST_ID.test(reason);
+  if (c.state === "wait") return { text: "…考えています", full: "" };
+  if (c.state === "off") {
+    const head = reason.includes(":") ? reason.split(":")[0].trim() : reason;
+    return { text: head && !TEST_ID.test(head) ? `今回は見ません。${head}` : "今回は見ません", full: reason }; // a sentence naming tests stays in the details
+  }
+  if (!reason || code) return { text: DOMAIN_PLAIN[c.domain] ? `「${DOMAIN_PLAIN[c.domain]}」を調べます` : "", full: reason, code };
+  return { text: reason, full: reason, code };
+}
+
 /** One card per analysis domain, in the contract's order: lit (picked), off, or not yet decided. */
 export function domainCards(m) {
   const picks = new Map((m.domains?.picks || []).map((p) => [p.domain, p]));
@@ -137,7 +165,7 @@ export function domainCards(m) {
     if (p) {
       const draft = m.domainsDraft && !m.finished && !m.picksFinal;
       return { domain: name, ja, state: draft ? "draft" : "lit", litAt: m.litAt.get(name) ?? null, shownName: p.shown_name, renamed: p.shown_name !== ja, reason: p.reason,
-               testIds: p.test_ids, testCount: p.test_ids ? p.test_ids.length : null };
+               testIds: p.test_ids, testCount: p.test_ids ? p.test_ids.length : null, added: addedTests(m).filter((a) => a.domain === name) };
     }
     const o = off.get(name);
     if (o) return { domain: name, ja, state: "off", shownName: ja, reason: o.reason, testIds: [], testCount: 0 };
