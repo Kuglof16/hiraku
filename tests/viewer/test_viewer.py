@@ -292,6 +292,48 @@ class FieldDataTest(unittest.TestCase):
         # the wall at the front-most part box, as the record's scene gives it
         self.assertEqual(o["wall_x_mm"], 415.0)
 
+    def test_crash_contact_record(self):
+        # K2 fcd3f2b8: element contact, the run goes on past the split, wheel nodes on no element
+        o = make("crash", "crash_contact")
+        rec = common.find_analysis(FX / "crash_contact", "crash_beam")[1]
+        nm = rec["fields"][0]
+        st = o["stop"]
+        self.assertTrue(st["goes_on"])
+        self.assertEqual((st["piece_pct"], st["limit_pct"], st["ok"]), (15.6, 3.0, False))
+        self.assertAlmostEqual(st["t_s"], common.result(rec, "frame_split_time"))
+        sm = o["summary"]
+        self.assertEqual(sm["after"], {"t0_s": st["t_s"], "t1_s": nm["frames"]["t_s"][-1]})
+        self.assertAlmostEqual(sm["crush_end"], common.result(rec, "max_crush"))
+        self.assertAlmostEqual(sm["crush_at_split"], common.result(rec, "crush_at_split"))
+        mg = sm["margin"]
+        self.assertAlmostEqual(mg["value"], common.result(rec, "occupant_space_margin"))
+        self.assertEqual((mg["op"], mg["limit"], mg["ok"]), (">=", 0.0, mg["value"] >= 0.0))
+        self.assertAlmostEqual(sm["wall_free_after_s"], 0.0981)
+        # the four wheel nodes: radius, links to the mounts the record names, the first frame at the wall by hand
+        W = {w["id"]: w for w in o["wheels"]}
+        self.assertEqual(sorted(W), ["wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR"])
+        fl = W["wheel_FL"]
+        self.assertEqual((fl["r"], fl["kg"], fl["parts"]), (300.0, 18.0, ["wheel_FL", "knuckle_FL", "caliper_FL"]))
+        self.assertEqual(fl["mount_ids"], ["LAl1", "LAl2", "LAu1", "LAu2"])
+        self.assertEqual([o["frame"]["node_ids"][i] for i in fl["mounts"]], fl["mount_ids"])
+        P, wx = nm["frames"]["positions_mm"], o["wall_x_mm"]
+        k = next(k for k, F in enumerate(P) if F[fl["node"]][0] + 300.0 >= wx - crash.TOL_MM)
+        self.assertEqual(fl["t_wall_s"], nm["frames"]["t_s"][k])
+        self.assertIsNone(W["wheel_RL"]["t_wall_s"])
+        # wheel nodes are not counted as frame nodes beyond the wall; parts on a wheel move with its node
+        self.assertEqual(len(o["frame"]["members"]), len(nm["members"]))
+        e = next(x for x in o["ledger"]["parts"] if x["id"] == "knuckle_FL")
+        self.assertEqual(e["nodes"][0][0], "wheel_FL~centre")
+        j = [p["id"] for p in o["parts"]].index("knuckle_FL")
+        off = common.unpack_f32(o["part_off"])
+        npt, last = len(o["parts"]), len(P) - 1
+        for a in range(3):
+            self.assertAlmostEqual(off[(last * npt + j) * 3 + a], P[-1][fl["node"]][a] - P[0][fl["node"]][a], places=3)
+        rows = {s["label"]: s for s in o["ledger"]["stated"]}
+        self.assertTrue(rows["wheel node wheel_FL~centre"]["agrees"])
+        self.assertTrue(any("分離" in t and "200 ms まで続く" in t for t in o["notes"]))
+        self.assertTrue(any("乗員への入力" in t for t in o["notes"]))
+
     def test_rigid_fit(self):
         # one node: its translation, no rotation
         c, t, w = common.rigid_fit([[10, 20, 30]], [[1, -2, 3]])
