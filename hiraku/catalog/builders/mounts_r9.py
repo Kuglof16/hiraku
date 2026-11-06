@@ -10,11 +10,14 @@ step driven in K2, S1 tilt, S3 lane change, S4 braking, S5 side slope, P2 and P3
 have), the largest |F| of each, the worst utilisation over them. A place's prediction is named
 <quantity>.<mount> (e.g. weld_utilisation.uca_front); the corner's worst point gives the plain quantity.
 
-No criterion yet (as H1-joints, commit 7fc0ffc): the hooks skip the load case and compare makes no verdict; the
-screen shows the predictions as 参考 rows. R9_CRITERIA is what it takes once the tool side judges it (stage 2-3:
-the bracket plates meshed into the frame's shell like gussets, welds along the plates' bases, pin loads over the
-hole edges; the hand calculation stays the prediction). Until then the step's tool is frame_static (the beam frame
-under the same K2 mount series), which reports none of these quantities.
+Stage 2: the step's tool is frame_shell, which meshes the brackets that stand on a tube wall as plates
+(k1_shell.brackets) and reports plate_bending_utilisation and weld_utilisation (and '<quantity>.<mount>') from
+the shell under the same K2 mount series; the hand calculation's values of those two are the predictions it is
+compared with. bolt_shear_utilisation and bolt_bearing_utilisation are not in the shell (the pin is not
+modelled): their predictions stay the hand calculation's, no tool reports them. R9_CRITERIA has the two
+quantities the shell judges. The load cases carry no criterion yet: a load case has one criterion
+(load_case.criterion) and R9 judges two quantities per corner, so how they are attached (one load case per
+quantity, or a list) is for the contract (the lead); until then the hooks skip the load case as before.
 
 The prediction's reader r9_inputs(design, load_case, upstream=None) needs the upstream analyses: from its third
 argument, else load_case["upstream_analyses"] or load_case["params"]["upstream_analyses"]; without them it raises
@@ -29,13 +32,14 @@ from hiraku.solvers.k0_handcalc.bracket_inputs import MOUNTS, NoForces, bracket_
 
 TEST_ID = "R9"
 R9_TOL = 0.10  # the hand calculation against the shell's plates and welds (stage 2): a first figure, no measurement
+SHELL_QUANTITIES = ("plate_bending_utilisation", "weld_utilisation")  # frame_shell.R9_QUANTITIES
 UPSTREAM_TESTS = ("P1", "S1", "S3", "S4", "S5", "P2", "P3")  # the K2 load cases whose tools record mount series
 UNITS = {"F_n": "N", "F_t": "N", "F_v": "N", "d": "mm", "n": "1", "t": "mm", "s": "mm", "b": "mm", "e": "mm",
          "f_y": "MPa", "f_u": "MPa", "f_ub": "MPa"}
-# the criteria R9 takes once the tool side judges it (not set now: shown, not judged)
+# the criteria of the two quantities the shell judges (frame_shell); not attached to the load cases yet (module doc)
 R9_CRITERIA = {qty: {"quantity": qty, "op": "<=", "limit": {"value": 1.0, "unit": "1"},
                      "basis": "R9: EN 1993-1-8 resistances with the recommended partial factors (not checked); "
-                              "docs/contract.md 金具の継ぎ手"} for qty in lb.QUANTITIES}
+                              "docs/contract.md 金具の継ぎ手"} for qty in SHELL_QUANTITIES}
 R9_TITLE = ("サスペンション取付 {sid} (判定なし: 手計算の予測だけ。金具の板を枠のシェルに入れて判定するのは次の段。"
             "ピンのせん断・支圧、板の根元の曲げ、根元の溶接を、K2 の取付点の力の最大で見る)")
 
@@ -95,7 +99,7 @@ def _prediction(qty: str, mount: str | None) -> Record:
 
 
 R9_PLAN = {
-    "tool": "frame_static",
+    "tool": "frame_shell",
     "say": ("サスペンションの取付点ごとに、K2 の力の最大で、ピンのせん断と支圧、金具の板の根元の曲げ、根元の溶接の利用率を"
             "先に出します (判定なし: 手計算の予測だけ)"),
     "predictions": [_prediction(qty, m) for qty in lb.QUANTITIES for m in (None, *MOUNTS)],

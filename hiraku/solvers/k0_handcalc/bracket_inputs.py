@@ -88,7 +88,8 @@ def find_bracket(design: Record, support_id: str, mount: str) -> Record | None:
 
 
 def plate_geometry(part: Record, hp, carrier_xyz, d0: float) -> Record:
-    """{u, base, b, e, base_axis} of a clevis bracket (see the module doc)."""
+    """{u, base, b, e, base_axis, base_at, base_side} of a clevis bracket (see the module doc): base_at the base
+    face's coordinate along base_axis, base_side +1 / -1 the direction from the box's centre to that face."""
     c, size = (np.asarray(part["box"][k], float) for k in ("center_mm", "size_mm"))
     half = size / 2.0
     p = np.asarray(hp, float)
@@ -104,7 +105,8 @@ def plate_geometry(part: Record, hp, carrier_xyz, d0: float) -> Record:
         e = max(size[i] - edge, 0.0)
     base = np.zeros(3)
     base[j] = 1.0
-    return {"u": PIN_AXIS.copy(), "base": base, "b": float(size[j]), "e": float(e), "base_axis": "yz"[i - 1]}
+    return {"u": PIN_AXIS.copy(), "base": base, "b": float(size[j]), "e": float(e), "base_axis": "yz"[i - 1],
+            "base_at": float(base_at), "base_side": side}
 
 
 def mount_points(design: Record, support_id: str) -> dict[str, Record]:
