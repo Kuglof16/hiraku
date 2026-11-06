@@ -68,7 +68,7 @@ def loading(req: Record, design: Record) -> tuple[str, list[str]]:
     """The loading to check (Q30) after checking the design carries the requirements' load
     (hiraku.catalog.build; Q33 given in N is taken as a mass, body_mass_in_kg), and the requirement keys that
     set it."""
-    from hiraku.catalog.build import check_design_loading, loading_requirement
+    from hiraku.catalog.build import carries_people, check_design_loading, loading_requirement
     from hiraku.catalog.loading import CARGO, OCCUPANTS
 
     try:
@@ -77,7 +77,7 @@ def loading(req: Record, design: Record) -> tuple[str, list[str]]:
     except CatalogError as e:
         raise BuildError(str(e)) from None
     keys = ["Q30"] if entry(req, "Q30") else []
-    keys += ["Q33"] if OCCUPANTS[name] and entry(req, "Q33") else []
+    keys += ["Q33"] if OCCUPANTS[name] and carries_people(design) and entry(req, "Q33") else []
     keys += ["Q40"] if CARGO[name] and entry(req, "Q40") else []
     return name, keys
 
@@ -92,3 +92,26 @@ def design_var(design: Record, name: str, unit: str) -> float | None:
 
     v = design.get("variables", {}).get(name)
     return None if v is None else units.to_unit(v, unit, name)
+
+
+def variable_records(design: Record, names: list[str] | tuple[str, ...], what: str) -> Record:
+    """{name: the design's variable record} for names a builder or a plan's reader needs; BuildError naming every
+    one the design lacks (a design Claude wrote has the variables it was written with, often none)."""
+    have = design.get("variables") or {}
+    missing = [n for n in names if not isinstance(have.get(n), dict)]
+    if missing:
+        raise BuildError(f"{what} reads the design variables {', '.join(missing)}, which this design does not have "
+                         "(give them in design.variables as {value, unit}, or the test needs another way)")
+    return {n: have[n] for n in names}
+
+
+def required_vars(design: Record, units_of: Record, what: str) -> dict[str, float]:
+    """{name: value in its unit} of design variables a builder or reader needs (units_of: name -> unit);
+    BuildError naming the missing ones (variable_records) or one in a unit that does not convert."""
+    from hiraku.solvers.k0_handcalc import units
+
+    recs = variable_records(design, list(units_of), what)
+    try:
+        return {n: units.to_unit(recs[n], u, n) for n, u in units_of.items()}
+    except ValueError as e:
+        raise BuildError(f"{what}: {e}") from None

@@ -107,7 +107,8 @@ class CatalogTest(unittest.TestCase):
 
     def test_design_must_carry_the_requirements_load(self):
         cases = [
-            (example_design(), "needs 2 occupant parts"),
+            # no occupant parts: no people required (hiraku.contract.loading), but the cargo still is
+            (example_design(), "Q40 = 150 kg in total, the design has 0 kg"),
             (loaded_design(person_kg=70.0), "Q33 = 76.6 kg"),
             (loaded_design(cargo_kg=100.0), "Q40 = 150 kg"),
         ]

@@ -14,7 +14,8 @@ from __future__ import annotations
 import copy
 import math
 
-from hiraku.catalog.builders.common import BuildError, Record, design_var, entry, loading, number, q, text, tolerance
+from hiraku.catalog.builders.common import (BuildError, Record, design_var, entry, loading, number, q, required_vars, text,
+                                            tolerance, variable_records)
 from hiraku.catalog.loading import LOADING_JA
 from hiraku.solvers.k0_handcalc.scene_inputs import TYRE_STIFFNESS_NOTE
 
@@ -320,12 +321,13 @@ def _r3_common(design: Record, load_case: Record) -> Record:
 def _hand_damage(design: Record, load_case: Record, formula_id: str, inputs: Record, qc: Record) -> float:
     from hiraku.solvers import formula_registry
 
+    variables = variable_records(design, [name for name, _ in _DAMAGE_VARS.values()], "R3 (the fatigue hand calculation)")
     reg = formula_registry()
     s = reg.evaluate(formula_id, inputs)["outputs"]
     p = load_case["params"]
     return reg.evaluate("fatigue.road_damage_four_wheels", {
         **{k: s[k] for k in ("sigma_ra", "sigma_rb", "sigma_fa", "sigma_fb")}, **qc,
-        **{k: design["variables"][name] for k, (name, _) in _DAMAGE_VARS.items()},
+        **{k: variables[name] for k, (name, _) in _DAMAGE_VARS.items()},
         "v": p["speed"], "d": p["distance"]})["outputs"]["D"]["value"]
 
 
@@ -532,6 +534,8 @@ def p4_calc(design: Record, load_case: Record) -> Record:
     from hiraku.solvers.k0_handcalc import units
 
     p = load_case["params"]
+    var = required_vars(design, {"drivetrain_efficiency": "1", "motor_efficiency": "1", "controller_efficiency": "1",
+                                 "battery_voltage": "V", "battery_capacity": "Ah"}, "P4 (the drive energy hand calculation)")
 
     def val(name, unit):
         return units.to_unit(p[name], unit, name)
@@ -543,10 +547,9 @@ def p4_calc(design: Record, load_case: Record) -> Record:
     rms = math.sqrt(sum(s.length * s.speed**2 for s in segs) / length)
     eta = 1.0
     for name in ("drivetrain_efficiency", "motor_efficiency", "controller_efficiency"):
-        eta *= design_var(design, name, "1")
+        eta *= var[name]
     return {"loop_climb": q(climb, "m"), "loop_rms_speed": q(rms * 3.6, "km/h"), "drive_efficiency": q(eta, "1"),
-            "battery_energy": q(design_var(design, "battery_voltage", "V") * design_var(design, "battery_capacity", "Ah") / 1000.0,
-                                "kWh")}
+            "battery_energy": q(var["battery_voltage"] * var["battery_capacity"] / 1000.0, "kWh")}
 
 
 P4_PLAN = {
@@ -590,7 +593,8 @@ def _hand_temperature(design: Record, load_case: Record, output: str) -> float:
         elif head == "lc":
             vals[name] = load_case["params"][rest]
         else:  # design.var.<name>
-            vals[name] = design["variables"][rest.split(".", 1)[1]]
+            var = rest.split(".", 1)[1]
+            vals[name] = variable_records(design, [var], "the thermal hand calculation")[var]
     return formula_registry().evaluate("thermal.loop_steady_temperature", vals)["outputs"][output]["value"]
 
 
