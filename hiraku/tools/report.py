@@ -205,6 +205,7 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
     """K5 for the (load case, design paths) pairs asked: the elasticity of the verdict's quantity.
     The tool is the one of the analysis behind the load case's verdict (current version); the
     upstream results are the trusted analyses analyze itself passes (functions.trusted_analysis)."""
+    from hiraku import designgen
     from hiraku.solvers.k5_sensitivity import sensitivity  # runs the tool again, so only on request
     from hiraku.tools.functions import trusted_analysis
     from hiraku.tools.judge import latest_verdicts
@@ -227,8 +228,9 @@ def sensitivities(ctx: RunContext, asked: list[Record]) -> list[Record]:
             if got is not None:
                 upstream[u["load_case_id"]] = got
         try:
+            # a design variable is moved by building the design again (designgen sits above K5's layer)
             terms = sensitivity(ctx.tools[ana["tool"]], ctx.store.design(), lc, crit["quantity"], list(a["paths"]),
-                                params={"upstream_analyses": upstream})
+                                params={"upstream_analyses": upstream}, rebuild=designgen.regenerate)
         except (KeyError, ValueError) as e:
             raise ToolError(f"{lc['load_case_id']} の感度を出せません: {e}") from None
         out.append({"load_case_id": lc["load_case_id"], "quantity": crit["quantity"], "terms": terms})

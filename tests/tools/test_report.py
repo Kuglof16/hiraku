@@ -280,14 +280,16 @@ class ReportTest(RunCase, unittest.TestCase):
                          agent="cae.strength", domain="strength")
         seen = {}
 
-        def fake(tool, design, lc, quantity, paths, params):
-            seen.update(tool=tool, upstream=params["upstream_analyses"])
+        def fake(tool, design, lc, quantity, paths, params, rebuild=None):
+            seen.update(tool=tool, upstream=params["upstream_analyses"], rebuild=rebuild)
             return []
 
         with mock.patch("hiraku.solvers.k5_sensitivity.sensitivity", fake):
             build_report(self.ctx, {"summary": "x", "next": [], "sensitivity": [
                 {"load_case_id": "R1-step100", "paths": ["sections.rt40x80x2.dims_mm.t"]}]}, "lead")
         self.assertIs(seen["tool"], self.ctx.tools[behind["tool"]])
+        from hiraku import designgen
+        self.assertIs(seen["rebuild"], designgen.regenerate)  # a design variable is moved by rebuilding
         self.assertEqual({k: a["analysis_id"] for k, a in seen["upstream"].items()},
                          {"P1-step100": trusted_p1["analysis_id"]})
 
