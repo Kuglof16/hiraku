@@ -13,22 +13,13 @@ TUBE_SHAPES = ("rect_tube", "round_tube")  # the sections the shell meshers buil
 
 
 def design_kind(design: Record) -> str | None:
-    """The kind of design (hiraku.designgen ARCHETYPES key): design.archetype; None for a design Claude wrote
-    (written_by); else the generator whose signature variables it carries (designgen.generator_of); None when
-    none does."""
-    if design.get("archetype"):
-        return str(design["archetype"])
+    """The kind of design: the design's own archetype field (the generators write it: ladder_4w.py and the
+    others set design["archetype"], a key of designgen.ARCHETYPES); None for a design Claude wrote (written_by)
+    or one without the field. The solvers sit below designgen (tests/contract/test_layers), so the kind is not
+    worked out from the generators here: a design without it is judged on its shape alone."""
     if design.get("written_by"):
         return None
-    try:
-        from hiraku import designgen
-    except ImportError:  # pragma: no cover
-        return None
-    try:
-        gen = designgen.generator_of(design)
-    except ValueError:
-        return None
-    return next((k for k, m in designgen.ARCHETYPES.items() if m is gen), None)
+    return str(design["archetype"]) if design.get("archetype") else None
 
 
 def _names(items: Iterable[str], most: int = 5) -> str:
