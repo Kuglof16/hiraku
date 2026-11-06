@@ -36,7 +36,7 @@ TOOL_FIELD = {
     "crash": "crash", "crash_beam": "crash",
     "tilt": "handling", "braking": "handling", "lane_change": "handling", "offroad_roll": "handling",
     "launch": "powertrain", "step_climb_dynamic": "powertrain", "drive_energy": "powertrain",
-    "crosswind": "aero",
+    "crosswind": "aero", "cfd_aero": "aero_cfd",
     "fatigue": "fatigue",
     "thermal": "thermal",
     "assembly": "assembly", "entry_opening": "assembly", "spray_reach": "assembly",
@@ -158,6 +158,11 @@ def _aero(run, vdir, rec):
     return aero.build(_args("aero", run, vdir, rec["analysis_id"], aero.extra))
 
 
+def _aero_cfd(run, vdir, rec):
+    from viewer.src import aero_cfd
+    return aero_cfd.for_record(run, vdir, rec)
+
+
 def _fatigue(run, vdir, rec):
     from viewer.src import fatigue
     if not _has_field(rec, "damage", "per_member"):
@@ -185,7 +190,7 @@ def _assembly(run, vdir, rec):
 
 
 BUILD: dict[str, Callable] = {"strength": _strength, "nvh": _nvh, "nvh_shell": _nvh_shell, "crash": _crash,
-                              "handling": _handling, "powertrain": _powertrain, "aero": _aero, "fatigue": _fatigue,
+                              "handling": _handling, "powertrain": _powertrain, "aero": _aero, "aero_cfd": _aero_cfd, "fatigue": _fatigue,
                               "thermal": _thermal, "assembly": _assembly}
 
 
