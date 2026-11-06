@@ -447,8 +447,9 @@ tests: [P1, R1, R1s, R3, S1, F1, S3, S4, S5, P2, P3, P4, T1, T2, C1, N1, R8, R7,
 # friction 0.8 to 1.6 and 50 to 80 km/h).
 beyond: [P1, R1, T1, F1, S4, S5]
 # drive records (hiraku.catalog.build DRIVE_BUILDERS): S3 at 1.25 times its speed, near the tyres' limit, no criterion and
-# feeding nothing, for the video's friction circles (N07; K2's claude/k2-p1-drive c7fd7f81)
-drive: [S3]
+# feeding nothing, for the video's friction circles (N07; K2's claude/k2-p1-drive c7fd7f81); S1 past the tilt
+# table's limit until the vehicle rolls over (K2's claude/k2-rollover 9e301f2c, tool rollover_tilt)
+drive: [S1, S3]
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 6  # HK5: one revision per red stage (5 in the scripted plan) and one spare for a run with Claude
 cost_limit_usd: 80.0  # as data/requirements/offroad-4w.yaml (tests/tools/test_catalog.py keeps them the same)
