@@ -4,7 +4,8 @@
 // agent_id and every event's agent), as the role of promo/pets/pet3d.js (ROLES).
 //
 // Drawing is cut_pets.js's PetStage (the same as the cut pages): one WebGL renderer off the
-// page, each pet copied into its own 2D canvas. A pet is drawn again only when its pose
+// page, each pet copied into its own 2D canvas. Without a GPU (WebGL drawn by software, as
+// SwiftShader: isSoftwareRenderer) each pet is one still picture, drawn once. A pet is drawn again only when its pose
 // changes: a still pet (idle, and blocked once it has settled) once; a moving one at most PET_FPS
 // times a second, the pets' clocks staggered so they do not all draw in the same frame. The pets
 // are small (34-60 px): pet3d.js's light build (lite, v9). Without
@@ -218,6 +219,20 @@ export function stopWhyHtml(why) {
   return `<span class="why" data-stop-code="${esc(why.code ?? "")}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</span>`;
 }
 
+// WebGL drawn by software (no GPU): SwiftShader (Chromium's), llvmpipe / softpipe / lavapipe (Mesa),
+// Microsoft Basic Render Driver (Windows without a GPU driver). There each pet is one still picture:
+// drawn once (pet3d.js idle, at its box's size) and not moved, so the 3D keeps its pace.
+const SOFTWARE_GL = /swiftshader|llvmpipe|softpipe|lavapipe|basic render|software/i;
+export function isSoftwareRenderer(name) {
+  return SOFTWARE_GL.test(String(name ?? ""));
+}
+// The renderer's name as the driver gives it (UNMASKED_RENDERER_WEBGL; without the extension, RENDERER).
+export function glRendererName(gl) {
+  if (!gl) return "";
+  const ext = gl.getExtension("WEBGL_debug_renderer_info");
+  return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+}
+
 const fade = (dt) => (dt < 0 || dt >= SAY_S ? 0 : Math.min(1, dt / 0.25, (SAY_S - dt) / 0.6));
 
 export class AgentPets {
@@ -239,6 +254,12 @@ export class AgentPets {
     this.pixel = 1; // canvas px per stage px (stage scale x device pixel ratio)
     this.stats = { paints: 0, ms: 0 };
     this.frame = 0;
+    // no GPU (a software renderer): the pets are still pictures (isSoftwareRenderer)
+    // (?petmotion=on moves them anyway, ?petmotion=off keeps them still anyway: the tests' and a comparison's)
+    this.rendererName = glRendererName(this.stage.renderer?.getContext?.());
+    const force = new URLSearchParams(globalThis.location?.search ?? "").get("petmotion");
+    this.still = force === "on" ? false : force === "off" ? true : isSoftwareRenderer(this.rendererName);
+    document.documentElement.dataset.petsStill = this.still ? "1" : "0";
   }
 
   // Can the agent be drawn as a pet (its role is one of pet3d.js ROLES)?
@@ -327,9 +348,15 @@ export class AgentPets {
       const off = p.i / n;
       const tq = how.still ? t : (Math.floor(t * PET_FPS + off) - off) / PET_FPS;
       const idleT = this.motion.idle_shift_s * p.i;
-      const { pose, o } = petPose(m.motion, m.since, tq, idleT, hop);
       const w = Math.max(1, Math.round(b.el.clientWidth * this.pixel));
       const h = Math.max(1, Math.round(b.el.clientHeight * this.pixel));
+      if (this.still) {
+        // one picture per box (again only when its size changes): the idle pose, whatever the motion
+        const k = `still|${w}x${h}`;
+        if (k !== b.last) due.push({ p, b, k, pose: idleT, o: null, pet: "idle", w, h, first: true });
+        continue;
+      }
+      const { pose, o } = petPose(m.motion, m.since, tq, idleT, hop);
       const k = `${how.pet}|${pose.toFixed(4)}|${o ? o.since.toFixed(4) : "-"}|${w}x${h}`;
       if (k === b.last) continue;
       const first = !b.last || b.last.split("|")[0] !== how.pet || !b.last.endsWith(`|${w}x${h}`);
