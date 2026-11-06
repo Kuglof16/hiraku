@@ -49,8 +49,10 @@ Joint reinforcement (the beam model K1 keeps its members and nodes either way):
   with the far wall. L joints stay as they are. A branch whose footprint
   reaches the edge of the wall (its walls would lie in the other tube's
   walls) stays a plain T joint (listed in `notes`).
-- parts of kind "gusset": a flat right-triangle plate at a T joint, carried
-  by the joint's node. box.center_mm is the triangle's centroid, box.size_mm
+- parts of kind "gusset": a flat right-triangle plate at a T joint or an L
+  joint, carried by the joint's node (at an L joint the tube extended to the
+  other's outer wall takes the place of the through tube, and the plate lies
+  on the side it runs on: the inside corner). box.center_mm is the triangle's centroid, box.size_mm
   [leg along the tube that passes through, leg along the branch, plate
   thickness]. The plate lies in the plane of the branch's upper (or lower)
   wall mid-surface; its right-angle corner is where the through tube's side
@@ -569,7 +571,7 @@ def _classify(runs: list[_Run], ends: dict, through_mode: bool = False) -> list[
                     wall, dist = al
                     rb.ext[eb] = rs.half_extent(-ub)  # to the mid-surface of the other's outer wall
                     rs.ext[es_] = -dist
-                    joints.append(_Joint(node, "L", rs.id, es_, rb.id, wall))
+                    joints.append(_Joint(node, "L", rs.id, es_, rb.id, wall, dist=dist))
                     continue
         # general: the largest tube ends at the node, the others stop at its envelope and are tied
         (rb, eb) = min(tube_ends, key=lambda re: (-re[0].area, re[0].order))
@@ -789,7 +791,7 @@ def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], si
         c = np.asarray(p["box"]["center_mm"], float)
         cands = []
         for j in joints:
-            if j.node != node or j.kind != "T":
+            if j.node != node or j.kind not in ("T", "L"):
                 continue
             host, br = runs[j.host], runs[j.branch]
             n0 = host.origin + host.nodes_at[node] * host.ex
@@ -800,9 +802,9 @@ def _place_gussets(runs: list[_Run], joints: list[_Joint], parts: list[dict], si
             tied = [j for j in joints if j.node == node and j.kind == "tied"]
             why = (f" (the joint of {runs[tied[0].branch].members[0]} there is tied: {tied[0].reason})" if tied
                    else "")
-            raise DesignError(f"gusset {p['id']!r}: node {node!r} has no T joint (a tube ending square on the side "
-                              f"of a rect tube, sharing its ring) on the side of the gusset's centre{why}; put gussets "
-                              f"at T joints")
+            raise DesignError(f"gusset {p['id']!r}: node {node!r} has no T joint or L joint (a tube ending square "
+                              f"on the side of a rect tube, sharing its ring) on the side of the gusset's centre{why}; put "
+                              f"gussets at T or L joints")
         j, host, br, n0, u_in = cands[0]
         u_s = host.ex if (c - n0) @ host.ex >= 0 else -host.ex
         u_n = np.cross(host.ex, u_in)
