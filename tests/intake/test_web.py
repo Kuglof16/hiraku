@@ -651,3 +651,24 @@ class StaticTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class AdviceRuleTest(unittest.TestCase):
+    """A5: an advice rule's hits are notes (docs/contract.md 規則の強さ): not hits, and what it cannot judge is not shown."""
+
+    def test_the_hits_of_an_advice_rule_are_advice_and_its_gaps_are_hidden(self):
+        got = node(f"""{FAKE_DOM}
+import {{ ruleState, checkedRows }} from "{url('model.js')}";
+const rule = {{ rule_id: 'WD-05', check: 'butt_end_ungusseted <= 0' }};
+const mk = (level) => ({{ checks: new Map([['WD-05', {{ rule_id: 'WD-05', level, design_version: 1, targets: ['cross', 'rail'],
+  hits: [{{ part_id: 'cross', message: 'ガセットが無い' }}], not_evaluable: [{{ part_id: 'rail', missing: ['x'] }}], pass: false,
+  checked: [{{ part_id: 'cross', values: {{ butt_end_ungusseted: 1 }} }}] }}]]) }});
+const pick = (s) => [s.hits.length, s.advice.length, s.notEvaluable.length, s.isAdvice, s.pass];
+console.log(JSON.stringify({{ advice: pick(ruleState(mk('advice'), rule)), plain: pick(ruleState(mk(undefined), rule)),
+  rows: checkedRows(mk('advice'), rule).map((r) => [r.hit, !!r.advice]), plainRows: checkedRows(mk(undefined), rule).map((r) => [r.hit, !!r.advice]) }}));
+""")
+        self.assertEqual(got["advice"], [0, 1, 0, True, True])
+        self.assertEqual(got["plain"], [1, 0, 1, False, False])
+        self.assertEqual(got["rows"], [[False, True]])
+        self.assertEqual(got["plainRows"], [[True, False]])
