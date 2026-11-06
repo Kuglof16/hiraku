@@ -439,4 +439,4 @@ requirements:
 tests: [P1, R1, R1s, N1, R8, R7, H1, H3, H6, H7, P3]  # R1s: the rail joints' hot spot on the shells (stage 3), as in the video file
 design_file: data/designs/offroad-4w-v1.json
 round_limit: 6  # HK5: one revision per red stage (layout, the opening, the motor, the joints: data/catalog/scripted.yaml uses 4), and spares for a run with Claude
-cost_limit_usd: 2.0
+cost_limit_usd: 80.0  # the person's choice (11/6), above the estimate of a real Claude run in data/catalog/demo_runs.yaml (demo)
