@@ -673,7 +673,10 @@ class LaunchTest(unittest.TestCase):
                 lau.proc.wait()
         shutil.rmtree(self.tmp)
 
-    def serve(self, env, hold_s=3.0, command=None, reader=fake_reader):
+    def serve(self, env, hold_s=60.0, command=None, reader=fake_reader):
+        # the stand-in run stays alive until tearDown kills it: under load a 3 s child could end before
+        # the next request, so a check that needs it going (409 for a second start, the hearing's 400)
+        # read a finished run instead
         lau = Launcher(self.runs, self.tmp / "requirements", env=env, command=command or fake_command(SAMPLE_EVENTS, self.RUN, hold_s),
                        reader=reader, wait_s=20, demo_runs_file=self.demo_file)
         self.launchers = [*getattr(self, "launchers", []), lau]
