@@ -536,7 +536,7 @@ def design_kind(ctx: RunContext) -> str | None:
     return next((k for k, m in kinds.items() if m is gen), None)
 
 
-_APPLIES_KEPT: dict[tuple, str | None] = {}  # (store, design stamp, tool) -> tool.applies' answer (HK5 asks often)
+_APPLIES_KEPT: dict[tuple, str | None] = {}  # (store, design stamp, tool, applies) -> its answer (HK5 asks often)
 
 
 def not_applying(ctx: RunContext, name: str) -> str | None:
@@ -549,7 +549,7 @@ def not_applying(ctx: RunContext, name: str) -> str | None:
     applies = getattr(ctx.tools.get(name), "applies", None)
     if callable(applies):
         stamp, design = _shared_design(ctx)
-        key = (id(ctx.store), stamp, name)
+        key = (id(ctx.store), stamp, name, id(getattr(applies, "__func__", applies)))
         if stamp is not None and key in _APPLIES_KEPT:
             return _APPLIES_KEPT[key]
         try:
