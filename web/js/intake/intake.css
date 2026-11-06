@@ -250,3 +250,4 @@ body.video .in-pane.a1 .in-plain, body.video .in-pane.a1 .in-was, body.video .in
 body.video .in-pane.a1 .in-reason { font-size: 24px; line-height: 1.3; }
 body.video .in-pane.a1 .in-card.off .in-reason { font-size: 24px; -webkit-line-clamp: 2; }
 body.video .in-pane.a1 .in-tests, body.video .in-pane.a1 .in-bub > .in-btn { display: none; }
+body.video .in-pane.a1 .in-ask-top, body.video .in-pane.a1 .in-ask { display: none; } /* the question bar over A1 is not part of the film */
