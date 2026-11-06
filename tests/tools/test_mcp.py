@@ -30,6 +30,13 @@ class SchemaTest(unittest.TestCase):
         units = INPUT_SCHEMAS["record_prediction"]["properties"]["inputs"]["additionalProperties"]["properties"]["unit"]
         self.assertIn("MPa", units["enum"])
 
+    def test_the_tools_register_find_tradeoffs_collector(self):
+        """hiraku.intake cannot import hiraku.tools: importing the MCP tools registers the collector it calls."""
+        from hiraku.intake import tradeoff
+        from hiraku.tools import tradeoff_data
+
+        self.assertIs(tradeoff.collector, tradeoff_data.collect)
+
 
 class HandlerTest(RunCase, unittest.TestCase):
     def call(self, name, args):
