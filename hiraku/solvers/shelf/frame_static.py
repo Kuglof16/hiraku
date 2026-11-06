@@ -343,6 +343,9 @@ def r9_bolt_outputs(design: Record, load_case: Record, upstream: dict | None) ->
             effects.append({"name": f"{q} at {w} ({v['bracket'] or 'no bracket part'}): {v['load_case_id']} t "
                                     f"{v['t_s']:.3f} s, F {[round(x, 1) for x in v['F_N']]} N", "value": v["utilisation"],
                             "unit": "1"})
+    lost, said = lost_load_outputs()  # the path check reads unsupported_load on the analysis that decides
+    results.append(lost)
+    effects.append(said)
     out = {"results": results, "fields": [], "effects": effects, "assumptions": assumptions}
     crit = (load_case or {}).get("criterion") or {}
     if crit.get("quantity") in qs and crit.get("op") in ("<=", "<"):
