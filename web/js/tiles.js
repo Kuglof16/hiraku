@@ -16,6 +16,7 @@ import { builtLine } from "./proposals.js"; // modules:
 import { judgedContour } from "./judged.js";
 import { viewerButtonHtml, viewerRunId } from "./viewer_link.js"; // 「ビューアで見る」 in くわしく
 import { MATERIAL_JA, pictureOf } from "./tile_pictures.js";
+import { domainIconSvg } from "./domain_icons.js";
 
 const W = 300;
 const H = 150;
@@ -407,7 +408,7 @@ export class TileBoard {
         : `<div class="num none" data-role="number"><span class="nq">${esc(why)}</span></div>`;
       return (
         `<div class="tile ${j.state}${held.length ? " held" : ""}" data-domain="${d}">` +
-        `<div class="th"><h3>${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
+        `<div class="th"><h3>${domainIconSvg(d)}${esc(DOMAIN_JA[d])}</h3><span class="mark ${j.state}" data-role="mark">${mark}${held.length ? `<small>保留 ${held.length}</small>` : ""}</span></div>` +
         `<div class="tbody"><div class="pic"><canvas class="tile3d" data-domain="${d}"${picAttrs}></canvas></div>` +
         `<div class="side">${number}<div class="tf" data-say-host>${safe}${tilePet(s, d, pets)}</div></div></div>` +
         // the words and the small drawings: only when the tile is opened
