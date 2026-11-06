@@ -22,7 +22,7 @@ class PickCliTest(unittest.TestCase):
         with mock.patch("hiraku.intake.domains.builder_for", lambda catalog, tid: object()):  # every test has a builder
             code, out, _ = run("pick", "--product", "serving-robot")
         self.assertEqual(code, 0)
-        self.assertIn("7 分野: 操安 (4)・動力 (4)・液体のこぼれ (1)・人との接触 (1)", out)
+        self.assertIn("確かめる分野を 7 つ、試験を", out)
 
     def test_pick_as_json(self):
         code, out, _ = run("pick", "--product", "electric-guitar", "--json")
@@ -44,7 +44,7 @@ class HearingCliTest(unittest.TestCase):
     def test_with_the_sample_answers(self):
         code, out, _ = run("hearing", "--product", "care-bed")
         self.assertEqual(code, 0)
-        self.assertIn("質問 4 件", out)
+        self.assertIn("3 つ答えてもらいました", out)  # Q03, Q30 and Q40 are the sample answers
 
     def test_bare_without_answers_cannot_proceed(self):
         code, out, _ = run("hearing", "--product", "care-bed", "--bare", "--no-answers")
@@ -63,7 +63,7 @@ class PrepareCliTest(unittest.TestCase):
             out = Path(d) / "care-bed.yaml"
             code, text, _ = run("prepare", "--product", "care-bed", "--bare", "--out", str(out))
             self.assertEqual(code, 0)
-            self.assertIn("5 分野", text)
+            self.assertIn("確かめる分野を 5 つ", text)
             req = load_requirements(out)  # validated against the contract
             self.assertEqual(req["product"], "care-bed")
             sources = {r["key"]: r["source"] for r in req["requirements"]}

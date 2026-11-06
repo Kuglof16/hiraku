@@ -301,14 +301,15 @@ class AskUserToolTest(ToolsTestCase):
         asked = next(e for e in ctx.store.events() if e["kind"] == ev.HEARING_ASKED)
         self.assertEqual(contract.errors("hearing_asked", asked["data"]), [])
         self.assertTrue(asked["data"]["questions"] and asked["data"]["rule_questions"])  # one asking for both
-        self.assertIn("当たった規則", asked["text"])
+        self.assertIn("決まっていないこと", asked["text"])
+        self.assertIn(self.HIT["text"].rstrip("。"), asked["text"])  # the rule question's own sentence says what was hit
 
     def test_only_rule_hits_leave_out_the_empty_questions(self):
         event = ev.asked_event({"questions": [], "rule_questions": [self.known_rule()]})
         self.assertNotIn("questions", event["data"])
         self.assertEqual(contract.errors("hearing_asked", event["data"]), [])
-        self.assertIn("当たった規則の相談が 1 件", event["text"])
-        self.assertNotIn("足りない要件", event["text"])
+        self.assertEqual(event["text"], self.HIT["text"].rstrip("。"))
+        self.assertNotIn("決まっていないこと", event["text"])
         both = ev.asked_event({"questions": [{"req_key": "Q30"}], "rule_questions": []})
         self.assertNotIn("rule_questions", both["data"])  # nothing to say about rules: the contract's old shape
 
