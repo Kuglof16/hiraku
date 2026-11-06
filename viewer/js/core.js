@@ -14,7 +14,46 @@ window.HV = window.HV || {};
     for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
     const buf = await new Response(stream).arrayBuffer();
+    if (p.dtype === 'i32') return new Int32Array(buf);
+    if (p.dtype === 'i16') { const q = new Int16Array(buf), out = new Float32Array(q.length), s = p.scale; for (let i = 0; i < q.length; i++) out[i] = q[i] * s; return out; }
     return new Float32Array(buf);
+  };
+
+  // ---------------------------------------------------------------- shell mesh
+  // Quads of the shell mesh, each with its own 4 vertices (flat colour per element), normals per quad.
+  HV.Shell = class {
+    constructor(view, nodes, quads) {
+      const T = window.THREE;
+      this.nodes0 = nodes; this.quads = quads; this.nE = quads.length / 4;
+      const nV = this.nE * 4;
+      this.pos = new Float32Array(nV * 3); this.nrm = new Float32Array(nV * 3); this.col = new Float32Array(nV * 3).fill(0.7);
+      const idx = new Uint32Array(this.nE * 6);
+      for (let e = 0; e < this.nE; e++) { const b = 4 * e; idx.set([b, b + 1, b + 2, b, b + 2, b + 3], 6 * e); }
+      this.geo = new T.BufferGeometry();
+      this.posAttr = new T.BufferAttribute(this.pos, 3); this.nrmAttr = new T.BufferAttribute(this.nrm, 3); this.colAttr = new T.BufferAttribute(this.col, 3);
+      this.geo.setAttribute('position', this.posAttr); this.geo.setAttribute('normal', this.nrmAttr); this.geo.setAttribute('color', this.colAttr);
+      this.geo.setIndex(new T.BufferAttribute(idx, 1));
+      this.mesh = new T.Mesh(this.geo, view.material(new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide })));
+      this.mesh.userData.kind = 'shell';
+      this.group = new T.Group(); this.group.add(this.mesh);
+      this.setNodes(nodes);
+    }
+    setNodes(p) {   // p: node positions now (n x 3)
+      const q = this.quads, P = this.pos, N = this.nrm;
+      for (let e = 0; e < this.nE; e++) {
+        for (let k = 0; k < 4; k++) { const n = 3 * q[4 * e + k], j = 12 * e + 3 * k; P[j] = p[n]; P[j + 1] = p[n + 1]; P[j + 2] = p[n + 2]; }
+        const j = 12 * e;   // normal: cross of the diagonals
+        const ax = P[j + 6] - P[j], ay = P[j + 7] - P[j + 1], az = P[j + 8] - P[j + 2];
+        const bx = P[j + 9] - P[j + 3], by = P[j + 10] - P[j + 4], bz = P[j + 11] - P[j + 5];
+        let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx; const l = Math.hypot(nx, ny, nz) || 1;
+        nx /= l; ny /= l; nz /= l;
+        for (let k = 0; k < 4; k++) { N[j + 3 * k] = nx; N[j + 3 * k + 1] = ny; N[j + 3 * k + 2] = nz; }
+      }
+      this.posAttr.needsUpdate = true; this.nrmAttr.needsUpdate = true; this.geo.computeBoundingSphere();
+    }
+    colourElements(fn) { for (let e = 0; e < this.nE; e++) { const c = fn(e); for (let k = 0; k < 4; k++) this.col.set(c, 12 * e + 3 * k); } this.colAttr.needsUpdate = true; }
+    colourNodes(fn) { const q = this.quads; for (let e = 0; e < this.nE; e++) for (let k = 0; k < 4; k++) this.col.set(fn(q[4 * e + k]), 12 * e + 3 * k); this.colAttr.needsUpdate = true; }
+    elementOf(hit) { return Math.floor(hit.faceIndex / 2); }
   };
 
   HV.esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from viewer.src import assembly, common, crash, nvh
+from viewer.src import assembly, common, crash, nvh, nvh_shell
 
 ROOT = Path(__file__).resolve().parents[2]
 FX = Path(__file__).resolve().parent / "fixtures"
@@ -27,6 +27,10 @@ LEDGER_CATS = set(common.CATEGORIES)
 def make(field, run=None, tool=None):
     args = SimpleNamespace(run=FX / (run or field), version=None, analysis=None, load_case=None, tool=tool)
     return SCRIPTS[field].build(args)
+
+
+def make_shell():
+    return nvh_shell.build(SimpleNamespace(run=FX / "shell", version=None, analysis=None, design=None))
 
 
 class PackTest(unittest.TestCase):
@@ -433,6 +437,9 @@ class FieldDataTest(unittest.TestCase):
         cut = crash_js.index("HV.crashB = ")
         parts = {f: [((VIEWER / "js" / f"{f}.js").read_text(encoding="utf-8"), o)] for f, o in self.obj.items()}
         parts["crash"] = [(crash_js[:cut], self.obj["crash"]), (crash_js[cut:], make("crash", "crash_b"))]
+        nvh_js = (VIEWER / "js" / "nvh.js").read_text(encoding="utf-8")
+        cut = nvh_js.index("HV.nvhShell = ")
+        parts["nvh"] = [(nvh_js[:cut], self.obj["nvh"]), (nvh_js[cut:], make_shell())]
         for f, lst in parts.items():
             for js, o in lst:
                 with self.subTest(field=f, model=o.get("model")):
@@ -452,6 +459,95 @@ class FieldDataTest(unittest.TestCase):
 
     def test_data_folder_is_ignored(self):
         self.assertIn("data/", (VIEWER / ".gitignore").read_text(encoding="utf-8").split())
+
+
+class ShellDataTest(unittest.TestCase):
+    """nvh_shell on the trimmed modal_shell record (fixtures/shell: 20 mm mesh, two members, modes 1 and 5)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.o = make_shell()
+        cls.rec = common.read_json(FX / "shell" / "analysis.json")
+        cls.mesh = common.read_json(FX / "shell" / "meshes" / "mesh-0001.json")
+        cls.design = common.read_json(FX / "shell" / "design.json")
+
+    def test_shape(self):
+        o, sh = self.o, self.o["shell"]
+        self.assertTrue(COMMON_KEYS <= set(o))
+        self.assertEqual((o["field"], o["model"], o["source"]["run"], o["source"]["tool"]), ("nvh", "shell", "shell", "modal_shell"))
+        self.assertEqual((sh["n_nodes"], sh["n_elements"]), (len(self.mesh["nodes_mm"]), len(self.mesh["elements"])))
+        self.assertEqual(common.unpack(sh["quads"]), [i for q in self.mesh["elements"] for i in q])
+        names = sh["member_names"]
+        self.assertEqual([names[round(i)] for i in common.unpack(sh["member"])], self.mesh["element_member"])
+        self.assertEqual([m["n"] for m in o["modes"]], [1, 5])
+        self.assertEqual([m["kind"] for m in o["modes"]], ["body", "frame"])
+        self.assertEqual(o["first"], {"body": 0, "frame": 1, "rollbar": None})
+        self.assertEqual(o["beam_first"]["frame"], common.result(self.rec, "first_frame_mode_beam"))
+        self.assertEqual(len(o["wheels"]), len(self.design["supports"]))
+
+    def test_fields_packed_without_loss(self):
+        shapes = [f for f in self.rec["fields"] if f["kind"] == "mode_shape"]
+        strains = [f for f in self.rec["fields"] if f["kind"] == "stress"]
+        for m, f, s in zip(self.o["modes"], shapes, strains):
+            got = common.unpack(m["shape"])
+            want = [c for p in f["per_mesh_node"] for c in p]
+            self.assertEqual(m["shape"]["dtype"], "i16")
+            self.assertLessEqual(max(abs(a - b) for a, b in zip(got, want)), 0.6 / 32767)
+            self.assertLessEqual(max(abs(a - b) for a, b in zip(common.unpack(m["strain"]), s["per_element"])), 0.6 / 32767)
+
+    def test_beam_pairing_from_the_record(self):
+        for m in self.o["modes"]:
+            e = next(e for e in self.rec["effects"] if e["name"].startswith(f"shell mode {m['n']} ("))
+            b = m["beam"]
+            self.assertIn(f"vs beam mode {b['mode']} (", e["name"])
+            self.assertIn(f"MAC {b['mac']:.2f}", e["name"])
+            self.assertAlmostEqual(b["diff"], e["value"])
+
+    def test_joint_nodes_by_hand(self):
+        j = nvh_shell.joint_nodes(self.design, self.mesh)
+        P = self.mesh["nodes_mm"]
+        xyz = {n["id"]: n["xyz_mm"] for n in self.design["nodes"]}
+        kept = {m["id"]: m for m in self.design["members"] if m["id"] in set(self.mesh["element_member"])}
+        ends = {m[k] for m in kept.values() for k in ("node_a", "node_b")}
+        for nid in ends:
+            self.assertTrue(j[nid], nid)
+            far = max(math.dist(P[i], xyz[nid]) for i in j[nid])
+            self.assertLess(far, 150.0)   # half the section's diagonal + 1.5 elements of 20 mm
+        # a mesh with the translation (1, 2, 3) everywhere: every design node and wheel centre moves by it
+        u = [[1.0, 2.0, 3.0]] * len(P)
+        per = nvh_shell.node_motion(self.design, self.mesh, j, u)
+        for v in per.values():
+            for a, b in zip(v, (1.0, 2.0, 3.0)):
+                self.assertAlmostEqual(a, b, places=9)
+
+    def test_parts_and_wheels_move_in_the_bounce(self):
+        m = self.o["modes"][0]
+        moving = [i for i, ns in enumerate(self.o["part_nodes"]) if ns]
+        self.assertTrue(moving)
+        self.assertAlmostEqual(max(m["parts"]["rel"]), 1.0)
+        # each tyre takes its node's motion from the mesh (the trimmed mesh holds no support's frame node: none moves)
+        f = next(f for f in self.rec["fields"] if f["kind"] == "mode_shape")
+        per = nvh_shell.node_motion(self.design, self.mesh, nvh_shell.joint_nodes(self.design, self.mesh), f["per_mesh_node"])
+        for w, got in zip(self.o["wheels"], m["wheels"]):
+            want = per.get(w["node"], [0.0, 0.0, 0.0])
+            for a, b in zip(got, want):
+                self.assertAlmostEqual(a, b, places=9)
+        self.assertTrue(any(abs(v[2]) > 0.05 for v in per.values()))   # the bounce lifts the kept frame nodes
+
+    def test_command_line_and_no_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = subprocess.run([sys.executable, "-m", "viewer.src.nvh_shell", str(FX / "shell"), "--out", d],
+                               cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            path = Path(d) / "nvh_shell.js"
+            self.assertEqual(common.read_data_js(path)[0], "nvh_shell")
+            self.assertNotRegex(path.read_text(encoding="ascii"), r"[A-Za-z]:\\\\|/Users/|/home/")
+            src = sum(f.stat().st_size for f in (FX / "shell").rglob("*.json"))
+            self.assertLess(path.stat().st_size, src / 3)   # packed: much smaller than the record and mesh
+
+    def test_design_key(self):
+        self.assertEqual(self.o["source"]["design_key"], common.design_key(self.design))
+        self.assertNotEqual(self.o["source"]["design_key"], make("nvh")["source"]["design_key"])
 
 
 def _system_python_with_playwright():
@@ -476,10 +572,15 @@ class PageTest(unittest.TestCase):
         shutil.copytree(VIEWER, cls.dir, ignore=shutil.ignore_patterns("data", "src", "__pycache__", "*.py"))
         for f in SCRIPTS:
             common.write_data(f, make(f), cls.dir / "data")
+        common.write_data("nvh_shell", make_shell(), cls.dir / "data")
         # the same page with the crash_beam (B) record as the crash field
         cls.dir_b = Path(cls.tmp.name) / "viewer_b"
         shutil.copytree(cls.dir, cls.dir_b)
         common.write_data("crash", make("crash", "crash_b"), cls.dir_b / "data")
+        # a beam record marked as the shell's design: the beam / shell switch is offered
+        same = make("nvh")
+        same["source"]["design_key"] = make_shell()["source"]["design_key"]
+        common.write_data("nvh", same, cls.dir_b / "data")
 
     @classmethod
     def tearDownClass(cls):
@@ -511,6 +612,27 @@ class PageTest(unittest.TestCase):
         self.assertEqual(out["layout_overlap"], [])
         self.assertGreater(out["boxes_moved"], 0)         # the part boxes follow the mode (phase 90 deg)
         self.assertGreater(out["tyres"], 0)
+
+    def test_nvh_shell_page(self):
+        out = self._check(self.dir, "nvh_shell")
+        self.assertEqual((out["shown_field"], out["variant"]), ("nvh", "nvh_shell"))
+        self.assertIn("[シェル]", out["title"])
+        self.assertIn("梁のモード", out["tline"])
+        self.assertIn("実寸ではない", out["hud"])
+        self.assertIn("要素のひずみ", out["hud"])
+        self.assertEqual(out["over_view"], [])
+        self.assertEqual(out["layout_overlap"], [])
+        self.assertGreater(out["boxes_moved"], 0)
+        self.assertEqual(out["tyres"], 4)
+        self.assertIn("別の設計", out["panel"])   # the beam fixture is another design: no comparison offered
+        self.assertNotRegex(out["page_text"], r"[A-Za-z]:\\|/Users/|/home/")
+        self.assertFalse(out["notes_open"])
+        beam = self._check(self.dir, "nvh")
+        self.assertEqual(beam["variant"], "nvh")
+        self.assertIn("[梁]", beam["title"])
+        same = self._check(self.dir_b, "nvh_shell")
+        self.assertIn("モデル", same["panel"])
+        self.assertNotIn("別の設計", same["panel"])
 
     def test_crash_a_page_says_no_shape(self):
         out = self._check(self.dir, "crash")

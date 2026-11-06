@@ -124,13 +124,19 @@ window.HV = window.HV || {};
     HV.refresh = refresh;
     window.addEventListener('resize', () => { plot.draw(); });
 
-    async function open(field) {
+    // field: a field name; want: one of its data variants (HV.fields[f].variants [{key, label}], e.g. the NVH
+    // field's beam (data/nvh.js) and shell (data/nvh_shell.js) records); the first that exists by default
+    async function open(field, want) {
       stopPlay(); st.playing = false; $('play').textContent = '▶ 再生';
       document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.id === 'sw_' + field));
       if (st.ctx) view.scene.remove(st.ctx.root);
       view.materials.length = 0; showInfo(null);
       st.field = field; st.ctl = null; st.ctx = null;
-      const D = await loadData(field);
+      const got = [];
+      for (const v of (HV.fields[field] || {}).variants || [{ key: field }]) { const d = await loadData(v.key); if (d) got.push(Object.assign({ D: d }, v)); }
+      const cur = got.find(g => g.key === want) || got[0];
+      const D = cur ? cur.D : null;
+      st.variant = cur ? cur.key : null;
       if (!D) {
         $('title').textContent = `${(HV.fields[field] || { label: field }).label}: データがない`;
         $('source').textContent = `python -m viewer.src.${field} で作る`;
@@ -144,6 +150,22 @@ window.HV = window.HV || {};
       const ctl = await HV.fields[field].init(D, ctx);
       st.ctl = ctl;
       if (ctl.panel) ctl.panel($('fieldpanel'));
+      // two records of one field (beam and shell): a switch above the field's own panel, only for the same design
+      const same = got.length > 1 && got.every(g => g.D.source.design_key && g.D.source.design_key === D.source.design_key);
+      if (got.length > 1) {
+        const box = document.createElement('div'); box.id = 'variants';
+        const h = document.createElement('h3'); h.textContent = 'モデル'; box.appendChild(h);
+        const row = document.createElement('div'); row.className = 'row';
+        for (const g of got) {
+          const b = document.createElement('button'); b.id = 'var_' + g.key; b.textContent = g.label;
+          b.classList.toggle('on', g === cur); b.disabled = !same && g !== cur;
+          b.onclick = () => { if (g !== cur) open(field, g.key); };
+          row.appendChild(b);
+        }
+        box.appendChild(row);
+        if (!same) { const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'ほかの記録は別の設計 (比べられない)'; box.appendChild(m); }
+        $('fieldpanel').prepend(box);
+      }
       // every part of the design as its box (the field's own boxes, or grey ones added here) and how it enters
       // this field's calculation (D.ledger)
       if (!ctx.boxes) ctx.addParts(D.parts, { opacity: 0.2 });
@@ -156,7 +178,7 @@ window.HV = window.HV || {};
       $('ledgerLists').innerHTML = ctx.ledger.listsHtml();
       $('ledgerTable').innerHTML = ctx.ledger.tableHtml();
       // header: short; the run by its name only (never a path)
-      $('title').textContent = D.title;
+      $('title').textContent = D.title + (cur.label ? `  [${cur.label}]` : '');
       const s = D.source;
       $('source').textContent = `v${s.design_version ?? '?'}  ${s.run}  ${s.analysis_id}  ${s.load_case_id}`;
       $('source').title = `${s.run} ${s.version} ${s.analysis_id} | ${s.tool} ${s.load_case_id}`;
@@ -197,7 +219,8 @@ window.HV = window.HV || {};
 
     const first = (location.hash || '').slice(1);
     $('loading').style.display = 'none';
-    await open(HV.FIELD_ORDER.includes(first) ? first : HV.FIELD_ORDER[0]);
+    const byVariant = HV.FIELD_ORDER.find(f => ((HV.fields[f] || {}).variants || []).some(v => v.key === first));
+    await open(HV.FIELD_ORDER.includes(first) ? first : byVariant || HV.FIELD_ORDER[0], byVariant ? first : undefined);
     window.__ready = true;
   };
 
