@@ -8,7 +8,10 @@ judged on the same criterion (first_frame_mode), so the stages decide when the h
 Results: mode_<i> (Hz, field_index for the modes with fields), first_body_mode, first_frame_mode (the
 first mode that bends the frame itself, FLEX_LIMIT on the mesh nodes of the frame's elements, as modal on its
 nodes), first_rollbar_mode, the wheel and motor rotation frequencies and excitation_gap (as modal), and the
-beam model's first_frame_mode_beam / first_body_mode_beam for the comparison. Fields (on the version's shell
+beam model's first_frame_mode_beam / first_body_mode_beam for the comparison. With suspension linkage also
+first_wheel_hop_mode and first_frame_involving_mode (N1's criterion: the lowest elastic mode that is neither a body
+mode nor a wheel mode and whose kinetic energy share in the frame, roll bar included, is FRAME_SHARE or more; which
+mode it is, its kind and its share in the effects). Fields (on the version's shell
 mesh when it is the mesh solved here): per mode of the first FIELD_MODES a mode_shape per_mesh_node (vec3,
 largest = 1) and a stress field per_element: the von Mises of the mode's stress over its largest in the mode
 (unit 1).
@@ -46,7 +49,10 @@ SUSPENSION = Param("suspension", None, "how the wheels hold the frame: spring (e
 TYRE_STIFFNESS = Param("tyre_stiffness", "N/mm", "linkage only: the tyre's vertical rate (without it: the design "
                        "variable tyre_stiffness, else 60 N/mm)")
 N_MODES_MAX = 40
-LABEL_SHAPE = "モードの形 (シェルの節の変位、いちばん大きい所を 1)"
+# N1's frame-involving mode: at least this share of the mode's kinetic energy in the frame (the shell and the mount
+# nodes, the roll bar included). The practitioner's decision for N1 (2026-11-06), as linkage_kinds' frame / body line.
+FRAME_SHARE = 0.5
+LABEL_SHAPE ="モードの形 (シェルの節の変位、いちばん大きい所を 1)"
 LABEL_SHAPE_LINKAGE = ("モードの形 (シェルの節とサスペンションの点 (per_node: 腕・タイロッドの節、車輪の中心と接地点、"
                        "フレームの側の取付点) の変位、全部でいちばん大きい所を 1)")
 LABEL_STRAIN = ("モードのひずみ (要素の中心の von Mises 応力 = E x ひずみ、外と内の面の大きい方、そのモードの最大を 1。"
@@ -99,7 +105,7 @@ class ModalShell(BuiltinTool):
     base = "K1"
     tests = ["N1"]
     formulas = ["modal.spring_mass", "modal.quarter_car", "modal.ladder_twist_mode", "modal.simple_beam_first_mode",
-                "modal.rotation_excitation"]
+                "modal.rotation_excitation", "modal.beam_frame_mode"]
     load_case_params = (
         Param("speed", "km/h", "driving speed for the wheel and motor rotation frequencies "
               "(without it: the design variable max_speed)"),
@@ -117,6 +123,9 @@ class ModalShell(BuiltinTool):
                  "one rail as a simply supported beam on the axles, without the masses it carries"),
         Predicts("wheel_rotation_frequency", "modal.rotation_excitation", "f_wheel"),
         Predicts("motor_rotation_frequency", "modal.rotation_excitation", "f_motor", "i = the design variable gear_ratio"),
+        Predicts("first_frame_involving_mode", "modal.beam_frame_mode", "f",
+                 "suspension linkage only: the beam model's first frame mode (k1_frame.modal; no linkage, no roll bar "
+                 "share), no hand estimate"),
     )
     needs_mesh = True
 
@@ -210,7 +219,14 @@ class ModalShell(BuiltinTool):
         hop = [i for i, k in enumerate(kinds) if k.startswith("wheel hop")]
         if hop:
             results.append(mode_row("first_wheel_hop_mode", hop[0]))
-        driven = [s for s in design["supports"] if s["actuation"]["drive"]] or design["supports"]
+        involving = None
+        if susp == "linkage":
+            involving = first_frame_involving(kinds, r["energies"])
+            if involving is None:
+                raise DesignError(f"no frame-involving mode (frame kinetic share {FRAME_SHARE:g} or more, not a body "
+                                  f"or wheel mode) among the first {n} modes; ask for more modes (n_modes)")
+            results.append(mode_row("first_frame_involving_mode", involving))
+        driven =[s for s in design["supports"] if s["actuation"]["drive"]] or design["supports"]
         radius = float(np.mean([s["radius_mm"] for s in driven]))
         f_wheel = (v / 3.6) / (2 * math.pi * radius / 1000.0)
         results.append(result("wheel_rotation_frequency", f_wheel, "Hz"))
@@ -232,6 +248,7 @@ class ModalShell(BuiltinTool):
         effects = mode_effects(r, kinds, n_fields) + cmp_effects + model_effects(mm, sol, r)
         if susp == "linkage":
             effects += linkage_effects(r, kinds)
+            effects.append(involving_effect(r, kinds, involving))
         fields = []
         mesh, why = mesh_of(design, params)
         if mesh is not None:
@@ -387,6 +404,28 @@ def linkage_kinds(r: dict, design: Record) -> list[str]:
                 k += " (coupled with the frame)"
         out.append(k)
     return out
+
+
+def first_frame_involving(kinds: list[str], energies: list[dict]) -> int | None:
+    """N1's frame-involving mode of the linkage model: the index of the lowest elastic mode that is not a body mode
+    (bounce / pitch / roll / the rigid sways) nor a wheel mode (hop, tramp, wind-up, steer, camber, ...) and whose
+    kinetic energy share in the frame (shell and mount nodes, the roll bar included) is FRAME_SHARE or more; None when
+    no mode is. kinds: linkage_kinds; energies: k1_shell.modal's per mode {"kinetic": {"frame": share, ...}}."""
+    for i, (k, en) in enumerate(zip(kinds, energies)):
+        if k.startswith(("body", "wheel")):
+            continue
+        if float(en["kinetic"].get("frame", 0.0)) >= FRAME_SHARE:
+            return i
+    return None
+
+
+def involving_effect(r: dict, kinds: list[str], i: int) -> Record:
+    """Which mode first_frame_involving_mode is: its number, kind, frequency and the frame's kinetic share."""
+    share = float(r["energies"][i]["kinetic"].get("frame", 0.0))
+    return {"name": (f"first frame-involving mode (N1): mode {i + 1} ({kinds[i]}) {float(r['frequencies'][i]):.3f} Hz, "
+                     f"frame kinetic energy share {share:.3f} (at least {FRAME_SHARE:g}; body and wheel modes left out, "
+                     f"the roll bar counted) (value: the share)"),
+            "value": share, "unit": "1"}
 
 
 def linkage_effects(r: dict, kinds: list[str]) -> list[Record]:

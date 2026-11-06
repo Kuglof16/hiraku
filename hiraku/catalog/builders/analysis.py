@@ -79,23 +79,64 @@ C1_PLAN = {
 
 # ---------------------------------------------------------------- N1 modal
 
-# The hand calculation gives the bounce of the whole vehicle on its springs;
-# the lowest mode of the frame model may be pitch or roll, which sit near the
-# bounce when the springs are at the axles: 15 %.
+# The plan's hand side: the body bounce of the whole vehicle on its springs and tyres in series, the ladder's
+# twist, and the beam model's first frame mode for the linkage model's first frame-involving mode (which may be
+# the roll bar: no hand estimate, the plan expects that mismatch and the tool decides): 15 %.
 N1_TOL = 0.15
-# The frame's lowest mode is kept this far above the wheels' turning rate at top speed: HIRAKU's assumption
-# for the video, not checked as a general rule. The criterion is on the frequency, not on the gap: the gap's
-# relative error is the frequency's times f / (f - f_wheel), about 2.3 on the demo vehicle.
+# N1 (the practitioner's decision, 2026-11-06): the first frame-involving mode of the linkage model (modal_shell,
+# suspension linkage: first_frame_involving_mode) is kept 20 % above the wheel hop. The practitioner's rule keeps the
+# frame's resonance above the spring's resonance, read here as the wheel hop; the 20 % has no source (not checked).
+# This replaces the criterion first_frame_mode >= 1.2 x the wheel turning rate at Q50 (7.07 Hz on v1): the new limit
+# is higher (12.7 Hz on v1, the wheels turn at 5.9 Hz), so it covers the rotation's 1.2 x too; the wheel and motor
+# rotation frequencies stay in the title and in the plan (predicted and analysed) so the screen still shows them.
 N1_MARGIN = 0.20
+# The tyre's vertical rate of the hop and of the plan's linkage run: the decided default (k1_shell.modal's
+# DEFAULT_TYRE_N_PER_MM, HIRAKU's choice, no source), given to the tool as its run parameter so both use the same tyre.
+N1_TYRE_N_PER_MM = 60.0
+# Assumption line of the basis: the analysis department's sets, 2026-11-06 (values as reported there, not computed
+# here): at the tyre range's upper end 90 N/mm the hop is 11.8 Hz, and the recommended design RECSb40's first
+# frame-involving mode 13.18 Hz is +11.6 % above it.
+N1_TYRE_HIGH = "タイヤ 90 N/mm (範囲の上の端) では跳ねは 11.8 Hz で、いま勧めている設計 RECSb40 (13.18 Hz) の余裕は +11.6 % (解析部の組、2026-11-06)"
+
+
+def n1_hop(design: Record, loading_id: str | None = None) -> Record:
+    """The wheel hop of each axle: f_hop = (1 / 2 pi) sqrt((k_w + k_t) / m_u) per corner, k_w the wheel rate and m_u
+    the unsprung mass per corner as K2 builds them (k2_vehicle.model.build_vehicle on the design, loaded), k_t
+    N1_TYRE_N_PER_MM. Returns {"front"|"rear": {"k_w", "m_u", "f_hop"} (the axle's mean corner)} and "axle" /
+    "f_hop" of the higher one."""
+    from hiraku.contract.loading import on_board
+    from hiraku.solvers.k2_vehicle.model import DesignError as K2Error, build_vehicle
+
+    try:
+        veh = build_vehicle(on_board(design, loading_id) if loading_id else design)
+    except K2Error as e:
+        raise BuildError(f"K2 cannot build the vehicle for the wheel hop: {e}") from None
+    wheels = [c for c in veh.corners if c.kind == "wheel" and c.dof]
+    if not wheels:
+        raise BuildError("no sprung wheel, so no wheel hop to keep the frame above")
+    x_mid = sum(float(c.pos[0]) for c in wheels) / len(wheels)
+    out: Record = {}
+    for axle, on in (("front", [c for c in wheels if float(c.pos[0]) > x_mid]),
+                     ("rear", [c for c in wheels if float(c.pos[0]) <= x_mid])):
+        if not on:
+            continue
+        k_w = sum(c.k_w for c in on) / len(on) / 1000.0  # N/mm
+        m_u = sum(c.m_u for c in on) / len(on)
+        f = math.sqrt((k_w + N1_TYRE_N_PER_MM) * 1000.0 / m_u) / (2.0 * math.pi)
+        out[axle] = {"k_w": k_w, "m_u": m_u, "f_hop": f}
+    out["axle"] = max((a for a in ("front", "rear") if a in out), key=lambda a: out[a]["f_hop"])
+    out["f_hop"] = out[out["axle"]]["f_hop"]
+    return out
 
 
 def n1_modal(spec: Record, req: Record, design: Record) -> Record:
-    import math as _m
-
     load, keys = loading(req, design)
     v = number(req, "Q50", "km/h")
     r = float(n1_calc(design, {})["driven_wheel_radius"]["value"])
-    f_wheel = (v / 3.6) / (2.0 * _m.pi * r / 1000.0)
+    f_wheel = (v / 3.6) / (2.0 * math.pi * r / 1000.0)
+    hop = n1_hop(design, load)
+    axle = hop[hop["axle"]]
+    ja = {"front": "前", "rear": "後ろ"}
     return {
         "load_case_id": f"N1-{v:g}kmh",
         "test_id": "N1",
@@ -103,11 +144,19 @@ def n1_modal(spec: Record, req: Record, design: Record) -> Record:
         "title": f"固有振動数と、{v:g} km/h での車輪とモーターの回る速さ ({LOADING_JA[load]})",
         "params": {"speed": q(v, "km/h"), "loading": load},
         "requirement_keys": ["Q50", *keys],
-        "criterion": {"quantity": "first_frame_mode", "op": ">=", "limit": q((1.0 + N1_MARGIN) * f_wheel, "Hz"),
-                      "basis": (f"フレームのいちばん低い固有振動数を、Q50 {v:g} km/h での車輪の回転 ({f_wheel:.2f} Hz) より "
-                                f"{N1_MARGIN:.0%} 上に離す (幅は HIRAKU の仮定で、一般の目安としては確かめていない。"
-                                f"路面の凹凸の加振は入れていない)"),
-                      "requirement_keys": ["Q50"]},
+        "criterion": {"quantity": "first_frame_involving_mode", "op": ">=",
+                      "limit": q((1.0 + N1_MARGIN) * hop["f_hop"], "Hz"),
+                      "basis": (f"フレームが揺れに加わるいちばん低いモード (サスペンションの模型で、車体と車輪のモードを除き、"
+                                f"運動エネルギーの半分以上がフレーム (ロールバーも) にあるもの) を、車輪の跳ね (ばね下の共振) "
+                                f"f_hop = (1/2π) √((k_w + k_t) / m_u) より {N1_MARGIN:.0%} 上に離す。実務の決まり "
+                                f"(フレームの共振をばねの共振より上に) を車輪の跳ねと読んだ。幅 {N1_MARGIN:.0%} は確かめていない "
+                                f"(出典なし)。f_hop は{ja[hop['axle']]}の軸 (前と後ろの高い方): ホイールレート k_w "
+                                f"{axle['k_w']:.4g} N/mm、ばね下の質量 m_u {axle['m_u']:.4g} kg (どちらも K2 の build_vehicle)、"
+                                f"タイヤ k_t {N1_TYRE_N_PER_MM:g} N/mm (決めた既定の値) で {hop['f_hop']:.2f} Hz。"
+                                f"仮定: {N1_TYRE_HIGH}。{v:g} km/h での車輪の回転 ({f_wheel:.2f} Hz) の "
+                                f"{1.0 + N1_MARGIN:g} 倍 ({(1.0 + N1_MARGIN) * f_wheel:.2f} Hz) は、この限界より"
+                                + ("下 (この限界を満たせば、回転の 1.2 倍という前の基準も満たす)" if f_wheel < hop["f_hop"] else "上 (この限界は回転を覆わない)")),
+                      },
         "tolerance_rel": tolerance(spec, N1_TOL),
     }
 
@@ -117,6 +166,39 @@ def n1_calc(design: Record, load_case: Record) -> Record:
     driven = [s for s in sup if s["actuation"]["drive"]] or sup
     return {"spring_rate_total": q(sum(float(s["suspension"].get("stiffness_N_per_mm") or 0.0) for s in sup), "N/mm"),
             "driven_wheel_radius": q(sum(s["radius_mm"] for s in driven) / len(driven), "mm")}
+
+
+def n1_body(design: Record, load_case: Record) -> Record:
+    """modal.quarter_car's inputs for the whole vehicle on the linkage model's springs and tyres: all the wheel rates,
+    all the tyres (N1_TYRE_N_PER_MM each) and K2's sprung mass (build_vehicle on the loaded design)."""
+    from hiraku.contract.loading import loading_of, on_board
+    from hiraku.solvers.k2_vehicle.model import DesignError as K2Error, build_vehicle
+
+    try:
+        veh = build_vehicle(on_board(design, loading_of(load_case)))
+    except K2Error as e:
+        raise BuildError(f"K2 cannot build the vehicle for the body bounce: {e}") from None
+    wheels = [c for c in veh.corners if c.kind == "wheel" and c.dof]
+    return {"wheel_rate_total": q(sum(c.k_w for c in wheels) / 1000.0, "N/mm"),
+            "tyre_rate_total": q(N1_TYRE_N_PER_MM * len(wheels), "N/mm"), "sprung_mass": q(veh.m_s, "kg")}
+
+
+def n1_beam(design: Record, load_case: Record) -> Record:
+    """The beam model's first frame mode (k1_frame.modal.modes on the loaded design, the modal tool's way of telling
+    a frame mode: FLEX_LIMIT on the whole frame and on the ladder), over the load case's n_modes (default 20, as
+    modal_shell's)."""
+    from hiraku.contract.loading import loading_of, on_board
+    from hiraku.solvers.k1_frame.modal import modes
+    from hiraku.solvers.shelf.modal import FLEX_LIMIT
+
+    n_q = (load_case.get("params") or {}).get("n_modes")
+    n = int(n_q["value"]) if n_q else 20
+    bm = modes(on_board(design, loading_of(load_case)), n)
+    f = next((float(fi) for fi, x, lx in zip(bm["frequencies"], bm["flexibility"], bm["ladder_flexibility"])
+              if x >= FLEX_LIMIT and lx >= FLEX_LIMIT), None)
+    if f is None:
+        raise BuildError(f"no frame bending mode among the beam model's first {n} modes")
+    return {"beam_first_frame_mode": q(f, "Hz")}
 
 
 def n1_twist(design: Record, load_case: Record) -> Record:
@@ -152,18 +234,36 @@ def joint_wall_calc(design: Record, load_case: Record) -> Record:
 
 
 _TWIST = ("E", "nu", "J_r", "J_c", "n_c", "w", "L", "I0", "r_x", "k_f", "k_r", "t_f", "t_r", "d_f", "d_r")
+# N1 is judged on the linkage model (modal_shell, stage 3, run params suspension linkage and the tyre of the hop);
+# the beam modal tool stays for the comparison inside modal_shell (first_frame_mode_beam) and gives the prediction of
+# first_frame_involving_mode (no hand estimate of the linkage model). The analysis department's runs (2026-11-06):
+# v1 beam first frame mode 8.95 Hz, linkage first frame mode 10.79 Hz (10 mm) with the roll bar's mode below it
+# (6.52 Hz at 10 mm, 6.42 Hz at 20 mm, frame kinetic share 0.99), RECSb40 linkage 13.18 Hz.
+N1_SOURCE = ("the analysis department's runs of modal_shell (suspension linkage, tyre 60 N/mm) and modal, 2026-11-06: v1 "
+             "beam first frame mode 8.95 Hz, linkage first frame mode 10.79 Hz (10 mm) and its roll bar mode 6.52 Hz "
+             "(10 mm; 6.42 Hz at 20 mm, frame kinetic share 0.99); RECSb40 linkage 13.18 Hz")
 N1_PLAN = {
-    "tool": "modal",
-    "say": ("車全体が 4 本のばねの上で上下に揺れる振動数と、はしご形のフレームが左右のレールを逆に動かしてねじれる "
-            "振動数を、車輪とモーターの回る速さとともに先に出します"),
+    "tool": "modal_shell",
+    "params": {"suspension": "linkage", "tyre_stiffness": q(N1_TYRE_N_PER_MM, "N/mm")},
+    "say": ("車全体がばねとタイヤの上で上下に揺れる振動数と、はしご形のフレームが左右のレールを逆に動かしてねじれる "
+            "振動数を、車輪とモーターの回る速さとともに先に出します。フレームが加わるいちばん低いモードは、梁の模型の"
+            "フレームのモードで見込み、サスペンションの腕とタイヤを入れたシェルの模型で確かめます"),
     "predictions": [
+        {"quantity": "first_frame_involving_mode", "formula_id": "modal.beam_frame_mode", "output": "f",
+         "assumptions": ["フレームが加わるいちばん低いモードは、梁の模型 (車輪の中心のばね、サスペンションの腕なし) の"
+                         "フレームのいちばん低いモードとみる (手計算の見積もりは無い)",
+                         "ロールバーのモードとフレームと車輪が一緒に動くモードは、梁の模型では分けられない"],
+         "inputs": {"f_beam": "from.beam_first_frame_mode"}, "inputs_from": n1_beam},
         {"quantity": "first_frame_mode", "formula_id": "modal.ladder_twist_mode", "output": "f",
          "assumptions": ["フレームのいちばん低い揺れは、はしご形のねじれ (左右のレールが逆に動く)",
                          "ねじれの角は前後に直線とみる (レイリー法。高めに出る)", "部品の重さは載せている節に等分"],
          "inputs": {k: f"from.{k}" for k in _TWIST}, "inputs_from": n1_twist},
-        {"quantity": "first_body_mode", "formula_id": "modal.spring_mass", "output": "f",
-         "assumptions": ["車全体が 4 本のばねの上で上下に揺れるとみる", "タイヤは硬いとみる (フレームのモデルと同じ)"],
-         "inputs": {"k": "from.spring_rate_total", "m": "load.mass"}, "inputs_from": n1_calc},
+        {"quantity": "first_body_mode", "formula_id": "modal.quarter_car", "output": "f",
+         "assumptions": ["車全体 (ばねの上の質量) が、全部のばねと全部のタイヤを直列にしたばねの上で上下に揺れるとみる",
+                         f"タイヤは 1 本 {N1_TYRE_N_PER_MM:g} N/mm (シェルの模型の実行と同じ)",
+                         "ばねの上の質量とホイールレートは K2 の build_vehicle"],
+         "inputs": {"k_s": "from.wheel_rate_total", "k_t": "from.tyre_rate_total", "m_s": "from.sprung_mass"},
+         "inputs_from": n1_body},
         {"quantity": "wheel_rotation_frequency", "formula_id": "modal.rotation_excitation", "output": "f_wheel",
          "assumptions": ["車輪は滑らずに回る"],
          "inputs": {"v": "lc.speed", "r": "from.driven_wheel_radius", "i": "design.var.gear_ratio"}, "inputs_from": n1_calc},
@@ -171,6 +271,20 @@ N1_PLAN = {
          "assumptions": ["車輪は滑らずに回る"],
          "inputs": {"v": "lc.speed", "r": "from.driven_wheel_radius", "i": "design.var.gear_ratio"}, "inputs_from": n1_calc},
     ],
+    "expected_mismatch": {
+        "quantity": "first_frame_involving_mode",
+        "source": N1_SOURCE,
+        "cause": ("梁の模型にはサスペンションの腕とタイヤが無く、車輪の中心のばねで支える。シェルの模型では、フレームが加わる"
+                  "いちばん低いモードは、ロールバーのモード (v1 で 6.52 Hz、運動エネルギーの 0.99 がフレーム) や、フレームと"
+                  "車輪が一緒に動くモードになることがあり、梁の模型のフレームのいちばん低いモード (v1 で 8.95 Hz) とは別の"
+                  "モード。シェルのフレームのモードも梁より高い (v1 で 10.79 Hz)"),
+        "fix": ("サスペンションの模型のフレームが加わるモードを手で見積もる式は無い。梁の模型の値は見込みとして記録し、"
+                "合否はシェルのサスペンションの模型 (modal_shell、suspension linkage) の値で出す"),
+        "tool_decides": True,
+        "tool_decides_reason": ("フレームが加わるいちばん低いモードは、腕とタイヤの上のシェルの模型でしか分けられず、手計算の"
+                                "見積もりは無い (梁の模型の値は v1 で 8.95 Hz に対してシェル 6.52 Hz)。値には届かないので、"
+                                "手計算で道がつながることを確かめて、ツールの値で決める"),
+    },
 }
 
 # ---------------------------------------------------------------- R3 fatigue

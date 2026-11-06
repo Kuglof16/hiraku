@@ -1,5 +1,7 @@
 import copy
 import json
+import math
+import os
 import unittest
 from pathlib import Path
 
@@ -42,8 +44,26 @@ TOOLS = {t.name: t for t in solvers.builtin_tools()}
 FORMULAS = solvers.formula_registry()
 
 
+SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"
+# Tests whose plan's tool is a heavy shell solve (N1: modal_shell on the linkage, about a minute at 20 mm): their load
+# cases are built and checked always, analysed only in the slow tests (HIRAKU_SLOW_TESTS=1), at 20 mm.
+HEAVY = {"N1": {"element_size": {"value": 20.0, "unit": "mm"}}}
+V1_LINKAGE = json.loads((ROOT / "tests" / "solvers" / "data" / "modal_shell_v1_20mm_linkage_modes.json")
+                        .read_text(encoding="utf-8"))
+
+
 def tool_for(test_id):
+    """The tool the test's plan names, else the first shelf tool for the test."""
+    plan = PLANS.get(test_id)
+    if plan is not None:
+        return TOOLS[plan["tool"]]
     return next(t for t in TOOLS.values() if test_id in t.tests and t.__class__.__module__.startswith("hiraku.solvers.shelf"))
+
+
+def run_params(lc):
+    """The run params the plan's step gives analyze (its params), with the slow test's element size for a HEAVY one."""
+    plan = PLANS.get(lc["load_case_id"]) or PLANS.get(lc["test_id"]) or {}
+    return {**copy.deepcopy(plan.get("params") or {}), **HEAVY.get(lc["test_id"], {})}
 
 
 def resolve(ref, design, lc, extra, preds=None):
@@ -94,7 +114,8 @@ class BuildersTest(unittest.TestCase):
         for tid in OURS:
             got = BUILDERS[tid](spec(tid), REQ, DESIGN)
             cls.cases.update({lc["load_case_id"]: lc for lc in got} if isinstance(got, list) else {tid: got})
-        cls.runs = {key: tool_for(lc["test_id"]).run(DESIGN, lc, PRED, {}) for key, lc in cls.cases.items()}
+        cls.runs = {key: tool_for(lc["test_id"]).run(DESIGN, lc, PRED, run_params(lc)) for key, lc in cls.cases.items()
+                    if SLOW or lc["test_id"] not in HEAVY}
 
     def test_every_test_has_a_builder(self):
         for tid in OURS:
@@ -104,6 +125,8 @@ class BuildersTest(unittest.TestCase):
     def test_load_cases_fit_the_contract_and_run(self):
         for tid, lc in self.cases.items():
             contract.validate("load_case", lc)
+            if tid not in self.runs:  # HEAVY: analysed in the slow tests only
+                continue
             rec = self.runs[tid]
             self.assertEqual(rec["status"], "ok", f"{tid}: {rec.get('error')}")
             if "criterion" in lc:
@@ -143,6 +166,8 @@ class BuildersTest(unittest.TestCase):
             tid = lc["test_id"]
             plan = plan_for(lc)
             self.assertEqual(plan["tool"], tool_for(tid).name)
+            if key not in self.runs:  # HEAVY: analysed in the slow tests only
+                continue
             got = {r["quantity"]: r for r in self.runs[key]["results"]}
             preds = {}
             expected = plan.get("expected_mismatch", {}).get("quantity")
@@ -267,6 +292,86 @@ class BuildersTest(unittest.TestCase):
     def test_catalog_tolerance_wins(self):
         spec = dict(CATALOG.test("C1"), tolerance_rel=0.07)
         self.assertEqual(BUILDERS["C1"](spec, REQ, DESIGN)["tolerance_rel"], 0.07)
+
+
+def hop_limit_by_hand(design, loading):
+    """1.2 x the higher axle's f_hop = (1 / 2 pi) sqrt((k_w + 60 N/mm) / m_u): k_w the design's wheel rate
+    (suspension.stiffness_N_per_mm), m_u K2's unsprung mass of the corner (build_vehicle)."""
+    from hiraku.contract.loading import on_board
+    from hiraku.solvers.k2_vehicle.model import build_vehicle
+
+    m_u = {c.id: c.m_u for c in build_vehicle(on_board(design, loading)).corners}
+    sup = design["supports"]
+    x_mid = sum(s["position_mm"][0] for s in sup) / len(sup)
+    f = {}
+    for s in sup:
+        axle = "front" if s["position_mm"][0] > x_mid else "rear"
+        k_w = s["suspension"]["stiffness_N_per_mm"]
+        f.setdefault(axle, []).append(math.sqrt((k_w + 60.0) * 1000.0 / m_u[s["id"]]) / (2.0 * math.pi))
+    return 1.2 * max(sum(v) / len(v) for v in f.values())
+
+
+class N1HopTest(unittest.TestCase):
+    """N1 judged on first_frame_involving_mode >= 1.2 x the wheel hop, on modal_shell with the suspension linkage."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.lc = BUILDERS["N1"](spec("N1"), REQ, DESIGN)
+
+    def test_limit_on_v1(self):
+        c = self.lc["criterion"]
+        self.assertEqual((c["quantity"], c["op"], c["limit"]["unit"]), ("first_frame_involving_mode", ">=", "Hz"))
+        self.assertNotIn("limit_from", c)
+        self.assertAlmostEqual(c["limit"]["value"], hop_limit_by_hand(DESIGN, self.lc["params"]["loading"]), places=9)
+        self.assertAlmostEqual(c["limit"]["value"], 12.713, places=3)  # rear: 20 N/mm, 18.05 kg, f_hop 10.59 Hz
+        for words in ("確かめていない", "90 N/mm", "11.8 Hz", "RECSb40", "13.18 Hz", "+11.6 %", "2026-11-06", "10.59 Hz"):
+            self.assertIn(words, c["basis"])
+        # the rotation at Q50 x 1.2 (the old criterion, 7.07 Hz) lies below: still in the title and the plan
+        self.assertIn("7.07 Hz", c["basis"])
+        self.assertIn("車輪とモーターの回る速さ", self.lc["title"])
+        self.assertTrue({"wheel_rotation_frequency", "motor_rotation_frequency"}
+                        <= {p["quantity"] for p in PLANS["N1"]["predictions"]})
+
+    def test_limit_with_another_spring_rate(self):
+        from hiraku import designgen
+
+        v2 = designgen.regenerate(DESIGN, {"rear_spring_rate": {"value": 40.0, "unit": "N/mm"}})
+        self.assertEqual({s["suspension"]["stiffness_N_per_mm"] for s in v2["supports"]}, {20.0, 40.0})
+        lc = BUILDERS["N1"](spec("N1"), REQ, v2)
+        got = lc["criterion"]["limit"]["value"]
+        self.assertAlmostEqual(got, hop_limit_by_hand(v2, lc["params"]["loading"]), places=9)
+        self.assertGreater(got, self.lc["criterion"]["limit"]["value"])
+        self.assertIn("k_w 40 N/mm", lc["criterion"]["basis"])
+
+    def test_plan_tool_and_params(self):
+        plan = PLANS["N1"]
+        self.assertEqual(plan["tool"], "modal_shell")
+        self.assertEqual(plan["params"], {"suspension": "linkage", "tyre_stiffness": {"value": 60.0, "unit": "N/mm"}})
+        declared = {p.name: p for p in TOOLS["modal_shell"].run_params}
+        for name, value in plan["params"].items():
+            declared[name].check(value, "run parameter")
+        em = plan["expected_mismatch"]
+        self.assertEqual(em["quantity"], self.lc["criterion"]["quantity"])
+        self.assertTrue(em["tool_decides"] and em["tool_decides_reason"] and em["cause"] and em["fix"] and em["source"])
+        self.assertNotIn("safe_side", em)
+        for p in plan["predictions"]:
+            self.assertIn(p["formula_id"], TOOLS["modal_shell"].formulas)
+
+    def test_prediction_is_the_beam_tools_first_frame_mode_and_misses_the_linkage(self):
+        p = next(p for p in PLANS["N1"]["predictions"] if p["quantity"] == "first_frame_involving_mode")
+        extra = p["inputs_from"](DESIGN, self.lc)
+        pred = FORMULAS.evaluate(p["formula_id"], {k: resolve(r, DESIGN, self.lc, extra) for k, r in p["inputs"].items()})
+        f = pred["outputs"][p["output"]]["value"]
+        beam = TOOLS["modal"].run(DESIGN, dict(self.lc, params={**self.lc["params"], "n_modes": {"value": 20, "unit": "1"}}),
+                                  PRED, {})
+        self.assertAlmostEqual(f, {r["quantity"]: r["value"] for r in beam["results"]}["first_frame_mode"], places=9)
+        self.assertAlmostEqual(f, V1_LINKAGE["results"]["first_frame_mode_beam"], delta=0.01)
+        # against v1's 20 mm linkage record (the roll bar's mode): the plan's expected mismatch really misses
+        modes = V1_LINKAGE["modes"]
+        from hiraku.solvers.shelf.modal_shell import first_frame_involving
+
+        i = first_frame_involving([m["kind"] for m in modes], [{"kinetic": m["kinetic"]} for m in modes])
+        self.assertGreater(abs(modes[i]["frequency_Hz"] - f) / f, self.lc["tolerance_rel"])
 
 
 class RopsBuilderTest(unittest.TestCase):

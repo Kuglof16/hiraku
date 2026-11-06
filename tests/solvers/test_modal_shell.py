@@ -11,11 +11,45 @@ import numpy as np
 from hiraku import contract
 from hiraku.solvers.k1_shell import element
 from hiraku.solvers.k1_shell import modal as smodal
-from hiraku.solvers.shelf.modal_shell import ModalShell, cantilever_strip_modes, make_mesh_record
+from hiraku.solvers.shelf.modal_shell import FRAME_SHARE, ModalShell, cantilever_strip_modes, first_frame_involving, \
+    make_mesh_record
 
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = json.loads((ROOT / "data" / "designs" / "offroad-4w-v1.json").read_text(encoding="utf-8"))
 SLOW = os.environ.get("HIRAKU_SLOW_TESTS") == "1"
+# v1's 20 mm linkage record (kinds and kinetic energy shares per mode, not a solve): see its "about"
+V1_LINKAGE = json.loads((ROOT / "tests" / "solvers" / "data" / "modal_shell_v1_20mm_linkage_modes.json")
+                        .read_text(encoding="utf-8"))
+
+
+class FrameInvolvingModeTest(unittest.TestCase):
+    """N1's first_frame_involving_mode: not a body mode, not a wheel mode, frame kinetic share >= 0.5 (roll bar too)."""
+
+    @staticmethod
+    def pick(modes):
+        return first_frame_involving([m["kind"] for m in modes], [{"kinetic": m["kinetic"]} for m in modes])
+
+    def test_v1_linkage_record_gives_the_roll_bar_mode(self):
+        modes = V1_LINKAGE["modes"]
+        i = self.pick(modes)
+        # mode 4, the roll bar at 6.417 Hz (frame share 0.995), below the first frame mode 10.622 Hz (mode 10) and
+        # below the wheel hop modes (mode 6 at 9.340 Hz is a hop coupled with the frame, share 0.425)
+        self.assertEqual((i, modes[i]["kind"], modes[i]["frequency_Hz"]), (3, "roll bar", 6.417))
+        self.assertEqual(modes[i]["frequency_Hz"], V1_LINKAGE["results"]["first_rollbar_mode"])
+        self.assertLess(modes[i]["frequency_Hz"], V1_LINKAGE["results"]["first_frame_mode"])
+
+    def test_without_the_roll_bar_modes_the_first_frame_mode(self):
+        modes = [m for m in V1_LINKAGE["modes"] if not m["kind"].startswith("roll bar")]
+        i = self.pick(modes)
+        self.assertEqual((modes[i]["mode"], modes[i]["frequency_Hz"]), (10, V1_LINKAGE["results"]["first_frame_mode"]))
+
+    def test_body_and_wheel_modes_never_count_and_the_share_decides(self):
+        mk = lambda kind, fr: {"kind": kind, "kinetic": {"frame": fr}}  # noqa: E731
+        self.assertIsNone(self.pick([mk("body bounce", 0.98), mk("wheel hop (front, in phase) (coupled with the frame)",
+                                                                 0.9), mk("wheel steer rotation (rear)", 0.7)]))
+        self.assertIsNone(self.pick([mk("arm local (FL)", FRAME_SHARE - 0.01)]))
+        self.assertEqual(self.pick([mk("frame (coupled with the wheels)", FRAME_SHARE - 0.01),
+                                    mk("frame (coupled with the arms)", FRAME_SHARE)]), 1)
 
 
 class MassTest(unittest.TestCase):
@@ -140,8 +174,13 @@ class LinkageToolRecordTest(unittest.TestCase):
         self.assertEqual(rec["status"], "ok", rec.get("error"))
         contract.validate("analysis", dict(rec, analysis_id="ana-0001"))
         got = {r["quantity"]: r for r in rec["results"]}
-        for q in ("first_frame_mode", "first_body_mode", "mode_1", "mode_12", "first_wheel_hop_mode"):
+        for q in ("first_frame_mode", "first_body_mode", "mode_1", "mode_12", "first_wheel_hop_mode",
+                  "first_frame_involving_mode"):
             self.assertIn(q, got)
+        # the roll bar's mode (as in the saved record, there mode 4 at 6.417 Hz) and the effect that names it
+        self.assertAlmostEqual(got["first_frame_involving_mode"]["value"], got["first_rollbar_mode"]["value"], places=9)
+        self.assertTrue(any(e["name"].startswith("first frame-involving mode (N1): mode ") and "(roll bar)" in e["name"]
+                            for e in rec["effects"]))
         shapes = [f for f in rec["fields"] if f["kind"] == "mode_shape"]
         self.assertEqual(len(shapes[0]["per_mesh_node"]), len(mesh["nodes_mm"]))
         layout = smodal.linkage_layout(DESIGN)
