@@ -657,7 +657,9 @@ class Handler(BaseHTTPRequestHandler):
     def _request(self, route: str, body: dict[str, Any]) -> dict[str, Any]:
         """A1/A2 before a run: hiraku.intake.request over the body. Claude picks the flags only when the
         body asks (claude: true) and the key is where this server runs; the key is never read here.
-        A settled request also says whether its product has a scripted plan and a kind of design."""
+        A settled request also says whether its product has a scripted plan and how its design is made
+        (launch.design_way: from a kind of design, or written by Claude when none suits). Every
+        product can be designed (designable is always true): one without a kind of design is not refused."""
         from hiraku.intake.domains import IntakeError
         from hiraku.intake.request import claude_picker, handle_answer, handle_request
 
@@ -671,10 +673,11 @@ class Handler(BaseHTTPRequestHandler):
         rf = out.get("requirements_file") or {}
         if out.get("ready") and rf:
             from hiraku.agent.scripted import has_plan
-            from hiraku.designgen import archetypes
+            from hiraku.webserve.launch import design_way
 
             out["scripted_plan"] = has_plan(rf.get("product", ""))
-            out["designable"] = bool(archetypes(rf.get("flags") or {}))
+            out["designable"] = True
+            out.update(design_way(rf.get("flags") or {}))
         return out
 
     def _send_tool_file(self, run_id: str, name: str) -> None:

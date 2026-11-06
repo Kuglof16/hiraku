@@ -525,6 +525,11 @@ async function followStart(onTick) {
   }
 }
 
+// A product that no kind of design (設計の型) suits: Claude writes the design itself (docs/contract.md
+// Claude が書く設計); the run list's lead says the same (FREE_DESIGN_JA).
+const WRITTEN_DESIGN_JA = "この製品に合う設計の型が無いので、Claude が設計そのもの (骨組み・部品・支え) を書いて進めます";
+const FREE_DESIGN_JA = "決まった設計の型が無いものでも、Claude が設計そのものを書いて始められます。";
+
 // The bar above A1/A2 in a new request: what is going on, and 始める once the hearing is settled.
 function renderDraft() {
   const bar = $("draftbar");
@@ -535,17 +540,23 @@ function renderDraft() {
   const keyed = !!draft.claudeReady;
   let body;
   if (draft.busy) body = `<span class="busy">${esc(draft.busy)}</span>`;
-  else if (d?.ready && d.designable === false) body = `<span class="err">この製品の設計の作り方がまだ無いので、走らせられません</span>`;
   else if (d?.ready) {
+    // a product no kind of design suits starts too: Claude writes its design itself (server.py
+    // _request: design_way "written"); the scripted run has no way to write one (agent/scripted.py)
+    const written = d.design_way === "written";
     // while a start is on its way (draftStart) both buttons stay, disabled, with what is going on
     const st = draft.starting;
     const off = st ? " disabled" : "";
     // what each way is, in one line (the run list's words for them: DRIVEN_JA)
     const scripted =
       `<span class="way"><button data-start="scripted"${off}>決まった手順で始める</button><span class="why">${DRIVEN_JA.scripted}します。Claude は呼ばないので費用はかかりません</span>` +
-      (d.scripted_plan ? "" : `<span class="why">この製品には決まった手順の計画が無いので、手順が少ない</span>`) +
+      (written
+        ? `<span class="why" data-why="scripted-written">決まった手順は設計を書けないので、設計を作る前で止まります</span>`
+        : d.scripted_plan ? "" : `<span class="why">この製品には決まった手順の計画が無いので、手順が少ない</span>`) +
       `</span>`;
-    const claudeWhy = `<span class="why">Claude が考えて進めます。費用がかかります</span>`;
+    const claudeWhy =
+      `<span class="why">Claude が考えて進めます。費用がかかります</span>` +
+      (written ? `<span class="why" data-why="written">${WRITTEN_DESIGN_JA}</span>` : "");
     const claude = !keyed
       ? `<span class="way"><button disabled title="${esc(`${draft.keyName ?? "ANTHROPIC_API_KEY"} が HIRAKU を起こした窓に無い`)}">Claude で始める</button>${claudeWhy}<span class="why">Claude で始めるには準備が要ります (<a class="readme" href="${README_RUN}" target="_blank" rel="noopener">くわしく</a>)</span></span>`
       : draft.confirm && !st
@@ -2274,7 +2285,7 @@ async function showRunList(message = "", runs = null) {
     const shown = people.filter((r) => !isOlderRecord(r)).sort(newest);
     const older = people.filter((r) => isOlderRecord(r)).sort(newest);
     box.innerHTML =
-      `<h2>HIRAKU でできること</h2><p class="lead">作りたいものを書くと、Claude が確かめる解析を選び、計算して、設計を直します。</p>` +
+      `<h2>HIRAKU でできること</h2><p class="lead">作りたいものを書くと、Claude が確かめる解析を選び、計算して、設計を直します。${FREE_DESIGN_JA}</p>` +
       `${message ? `<p class="err">${esc(message)}</p>` : ""}<div id="launch"></div>` +
       (shown.length ? `<h3>記録を見る</h3><table class="runs">${shown.map(row).join("")}</table>` : "") +
       (older.length ? `<details class="older"><summary>この PC の記録 (${older.length})</summary><table class="runs">${older.map(row).join("")}</table></details>` : "");
