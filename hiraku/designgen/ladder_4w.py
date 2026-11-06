@@ -590,8 +590,9 @@ _DRIVER_VARS["seat_slide"] = Var(
     "mm", 0.0, 0.0, SEAT_SLIDE_MAX_MM,
     "the driver's seat's fore-and-aft travel (the whole length of its slide); seat_x is the travel's middle. The "
     "seat's box stays at the middle (its mass and the interference check, H1, are there); K4 seats the large and "
-    "the small driver each where their own H3 margins are best within the travel (k4_geometry.people.poses), and "
-    "the driver's body parts are where the large driver sits. The driver's seat belt stands behind the seat back "
+    "the small driver each where their own H3 margins are best within the travel (k4_geometry.people.poses), the "
+    "seat, its back and head restraint moved with each (K4's seat_restraint measures there); the driver's body parts "
+    "are drawn on the seat at the middle, against its seatback. The driver's seat belt stands behind the seat back "
     "at the rearmost end of the travel. The passenger's seat does not slide. 0: a fixed seat (v1). Range: 0 to "
     f"{SEAT_SLIDE_MAX_MM:g} mm (assumption, not verified: no source for a seat's travel was read). Written into "
     "design.variables only when it is not 0")
@@ -614,11 +615,9 @@ _MOUNT_WORDS = {"mount_floor": "the floor panels, the deck and the front body (e
                                "under it)",
                 "mount_electrics": "the battery (each pack), the controller, the wiring box and the main switch (to the cross "
                                    "members beside, above or below them)",
-                "mount_seats": "the seats and the seat belts' anchors (the seats stand on the floor, so a seat is "
-                               "held through the floor; each belt's anchor goes to the nearest member). Without "
-                               "mount_floor the floor, the seats and what touches them hang on the two belt anchors "
-                               "alone (load_path R8-stress on version 1 with mount_seats only: 357 MPa in "
-                               "rollbar_post_L, against 163 MPa allowed)",
+                "mount_seats": "the seats and the seat belts' anchors (the seats stand on the floor, and each seatback "
+                               "on cross_S2 through its two mounting brackets, _seat_mounts; each belt's anchor goes "
+                               "to the nearest member)",
                 "mount_drive": "the reducer and the motor (to the rear cross member)"}
 _OPTION_VARS: dict[str, Var] = {
     k: Var("1", 0.0, 0.0, 1.0, f"1: mounts (kit/attach.py: a spacer up to {20:g} mm, else a bracket of two plates; "
@@ -798,6 +797,60 @@ VARIABLES["seat_depth"] = Var(
     "J5). Rule HU-02 asks for at most the female 5th percentile buttock-popliteal length J6 (406 mm). Written into "
     "design.variables only when it is not the default")
 OPTIONAL["seat_depth"] = ("seat_depth",)
+# Each seat's back and head restraint (parts seatback_<R|L>, head_restraint_<R|L>), sized from the large person
+# (k4_geometry.people.SIZES[BIG], AIST young adult male 95th percentile, people.SOURCE / BODY_SOURCE):
+# - the seatback: behind the seat box's rear face (the seat back, where the people's backs are: kit/body.py), from
+#   SEATBACK_FLOOR_GAP_MM above the seat box's bottom (its front face on the seat's rear face, bolted to the seat's
+#   frame, clear of the floor) up to the large
+#   person's shoulder above the cushion top (I3 Acromiale height, sitting, 637.5 mm), SEATBACK_T_MM thick,
+#   the seat's width less a seat belt's width (kit/safety.BELT_SIZE_MM) on each side (the belts stand behind the
+#   seat back at its outboard edge). Its mass: a steel pan SEATBACK_STEEL_T_MM thick over its front face above the
+#   cushion (the
+#   frame's steel density) and a plastic shell PLASTIC_SHELL_T_MM thick over its back face; both thicknesses and the
+#   plastic's density are assumptions (no source read). The two parts' masses are taken out of the seat's mass
+#   (12 kg for the whole seat, assumption, less its belt's: kit/safety.place_belts), so the vehicle's mass does not
+#   change.
+# - the head restraint: above the seatback, from its top to headrest_height above the cushion top, its front face
+#   headrest_gap behind the back of the large person's head (the head's back is at the seat back: kit/body.py),
+#   HEADREST_SIZE_MM (across, along x) and a plastic shell PLASTIC_SHELL_T_MM thick over its whole surface
+#   (assumptions). Both are carried by the seat's own nodes (its carried_by: the seat cross members' nodes).
+# headrest_height's default: the large person's head's centre of gravity above the cushion (the middle of the head's
+# box, kit/body.py: I1 Sitting height less half A36 Total head height), rounded up to the mm (assumption until the
+# value of a rear-impact standard is given; none was read here). headrest_gap's default 40 mm: an assumption.
+SEATBACK_T_MM = 60.0  # the seatback's thickness along x (assumption)
+# The seatback's bottom this far above the seat box's bottom (assumption): it hangs on the seat's frame and does not
+# stand on the floor under the seat. Standing on it, it touched the floor's 3.2 mm sheet at the sheet's rear edge, and
+# load_path (which joins what touches) held it there besides the seat: a stiff joint on the thin sheet that, with the
+# head restraint on it, left that model too badly conditioned to solve. More than load_path's touch (2 mm).
+SEATBACK_FLOOR_GAP_MM = 10.0
+SEATBACK_STEEL_T_MM = 1.0  # the seatback's steel pan (assumption)
+PLASTIC_SHELL_T_MM = 3.0  # the plastic shells of the seatback and the head restraint (assumption)
+PLASTIC_DENSITY_KG_M3 = 950.0  # the shells' plastic (assumption, no source read)
+HEADREST_SIZE_MM = (250.0, 80.0)  # the head restraint across (y) and along x (assumption)
+_BIG = _people.SIZES[_people.BIG]
+HEAD_CG_BIG_MM = _BIG["sitting_height"] - _BIG["head_height"] / 2.0  # above the cushion top (kit/body.py's head box)
+SEATBACK_HEIGHT_MM = _BIG["shoulder_height"]  # above the cushion top (I3)
+HEADREST_HEIGHT_RANGE_MM = (float(math.ceil(SEATBACK_HEIGHT_MM)) + 10.0, float(math.ceil(_BIG["sitting_height"])) + 100.0)
+HEADREST_ON_BACK_MM = 10.0  # the head restraint over the seatback's top along x, at least (assumption)
+HEADREST_GAP_RANGE_MM = (0.0, SEATBACK_T_MM - HEADREST_ON_BACK_MM)  # so that it stands on the seatback
+VARIABLES["headrest_height"] = Var(
+    "mm", float(math.ceil(HEAD_CG_BIG_MM)), *HEADREST_HEIGHT_RANGE_MM,
+    "the top of each seat's head restraint above the seat's cushion top. The default "
+    f"{math.ceil(HEAD_CG_BIG_MM):g} mm puts it level with the large person's head's centre of gravity (AIST young adult "
+    f"male 95th percentile: I1 Sitting height {_BIG['sitting_height']:g} mm less half A36 Total head height "
+    f"{_BIG['head_height']:g} mm, rounded up): an assumption until a rear-impact standard's value is given (none was "
+    f"read). Range (assumption): from 10 mm above the seatback's top (the large person's shoulder, I3 "
+    f"{SEATBACK_HEIGHT_MM:g} mm, rounded up) to 100 mm above the large person's head (I1, rounded up). Written into "
+    "design.variables only when it is not the default")
+OPTIONAL["headrest_height"] = ("headrest_height",)
+VARIABLES["headrest_gap"] = Var(
+    "mm", 40.0, *HEADREST_GAP_RANGE_MM,
+    "the horizontal gap from the back of the large person's head (at the seat back, kit/body.py) to the front face of "
+    "the head restraint. The default 40 mm is an assumption until a rear-impact standard's value is given (none was "
+    f"read). Range 0 to {HEADREST_GAP_RANGE_MM[1]:g} mm: the restraint stands on the seatback's top, over it by at "
+    f"least {HEADREST_ON_BACK_MM:g} mm of the seatback's {SEATBACK_T_MM:g} mm thickness (both assumptions). Written "
+    "into design.variables only when it is not the default")
+OPTIONAL["headrest_gap"] = ("headrest_gap",)
 # The battery as two packs (battery_split = 2): the v1 pack's box cut in two across y, each half its width and
 # mass, side by side under the floor between the seat cross members with BATTERY_SPLIT_GAP_MM between them (the
 # two together BATTERY_SPLIT_GAP_MM wider than the one pack). Each hangs from the seat cross members on its side
@@ -1100,6 +1153,10 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
         lay.put(Item(pid, label, "seat", (v["seat_depth"], SEAT_WIDTH_MM, v["seat_height"]), 12.0), x=rear_at(seat_back),
                 y=y, z=bottom_at(lay.top_of("floor")))
     _kit(safety.place_belts, lay, ("seat_R", "seat_L"))
+    for seat in ("seat_R", "seat_L"):
+        _seat_back_parts(lay, seat, v["headrest_height"], v["headrest_gap"], rho)
+        # cross_S2 runs between the nodes LS2 and RS2 at the rails' height (frame.ladder)
+        _seat_mounts(lay, seat, rail_z + v["cross_h"] / 2.0, rail_y - v["rail_b"] / 2.0, v["cross_b"], rho)
     if v["seat_slide"] > 0:
         _belt_behind_travel(lay, "seat_belt_R", v["seat_slide"] / 2.0)
     for pid, label, seat in (("occupant_R", "運転者 (体重は強さの不利側)", "seat_R"), ("occupant_L", "同乗者 (体重は強さの不利側)", "seat_L")):
@@ -1266,8 +1323,9 @@ def _build(values: dict | None = None, *, version: int = 1, parent: int | None =
         if m["id"].startswith("rops_"):
             m["part"] = safety.ROLLBAR_PART
     add_options(design, v, guard, rho, net, closure)
-    if v["seat_slide"] > 0 and BODY_PARTS:
-        _driver_on_the_slide(design, "occupant_R")
+    # The driver's body parts stay on the seat as drawn (the travel's middle), against its seatback: K4 seats each
+    # body size at its own place on the slide with the seat moved under them (k4_geometry.people.poses). They were
+    # once moved to the large driver's place while the seat, its back and the belt stayed at the middle (78 mm apart).
     arms.pivot_brackets(design, rho, mount_joint(v))  # clevis brackets at the lower arm pivots and damper tops on bare nodes
     _floors_clear_of_brackets(design)  # each floor can be lowered in from above
     systems.write(design)  # system and connects_to of every part, when the contract has them
@@ -1407,6 +1465,93 @@ def place_battery(lay: Layout, v: dict[str, float]) -> list[str]:
 TOL_FIT_MM = 1e-6
 
 
+def seat_back_ids(seat: str) -> tuple[str, str]:
+    """The ids of a seat's back and head restraint: seatback_<side>, head_restraint_<side> (seat_<side>)."""
+    side = seat.rsplit("_", 1)[1]
+    return f"seatback_{side}", f"head_restraint_{side}"
+
+
+def _seat_back_parts(lay: Layout, seat: str, headrest_height: float, headrest_gap: float, rho: float) -> None:
+    """The seat's back and head restraint (see SEATBACK_T_MM above): behind the seat box's rear face, carried by the
+    seat's nodes; their masses (steel pan and plastic shells) taken out of the seat's."""
+    lo, hi = lay.box(seat)
+    p = lay.part(seat)
+    y = float(p["box"]["center_mm"][1])
+    back, top = float(lo[0]), float(hi[2])
+    width = float(hi[1] - lo[1]) - 2.0 * safety.BELT_SIZE_MM[1]
+    sb_id, hr_id = seat_back_ids(seat)
+    side = "運転席" if y < 0 else "助手席"
+    shell = PLASTIC_SHELL_T_MM * 1e-3 * PLASTIC_DENSITY_KG_M3  # kg per m^2
+    face = width * SEATBACK_HEIGHT_MM * 1e-6  # m^2: the back above the cushion (below it, the seat's own frame)
+    sb_kg = face * (SEATBACK_STEEL_T_MM * 1e-3 * rho + shell)
+    hw, ht = HEADREST_SIZE_MM
+    hh = headrest_height - SEATBACK_HEIGHT_MM
+    if hh <= 0.0:
+        raise DesignGenError(f"headrest_height {headrest_height:g} mm is not above the seatback's top "
+                             f"({SEATBACK_HEIGHT_MM:g} mm above the cushion)")
+    hr_kg = 2.0 * (hw * ht + hw * hh + ht * hh) * 1e-6 * shell
+    if float(p["mass_kg"]) <= sb_kg + hr_kg:
+        raise DesignGenError(f"{seat} is lighter than its back and head restraint")
+    p["mass_kg"] = float(p["mass_kg"]) - sb_kg - hr_kg
+    carried = list(p["carried_by"]) if p.get("carried_by") else None
+    # down to SEATBACK_FLOOR_GAP_MM above the seat box's bottom: its front face on the seat's rear face (it is bolted
+    # to the seat's frame), clear of the floor under the seat
+    lay.put(Item(sb_id, f"{side}の背もたれ (鋼板と樹脂の殻)", "seatback", (SEATBACK_T_MM, width, float(hi[2] - lo[2]) -
+                 SEATBACK_FLOOR_GAP_MM + SEATBACK_HEIGHT_MM), sb_kg), x=front_at(back), y=y,
+            z=bottom_at(float(lo[2]) + SEATBACK_FLOOR_GAP_MM), carried_by=carried)
+    lay.put(Item(hr_id, f"{side}の頭部後傾抑止装置 (ヘッドレスト)", "head_restraint", (ht, hw, hh), hr_kg),
+            x=front_at(back - headrest_gap), y=y, z=bottom_at(top + SEATBACK_HEIGHT_MM), carried_by=carried)
+    # what holds them (kit/systems.py keeps these; kit/joints.py then drops the far joints to the carried_by nodes):
+    # the seatback bolted to the seat's rear face, the head restraint on the seatback's top (headrest_gap's range
+    # keeps it over the seatback by HEADREST_ON_BACK_MM)
+    lay.part(sb_id)["connects_to"] = [{"to": seat, "via": "bolt", "carries": "load"}]
+    lay.part(hr_id)["connects_to"] = [{"to": sb_id, "via": "bolt", "carries": "load"}]
+
+
+# Each seat's mounts on the frame (parts bracket_seat_<R|L><1|2>, kind bracket: kit/mounts._bracket, two plates
+# mounts.BRACKET_T_MM thick, so the mass follows from the steel's density). The seat box stands on the floor under the
+# seats, which covers the tops of the seat cross members S1 and S2 and the rails, and its front and rear faces are
+# short of the cross members (SEAT_HALF_MM against half the seat's length), so nothing goes straight down from it to
+# the frame. The floor ends at S2's centre line, so the rear half of cross_S2's top is bare, and the seatback stands
+# over it (behind the seat's rear face, SEATBACK_FLOOR_GAP_MM above the seat's bottom). The brackets go from
+# cross_S2's top up to the seatback's bottom (the seatback is bolted to the seat's rear face, so the seat is held
+# through it): along x from the farther back of cross_S2's rear face and the seatback's rear face to
+# SEAT_MOUNT_FLOOR_GAP_MM short of the floor's rear edge; across, SEAT_MOUNT_WIDTH_MM wide, one at each end of the
+# stretch of the seatback that is over cross_S2 between the rails' inner faces (one, that wide, when the stretch is
+# narrower than two). With seat_slide the brackets stay (they stand for the slide's feet on the frame: the seat, its
+# back and head restraint move along the slide above them; people.slide_ends moves only those).
+SEAT_MOUNT_WIDTH_MM = 40.0  # each seat mount bracket's width across (assumption)
+SEAT_MOUNT_FLOOR_GAP_MM = 3.0  # the brackets' front face this far behind the floor's rear edge: more than load_path's
+# touch (2 mm), so that the floor's thin sheet is not joined to them (assumption)
+
+
+def _seat_mounts(lay: Layout, seat: str, cross_top: float, rail_inner: float, cross_b: float, rho: float) -> None:
+    """The seat's mount brackets on cross_S2 under its seatback (see SEAT_MOUNT_WIDTH_MM above). cross_top: the
+    cross member's top (z, mm); rail_inner: the rails' inner faces' distance from the centre line (mm)."""
+    sb_id, _ = seat_back_ids(seat)
+    slo, shi = lay.box(sb_id)
+    flo, _ = lay.box("floor")
+    s2 = lay.station_x("S2")
+    x_lo = max(s2 - cross_b / 2.0, float(slo[0]))
+    x_hi = float(flo[0]) - SEAT_MOUNT_FLOOR_GAP_MM
+    if x_hi - x_lo <= 0.0 or x_hi <= s2 - cross_b / 2.0:
+        raise DesignGenError(f"{seat}'s seatback leaves no room over the seat cross member S2 behind the floor for "
+                             f"its mount brackets")
+    y_lo, y_hi = max(float(slo[1]), -rail_inner), min(float(shi[1]), rail_inner)
+    z_lo, z_hi = cross_top, float(slo[2])
+    if y_hi - y_lo < SEAT_MOUNT_WIDTH_MM or z_hi <= z_lo:
+        raise DesignGenError(f"{seat}'s seatback is not over the seat cross member S2 between the rails (for its "
+                             f"mount brackets)")
+    w = SEAT_MOUNT_WIDTH_MM
+    spans = [(y_lo, y_lo + w), (y_hi - w, y_hi)] if y_hi - y_lo >= 2.0 * w else [((y_lo + y_hi - w) / 2.0, (y_lo + y_hi + w) / 2.0)]
+    side = seat.rsplit("_", 1)[1]
+    label = "運転席" if side == "R" else "助手席"
+    nodes = ["LS2", "RS2"]  # cross_S2's ends
+    for k, (a, b) in enumerate(spans, 1):
+        lay.parts.append(mounts._bracket(f"bracket_seat_{side}{k}", f"{label}の取付け金具 (座席の後ろの横の部材の上、背もたれの下)",
+                                         (x_lo, a, z_lo), (x_hi, b, z_hi), nodes, rho))
+
+
 def _belt_behind_travel(lay: Layout, belt: str, back_mm: float) -> None:
     """Put the seat belt (as kit/safety.place_belts placed it, behind the seat back at the travel's middle)
     back_mm farther back: behind the seat back at the rearmost end of the travel. Placed again, so that the
@@ -1416,26 +1561,6 @@ def _belt_behind_travel(lay: Layout, belt: str, back_mm: float) -> None:
     c, size = p["box"]["center_mm"], p["box"]["size_mm"]
     lay.put(Item(p["id"], p["name"], p["kind"], tuple(size), float(p["mass_kg"])), x=float(c[0]) - back_mm,
             y=float(c[1]), z=float(c[2]))
-
-
-def _driver_on_the_slide(design: Record, occupant: str) -> None:
-    """The driver's body parts (kit/body.occupant_parts) where K4 seats the large driver within the seat's
-    travel (k4_geometry.people.poses), each part in its place in the parts list. K4's place for him does not
-    depend on the body parts (the legs are not checked against occupant parts, the knee room skips them)."""
-    from hiraku.solvers.k4_geometry.people import grip_points, poses
-
-    pose = poses(design)[occupant]["big"]
-    parts = design["parts"]
-    mine = {p["id"]: i for i, p in enumerate(parts) if body.person_of(p["id"]) == occupant}
-    trunk = parts[mine[occupant]]
-    whole = dict(trunk, mass_kg=float(sum(parts[i]["mass_kg"] for i in mine.values())))
-    lay = Layout({**design, "parts": [whole]})
-    wheel = next((p for p in parts if p["id"] == "steering_wheel"), None)
-    new = body.occupant_parts(lay, occupant, pose, grip_points(wheel) if wheel is not None else None)
-    if {p["id"] for p in new} != set(mine):
-        raise DesignGenError(f"{occupant}'s body parts changed on the seat's slide")
-    for p in new:
-        parts[mine[p["id"]]] = p
 
 
 def _behind(radius: float, across: float) -> float:
