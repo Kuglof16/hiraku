@@ -22,7 +22,7 @@ class PickCliTest(unittest.TestCase):
         with mock.patch("hiraku.intake.domains.builder_for", lambda catalog, tid: object()):  # every test has a builder
             code, out, _ = run("pick", "--product", "serving-robot")
         self.assertEqual(code, 0)
-        self.assertIn("7 分野: 操安 (3)・動力 (4)・液体のこぼれ (1)・人との接触 (1)", out)
+        self.assertIn("7 分野: 操安 (4)・動力 (4)・液体のこぼれ (1)・人との接触 (1)", out)
 
     def test_pick_as_json(self):
         code, out, _ = run("pick", "--product", "electric-guitar", "--json")

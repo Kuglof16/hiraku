@@ -19,6 +19,8 @@ tests:
   - {id: S3, domain: handling, title: 回避 (ダブルレーンチェンジ), applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50]}
   - {id: S4, domain: handling, title: 制動と前のめり, applies_if: self_propelled, requirement_keys: [Q11, Q50, Q52, Q53]}
   - {id: S5, domain: handling, title: 凸凹の横斜面, applies_if: self_propelled and rough, requirement_keys: [Q12, Q14]}
+  # S6: the circle the outermost wheel draws at full lock against Q58; K2 builds the load case (build: to come)
+  - {id: S6, domain: handling, title: 小回り (最小回転半径), applies_if: self_propelled, requirement_keys: [Q58]}
   - {id: F1, domain: aero, title: 横風, applies_if: outdoor and self_propelled, requirement_keys: [Q16, Q18]}
   - {id: F2, domain: aero, title: 空気抵抗, applies_if: self_propelled and speed_vehicle, requirement_keys: [Q50, Q54]}
   - {id: F3, domain: aero, title: 液体のこぼれ, applies_if: liquid and self_propelled, requirement_keys: [Q42, Q51]}

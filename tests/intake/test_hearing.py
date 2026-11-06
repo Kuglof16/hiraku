@@ -157,6 +157,28 @@ class PrepareTest(unittest.TestCase):
         self.assertIn("答えが無いまま 1 件", hearing_text(p))  # Q03
 
 
+class TurningRadiusItemTest(unittest.TestCase):
+    def test_the_item_asks_in_plain_words_and_its_default_says_where_the_12_m_was_read(self):
+        it = item("Q58")
+        self.assertEqual((it["name"], it["applies_if"], it["ask"]), ("最小回転半径の上限", "self_propelled", "confirm"))
+        self.assertEqual((it["default"]["value"], it["default"]["unit"], it["default"]["trust"]), (12, "m", 3))
+        basis = it["default"]["basis"]
+        self.assertIn("道路運送車両の保安基準 第 6 条第 1 項", basis)
+        self.assertIn("林業専用道作設指針", basis)
+        self.assertIn("read 2026-11-05", basis)
+        self.assertIn("was not checked", basis)  # the 林道規程's own text was not read: only a research institute's page
+        self.assertNotIn("Q58", it["name"] + it["question"])
+
+    def test_it_is_asked_of_something_that_moves_by_itself_and_a_typed_radius_is_kept_in_metres(self):
+        from hiraku.intake.hearing import _answer_requirement
+
+        self.assertIn("Q58", [i["key"] for i in applicable_items({"self_propelled": True})])
+        self.assertNotIn("Q58", [i["key"] for i in applicable_items({"standing": True})])
+        for typed in ("8", "8 m", "800 cm", "8000 mm"):
+            got = _answer_requirement(item("Q58"), typed)
+            self.assertEqual((got["value"], got["unit"]), (8, "m"), typed)
+
+
 class RequirementsFileStandsTest(unittest.TestCase):
     """ask_confirm False: the requirements came as a file somebody wrote (a run started from it)."""
 
@@ -164,7 +186,8 @@ class RequirementsFileStandsTest(unittest.TestCase):
         req = copy.deepcopy(load_product("serving-robot"))
         req["requirements"] = [r for r in req["requirements"] if r["key"] not in drop]
         req["requirements"] += [{"key": "Q40", "name": "積載", "value": 40, "unit": "kg", "source": "user", "trust": 1},
-                                {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1}]
+                                {"key": "Q50", "name": "最高速度", "value": 1.2, "unit": "m/s", "source": "user", "trust": 1},
+                                {"key": "Q58", "name": "最小回転半径の上限", "value": 3, "unit": "m", "source": "user", "trust": 1}]
         return req
 
     def test_nothing_is_asked_when_the_file_has_every_required_item(self):
@@ -179,7 +202,7 @@ class RequirementsFileStandsTest(unittest.TestCase):
         req = self.file(drop=("Q63",))
         p = prepare(req, ask_confirm=False)
         self.assertEqual(p.asked["questions"], [])
-        (added,) = p.answered["answers"]
+        added = {r["key"]: r for r in p.answered["answers"]}["Q63"]
         self.assertEqual((added["key"], added["source"], added["trust"]), ("Q63", "default", 1))
         self.assertIn("read 2026-11-03", added["basis"])
         out = {r["key"]: r for r in p.requirements_file["requirements"]}

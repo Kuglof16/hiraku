@@ -188,6 +188,15 @@ export const DEMOS = {
       "basis": "assumption"
      },
      {
+      "key": "Q58",
+      "name": "最小回転半径の上限",
+      "value": 12,
+      "unit": "m",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https:\/\/laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https:\/\/www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https:\/\/www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked"
+     },
+     {
       "key": "Q60",
       "name": "倒れない角度 (Q30 の組で)",
       "value": 24,
@@ -489,7 +498,7 @@ export const DEMOS = {
      {
       "domain": "handling",
       "shown_name": "操安",
-      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる。S2 旋回での転倒 (J ターン・定常円) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる。S2 旋回での転倒 (J ターン・定常円)・S6 小回り (最小回転半径) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "S1",
        "S3",
@@ -24456,7 +24465,7 @@ export const DEMOS = {
      {
       "domain": "handling",
       "shown_name": "操安",
-      "reason": "置・走 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S4 制動と前のめり を当てる。S2 旋回での転倒 (J ターン・定常円) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "置・走 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S4 制動と前のめり を当てる。S2 旋回での転倒 (J ターン・定常円)・S6 小回り (最小回転半径) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "S1",
        "S4"
@@ -25100,7 +25109,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.asked",
    "agent": "lead",
-   "text": "足りない要件が 15 件あります。まとめて聞きます",
+   "text": "足りない要件が 16 件あります。まとめて聞きます",
    "data": {
     "questions": [
      {
@@ -25268,6 +25277,19 @@ export const DEMOS = {
       }
      },
      {
+      "req_key": "Q58",
+      "name": "最小回転半径の上限",
+      "text": "その場で向きを変えるのに要る円の半径 (いちばん外側の車輪が描く円) は、いくつまでにしますか。",
+      "ask": "confirm",
+      "allow_other": true,
+      "default": {
+       "value": 12,
+       "unit": "m",
+       "trust": 3,
+       "basis": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https:\/\/laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https:\/\/www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https:\/\/www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked"
+      }
+     },
+     {
       "req_key": "Q61",
       "name": "安全率 (降伏に対して)",
       "text": "部材の安全率 (降伏に対する余裕) はいくつにしますか。",
@@ -25339,7 +25361,7 @@ export const DEMOS = {
    "run_id": "20261103-100000-serving-robot",
    "kind": "hearing.answered",
    "agent": "lead",
-   "text": "質問 15 件、答え 2 件、既定値 21 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
+   "text": "質問 16 件、答え 2 件、既定値 22 件、答えが無いまま 4 件 (聞いたが、答えも標準の値も無く、要件に入っていない)",
    "data": {
     "answers": [
      {
@@ -25511,6 +25533,15 @@ export const DEMOS = {
       "basis": "各社の稼働時間 9〜18 h の下の側, https:\/\/www.keenon.com/en/product/T9 ほか; the range 9-18 h read 2026-11-03 in a source check (Keenon)",
       "value": 10,
       "unit": "h"
+     },
+     {
+      "key": "Q58",
+      "name": "最小回転半径の上限",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https:\/\/laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https:\/\/www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https:\/\/www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked",
+      "value": 12,
+      "unit": "m"
      },
      {
       "key": "Q61",
@@ -25790,6 +25821,15 @@ export const DEMOS = {
       "unit": "mm"
      },
      {
+      "key": "Q58",
+      "name": "最小回転半径の上限",
+      "value": 12,
+      "unit": "m",
+      "source": "default",
+      "trust": 3,
+      "basis": "assumption: the 12 m of a motor vehicle on a public road and of the design vehicle of a forest road, applied to a vehicle on private land. 道路運送車両の保安基準 第 6 条第 1 項 (最小回転半径は、最外側のわだちについて 12 m 以下), read 2026-11-05 in the e-Gov law text (https:\/\/laws.e-gov.go.jp/law/326M50000800067). 林業専用道作設指針 (林野庁長官通知 平成 22 年 9 月 24 日 22林整整第 602 号) 第 3 の 1 (設計車両 普通自動車 最小回転半径 12 m) と 6 (曲線半径は原則 12 m 以上), read 2026-11-05 (https:\/\/www.rinya.maff.go.jp/j/seibi/saisei/pdf/rinngyousenyou.pdf). The narrower curves of the 林道規程 (design speed 20 km/h: class 1 15 m, class 2 12 m, class 3 6 m) come from the 森林総合研究所 Q&A (https:\/\/www.ffpri.go.jp/qa/management/qa-manage3.html), a secondary page; the text of the 林道規程 was not checked"
+     },
+     {
       "key": "Q60",
       "name": "倒れない角度 (Q30 の組で)",
       "value": 24,
@@ -26046,7 +26086,7 @@ export const DEMOS = {
      {
       "domain": "handling",
       "shown_name": "操安",
-      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる。S2 旋回での転倒 (J ターン・定常円) は荷重条件の作り方がまだ無いので、この実行では見ない",
+      "reason": "置・走・悪 に当てはまるので、S1 静的な転倒 (傾斜台・縁の荷重)・S3 回避 (ダブルレーンチェンジ)・S4 制動と前のめり・S5 凸凹の横斜面 を当てる。S2 旋回での転倒 (J ターン・定常円)・S6 小回り (最小回転半径) は荷重条件の作り方がまだ無いので、この実行では見ない",
       "test_ids": [
        "S1",
        "S3",
