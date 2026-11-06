@@ -2409,7 +2409,7 @@ function loadEvents(events, { live }) {
 function loadFailedWhy(e, kind = null) {
   let what, todo = "ページを読み込み直してください";
   if (kind === "timeout") what = "時間切れ";
-  else if (kind === "broken" || e instanceof SyntaxError) what = "記録が壊れています";
+  else if (kind === "broken" || e?.broken || e instanceof SyntaxError) what = "記録が壊れています";
   else if (e?.status === 404) [what, todo] = ["見つかりません", "消されたか、名前が違います。一覧から選び直してください"];
   else if (e?.status) what = `サーバー ${e.status}`;
   else if (STATIC) what = "ネットワーク";

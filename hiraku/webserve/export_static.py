@@ -242,7 +242,7 @@ def lite_of(kind: str, d: dict[str, Any]) -> dict[str, Any]:
     return {"pace": pace}
 
 
-def split_record(data: bytes) -> tuple[bytes, dict[str, bytes]]:
+def split_record(data: bytes, min_bytes: int = HEAVY_MIN_BYTES) -> tuple[bytes, dict[str, bytes]]:
     """A record's complete lines -> (the light lines, {heavy file name: gzipped JSON}). A line of a
     HEAVY_KINDS event loses its data values of HEAVY_MIN_BYTES or more; it gets `_heavy` (key ->
     the part's file under heavy/, named by its hash) and `_lite` (lite_of, and arrays: the length
@@ -264,7 +264,7 @@ def split_record(data: bytes) -> tuple[bytes, dict[str, bytes]]:
             if not _KEY_RE.fullmatch(key) or key in LIGHT_KEYS:
                 continue
             text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-            if len(text) >= HEAVY_MIN_BYTES:
+            if len(text) >= min_bytes:
                 big[key] = text
         if not big:
             lines.append(line)
@@ -435,9 +435,10 @@ def export(
     shelf: Shelf | None = None,
     assets: bool = True,
     sample: bool = True,
+    heavy_min_bytes: int = HEAVY_MIN_BYTES,
 ) -> dict[str, Any]:
     """Write the static site to `out` (see the module's doc). run_ids: the saved runs to take
-    (None: all). Returns {"out", "runs", "files": {relative path: bytes}}."""
+    (None: all). heavy_min_bytes: split_record's size of a heavy value. Returns {"out", "runs", "files": {relative path: bytes}}."""
     out, saved_dir, web_dir = Path(out), Path(saved_dir), Path(web_dir)
     _prepare_out(out)
     # the screen's files, its pages marked
@@ -466,7 +467,7 @@ def export(
     for r in runs:
         rid = r["run_id"]
         src = SAMPLE_EVENTS if rid == SAMPLE_ID else saved_dir / rid / EVENTS_FILE
-        light, parts = split_record(complete_lines(src.read_bytes()))
+        light, parts = split_record(complete_lines(src.read_bytes()), heavy_min_bytes)
         _write(data / "runs" / rid / LIGHT_FILE, gzip.compress(light, compresslevel=9, mtime=0))
         for name, gz in parts.items():
             _write(data / "runs" / rid / HEAVY_DIR / name, gz)

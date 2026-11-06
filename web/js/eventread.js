@@ -143,7 +143,15 @@ async function fetchStaticEvents(runId, offset, onProgress) {
   }
   const total = Number(res.headers.get("Content-Length")) || 0;
   const packed = await bodyBytes(res, onProgress && total ? (n) => onProgress(READ_SHARE * Math.min(1, n / total)) : null);
-  const bytes = await gunzipped(new Response(packed));
+  let bytes;
+  try {
+    bytes = await gunzipped(new Response(packed));
+  } catch (e) {
+    // (it came, but it does not unpack: the file is broken, not the network)
+    const err = new Error(`broken ${path}: ${e?.message ?? e}`);
+    err.broken = true;
+    throw err;
+  }
   const { events, bad } = await parseEventLinesAsync(bytes, onProgress && ((f) => onProgress(READ_SHARE + (1 - READ_SHARE) * f)));
   const base = staticRunDir(runId);
   for (const ev of events) attachHeavy(ev, base);
