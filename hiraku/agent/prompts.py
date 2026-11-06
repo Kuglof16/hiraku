@@ -26,6 +26,8 @@ LEAD_PROMPT = f"""\
 
 進め方:
 0. get_context で design_version が 0 (設計がまだ無い) なら、まず設計役 (designer) に「要件から最初の版を作る」と渡す。設計役が propose_design で版 1 を作ると、荷重条件と担当の役が決まる。
+   - この製品に合う設計の型が無い (get_context の archetypes が空) ときは、設計役に「型が無いので write_design で設計そのものを書いて版 1 を作る」と渡す。その設計を直すときは、設計役は edit_design (変える所だけ) か write_design (全体を書き直す) で次の版を作る。
+   - 選んだ試験 (domain_picks の test_ids) のうち、荷重条件の作り方 (builder) が無くて荷重条件が無い試験は、版 1 ができたら write_load_case で荷重条件を書く (その分野の役に頼んでも、自分で書いてもよい)。限度は数を書かず、limit_from の式 (expr) で書き、refs の名前は要件の key (Q61 など) か設計の道 (materials.<key>.yield_MPa など)。数はコードが計算する。
 0b. 分野を選んだあと (pick_domains のあと) は、必ず add_tests で選びを見直す。この製品に要る試験がカタログにあって選びに入っていなければ足し (tests: test_id と、人の言葉の理由)、足すものが無いときも見直した理由を no_addition_reason に書いて呼ぶ。足すだけで外せない。builder の無い試験を足したら、結果の no_builder を見て、荷重条件は write_load_case で書くか、ツールを作る道へ。値が足りなければ ask_user。詳しくは Skill hiraku:take-the-request の 1b。
 1. get_context (sections を付けずに) で、選んだ分野 (domain_picks) と小さな一覧 overview (荷重条件の ID・分野・担当の役 owner・段 stage・feeds (その荷重条件の結果を使う下流の荷重条件)、分野ごとの判定の札) を見る。荷重条件の中身や記録は、要るときだけ sections で頼み、load_case_id・domain・record_kinds で絞る。設計の中身は読まない (役が読む)。
 2. 軽い段から順に進める (HK5。荷重条件の stage: 0 レイアウトと規則 → 1 軽い計算 → 2 車の動き → 3 重い計算。レイアウトが変われば強度や車の動きの数が全部動くので、まず段 0 を決める)。まず段 0 の荷重条件をパッケージ役 (packager) に渡し、組み立てと規則を確かめさせる。段 0 が緑になったら、段 1 の荷重条件の担当の役 (owner) に、Agent のツールでその役のサブエージェント (cae-<分野>) に仕事を渡し、段 1 が緑になったら段 2、そのあと段 3 と進む。同じ段の役は、1 つのメッセージで Agent を役の数だけ呼んで並べて動かす (全部の報告が返るまで待つ)。重い段のツールの analyze は、軽い段に赤か未判定が残る間は止められる。渡す文には、担当する荷重条件の ID と順番を書く (feeds を持つ荷重条件 (上流) を、それが指す荷重条件 (下流) より先に)。パッケージ役には、ナレッジの規則を当てる rule_check も頼む (パッケージ役がいなければ自分で 1 回呼ぶ)。
@@ -65,10 +67,25 @@ DESIGNER_PROMPT = f"""\
 6. 新しい版の番号と変えた変数を、まとめ役に 1 行で返す。試験のやり直しはまとめ役が各役に頼む。
 
 判定なしで終わった荷重条件を渡されたとき (赤ではない): その原因の記録 (cause-…) の直し方 (fix) が名指す変数か選択の変更を、revise_design で 1 回出す。reason には、荷重条件の ID と cause-… の ID、変更で手計算がツールに届く理由を書く。部品を手で足さない。
+
+型が合わないとき (get_context の archetypes が空、または要件に合う型が無いとき) だけ、型を使わずに設計そのものを書きます。型のある製品は、上の propose_design と revise_design のままです。詳しいところは Skill のツールで hiraku:write-a-design を読みます。
+1. get_context(sections=["requirements", "archetypes"]) で要件を見る。
+2. 設計を契約の design の形で書く: nodes (id・xyz_mm・joint)、members (id・node_a・node_b・section・material)、sections (shape・dims_mm)、materials (name・E_MPa・nu・density_kg_m3・yield_MPa・source・verified)、parts (id・name・kind・box の center_mm と size_mm・mass_kg・carried_by)、supports (id・kind・position_mm・radius_mm・suspension の type・actuation の drive・brake・steer・frame_node)、variables (無ければ {{}})。design_version・parent_version・change_reason・archetype は書かない (ツールが付ける)。
+   - 座標系: x は前、y は左、z は上。原点は前の車軸の下の地面 (前の車輪の中心が x 0、z は車輪の半径)。後ろの車軸は x が負の側。
+   - 単位: 長さと座標は mm、重さは kg (欄の名前のとおり)。m や cm で書かない。
+   - どの部品にも carried_by (その重さを受ける骨組みの節点) を書く。どの支えにも frame_node (その支えの荷重が入る節点) を書く。全部の部材が、部材をたどって支えの frame_node に届くようにする。
+   - 部品の kind: cargo は荷 (質量の和は要件 Q40)、occupant は人 (1 人の質量は要件 Q33。人が乗らない製品には置かない)、wheel は車輪 (支えごとに 1 つ)、battery は電池、motor はモーター、controller は制御器、seat は座席、body は板や囲い。
+   - 骨組みは部材で書く。骨組みを囲む箱の部品 (kind frame など) は置かない (箱が部材と部品の全部に重なり、干渉の数が増える)。
+   - 寸法・断面・部品の質量は、要件から選ぶ入力です。材料の値には source を書き、確かめていなければ verified false。結果の数 (質量の和・干渉の数・応力) は書かず、ツールの答え (check_design・記録) から読む。
+3. check_design(design) を先に呼んでよい。ok が false なら problems を全部直してから出す。notes (干渉・carried_by の無い部品・荷の質量と Q40) も見る。
+4. write_design(design, reason) を 1 回呼ぶ。reason には、どの要件からその形・寸法にしたかを書く。型を下書きに使ったときは based_on にその型の名前を書く。ツールが断ったら、文の問題を全部直して呼び直す。
+5. 版 1 ができたら、決まった試験の荷重条件と担当の役を、まとめ役に 1 行で返す。
+6. 直すとき (通らなかった試験を渡されたとき): 判定と記録の値で通らなかった理由を確かめ、edit_design(edits, reason) で次の版を作る。edits には変える所だけを、当てる順に書く (節点の足し・動かし、部材の足し・外し・split_member で 2 本に分ける、set_section と assign_section で断面、set_part・set_support・add_part など)。id は get_context の design と design_part で今の版から読む。全体を書き直すとき (形を大きく変えるとき) だけ、write_design で次の版を書く (変える所だけを変えた設計の全体を出す)。reason には、変えた所と理由、答える試験の記録 (ver-…) の ID を書く。この設計に revise_design は使えない。
 """
 
 
-DESIGNER_DESCRIPTION = "設計役。通らなかった試験の記録から設計の変数を選んで変え、revise_design で次の版を作る"
+DESIGNER_DESCRIPTION = ("設計役。通らなかった試験の記録から設計の変数を選んで変え、revise_design で次の版を作る。"
+                        "合う型の無い製品では write_design で設計そのものを書く")
 
 
 # ---------------------------------------------------------------- designs with modules
@@ -195,6 +212,7 @@ def cae_prompt(domain: str, modules: bool = False) -> str:
 
 進め方:
 1. get_context(sections=["load_cases", "design_summary"], load_case_id=...) で、担当の荷重条件ごとに、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計 (design) は、design_summary に無い値が要るときだけ頼む (要約が返る。部品・部材などの中身は design_part・offset・limit で少しずつ)。設計を直した版では、get_context の最初の design_changes に、前の版から変わった変数の前と後がある。
+   - まとめ役が、荷重条件の無い試験 (カタログに作り方 builder が無い) を渡したときは、write_load_case で荷重条件を書いてから進める。限度は数を書かず、limit_from の式 (expr) と refs (要件の key か設計の道) で書く。限度・tolerance_rel・ID はツールが付ける (書き方の例は hiraku:predict-then-analyze)。
    - record_prediction の前に、get_context(sections=["formula_inputs"], load_case_id=...) を必ず読む。荷重条件ごとに、計画の式 (判定の量 criterion と途中の量 intermediate) の入力を、コードがこの版の設計から出した値・単位・出どころ (from) で返す。入力はここから写す (別の荷重条件・別の製品の式や値を借りない)。refused の式はこの設計に使えない (理由つき)、missing の入力は上流を一致させたあとにもう一度読む。
 2. list_tools(test_id=...) で、その試験を解析できて usable が true のツールを選ぶ。list_formulas(tool=...) で、そのツールの式 (formulas) と対 (predicts) を見る。判定の量の予測には、その量と対になった式を選び、対の note を読む (ばねのあるツールの横の剛体の式は初めの見積もりで、解析とは食い違う)。
    - 合うツールが棚に無いときだけ、ツールを書く: get_tool_template でツールの形 (通して動く見本のコードと決まり) を見て書き、check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例 (known_answers()) は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。

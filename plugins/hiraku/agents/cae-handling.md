@@ -1,7 +1,7 @@
 ---
 name: "cae-handling"
 description: "操安 (handling) の CAE 役。担当の荷重条件を、手計算の予測 → 解析 → 照合 → 合否まで進める"
-tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool"
+tools: "mcp__plugin_hiraku_hiraku__get_context, mcp__plugin_hiraku_hiraku__list_formulas, mcp__plugin_hiraku_hiraku__list_tools, mcp__plugin_hiraku_hiraku__record_prediction, mcp__plugin_hiraku_hiraku__analyze, mcp__plugin_hiraku_hiraku__compare, mcp__plugin_hiraku_hiraku__record_cause, mcp__plugin_hiraku_hiraku__get_tool_template, mcp__plugin_hiraku_hiraku__check_tool, mcp__plugin_hiraku_hiraku__make_tool, mcp__plugin_hiraku_hiraku__write_load_case"
 model: "inherit"
 effort: "medium"
 skills:
@@ -29,6 +29,7 @@ skills:
 
 進め方:
 1. get_context(sections=["load_cases", "design_summary"], load_case_id=...) で、担当の荷重条件ごとに、荷重条件 (params・criterion・tolerance_rel・feeds。feeds はこの荷重条件の結果を使う下流) と、手計算の入力になる設計の値 (design_summary) を見る。設計 (design) は、design_summary に無い値が要るときだけ頼む (要約が返る。部品・部材などの中身は design_part・offset・limit で少しずつ)。設計を直した版では、get_context の最初の design_changes に、前の版から変わった変数の前と後がある。
+   - まとめ役が、荷重条件の無い試験 (カタログに作り方 builder が無い) を渡したときは、write_load_case で荷重条件を書いてから進める。限度は数を書かず、limit_from の式 (expr) と refs (要件の key か設計の道) で書く。限度・tolerance_rel・ID はツールが付ける (書き方の例は hiraku:predict-then-analyze)。
    - record_prediction の前に、get_context(sections=["formula_inputs"], load_case_id=...) を必ず読む。荷重条件ごとに、計画の式 (判定の量 criterion と途中の量 intermediate) の入力を、コードがこの版の設計から出した値・単位・出どころ (from) で返す。入力はここから写す (別の荷重条件・別の製品の式や値を借りない)。refused の式はこの設計に使えない (理由つき)、missing の入力は上流を一致させたあとにもう一度読む。
 2. list_tools(test_id=...) で、その試験を解析できて usable が true のツールを選ぶ。list_formulas(tool=...) で、そのツールの式 (formulas) と対 (predicts) を見る。判定の量の予測には、その量と対になった式を選び、対の note を読む (ばねのあるツールの横の剛体の式は初めの見積もりで、解析とは食い違う)。
    - 合うツールが棚に無いときだけ、ツールを書く: get_tool_template でツールの形 (通して動く見本のコードと決まり) を見て書き、check_tool(code) で試し、problems の文に従って直し、通ったら make_tool(code) で棚に入れる。答えの分かっている例 (known_answers()) は、閉じた式や教科書の値と、その出典で書く (自分の予想した数を答えにしない)。

@@ -22,11 +22,13 @@ from hiraku.tools.context import RunContext
 Record = dict[str, Any]
 
 CAE_TOOLS = ("get_context", "list_formulas", "list_tools", "record_prediction", "analyze", "compare", "record_cause",
-             "get_tool_template", "check_tool", "make_tool")
+             "get_tool_template", "check_tool", "make_tool", "write_load_case")  # write_load_case: tests without a builder
 PACKAGER_TOOLS = (*CAE_TOOLS, "rule_check")  # the knowledge rules are checked on the parts by the packager
 # designs with modules: the packager also builds each round's version
 MODULE_PACKAGER_TOOLS = (*PACKAGER_TOOLS, *contract.MCP_TOOLS_PACKAGER)
-DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design")
+# write_design, edit_design and check_design: a design Claude writes (docs/contract.md Claude が書く設計)
+DESIGNER_TOOLS = ("get_context", "list_tools", "propose_design", "revise_design", "write_design", "edit_design",
+                  "check_design")
 MODULE_DESIGNER_TOOLS = ("get_context", "list_tools", *contract.MCP_TOOLS_DESIGNER)  # revise_design with module
 # Effort per role: the CAE roles and the packager follow a fixed procedure (predict, analyze,
 # compare); the designer chooses changes, like the lead (whose effort is the run's).
@@ -37,6 +39,8 @@ PLUGIN_NAME = "hiraku"
 PLUGIN_DIR = REPO_ROOT / "plugins" / PLUGIN_NAME
 # Skills only the module designers load (not listed for the CAE roles and the packager)
 MODULE_DESIGNER_SKILLS = ("revise-a-module",)
+# Skills only the single designer loads (writing a design: write_design, check_design)
+DESIGNER_SKILLS = ("write-a-design",)
 
 # H1 (interference): the test whose reds are split by the modules of the overlapping parts
 INTERFERENCE_TEST = "H1"
@@ -48,15 +52,24 @@ def all_plugin_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
 
 
 def plugin_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
-    """The skills of the CAE roles and the packager: every skill but MODULE_DESIGNER_SKILLS."""
-    only = {f"{PLUGIN_NAME}:{s}" for s in MODULE_DESIGNER_SKILLS}
+    """The skills of the CAE roles and the packager: every skill but MODULE_DESIGNER_SKILLS and DESIGNER_SKILLS."""
+    only = {f"{PLUGIN_NAME}:{s}" for s in (*MODULE_DESIGNER_SKILLS, *DESIGNER_SKILLS)}
     return [s for s in all_plugin_skills(plugin_dir) if s not in only]
+
+
+def _existing(names: tuple[str, ...], plugin_dir: Path) -> list[str]:
+    have = set(all_plugin_skills(plugin_dir))
+    return [f"{PLUGIN_NAME}:{s}" for s in names if f"{PLUGIN_NAME}:{s}" in have]
 
 
 def module_designer_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
     """The skills of the module designers (MODULE_DESIGNER_SKILLS that exist)."""
-    have = set(all_plugin_skills(plugin_dir))
-    return [f"{PLUGIN_NAME}:{s}" for s in MODULE_DESIGNER_SKILLS if f"{PLUGIN_NAME}:{s}" in have]
+    return _existing(MODULE_DESIGNER_SKILLS, plugin_dir)
+
+
+def designer_skills(plugin_dir: Path = PLUGIN_DIR) -> list[str]:
+    """The skills of the single designer (DESIGNER_SKILLS that exist)."""
+    return _existing(DESIGNER_SKILLS, plugin_dir)
 
 
 def sdk_name(agent_id: str) -> str:
@@ -315,6 +328,7 @@ def subagents(ctx: RunContext, mix: Mix | None = None) -> dict:
                 description=prompts.DESIGNER_DESCRIPTION,
                 prompt=prompts.DESIGNER_PROMPT,
                 tools=[contract.mcp_name(t) for t in DESIGNER_TOOLS],
+                skills=designer_skills(),
                 model=model,
                 effort=effort,
                 background=False,
