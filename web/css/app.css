@@ -1356,3 +1356,24 @@ body.present.present-detail .chain { height: 100%; }
 .card .edge-near { font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.35; }
 .tile .edge-line { font-size: 12px; margin-top: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .tiles.dense .tile .edge-line { font-size: 11px; -webkit-line-clamp: 2; }
+
+/* ④ 解析結果 as the run's result (app.js gridAtEnd): no play bar; a tile opens its analysis in the
+   viewer over the tab (#grid-viewer), ← 一覧へ goes back */
+body.grid-fixed #playbar { display: none; }
+body.grid-fixed .grid-view .tile[data-domain] { cursor: pointer; }
+.grid-view { position: relative; }
+.grid-viewer { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg, #f4f1ea); border-radius: 12px; }
+.grid-viewer .gv-head { display: flex; align-items: center; gap: 14px; padding: 8px 4px; }
+.grid-viewer .gv-back { font-size: 15px; padding: 6px 14px; border-radius: 999px; border: 1.5px solid var(--line, #ccc); background: var(--card, #fffdf8); cursor: pointer; }
+.grid-viewer .gv-title { font-size: 16px; font-weight: 600; }
+.grid-viewer .gv-frame { flex: 1; width: 100%; border: 1.5px solid var(--line, #ccc); border-radius: 12px; background: #fff; }
+.grid-viewer .gv-why { font-size: 16px; padding: 12px 6px; }
+
+/* ③ (not the video): the words over the 3D stay small, two lines; the rest under the card's own
+   くわしく / the log (one card at a time: app.js) */
+body:not(.video) #causenote { max-width: 46%; max-height: 22%; }
+body:not(.video) #causenote .tx { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+body:not(.video) #roundcard { max-width: 46%; max-height: 24%; overflow: hidden; }
+body:not(.video) #roundcard .rc-list .pr { display: none; }
+body:not(.video) #roundcard .rc-list .pw { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 92%; vertical-align: bottom; }
+body:not(.video) #now { max-width: 62%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

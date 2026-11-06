@@ -66,7 +66,7 @@ import { GripView } from "./grip_panel.js"; // grip: the tyres of a driving reco
 import { hasGrip } from "./grip_view.js"; // grip:
 import { kcFor } from "./kc_view.js"; // grip:
 import { EnergyFlow } from "./energy_flow.js"; // heat: the energy's flow over the 3D
-import { loadViewerInfo, viewerButtonHtml, viewerRunId } from "./viewer_link.js"; // 「ビューアで見る」
+import { loadViewerInfo, viewerButtonHtml, viewerRunId, viewerTarget, viewerUrl } from "./viewer_link.js"; // 「ビューアで見る」
 import { clampToSpan, domainLcAt, domainSpans } from "./domain_replay.js";
 import { loopFromParams } from "./anim_loop.js"; // ?play=loop&analysis=: one analysis' motion over and over
 import { STATIC, getUrl } from "./source.js"; // a static export: its files in place of the server's routes, nothing POSTed
@@ -221,6 +221,7 @@ if (animLoop && !ui.pinnedTab && !ui.tabPlan.length) ui.pinnedTab = "bench";
 if (animLoop) $("ab-play").style.display = "none"; // (the loop's clock moves the motion, not ▶)
 
 if (params.get("video") === "1") document.body.classList.add("video");
+const VIDEO_FRAME = params.get("video") === "1"; // the filmed frames keep their look (広報部's final shoot)
 if (params.get("status") === "0") document.body.classList.add("no-status");
 
 // ---- stage scaling -------------------------------------------------------
@@ -2199,6 +2200,15 @@ function renderTransient(s, playhead, chain, resolved) {
   const cause = CAUSE_OFF ? null : openCause(s);
   const cn = $("causenote");
   cn.hidden = !cause;
+  // one card of words over the 3D at a time (not in the video): the newer of the cause and the
+  // proposals' card (the latter is drawn before, renderRoundCard)
+  const rc = $("roundcard");
+  if (!VIDEO_FRAME && cause && rc && !rc.hidden) {
+    const causeT = s.tOf?.[cause.id] ?? -Infinity;
+    const roundNewer = (s.builtT?.[s.currentVersion] ?? -Infinity) > causeT || !!rc.querySelector(".rc-list");
+    if (roundNewer) cn.hidden = true;
+    else rc.hidden = true;
+  }
   if (cause && cn.dataset.key !== cause.key) {
     cn.dataset.key = cause.key;
     cn.innerHTML = causeNoteHtml(cause);
@@ -2444,6 +2454,7 @@ function drawNow() {
     const intakeTab = INTAKE_TABS.includes(tab);
     $("view-bench").hidden = view !== "bench";
     $("view-grid").hidden = view !== "grid";
+    gridAtEnd(view === "grid");
     $("view-intake").hidden = !intakeTab;
     document.body.dataset.intakeTab = intakeTab ? tab : ""; // css: no present card over A1 / A2 in the video
     $("view-shelf").hidden = tab !== "A4";
@@ -2697,11 +2708,65 @@ $("tests").addEventListener("click", (ev) => {
   else ui.pinnedLc = b.dataset.lc || null;
   drawn.rev = -2;
 });
-// ④: a tile with analyses in the record replays its domain in the tab; 格子に戻る closes it
+// ④ 解析結果 is the run's result: shown at the record's end, without the play bar (not tied to the
+// replay's time). ?video=1 (the filmed frames) and a run still going keep the replay as before.
+const GRID_FIXED = params.get("video") !== "1";
+let gridWasFixed = false;
+function gridAtEnd(on) {
+  const fix = GRID_FIXED && on && !player.live;
+  document.body.classList.toggle("grid-fixed", fix);
+  if (fix && !gridWasFixed) {
+    player.playing = false;
+    if (player.playhead < player.duration) player.seek(player.duration);
+  }
+  gridWasFixed = fix;
+}
+
+// ④: a tile (or a test row in it) opens that analysis in the viewer, in the tab itself; ← 一覧へ goes back.
+// The analysis: the row's test's last, else the domain's last that is not a failed one.
+function gridAnalysis(s, domain, lc) {
+  const domainOf = Object.fromEntries((s.project?.load_cases ?? []).map((c) => [c.load_case_id, c.domain]));
+  const all = (s.order?.analyses ?? Object.keys(s.analyses ?? {})).map((id) => s.analyses[id]).filter((a) => a && a.status !== "failed");
+  const mine = all.filter((a) => (lc ? a.load_case_id === lc : domainOf[a.load_case_id] === domain));
+  const drawable = mine.filter((a) => viewerTarget(a, viewerRunId(s)).field);
+  return drawable.at(-1) ?? mine.at(-1) ?? null;
+}
+function closeGridViewer() {
+  $("grid-viewer")?.remove();
+}
+function openGridViewer(domain, lc) {
+  const s = player.state;
+  const ana = gridAnalysis(s, domain, lc);
+  closeGridViewer();
+  const box = document.createElement("div");
+  box.id = "grid-viewer";
+  box.className = "grid-viewer";
+  const head = `<div class="gv-head"><button type="button" class="gv-back" data-act="grid-back">← 解析結果の一覧へ</button>`;
+  const runId = viewerRunId(s);
+  const t = viewerTarget(ana, runId);
+  const title = ana ? `${esc(DOMAIN_JA[domain] ?? domain)}・${esc(ana.load_case_id ?? "")}・${esc(verLabel(ana.design_version))}` : esc(DOMAIN_JA[domain] ?? domain);
+  if (!ana || !t.field || !runId) {
+    box.innerHTML = `${head}<span class="gv-title">${title}</span></div><p class="gv-why">${esc(t.reason ?? "この分野には、ビューアで見られる解析がありません")}</p>`;
+  } else {
+    box.innerHTML = `${head}<span class="gv-title">${title}</span></div><iframe class="gv-frame" title="ビューア" src="${esc(viewerUrl(runId, ana.analysis_id, t.field))}"></iframe>`;
+  }
+  $("view-grid").append(box);
+}
 $("tiles").addEventListener("click", (ev) => {
-  const tile = ev.target.closest(".tile.can-replay[data-domain], .offchip.can-replay[data-domain]");
+  const tile = ev.target.closest(".tile[data-domain], .offchip[data-domain]");
   if (!tile || ev.target.closest("a, details, summary")) return;
-  openDomain(tile.dataset.domain);
+  if (!GRID_FIXED) {
+    if (tile.matches(".can-replay")) openDomain(tile.dataset.domain);
+    return;
+  }
+  const row = ev.target.closest("[data-lc]");
+  openGridViewer(tile.dataset.domain, row?.dataset.lc || null);
+});
+$("view-grid").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-act=grid-back]")) closeGridViewer();
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && $("grid-viewer")) closeGridViewer();
 });
 $("view-bench").addEventListener("click", (ev) => {
   if (ev.target.closest("button[data-act=close-domain]")) closeDomain();
@@ -2825,7 +2890,10 @@ async function play() {
   }
   if (params.has("t")) {
     // (the state up to t built in steps first, nothing drawn meanwhile: a long record does not hold the page)
-    const t = Number(params.get("t")) || 0;
+    // A static export's first screen (①): one moment for all of the page, the request settled (the
+    // domains picked and the hearing answered) just before v1 is made: no version, no later words
+    const firstDesign = FIRST ? player.events.find((e) => e.kind === "design.created") : null;
+    const t = firstDesign ? Math.max(0, firstDesign.t - 0.01) : Number(params.get("t")) || 0;
     ui.building = true;
     await player.seekInSteps(t >= player.duration - END_SNAP_S ? player.duration : t);
     ui.building = false;
