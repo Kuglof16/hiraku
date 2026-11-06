@@ -153,7 +153,10 @@ STOP_SHARE = 0.05  # the run stops when the whole vehicle's speed toward the wal
                    # (its kinetic energy then 0.25 % of the start's at most if all of it were along x; a fully plastic
                    # crush comes to rest without turning back, and a frame that yaws off the wall drifts on at a few
                    # tenths of a m/s with no wall force: e.g. showcase 20261105-150416 v3 at 0.32 m/s from 95 ms on;
-                   # HIRAKU's choice)
+                   # HIRAKU's choice). Below it the run goes on while the wall still pushes (QUIET_S): on design v1
+                   # the towers still fell back into the foot box after 5 %, the least room -164 mm at 5 %, -191 mm at
+                   # the full stop (K2's runs, 2026-11-06)
+QUIET_S = 2e-3  # s: below STOP_SHARE the run stops once the wall has given no impulse over this long (a drift)
 
 
 def pieces(mesh: Mesh, alive: np.ndarray, keep: list[int]) -> list[list[int]]:
@@ -242,9 +245,15 @@ def run_crash(mesh: Mesh, speed: float, time_limit: float = 0.2, mu: float = 0.0
                     stopped = (f"a piece with {big * 100:.1f} % of the mass broke off the seats' side (at least "
                                f"{stop_share * 100:g} %; the run stops at the split)")
                     break
-        if mom[-1][0] / M <= STOP_SHARE * speed:
-            stopped = (f"the vehicle stopped (its speed toward the wall, its momentum / its mass, fell to "
-                       f"{STOP_SHARE * 100:g} % of the start)")
+        v_now = mom[-1][0] / M
+        if v_now <= 0.0:
+            stopped = "the vehicle stopped (its speed toward the wall, its momentum / its mass, reached 0)"
+            break
+        quiet = max(1, int(round(QUIET_S / (per * dt))))
+        if (v_now <= STOP_SHARE * speed and len(imps) >= quiet
+                and all(abs(float(i[0])) == 0.0 for i in imps[-quiet:])):
+            stopped = (f"the vehicle drifts off the wall (its speed toward the wall below {STOP_SHARE * 100:g} % of the "
+                       f"start, and no wall force for {QUIET_S * 1000:g} ms)")
             break
     extra["up"], extra["thp"] = np.array(ups), np.array(thps)
     extra["contact"] = {"on": bool(contact), "lists": int(st.cstat[0]), "longest": int(st.cstat[1]),
