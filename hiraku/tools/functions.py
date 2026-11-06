@@ -727,7 +727,7 @@ def analyze(ctx: RunContext, args: dict[str, Any], agent: str | None = None) -> 
         if a is None:
             raise ToolError(
                 f"{lc['load_case_id']} は {up['load_case_id']} の解析の結果を入力に使います。"
-                f"先に {up['load_case_id']} を予測 → analyze → compare で一致させてください"
+                f"先に {up['load_case_id']} を予測 → analyze → compare で、予測との判定を OK にしてください"
             )
         upstream[up["load_case_id"]] = a
 

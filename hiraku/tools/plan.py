@@ -339,7 +339,7 @@ def _missing(ctx: RunContext, ref: Any, load_case: Record, given: Record | None)
         except IndexError:
             pass
         return (f"まだ値がありません: 上流の {up} の解析の結果 {rest.rsplit('.', 1)[-1]} を使います。先に {up} を"
-                f"予測 → analyze → compare で一致させてから、get_context をもう一度呼んでください")
+                f"予測 → analyze → compare で予測との判定を OK にしてから、get_context をもう一度呼んでください")
     if head == "pred":
         return (f"まだ値がありません: この荷重条件の {rest} の予測を使います。先にその予測を record_prediction "
                 f"してから、get_context をもう一度呼んでください")

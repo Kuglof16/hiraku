@@ -504,14 +504,14 @@ def stop_reason(ctx: RunContext, domain: str | None = None) -> str | None:
             at = "" if stage[lc_id] is None else f"{_stage_ja(stage[lc_id])}: "
             if lc_id in held:
                 steps.append(f"{at}{lc_id} ({'、'.join(held[lc_id])}。原因を書き、その結果と一致する予測を記録し直して "
-                             f"compare で一致させると判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
+                             f"compare で予測との判定が OK になると基準の判定が付く。合う式が無いときは、そう報告して設計役に渡す)")
                 continue
             ups = [u["load_case_id"] for u in ctx.upstream_of(lc_id)]
             first = f"{'・'.join(ups)} の予測との判定を OK にし、" if ups else ""
             if not _usable_tools(ctx, lc["test_id"]):
                 first = (f"棚に {lc['test_id']} を解析できる使えるツールがありません。get_tool_template でツールの形を見て書き、"
                          f"check_tool で試してから make_tool で棚に入れ、{first}")
-            steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で一致させると判定が付く)")
+            steps.append(f"{at}{lc_id} ({first}{q} を予測 → analyze → compare で比べ、予測との判定が OK になると基準の判定が付く)")
         parts.append(f"{_ja(d)}: {'; '.join(steps)}")
     open_ = ctx.open_mismatches(domain)
     tail = ""
